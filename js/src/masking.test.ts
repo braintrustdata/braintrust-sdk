@@ -545,21 +545,20 @@ describe("masking functionality", () => {
 
     // First event - error when masking input.password
     const event1 = events[0];
-    expect(event1.input).toMatch(/ERROR: Failed to mask data:/);
-    expect(event1.input).toMatch(/Cannot mask sensitive field 'password'/);
+    expect(event1.input).toBe("ERROR: Failed to mask field 'input' - Error");
     expect(event1.output).toEqual({ status: "success" });
     expect(event1.metadata).toEqual({ safe: "no-error" });
 
     // Second event - error when masking input.secret
     const event2 = events[1];
-    expect(event2.input).toMatch(/ERROR: Failed to mask data:/);
-    expect(event2.input).toMatch(/Division by zero error/);
+    expect(event2.input).toBe("ERROR: Failed to mask field 'input' - Error");
     expect(event2.output).toEqual({ result: "ok" });
 
     // Third event - error when masking input.complex
     const event3 = events[2];
-    expect(event3.input).toMatch(/ERROR: Failed to mask data:/);
-    expect(event3.input).toMatch(/Index out of bounds/);
+    expect(event3.input).toBe(
+      "ERROR: Failed to mask field 'input' - RangeError",
+    );
     expect(event3.expected).toEqual({ values: ["x", "y", "z"] });
   });
 });

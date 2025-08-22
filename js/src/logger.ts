@@ -104,7 +104,7 @@ const REDACTION_FIELDS = [
 
 /**
  * Apply masking function to data and handle errors gracefully.
- * If the masking function raises an exception, returns an error message with stack trace.
+ * If the masking function raises an exception, returns an error message.
  */
 function applyMaskingToField(
   maskingFunction: (value: unknown) => unknown,
@@ -114,9 +114,9 @@ function applyMaskingToField(
   try {
     return maskingFunction(data);
   } catch (error) {
-    // Get the stack trace
-    const stack = error instanceof Error ? error.stack : String(error);
-    return `ERROR: Failed to mask data: ${stack}`;
+    // Return a generic error message without the stack trace to avoid leaking PII
+    const errorType = error instanceof Error ? error.constructor.name : "Error";
+    return `ERROR: Failed to mask field '${fieldName}' - ${errorType}`;
   }
 }
 

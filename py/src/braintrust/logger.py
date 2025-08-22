@@ -630,14 +630,13 @@ def _check_json_serializable(event):
 def _apply_masking_to_field(masking_function: Callable[[Any], Any], data: Any, field_name: str) -> Any:
     """Apply masking function to data and handle errors gracefully.
 
-    If the masking function raises an exception, returns an error message with stack trace.
+    If the masking function raises an exception, returns an error message.
     """
     try:
         return masking_function(data)
     except Exception as mask_error:
-        # Get the full stack trace
-        tb_lines = traceback.format_exception(type(mask_error), mask_error, mask_error.__traceback__)
-        return f"ERROR: Failed to mask data: {''.join(tb_lines)}"
+        # Return a generic error message without the stack trace to avoid leaking PII
+        return f"ERROR: Failed to mask field '{field_name}' - {type(mask_error).__name__}"
 
 
 class _BackgroundLogger(ABC):

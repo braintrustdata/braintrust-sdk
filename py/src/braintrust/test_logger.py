@@ -1417,17 +1417,13 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
 
     # Verify error handling
     # The input should have an error message because of the password field
-    assert "ERROR: Failed to mask data:" in log["input"]
-    assert "ValueError: Cannot mask sensitive field 'password'" in log["input"]
-    assert "broken_masking_function" in log["input"]
+    assert log["input"] == "ERROR: Failed to mask field 'input' - ValueError"
 
     # The output should have an error message because of division by zero
-    assert "ERROR: Failed to mask data:" in log["output"]
-    assert "ZeroDivisionError: division by zero" in log["output"]
+    assert log["output"] == "ERROR: Failed to mask field 'output' - ZeroDivisionError"
 
     # The expected should have an error message because of index error
-    assert "ERROR: Failed to mask data:" in log["expected"]
-    assert "IndexError: list index out of range" in log["expected"]
+    assert log["expected"] == "ERROR: Failed to mask field 'expected' - IndexError"
 
     # Metadata should be fine since it doesn't trigger any errors
     assert log["metadata"] == {"safe": "data"}
@@ -1461,14 +1457,11 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
     child_log = next(log for log in logs if log.get("span_attributes", {}).get("name") == "child")
 
     # Parent should have error in input
-    assert "ERROR: Failed to mask data:" in parent_log["input"]
-    assert "ValueError: Cannot mask sensitive field 'password'" in parent_log["input"]
+    assert parent_log["input"] == "ERROR: Failed to mask field 'input' - ValueError"
 
     # Child should have errors in output and expected
-    assert "ERROR: Failed to mask data:" in child_log["output"]
-    assert "ZeroDivisionError" in child_log["output"]
-    assert "ERROR: Failed to mask data:" in child_log["expected"]
-    assert "IndexError" in child_log["expected"]
+    assert child_log["output"] == "ERROR: Failed to mask field 'output' - ZeroDivisionError"
+    assert child_log["expected"] == "ERROR: Failed to mask field 'expected' - IndexError"
 
     # Clean up
     braintrust.set_masking_function(None)
