@@ -20,7 +20,8 @@
     "pyright": "^1.1.388"
   },
   "overrides": {
-    "zod": "3.25.34"
+    "zod": "3.25.34",
+    "tsup": "8.4.0"
   },
   "packageManager": "pnpm@8.15.5"
 }
