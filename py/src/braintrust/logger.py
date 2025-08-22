@@ -1120,7 +1120,6 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-    masking_function: Optional[Callable[[Any], Any]] = ...,
 ) -> "Experiment": ...
 
 
@@ -1143,7 +1142,6 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-    masking_function: Optional[Callable[[Any], Any]] = ...,
 ) -> "ReadonlyExperiment": ...
 
 
@@ -1293,9 +1291,7 @@ def init(
             ),
         )
 
-    ret = Experiment(
-        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset
-    )
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
     if set_current:
         _state.current_experiment = ret
     return ret
