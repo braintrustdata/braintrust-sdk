@@ -1,12 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import {
-  CompiledPrompt,
-  Span,
-  StartSpanArgs,
-  startSpan,
-  traced,
-} from "../logger";
+import { CompiledPrompt, Span, StartSpanArgs, startSpan } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
 import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
@@ -74,7 +68,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     get(target, name, receiver) {
       const baseVal = Reflect.get(target, name, receiver);
       if (name === "create") {
-        return wrapChatCompletion(baseVal.bind(target));
+        return wrapChatCompletions(baseVal.bind(target));
       } else if (name === "parse") {
         return wrapBetaChatCompletionParse(baseVal.bind(target));
       }
@@ -304,65 +298,6 @@ function logHeaders(response: Response, span: Span) {
   }
 }
 
-function wrapChatCompletion<
-  P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse,
->(
-  completion: (params: P, options?: unknown) => APIPromise<C>,
-): (params: P, options?: unknown) => Promise<any> {
-  return async (allParams: P & SpanInfo, options?: unknown) => {
-    const { span_info: _, ...params } = allParams;
-    const span = startSpan(
-      mergeDicts(
-        {
-          name: "Chat Completion",
-          spanAttributes: {
-            type: SpanTypeAttribute.LLM,
-          },
-        },
-        parseChatCompletionParams(allParams),
-      ),
-    );
-    const startTime = getCurrentUnixTimestamp();
-    if (params.stream) {
-      const { data: ret, response } = await completion(
-        // We could get rid of this type coercion if we could somehow enforce
-        // that `P extends ChatParams` BUT does not have the property
-        // `span_info`.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        params as P,
-        options,
-      ).withResponse();
-      logHeaders(response, span);
-      const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
-      ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
-      return ret;
-    } else {
-      try {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const completionResponse = completion(
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          params as P,
-          options,
-        ) as APIPromise<NonStreamingChatResponse>;
-        const { data: ret, response } = await completionResponse.withResponse();
-        logHeaders(response, span);
-        const { messages, ...rest } = params;
-        span.log({
-          input: messages,
-          metadata: {
-            ...rest,
-          },
-        });
-        logCompletionResponse(startTime, ret, span);
-        return ret;
-      } finally {
-        span.end();
-      }
-    }
-  };
-}
-
 function parseBaseParams<T extends Record<string, any>>(
   allParams: T & SpanInfo,
   inputField: string,
@@ -381,46 +316,117 @@ function parseBaseParams<T extends Record<string, any>>(
   return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }
 
+// A generic type for the OpenAI methods we are wrapping (e.g., `chat.completions.create`)
+type OpenAIAsyncMethod<T, R> = (params: T, options?: unknown) => APIPromise<R>;
+
 function createApiWrapper<T, R>(
   name: string,
-  create: (
-    params: Omit<T & SpanInfo, "span_info">,
-    options?: unknown,
-  ) => APIPromise<R>,
-  processResponse: (result: R, span: Span) => void,
+  create: OpenAIAsyncMethod<T, R>,
+  processResponse: (
+    startTime: number,
+    result: R,
+    span: Span,
+    allParams: T & SpanInfo,
+  ) => void,
   parseParams: (params: T & SpanInfo) => StartSpanArgs,
-): (params: T & SpanInfo, options?: unknown) => Promise<any> {
-  return async (allParams: T & SpanInfo, options?: unknown) => {
+): OpenAIAsyncMethod<T, R> {
+  const wrappedFn = (
+    allParams: T & SpanInfo,
+    options?: unknown,
+  ): APIPromise<R> => {
     const { span_info: _, ...params } = allParams;
-    return traced(
-      async (span) => {
-        const { data: result, response } = await create(
-          params,
-          options,
-        ).withResponse();
-        logHeaders(response, span);
-        processResponse(result, span);
-        return result;
+
+    // Cache the execution promise to ensure we only execute once
+    let executionPromise: Promise<EnhancedResponse> | null = null;
+
+    const executeWrapped = (): Promise<EnhancedResponse> => {
+      if (!executionPromise) {
+        executionPromise = (async () => {
+          const span = startSpan(
+            mergeDicts(
+              {
+                name,
+                spanAttributes: {
+                  type: SpanTypeAttribute.LLM,
+                },
+              },
+              parseParams(allParams),
+            ),
+          );
+          const startTime = getCurrentUnixTimestamp();
+
+          if ("stream" in params && params.stream) {
+            const { data: ret, response } = await create(
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              params as T,
+              options,
+            ).withResponse();
+            logHeaders(response, span);
+            const wrapperStream = new WrapperStream(
+              span,
+              startTime,
+              ret.iterator(),
+            );
+            ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
+            // Note: span is not ended for streaming - it will be ended by WrapperStream
+            const _ = await wrapperStream;
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            return { data: ret as R, response };
+          } else {
+            try {
+              const { data: result, response } = await create(
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                params as T,
+                options,
+              ).withResponse();
+              logHeaders(response, span);
+              processResponse(startTime, result, span, allParams);
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              return { data: result as R, response };
+            } finally {
+              span.end();
+            }
+          }
+        })();
+      }
+      return executionPromise;
+    };
+
+    // Create a Promise that resolves to just the data
+    const dataPromise = executeWrapped().then((result) => result.data);
+
+    // Create an APIPromise using a Proxy pattern:
+    // - The base object is a Promise<R> that resolves to the completion data
+    // - The Proxy intercepts property access to add the withResponse() method
+    // - This maintains full Promise compatibility while extending the API
+    // - The withResponse() method returns the same cached promise for both data and response
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return new Proxy(dataPromise, {
+      get(target, prop, receiver) {
+        // Special handling for withResponse method
+        if (prop === "withResponse") {
+          return executeWrapped;
+        }
+        // Forward all other properties to the underlying Promise
+        const value = Reflect.get(target, prop, receiver);
+        // If it's a function, bind it to maintain correct `this` context
+        if (typeof value === "function") {
+          return value.bind(target);
+        }
+        return value;
       },
-      mergeDicts(
-        {
-          name,
-          spanAttributes: {
-            type: SpanTypeAttribute.LLM,
-          },
-        },
-        parseParams(allParams),
-      ),
-    );
+    }) as APIPromise<R>;
   };
+
+  // We cast our implementation to the original method's signature.
+  // This hides `SpanInfo` from the public API.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return wrappedFn as OpenAIAsyncMethod<T, R>;
 }
 
 function createEndpointProxy<T, R>(
   target: any,
-  wrapperFn: (
-    create: (params: T, options?: unknown) => APIPromise<R>,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  ) => Function,
+  wrapperFn: (create: OpenAIAsyncMethod<T, R>) => OpenAIAsyncMethod<T, R>,
 ) {
   return new Proxy(target, {
     get(target, name, receiver) {
@@ -475,16 +481,31 @@ function processModerationResponse(
   });
 }
 
+const wrapChatCompletions = (
+  create: (
+    params: ChatParams,
+    options?: unknown,
+  ) => APIPromise<NonStreamingChatResponse | StreamingChatResponse>,
+) =>
+  createApiWrapper(
+    "Chat Completion",
+    create,
+    (startTime, result, span) => {
+      logCompletionResponse(startTime, result, span);
+    },
+    (params) => parseChatCompletionParams(params),
+  );
+
 const wrapEmbeddings = (
   create: (
     params: EmbeddingCreateParams,
     options?: unknown,
   ) => APIPromise<CreateEmbeddingResponse>,
 ) =>
-  createApiWrapper<EmbeddingCreateParams, CreateEmbeddingResponse>(
+  createApiWrapper(
     "Embedding",
     create,
-    processEmbeddingResponse,
+    (_startTime, result, span) => processEmbeddingResponse(result, span),
     (params) => parseBaseParams(params, "input"),
   );
 
@@ -494,10 +515,10 @@ const wrapModerations = (
     options?: unknown,
   ) => APIPromise<CreateModerationResponse>,
 ) =>
-  createApiWrapper<ModerationCreateParams, CreateModerationResponse>(
+  createApiWrapper(
     "Moderation",
     create,
-    processModerationResponse,
+    (_startTime, result, span) => processModerationResponse(result, span),
     (params) => parseBaseParams(params, "input"),
   );
 
