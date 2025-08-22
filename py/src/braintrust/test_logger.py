@@ -1131,6 +1131,393 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
 
 
+def test_masking_function_logger(with_memory_logger, with_simulate_login):
+    """Test that masking function is applied to logged data in Logger."""
+
+    def masking_function(data):
+        """Replace any occurrence of 'sensitive' with 'REDACTED'"""
+        if isinstance(data, str):
+            return data.replace('sensitive', 'REDACTED')
+        elif isinstance(data, dict):
+            masked = {}
+            for k, v in data.items():
+                if isinstance(v, str) and 'sensitive' in v:
+                    masked[k] = v.replace('sensitive', 'REDACTED')
+                elif isinstance(v, dict):
+                    masked[k] = masking_function(v)
+                elif isinstance(v, list):
+                    masked[k] = [masking_function(item) if isinstance(item, (dict, list)) else item for item in v]
+                else:
+                    masked[k] = v
+            return masked
+        elif isinstance(data, list):
+            return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
+        return data
+
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test logger
+    test_logger = init_test_logger("test_project")
+
+    # Log some data with sensitive information
+    test_logger.log(
+        input="This is a sensitive input",
+        output={"message": "This contains sensitive data", "count": 42},
+        metadata={"user": "sensitive_user", "safe": "normal_data"},
+    )
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Verify masking was applied
+    assert log["input"] == "This is a REDACTED input"
+    assert log["output"]["message"] == "This contains REDACTED data"
+    assert log["output"]["count"] == 42
+    assert log["metadata"]["user"] == "REDACTED_user"
+    assert log["metadata"]["safe"] == "normal_data"
+
+    # Clean up
+    braintrust.set_masking_function(None)
+
+
+def test_masking_function_experiment(with_memory_logger, with_simulate_login):
+    """Test that masking function is applied to logged data in Experiment."""
+
+    def masking_function(data):
+        """Replace any occurrence of 'password' with 'XXX'"""
+        if isinstance(data, str):
+            return data.replace('password', 'XXX')
+        elif isinstance(data, dict):
+            masked = {}
+            for k, v in data.items():
+                if k == "password":
+                    # Mask the value when the key is "password"
+                    masked[k] = "XXX"
+                elif isinstance(v, str) and 'password' in v:
+                    masked[k] = v.replace('password', 'XXX')
+                elif isinstance(v, dict):
+                    masked[k] = masking_function(v)
+                elif isinstance(v, list):
+                    masked[k] = [masking_function(item) if isinstance(item, (dict, list)) else item for item in v]
+                else:
+                    masked[k] = v
+            return masked
+        elif isinstance(data, list):
+            return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
+        return data
+
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test experiment
+    from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
+    project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
+    experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
+    metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+    experiment = Experiment(lazy_metadata=lazy_metadata)
+
+    # Log some data with passwords
+    experiment.log(
+        input={"command": "login", "password": "secret123"},
+        output="Login successful with password validation",
+        scores={"accuracy": 0.95},
+    )
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+    assert len(logs) > 0  # Should have at least one log entry
+
+    # Debug: Print all logs to see what's there
+    print(f"Number of logs: {len(logs)}")
+    for i, log in enumerate(logs):
+        print(f"Log {i}: {log}")
+
+    # Find the main log entry (not the end span)
+    main_log = None
+    for log in logs:
+        if log.get("input") is not None:
+            main_log = log
+            break
+
+    assert main_log is not None, "Could not find main log entry"
+
+    # Verify masking was applied
+    assert main_log["input"]["command"] == "login"
+    assert main_log["input"]["password"] == "XXX"
+    assert main_log["output"] == "Login successful with XXX validation"
+    assert main_log["scores"]["accuracy"] == 0.95
+
+    # Clean up
+    braintrust.set_masking_function(None)
+
+
+def test_masking_function_propagates_to_spans(with_memory_logger, with_simulate_login):
+    """Test that masking function propagates from parent to child spans."""
+
+    def masking_function(data):
+        """Replace any 'api_key' field with 'HIDDEN'"""
+        if isinstance(data, dict):
+            masked = {}
+            for k, v in data.items():
+                if k == "api_key":
+                    masked[k] = "HIDDEN"
+                elif isinstance(v, dict):
+                    masked[k] = masking_function(v)
+                elif isinstance(v, list):
+                    masked[k] = [masking_function(item) if isinstance(item, (dict, list)) else item for item in v]
+                else:
+                    masked[k] = v
+            return masked
+        elif isinstance(data, list):
+            return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
+        return data
+
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test logger
+    test_logger = init_test_logger("test_project")
+
+    # Create parent span
+    with test_logger.start_span(name="parent_span") as parent:
+        parent.log(input={"api_key": "sk-12345", "query": "test"})
+
+        # Create child span
+        with parent.start_span(name="child_span") as child:
+            child.log(output={"response": "data", "api_key": "sk-67890"})
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+
+    # Find parent and child logs
+    parent_log = next((log for log in logs if log.get("span_attributes", {}).get("name") == "parent_span"), None)
+    child_log = next((log for log in logs if log.get("span_attributes", {}).get("name") == "child_span"), None)
+
+    assert parent_log is not None
+    assert child_log is not None
+
+    # Verify masking was applied to both spans
+    assert parent_log["input"]["api_key"] == "HIDDEN"
+    assert parent_log["input"]["query"] == "test"
+    assert child_log["output"]["api_key"] == "HIDDEN"
+    assert child_log["output"]["response"] == "data"
+
+
+def test_masking_function_dataset(with_memory_logger, with_simulate_login):
+    """Test that masking function is applied to dataset operations."""
+
+    def masking_function(data):
+        """Replace email addresses with 'EMAIL_REDACTED'"""
+        if isinstance(data, dict):
+            masked = {}
+            for k, v in data.items():
+                if isinstance(v, str) and '@' in v and '.' in v:
+                    # Simple email detection
+                    masked[k] = "EMAIL_REDACTED"
+                elif isinstance(v, dict):
+                    masked[k] = masking_function(v)
+                elif isinstance(v, list):
+                    masked[k] = [masking_function(item) if isinstance(item, (dict, list)) else item for item in v]
+                else:
+                    masked[k] = v
+            return masked
+        elif isinstance(data, list):
+            return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
+        return data
+
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test dataset
+    from braintrust.logger import Dataset, ObjectMetadata, ProjectDatasetMetadata
+    project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
+    dataset_metadata = ObjectMetadata(id="test_dataset", name="test_dataset", full_info=dict())
+    metadata = ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+    dataset = Dataset(lazy_metadata=lazy_metadata)
+
+    # Insert data with email addresses
+    dataset.insert(
+        input={"user": "john@example.com", "action": "login"},
+        expected={"status": "success", "email": "john@example.com"},
+        metadata={"admin_email": "admin@example.com"},
+    )
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Verify masking was applied
+    assert log["input"]["user"] == "EMAIL_REDACTED"
+    assert log["input"]["action"] == "login"
+    assert log["expected"]["status"] == "success"
+    assert log["expected"]["email"] == "EMAIL_REDACTED"
+    assert log["metadata"]["admin_email"] == "EMAIL_REDACTED"
+
+    # Clean up
+    braintrust.set_masking_function(None)
+
+
+
+def test_masking_function_with_error(with_memory_logger, with_simulate_login):
+    """Test that masking errors are handled gracefully and stack traces are captured."""
+
+    def broken_masking_function(data):
+        """A masking function that throws errors for certain data types."""
+        if isinstance(data, dict):
+            # This will throw an error when trying to iterate
+            for key in data:
+                if key == "password":
+                    # Simulate a complex error
+                    raise ValueError(f"Cannot mask sensitive field '{key}' - internal masking error")
+                elif key == "accuracy":
+                    # Trigger error for scores field
+                    raise TypeError("Cannot process numeric score")
+            return data
+        elif isinstance(data, str):
+            if "secret" in data.lower():
+                # Another type of error
+                result = 1 / 0  # ZeroDivisionError
+            return data
+        elif isinstance(data, list):
+            # Try to access non-existent index
+            if len(data) > 0:
+                _ = data[100]  # IndexError
+            return data
+        return data
+
+    # Set the broken masking function
+    braintrust.set_masking_function(broken_masking_function)
+
+    # Create test experiment
+    from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
+    project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
+    experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
+    metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+    experiment = Experiment(lazy_metadata=lazy_metadata)
+
+    # Log data that will trigger various errors
+    experiment.log(
+        input={"password": "my-password", "user": "test"},
+        output="This contains SECRET information",
+        expected=["item1", "item2"],
+        metadata={"safe": "data"},
+        scores={"score": 1.0}  # Add a safe score that won't trigger error
+    )
+
+    experiment.flush()
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Verify error handling
+    # The input should have an error message because of the password field
+    assert log["input"] == "ERROR: Failed to mask field 'input' - ValueError"
+
+    # The output should have an error message because of division by zero
+    assert log["output"] == "ERROR: Failed to mask field 'output' - ZeroDivisionError"
+
+    # The expected should have an error message because of index error
+    assert log["expected"] == "ERROR: Failed to mask field 'expected' - IndexError"
+
+    # Metadata should be fine since it doesn't trigger any errors
+    assert log["metadata"] == {"safe": "data"}
+
+    # Test with scores that triggers an error
+    experiment.log(
+        input={"data": "test"},
+        output="result",
+        scores={"accuracy": 0.95},  # This will trigger an error
+    )
+
+    logs2 = with_memory_logger.pop()
+    assert len(logs2) == 1
+    log2 = logs2[0]
+
+    # Scores should be dropped and error should be logged
+    assert "scores" not in log2
+    assert "error" in log2
+    assert log2["error"] == "ERROR: Failed to mask field 'scores' - TypeError"
+
+    # Test with metrics that triggers an error
+    experiment.log(
+        input={"data": "test2"},
+        output="result2",
+        scores={"score": 1.0},  # Safe score
+        metrics={"accuracy": 0.95},  # This will trigger an error
+    )
+
+    logs3 = with_memory_logger.pop()
+    assert len(logs3) == 1
+    log3 = logs3[0]
+
+    # Metrics should be dropped and error should be logged
+    assert "metrics" not in log3
+    assert "error" in log3
+    assert log3["error"] == "ERROR: Failed to mask field 'metrics' - TypeError"
+
+    # Test with both scores and metrics failing
+    experiment.log(
+        input={"data": "test3"},
+        output="result3",
+        scores={"accuracy": 0.85},  # This will trigger an error
+        metrics={"accuracy": 0.95},  # This will also trigger an error
+    )
+
+    logs4 = with_memory_logger.pop()
+    assert len(logs4) == 1
+    log4 = logs4[0]
+
+    # Both should be dropped and errors should be concatenated
+    assert "scores" not in log4
+    assert "metrics" not in log4
+    assert "error" in log4
+    assert "ERROR: Failed to mask field 'scores' - TypeError" in log4["error"]
+    assert "ERROR: Failed to mask field 'metrics' - TypeError" in log4["error"]
+    assert "; " in log4["error"]  # Check that errors are joined with semicolon
+
+    # Test with logger and nested spans
+    test_logger = init_test_logger("test_masking_errors_logger")
+
+    with test_logger.start_span("parent") as parent:
+        parent.log(
+            input={"api_key": "key123", "password": "secret"},
+            metadata={"request_id": "req-123"}
+        )
+
+        with parent.start_span("child") as child:
+            child.log(
+                output="Result with secret data",
+                expected=[1, 2, 3]
+            )
+
+    test_logger.flush()
+
+    # Check nested span logs
+    logs = with_memory_logger.pop()
+    assert len(logs) == 2  # parent and child
+
+    # Find parent and child by span_attributes
+    parent_log = next(log for log in logs if log.get("span_attributes", {}).get("name") == "parent")
+    child_log = next(log for log in logs if log.get("span_attributes", {}).get("name") == "child")
+
+    # Parent should have error in input
+    assert parent_log["input"] == "ERROR: Failed to mask field 'input' - ValueError"
+
+    # Child should have errors in output and expected
+    assert child_log["output"] == "ERROR: Failed to mask field 'output' - ZeroDivisionError"
+    assert child_log["expected"] == "ERROR: Failed to mask field 'expected' - IndexError"
+
+    # Clean up
+    braintrust.set_masking_function(None)
 
 def test_attachment_unreadable_path_logs_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="braintrust"):

@@ -98,6 +98,10 @@ from .util import (
     merge_dicts,
     response_raise_for_status,
 )
+
+# Fields that should be passed to the masking function
+# Note: "tags" field is intentionally excluded, but can be added if needed
+REDACTION_FIELDS = ["input", "output", "expected", "metadata", "context", "scores", "metrics"]
 from .xact_ids import prettify_xact
 
 Metadata = Dict[str, Any]
@@ -425,6 +429,10 @@ class BraintrustState:
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+        """Set the masking function on the background logger."""
+        self.global_bg_logger().set_masking_function(masking_function)
+
 
 _state: BraintrustState = None  # type: ignore
 
@@ -619,6 +627,39 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _MaskingError:
+    """Internal class to signal masking errors that need special handling."""
+    def __init__(self, field_name: str, error_type: str):
+        self.field_name = field_name
+        self.error_type = error_type
+        self.error_msg = f"ERROR: Failed to mask field '{field_name}' - {error_type}"
+
+
+def _apply_masking_to_field(masking_function: Callable[[Any], Any], data: Any, field_name: str) -> Any:
+    """Apply masking function to data and handle errors gracefully.
+
+    If the masking function raises an exception, returns an error message.
+    Returns _MaskingError for scores/metrics fields to signal they should be dropped.
+    """
+    try:
+        return masking_function(data)
+    except Exception as mask_error:
+        # Return a generic error message without the stack trace to avoid leaking PII
+        error_type = type(mask_error).__name__
+
+        # For scores and metrics fields, return a special error object
+        # to signal the field should be dropped and error logged
+        if field_name in ["scores", "metrics"]:
+            return _MaskingError(field_name, error_type)
+
+        # For metadata field that expects dict type, return a dict with error key
+        if field_name == "metadata":
+            return {"error": f"ERROR: Failed to mask field '{field_name}' - {error_type}"}
+
+        # For other fields, return the error message as a string
+        return f"ERROR: Failed to mask field '{field_name}' - {error_type}"
+
+
 class _BackgroundLogger(ABC):
     @abstractmethod
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
@@ -633,10 +674,15 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def __init__(self):
         self.lock = threading.Lock()
         self.logs = []
+        self.masking_function: Optional[Callable[[Any], Any]] = None
 
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         with self.lock:
             self.logs.extend(args)
+
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+        """Set the masking function for the memory logger."""
+        self.masking_function = masking_function
 
     def flush(self, batch_size: Optional[int] = None):
         pass
@@ -655,6 +701,30 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             first = merged[0]
             for other in merged[1:]:
                 first.extend(other)
+
+            # Apply masking after merge, similar to HTTPBackgroundLogger
+            if self.masking_function:
+                for i in range(len(first)):
+                    item = first[i]
+                    masked_item = item.copy()
+
+                    # Only mask specific fields if they exist
+                    for field in REDACTION_FIELDS:
+                        if field in item:
+                            masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                            if isinstance(masked_value, _MaskingError):
+                                # Drop the field and add error message
+                                if field in masked_item:
+                                    del masked_item[field]
+                                if "error" in masked_item:
+                                    masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
+                                else:
+                                    masked_item["error"] = masked_value.error_msg
+                            else:
+                                masked_item[field] = masked_value
+
+                    first[i] = masked_item
+
             return first
 
 
@@ -668,6 +738,7 @@ BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
 class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
+        self.masking_function: Optional[Callable[[Any], Any]] = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
 
@@ -827,6 +898,30 @@ class _HTTPBackgroundLogger:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 batched_items = merge_row_batch(unwrapped_items)
 
+                # Apply masking after merging but before sending to backend
+                if self.masking_function:
+                    for batch_idx in range(len(batched_items)):
+                        for item_idx in range(len(batched_items[batch_idx])):
+                            item = batched_items[batch_idx][item_idx]
+                            masked_item = item.copy()
+
+                            # Only mask specific fields if they exist
+                            for field in REDACTION_FIELDS:
+                                if field in item:
+                                    masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                                    if isinstance(masked_value, _MaskingError):
+                                        # Drop the field and add error message
+                                        if field in masked_item:
+                                            del masked_item[field]
+                                        if "error" in masked_item:
+                                            masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
+                                        else:
+                                            masked_item["error"] = masked_value.error_msg
+                                    else:
+                                        masked_item[field] = masked_value
+
+                            batched_items[batch_idx][item_idx] = masked_item
+
                 attachments: List["BaseAttachment"] = []
                 for batch in batched_items:
                     for item in batch:
@@ -936,6 +1031,10 @@ class _HTTPBackgroundLogger:
     # Should only be called by BraintrustState.
     def internal_replace_api_conn(self, api_conn: HTTPConnection):
         self.api_conn = LazyValue(lambda: api_conn, use_mutex=False)
+
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]):
+        """Set or update the masking function."""
+        self.masking_function = masking_function
 
 
 def _internal_reset_global_state() -> None:
@@ -1582,6 +1681,17 @@ def login(
 
         # Replace the global logger's api_conn with this one.
         _state.login_replace_api_conn(conn)
+
+
+def set_masking_function(masking_function: Optional[Callable[[Any], Any]]) -> None:
+    """
+    Set a global masking function that will be applied to all logged data before sending to Braintrust.
+    The masking function will be applied after records are merged but before they are sent to the backend.
+
+    :param masking_function: A function that takes a JSON-serializable object and returns a masked version.
+                           Set to None to disable masking.
+    """
+    _state.set_masking_function(masking_function)
 
 
 def log(**event: Any) -> str:
