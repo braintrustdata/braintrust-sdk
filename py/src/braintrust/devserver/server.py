@@ -1,13 +1,27 @@
 import asyncio
 import json
+import textwrap
 import traceback
 from typing import Any, Union
 
-import uvicorn
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from starlette.routing import Route
+try:
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
+    from starlette.routing import Route
+except ModuleNotFoundError as e:
+    raise ModuleNotFoundError(
+        textwrap.dedent(
+            f"""\
+            At least one dependency not found: {str(e)!r}
+            It is possible that braintrust was installed without the CLI dependencies. Run:
+
+              pip install 'braintrust[cli]'
+
+            to install braintrust with the CLI dependencies (make sure to quote 'braintrust[cli]')."""
+        )
+    )
 
 from ..framework import EvalAsync, EvalScorer, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..generated_types import FunctionId

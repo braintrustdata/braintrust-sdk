@@ -49,7 +49,6 @@ import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import zodToJsonSchema from "zod-to-json-schema";
-
 export interface DevServerOpts {
   host: string;
   port: number;

@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Dict, List, Optional, Union
 
-from braintrust.devserver.server import run_dev_server
-
 from .. import login
 from ..framework import (
     BaseExperiment,
@@ -294,6 +292,8 @@ def run(args):
     handles = initialize_handles(args.files)
 
     if args.dev:
+        from braintrust.devserver.server import run_dev_server
+
         objects = EvaluatorState()
         update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
         evaluators = [e.evaluator for e in objects.evaluators]
