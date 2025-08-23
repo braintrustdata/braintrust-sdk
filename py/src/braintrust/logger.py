@@ -403,9 +403,6 @@ class BraintrustState:
                 "current_logger",
                 "current_parent",
                 "current_span",
-                "_prompt_cache",
-                "_global_bg_logger",
-                "_override_bg_logger",
             )
         })
 
