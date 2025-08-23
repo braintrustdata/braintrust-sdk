@@ -394,7 +394,18 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__ = other.__dict__
+        self.__dict__.update({
+            k: v
+            for (k, v) in other.__dict__.items()
+            if k
+            not in (
+                "current_experiment",
+                "current_logger",
+                "current_parent",
+                "current_span",
+                "_prompt_cache",
+            )
+        })
 
     def login(
         self,
