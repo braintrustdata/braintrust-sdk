@@ -404,6 +404,8 @@ class BraintrustState:
                 "current_parent",
                 "current_span",
                 "_prompt_cache",
+                "_global_bg_logger",
+                "_override_bg_logger",
             )
         })
 
@@ -1666,6 +1668,7 @@ def login_to_state(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
 ) -> BraintrustState:
+    print("LOGGING IN!")
     app_url = _get_app_url(app_url)
 
     app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
