@@ -25,7 +25,7 @@
   "devDependencies": {
     "@langchain/core": "^0.3.42",
     "@langchain/langgraph": "^0.2.25",
-    "@langchain/openai": "^0.3.14",
+    "@langchain/openai": "^0.3.17",
     "@types/node": "^20.10.5",
     "msw": "^2.6.6",
     "tsup": "^8.3.5",
