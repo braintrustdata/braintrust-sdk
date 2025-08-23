@@ -403,8 +403,20 @@ class BraintrustState:
         org_name: Optional[str] = None,
         force_login: bool = False,
     ) -> None:
-        if self.api_url and not force_login:
-            # If we already have an API connection, we don't need to log in again.
+        if not force_login and self.logged_in:
+            # We have already logged in. If any provided login inputs disagree
+            # with our existing settings, raise an Exception warning the user to
+            # try again with `force_login=True`.
+            def check_updated_param(varname, arg, orig):
+                if arg is not None and orig is not None and arg != orig:
+                    raise Exception(
+                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
+                    )
+
+            sanitized_api_key = HTTPConnection.sanitize_token(api_key) if api_key else None
+            check_updated_param("app_url", app_url, self.app_url)
+            check_updated_param("api_key", sanitized_api_key, self.login_token)
+            check_updated_param("org_name", org_name, self.org_name)
             return
 
         state = login_to_state(
@@ -1635,23 +1647,7 @@ def login(
 
     # Only permit one thread to login at a time
     with login_lock:
-        if not force_login and _state.logged_in:
-            # We have already logged in. If any provided login inputs disagree
-            # with our existing settings, raise an Exception warning the user to
-            # try again with `force_login=True`.
-            def check_updated_param(varname, arg, orig):
-                if arg is not None and orig is not None and arg != orig:
-                    raise Exception(
-                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
-                    )
-
-            sanitized_api_key = HTTPConnection.sanitize_token(api_key) if api_key else None
-            check_updated_param("app_url", app_url, _state.app_url)
-            check_updated_param("api_key", sanitized_api_key, _state.login_token)
-            check_updated_param("org_name", org_name, _state.org_name)
-            return
-        new_state = login_to_state(app_url=app_url, api_key=api_key, org_name=org_name)
-        _state.copy_state(new_state)
+        _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
 
 def login_to_state(
