@@ -341,7 +341,7 @@ class BraintrustState:
         )
 
         def default_get_api_conn():
-            login()
+            self.login()
             return self.api_conn()
 
         # Any time we re-log in, we directly update the api_conn inside the
@@ -403,6 +403,8 @@ class BraintrustState:
                 "current_logger",
                 "current_parent",
                 "current_span",
+                "_global_bg_logger",
+                "_override_bg_logger",
             )
         })
 
