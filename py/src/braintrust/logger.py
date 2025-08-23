@@ -392,27 +392,9 @@ class BraintrustState:
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
 
-    # XXX REMOVE?
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.app_url = other.app_url
-        self.app_public_url = other.app_public_url
-        self.login_token = other.login_token
-        self.org_id = other.org_id
-        self.org_name = other.org_name
-        self.api_url = other.api_url
-        self.proxy_url = other.proxy_url
-        self.logged_in = other.logged_in
-        self.git_metadata_settings = other.git_metadata_settings
-
-        # Reset connections to ensure they are re-initialized with the new URLs.
-        self._app_conn = other._app_conn
-        self._api_conn = other._api_conn
-        self._proxy_conn = other._proxy_conn
-        self._user_info = other._user_info
-        self._global_bg_logger = other._global_bg_logger
-        self._override_bg_logger = other._override_bg_logger
-        self._prompt_cache = other._prompt_cache
+        self.__dict__ = other.__dict__
 
     def login(
         self,
@@ -430,8 +412,7 @@ class BraintrustState:
             api_key=api_key,
             org_name=org_name,
         )
-        # self.copy_login_info(state)
-        self.__dict__ = state.__dict__
+        self.copy_login_info(state)
 
     def app_conn(self):
         if not self._app_conn:
@@ -1670,8 +1651,7 @@ def login(
             check_updated_param("org_name", org_name, _state.org_name)
             return
         new_state = login_to_state(app_url=app_url, api_key=api_key, org_name=org_name)
-        # _state.copy_state(new_state)
-        _state = new_state
+        _state.copy_state(new_state)
 
 
 def login_to_state(
