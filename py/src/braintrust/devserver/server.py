@@ -96,13 +96,6 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     except Exception as e:
         return JSONResponse({"error": f"Failed to load dataset: {str(e)}"}, status_code=400)
 
-    try:
-        print(dataset)
-        print(list(dataset))
-    except Exception as e:
-        print(traceback.format_exc())
-        return JSONResponse({"error": f"Failed to process dataset: {str(e)}"}, status_code=400)
-
     # Validate parameters if provided
     validated_parameters = None
     if evaluator.parameters:
