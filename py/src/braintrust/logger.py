@@ -486,8 +486,7 @@ class BraintrustState:
         Set queue size limit enforcement for the global background logger.
         """
         bg_logger = self._global_bg_logger.get()
-        if hasattr(bg_logger, 'enforce_queue_size_limit'):
-            bg_logger.enforce_queue_size_limit(enforce)
+        bg_logger.enforce_queue_size_limit(enforce)
 
     def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
         """Set the masking function on the background logger."""

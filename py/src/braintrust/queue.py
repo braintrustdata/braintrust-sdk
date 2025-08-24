@@ -5,7 +5,7 @@ from .util import eprint
 
 T = TypeVar("T")
 
-DEFAULT_QUEUE_SIZE = 15000
+DEFAULT_QUEUE_SIZE = 25000
 
 
 class LogQueue:
