@@ -736,6 +736,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.logs = []
         self.masking_function: Optional[Callable[[Any], Any]] = None
 
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        pass
+
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         with self.lock:
             self.logs.extend(args)

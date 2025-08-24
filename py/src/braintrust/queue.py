@@ -1,4 +1,5 @@
 import threading
+from collections import deque
 from typing import List, Optional, TypeVar
 
 from .util import eprint
@@ -9,7 +10,7 @@ DEFAULT_QUEUE_SIZE = 25000
 
 
 class LogQueue:
-    """A thread-safe queue that can operate in bounded or unbounded mode."""
+    """A thread-safe queue that drops oldest items when full."""
 
     def __init__(self, maxsize: int = 0):
         """
@@ -24,7 +25,7 @@ class LogQueue:
 
         self.maxsize = maxsize
         self._mutex = threading.Lock()
-        self._queue: List[T] = []
+        self._queue: deque[T] = deque(maxlen=maxsize)
         self._has_items_event = threading.Event()
         self._total_dropped = 0
         self._enforce_size_limit = False
@@ -58,11 +59,11 @@ class LogQueue:
                 self._queue.append(item)
             else:
                 # For bounded queues, drop new items when full
-                if len(self._queue) >= self.maxsize:
-                    dropped.append(item)
+                while len(self._queue) >= self.maxsize:
+                    dropped_item = self._queue.popleft()
+                    dropped.append(dropped_item)
                     self._total_dropped += 1
-                else:
-                    self._queue.append(item)
+                self._queue.append(item)
 
             # Signal that items are available if queue was not empty before or item was added
             if len(self._queue) > 0:
@@ -77,17 +78,18 @@ class LogQueue:
         Returns:
             List of all items that were in the queue.
         """
+        old_queue = None
         with self._mutex:
             if len(self._queue) == 0:
                 return []
 
             old_queue = self._queue
-            self._queue = []
+            self._queue = deque(maxlen=self.maxsize)
 
             # Clear the event since queue is now empty
             self._has_items_event.clear()
 
-            return old_queue
+        return list(old_queue) if old_queue else []
 
     def size(self) -> int:
         """
