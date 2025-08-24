@@ -10,7 +10,11 @@ DEFAULT_QUEUE_SIZE = 25000
 
 
 class LogQueue:
-    """A thread-safe queue that drops oldest items when full."""
+    """A thread-safe queue with a fixed size that drops oldest items when full.
+
+    When enforcement is disabled (default), drops happen silently.
+    When enforcement is enabled, dropped items are tracked and returned.
+    """
 
     def __init__(self, maxsize: int = 0):
         """
@@ -32,11 +36,12 @@ class LogQueue:
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
         """
-        Set queue size limit enforcement. When enabled, the queue will drop new items
-        when it reaches maxsize. When disabled (default), the queue can grow unlimited.
+        Set queue size limit enforcement. When enabled, the queue will drop oldest items
+        when it reaches maxsize and return them from put(). When disabled (default),
+        the queue will still drop oldest items when full but won't track or return them.
 
         Args:
-            enforce: Whether to enforce the queue size limit.
+            enforce: Whether to track and return dropped items.
         """
         with self._mutex:
             self._enforce_size_limit = enforce
@@ -55,10 +60,10 @@ class LogQueue:
             dropped = []
 
             if not self._enforce_size_limit:
-                # For unlimited queues (default), just add items without dropping
+                # For queues with enforcement disabled, deque auto-drops silently
                 self._queue.append(item)
             else:
-                # For bounded queues, drop new items when full
+                # For bounded queues with enforcement, explicitly track drops
                 while len(self._queue) >= self.maxsize:
                     dropped_item = self._queue.popleft()
                     dropped.append(dropped_item)
