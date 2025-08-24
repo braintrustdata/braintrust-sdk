@@ -481,6 +481,14 @@ class BraintrustState:
     def flush(self):
         self._global_bg_logger.get().flush()
 
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        """
+        Set queue size limit enforcement for the global background logger.
+        """
+        bg_logger = self._global_bg_logger.get()
+        if hasattr(bg_logger, 'enforce_queue_size_limit'):
+            bg_logger.enforce_queue_size_limit(enforce)
+
     def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
         """Set the masking function on the background logger."""
         self.global_bg_logger().set_masking_function(masking_function)
@@ -846,6 +854,13 @@ class _HTTPBackgroundLogger:
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
 
         atexit.register(self._finalize)
+
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        """
+        Set queue size limit enforcement. When enabled, the queue will drop new items
+        when it reaches maxsize. When disabled (default), the queue can grow unlimited.
+        """
+        self.queue.enforce_queue_size_limit(enforce)
 
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         self._start()
@@ -1350,6 +1365,9 @@ def init(
             ),
         )
 
+    # For experiments, disable queue size limit enforcement (unlimited queue)
+    state.enforce_queue_size_limit(False)
+
     ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
     if set_current:
         state.current_experiment = ret
@@ -1488,6 +1506,9 @@ def init_logger(
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         return _compute_logger_metadata(**compute_metadata_args)
+
+    # For loggers, enable queue size limit enforcement (bounded queue)
+    state.enforce_queue_size_limit(True)
 
     ret = Logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),

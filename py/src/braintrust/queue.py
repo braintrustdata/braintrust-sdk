@@ -1,16 +1,15 @@
 import threading
-from collections import deque
 from typing import List, Optional, TypeVar
 
 from .util import eprint
 
 T = TypeVar("T")
 
-DEFAULT_QUEUE_SIZE = 25000
+DEFAULT_QUEUE_SIZE = 15000
 
 
 class LogQueue:
-    """A thread-safe queue that drops oldest items when full."""
+    """A thread-safe queue that can operate in bounded or unbounded mode."""
 
     def __init__(self, maxsize: int = 0):
         """
@@ -25,9 +24,21 @@ class LogQueue:
 
         self.maxsize = maxsize
         self._mutex = threading.Lock()
-        self._queue: deque[T] = deque(maxlen=maxsize)
+        self._queue: List[T] = []
         self._has_items_event = threading.Event()
         self._total_dropped = 0
+        self._enforce_size_limit = False
+
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        """
+        Set queue size limit enforcement. When enabled, the queue will drop new items
+        when it reaches maxsize. When disabled (default), the queue can grow unlimited.
+
+        Args:
+            enforce: Whether to enforce the queue size limit.
+        """
+        with self._mutex:
+            self._enforce_size_limit = enforce
 
     def put(self, item: T) -> List[T]:
         """
@@ -42,16 +53,20 @@ class LogQueue:
         with self._mutex:
             dropped = []
 
-            # If queue is at max capacity, popleft before appending
-            if len(self._queue) == self.maxsize:
-                dropped_item = self._queue.popleft()
-                dropped.append(dropped_item)
-                self._total_dropped += 1
+            if not self._enforce_size_limit:
+                # For unlimited queues (default), just add items without dropping
+                self._queue.append(item)
+            else:
+                # For bounded queues, drop new items when full
+                if len(self._queue) >= self.maxsize:
+                    dropped.append(item)
+                    self._total_dropped += 1
+                else:
+                    self._queue.append(item)
 
-            self._queue.append(item)
-
-            # Signal that items are available if queue was empty
-            self._has_items_event.set()
+            # Signal that items are available if queue was not empty before or item was added
+            if len(self._queue) > 0:
+                self._has_items_event.set()
 
         return dropped
 
@@ -62,18 +77,17 @@ class LogQueue:
         Returns:
             List of all items that were in the queue.
         """
-        old_queue = None
         with self._mutex:
             if len(self._queue) == 0:
                 return []
 
             old_queue = self._queue
-            self._queue = deque(maxlen=self.maxsize)
+            self._queue = []
 
             # Clear the event since queue is now empty
             self._has_items_event.clear()
 
-        return list(old_queue) if old_queue else []
+            return old_queue
 
     def size(self) -> int:
         """

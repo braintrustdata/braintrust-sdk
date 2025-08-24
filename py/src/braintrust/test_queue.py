@@ -35,6 +35,8 @@ def test_log_queue_drop_behavior():
     """Test queue drops oldest items when full, including single and multiple drops"""
     # Test basic drop behavior with size 2
     queue = LogQueue(maxsize=2)
+    # Enable size limit enforcement for this test
+    queue.enforce_queue_size_limit(True)
 
     # Fill queue to capacity
     d1 = queue.put("item1")
@@ -42,34 +44,36 @@ def test_log_queue_drop_behavior():
     assert not d1
     assert not d2
 
-    # Adding more should drop the oldest (item1)
+    # Adding more should drop the new items (with enforcement enabled)
     d3 = queue.put("item3")
-    assert d3 == ["item1"]
+    assert d3 == ["item3"]  # New item is dropped
 
     d4 = queue.put("item4")
-    assert d4 == ["item2"]
+    assert d4 == ["item4"]  # New item is dropped
 
-    # Queue should now contain newest items
+    # Queue should still contain the original items
     items = queue.drain_all()
-    assert items == ["item3", "item4"]
+    assert items == ["item1", "item2"]
 
     # Test size limit with maxsize=1
     queue_small = LogQueue(maxsize=1)
+    queue_small.enforce_queue_size_limit(True)
 
     d1 = queue_small.put("item1")
     assert d1 == []
     assert queue_small.size() == 1
 
-    # Adding another item should drop the first
+    # Adding another item should drop the new item (with enforcement enabled)
     d2 = queue_small.put("item2")
-    assert d2 == ["item1"]
+    assert d2 == ["item2"]  # New item is dropped
     assert queue_small.size() == 1
 
     items = queue_small.drain_all()
-    assert items == ["item2"]
+    assert items == ["item1"]  # Original item remains
 
     # Test multiple drops in sequence
     queue_multi = LogQueue(maxsize=2)
+    queue_multi.enforce_queue_size_limit(True)
 
     # Fill queue
     queue_multi.put("item1")
@@ -79,12 +83,12 @@ def test_log_queue_drop_behavior():
     dropped1 = queue_multi.put("item3")
     dropped2 = queue_multi.put("item4")
 
-    assert dropped1 == ["item1"]
-    assert dropped2 == ["item2"]
+    assert dropped1 == ["item3"]  # New items are dropped
+    assert dropped2 == ["item4"]  # New items are dropped
 
-    # Queue should contain the newest items
+    # Queue should contain the original items
     items = queue_multi.drain_all()
-    assert items == ["item3", "item4"]
+    assert items == ["item1", "item2"]
 
 
 def test_log_queue_wait_for_items_semaphore_reset():
@@ -141,6 +145,7 @@ def test_log_queue_default_size():
 async def test_queue_never_blocks_event_loop():
     """Test that queue operations don't block the asyncio event loop"""
     queue = LogQueue(maxsize=1)
+    queue.enforce_queue_size_limit(True)  # Enable enforcement
 
     # Fill the queue
     queue.put("item1")
@@ -157,7 +162,7 @@ async def test_queue_never_blocks_event_loop():
 
     # This should not block since we drop when full
     dropped = queue.put("item2")
-    assert dropped == ["item1"]
+    assert dropped == ["item2"]  # New item is dropped
 
     # Wait for flag task to complete
     await flag_task
@@ -173,6 +178,7 @@ async def test_queue_never_blocks_event_loop():
 async def test_queue_concurrent_drops_and_drains():
     """Test concurrent producer/consumer with drops and drains in asyncio"""
     queue = LogQueue(maxsize=3)
+    queue.enforce_queue_size_limit(True)  # Enable enforcement to ensure drops
 
     total_pushed = 0
     total_dropped = 0
