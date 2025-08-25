@@ -304,120 +304,167 @@ describe("AISpanProcessor", () => {
     customProvider.shutdown();
   });
 
-  it("should correctly identify root spans across OTel v1 and v2", () => {
-    // Create new processor with filtering enabled
-    const customMemoryExporter = new InMemorySpanExporter();
-    const customFilterProcessor = new AISpanProcessor(
-      new SimpleSpanProcessor(customMemoryExporter),
+  describe("cross-version span filtering", () => {
+    it.each([
+      // Root spans (no parent) - should always be kept
+      {
+        name: "v1 root span",
+        spanName: "v1-root-span",
+        parentSpanContext: undefined,
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "root spans are always kept",
+      },
+      {
+        name: "v2 root span",
+        spanName: "v2-root-span",
+        parentSpanContext: undefined,
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "root spans are always kept",
+      },
+
+      // Child spans without AI prefixes - should be dropped
+      {
+        name: "v1 child span (no AI prefix)",
+        spanName: "database.query",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+      {
+        name: "v2 child span (no AI prefix)",
+        spanName: "http.request",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+      {
+        name: "mixed child span (no AI prefix)",
+        spanName: "regular.operation",
+        parentSpanContext: { spanId: "parent-mixed", traceId: "trace-mixed" },
+        parentSpanId: "parent-mixed-id",
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+
+      // Child spans with AI prefixes - should be kept
+      {
+        name: "v1 child span with gen_ai prefix",
+        spanName: "gen_ai.completion",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v2 child span with llm prefix",
+        spanName: "llm.generate",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v1 child span with braintrust prefix",
+        spanName: "braintrust.eval",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v2 child span with ai prefix",
+        spanName: "ai.model_call",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "mixed child span with traceloop prefix",
+        spanName: "traceloop.agent",
+        parentSpanContext: { spanId: "parent-mixed", traceId: "trace-mixed" },
+        parentSpanId: "parent-mixed-id",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+
+      // Child spans with AI attribute prefixes - should be kept
+      {
+        name: "v1 child span with gen_ai attribute",
+        spanName: "some.operation",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: { "gen_ai.model": "gpt-4" },
+        expected: true,
+        reason: "child spans with AI attribute prefixes are kept",
+      },
+      {
+        name: "v2 child span with llm attribute",
+        spanName: "some.operation",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: { "llm.temperature": 0.7 },
+        expected: true,
+        reason: "child spans with AI attribute prefixes are kept",
+      },
+    ])(
+      "should filter spans correctly across OTel versions: $name",
+      ({
+        spanName,
+        parentSpanContext,
+        parentSpanId,
+        attributes,
+        expected,
+        reason,
+      }) => {
+        const filterProcessor = new AISpanProcessor({} as any);
+
+        const mockSpan = {
+          name: spanName,
+          attributes,
+          parentSpanContext,
+          parentSpanId,
+          spanContext: () => ({
+            spanId: "test-span-id",
+            traceId: "test-trace-id",
+          }),
+          kind: 0,
+          startTime: [Date.now(), 0],
+          endTime: [Date.now(), 0],
+          status: { code: 0 },
+          ended: true,
+          duration: [0, 1000000],
+          events: [],
+          links: [],
+          resource: {} as any,
+          instrumentationLibrary: {} as any,
+          instrumentationScope: {} as any,
+          droppedAttributesCount: 0,
+          droppedEventsCount: 0,
+          droppedLinksCount: 0,
+        } as ReadableSpan;
+
+        const result = (filterProcessor as any).shouldKeepFilteredSpan(
+          mockSpan,
+        );
+
+        expect(result).toBe(expected);
+      },
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
-    const customTracer = customProvider.getTracer("cross_version_test");
-
-    // Create root spans (these should be kept)
-    const rootSpan1 = customTracer.startSpan("v1-root-span");
-    const rootSpan2 = customTracer.startSpan("v2-root-span");
-
-    // Create child spans (these should be dropped - no AI prefixes)
-    const parentContext1 = trace.setSpanContext(
-      context.active(),
-      rootSpan1.spanContext(),
-    );
-    const childSpan1 = customTracer.startSpan(
-      "v1-child-span",
-      {},
-      parentContext1,
-    );
-
-    const parentContext2 = trace.setSpanContext(
-      context.active(),
-      rootSpan2.spanContext(),
-    );
-    const childSpan2 = customTracer.startSpan(
-      "v2-child-span",
-      {},
-      parentContext2,
-    );
-    const mixedChildSpan = customTracer.startSpan(
-      "mixed-child-span",
-      {},
-      parentContext2,
-    );
-
-    // End all spans
-    childSpan1.end();
-    childSpan2.end();
-    mixedChildSpan.end();
-    rootSpan1.end();
-    rootSpan2.end();
-
-    const exportedSpans = customMemoryExporter.getFinishedSpans();
-    const spanNames = exportedSpans.map((s) => s.name);
-
-    expect(spanNames).toEqual(
-      expect.arrayContaining(["v1-root-span", "v2-root-span"]),
-    );
-    expect(spanNames).toHaveLength(2);
-
-    customProvider.shutdown();
-  });
-
-  it("should filter child spans based on AI prefixes across OTel versions", () => {
-    // Create new processor with filtering enabled
-    const customMemoryExporter = new InMemorySpanExporter();
-    const customFilterProcessor = new AISpanProcessor(
-      new SimpleSpanProcessor(customMemoryExporter),
-    );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
-    const customTracer = customProvider.getTracer("ai_prefix_test");
-
-    // Create a root span
-    const rootSpan = customTracer.startSpan("root");
-
-    const parentContext = trace.setSpanContext(
-      context.active(),
-      rootSpan.spanContext(),
-    );
-
-    // Create AI child spans (these should be kept)
-    const aiSpan1 = customTracer.startSpan(
-      "gen_ai.completion",
-      {},
-      parentContext,
-    );
-    const aiSpan2 = customTracer.startSpan("llm.generate", {}, parentContext);
-
-    // Create non-AI child spans (these should be dropped)
-    const nonAiSpan1 = customTracer.startSpan(
-      "database.query",
-      {},
-      parentContext,
-    );
-    const nonAiSpan2 = customTracer.startSpan(
-      "http.request",
-      {},
-      parentContext,
-    );
-
-    // End all spans
-    aiSpan1.end();
-    aiSpan2.end();
-    nonAiSpan1.end();
-    nonAiSpan2.end();
-    rootSpan.end();
-
-    const exportedSpans = customMemoryExporter.getFinishedSpans();
-    const spanNames = exportedSpans.map((s) => s.name);
-
-    expect(spanNames).toEqual(
-      expect.arrayContaining(["root", "gen_ai.completion", "llm.generate"]),
-    );
-    expect(spanNames).toHaveLength(3);
-
-    customProvider.shutdown();
   });
 });
 
