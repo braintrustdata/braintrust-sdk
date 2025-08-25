@@ -303,6 +303,122 @@ describe("AISpanProcessor", () => {
 
     customProvider.shutdown();
   });
+
+  it("should correctly identify root spans across OTel v1 and v2", () => {
+    // Create new processor with filtering enabled
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+    );
+    const customProvider = new BasicTracerProvider({
+      spanProcessors: [customFilterProcessor],
+    });
+    const customTracer = customProvider.getTracer("cross_version_test");
+
+    // Create root spans (these should be kept)
+    const rootSpan1 = customTracer.startSpan("v1-root-span");
+    const rootSpan2 = customTracer.startSpan("v2-root-span");
+
+    // Create child spans (these should be dropped - no AI prefixes)
+    const parentContext1 = trace.setSpanContext(
+      context.active(),
+      rootSpan1.spanContext(),
+    );
+    const childSpan1 = customTracer.startSpan(
+      "v1-child-span",
+      {},
+      parentContext1,
+    );
+
+    const parentContext2 = trace.setSpanContext(
+      context.active(),
+      rootSpan2.spanContext(),
+    );
+    const childSpan2 = customTracer.startSpan(
+      "v2-child-span",
+      {},
+      parentContext2,
+    );
+    const mixedChildSpan = customTracer.startSpan(
+      "mixed-child-span",
+      {},
+      parentContext2,
+    );
+
+    // End all spans
+    childSpan1.end();
+    childSpan2.end();
+    mixedChildSpan.end();
+    rootSpan1.end();
+    rootSpan2.end();
+
+    const exportedSpans = customMemoryExporter.getFinishedSpans();
+    const spanNames = exportedSpans.map((s) => s.name);
+
+    expect(spanNames).toEqual(
+      expect.arrayContaining(["v1-root-span", "v2-root-span"]),
+    );
+    expect(spanNames).toHaveLength(2);
+
+    customProvider.shutdown();
+  });
+
+  it("should filter child spans based on AI prefixes across OTel versions", () => {
+    // Create new processor with filtering enabled
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+    );
+    const customProvider = new BasicTracerProvider({
+      spanProcessors: [customFilterProcessor],
+    });
+    const customTracer = customProvider.getTracer("ai_prefix_test");
+
+    // Create a root span
+    const rootSpan = customTracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+
+    // Create AI child spans (these should be kept)
+    const aiSpan1 = customTracer.startSpan(
+      "gen_ai.completion",
+      {},
+      parentContext,
+    );
+    const aiSpan2 = customTracer.startSpan("llm.generate", {}, parentContext);
+
+    // Create non-AI child spans (these should be dropped)
+    const nonAiSpan1 = customTracer.startSpan(
+      "database.query",
+      {},
+      parentContext,
+    );
+    const nonAiSpan2 = customTracer.startSpan(
+      "http.request",
+      {},
+      parentContext,
+    );
+
+    // End all spans
+    aiSpan1.end();
+    aiSpan2.end();
+    nonAiSpan1.end();
+    nonAiSpan2.end();
+    rootSpan.end();
+
+    const exportedSpans = customMemoryExporter.getFinishedSpans();
+    const spanNames = exportedSpans.map((s) => s.name);
+
+    expect(spanNames).toEqual(
+      expect.arrayContaining(["root", "gen_ai.completion", "llm.generate"]),
+    );
+    expect(spanNames).toHaveLength(3);
+
+    customProvider.shutdown();
+  });
 });
 
 describe("BraintrustSpanProcessor", () => {
