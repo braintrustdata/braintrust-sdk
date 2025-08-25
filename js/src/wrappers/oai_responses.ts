@@ -35,9 +35,14 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
 
 // convert response.create params into a span
 function parseSpanFromResponseCreateParams(params: any): TimedSpan {
-  // responses.create is meant to take a single message and instruction.
-  // Convert that to the form our backend expects.
-  const input = [{ role: "user", content: params.input }];
+  // When input is a single message, convert it to the form our backend expects.
+  const input =
+    typeof params.input === "string"
+      ? [{ role: "user", content: params.input }]
+      : Array.isArray(params.input)
+        ? params.input
+        : [];
+
   if (params.instructions) {
     input.push({ role: "system", content: params.instructions });
   }
@@ -72,9 +77,13 @@ function parseEventFromResponseCreateResult(result: any) {
 
 // convert response.parse params into a span
 function parseSpanFromResponseParseParams(params: any): TimedSpan {
-  // responses.parse is meant to take a single message and instruction.
-  // Convert that to the form our backend expects.
-  const input = [{ role: "user", content: params.input }];
+  // When input is a single message, convert it to the form our backend expects.
+  const input =
+    typeof params.input === "string"
+      ? [{ role: "user", content: params.input }]
+      : Array.isArray(params.input)
+        ? params.input
+        : [];
   if (params.instructions) {
     input.push({ role: "system", content: params.instructions });
   }
