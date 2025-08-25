@@ -22,6 +22,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Type,
@@ -33,9 +34,10 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
 
+from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
-    NOOP_SPAN,
+    BraintrustState,
     Dataset,
     Experiment,
     ExperimentSummary,
@@ -43,9 +45,12 @@ from .logger import (
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
+    parent_context,
+    start_span,
     stringify_exception,
 )
 from .logger import init as _init_experiment
+from .parameters import EvalParameters
 from .resource_manager import ResourceManager
 from .score import Score, is_score, is_scorer
 from .serializable_data_class import SerializableDataClass
@@ -127,6 +132,37 @@ class EvalResult(SerializableDataClass, Generic[Input, Output]):
     exc_info: Optional[str] = None
 
 
+@dataclasses.dataclass
+class TaskProgressEvent(TypedDict):
+    """Progress event that can be reported during task execution."""
+
+    format: FunctionFormat
+    output_type: FunctionOutputType
+    event: Literal[
+        "reasoning_delta",
+        "text_delta",
+        "json_delta",
+        "error",
+        "console",
+        "start",
+        "done",
+        "progress",
+    ]
+    data: str
+
+
+class SSEProgressEvent(TaskProgressEvent):
+    """
+    A progress event that can be reported during task execution, specifically for SSE (Server-Sent Events) streams.
+    This is a subclass of TaskProgressEvent with additional fields for SSE-specific metadata.
+    """
+
+    id: str
+    object_type: str
+    origin: ObjectReference
+    name: str
+
+
 class EvalHooks(abc.ABC, Generic[Output]):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
@@ -168,6 +204,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
         """
 
     @abc.abstractmethod
+    def report_progress(self, progress: TaskProgressEvent) -> None:
+        """
+        Report progress that will show up in the playground.
+        """
+        ...
+
+    @abc.abstractmethod
     def meta(self, **info: Any) -> None:
         """
         DEPRECATED: Use the metadata field on the hook directly.
@@ -176,6 +219,14 @@ class EvalHooks(abc.ABC, Generic[Output]):
         as keyword arguments, e.g. `hooks.meta(foo="bar")`.
         """
         ...
+
+    @property
+    @abc.abstractmethod
+    def parameters(self) -> Optional[Dict[str, Any]]:
+        """
+        The parameters for the current evaluation. These are the validated parameter values
+        that were passed to the evaluator.
+        """
 
 
 class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
@@ -390,6 +441,12 @@ class Evaluator(Generic[Input, Output]):
     summarize_scores: bool = True
     """
     Whether to summarize the scores of the experiment after it has run.
+    """
+
+    parameters: Optional[EvalParameters] = None
+    """
+    A set of parameters that will be passed to the evaluator.
+    Can be used to define prompts or other configurable values.
     """
 
 
@@ -623,6 +680,11 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    parameters: Optional[EvalParameters] = None,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -656,6 +718,7 @@ def _EvalCommon(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        parameters=parameters,
     )
 
     if _lazy_load:
@@ -684,7 +747,7 @@ def _EvalCommon(
         # NOTE: This code is duplicated with run_evaluator_task in py/src/braintrust/cli/eval.py.
         # Make sure to update those arguments if you change this.
         experiment = None
-        if not no_send_logs:
+        if not no_send_logs and parent is None:
             experiment = init_experiment(
                 project_name=evaluator.project_name if evaluator.project_id is None else None,
                 project_id=evaluator.project_id,
@@ -698,16 +761,24 @@ def _EvalCommon(
                 git_metadata_settings=evaluator.git_metadata_settings,
                 repo_info=evaluator.repo_info,
                 dataset=dataset,
+                state=state,
             )
 
+            if on_start:
+                summary = experiment.summarize(summarize_scores=False)
+                on_start(summary)
+
         async def run_to_completion():
-            try:
-                ret = await run_evaluator(experiment, evaluator, 0, [])
-                reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
-                return ret
-            finally:
-                if experiment:
-                    experiment.flush()
+            with parent_context(parent, state):
+                try:
+                    ret = await run_evaluator(experiment, evaluator, 0, [], stream, state)
+                    reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+                    return ret
+                finally:
+                    if experiment:
+                        experiment.flush()
+                    elif state is not None:
+                        state.flush()
 
         return run_to_completion
 
@@ -734,6 +805,11 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parameters: Optional[EvalParameters] = None,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -783,6 +859,14 @@ async def EvalAsync(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parameters: A set of parameters that will be passed to the evaluator.
+    :param on_start: An optional callback that will be called when the evaluation starts. It receives the
+    `ExperimentSummary` object, which can be used to display metadata about the experiment.
+    :param stream: A function that will be called with progress events, which can be used to
+    display intermediate progress.
+    :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
+    the object or span specified by this parent.
+    :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -806,6 +890,11 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parameters=parameters,
+        on_start=on_start,
+        stream=stream,
+        parent=parent,
+        state=state,
     )
 
     return await f()
@@ -836,6 +925,11 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parameters: Optional[EvalParameters] = None,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -885,6 +979,14 @@ def Eval(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parameters: A set of parameters that will be passed to the evaluator.
+    :param on_start: An optional callback that will be called when the evaluation starts. It receives the
+    `ExperimentSummary` object, which can be used to display metadata about the experiment.
+    :param stream: A function that will be called with progress events, which can be used to
+    display intermediate progress.
+    :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
+    the object or span specified by this parent.
+    :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -910,6 +1012,11 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parameters=parameters,
+        on_start=on_start,
+        stream=stream,
+        parent=parent,
+        state=state,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1033,6 +1140,8 @@ class DictEvalHooks(Dict[str, Any]):
         expected: Optional[Any] = None,
         trial_index: int = 0,
         tags: Optional[Sequence[str]] = None,
+        report_progress: Callable[[TaskProgressEvent], None] = None,
+        parameters: Optional[Dict[str, Any]] = None,
     ):
         if metadata is not None:
             self.update({"metadata": metadata})
@@ -1044,6 +1153,9 @@ class DictEvalHooks(Dict[str, Any]):
             self.update({"tags": tags})
         else:
             self.update({"tags": []})
+
+        self._report_progress = report_progress
+        self._parameters = parameters
 
     @property
     def metadata(self):
@@ -1081,6 +1193,14 @@ class DictEvalHooks(Dict[str, Any]):
             self.update({"metadata": {}})
 
         self.get("metadata").update(info)  # type: ignore
+
+    def report_progress(self, event: TaskProgressEvent):
+        if self._report_progress:
+            return self._report_progress(event)
+
+    @property
+    def parameters(self) -> Optional[Dict[str, Any]]:
+        return self._parameters
 
 
 def init_experiment(
@@ -1139,10 +1259,12 @@ async def run_evaluator(
     evaluator: Evaluator[Input, Output],
     position: Optional[int],
     filters: List[Filter],
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
-        _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
+        _run_evaluator_internal(experiment, evaluator, position, filters, stream, state), evaluator.timeout
     )
 
     if experiment:
@@ -1163,7 +1285,14 @@ def default_error_score_handler(
     return scores
 
 
-async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+async def _run_evaluator_internal(
+    experiment,
+    evaluator: Evaluator,
+    position: Optional[int],
+    filters: List[Filter],
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    state: Optional[BraintrustState] = None,
+):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -1223,28 +1352,56 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         scores = {}
         tags = datum.tags
 
+        event_dataset = (
+            experiment.dataset if experiment else evaluator.data if isinstance(evaluator.data, Dataset) else None
+        )
+
+        origin = (
+            {
+                "object_type": "dataset",
+                "object_id": event_dataset.id,
+                "id": datum.id,
+                "created": datum.created,
+                "_xact_id": datum._xact_id,
+            }
+            if event_dataset and datum.id and datum._xact_id
+            else None
+        )
+        base_event = dict(
+            name="eval",
+            span_attributes={"type": SpanTypeAttribute.EVAL},
+            input=datum.input,
+            expected=datum.expected,
+            tags=tags,
+            origin=origin,
+        )
+
         if experiment:
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=tags,
-                origin={
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None,
-            )
+            root_span = experiment.start_span(**base_event)
         else:
-            root_span = NOOP_SPAN
+            # In most cases this will be a no-op span, but if the parent is set, it will use that ctx.
+            root_span = start_span(state=state, **base_event)
+
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index, tags=tags)
+
+                def report_progress(event: TaskProgressEvent):
+                    if not stream:
+                        return
+                    stream(
+                        SSEProgressEvent(
+                            id=root_span.id, origin=origin, name=evaluator.eval_name, object_type="task", **event
+                        )
+                    )
+
+                hooks = DictEvalHooks(
+                    metadata,
+                    expected=datum.expected,
+                    trial_index=trial_index,
+                    tags=tags,
+                    report_progress=report_progress,
+                    parameters=evaluator.parameters,
+                )
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
