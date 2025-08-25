@@ -137,10 +137,10 @@ export class AISpanProcessor {
    * 4. Any attribute name starts with those prefixes
    */
   private shouldKeepFilteredSpan(span: ReadableSpan): boolean {
-    console.log(
+    console.warn(
       `Filtering span: "${span.name}", hasParent: ${!!span.parentSpanContext}, attributes: ${JSON.stringify(span.attributes)}`,
     );
-    console.log(span);
+    console.warn(span);
     if (!span) {
       return false;
     }
@@ -357,12 +357,14 @@ export class BraintrustSpanProcessor {
 
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
+      console.warn("filter ai spans on");
       // Only enable filtering if explicitly requested
       this.aiSpanProcessor = new AISpanProcessor(
         this.processor,
         options.customFilter,
       );
     } else {
+      console.warn("filter ai spans off");
       // Use the batch processor directly without filtering (default behavior)
       this.aiSpanProcessor = this.processor;
     }
