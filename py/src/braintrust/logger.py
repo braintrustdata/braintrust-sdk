@@ -75,7 +75,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
-from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
+from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
@@ -333,12 +333,15 @@ class BraintrustState:
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
+        self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+            "braintrust_current_parent", default=None
+        )
         self.current_span: contextvars.ContextVar[Span] = contextvars.ContextVar(
             "braintrust_current_span", default=NOOP_SPAN
         )
 
         def default_get_api_conn():
-            login()
+            self.login()
             return self.api_conn()
 
         # Any time we re-log in, we directly update the api_conn inside the
@@ -389,6 +392,52 @@ class BraintrustState:
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
 
+    def copy_state(self, other: "BraintrustState"):
+        """Copy login information from another BraintrustState instance."""
+        self.__dict__.update({
+            k: v
+            for (k, v) in other.__dict__.items()
+            if k
+            not in (
+                "current_experiment",
+                "current_logger",
+                "current_parent",
+                "current_span",
+                "_global_bg_logger",
+                "_override_bg_logger",
+            )
+        })
+
+    def login(
+        self,
+        app_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        org_name: Optional[str] = None,
+        force_login: bool = False,
+    ) -> None:
+        if not force_login and self.logged_in:
+            # We have already logged in. If any provided login inputs disagree
+            # with our existing settings, raise an Exception warning the user to
+            # try again with `force_login=True`.
+            def check_updated_param(varname, arg, orig):
+                if arg is not None and orig is not None and arg != orig:
+                    raise Exception(
+                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
+                    )
+
+            sanitized_api_key = HTTPConnection.sanitize_token(api_key) if api_key else None
+            check_updated_param("app_url", app_url, self.app_url)
+            check_updated_param("api_key", sanitized_api_key, self.login_token)
+            check_updated_param("org_name", org_name, self.org_name)
+            return
+
+        state = login_to_state(
+            app_url=app_url,
+            api_key=api_key,
+            org_name=org_name,
+        )
+        self.copy_state(state)
+
     def app_conn(self):
         if not self._app_conn:
             if not self.app_url:
@@ -428,6 +477,16 @@ class BraintrustState:
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
+
+    def flush(self):
+        self._global_bg_logger.get().flush()
+
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        """
+        Set queue size limit enforcement for the global background logger.
+        """
+        bg_logger = self._global_bg_logger.get()
+        bg_logger.enforce_queue_size_limit(enforce)
 
     def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
         """Set the masking function on the background logger."""
@@ -629,6 +688,7 @@ def _check_json_serializable(event):
 
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
+
     def __init__(self, field_name: str, error_type: str):
         self.field_name = field_name
         self.error_type = error_type
@@ -675,6 +735,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.lock = threading.Lock()
         self.logs = []
         self.masking_function: Optional[Callable[[Any], Any]] = None
+
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        pass
 
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         with self.lock:
@@ -793,6 +856,13 @@ class _HTTPBackgroundLogger:
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
 
         atexit.register(self._finalize)
+
+    def enforce_queue_size_limit(self, enforce: bool) -> None:
+        """
+        Set queue size limit enforcement. When enabled, the queue will drop new items
+        when it reaches maxsize. When disabled (default), the queue can grow unlimited.
+        """
+        self.queue.enforce_queue_size_limit(enforce)
 
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         self._start()
@@ -1120,6 +1190,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "Experiment": ...
 
 
@@ -1142,6 +1213,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "ReadonlyExperiment": ...
 
 
@@ -1163,6 +1235,7 @@ def init(
     project_id: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1186,8 +1259,11 @@ def init(
     :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param state: (Optional) A BraintrustState object to use. If not specified, will use the global state. This is for advanced use only.
     :returns: The experiment object.
     """
+
+    state: BraintrustState = state or _state
 
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
@@ -1200,15 +1276,15 @@ def init(
             raise ValueError(f"Cannot open an experiment without specifying its name")
 
         def compute_metadata():
-            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            state.login(org_name=org_name, api_key=api_key, app_url=app_url)
             args = {
                 "experiment_name": experiment,
                 "project_name": project,
                 "project_id": project_id,
-                "org_name": _state.org_name,
+                "org_name": state.org_name,
             }
 
-            response = _state.app_conn().post_json("api/experiment/get", args)
+            response = state.app_conn().post_json("api/experiment/get", args)
             if len(response) == 0:
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
@@ -1223,15 +1299,15 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state)
 
     # pylint: disable=function-redefined
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {
             "project_name": project,
             "project_id": project_id,
-            "org_id": _state.org_id,
+            "org_id": state.org_id,
             "update": update,
         }
 
@@ -1244,7 +1320,7 @@ def init(
         if repo_info:
             repo_info_arg = repo_info
         else:
-            merged_git_metadata_settings = _state.git_metadata_settings
+            merged_git_metadata_settings = state.git_metadata_settings
             if git_metadata_settings is not None:
                 merged_git_metadata_settings = GitMetadataSettings.merge(
                     merged_git_metadata_settings, git_metadata_settings
@@ -1273,7 +1349,7 @@ def init(
 
         while True:
             try:
-                response = _state.app_conn().post_json("api/experiment/register", args)
+                response = state.app_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -1291,9 +1367,12 @@ def init(
             ),
         )
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
+    # For experiments, disable queue size limit enforcement (unlimited queue)
+    state.enforce_queue_size_limit(False)
+
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
     if set_current:
-        _state.current_experiment = ret
+        state.current_experiment = ret
     return ret
 
 
@@ -1315,6 +1394,7 @@ def init_dataset(
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
     _internal_btql: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1330,18 +1410,22 @@ def init_dataset(
     :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
     :param metadata: (Optional) a dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
+    :param _internal_btql: (Internal) If specified, the dataset will be created with the given BTQL filters.
+    :param state: (Internal) The Braintrust state to use. If not specified, will use the global state. For advanced use only.
     :returns: The dataset object.
     """
 
+    state = state or _state
+
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
-            {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
+            {"project_name": project, "project_id": project_id, "org_id": state.org_id},
             dataset_name=name,
             description=description,
             metadata=metadata,
         )
-        response = _state.app_conn().post_json("api/dataset/register", args)
+        response = state.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -1354,6 +1438,7 @@ def init_dataset(
         version=version,
         legacy=use_output,
         _internal_btql=_internal_btql,
+        state=state,
     )
 
 
@@ -1393,6 +1478,7 @@ def init_logger(
     org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
+    state: Optional[BraintrustState] = None,
 ) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -1409,6 +1495,7 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
+    state = state or _state
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
     link_args = {
@@ -1419,16 +1506,22 @@ def init_logger(
     }
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         return _compute_logger_metadata(**compute_metadata_args)
+
+    # For loggers, enable queue size limit enforcement (bounded queue)
+    state.enforce_queue_size_limit(True)
 
     ret = Logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
         compute_metadata_args=compute_metadata_args,
         link_args=link_args,
+        state=state,
     )
     if set_current:
+        if _state is None:
+            raise RuntimeError("_state is None in init_logger. This should never happen.")
         _state.current_logger = ret
     return ret
 
@@ -1589,98 +1682,90 @@ def login(
 
     # Only permit one thread to login at a time
     with login_lock:
-        if not force_login and _state.logged_in:
-            # We have already logged in. If any provided login inputs disagree
-            # with our existing settings, raise an Exception warning the user to
-            # try again with `force_login=True`.
-            def check_updated_param(varname, arg, orig):
-                if arg is not None and orig is not None and arg != orig:
-                    raise Exception(
-                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
-                    )
+        _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
-            sanitized_api_key = HTTPConnection.sanitize_token(api_key) if api_key else None
-            check_updated_param("app_url", app_url, _state.app_url)
-            check_updated_param("api_key", sanitized_api_key, _state.login_token)
-            check_updated_param("org_name", org_name, _state.org_name)
-            return
 
-        app_url = _get_app_url(app_url)
+def login_to_state(
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+) -> BraintrustState:
+    app_url = _get_app_url(app_url)
 
-        app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
+    app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
 
-        if api_key is None:
-            api_key = os.environ.get("BRAINTRUST_API_KEY")
+    if api_key is None:
+        api_key = os.environ.get("BRAINTRUST_API_KEY")
 
-        org_name = _get_org_name(org_name)
+    org_name = _get_org_name(org_name)
 
-        _state.reset_login_info()
+    state = BraintrustState()
 
-        _state.app_url = app_url
-        _state.app_public_url = app_public_url
-        _state.org_name = org_name
+    state.app_url = app_url
+    state.app_public_url = app_public_url
+    state.org_name = org_name
 
-        conn = None
-        if api_key == TEST_API_KEY:
-            # a small hook for pseudo-logins
-            test_org_info = [
-                {
-                    "id": "test-org-id",
-                    "name": org_name or "test-org-name",
-                    "api_url": "https://api.braintrust.ai",
-                    "proxy_url": "https://proxy.braintrust.ai",
-                }
-            ]
-            _check_org_info(test_org_info, org_name)
-            _state.login_token = TEST_API_KEY
-            _state.logged_in = True
-            return
-        elif api_key is not None:
-            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
-            app_conn.set_token(api_key)
-            resp = app_conn.post("api/apikey/login")
-            if not resp.ok:
-                masked_api_key = mask_api_key(api_key)
-                raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
-            info = resp.json()
+    conn = None
+    if api_key == TEST_API_KEY:
+        # a small hook for pseudo-logins
+        test_org_info = [
+            {
+                "id": "test-org-id",
+                "name": org_name or "test-org-name",
+                "api_url": "https://api.braintrust.ai",
+                "proxy_url": "https://proxy.braintrust.ai",
+            }
+        ]
+        _check_org_info(state, test_org_info, org_name)
+        state.login_token = TEST_API_KEY
+        state.logged_in = True
+        return state
+    elif api_key is not None:
+        app_conn = HTTPConnection(state.app_url, adapter=_http_adapter)
+        app_conn.set_token(api_key)
+        resp = app_conn.post("api/apikey/login")
+        if not resp.ok:
+            masked_api_key = mask_api_key(api_key)
+            raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
+        info = resp.json()
 
-            _check_org_info(info["org_info"], org_name)
+        _check_org_info(state, info["org_info"], org_name)
 
-            if not _state.api_url:
-                if org_name:
-                    raise ValueError(
-                        f"Unable to log into organization '{org_name}'."
-                        " Are you sure this credential is scoped to the organization?"
-                    )
-                else:
-                    raise ValueError("Unable to log into any organization with the provided credential.")
+        if not state.api_url:
+            if org_name:
+                raise ValueError(
+                    f"Unable to log into organization '{org_name}'."
+                    " Are you sure this credential is scoped to the organization?"
+                )
+            else:
+                raise ValueError("Unable to log into any organization with the provided credential.")
 
-            conn = _state.api_conn()
-            conn.set_token(api_key)
+        conn = state.api_conn()
+        conn.set_token(api_key)
 
-        if not conn:
-            raise ValueError(
-                "Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment."
-            )
+    if not conn:
+        raise ValueError("Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment.")
 
-        # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
-        # this point because we know the connection _can_ successfully ping.
-        conn.make_long_lived()
+    # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
+    # this point because we know the connection _can_ successfully ping.
+    conn.make_long_lived()
 
-        # Same for the app conn, which we know is valid because we have
-        # successfully logged in.
-        _state.app_conn().make_long_lived()
+    # Same for the app conn, which we know is valid because we have
+    # successfully logged in.
+    state.app_conn().make_long_lived()
 
-        # Set the same token in the API
-        _state.app_conn().set_token(conn.token)
-        if _state.proxy_url:
-            _state.proxy_conn().set_token(conn.token)
-            _state.proxy_conn().make_long_lived()
-        _state.login_token = conn.token
-        _state.logged_in = True
+    # Set the same token in the API
+    state.app_conn().set_token(conn.token)
+    if state.proxy_url:
+        state.proxy_conn().set_token(conn.token)
+        state.proxy_conn().make_long_lived()
+    state.login_token = conn.token
+    state.logged_in = True
 
-        # Replace the global logger's api_conn with this one.
-        _state.login_replace_api_conn(conn)
+    # Replace the global logger's api_conn with this one.
+    state.login_replace_api_conn(conn)
+
+    return state
 
 
 def set_masking_function(masking_function: Optional[Callable[[Any], Any]]) -> None:
@@ -1749,6 +1834,28 @@ def current_span() -> Span:
     """
 
     return _state.current_span.get()
+
+
+@contextlib.contextmanager
+def parent_context(parent: Optional[str], state: Optional[BraintrustState] = None):
+    """
+    Context manager to temporarily set the parent context for spans.
+
+    Args:
+        parent: The parent string to set during the context
+        state: Optional BraintrustState to use. If not provided, uses the global state.
+
+    Example:
+        with parent_context('parent-id-123', state=state):
+            # Any spans created here will use 'parent-id-123' as their parent
+            span = start_span("my-span")
+    """
+    state = state or _state
+    token = state.current_parent.set(parent)
+    try:
+        yield
+    finally:
+        state.current_parent.reset(token)
 
 
 def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
@@ -1964,6 +2071,7 @@ def start_span(
     set_current: Optional[bool] = None,
     parent: Optional[str] = None,
     propagated_event: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
     **event: Any,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
@@ -1972,6 +2080,12 @@ def start_span(
 
     See `Span.start_span` for full details.
     """
+
+    if not state:
+        state = _state
+
+    if not parent and state:
+        parent = state.current_parent.get()
 
     if parent:
         components = SpanComponentsV3.from_str(parent)
@@ -1991,6 +2105,7 @@ def start_span(
             set_current=set_current,
             propagated_event=coalesce(propagated_event, components.propagated_event),
             event=event,
+            state=state,
         )
     else:
         return get_span_parent_object().start_span(
@@ -2011,22 +2126,20 @@ def flush():
     _state.global_bg_logger().flush()
 
 
-def _check_org_info(org_info, org_name):
-    global _state
-
+def _check_org_info(state, org_info, org_name):
     if len(org_info) == 0:
         raise ValueError("This user is not part of any organizations.")
 
     for orgs in org_info:
         if org_name is None or orgs["name"] == org_name:
-            _state.org_id = orgs["id"]
-            _state.org_name = orgs["name"]
-            _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
-            _state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
-            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
+            state.org_id = orgs["id"]
+            state.org_name = orgs["name"]
+            state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
+            state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
-    if _state.org_id is None:
+    if state.org_id is None:
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
@@ -3057,12 +3170,14 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
+        self.state = state or _state
 
         ObjectFetcher.__init__(
             self,
@@ -3098,7 +3213,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def log(
         self,
@@ -3327,7 +3442,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def _start_span_impl(
         self,
@@ -3356,6 +3471,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            state=self.state,
         )
 
     def __enter__(self) -> "Experiment":
@@ -3378,8 +3494,10 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def __init__(
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
+        self.state = state or _state
 
         ObjectFetcher.__init__(
             self,
@@ -3395,7 +3513,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
         return ExperimentDatasetIterator(self.fetch())
@@ -3429,6 +3547,7 @@ class SpanImpl(Span):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
+        state: Optional[BraintrustState] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3436,6 +3555,8 @@ class SpanImpl(Span):
             event = {}
         if type is None and not parent_span_ids:
             type = default_root_type
+
+        self.state = state or _state
 
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
@@ -3564,7 +3685,7 @@ class SpanImpl(Span):
                 ).object_id_fields(),
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
@@ -3604,6 +3725,7 @@ class SpanImpl(Span):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            state=self.state,
         )
 
     def end(self, end_time: Optional[float] = None) -> float:
@@ -3637,7 +3759,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = _state.current_logger
+            cur_logger = self.state.current_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -3653,8 +3775,8 @@ class SpanImpl(Span):
             else:
                 return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
-            app_url = _state.app_url or _get_app_url()
-            org_name = _state.org_name or _get_org_name()
+            app_url = self.state.app_url or _get_app_url()
+            org_name = self.state.org_name or _get_org_name()
             if not app_url or not org_name:
                 return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
@@ -3682,11 +3804,11 @@ class SpanImpl(Span):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = _state.current_span.set(self)
+            self._context_token = self.state.current_span.set(self)
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -3698,7 +3820,7 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             if self.can_set_current:
-                _state.current_span.reset(self._context_token)
+                self.state.current_span.reset(self._context_token)
 
             self.end()
 
@@ -3781,6 +3903,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
         _internal_btql: Optional[Dict[str, Any]] = None,
+        state: Optional[BraintrustState] = None,
     ):
         if legacy:
             eprint(
@@ -3801,6 +3924,8 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             mutate_record=mutate_record,
             _internal_btql=_internal_btql,
         )
+
+        self.state = state or _state
 
     @property
     def id(self) -> str:
@@ -3825,7 +3950,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def _validate_event(
         self,
@@ -3918,7 +4043,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        _state.global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return row_id
 
     def update(
@@ -3953,7 +4078,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        _state.global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return id
 
     def delete(self, id: str) -> str:
@@ -3980,7 +4105,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 dataset_id=self.id,
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
     def summarize(self, summarize_data: bool = True) -> "DatasetSummary":
@@ -4027,7 +4152,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def __enter__(self) -> "Dataset":
         return self
@@ -4056,9 +4181,10 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append(
-                        {**c, "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])}}
-                    )
+                    rendered_content.append({
+                        **c,
+                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                    })
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
@@ -4172,6 +4298,28 @@ class Prompt:
         self._lazy_metadata = lazy_metadata
         self.defaults = defaults
         self.no_trace = no_trace
+
+    @classmethod
+    def from_prompt_data(
+        cls,
+        name: str,
+        prompt_data: PromptData,
+    ) -> "Prompt":
+        """
+        Create a `Prompt` object from the given `PromptSchema` data.
+        """
+        prompt_schema = PromptSchema(
+            name=name,
+            slug=name,
+            prompt_data=prompt_data,
+            id=None,
+            project_id=None,
+            _xact_id=None,
+            description=None,
+            tags=None,
+        )
+        lazy_metadata = LazyValue(lambda: prompt_schema, use_mutex=False)
+        return cls(lazy_metadata, {}, False)
 
     @property
     def id(self) -> str:
@@ -4321,6 +4469,7 @@ class Logger(Exportable):
         async_flush: bool = True,
         compute_metadata_args: Optional[Dict] = None,
         link_args: Optional[Dict] = None,
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -4331,6 +4480,7 @@ class Logger(Exportable):
         # unresolved args about the org / project. Use these as potential
         # fallbacks when generating links
         self._link_args = link_args
+        self.state = state or _state
 
     @property
     def org_id(self) -> str:
@@ -4351,7 +4501,7 @@ class Logger(Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def log(
         self,
@@ -4514,6 +4664,7 @@ class Logger(Exportable):
             event=event,
             span_id=span_id,
             root_span_id=root_span_id,
+            state=self.state,
         )
 
     def export(self) -> str:
@@ -4545,8 +4696,8 @@ class Logger(Exportable):
         # the url and org name can be passed into init_logger, resolved by login or provided as env variables
         # so this resolves all of those things. It's possible we never have an org name if the user has not
         # yet logged in and there is nothing else configured.
-        app_url = _state.app_url or self._link_args.get("app_url") or _get_app_url()
-        org_name = _state.org_name or self._link_args.get("org_name") or _get_org_name()
+        app_url = self.state.app_url or self._link_args.get("app_url") or _get_app_url()
+        org_name = self.state.org_name or self._link_args.get("org_name") or _get_org_name()
         if not app_url or not org_name:
             return None
         return f"{app_url}/app/{org_name}"
@@ -4558,7 +4709,7 @@ class Logger(Exportable):
         """
         Flush any pending logs to the server.
         """
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
 
 @dataclasses.dataclass
