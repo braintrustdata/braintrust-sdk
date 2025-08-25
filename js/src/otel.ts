@@ -40,13 +40,7 @@ interface Span extends ReadableSpan {
   setStatus(status: { code: number; message?: string }): void;
 }
 
-const FILTER_PREFIXES = [
-  "gen_ai.",
-  "braintrust.",
-  "llm.",
-  "ai.",
-  "traceloop.",
-] as const;
+const FILTER_PREFIXES = ["gen_ai.", "llm.", "ai.", "traceloop."] as const;
 
 /**
  * Custom filter function type for span filtering.
