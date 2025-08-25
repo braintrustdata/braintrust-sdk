@@ -142,7 +142,7 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent)
+    // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
     if (!span.parentSpanContext && !span.parentSpanId) {
       return true;
     }
