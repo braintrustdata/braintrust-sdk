@@ -212,17 +212,22 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             parent = self._spans[span.parent_id]
         else:
             parent = self._spans[span.trace_id]
-        self._spans[span.span_id] = parent.start_span(
+        created_span = parent.start_span(
             id=span.span_id,
             name=_span_name(span),
             type=_span_type(span),
             start_time=_timestamp_from_maybe_iso(span.started_at),
         )
+        self._spans[span.span_id] = created_span
+
+        # Set the span as current so current_span() calls will return it
+        created_span.set_current()
 
     def on_span_end(self, span: tracing.Span[tracing.SpanData]) -> None:
         s = self._spans.pop(span.span_id)
         event = dict(error=span.error, **self._log_data(span))
         s.log(**event)
+        s.unset_current()
         s.end(_timestamp_from_maybe_iso(span.ended_at))
 
         input_ = event.get("input")
