@@ -3823,9 +3823,7 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            if self.can_set_current:
-                self.state.current_span.reset(self._context_token)
-
+            self.unset_current()
             self.end()
 
     def _get_parent_info(self):
