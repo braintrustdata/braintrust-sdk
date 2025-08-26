@@ -3810,6 +3810,10 @@ class SpanImpl(Span):
         if self.can_set_current:
             self._context_token = self.state.current_span.set(self)
 
+    def unset_current(self):
+        if self.can_set_current:
+            self.state.current_span.reset(self._context_token)
+
     def __enter__(self) -> Span:
         self.set_current()
         return self

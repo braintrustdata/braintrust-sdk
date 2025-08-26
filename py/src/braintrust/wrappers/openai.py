@@ -227,6 +227,9 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         s = self._spans.pop(span.span_id)
         event = dict(error=span.error, **self._log_data(span))
         s.log(**event)
+
+        # Unset the span as current before ending it
+        s.unset_current()
         s.end(_timestamp_from_maybe_iso(span.ended_at))
 
         input_ = event.get("input")
