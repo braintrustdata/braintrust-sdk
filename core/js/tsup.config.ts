@@ -8,11 +8,4 @@ export default defineConfig([
     external: ["zod"],
     dts: true,
   },
-  {
-    entry: ["typespecs/index.ts"],
-    format: ["cjs", "esm"],
-    outDir: "typespecs/dist",
-    external: ["zod"],
-    dts: true,
-  },
 ]);

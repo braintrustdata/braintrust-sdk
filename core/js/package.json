@@ -19,17 +19,10 @@
       "import": "./dist/index.mjs",
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
-    },
-    "./typespecs": {
-      "types": "./typespecs/dist/index.d.ts",
-      "import": "./typespecs/dist/index.mjs",
-      "module": "./typespecs/dist/index.mjs",
-      "require": "./typespecs/dist/index.js"
     }
   },
   "files": [
-    "dist/**/*",
-    "typespecs/dist/**/*"
+    "dist/**/*"
   ],
   "license": "MIT",
   "publishConfig": {
@@ -56,7 +49,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^6.3.1",
     "uuid": "^9.0.1",
     "zod": "^3.25.34"
   }
