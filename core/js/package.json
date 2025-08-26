@@ -19,7 +19,7 @@
       "import": "./dist/index.mjs",
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
-    },
+    }
   },
   "files": [
     "dist/**/*"
