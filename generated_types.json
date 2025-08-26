@@ -196,7 +196,7 @@
             "type": "number"
           },
           "response_format": {
-            "$ref": "#/components/schemas/ResponseFormat"
+            "$ref": "#/components/schemas/ResponseFormatNullish"
           },
           "tool_choice": {
             "anyOf": [
@@ -401,6 +401,128 @@
           "id",
           "name",
           "preview_name"
+        ]
+      },
+      "AsyncScoringControl": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "score_update"
+                ]
+              },
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "token"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "state_override"
+                ]
+              },
+              "state": {
+                "$ref": "#/components/schemas/AsyncScoringState"
+              }
+            },
+            "required": [
+              "kind",
+              "state"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "state_force_reselect"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "state_enabled_force_rescore"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "AsyncScoringState": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "enabled"
+                ]
+              },
+              "token": {
+                "type": "string"
+              },
+              "function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
+              },
+              "skip_logging": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "token",
+              "function_ids"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "disabled"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "type": "null"
+          },
+          {
+            "type": "null"
+          }
         ]
       },
       "AttachmentReference": {
@@ -1624,7 +1746,7 @@
             "description": "Whether this span is a root span"
           },
           "origin": {
-            "$ref": "#/components/schemas/ObjectReference"
+            "$ref": "#/components/schemas/ObjectReferenceNullish"
           }
         },
         "required": [
@@ -2001,7 +2123,7 @@
             "description": "Whether this span is a root span"
           },
           "origin": {
-            "$ref": "#/components/schemas/ObjectReference"
+            "$ref": "#/components/schemas/ObjectReferenceNullish"
           }
         },
         "required": [
@@ -3364,7 +3486,7 @@
                 "type": "number"
               },
               "response_format": {
-                "$ref": "#/components/schemas/ResponseFormat"
+                "$ref": "#/components/schemas/ResponseFormatNullish"
               },
               "tool_choice": {
                 "anyOf": [
@@ -3565,6 +3687,52 @@
         ]
       },
       "ObjectReference": {
+        "type": "object",
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "project_logs",
+              "experiment",
+              "dataset",
+              "prompt",
+              "function",
+              "prompt_session"
+            ],
+            "description": "Type of the object the event is originating from."
+          },
+          "object_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the object the event is originating from."
+          },
+          "id": {
+            "type": "string",
+            "description": "ID of the original event."
+          },
+          "_xact_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Transaction ID of the original event."
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Created timestamp of the original event. Used to help sort in the UI"
+          }
+        },
+        "required": [
+          "object_type",
+          "object_id",
+          "id"
+        ],
+        "description": "Reference to the original object and event this was copied from."
+      },
+      "ObjectReferenceNullish": {
         "type": [
           "object",
           "null"
@@ -4250,7 +4418,7 @@
             "$ref": "#/components/schemas/SpanAttributes"
           },
           "origin": {
-            "$ref": "#/components/schemas/ObjectReference"
+            "$ref": "#/components/schemas/ObjectReferenceNullish"
           }
         },
         "required": [
@@ -5089,9 +5257,6 @@
               "type"
             ],
             "title": "text"
-          },
-          {
-            "type": "null"
           }
         ]
       },
@@ -5126,6 +5291,62 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "ResponseFormatNullish": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "json_object"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "json_object"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "json_schema"
+                ]
+              },
+              "json_schema": {
+                "$ref": "#/components/schemas/ResponseFormatJsonSchema"
+              }
+            },
+            "required": [
+              "type",
+              "json_schema"
+            ],
+            "title": "json_schema"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "text"
+          },
+          {
+            "type": "null"
+          }
         ]
       },
       "RetentionObjectType": {
@@ -5502,7 +5723,7 @@
           "preview_name": {
             "type": "string"
           },
-          "user_id": {
+          "service_account_id": {
             "type": [
               "string",
               "null"
@@ -5510,26 +5731,19 @@
             "format": "uuid",
             "description": "Unique identifier for the service token"
           },
-          "user_email": {
+          "service_account_email": {
             "type": [
               "string",
               "null"
             ],
             "description": "The service account email (not routable)"
           },
-          "user_given_name": {
+          "service_account_name": {
             "type": [
               "string",
               "null"
             ],
-            "description": "The service account given name"
-          },
-          "user_family_name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The service account family name"
+            "description": "The service account name"
           },
           "org_id": {
             "type": [
@@ -5680,7 +5894,7 @@
           "origin": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/ObjectReference"
+                "$ref": "#/components/schemas/ObjectReferenceNullish"
               },
               {
                 "description": "The origin of the event"
@@ -6283,7 +6497,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "1ac2b47b4b217608a0eea90a6f5299afce9e1a64"
+    "x-internal-git-sha": "10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83"
   },
   "paths": {},
   "webhooks": {}
