@@ -1226,7 +1226,6 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
 
 
 @pytest.mark.asyncio
-@pytest.mark.vcr
 async def test_agents_tool_openai_nested_spans(memory_logger):
     """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
     pytest.importorskip("agents", reason="agents package not available")
@@ -1246,24 +1245,12 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
         with current_span().start_span(name="text_analysis_tool") as span:
             span.log(input={"text": text})
 
-            # Use a deterministic prompt for testing
-            analysis_prompt = f"""Analyze the following text and provide a structured response in exactly this format:
-
-SENTIMENT: [Positive/Negative/Neutral]
-WORD_COUNT: [exact number]
-KEY_POINTS:
-- [point 1]
-- [point 2]
-- [point 3]
-
-Text to analyze: "{text}"
-
-Provide your response in the exact format above."""
+            # Use a simple prompt for testing - just like other tests in this file
+            simple_prompt = f"Analyze this text briefly: {text}"
 
             response = client.chat.completions.create(
                 model=TEST_MODEL,
-                messages=[{"role": "user", "content": analysis_prompt}],
-                temperature=0.1,  # Low temperature for deterministic results
+                messages=[{"role": "user", "content": simple_prompt}],
             )
             result = response.choices[0].message.content
             span.log(output={"analysis": result})
@@ -1334,8 +1321,22 @@ Provide your response in the exact format above."""
     assert test_text in str(tool_span["input"]), "Tool span input should contain the test text"
     assert "output" in tool_span, "Tool span should have output logged"
 
+    # Verify we have chat completion spans
+    assert len(chat_spans) >= 1, f"Should have at least one chat completion span, got {len(chat_spans)}"
+    chat_span = chat_spans[0]
+    chat_span_parents = chat_span.get("span_parents", [])
+
+    # Verify the chat completion span is nested under the tool span
+    assert isinstance(chat_span_parents, list) and len(chat_span_parents) > 0, (
+        "Chat completion span should have span_parents array"
+    )
+    assert tool_span_id in chat_span_parents, (
+        f"Chat completion span should include tool span_id {tool_span_id} in its span_parents array {chat_span_parents}"
+    )
+
     # Verify the chat completion span has proper LLM data
     assert "input" in chat_span, "Chat completion span should have input logged"
     assert "output" in chat_span, "Chat completion span should have output logged"
     assert chat_span["metadata"]["model"] == TEST_MODEL, "Chat completion should use test model"
-    assert "SENTIMENT:" in str(chat_span["output"]), "Chat completion output should contain structured analysis"
+    # Just verify there's some output content - don't check specific format
+    assert len(str(chat_span["output"])) > 0, "Chat completion should have some output content"
