@@ -1,0 +1,298 @@
+interactions:
+- request:
+    body: '{"include":[],"input":[{"content":"Please analyze this text: ''Artificial
+      intelligence is transforming industries worldwide. Companies are adopting AI
+      technologies to improve efficiency and innovation. However, challenges like
+      ethics and job displacement remain concerns.''","role":"user"}],"instructions":"You
+      are a helpful assistant that analyzes text. When asked to analyze text, you
+      MUST use the analyze_text tool. Always call the tool with the exact text provided
+      by the user. After using the tool, provide a two sentence summary of what the
+      tool returned.","model":"gpt-4o","stream":false,"tools":[{"name":"analyze_text","parameters":{"properties":{"text":{"title":"Text","type":"string"}},"required":["text"],"title":"analyze_text_args","type":"object"},"strict":false,"type":"function","description":"Analyze
+      text and return a structured summary with key points, sentiment, and statistics."}]}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '899'
+      content-type:
+      - application/json
+      cookie:
+      - __cf_bm=nTtafXKdFQJ08nOk7mg_qfXcuPpHFdTKcmfeMYy1EK4-1756229640-1.0.1.1-xgErQeLQvimWb4QS12IaK5CSWUg4IvySjiVCsL2dc8wTp1vIrCgKA4Y9EKlDWcqOTljNojvKPA2KXoube5nkd_8V0Qj7K1xVnbjOWhuB1t0;
+        _cfuvid=K77ROyEaXywJuEbxDBMZqCdk6Z2MsdeQvSlFu8U6E08-1756229640152-0.0.1.1-604800000
+      host:
+      - api.openai.com
+      user-agent:
+      - Agents/Python 0.2.4
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.99.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '1'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.3
+    method: POST
+    uri: https://api.openai.com/v1/responses
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//hFXfj+I4DH7nr7D6zKDCMCzwNtrT6H7onmZXp7ubVWUSt2RJk27iwLAj
+        /vdTUmgLO6t7QcVf7DifP9tvI4BMyWwNmSPfFIslyjLPlxtazZfTlVhJnOUf5pvZbDFblFORE87v
+        aXGPs+VsmS9FNo4B7OYrCb4EscZTaxeOkEkWGLHph4fFbLZazPOEeUYOPvoIWzeamGTrtEGxq5wN
+        JmZVovaUzOScddkaTNA6GZS5OBaSGJX216hnFwQra9Ilf9sA6AgQtqSbMmhA75VnNAy8RQY0qI/f
+        yQPTK0/gry0ZQL8jCWwvYMLGcLQB/vz8/AmCJ+AtXeAiwsDW6gk86gMePQjUOh2JVjgo3qZ/9IqC
+        UzRonN0rSRI2xwQFT24CjyWTg+CVqTr38eUsIPDBgifDZASBD3WN7gi2hEN8SnefIw7OkJy0zNb4
+        WtjATeCC7Y7MFWERjE5FTPkasZJ05LBq+G5u72b5bH6XL+/yxbn6KWS2hn9HAABv6beTVSkuolo9
+        UJlEhUQPS8w/5It8Rvf5/F1RpRB8bCgFCSaVMiXXwz/TUALRVaEmwwl/e8ki2y/Z+iV7dKxKJRRq
+        UIZJa1UlGpUHdmh8aV0deVdGBs9OkYeDdVoelKQJfLR1gyYak5ykbTgefvwNmMTWWG2rCLIFVcd6
+        EVAZbyMjjoBGgjLG7jG+ZgK/2gPtyY1BbFFrMhV50GpHQLxVwqfzX+0GpPKNRkHxPeCoRmVAWCPI
+        GT95yU79qyNBRct8+vznd/f9aSGfp398XHzef3tunupfnl/lU+9hsE4cD0WcJfA0AviSStygi/np
+        a4WwC21vNo72ygZfXNq/zaBTUONs3XAhUGyp2NFxiDlCb40yVbY+SyejsrSOB4diqVuNn40jgFM7
+        RbAkPhZKkolFpasJ4cntlaCCW3smqcSgOTvPH+to+AimuiGHHJJ5OsnP1lfuM4vSwP7/QKED1s4Z
+        78ltrFccc85qkirUWZd3y+PWKtFyH9hmHeB/7KXbRujLJ8kLp5pkXEP2OJhUST7tDACEdh4GR7Ib
+        GGke7egIjVWG/TiNFBVFNk6+sb+UZyX85H/00qFRKTUxOT9gqZVAQ44VXdtvGe6tinW65tMw/A0b
+        sTtNlQ3AU/d96n0yR9+CciQ7XodXd4YvA4/u+uErC3SVz4anznmc99/o5uaUX9qLaY3d9BTbptC2
+        apzdRE7yztgM5eeCEXgprlQeN/qyKIPHinptKnM12KfzxfhHYLAq3/qRIbYke8/8Ssa3C2M+fw94
+        L27X2T8LzZZRDzJe5V1/xC14tYOIUSJjjH8anf4DAAD//wMAuO7FRrcIAAA=
+    headers:
+      CF-RAY:
+      - 975513d608cacf27-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 Aug 2025 17:34:01 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '1019'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-envoy-upstream-service-time:
+      - '1024'
+      x-ratelimit-limit-requests:
+      - '10000'
+      x-ratelimit-limit-tokens:
+      - '30000000'
+      x-ratelimit-remaining-requests:
+      - '9999'
+      x-ratelimit-remaining-tokens:
+      - '29999637'
+      x-ratelimit-reset-requests:
+      - 6ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_8683014e7104c8e5ca5c9e51dc9eeff6
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"data":[{"object":"trace","id":"trace_1a9cfacce9654817b91820ee33ac563d","workflow_name":"Agent
+      workflow","group_id":null,"metadata":null},{"object":"trace.span","id":"span_38f87251668f40cca3ec1c49","trace_id":"trace_1a9cfacce9654817b91820ee33ac563d","parent_id":"span_4742df0cb69546d9ac7d8653","started_at":"2025-08-26T17:33:59.370497+00:00","ended_at":"2025-08-26T17:34:00.138027+00:00","span_data":{"type":"response","response_id":"resp_68adf00787488190907cb740ed55d8680ac696b0fb8885c4"},"error":null},{"object":"trace.span","id":"span_4742df0cb69546d9ac7d8653","trace_id":"trace_1a9cfacce9654817b91820ee33ac563d","parent_id":null,"started_at":"2025-08-26T17:33:59.357761+00:00","ended_at":"2025-08-26T17:34:00.138737+00:00","span_data":{"type":"agent","name":"test-agent","handoffs":[],"tools":[],"output_type":"str"},"error":null}]}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '837'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      openai-beta:
+      - traces=v1
+      user-agent:
+      - python-httpx/0.28.1
+    method: POST
+    uri: https://api.openai.com/v1/traces/ingest
+  response:
+    body:
+      string: ''
+    headers:
+      CF-RAY:
+      - 975513ecfbb7cec1-SJC
+      Connection:
+      - keep-alive
+      Date:
+      - Tue, 26 Aug 2025 17:34:04 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=cMbsYZJxNHIfEGrvgHjH5F38luv6p6ssHl74FOk4WGo-1756229644-1.0.1.1-0Ge3KjS8SSZixxL857px0dzlpLxmmz6HdH40_NQvOtXXLe3rFWYprm2Sl7TVRl8ca9zsV_SkE_sEZdfGIFsrvaV57sm04OIfYiQeNplBsZ8;
+        path=/; expires=Tue, 26-Aug-25 18:04:04 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=tKeunHPytAJqGUTqAh8m8.u566LIhfVyT4BzNRtQ94M-1756229644956-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      X-Content-Type-Options:
+      - nosniff
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '487'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-envoy-upstream-service-time:
+      - '489'
+      x-request-id:
+      - req_3bdc4d590b04fd3733f0042244d6a503
+    status:
+      code: 204
+      message: No Content
+- request:
+    body: '{"include":[],"input":[{"content":"Please analyze this text: ''Artificial
+      intelligence is transforming industries worldwide. Companies are adopting AI
+      technologies to improve efficiency and innovation. However, challenges like
+      ethics and job displacement remain concerns.''","role":"user"},{"arguments":"{\"text\":\"Artificial
+      intelligence is transforming industries worldwide. Companies are adopting AI
+      technologies to improve efficiency and innovation. However, challenges like
+      ethics and job displacement remain concerns.\"}","call_id":"call_ZJrzF6dS1KC6UvqSpFmDSxdF","name":"analyze_text","type":"function_call","id":"fc_68adf0095ef4819caee58a070602e3040ea43e63a282808c","status":"completed"},{"call_id":"call_ZJrzF6dS1KC6UvqSpFmDSxdF","output":"SENTIMENT:
+      Neutral  \nWORD_COUNT: 27  \nKEY_POINTS:  \n- Artificial intelligence is positively
+      impacting industries by improving efficiency and innovation.  \n- Companies
+      are increasingly adopting AI technologies.  \n- There are concerns regarding
+      ethics and job displacement associated with AI.","type":"function_call_output"}],"instructions":"You
+      are a helpful assistant that analyzes text. When asked to analyze text, you
+      MUST use the analyze_text tool. Always call the tool with the exact text provided
+      by the user. After using the tool, provide a two sentence summary of what the
+      tool returned.","model":"gpt-4o","stream":false,"tools":[{"name":"analyze_text","parameters":{"properties":{"text":{"title":"Text","type":"string"}},"required":["text"],"title":"analyze_text_args","type":"object"},"strict":false,"type":"function","description":"Analyze
+      text and return a structured summary with key points, sentiment, and statistics."}]}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '1687'
+      content-type:
+      - application/json
+      cookie:
+      - __cf_bm=nTtafXKdFQJ08nOk7mg_qfXcuPpHFdTKcmfeMYy1EK4-1756229640-1.0.1.1-xgErQeLQvimWb4QS12IaK5CSWUg4IvySjiVCsL2dc8wTp1vIrCgKA4Y9EKlDWcqOTljNojvKPA2KXoube5nkd_8V0Qj7K1xVnbjOWhuB1t0;
+        _cfuvid=K77ROyEaXywJuEbxDBMZqCdk6Z2MsdeQvSlFu8U6E08-1756229640152-0.0.1.1-604800000
+      host:
+      - api.openai.com
+      user-agent:
+      - Agents/Python 0.2.4
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.99.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.3
+    method: POST
+    uri: https://api.openai.com/v1/responses
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//dFXBbuM4DL33Kwif08BJ09TNrcc5zGm6WCwGC4OWaFtTWfJIVFvvoP++
+        kBw7dqZzCWI+kqKo98hfNwCZktkJMke+L48FyjrP652oimL3KIrHHQosHvGhoPxwvM8JD3d0vMN9
+        sS/yQmSbmMBWP0jwlMQaT6NdOEImWWLEdg/3x/3+8Xh4SJhn5OBjjLBdr4lJjkEVipfG2WBiVTVq
+        T8lMzlmXncAErZNBmSmwlMSotF+jnl0QrKxJh/xjA6AjQGhJ93XQgN4rz2gYuEUGNKiH/8gD0ztv
+        4e+WDKB/IQlsJzBhGxhsgK9/fXuG4Am4pQkuIwxsrd7Ck37DwYNArZNLtMKb4jZ90TsKTtmgd/ZV
+        SZJQDQkKntwWnmomB8Er08zhm8kXEPjNgifDZASBD12HbgBbw1u8ynyeIw7OkNyOne3wvbSB+8Al
+        2xcyq4ZFMAaVseQ1YiXp2MOm59uDvd3n+8NtXtzmx/Prp5TZCb7fAAD8Sr8zrTrfnFm12+XH/SGy
+        CnfV/nikO6x2WB2Kz1mVcvDQU8pC3mNDF+BP9EmgsLEzl5KWZa3STt2gd56jkwMaYxkn9nz/dwVq
+        2/TOVp8gKdEJsud25Aq0qmm1alr2Z5Y5VrUSCjUow6S1atITKg+qS89rGqA6upARA6CRoIyxr6kW
+        QOGs96CMDJ6dIr8ZORV7gEZRhKLoIm/0AChtz2cKRaqSaI3VtlHkt/CFAbW3YCyTB2GNIGc8YGUD
+        A3GrhE/H/7AVSOV7jYI6MgyOdFR11MXTl2023//j/G9uSeasTm2epTY6R8fklPXoUGvSa+axC6Pm
+        e0evygZfTmOlTJyamdk72/VcChQtlS80LLHYBWuUabLT+e0zqmvreOEUeTRq52y8AfgYpxPWxEOp
+        JJn4YLSaPJ7cqxJU8mjPJNUY9MigzLN1tLwEU9eTQw7JvNvmZ2tiyrmy2roOL98Lhia/sWvnil/J
+        VdYrHkZdSBW6bK577GNrlRgbH9hmM+B/1+h0TB1MmpUXDUnywqk+GU+QPS0mYKLFOFsAYZyzwZGc
+        B1Hi5AsN0Ftl2G/SqFKRPJsUG8WrPCvht5cDDXZjzYthekEjUzpicn7RpZECPTlWtLZfd/hiVTxy
+        8vla84tuRG2ZJluAHxeWX2IyRz+DciRXgwaWj7bSw/L45S1LdI3Pll7TeBr36s3Vyam+tG/TerzS
+        FNu+XEyofDb2S/q5YAROjyuVx0pPCzikSTtzU5nVwtjf7za/A4sVPHMryVJeIvMVja8X0d3xM+Cz
+        vLOy/5SaLaNeVFw8zPqI23W124hRImPM/3Hz8T8AAAD//wMAxPgQcw8JAAA=
+    headers:
+      CF-RAY:
+      - 975513f98cf8cf27-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 26 Aug 2025 17:34:09 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '2811'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-envoy-upstream-service-time:
+      - '3487'
+      x-request-id:
+      - req_98ca528d5054084fd4275f4f8d1396a5
+    status:
+      code: 200
+      message: OK
+version: 1

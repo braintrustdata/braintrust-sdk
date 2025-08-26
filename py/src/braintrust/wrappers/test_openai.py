@@ -1223,3 +1223,119 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
     assert has_llm_spans or has_task_spans, (
         f"Should have LLM or task type spans from OpenAI SDK, got types: {span_types}"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vcr
+async def test_agents_tool_openai_nested_spans(memory_logger):
+    """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    from agents import Agent, Runner, function_tool, set_trace_processors
+
+    from braintrust import current_span, wrap_openai
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    # Create a tool that uses OpenAI within a manual span
+    @function_tool(strict_mode=False)
+    def analyze_text(text: str):
+        """Analyze text and return a structured summary with key points, sentiment, and statistics."""
+        client = wrap_openai(openai.OpenAI())
+        with current_span().start_span(name="text_analysis_tool") as span:
+            span.log(input={"text": text})
+
+            # Use a deterministic prompt for testing
+            analysis_prompt = f"""Analyze the following text and provide a structured response in exactly this format:
+
+SENTIMENT: [Positive/Negative/Neutral]
+WORD_COUNT: [exact number]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]
+
+Text to analyze: "{text}"
+
+Provide your response in the exact format above."""
+
+            response = client.chat.completions.create(
+                model=TEST_MODEL,
+                messages=[{"role": "user", "content": analysis_prompt}],
+                temperature=0.1,  # Low temperature for deterministic results
+            )
+            result = response.choices[0].message.content
+            span.log(output={"analysis": result})
+            return result
+
+    # Set up tracing
+    set_trace_processors([BraintrustTracingProcessor()])
+
+    # Create agent with the tool
+    agent = Agent(
+        name="Text Analysis Agent",
+        instructions="You are a helpful assistant that analyzes text. When asked to analyze text, you MUST use the analyze_text tool. Always call the tool with the exact text provided by the user. After using the tool, provide a two sentence summary of what the tool returned.",
+        tools=[analyze_text],
+    )
+
+    # Run agent with a specific text to analyze
+    test_text = "Artificial intelligence is transforming industries worldwide. Companies are adopting AI technologies to improve efficiency and innovation. However, challenges like ethics and job displacement remain concerns."
+    result = await Runner.run(
+        agent,
+        f"Please analyze this text: '{test_text}'",
+        max_turns=3,
+    )
+
+    assert result is not None, "Agent should return a result"
+
+    # Verify spans were created
+    spans = memory_logger.pop()
+    assert len(spans) >= 3, f"Should have at least 3 spans (agent workflow, tool, chat completion), got {len(spans)}"
+
+    # Find different types of spans
+    agent_spans = []
+    tool_spans = []
+    chat_spans = []
+
+    for span in spans:
+        span_name = span.get("span_attributes", {}).get("name", "")
+        span_type = span.get("span_attributes", {}).get("type", "")
+
+        if "Agent workflow" in span_name or span_type == "task":
+            agent_spans.append(span)
+        elif span_name == "text_analysis_tool":
+            tool_spans.append(span)
+        elif span_name == "Chat Completion" and span_type == "llm":
+            chat_spans.append(span)
+
+    # Verify we have the expected spans
+    assert len(agent_spans) > 0, "Should have at least one agent workflow span"
+    assert len(tool_spans) == 1, f"Should have exactly one tool span, got {len(tool_spans)}"
+    assert len(chat_spans) == 1, f"Should have exactly one chat completion span, got {len(chat_spans)}"
+
+    tool_span = tool_spans[0]
+    chat_span = chat_spans[0]
+
+    # Verify the chat completion span is nested under the tool span
+    chat_span_parents = chat_span.get("span_parents", [])
+    tool_span_id = tool_span.get("span_id")
+
+    assert tool_span_id is not None, "Tool span should have a span_id"
+    assert isinstance(chat_span_parents, list) and len(chat_span_parents) > 0, (
+        "Chat completion span should have span_parents array"
+    )
+    assert tool_span_id in chat_span_parents, (
+        f"Chat completion span should include tool span_id {tool_span_id} in its span_parents array {chat_span_parents}"
+    )
+
+    # Verify the tool span has input/output logged
+    assert "input" in tool_span, "Tool span should have input logged"
+    assert test_text in str(tool_span["input"]), "Tool span input should contain the test text"
+    assert "output" in tool_span, "Tool span should have output logged"
+
+    # Verify the chat completion span has proper LLM data
+    assert "input" in chat_span, "Chat completion span should have input logged"
+    assert "output" in chat_span, "Chat completion span should have output logged"
+    assert chat_span["metadata"]["model"] == TEST_MODEL, "Chat completion should use test model"
+    assert "SENTIMENT:" in str(chat_span["output"]), "Chat completion output should contain structured analysis"
