@@ -32,6 +32,7 @@ interface ReadableSpan {
   parentSpanContext?: { spanId: string; traceId: string };
   attributes?: Record<string, any>;
   spanContext(): { spanId: string; traceId: string };
+  parentSpanId?: string; // NOTE: In OTel JS v1.x, ReadableSpan exposed `parentSpanId?: string`
 }
 
 interface Span extends ReadableSpan {
@@ -141,8 +142,8 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent)
-    if (!span.parentSpanContext) {
+    // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
+    if (!span.parentSpanContext && !span.parentSpanId) {
       return true;
     }
 
