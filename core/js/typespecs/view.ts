@@ -28,20 +28,10 @@ export const viewDataSearchSchema = z
   })
   .strip()
   .openapi("ViewDataSearch");
-
-export const viewDataCustomChartsSchema = z
-  .object({
-    charts: z.record(z.string(), z.unknown()).optional(),
-    layout: z.unknown().optional(),
-    metadata: z.unknown().optional(),
-    version: z.string(),
-  })
-  .strip()
-  .openapi("ViewDataCustomCharts");
 export const viewDataSchema = z
   .object({
     search: viewDataSearchSchema.nullish(),
-    custom_charts: viewDataCustomChartsSchema.nullish(),
+    custom_charts: z.unknown().nullish(),
   })
   .strip()
   .openapi("ViewData");
