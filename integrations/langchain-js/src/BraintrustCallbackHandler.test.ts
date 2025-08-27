@@ -7,7 +7,7 @@ import { flush, initLogger, NOOP_SPAN } from "braintrust";
 import { http, HttpResponse } from "msw";
 import { ReadableStream } from "stream/web";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import {
