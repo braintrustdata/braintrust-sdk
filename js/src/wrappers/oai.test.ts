@@ -126,7 +126,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
@@ -319,8 +319,8 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is 6x6?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is 6x6?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("36");
 
@@ -363,15 +363,13 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const input = span.input as any[];
-    assert.lengthOf(input, 2);
-    assert.equal(input[0].content, "Read me a few lines of Sonnet 18");
-    assert.equal(input[0].role, "user");
-    assert.equal(input[1].content, "the whole poem, strip punctuation");
-    assert.equal(input[1].role, "system");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "Read me a few lines of Sonnet 18");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
+    assert.equal(
+      span.metadata.instructions,
+      "the whole poem, strip punctuation",
+    );
     assert.equal(span.metadata.temperature, 0.5);
     // This line takes the output text, converts it to lowercase, and removes all characters
     // except letters, numbers and whitespace using a regex
@@ -409,8 +407,8 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is the capital of France?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is the capital of France?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("Paris");
     const m = span.metrics;
@@ -490,8 +488,8 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.parse");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is 20 + 4?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is 20 + 4?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     assert.ok(span.metadata.text);
     assert.equal(span.output.value, 24);
@@ -544,7 +542,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "Chat Completion");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
