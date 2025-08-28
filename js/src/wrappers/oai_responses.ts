@@ -59,16 +59,14 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 function parseEventFromResponseCreateResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output - prioritize output_text but preserve full output structure
-  if (result?.output_text) {
-    data.output = result.output_text;
-  } else if (result?.output) {
+  // Extract output
+  if (result?.output !== undefined) {
     data.output = result.output;
   }
 
-  // Extract metadata - preserve all response fields except output_text and usage
+  // Extract metadata - preserve all response fields except output and usage
   if (result) {
-    const { output_text, usage, ...metadata } = result;
+    const { output, usage, ...metadata } = result;
     if (Object.keys(metadata).length > 0) {
       data.metadata = metadata;
     }
@@ -106,18 +104,14 @@ function parseSpanFromResponseParseParams(params: any): TimedSpan {
 function parseEventFromResponseParseResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output - prioritize output_parsed, then output_text, then full output structure
-  if (result?.output_parsed) {
-    data.output = result.output_parsed;
-  } else if (result?.output_text) {
-    data.output = result.output_text;
-  } else if (result?.output) {
+  // Extract output
+  if (result?.output !== undefined) {
     data.output = result.output;
   }
 
-  // Extract metadata - preserve all response fields except output fields and usage
+  // Extract metadata - preserve all response fields except output and usage
   if (result) {
-    const { output_parsed, output_text, output, usage, ...metadata } = result;
+    const { output, usage, ...metadata } = result;
     if (Object.keys(metadata).length > 0) {
       data.metadata = metadata;
     }
@@ -171,16 +165,10 @@ function parseLogFromItem(item: any): {} {
     case "response.completed":
       const data: Record<string, any> = {};
 
-      // Extract output text - collect all output_text content
-      const texts = [];
-      for (const output of response?.output || []) {
-        for (const content of output?.content || []) {
-          if (content?.type === "output_text") {
-            texts.push(content.text);
-          }
-        }
+      // Extract output
+      if (response?.output !== undefined) {
+        data.output = response.output;
       }
-      data.output = texts.join("");
 
       // Extract metadata - preserve response fields except usage and output
       if (response) {
