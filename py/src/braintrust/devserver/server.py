@@ -61,7 +61,7 @@ class CheckAuthorizedMiddleware(BaseHTTPMiddleware):
                 )
                 ctx.state = state
             except Exception as e:
-                print(f"Authorization error: {e}")
+                print(f"Authorization error: {e}", file=sys.stderr)
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
         return await call_next(request)
