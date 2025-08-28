@@ -100,6 +100,33 @@ class ApiKey(TypedDict):
     """
 
 
+class AsyncScoringControlAsyncScoringControl(TypedDict):
+    kind: Literal['score_update']
+    token: str
+
+
+class AsyncScoringControlAsyncScoringControl2(TypedDict):
+    kind: Literal['state_force_reselect']
+
+
+class AsyncScoringControlAsyncScoringControl3(TypedDict):
+    kind: Literal['state_enabled_force_rescore']
+
+
+class AsyncScoringStateAsyncScoringState(TypedDict):
+    status: Literal['enabled']
+    token: str
+    function_ids: Sequence
+    skip_logging: NotRequired[Optional[bool]]
+
+
+class AsyncScoringStateAsyncScoringState1(TypedDict):
+    status: Literal['disabled']
+
+
+AsyncScoringState = Optional[Union[AsyncScoringStateAsyncScoringState, AsyncScoringStateAsyncScoringState1]]
+
+
 class BraintrustAttachmentReference(TypedDict):
     type: Literal['braintrust_attachment']
     """
@@ -1036,6 +1063,29 @@ class ObjectReference(TypedDict):
     """
 
 
+class ObjectReferenceNullish(TypedDict):
+    object_type: Literal['project_logs', 'experiment', 'dataset', 'prompt', 'function', 'prompt_session']
+    """
+    Type of the object the event is originating from.
+    """
+    object_id: str
+    """
+    ID of the object the event is originating from.
+    """
+    id: str
+    """
+    ID of the original event.
+    """
+    _xact_id: NotRequired[Optional[str]]
+    """
+    Transaction ID of the original event.
+    """
+    created: NotRequired[Optional[str]]
+    """
+    Created timestamp of the original event. Used to help sort in the UI
+    """
+
+
 class Organization(TypedDict):
     id: str
     """
@@ -1417,6 +1467,28 @@ class ResponseFormatJsonSchema(TypedDict):
     strict: NotRequired[Optional[bool]]
 
 
+class ResponseFormatNullishResponseFormatNullish(TypedDict):
+    type: Literal['json_object']
+
+
+class ResponseFormatNullishResponseFormatNullish1(TypedDict):
+    type: Literal['json_schema']
+    json_schema: ResponseFormatJsonSchema
+
+
+class ResponseFormatNullishResponseFormatNullish2(TypedDict):
+    type: Literal['text']
+
+
+ResponseFormatNullish = Optional[
+    Union[
+        ResponseFormatNullishResponseFormatNullish,
+        ResponseFormatNullishResponseFormatNullish1,
+        ResponseFormatNullishResponseFormatNullish2,
+    ]
+]
+
+
 RetentionObjectType = Literal['project_logs', 'experiment', 'dataset']
 
 
@@ -1512,21 +1584,17 @@ class ServiceToken(TypedDict):
     Name of the service token
     """
     preview_name: str
-    user_id: NotRequired[Optional[str]]
+    service_account_id: NotRequired[Optional[str]]
     """
     Unique identifier for the service token
     """
-    user_email: NotRequired[Optional[str]]
+    service_account_email: NotRequired[Optional[str]]
     """
     The service account email (not routable)
     """
-    user_given_name: NotRequired[Optional[str]]
+    service_account_name: NotRequired[Optional[str]]
     """
-    The service account given name
-    """
-    user_family_name: NotRequired[Optional[str]]
-    """
-    The service account family name
+    The service account name
     """
     org_id: NotRequired[Optional[str]]
     """
@@ -1587,7 +1655,7 @@ class SSEProgressEventData(TypedDict):
     The id of the span this event is for
     """
     object_type: FunctionObjectType
-    origin: NotRequired[Optional[ObjectReference]]
+    origin: NotRequired[Optional[ObjectReferenceNullish]]
     format: FunctionFormat
     output_type: FunctionOutputType
     name: str
@@ -1756,6 +1824,48 @@ class Acl(TypedDict):
     """
 
 
+class AnyModelParams(TypedDict):
+    temperature: NotRequired[Optional[float]]
+    top_p: NotRequired[Optional[float]]
+    max_tokens: float
+    max_completion_tokens: NotRequired[Optional[float]]
+    """
+    The successor to max_tokens
+    """
+    frequency_penalty: NotRequired[Optional[float]]
+    presence_penalty: NotRequired[Optional[float]]
+    response_format: NotRequired[Optional[ResponseFormatNullish]]
+    tool_choice: NotRequired[Optional[Union[Literal['auto'], Literal['none'], Literal['required'], AnyModelParamsToolChoice]]]
+    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], AnyModelParamsFunctionCall]]]
+    n: NotRequired[Optional[float]]
+    stop: NotRequired[Optional[Sequence[str]]]
+    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
+    top_k: NotRequired[Optional[float]]
+    stop_sequences: NotRequired[Optional[Sequence[str]]]
+    max_tokens_to_sample: NotRequired[Optional[float]]
+    """
+    This is a legacy parameter that should not be used.
+    """
+    maxOutputTokens: NotRequired[Optional[float]]
+    topP: NotRequired[Optional[float]]
+    topK: NotRequired[Optional[float]]
+    use_cache: NotRequired[Optional[bool]]
+
+
+class AsyncScoringControlAsyncScoringControl1(TypedDict):
+    kind: Literal['state_override']
+    state: AsyncScoringState
+
+
+AsyncScoringControl = Union[
+    AsyncScoringControlAsyncScoringControl,
+    AsyncScoringControlAsyncScoringControl1,
+    AsyncScoringControlAsyncScoringControl2,
+    AsyncScoringControlAsyncScoringControl3,
+]
+
+
 AttachmentReference = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
 
 
@@ -1865,7 +1975,7 @@ class DatasetEvent(TypedDict):
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[ObjectReference]]
+    origin: NotRequired[Optional[ObjectReferenceNullish]]
 
 
 class Experiment(TypedDict):
@@ -1926,6 +2036,37 @@ class Experiment(TypedDict):
     """
     A list of tags for the experiment
     """
+
+
+class ModelParamsModelParams(TypedDict):
+    use_cache: NotRequired[Optional[bool]]
+    temperature: NotRequired[Optional[float]]
+    top_p: NotRequired[Optional[float]]
+    max_tokens: NotRequired[Optional[float]]
+    max_completion_tokens: NotRequired[Optional[float]]
+    """
+    The successor to max_tokens
+    """
+    frequency_penalty: NotRequired[Optional[float]]
+    presence_penalty: NotRequired[Optional[float]]
+    response_format: NotRequired[Optional[ResponseFormatNullish]]
+    tool_choice: NotRequired[
+        Union[Literal['auto'], Literal['none'], Literal['required'], ModelParamsModelParamsToolChoice]
+    ]
+    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], ModelParamsModelParamsFunctionCall]]]
+    n: NotRequired[Optional[float]]
+    stop: NotRequired[Optional[Sequence[str]]]
+    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
+
+
+ModelParams = Union[
+    ModelParamsModelParams,
+    ModelParamsModelParams1,
+    ModelParamsModelParams2,
+    ModelParamsModelParams3,
+    ModelParamsModelParams4,
+]
 
 
 class OnlineScoreConfig(TypedDict):
@@ -2055,14 +2196,24 @@ PromptBlockDataNullish = Optional[
 ]
 
 
+class PromptOptions(TypedDict):
+    model: NotRequired[Optional[str]]
+    params: NotRequired[Optional[ModelParams]]
+    position: NotRequired[Optional[str]]
+
+
+class PromptOptionsNullish(TypedDict):
+    model: NotRequired[Optional[str]]
+    params: NotRequired[Optional[ModelParams]]
+    position: NotRequired[Optional[str]]
+
+
 class ResponseFormatResponseFormat1(TypedDict):
     type: Literal['json_schema']
     json_schema: ResponseFormatJsonSchema
 
 
-ResponseFormat = Optional[
-    Union[ResponseFormatResponseFormat, ResponseFormatResponseFormat1, ResponseFormatResponseFormat2]
-]
+ResponseFormat = Union[ResponseFormatResponseFormat, ResponseFormatResponseFormat1, ResponseFormatResponseFormat2]
 
 
 class SpanAttributes(TypedDict):
@@ -2075,35 +2226,6 @@ class SpanAttributes(TypedDict):
 
 class ViewData(TypedDict):
     search: NotRequired[Optional[ViewDataSearch]]
-
-
-class AnyModelParams(TypedDict):
-    temperature: NotRequired[Optional[float]]
-    top_p: NotRequired[Optional[float]]
-    max_tokens: float
-    max_completion_tokens: NotRequired[Optional[float]]
-    """
-    The successor to max_tokens
-    """
-    frequency_penalty: NotRequired[Optional[float]]
-    presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[ResponseFormat]]
-    tool_choice: NotRequired[Optional[Union[Literal['auto'], Literal['none'], Literal['required'], AnyModelParamsToolChoice]]]
-    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], AnyModelParamsFunctionCall]]]
-    n: NotRequired[Optional[float]]
-    stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
-    top_k: NotRequired[Optional[float]]
-    stop_sequences: NotRequired[Optional[Sequence[str]]]
-    max_tokens_to_sample: NotRequired[Optional[float]]
-    """
-    This is a legacy parameter that should not be used.
-    """
-    maxOutputTokens: NotRequired[Optional[float]]
-    topP: NotRequired[Optional[float]]
-    topK: NotRequired[Optional[float]]
-    use_cache: NotRequired[Optional[bool]]
 
 
 class ExperimentEvent(TypedDict):
@@ -2184,7 +2306,7 @@ class ExperimentEvent(TypedDict):
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[ObjectReference]]
+    origin: NotRequired[Optional[ObjectReferenceNullish]]
 
 
 class GraphNodeGraphNode7(TypedDict):
@@ -2209,37 +2331,6 @@ GraphNode = Union[
     GraphNodeGraphNode5,
     GraphNodeGraphNode6,
     GraphNodeGraphNode7,
-]
-
-
-class ModelParamsModelParams(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    temperature: NotRequired[Optional[float]]
-    top_p: NotRequired[Optional[float]]
-    max_tokens: NotRequired[Optional[float]]
-    max_completion_tokens: NotRequired[Optional[float]]
-    """
-    The successor to max_tokens
-    """
-    frequency_penalty: NotRequired[Optional[float]]
-    presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[ResponseFormat]]
-    tool_choice: NotRequired[
-        Union[Literal['auto'], Literal['none'], Literal['required'], ModelParamsModelParamsToolChoice]
-    ]
-    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], ModelParamsModelParamsFunctionCall]]]
-    n: NotRequired[Optional[float]]
-    stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
-
-
-ModelParams = Union[
-    ModelParamsModelParams,
-    ModelParamsModelParams1,
-    ModelParamsModelParams2,
-    ModelParamsModelParams3,
-    ModelParamsModelParams4,
 ]
 
 
@@ -2325,7 +2416,7 @@ class ProjectLogsEvent(TypedDict):
     Whether this span is a root span
     """
     span_attributes: NotRequired[Optional[SpanAttributes]]
-    origin: NotRequired[Optional[ObjectReference]]
+    origin: NotRequired[Optional[ObjectReferenceNullish]]
 
 
 class ProjectScore(TypedDict):
@@ -2359,16 +2450,20 @@ class ProjectScore(TypedDict):
     """
 
 
-class PromptOptions(TypedDict):
-    model: NotRequired[Optional[str]]
-    params: NotRequired[Optional[ModelParams]]
-    position: NotRequired[Optional[str]]
+class PromptData(TypedDict):
+    prompt: NotRequired[Optional[PromptBlockDataNullish]]
+    options: NotRequired[Optional[PromptOptionsNullish]]
+    parser: NotRequired[Optional[PromptParserNullish]]
+    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    origin: NotRequired[Optional[PromptDataOrigin]]
 
 
-class PromptOptionsNullish(TypedDict):
-    model: NotRequired[Optional[str]]
-    params: NotRequired[Optional[ModelParams]]
-    position: NotRequired[Optional[str]]
+class PromptDataNullish(TypedDict):
+    prompt: NotRequired[Optional[PromptBlockDataNullish]]
+    options: NotRequired[Optional[PromptOptionsNullish]]
+    parser: NotRequired[Optional[PromptParserNullish]]
+    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    origin: NotRequired[Optional[PromptDataNullishOrigin]]
 
 
 class View(TypedDict):
@@ -2419,37 +2514,6 @@ class View(TypedDict):
     """
 
 
-class GraphData(TypedDict):
-    type: Literal['graph']
-    nodes: Mapping[str, GraphNode]
-    edges: Mapping[str, GraphEdge]
-
-
-class PromptData(TypedDict):
-    prompt: NotRequired[Optional[PromptBlockDataNullish]]
-    options: NotRequired[Optional[PromptOptionsNullish]]
-    parser: NotRequired[Optional[PromptParserNullish]]
-    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
-    origin: NotRequired[Optional[PromptDataOrigin]]
-
-
-class PromptDataNullish(TypedDict):
-    prompt: NotRequired[Optional[PromptBlockDataNullish]]
-    options: NotRequired[Optional[PromptOptionsNullish]]
-    parser: NotRequired[Optional[PromptParserNullish]]
-    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
-    origin: NotRequired[Optional[PromptDataNullishOrigin]]
-
-
-FunctionData = Union[
-    FunctionDataFunctionData,
-    FunctionDataFunctionData1,
-    GraphData,
-    FunctionDataFunctionData2,
-    FunctionDataFunctionData3,
-]
-
-
 class FunctionIdFunctionId5(TypedDict):
     inline_prompt: NotRequired[Optional[PromptData]]
     inline_function: Mapping[str, Any]
@@ -2478,6 +2542,12 @@ FunctionId = Union[
     FunctionIdFunctionId5,
     FunctionIdFunctionId6,
 ]
+
+
+class GraphData(TypedDict):
+    type: Literal['graph']
+    nodes: Mapping[str, GraphNode]
+    edges: Mapping[str, GraphEdge]
 
 
 class InvokeFunction(TypedDict):
@@ -2631,6 +2701,15 @@ class RunEval(TypedDict):
     """
     Optional tags that will be added to the experiment.
     """
+
+
+FunctionData = Union[
+    FunctionDataFunctionData,
+    FunctionDataFunctionData1,
+    GraphData,
+    FunctionDataFunctionData2,
+    FunctionDataFunctionData3,
+]
 
 
 class Function(TypedDict):

@@ -8,7 +8,7 @@ import {
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
-import { InvokeFunctionRequest } from "typespecs";
+import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 import {
   base64ToUint8Array,
   concatUint8Arrays,

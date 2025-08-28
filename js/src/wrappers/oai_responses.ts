@@ -35,22 +35,15 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
 
 // convert response.create params into a span
 function parseSpanFromResponseCreateParams(params: any): TimedSpan {
-  // responses.create is meant to take a single message and instruction.
-  // Convert that to the form our backend expects.
-  const input = [{ role: "user", content: params.input }];
-  if (params.instructions) {
-    input.push({ role: "system", content: params.instructions });
-  }
-
   const spanArgs = {
     name: "openai.responses.create",
     spanAttributes: {
       type: "llm",
     },
     event: {
-      input,
+      input: params.input,
       metadata: {
-        ...filterFrom(params, ["input", "instructions"]),
+        ...filterFrom(params, ["input"]),
         provider: "openai",
       },
     },
@@ -64,30 +57,38 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 
 // convert response.create result into an event
 function parseEventFromResponseCreateResult(result: any) {
-  return {
-    output: result?.output_text || "",
-    metrics: parseMetricsFromUsage(result?.usage),
-  };
+  const data: Record<string, any> = {};
+
+  // Extract output
+  if (result?.output !== undefined) {
+    data.output = result.output;
+  }
+
+  // Extract metadata - preserve all response fields except output and usage
+  if (result) {
+    const { output, usage, ...metadata } = result;
+    if (Object.keys(metadata).length > 0) {
+      data.metadata = metadata;
+    }
+  }
+
+  // Extract metrics from usage
+  data.metrics = parseMetricsFromUsage(result?.usage);
+
+  return data;
 }
 
 // convert response.parse params into a span
 function parseSpanFromResponseParseParams(params: any): TimedSpan {
-  // responses.parse is meant to take a single message and instruction.
-  // Convert that to the form our backend expects.
-  const input = [{ role: "user", content: params.input }];
-  if (params.instructions) {
-    input.push({ role: "system", content: params.instructions });
-  }
-
   const spanArgs = {
     name: "openai.responses.parse",
     spanAttributes: {
       type: "llm",
     },
     event: {
-      input,
+      input: params.input,
       metadata: {
-        ...filterFrom(params, ["input", "instructions"]),
+        ...filterFrom(params, ["input"]),
         provider: "openai",
       },
     },
@@ -101,10 +102,25 @@ function parseSpanFromResponseParseParams(params: any): TimedSpan {
 
 // convert response.parse result into an event
 function parseEventFromResponseParseResult(result: any) {
-  return {
-    output: result?.output_parsed || result?.output_text || "",
-    metrics: parseMetricsFromUsage(result?.usage),
-  };
+  const data: Record<string, any> = {};
+
+  // Extract output
+  if (result?.output !== undefined) {
+    data.output = result.output;
+  }
+
+  // Extract metadata - preserve all response fields except output and usage
+  if (result) {
+    const { output, usage, ...metadata } = result;
+    if (Object.keys(metadata).length > 0) {
+      data.metadata = metadata;
+    }
+  }
+
+  // Extract metrics from usage
+  data.metrics = parseMetricsFromUsage(result?.usage);
+
+  return data;
 }
 
 function traceResponseCreateStream(
@@ -147,20 +163,25 @@ function parseLogFromItem(item: any): {} {
   const response = item.response;
   switch (item.type) {
     case "response.completed":
-      // I think there is usually only one output, but since they are arrays
-      // we'll collect them all just in case.
-      const texts = [];
-      for (const output of response?.output || []) {
-        for (const content of output?.content || []) {
-          if (content?.type === "output_text") {
-            texts.push(content.text);
-          }
+      const data: Record<string, any> = {};
+
+      // Extract output
+      if (response?.output !== undefined) {
+        data.output = response.output;
+      }
+
+      // Extract metadata - preserve response fields except usage and output
+      if (response) {
+        const { usage, output, ...metadata } = response;
+        if (Object.keys(metadata).length > 0) {
+          data.metadata = metadata;
         }
       }
-      return {
-        output: texts.join(""),
-        metrics: parseMetricsFromUsage(response?.usage),
-      };
+
+      // Extract metrics from usage
+      data.metrics = parseMetricsFromUsage(response?.usage);
+
+      return data;
     default:
       return {};
   }

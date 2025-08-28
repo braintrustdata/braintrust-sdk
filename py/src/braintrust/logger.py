@@ -254,6 +254,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """Set the span as the current span. This is used to mark the span as the active span for the current thread."""
         pass
 
+    @abstractmethod
+    def unset_current(self) -> None:
+        """Unset the span as the current span."""
+        pass
+
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -310,6 +315,9 @@ class _NoopSpan(Span):
         pass
 
     def set_current(self):
+        pass
+
+    def unset_current(self):
         pass
 
     def __enter__(self):
@@ -3810,6 +3818,10 @@ class SpanImpl(Span):
         if self.can_set_current:
             self._context_token = self.state.current_span.set(self)
 
+    def unset_current(self):
+        if self.can_set_current:
+            self.state.current_span.reset(self._context_token)
+
     def __enter__(self) -> Span:
         self.set_current()
         return self
@@ -3819,9 +3831,7 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            if self.can_set_current:
-                self.state.current_span.reset(self._context_token)
-
+            self.unset_current()
             self.end()
 
     def _get_parent_info(self):
