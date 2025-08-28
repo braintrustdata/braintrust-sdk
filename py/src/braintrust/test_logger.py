@@ -1539,3 +1539,72 @@ def test_attachment_readable_path_returns_data(tmp_path):
 
     a = Attachment(data=str(file_path), filename="hello.txt", content_type="text/plain")
     assert a.data == b"hello world"
+
+
+def test_traced_thread_pool_executor_parent_child_spans(with_memory_logger):
+    """Test that TracedThreadPoolExecutor preserves parent-child span relationships."""
+    init_test_logger(__name__)
+
+    # Track spans created during execution
+    span_exports = []
+
+    @logger.traced
+    def child_function(name: str) -> str:
+        """Child function that should be nested under parent span."""
+        current = logger.current_span()
+        span_exports.append(("child", name, current.export()))
+        return f"completed-{name}"
+
+    @logger.traced
+    def parent_function() -> str:
+        """Parent function that creates child spans in threads."""
+        parent_span = logger.current_span()
+        span_exports.append(("parent", "main", parent_span.export()))
+
+        # Use TracedThreadPoolExecutor to run child functions in threads
+        with braintrust.TracedThreadPoolExecutor(max_workers=2) as executor:
+            # Submit multiple functions to test parent-child relationships
+            future1 = executor.submit(child_function, "child-1")
+            future2 = executor.submit(child_function, "child-2")
+
+            result1 = future1.result()
+            result2 = future2.result()
+
+            return f"Results: {result1}, {result2}"
+
+    # Execute the test
+    result = parent_function()
+    assert result == "Results: completed-child-1, completed-child-2"
+
+    # Verify we captured the expected spans
+    assert len(span_exports) == 3, f"Expected 3 spans, got {len(span_exports)}"
+
+    # Extract span exports
+    parent_export = None
+    child_exports = []
+
+    for span_type, name, export in span_exports:
+        if span_type == "parent":
+            parent_export = export
+        else:
+            child_exports.append((name, export))
+
+    assert parent_export is not None, "Parent span export not found"
+    assert len(child_exports) == 2, f"Expected 2 child exports, got {len(child_exports)}"
+
+    # Parse the exports to verify relationships
+    from braintrust.span_identifier_v3 import SpanComponentsV3
+    parent_components = SpanComponentsV3.from_str(parent_export)
+
+    # Verify each child span has correct parent relationship
+    for child_name, child_export in child_exports:
+        child_components = SpanComponentsV3.from_str(child_export)
+
+        # Key verification: child and parent should share the same root span ID
+        # This proves TracedThreadPoolExecutor preserved the parent-child relationship
+        assert child_components.root_span_id == parent_components.root_span_id, \
+            f"Child '{child_name}' root_span_id {child_components.root_span_id} != parent root_span_id {parent_components.root_span_id}"
+
+        # Child should have a different span ID than parent
+        assert child_components.span_id != parent_components.span_id, \
+            f"Child '{child_name}' should have different span_id than parent"

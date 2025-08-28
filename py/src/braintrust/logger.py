@@ -4887,9 +4887,22 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         # Capture all current context variables
         context = contextvars.copy_context()
 
-        def wrapped_fn(*args, **kwargs):
-            # Run the function inside the captured context
-            return context.run(fn, *args, **kwargs)
+        # Capture the current span to ensure proper parent-child relationships
+        current_span_obj = current_span()
+        current_parent_export = None
+        if current_span_obj != NOOP_SPAN:
+            current_parent_export = current_span_obj.export()
+
+        def wrapped_fn(*args: Any, **kwargs: Any) -> Any:
+            # Run the function inside the captured context with proper parent context
+            def run_with_parent() -> Any:
+                if current_parent_export:
+                    with parent_context(current_parent_export):
+                        return fn(*args, **kwargs)
+                else:
+                    return fn(*args, **kwargs)
+
+            return context.run(run_with_parent)
 
         return super().submit(wrapped_fn, *args, **kwargs)
 
