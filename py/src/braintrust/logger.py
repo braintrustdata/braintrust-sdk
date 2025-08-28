@@ -4893,14 +4893,27 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         if current_span_obj != NOOP_SPAN:
             current_parent_export = current_span_obj.export()
 
+        # Capture the current background logger override (for testing)
+        # This ensures memory loggers and other test fixtures work in threads
+        current_bg_logger = getattr(_state._override_bg_logger, 'logger', None)
+
         def wrapped_fn(*args: Any, **kwargs: Any) -> Any:
             # Run the function inside the captured context with proper parent context
             def run_with_parent() -> Any:
-                if current_parent_export:
-                    with parent_context(current_parent_export):
+                # Restore background logger override in the thread
+                if current_bg_logger is not None:
+                    _state._override_bg_logger.logger = current_bg_logger
+
+                try:
+                    if current_parent_export:
+                        with parent_context(current_parent_export):
+                            return fn(*args, **kwargs)
+                    else:
                         return fn(*args, **kwargs)
-                else:
-                    return fn(*args, **kwargs)
+                finally:
+                    # Clean up background logger override
+                    if current_bg_logger is not None:
+                        _state._override_bg_logger.logger = None
 
             return context.run(run_with_parent)
 

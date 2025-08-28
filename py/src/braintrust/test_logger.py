@@ -1542,69 +1542,71 @@ def test_attachment_readable_path_returns_data(tmp_path):
 
 
 def test_traced_thread_pool_executor_parent_child_spans(with_memory_logger):
-    """Test that TracedThreadPoolExecutor preserves parent-child span relationships."""
-    init_test_logger(__name__)
+    """Test that TracedThreadPoolExecutor preserves parent-child relationships in ACTUAL logged spans."""
+    test_logger_instance = init_test_logger(__name__)
 
-    # Track spans created during execution
-    span_exports = []
+    # Create functions that will create spans with distinguishable metadata
+    def child_work(task_name: str) -> str:
+        """Function that creates a span when run - this tests the real bug"""
+        with logger.start_span(f"child_task_{task_name}") as span:
+            span.log(metadata={"task_type": "child", "task_name": task_name})
+            return f"completed_{task_name}"
 
-    @logger.traced
-    def child_function(name: str) -> str:
-        """Child function that should be nested under parent span."""
-        current = logger.current_span()
-        span_exports.append(("child", name, current.export()))
-        return f"completed-{name}"
+    # Test the core issue: parent span context should propagate to executor threads
+    with logger.start_span("parent_span") as parent_span:
+        parent_span.log(metadata={"task_type": "parent"})
 
-    @logger.traced
-    def parent_function() -> str:
-        """Parent function that creates child spans in threads."""
-        parent_span = logger.current_span()
-        span_exports.append(("parent", "main", parent_span.export()))
-
-        # Use TracedThreadPoolExecutor to run child functions in threads
+        # This is the key test - child spans created in executor threads
+        # should be properly nested under the parent span
         with braintrust.TracedThreadPoolExecutor(max_workers=2) as executor:
-            # Submit multiple functions to test parent-child relationships
-            future1 = executor.submit(child_function, "child-1")
-            future2 = executor.submit(child_function, "child-2")
+            future1 = executor.submit(child_work, "task1")
+            future2 = executor.submit(child_work, "task2")
 
             result1 = future1.result()
             result2 = future2.result()
 
-            return f"Results: {result1}, {result2}"
+    # Give time for background logging to complete and explicitly flush
+    import time
+    time.sleep(0.1)
+    logger.flush()
+    time.sleep(0.1)  # Additional time for flush to complete
 
-    # Execute the test
-    result = parent_function()
-    assert result == "Results: completed-child-1, completed-child-2"
+    # Now verify the ACTUAL LOGGED SPANS have correct parent-child relationships
+    logged_spans = with_memory_logger.pop()
 
-    # Verify we captured the expected spans
-    assert len(span_exports) == 3, f"Expected 3 spans, got {len(span_exports)}"
+    # Find parent and child spans in the logged data
+    parent_span_data = None
+    child_spans_data = []
 
-    # Extract span exports
-    parent_export = None
-    child_exports = []
+    for span_data in logged_spans:
+        task_type = span_data.get("metadata", {}).get("task_type")
+        if task_type == "parent":
+            parent_span_data = span_data
+        elif task_type == "child":
+            child_spans_data.append(span_data)
 
-    for span_type, name, export in span_exports:
-        if span_type == "parent":
-            parent_export = export
-        else:
-            child_exports.append((name, export))
+    # Verify we found the expected spans - if this fails, the test setup is wrong
+    assert parent_span_data is not None, f"Parent span not found in {len(logged_spans)} logged spans"
+    assert len(child_spans_data) == 2, f"Expected 2 child spans, found {len(child_spans_data)}"
 
-    assert parent_export is not None, "Parent span export not found"
-    assert len(child_exports) == 2, f"Expected 2 child exports, got {len(child_exports)}"
+    # THIS IS THE CRITICAL TEST: verify parent-child relationships in logged spans
+    parent_span_id = parent_span_data["span_id"]
 
-    # Parse the exports to verify relationships
-    from braintrust.span_identifier_v3 import SpanComponentsV3
-    parent_components = SpanComponentsV3.from_str(parent_export)
+    for child_data in child_spans_data:
+        task_name = child_data.get("metadata", {}).get("task_name", "unknown")
 
-    # Verify each child span has correct parent relationship
-    for child_name, child_export in child_exports:
-        child_components = SpanComponentsV3.from_str(child_export)
+        # KEY ASSERTION: Child span should be properly nested under parent
+        # This is exactly what was broken before our TracedThreadPoolExecutor fix
 
-        # Key verification: child and parent should share the same root span ID
-        # This proves TracedThreadPoolExecutor preserved the parent-child relationship
-        assert child_components.root_span_id == parent_components.root_span_id, \
-            f"Child '{child_name}' root_span_id {child_components.root_span_id} != parent root_span_id {parent_components.root_span_id}"
+        # Check if parent span ID is in span_parents list
+        span_parents = child_data.get("span_parents", [])
+        assert parent_span_id in span_parents, \
+            f"Child span '{task_name}' should have parent span_id={parent_span_id} in span_parents={span_parents}"
 
-        # Child should have a different span ID than parent
-        assert child_components.span_id != parent_components.span_id, \
-            f"Child '{child_name}' should have different span_id than parent"
+        # Additional verification: child should have same root_span_id as parent
+        assert child_data["root_span_id"] == parent_span_data["root_span_id"], \
+            f"Child span '{task_name}' should have same root_span_id as parent"
+
+        # Child should have different span_id than parent
+        assert child_data["span_id"] != parent_span_id, \
+            f"Child span '{task_name}' should have different span_id than parent"
