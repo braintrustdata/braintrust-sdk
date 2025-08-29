@@ -4045,7 +4045,12 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  const parentStr = args?.parent ?? state.currentParent.getStore();
+  // Precedence: current span > current parent > logger
+  // If a current span exists, don't use propagated parent string so children attach to current span
+  const parentStr =
+    state.currentSpan.getStore() !== undefined
+      ? undefined
+      : args?.parent ?? state.currentParent.getStore();
 
   const components: SpanComponentsV3 | undefined = parentStr
     ? SpanComponentsV3.fromStr(parentStr)

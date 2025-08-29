@@ -9,7 +9,7 @@ import pytest
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
-from braintrust.logger import _deep_copy_event, _extract_attachments
+from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -1539,3 +1539,70 @@ def test_attachment_readable_path_returns_data(tmp_path):
 
     a = Attachment(data=str(file_path), filename="hello.txt", content_type="text/plain")
     assert a.data == b"hello world"
+
+
+def test_parent_precedence_with_parent_context_and_traced(with_memory_logger, with_simulate_login):
+    """Test that with parent_context + traced, child spans attach to current span (not directly to parent context)."""
+    init_test_logger(__name__)
+
+    # Create exported parent context
+    with logger.start_span(name="outer") as outer:
+        outer_export = outer.export()
+
+    @logger.traced("inner", notrace_io=True)
+    def inner():
+        s = logger.start_span(name="child")
+        s.end()
+
+    with parent_context(outer_export):
+        inner()
+
+    logs = with_memory_logger.pop()
+    outer_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "outer")
+    inner_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "inner")
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+
+    # child should have inner as a parent
+    assert inner_log["span_id"] in (child_log.get("span_parents") or [])
+    # child and outer should share the same root
+    assert child_log["root_span_id"] == outer_log["root_span_id"]
+
+
+def test_parent_precedence_traced_baseline(with_memory_logger, with_simulate_login):
+    """Test that traced baseline nests child under current span."""
+    init_test_logger(__name__)
+
+    @logger.traced("top", notrace_io=True)
+    def top():
+        s = logger.start_span(name="child")
+        s.end()
+
+    top()
+    logs = with_memory_logger.pop()
+    top_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "top")
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+
+    assert top_log["span_id"] in (child_log.get("span_parents") or [])
+
+
+def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_simulate_login):
+    """Test that explicit parent overrides current span."""
+    init_test_logger(__name__)
+
+    with logger.start_span(name="outer") as outer:
+        outer_export = outer.export()
+
+    @logger.traced("inner", notrace_io=True)
+    def inner():
+        s = braintrust.start_span(name="forced", parent=outer_export)
+        s.end()
+
+    inner()
+    logs = with_memory_logger.pop()
+    outer_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "outer")
+    inner_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "inner")
+    forced_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "forced")
+
+    parents = forced_log.get("span_parents") or []
+    assert outer_log["span_id"] in parents
+    assert inner_log["span_id"] not in parents
