@@ -263,16 +263,20 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
+        self.name = name
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
+        if self.create_fn is None:
+            raise RuntimeError("create_fn is None")
+
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self.name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
@@ -285,7 +289,6 @@ class ResponseWrapper:
             else:
                 raw_response = create_response
             if stream:
-
                 def gen():
                     try:
                         first = True
@@ -301,32 +304,31 @@ class ResponseWrapper:
                             all_results.append(item)
                             yield item
 
+                        # Process final results for streaming
                         span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
                 should_end = False
                 return gen()
-
             else:
                 log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage"))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["output"],
-                )
+                event_data = self._parse_event_from_result(log_response)
+                span.log(**event_data)
                 return raw_response
         finally:
             if should_end:
                 span.end()
 
     async def acreate(self, *args: Any, **kwargs: Any) -> Any:
+        if self.acreate_fn is None:
+            raise RuntimeError("acreate_fn is None")
+
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self.name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
@@ -339,7 +341,6 @@ class ResponseWrapper:
             else:
                 raw_response = create_response
             if stream:
-
                 async def gen():
                     try:
                         first = True
@@ -355,6 +356,7 @@ class ResponseWrapper:
                             all_results.append(item)
                             yield item
 
+                        # Process final results for streaming
                         span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
@@ -364,12 +366,8 @@ class ResponseWrapper:
                 return AsyncResponseWrapper(streamer)
             else:
                 log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage"))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["output"],
-                )
+                event_data = self._parse_event_from_result(log_response)
+                span.log(**event_data)
                 return raw_response
         finally:
             if should_end:
@@ -382,68 +380,75 @@ class ResponseWrapper:
 
         # Then, copy the rest of the params
         params = prettify_params(params)
-        input = params.pop("input", None)
+        input_data = params.pop("input", None)
         return merge_dicts(
             ret,
             {
-                "input": input,
+                "input": input_data,
                 "metadata": {**params, "provider": "openai"},
             },
         )
 
     @classmethod
+    def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse event from response result - minimal processing like JS version."""
+        data = {}
+
+        # Extract output (similar to JS version)
+        if result and "output" in result:
+            data["output"] = result["output"]
+
+        # Extract metadata - preserve all response fields except output and usage
+        if result:
+            metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
+            if metadata:
+                data["metadata"] = metadata
+
+        # Extract metrics from usage (similar to JS parseMetricsFromUsage)
+        data["metrics"] = _parse_metrics_from_usage(result.get("usage"))
+
+        return data
+
+    @classmethod
     def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
-        role = None
-        content = None
-        tool_calls = None
-        finish_reason = None
+        """Process streaming results - minimal version focused on metrics extraction."""
         metrics = {}
         output = []
+
         for result in all_results:
+            # Extract usage from the result if available
             usage = None
             if hasattr(result, "usage"):
                 usage = getattr(result, "usage")
-            elif result.type == "response.completed" and hasattr(result, "response"):
-                usage = getattr(result.response, "usage")
+            elif hasattr(result, "type") and result.type == "response.completed" and hasattr(result, "response"):
+                usage = getattr(result.response, "usage", None)
 
             if usage:
                 parsed_metrics = _parse_metrics_from_usage(usage)
                 metrics.update(parsed_metrics)
 
-            if result.type == "response.output_item.added":
-                output.append({"id": result.item.id, "type": result.item.type})
-                continue
-
-            if not hasattr(result, "output_index"):
-                continue
-
-            output_index = result.output_index
-            current_output = output[output_index]
-            if result.type == "response.output_item.done":
-                current_output["status"] = result.item.status
-                continue
-
-            if result.type == "response.output_item.delta":
-                current_output["delta"] = result.delta
-                continue
-
-            if hasattr(result, "content_index"):
-                if "content" not in current_output:
-                    current_output["content"] = []
-                content_index = result.content_index
-                if content_index == len(current_output["content"]):
-                    current_output["content"].append({})
-                current_content = current_output["content"][content_index]
-                if hasattr(result, "delta") and result.delta:
-                    current_content["text"] = (current_content.get("text") or "") + result.delta
-
-                if result.type == "response.output_text.annotation.added":
-                    annotation_index = result.annotation_index
-                    if "annotations" not in current_content:
-                        current_content["annotations"] = []
-                    if annotation_index == len(current_content["annotations"]):
-                        current_content["annotations"].append({})
-                    current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
+            # Simple output aggregation for responses API
+            if hasattr(result, "type"):
+                if result.type == "response.output_item.added":
+                    output.append({"id": result.item.id, "type": result.item.type})
+                elif result.type == "response.output_text.delta" and hasattr(result, "delta"):
+                    # Aggregate text deltas
+                    if not output:
+                        output.append({"content": []})
+                    if not output[-1].get("content"):
+                        output[-1]["content"] = [{"text": ""}]
+                    output[-1]["content"][-1]["text"] += result.delta
+                elif result.type == "response.completed":
+                    # Use the completed response output if available
+                    if hasattr(result, "response") and hasattr(result.response, "output"):
+                        # Make sure we have the metrics from this completed response
+                        if hasattr(result.response, "usage"):
+                            final_metrics = _parse_metrics_from_usage(result.response.usage)
+                            metrics.update(final_metrics)
+                        return {
+                            "metrics": metrics,
+                            "output": result.response.output,
+                        }
 
         return {
             "metrics": metrics,
@@ -663,7 +668,7 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
     def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+        return ResponseWrapper(self.__responses.parse, None, "openai.responses.parse").create(*args, **kwargs)
 
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
@@ -676,7 +681,7 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         return AsyncResponseWrapper(response)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.parse, "openai.responses.parse").acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

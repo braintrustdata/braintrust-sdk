@@ -66,7 +66,7 @@ def test_openai_chat_metrics(memory_logger):
         assert span
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
@@ -119,7 +119,7 @@ def test_openai_responses_metrics(memory_logger):
     assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
     assert len(span["output"]) > 0
@@ -162,7 +162,7 @@ def test_openai_responses_metrics(memory_logger):
     assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
     assert len(span["output"]) > 0
@@ -249,7 +249,7 @@ def test_openai_chat_streaming_sync(memory_logger):
         assert span
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
@@ -383,7 +383,7 @@ async def test_openai_chat_async(memory_logger):
     assert span
     metrics = span["metrics"]
     assert_metrics_are_valid(metrics, start, end)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     # assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
@@ -428,7 +428,7 @@ async def test_openai_responses_async(memory_logger):
         assert_metrics_are_valid(metrics, start, end)
         assert 0 <= metrics.get("prompt_cached_tokens", 0)
         assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
@@ -474,7 +474,7 @@ async def test_openai_responses_async(memory_logger):
             assert_metrics_are_valid(metrics, start, end)
             assert 0 <= metrics.get("prompt_cached_tokens", 0)
             assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-            assert span["metadata"]["model"] == TEST_MODEL
+            assert TEST_MODEL in span["metadata"]["model"]
             # assert span["metadata"]["provider"] == "openai"
             assert TEST_PROMPT in str(span["input"])
             assert len(span["output"]) > 0
@@ -562,7 +562,7 @@ async def test_openai_chat_streaming_async(memory_logger):
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
@@ -849,7 +849,7 @@ async def test_openai_async_parallel_requests(memory_logger):
 
     # Verify each span has proper data
     for i, span in enumerate(spans):
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert prompts[i] in str(span["input"])
         assert_metrics_are_valid(span["metrics"])
@@ -939,18 +939,18 @@ def test_openai_responses_not_given_filtering(memory_logger):
         {
             "input": TEST_PROMPT,
             "metadata": {
-                "model": TEST_MODEL,
+                "model": lambda x: TEST_MODEL in x,
                 "provider": "openai",
                 "temperature": 0.5,
                 "instructions": "Just the number please",
             },
         },
     )
-    # Verify NOT_GIVEN values are not in the logged metadata
+    # Verify NOT_GIVEN values are not in the logged metadata (only check original request params)
+    # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    for k in ["max_output_tokens", "tools", "top_p", "store"]:
-        assert k not in meta
+    # Don't check for response fields since we now include all response metadata
 
     # Test responses.parse with NOT_GIVEN filtering
     class NumberAnswer(BaseModel):
@@ -986,18 +986,18 @@ def test_openai_responses_not_given_filtering(memory_logger):
         {
             "input": TEST_PROMPT,
             "metadata": {
-                "model": TEST_MODEL,
+                "model": lambda x: TEST_MODEL in x,
                 "provider": "openai",
                 "temperature": 0.7,
                 "text_format": lambda tf: tf is not None and "NumberAnswer" in str(tf),
             },
         },
     )
-    # Verify NOT_GIVEN values are not in the logged metadata
+    # Verify NOT_GIVEN values are not in the logged metadata (only check original request params)
+    # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    for k in ["max_output_tokens", "tools", "top_p", "store"]:
-        assert k not in meta
+    # Don't check for response fields since we now include all response metadata
     # Verify the output is properly logged in the span
     assert span["output"]
     assert isinstance(span["output"], list)
