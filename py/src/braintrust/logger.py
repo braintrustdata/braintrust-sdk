@@ -9,6 +9,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import sys
 import textwrap
 import threading
@@ -3999,17 +4000,90 @@ def _create_custom_render():
 _custom_render = _create_custom_render()
 
 
-def render_templated_object(obj: Any, args: Any) -> Any:
+def _extract_mustache_variables(template: str) -> List[str]:
+    """
+    Extract mustache variables from a template string.
+    This mimics the JavaScript getMustacheVars functionality.
+    """
+    # Match mustache variables: {{variable}} or {{{variable}}}
+    pattern = r'\{\{\{?([^}]+)\}?\}\}'
+    matches = re.findall(pattern, template)
+    # Clean up variable names (remove whitespace, handle nested properties)
+    variables = []
+    for match in matches:
+        # Handle nested properties and array indices
+        variable = match.strip()
+        # Convert array indices to .0 format for path checking
+        variable_with_array_replacement = re.sub(r'\.\d+', '.0', variable)
+        variables.append(variable_with_array_replacement)
+    return variables
+
+
+def _get_nested_value(obj: Any, path: str) -> Any:
+    """Get a nested value from an object using dot notation."""
+    if not path:
+        return obj
+
+    parts = path.split('.')
+    current = obj
+
+    try:
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, (list, tuple)) and part.isdigit():
+                index = int(part)
+                if 0 <= index < len(current):
+                    current = current[index]
+                else:
+                    return None
+            else:
+                # Try to get attribute
+                current = getattr(current, part, None)
+
+            if current is None:
+                return None
+
+        return current
+    except (KeyError, IndexError, AttributeError, TypeError):
+        return None
+
+
+def lint_template(template: str, context: Dict[str, Any]) -> None:
+    """
+    Validate that all mustache variables in a template have corresponding values in the context.
+    Raises ValueError if any variables are missing.
+
+    This is the Python equivalent of the TypeScript lintTemplate function.
+    """
+    variables = _extract_mustache_variables(template)
+
+    for variable in variables:
+        # Check if the variable exists in the context
+        value = _get_nested_value(context, variable)
+        if value is None and variable not in context:
+            # Double-check for direct key existence
+            if '.' not in variable and variable not in context:
+                raise ValueError(f"Variable '{variable}' does not exist.")
+            elif '.' in variable:
+                # For nested variables, check the full path
+                if _get_nested_value(context, variable) is None:
+                    raise ValueError(f"Variable '{variable}' does not exist.")
+
+
+def render_templated_object(obj: Any, args: Any, strict: bool = False) -> Any:
     if isinstance(obj, str):
+        if strict:
+            lint_template(obj, args)
         return _custom_render(obj, data=args)  # pylint: disable=not-callable
     elif isinstance(obj, list):
-        return [render_templated_object(item, args) for item in obj]  # type: ignore
+        return [render_templated_object(item, args, strict) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
-        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
+        return {str(k): render_templated_object(v, args, strict) for k, v in obj.items()}  # type: ignore
     return obj
 
 
-def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+def render_prompt_params(params: Dict[str, Any], args: Any, strict: bool = False) -> Dict[str, Any]:
     if not params:
         return params
 
@@ -4028,7 +4102,7 @@ def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     if raw_schema is None:
         return params
 
-    templated_schema = render_templated_object(raw_schema, args)
+    templated_schema = render_templated_object(raw_schema, args, strict)
     parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
 
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
@@ -4083,12 +4157,13 @@ class Prompt:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def build(self, **build_args: Any) -> Mapping[str, Any]:
+    def build(self, strict: bool = False, **build_args: Any) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
         be forwarded to the mustache template that defines the prompt and rendered with
         the `chevron` library.
 
+        :param strict: If true, throw an error if the variable names in the prompt do not match the input keys.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
@@ -4097,7 +4172,7 @@ class Prompt:
 
         ret = {
             **self.defaults,
-            **render_prompt_params(params, build_args),
+            **render_prompt_params(params, build_args, strict),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -4120,15 +4195,21 @@ class Prompt:
             raise ValueError("Empty prompt")
 
         if self.prompt.type == "completion":
+            if strict:
+                lint_template(self.prompt.content, build_args)
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
 
             def render(template: str):
+                if strict:
+                    lint_template(template, build_args)
                 return chevron.render(template, data=build_args)
 
             ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
 
             if self.prompt.tools and self.prompt.tools.strip():
+                if strict:
+                    lint_template(self.prompt.tools, build_args)
                 ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
         return ret
