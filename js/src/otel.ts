@@ -324,6 +324,17 @@ export class BraintrustSpanProcessor {
                 if (!span.instrumentationScope && span.instrumentationLibrary) {
                   span.instrumentationScope = span.instrumentationLibrary;
                 }
+
+                if (!span.parentSpanContext && span.parentSpanId) {
+                  const spanContext = span.spanContext?.();
+                  if (spanContext?.traceId) {
+                    span.parentSpanContext = {
+                      spanId: span.parentSpanId,
+                      traceId: spanContext.traceId,
+                    };
+                  }
+                }
+
                 return span;
               });
 

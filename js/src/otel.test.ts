@@ -948,4 +948,41 @@ describe("BraintrustExporter", () => {
 
     consoleSpy.mockRestore();
   });
+
+  it("proxy exporter should make OTEL v1 traces compatible with v2", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const exporter = new BraintrustExporter();
+    const processor = (exporter as any).processor;
+    const batchProcessor = (processor as any).processor;
+    const proxiedExporter = (batchProcessor as any)._exporter;
+
+    const mockExport = vi.fn();
+    proxiedExporter.export = mockExport;
+
+    const v1Span = {
+      name: "gen_ai.completion",
+      spanContext: () => ({ traceId: "trace-123", spanId: "span-456" }),
+      parentSpanId: "parent-789",
+      instrumentationLibrary: { name: "openai", version: "1.0.0" },
+    } as any;
+
+    proxiedExporter.export([v1Span], () => {});
+    expect(mockExport).toHaveBeenCalledOnce();
+    const [transformedSpans] = mockExport.mock.calls[0];
+
+    expect(transformedSpans).toHaveLength(1);
+    const transformedSpan = transformedSpans[0];
+
+    // transformed span should have OTEL v2 fields
+    const expectedV2Span = {
+      ...v1Span,
+      parentSpanContext: {
+        spanId: v1Span.parentSpanId,
+        traceId: v1Span.spanContext().traceId,
+      },
+      instrumentationScope: v1Span.instrumentationLibrary,
+    } as any;
+    expect(transformedSpan).toEqual(expectedV2Span);
+  });
 });
