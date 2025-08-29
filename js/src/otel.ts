@@ -326,10 +326,13 @@ export class BraintrustSpanProcessor {
                 }
 
                 if (!span.parentSpanContext && span.parentSpanId) {
-                  span.parentSpanContext = {
-                    spanId: span.parentSpanId,
-                    traceId: span.spanContext().traceId,
-                  };
+                  const spanContext = span.spanContext?.();
+                  if (spanContext?.traceId) {
+                    span.parentSpanContext = {
+                      spanId: span.parentSpanId,
+                      traceId: spanContext.traceId,
+                    };
+                  }
                 }
 
                 return span;
