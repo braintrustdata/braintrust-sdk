@@ -301,6 +301,7 @@ def run(args):
             evaluators,
             host=args.dev_host,
             port=args.dev_port,
+            org_name=args.dev_org_name,
         )
         sys.exit(0)
 
@@ -378,7 +379,7 @@ def build_parser(subparsers, parent_parser):
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground.",
+        help="Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground's remote evals feature.",
     )
     parser.add_argument(
         "--dev-host",
@@ -391,6 +392,11 @@ def build_parser(subparsers, parent_parser):
         help="The port to bind the dev server to. Defaults to 8300.",
         type=int,
         default=8300,
+    )
+    parser.add_argument(
+        "--dev-org-name",
+        help="Only allow users that belong to this org name to run remote evals.",
+        type=str,
     )
     parser.add_argument(
         "files",
