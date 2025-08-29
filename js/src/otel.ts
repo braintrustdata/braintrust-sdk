@@ -324,6 +324,15 @@ export class BraintrustSpanProcessor {
                 if (!span.instrumentationScope && span.instrumentationLibrary) {
                   span.instrumentationScope = span.instrumentationLibrary;
                 }
+
+                // Traces generated from OTel JS v1.x have parent spans defined via parentSpanId.
+                if (span.parentSpanId) {
+                  span.parentSpanContext = {
+                    spanId: span.parentSpanId,
+                    traceId: span.spanContext().traceId,
+                  };
+                }
+
                 return span;
               });
 
