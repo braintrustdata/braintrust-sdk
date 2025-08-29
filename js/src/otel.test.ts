@@ -948,4 +948,58 @@ describe("BraintrustExporter", () => {
 
     consoleSpy.mockRestore();
   });
+
+  it("proxy exporter should make OTEL v1 traces compatible with v2", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const exporter = new BraintrustExporter();
+    const processor = (exporter as any).processor;
+    const batchProcessor = (processor as any).processor;
+    const proxiedExporter = (batchProcessor as any)._exporter;
+
+    const mockExport = vi.fn();
+    proxiedExporter.export = mockExport;
+
+    const v1Span = {
+      name: "gen_ai.completion",
+      spanContext: () => ({ traceId: "trace-123", spanId: "span-456" }),
+      attributes: { "gen_ai.model": "gpt-4" },
+      parentSpanId: "parent-789",
+      instrumentationLibrary: { name: "openai", version: "1.0.0" },
+      kind: 0,
+      startTime: [Date.now(), 0],
+      endTime: [Date.now(), 0],
+      status: { code: 0 },
+      ended: true,
+      duration: [0, 1000000],
+      events: [],
+      links: [],
+      resource: {} as any,
+      droppedAttributesCount: 0,
+      droppedEventsCount: 0,
+      droppedLinksCount: 0,
+    } as any;
+    proxiedExporter.export([v1Span], () => {});
+
+    expect(mockExport).toHaveBeenCalledOnce();
+    const [transformedSpans] = mockExport.mock.calls[0];
+
+    expect(transformedSpans).toHaveLength(1);
+    const transformedSpan = transformedSpans[0];
+
+    // v1 -> v2 compatibility: parentSpanId should be copied to parentSpanContext
+    expect(transformedSpan.parentSpanContext).toEqual({
+      spanId: v1Span.parentSpanId,
+      traceId: v1Span.spanContext().traceId,
+    });
+    expect(transformedSpan.parentSpanId).toBe(v1Span.parentSpanId);
+
+    // v1 -> v2 compatibility: instrumentationLibrary should be copied to instrumentationScope
+    expect(transformedSpan.instrumentationScope).toEqual(
+      v1Span.instrumentationLibrary,
+    );
+    expect(transformedSpan.instrumentationLibrary).toEqual(
+      v1Span.instrumentationLibrary,
+    );
+  });
 });
