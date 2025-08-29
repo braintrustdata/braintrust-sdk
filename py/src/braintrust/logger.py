@@ -48,6 +48,7 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
+from chevron.tokenizer import tokenize
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -4002,20 +4003,22 @@ _custom_render = _create_custom_render()
 
 def _extract_mustache_variables(template: str) -> List[str]:
     """
-    Extract mustache variables from a template string.
-    This mimics the JavaScript getMustacheVars functionality.
+    Extract mustache variables from a template string using chevron's tokenizer.
+    This provides the same functionality as the JavaScript getMustacheVars.
     """
-    # Match mustache variables: {{variable}} or {{{variable}}}
-    pattern = r'\{\{\{?([^}]+)\}?\}\}'
-    matches = re.findall(pattern, template)
-    # Clean up variable names (remove whitespace, handle nested properties)
     variables = []
-    for match in matches:
-        # Handle nested properties and array indices
-        variable = match.strip()
-        # Convert array indices to .0 format for path checking
-        variable_with_array_replacement = re.sub(r'\.\d+', '.0', variable)
-        variables.append(variable_with_array_replacement)
+    try:
+        tokens = tokenize(template)
+        for token in tokens:
+            # Handle both regular variables {{var}} and unescaped {{{var}}}
+            if token[0] == 'variable' or token[0] == 'no escape':
+                variable = token[1].strip()
+                # Convert array indices to .0 format for path checking
+                variable_with_array_replacement = re.sub(r'\.\d+', '.0', variable)
+                variables.append(variable_with_array_replacement)
+    except Exception:
+        # If tokenization fails, return empty list (matches TypeScript behavior)
+        return []
     return variables
 
 
