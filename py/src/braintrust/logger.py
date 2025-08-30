@@ -4160,15 +4160,18 @@ class Prompt:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def build(self, strict: bool = False, **build_args: Any) -> Mapping[str, Any]:
+    def build(self, **build_args: Any) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
         be forwarded to the mustache template that defines the prompt and rendered with
         the `chevron` library.
 
-        :param strict: If true, throw an error if the variable names in the prompt do not match the input keys.
+        :param build_args: Arguments to forward to the prompt template. Can include 'strict=True' to enable strict mode validation.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
+
+        # Extract strict mode setting from build_args if provided
+        strict = build_args.pop('strict', False)
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
