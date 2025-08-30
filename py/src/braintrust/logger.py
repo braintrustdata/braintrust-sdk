@@ -9,6 +9,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import sys
 import textwrap
 import threading
@@ -47,6 +48,7 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
+from chevron.tokenizer import tokenize
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -4253,8 +4255,78 @@ def _create_custom_render():
 _custom_render = _create_custom_render()
 
 
+def _extract_mustache_variables(template: str) -> List[str]:
+    """
+    Extract mustache variables from a template string using chevron's tokenizer.
+    This provides the same functionality as the JavaScript getMustacheVars.
+    """
+    variables = []
+    try:
+        tokens = tokenize(template)
+        for token in tokens:
+            if token[0] == "variable" or token[0] == "no escape":
+                variable = token[1].strip()
+                variable_with_array_replacement = re.sub(r"\.\d+", ".0", variable)
+                variables.append(variable_with_array_replacement)
+    except Exception:
+        # If tokenization fails, return empty list (matches TypeScript behavior)
+        return []
+    return variables
+
+
+def _get_nested_value(obj: Any, path: str) -> Any:
+    """Get a nested value from an object using dot notation."""
+    if not path:
+        return obj
+
+    parts = path.split(".")
+    current = obj
+
+    try:
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, (list, tuple)) and part.isdigit():
+                index = int(part)
+                if 0 <= index < len(current):
+                    current = current[index]
+                else:
+                    return None
+            else:
+                # Try to get attribute
+                current = getattr(current, part, None)
+
+            if current is None:
+                return None
+
+        return current
+    except (KeyError, IndexError, AttributeError, TypeError):
+        return None
+
+
+def lint_template(template: str, context: Dict[str, Any]) -> None:
+    """
+    Validate that all mustache variables in a template have corresponding values in the context.
+    Raises ValueError if any variables are missing.
+    """
+    variables = _extract_mustache_variables(template)
+
+    for variable in variables:
+        value = _get_nested_value(context, variable)
+        if value is None and variable not in context:
+            if "." not in variable and variable not in context:
+                raise ValueError(f"Variable '{variable}' does not exist.")
+            elif "." in variable:
+                if _get_nested_value(context, variable) is None:
+                    raise ValueError(f"Variable '{variable}' does not exist.")
+
+
 def render_templated_object(obj: Any, args: Any) -> Any:
+    strict = args.get("strict", False) if isinstance(args, dict) else False
+
     if isinstance(obj, str):
+        if strict:
+            lint_template(obj, args)
         return _custom_render(obj, data=args)  # pylint: disable=not-callable
     elif isinstance(obj, list):
         return [render_templated_object(item, args) for item in obj]  # type: ignore
@@ -4365,8 +4437,12 @@ class Prompt:
         be forwarded to the mustache template that defines the prompt and rendered with
         the `chevron` library.
 
+        :param build_args: Arguments to forward to the prompt template. Can include 'strict=True' to enable strict mode validation.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
+
+        # Extract strict mode setting from build_args (using get to avoid modifying the original dict)
+        strict = build_args.get("strict", False)
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
@@ -4396,15 +4472,21 @@ class Prompt:
             raise ValueError("Empty prompt")
 
         if self.prompt.type == "completion":
+            if strict:
+                lint_template(self.prompt.content, build_args)
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
 
             def render(template: str):
+                if strict:
+                    lint_template(template, build_args)
                 return chevron.render(template, data=build_args)
 
             ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
 
             if self.prompt.tools and self.prompt.tools.strip():
+                if strict:
+                    lint_template(self.prompt.tools, build_args)
                 ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
         return ret
