@@ -4012,8 +4012,7 @@ def _extract_mustache_variables(template: str) -> List[str]:
         for token in tokens:
             if token[0] == "variable" or token[0] == "no escape":
                 variable = token[1].strip()
-                variable_with_array_replacement = re.sub(r"\.\d+", ".0", variable)
-                variables.append(variable_with_array_replacement)
+                variables.append(variable)
     except Exception:
         # If tokenization fails, return empty list (matches TypeScript behavior)
         return []
@@ -4058,12 +4057,24 @@ def lint_template(template: str, context: Dict[str, Any]) -> None:
     variables = _extract_mustache_variables(template)
 
     for variable in variables:
+        # Check if the actual variable exists
         value = _get_nested_value(context, variable)
-        if value is None and variable not in context:
-            if "." not in variable and variable not in context:
-                raise ValueError(f"Variable '{variable}' does not exist.")
-            elif "." in variable:
-                if _get_nested_value(context, variable) is None:
+        if value is None:
+            # For array access, check if it's because the index is out of bounds vs array doesn't exist
+            if re.search(r"\.\d+", variable):
+                # This is an array access - check if the base array exists
+                base_path = re.sub(r"\.\d+.*$", "", variable)
+                base_value = _get_nested_value(context, base_path)
+                if base_value is None:
+                    raise ValueError(f"Variable '{variable}' does not exist.")
+                elif not isinstance(base_value, (list, tuple)):
+                    raise ValueError(f"Variable '{variable}' does not exist.")
+                else:
+                    # Array exists, but index is out of bounds
+                    raise ValueError(f"Variable '{variable}' does not exist.")
+            else:
+                # Simple variable doesn't exist
+                if variable not in context:
                     raise ValueError(f"Variable '{variable}' does not exist.")
 
 
