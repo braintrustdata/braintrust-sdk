@@ -2092,7 +2092,9 @@ def start_span(
     if not state:
         state = _state
 
-    if not parent and state:
+    # Precedence: explicit parent > current span > current parent > logger
+    # Only fall back to current_parent when there is NO active current_span.
+    if parent is None and state and state.current_span.get() is NOOP_SPAN:
         parent = state.current_parent.get()
 
     if parent:

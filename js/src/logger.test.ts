@@ -8,6 +8,8 @@ import {
   BraintrustState,
   wrapTraced,
   currentSpan,
+  withParent,
+  startSpan,
   Attachment,
 } from "./logger";
 import { LazyValue } from "./util";
@@ -738,6 +740,94 @@ describe("wrapTraced generator support", () => {
     expect(log.input).toBeUndefined(); // no input because noTraceIO
     expect(log.span_attributes?.name).toBe("main");
     expect(log.metadata).toEqual({ a: "b", total: 6 });
+  });
+});
+
+describe("parent precedence", () => {
+  let memory: any;
+
+  beforeEach(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    memory = _exportsForTestingOnly.useTestBackgroundLogger();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("withParent + wrapTraced: child spans attach to current span (not directly to withParent)", async () => {
+    const logger = initLogger({ projectName: "test", projectId: "pid" });
+    const outer = logger.startSpan({ name: "outer" });
+    const parentStr = await outer.export();
+    outer.end();
+
+    const inner = wrapTraced(
+      async function inner() {
+        startSpan({ name: "child" }).end();
+      },
+      { name: "inner" },
+    );
+
+    await withParent(parentStr, () => inner());
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+
+    expect(byName.outer).toBeTruthy();
+    expect(byName.inner).toBeTruthy();
+    expect(byName.child).toBeTruthy();
+
+    // child should list inner as a parent
+    expect(byName.child.span_parents || []).toContain(byName.inner.span_id);
+    // child and outer share the same root
+    expect(byName.child.root_span_id).toBe(byName.outer.root_span_id);
+  });
+
+  test("wrapTraced baseline: child spans attach to current span", async () => {
+    initLogger({ projectName: "test", projectId: "pid" });
+
+    const top = wrapTraced(
+      async function top() {
+        startSpan({ name: "child" }).end();
+      },
+      { name: "top" },
+    );
+
+    await top();
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+    expect(byName.child.span_parents).toContain(byName.top.span_id);
+  });
+
+  test("explicit parent overrides current span", async () => {
+    const logger = initLogger({ projectName: "test", projectId: "pid" });
+    const outer = logger.startSpan({ name: "outer" });
+    const parentStr = await outer.export();
+    outer.end();
+
+    const inner = wrapTraced(
+      async function inner() {
+        startSpan({ name: "forced", parent: parentStr }).end();
+      },
+      { name: "inner" },
+    );
+
+    await inner();
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+    expect(byName.forced.span_parents).toContain(byName.outer.span_id);
+    expect(byName.forced.span_parents).not.toContain(byName.inner.span_id);
   });
 });
 
