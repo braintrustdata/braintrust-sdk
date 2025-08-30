@@ -1,4 +1,5 @@
 import { SpanType } from "@braintrust/core";
+import { type EvalResult } from "./framework";
 
 export interface ReadonlyTrace {
   readonly rootSpanId: string;
@@ -9,13 +10,13 @@ export interface ReadonlyTrace {
    * Returns all spans, in chronological order (from start time), that
    * match at least one of the provided filters.
    */
-  findSpans(filters: SpanFilter[]): ReadonlySpan[];
+  getSpans(...filters: SpanFilter[]): ReadonlySpan[];
 
   kind: "readonly_trace";
 }
 
 export type SpanFilter = Partial<
-  Omit<ReadonlySpan, "parent" | "children" | "kind">
+  Omit<ReadonlySpan, "parent" | "children" | "kind" | "getData">
 >;
 
 export interface ReadonlySpan {
@@ -24,18 +25,13 @@ export interface ReadonlySpan {
   readonly id: string;
 
   readonly isRoot: boolean;
-  readonly parent: ReadonlySpan;
+  readonly parent: ReadonlySpan | null;
   readonly children: ReadonlySpan[];
 
   readonly name: string;
   readonly type: SpanType;
 
-  readonly input: unknown;
-  readonly output: unknown;
-  readonly expected: unknown;
-  readonly metadata: Record<string, unknown> | null | undefined;
-  readonly scores: Record<string, number>;
-  readonly metrics: Record<string, number>;
+  getData(): Promise<EvalResult<unknown, unknown, unknown>>;
 
   kind: "readonly_span";
 }

@@ -184,6 +184,7 @@ export type EvalResult<
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
   scores: Record<string, number | null>;
+  metrics: Record<string, number | null>;
   error: unknown;
   origin?: ObjectReference;
 };
