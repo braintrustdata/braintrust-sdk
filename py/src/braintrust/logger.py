@@ -4074,19 +4074,22 @@ def lint_template(template: str, context: Dict[str, Any]) -> None:
                     raise ValueError(f"Variable '{variable}' does not exist.")
 
 
-def render_templated_object(obj: Any, args: Any, strict: bool = False) -> Any:
+def render_templated_object(obj: Any, args: Any) -> Any:
+    # Extract strict mode from args if present (without modifying the original args)
+    strict = args.get('strict', False) if isinstance(args, dict) else False
+
     if isinstance(obj, str):
         if strict:
             lint_template(obj, args)
         return _custom_render(obj, data=args)  # pylint: disable=not-callable
     elif isinstance(obj, list):
-        return [render_templated_object(item, args, strict) for item in obj]  # type: ignore
+        return [render_templated_object(item, args) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
-        return {str(k): render_templated_object(v, args, strict) for k, v in obj.items()}  # type: ignore
+        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
     return obj
 
 
-def render_prompt_params(params: Dict[str, Any], args: Any, strict: bool = False) -> Dict[str, Any]:
+def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     if not params:
         return params
 
@@ -4105,7 +4108,7 @@ def render_prompt_params(params: Dict[str, Any], args: Any, strict: bool = False
     if raw_schema is None:
         return params
 
-    templated_schema = render_templated_object(raw_schema, args, strict)
+    templated_schema = render_templated_object(raw_schema, args)
     parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
 
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
@@ -4170,15 +4173,15 @@ class Prompt:
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
-        # Extract strict mode setting from build_args if provided
-        strict = build_args.pop('strict', False)
+        # Extract strict mode setting from build_args (using get to avoid modifying the original dict)
+        strict = build_args.get('strict', False)
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
 
         ret = {
             **self.defaults,
-            **render_prompt_params(params, build_args, strict),
+            **render_prompt_params(params, build_args),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
