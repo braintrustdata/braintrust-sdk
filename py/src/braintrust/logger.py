@@ -4010,10 +4010,8 @@ def _extract_mustache_variables(template: str) -> List[str]:
     try:
         tokens = tokenize(template)
         for token in tokens:
-            # Handle both regular variables {{var}} and unescaped {{{var}}}
             if token[0] == "variable" or token[0] == "no escape":
                 variable = token[1].strip()
-                # Convert array indices to .0 format for path checking
                 variable_with_array_replacement = re.sub(r"\.\d+", ".0", variable)
                 variables.append(variable_with_array_replacement)
     except Exception:
