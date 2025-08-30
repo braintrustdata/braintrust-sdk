@@ -1,6 +1,6 @@
 // Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const AclObjectType = z.union([
   z.enum([

@@ -18,7 +18,7 @@ import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { addAzureBlobHeaders, isEmpty } from "../util";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";

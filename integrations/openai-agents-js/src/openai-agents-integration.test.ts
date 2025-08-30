@@ -7,7 +7,7 @@ import {
   describe,
 } from "vitest";
 import { OpenAIAgentsTraceProcessor } from "./index";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 // Import necessary types and functions from braintrust
 import {
