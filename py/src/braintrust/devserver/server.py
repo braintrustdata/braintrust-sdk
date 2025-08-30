@@ -1,12 +1,14 @@
 import asyncio
 import json
+import sys
 import textwrap
 import traceback
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 try:
     import uvicorn
     from starlette.applications import Starlette
+    from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request
     from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
     from starlette.routing import Route
@@ -38,6 +40,33 @@ from .schemas import ValidationError, parse_eval_body
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
 
 
+class CheckAuthorizedMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, allowed_org_name: Optional[str] = None):
+        super().__init__(app)
+        self.allowed_org_name = allowed_org_name
+        self.protected_paths = ["/list", "/eval"]
+
+    async def dispatch(self, request: Request, call_next):
+        # Only check auth for protected paths
+        if request.url.path in self.protected_paths:
+            ctx = getattr(request.state, "ctx", None)
+            if not ctx or not ctx.token:
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+            try:
+                state = await cached_login(
+                    api_key=ctx.token,
+                    app_url=ctx.app_origin,
+                    org_name=self.allowed_org_name,
+                )
+                ctx.state = state
+            except Exception as e:
+                print(f"Authorization error: {e}", file=sys.stderr)
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+        return await call_next(request)
+
+
 async def index(request: Request) -> PlainTextResponse:
     return PlainTextResponse("Hello, world!")
 
@@ -46,13 +75,12 @@ async def list_evaluators(request: Request) -> JSONResponse:
     # Get the authenticated context
     ctx = getattr(request.state, "ctx", None)
 
-    # Login with caching (preparing for potential future features that may need state)
-    # For now, we don't use the state, but having it cached will speed up subsequent eval calls
-    try:
-        state = await cached_login(api_key=ctx.token, app_url=ctx.app_origin, org_name=ctx.org_name)
-    except Exception as e:
-        # Log the error but continue - list doesn't strictly need the state yet
-        print(f"Warning: Failed to cache login state: {e}")
+    if not ctx or not ctx.token:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    if not ctx.state:
+        print("Braintrust state not initialized in request", file=sys.stderr)
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     evaluator_list = {}
     for name, evaluator in _all_evaluators.items():
@@ -80,10 +108,14 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     # Access the context if needed
     ctx = getattr(request.state, "ctx", None)
 
-    try:
-        state = await cached_login(api_key=ctx.token, app_url=ctx.app_origin, org_name=ctx.org_name)
-    except Exception as e:
-        return JSONResponse({"error": f"Failed to log in: {str(e)}"}, status_code=401)
+    if not ctx or not ctx.token:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    if not ctx.state:
+        print("Braintrust state not initialized in request", file=sys.stderr)
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    state = ctx.state
 
     # Check if the evaluator exists
     evaluator = _all_evaluators.get(eval_data["name"])
@@ -223,7 +255,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
 
 
-def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300):
+def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None):
     global _all_evaluators
     _all_evaluators = {evaluator.eval_name: evaluator for evaluator in evaluators}
 
@@ -238,6 +270,7 @@ def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost
 
     app = Starlette(routes=routes)
     # Add middlewares in reverse order (last added is executed first)
+    app.add_middleware(CheckAuthorizedMiddleware, allowed_org_name=org_name)
     app.add_middleware(AuthorizationMiddleware)
     app.add_middleware(create_cors_middleware())
 

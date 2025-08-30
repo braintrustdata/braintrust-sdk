@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import { IncomingHttpHeaders } from "http";
 import createError from "http-errors";
+import { LRUCache } from "../src/prompt-cache/lru-cache";
+import { BraintrustState, LoginOptions, loginToState } from "../src/logger";
 
 export interface RequestContext {
   appOrigin: string;
   token: string | undefined;
+  state: BraintrustState | undefined;
 }
 declare module "express" {
   interface Request {
@@ -21,6 +24,7 @@ export function authorizeRequest(
     const ctx: RequestContext = {
       appOrigin: extractAllowedOrigin(req.headers[ORIGIN_HEADER]),
       token: undefined,
+      state: undefined,
     };
 
     // Extract token and data from request
@@ -43,15 +47,40 @@ export function authorizeRequest(
   }
 }
 
-export function checkAuthorized(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  if (!req.ctx?.token) {
-    return next(createError(401, "Unauthorized"));
+const loginCache = new LRUCache<string, BraintrustState>({
+  max: 32, // TODO: Make this configurable
+});
+
+async function cachedLogin(options: LoginOptions): Promise<BraintrustState> {
+  const key = JSON.stringify(options);
+  const cached = loginCache.get(key);
+  if (cached) {
+    return cached;
   }
-  next();
+
+  const state = await loginToState(options);
+  loginCache.set(key, state);
+  return state;
+}
+
+export function makeCheckAuthorized(allowedOrgName: string | undefined) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.ctx?.token) {
+      return next(createError(401, "Unauthorized"));
+    }
+
+    try {
+      const state = await cachedLogin({
+        apiKey: req.ctx?.token,
+        orgName: allowedOrgName,
+      });
+      req.ctx.state = state;
+      next();
+    } catch (e) {
+      console.error("Authorization error:", e);
+      return next(createError(401, "Unauthorized"));
+    }
+  };
 }
 
 function parseBraintrustAuthHeader(
