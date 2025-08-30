@@ -4011,10 +4011,10 @@ def _extract_mustache_variables(template: str) -> List[str]:
         tokens = tokenize(template)
         for token in tokens:
             # Handle both regular variables {{var}} and unescaped {{{var}}}
-            if token[0] == 'variable' or token[0] == 'no escape':
+            if token[0] == "variable" or token[0] == "no escape":
                 variable = token[1].strip()
                 # Convert array indices to .0 format for path checking
-                variable_with_array_replacement = re.sub(r'\.\d+', '.0', variable)
+                variable_with_array_replacement = re.sub(r"\.\d+", ".0", variable)
                 variables.append(variable_with_array_replacement)
     except Exception:
         # If tokenization fails, return empty list (matches TypeScript behavior)
@@ -4027,7 +4027,7 @@ def _get_nested_value(obj: Any, path: str) -> Any:
     if not path:
         return obj
 
-    parts = path.split('.')
+    parts = path.split(".")
     current = obj
 
     try:
@@ -4056,27 +4056,21 @@ def lint_template(template: str, context: Dict[str, Any]) -> None:
     """
     Validate that all mustache variables in a template have corresponding values in the context.
     Raises ValueError if any variables are missing.
-
-    This is the Python equivalent of the TypeScript lintTemplate function.
     """
     variables = _extract_mustache_variables(template)
 
     for variable in variables:
-        # Check if the variable exists in the context
         value = _get_nested_value(context, variable)
         if value is None and variable not in context:
-            # Double-check for direct key existence
-            if '.' not in variable and variable not in context:
+            if "." not in variable and variable not in context:
                 raise ValueError(f"Variable '{variable}' does not exist.")
-            elif '.' in variable:
-                # For nested variables, check the full path
+            elif "." in variable:
                 if _get_nested_value(context, variable) is None:
                     raise ValueError(f"Variable '{variable}' does not exist.")
 
 
 def render_templated_object(obj: Any, args: Any) -> Any:
-    # Extract strict mode from args if present (without modifying the original args)
-    strict = args.get('strict', False) if isinstance(args, dict) else False
+    strict = args.get("strict", False) if isinstance(args, dict) else False
 
     if isinstance(obj, str):
         if strict:
@@ -4174,7 +4168,7 @@ class Prompt:
         """
 
         # Extract strict mode setting from build_args (using get to avoid modifying the original dict)
-        strict = build_args.get('strict', False)
+        strict = build_args.get("strict", False)
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
