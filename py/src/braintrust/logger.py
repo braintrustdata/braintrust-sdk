@@ -1866,12 +1866,17 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
-    """Mainly for internal use. Return the parent object for starting a span in a global context."""
+def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponentsV3, "Logger", "Experiment", Span]:
+    """Mainly for internal use. Return the parent object for starting a span in a global context.
+    Applies precedence: current span > propagated parent string > experiment > logger."""
 
-    parent_span = current_span()
-    if parent_span != NOOP_SPAN:
-        return parent_span
+    span = current_span()
+    if span != NOOP_SPAN:
+        return span
+
+    parent = parent or _state.current_parent.get()
+    if parent:
+        return SpanComponentsV3.from_str(parent)
 
     experiment = current_experiment()
     if experiment:
@@ -2092,33 +2097,29 @@ def start_span(
     if not state:
         state = _state
 
-    # Precedence: explicit parent > current span > current parent > logger
-    # Only fall back to current_parent when there is NO active current_span.
-    if parent is None and state and state.current_span.get() is NOOP_SPAN:
-        parent = state.current_parent.get()
+    parent_obj = get_span_parent_object(parent)
 
-    if parent:
-        components = SpanComponentsV3.from_str(parent)
-        if components.row_id and components.span_id and components.root_span_id:
-            parent_span_ids = ParentSpanIds(span_id=components.span_id, root_span_id=components.root_span_id)
+    if isinstance(parent_obj, SpanComponentsV3):
+        if parent_obj.row_id and parent_obj.span_id and parent_obj.root_span_id:
+            parent_span_ids = ParentSpanIds(span_id=parent_obj.span_id, root_span_id=parent_obj.root_span_id)
         else:
             parent_span_ids = None
         return SpanImpl(
-            parent_object_type=components.object_type,
-            parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
-            parent_compute_object_metadata_args=components.compute_object_metadata_args,
+            parent_object_type=parent_obj.object_type,
+            parent_object_id=LazyValue(_span_components_to_object_id_lambda(parent_obj), use_mutex=False),
+            parent_compute_object_metadata_args=parent_obj.compute_object_metadata_args,
             parent_span_ids=parent_span_ids,
             name=name,
             type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            propagated_event=coalesce(propagated_event, components.propagated_event),
+            propagated_event=coalesce(propagated_event, parent_obj.propagated_event),
             event=event,
             state=state,
         )
     else:
-        return get_span_parent_object().start_span(
+        return parent_obj.start_span(
             name=name,
             type=type,
             span_attributes=span_attributes,

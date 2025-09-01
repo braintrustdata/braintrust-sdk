@@ -3651,15 +3651,22 @@ export function currentSpan(options?: OptionalStateArg): Span {
 
 /**
  * Mainly for internal use. Return the parent object for starting a span in a global context.
+ * Applies precedence: current span > propagated parent string > experiment > logger.
  */
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): Span | Experiment | Logger<IsAsyncFlush> {
+  options?: AsyncFlushArg<IsAsyncFlush> &
+    OptionalStateArg & { parent?: string },
+): SpanComponentsV3 | Span | Experiment | Logger<IsAsyncFlush> {
   const state = options?.state ?? _globalState;
+
   const parentSpan = currentSpan({ state });
   if (!Object.is(parentSpan, NOOP_SPAN)) {
     return parentSpan;
   }
+
+  const parentStr = options?.parent ?? state.currentParent.getStore();
+  if (parentStr) return SpanComponentsV3.fromStr(parentStr);
+
   const experiment = currentExperiment();
   if (experiment) {
     return experiment;
@@ -4045,58 +4052,50 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  // Precedence: current span > current parent > logger
-  // If a current span exists, don't use propagated parent string so children attach to current span
-  const parentStr =
-    state.currentSpan.getStore() !== undefined
-      ? undefined
-      : args?.parent ?? state.currentParent.getStore();
+  const parent = getSpanParentObject<IsAsyncFlush>({
+    asyncFlush: args?.asyncFlush,
+    parent: args?.parent,
+    state,
+  });
 
-  const components: SpanComponentsV3 | undefined = parentStr
-    ? SpanComponentsV3.fromStr(parentStr)
-    : undefined;
-
-  if (components) {
-    const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
+  if (parent instanceof SpanComponentsV3) {
+    const parentSpanIds: ParentSpanIds | undefined = parent.data.row_id
       ? {
-          spanId: components.data.span_id,
-          rootSpanId: components.data.root_span_id,
+          spanId: parent.data.span_id,
+          rootSpanId: parent.data.root_span_id,
         }
       : undefined;
     const span = new SpanImpl({
       state,
       ...args,
-      parentObjectType: components.data.object_type,
+      parentObjectType: parent.data.object_type,
       parentObjectId: new LazyValue(
-        spanComponentsToObjectIdLambda(state, components),
+        spanComponentsToObjectIdLambda(state, parent),
       ),
       parentComputeObjectMetadataArgs:
-        components.data.compute_object_metadata_args ?? undefined,
+        parent.data.compute_object_metadata_args ?? undefined,
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        ((components.data.propagated_event ?? undefined) as
+        ((parent.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
     });
     return {
       span,
       isSyncFlushLogger:
-        components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
+        parent.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
         args?.asyncFlush === false,
     };
   } else {
-    const parentObject = getSpanParentObject<IsAsyncFlush>({
-      asyncFlush: args?.asyncFlush,
-    });
-    const span = parentObject.startSpan(args);
+    const span = parent.startSpan(args);
     return {
       span,
       isSyncFlushLogger:
-        parentObject.kind === "logger" && parentObject.asyncFlush === false,
+        parent.kind === "logger" && parent.asyncFlush === false,
     };
   }
 }

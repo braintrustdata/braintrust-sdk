@@ -11,6 +11,7 @@ import {
   withParent,
   startSpan,
   Attachment,
+  NOOP_SPAN,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
@@ -780,9 +781,7 @@ describe("parent precedence", () => {
     expect(byName.inner).toBeTruthy();
     expect(byName.child).toBeTruthy();
 
-    // child should list inner as a parent
     expect(byName.child.span_parents || []).toContain(byName.inner.span_id);
-    // child and outer share the same root
     expect(byName.child.root_span_id).toBe(byName.outer.root_span_id);
   });
 
@@ -828,6 +827,31 @@ describe("parent precedence", () => {
     );
     expect(byName.forced.span_parents).toContain(byName.outer.span_id);
     expect(byName.forced.span_parents).not.toContain(byName.inner.span_id);
+  });
+
+  test("NOOP_SPAN as current span with propagated parent: should use propagated parent", async () => {
+    const logger = initLogger({ projectName: "test", projectId: "pid" });
+    const outer = logger.startSpan({ name: "outer" });
+    const parentStr = await outer.export();
+    outer.end();
+
+    await withParent(parentStr, async () => {
+      const current = currentSpan();
+      expect(current).toBe(NOOP_SPAN);
+      startSpan({ name: "should_use_propagated" }).end();
+    });
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+
+    expect(byName.outer).toBeTruthy();
+    expect(byName.should_use_propagated).toBeTruthy();
+    expect(byName.should_use_propagated.root_span_id).toBe(
+      byName.outer.root_span_id,
+    );
   });
 });
 
