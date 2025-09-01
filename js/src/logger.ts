@@ -4052,50 +4052,50 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  const parent = getSpanParentObject<IsAsyncFlush>({
+  const parentObject = getSpanParentObject<IsAsyncFlush>({
     asyncFlush: args?.asyncFlush,
     parent: args?.parent,
     state,
   });
 
-  if (parent instanceof SpanComponentsV3) {
-    const parentSpanIds: ParentSpanIds | undefined = parent.data.row_id
+  if (parentObject instanceof SpanComponentsV3) {
+    const parentSpanIds: ParentSpanIds | undefined = parentObject.data.row_id
       ? {
-          spanId: parent.data.span_id,
-          rootSpanId: parent.data.root_span_id,
+          spanId: parentObject.data.span_id,
+          rootSpanId: parentObject.data.root_span_id,
         }
       : undefined;
     const span = new SpanImpl({
       state,
       ...args,
-      parentObjectType: parent.data.object_type,
+      parentObjectType: parentObject.data.object_type,
       parentObjectId: new LazyValue(
-        spanComponentsToObjectIdLambda(state, parent),
+        spanComponentsToObjectIdLambda(state, parentObject),
       ),
       parentComputeObjectMetadataArgs:
-        parent.data.compute_object_metadata_args ?? undefined,
+        parentObject.data.compute_object_metadata_args ?? undefined,
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        ((parent.data.propagated_event ?? undefined) as
+        ((parentObject.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
     });
     return {
       span,
       isSyncFlushLogger:
-        parent.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
+        parentObject.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
         args?.asyncFlush === false,
     };
   } else {
-    const span = parent.startSpan(args);
+    const span = parentObject.startSpan(args);
     return {
       span,
       isSyncFlushLogger:
-        parent.kind === "logger" && parent.asyncFlush === false,
+        parentObject.kind === "logger" && parentObject.asyncFlush === false,
     };
   }
 }

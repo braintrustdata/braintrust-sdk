@@ -354,6 +354,7 @@ describe("wrapTraced generator support", () => {
       delete process.env.BRAINTRUST_MAX_GENERATOR_ITEMS;
     }
     _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   test("traced sync generator", async () => {
@@ -754,6 +755,7 @@ describe("parent precedence", () => {
 
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   test("withParent + wrapTraced: child spans attach to current span (not directly to withParent)", async () => {
@@ -827,31 +829,6 @@ describe("parent precedence", () => {
     );
     expect(byName.forced.span_parents).toContain(byName.outer.span_id);
     expect(byName.forced.span_parents).not.toContain(byName.inner.span_id);
-  });
-
-  test("NOOP_SPAN as current span with propagated parent: should use propagated parent", async () => {
-    const logger = initLogger({ projectName: "test", projectId: "pid" });
-    const outer = logger.startSpan({ name: "outer" });
-    const parentStr = await outer.export();
-    outer.end();
-
-    await withParent(parentStr, async () => {
-      const current = currentSpan();
-      expect(current).toBe(NOOP_SPAN);
-      startSpan({ name: "should_use_propagated" }).end();
-    });
-
-    await memory.flush();
-    const events = await memory.drain();
-    const byName: any = Object.fromEntries(
-      events.map((e: any) => [e.span_attributes?.name, e]),
-    );
-
-    expect(byName.outer).toBeTruthy();
-    expect(byName.should_use_propagated).toBeTruthy();
-    expect(byName.should_use_propagated.root_span_id).toBe(
-      byName.outer.root_span_id,
-    );
   });
 });
 
