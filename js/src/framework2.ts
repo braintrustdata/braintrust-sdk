@@ -1,7 +1,7 @@
 import path from "path";
 import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
-import { z } from "zod";
+import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
   IfExists as IfExistsSchema,

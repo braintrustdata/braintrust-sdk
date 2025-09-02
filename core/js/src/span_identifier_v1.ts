@@ -2,7 +2,7 @@
 
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
   try {
