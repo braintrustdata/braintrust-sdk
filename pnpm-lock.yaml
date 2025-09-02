@@ -80,11 +80,11 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
       zod:
-        specifier: ^3.22.4
-        version: 3.24.0
+        specifier: ^3.25.34
+        version: 3.25.76
       zod-to-json-schema:
         specifier: ^3.22.5
-        version: 3.22.5(zod@3.24.0)
+        version: 3.22.5(zod@3.25.76)
 
   integrations/openai-agents-js:
     dependencies:
@@ -2490,8 +2490,8 @@ packages:
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 10.0.0
-      zod: 3.25.34
-      zod-to-json-schema: 3.22.5(zod@3.25.34)
+      zod: 3.25.76
+      zod-to-json-schema: 3.22.5(zod@3.25.76)
     transitivePeerDependencies:
       - openai
     dev: true
@@ -2525,7 +2525,7 @@ packages:
       '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.42)
       '@langchain/langgraph-sdk': 0.0.31
       uuid: 10.0.0
-      zod: 3.25.34
+      zod: 3.25.76
     dev: true
 
   /@langchain/openai@0.3.17(@langchain/core@0.3.42):
@@ -2536,9 +2536,9 @@ packages:
     dependencies:
       '@langchain/core': 0.3.42
       js-tiktoken: 1.0.21
-      openai: 4.104.0(zod@3.24.0)
-      zod: 3.24.0
-      zod-to-json-schema: 3.22.5(zod@3.24.0)
+      openai: 4.104.0(zod@3.25.76)
+      zod: 3.25.76
+      zod-to-json-schema: 3.22.5(zod@3.25.76)
     transitivePeerDependencies:
       - encoding
       - ws
@@ -6535,30 +6535,6 @@ packages:
       mimic-fn: 2.1.0
     dev: true
 
-  /openai@4.104.0(zod@3.24.0):
-    resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
-    hasBin: true
-    peerDependencies:
-      ws: ^8.18.0
-      zod: ^3.23.8
-    peerDependenciesMeta:
-      ws:
-        optional: true
-      zod:
-        optional: true
-    dependencies:
-      '@types/node': 18.19.123
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0
-      zod: 3.24.0
-    transitivePeerDependencies:
-      - encoding
-    dev: true
-
   /openai@4.104.0(zod@3.25.76):
     resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
     hasBin: true
@@ -8786,20 +8762,13 @@ packages:
     resolution: {integrity: sha512-rAbqEGa8ovJy4pyBxZM70hg4pE6gDgaQ0Sl9M3enG3I0d6H4XSAM3GeNGLKnsBpuijUow064sf7ww1nutC5/3w==}
     dev: false
 
-  /zod-to-json-schema@3.22.5(zod@3.24.0):
-    resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
-    peerDependencies:
-      zod: ^3.22.4
-    dependencies:
-      zod: 3.24.0
-    dev: true
-
   /zod-to-json-schema@3.22.5(zod@3.25.34):
     resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
     peerDependencies:
       zod: ^3.22.4
     dependencies:
       zod: 3.25.34
+    dev: false
 
   /zod-to-json-schema@3.22.5(zod@3.25.76):
     resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
@@ -8807,7 +8776,6 @@ packages:
       zod: ^3.22.4
     dependencies:
       zod: 3.25.76
-    dev: false
 
   /zod-to-json-schema@3.24.6(zod@3.25.34):
     resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
@@ -8823,10 +8791,6 @@ packages:
       zod: ^3.24.1
     dependencies:
       zod: 3.25.76
-
-  /zod@3.24.0:
-    resolution: {integrity: sha512-Hz+wiY8yD0VLA2k/+nsg2Abez674dDGTai33SwNvMPuf9uIrBC9eFgIMQxBBbHFxVXi8W+5nX9DcAh9YNSQm/w==}
-    dev: true
 
   /zod@3.25.34:
     resolution: {integrity: sha512-lZHvSc2PpWdcfpHlyB33HA9nqP16GpC9IpiG4lYq9jZCJVLZNnWd6Y1cj79bcLSBKTkxepfpjckPv5Y5VOPlwA==}
