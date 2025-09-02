@@ -268,6 +268,8 @@ class ResponseWrapper:
         self.acreate_fn = acreate_fn
         self.name = name
 
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        if self.create_fn is None:
             raise RuntimeError("ResponseWrapper was not properly initialized: 'create_fn' is None. Please ensure you pass a valid create function when constructing ResponseWrapper.")
 
         params = self._parse_params(kwargs)
@@ -320,6 +322,8 @@ class ResponseWrapper:
             if should_end:
                 span.end()
 
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
+        if self.acreate_fn is None:
             raise RuntimeError("ResponseWrapper was not properly initialized with an async create function (acreate_fn is None). Please ensure you pass a valid async create function to the constructor.")
 
         params = self._parse_params(kwargs)
@@ -425,10 +429,17 @@ class ResponseWrapper:
 
             if hasattr(result, "type"):
                 if result.type == "response.output_item.added":
-                    output.append({"id": result.item.id, "type": result.item.type})
+                    # Check if we already have an incomplete item from earlier deltas
+                    if output and "id" not in output[-1] and "type" not in output[-1]:
+                        # Update the existing item with proper id and type
+                        output[-1].update({"id": result.item.id, "type": result.item.type})
+                    else:
+                        # Create new item
+                        output.append({"id": result.item.id, "type": result.item.type})
                 elif result.type == "response.output_text.delta" and hasattr(result, "delta"):
                     # Aggregate text deltas
                     if not output:
+                        # Create placeholder item that will be updated when output_item.added arrives
                         output.append({"content": []})
                     if not output[-1].get("content"):
                         output[-1]["content"] = [{"text": ""}]
