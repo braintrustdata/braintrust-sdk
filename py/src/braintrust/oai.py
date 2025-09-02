@@ -304,7 +304,6 @@ class ResponseWrapper:
                             all_results.append(item)
                             yield item
 
-                        # Process final results for streaming
                         span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
@@ -356,7 +355,6 @@ class ResponseWrapper:
                             all_results.append(item)
                             yield item
 
-                        # Process final results for streaming
                         span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
@@ -394,17 +392,14 @@ class ResponseWrapper:
         """Parse event from response result - minimal processing like JS version."""
         data = {}
 
-        # Extract output (similar to JS version)
         if result and "output" in result:
             data["output"] = result["output"]
 
-        # Extract metadata - preserve all response fields except output and usage
         if result:
             metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
             if metadata:
                 data["metadata"] = metadata
 
-        # Extract metrics from usage (similar to JS parseMetricsFromUsage)
         data["metrics"] = _parse_metrics_from_usage(result.get("usage"))
 
         return data
@@ -416,7 +411,6 @@ class ResponseWrapper:
         output = []
 
         for result in all_results:
-            # Extract usage from the result if available
             usage = None
             if hasattr(result, "usage"):
                 usage = getattr(result, "usage")
@@ -427,7 +421,6 @@ class ResponseWrapper:
                 parsed_metrics = _parse_metrics_from_usage(usage)
                 metrics.update(parsed_metrics)
 
-            # Simple output aggregation for responses API
             if hasattr(result, "type"):
                 if result.type == "response.output_item.added":
                     output.append({"id": result.item.id, "type": result.item.type})
