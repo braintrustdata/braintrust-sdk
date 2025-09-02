@@ -430,7 +430,7 @@ class ResponseWrapper:
             if hasattr(result, "type"):
                 if result.type == "response.output_item.added":
                     # Check if we already have an incomplete item from earlier deltas
-                    if output and "id" not in output[-1] and "type" not in output[-1]:
+                    if output and isinstance(output[-1], dict) and "id" not in output[-1] and "type" not in output[-1]:
                         # Update the existing item with proper id and type
                         output[-1].update({"id": result.item.id, "type": result.item.type})
                     else:
