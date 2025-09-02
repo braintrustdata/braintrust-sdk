@@ -320,9 +320,7 @@ class ResponseWrapper:
             if should_end:
                 span.end()
 
-    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
-        if self.acreate_fn is None:
-            raise RuntimeError("acreate_fn is None")
+            raise RuntimeError("ResponseWrapper was not properly initialized with an async create function (acreate_fn is None). Please ensure you pass a valid async create function to the constructor.")
 
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
