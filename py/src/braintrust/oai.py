@@ -313,6 +313,9 @@ class ResponseWrapper:
             else:
                 log_response = _try_to_dict(raw_response)
                 event_data = self._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
                 span.log(**event_data)
                 return raw_response
         finally:
@@ -365,6 +368,9 @@ class ResponseWrapper:
             else:
                 log_response = _try_to_dict(raw_response)
                 event_data = self._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
                 span.log(**event_data)
                 return raw_response
         finally:
