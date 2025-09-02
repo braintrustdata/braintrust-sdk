@@ -187,6 +187,10 @@ class SpanComponentsV3:
         else:
             raise Exception(f"Invalid object_type {self.object_type}")
 
+    def export(self) -> str:
+        """Return a serialized representation compatible with other exportable objects."""
+        return self.to_str()
+
     @staticmethod
     def _from_json_obj(json_obj: Dict) -> "SpanComponentsV3":
         kwargs = {

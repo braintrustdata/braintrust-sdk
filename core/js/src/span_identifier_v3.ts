@@ -239,6 +239,10 @@ export class SpanComponentsV3 {
     }
   }
 
+  public async export(): Promise<string> {
+    return this.toStr();
+  }
+
   private static fromJsonObj(jsonObj: unknown): SpanComponentsV3 {
     return new SpanComponentsV3(spanComponentsV3Schema.parse(jsonObj));
   }
