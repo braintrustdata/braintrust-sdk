@@ -268,9 +268,7 @@ class ResponseWrapper:
         self.acreate_fn = acreate_fn
         self.name = name
 
-    def create(self, *args: Any, **kwargs: Any) -> Any:
-        if self.create_fn is None:
-            raise RuntimeError("create_fn is None")
+            raise RuntimeError("ResponseWrapper was not properly initialized: 'create_fn' is None. Please ensure you pass a valid create function when constructing ResponseWrapper.")
 
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
