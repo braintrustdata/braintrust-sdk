@@ -133,6 +133,7 @@ export const comparisonOps = [
   "ilike",
   "like",
   "match",
+  "in",
 ] as const;
 export type ComparisonOp = (typeof comparisonOps)[number];
 export interface ComparisonExpr {
