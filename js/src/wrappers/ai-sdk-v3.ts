@@ -1,8 +1,65 @@
-import { BraintrustAISDKV3Middleware } from "./ai-sdk-v3-middleware";
-import { wrapTraced } from "../logger";
+import { BraintrustMiddleware } from "./ai-sdk-v2";
+import { wrapTraced, traced } from "../logger";
+import { SpanTypeAttribute } from "@braintrust/core";
+import {
+  extractModelParameters,
+  normalizeUsageMetrics,
+  detectProviderFromResult,
+  extractModelFromResult,
+} from "./ai-sdk-shared";
 
-// Import AI SDK v2 types
-import type { LanguageModelV2StreamPart } from "@ai-sdk/provider";
+// V3-specific exclude keys for extractModelParameters
+const V3_EXCLUDE_KEYS = new Set([
+  "prompt", // Already captured as input
+  "system", // Already captured as input
+  "messages", // Already captured as input
+  "model", // Already captured in metadata.model
+  "providerOptions", // Internal AI SDK configuration
+  "tools", // Already captured in metadata.tools
+]);
+
+const _logTracedSpan = (
+  span: any,
+  params: Record<string, unknown>,
+  result: any,
+) => {
+  const provider = detectProviderFromResult(result);
+
+  span.log({
+    input: params.prompt,
+    output: result.content,
+    metadata: {
+      ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+    },
+    metrics: normalizeUsageMetrics(
+      result.usage,
+      provider,
+      result.providerMetadata,
+    ),
+  });
+};
+
+const _wrapTools = (tools?: Record<string, unknown>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrappedTools: Record<string, any> = {};
+  if (tools) {
+    for (const [key, tool] of Object.entries(tools)) {
+      wrappedTools[key] = tool;
+      if (
+        tool != null &&
+        typeof tool === "object" &&
+        "execute" in tool &&
+        typeof tool.execute === "function"
+      ) {
+        wrappedTools[key].execute = wrapTraced(tool.execute.bind(tool), {
+          name: key,
+          type: "tool",
+        });
+      }
+    }
+  }
+  return wrappedTools;
+};
 
 /**
  * Wrap AI SDK v3 functions to add Braintrust tracing. Returns wrapped versions
@@ -25,183 +82,140 @@ import type { LanguageModelV2StreamPart } from "@ai-sdk/provider";
  * });
  * ```
  */
-export function wrapAISDK(ai: unknown): {
-  generateText: (options: Record<string, unknown>) => Promise<any>;
-  streamText: (options: Record<string, unknown>) => Promise<
-    {
-      stream: ReadableStream<LanguageModelV2StreamPart>;
-    } & Record<string, unknown>
-  >;
-  generateObject: (options: Record<string, unknown>) => Promise<any>;
-  streamObject: (options: Record<string, unknown>) => Promise<
-    {
-      stream: ReadableStream<LanguageModelV2StreamPart>;
-    } & Record<string, unknown>
-  >;
-} {
+const wrapAISDK = <
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const aiSdk = ai as any;
+  WrapLanguageModelType extends (...args: any[]) => any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  GenerateTextType extends (...args: any[]) => any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  StreamTextType extends (...args: any[]) => any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  StreamObjectType extends (...args: any[]) => any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  GenerateObjectType extends (...args: any[]) => any,
+>({
+  wrapLanguageModel,
+  generateText,
+  streamText,
+  streamObject,
+  generateObject,
+}: {
+  wrapLanguageModel: WrapLanguageModelType;
+  generateText: GenerateTextType;
+  streamText: StreamTextType;
+  streamObject: StreamObjectType;
+  generateObject: GenerateObjectType;
+}) => {
+  const wrappedGenerateText = async (
+    params: Parameters<GenerateTextType>[0],
+  ) => {
+    return traced(
+      async (span) => {
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
+
+        const result = (await generateText({
+          ...params,
+          tools: _wrapTools(params.tools),
+          model: wrappedModel,
+        })) as ReturnType<GenerateTextType>;
+
+        _logTracedSpan(span, params, result);
+
+        return result;
+      },
+      {
+        name: "ai-sdk.generateText",
+        spanAttributes: { type: SpanTypeAttribute.LLM },
+      },
+    );
+  };
+
+  const wrappedGenerateObject = async (
+    params: Parameters<GenerateObjectType>[0],
+  ) => {
+    return traced(
+      async (span) => {
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
+
+        const result = (await generateObject({
+          ...params,
+          model: wrappedModel,
+        })) as ReturnType<GenerateObjectType>;
+
+        _logTracedSpan(span, params, result);
+
+        return result;
+      },
+      {
+        name: "ai-sdk.generateObject",
+        spanAttributes: { type: SpanTypeAttribute.LLM },
+      },
+    );
+  };
+
+  const wrappedStreamText = async (params: Parameters<StreamTextType>[0]) => {
+    return traced(
+      async (span) => {
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
+
+        const result = (await streamText({
+          ...params,
+          tools: _wrapTools(params.tools),
+          model: wrappedModel,
+        })) as ReturnType<StreamTextType>;
+
+        _logTracedSpan(span, params, result);
+
+        return result;
+      },
+      {
+        name: "ai-sdk.streamText",
+        spanAttributes: { type: SpanTypeAttribute.LLM },
+      },
+    );
+  };
+
+  const wrappedStreamObject = async (
+    params: Parameters<StreamObjectType>[0],
+  ) => {
+    return traced(
+      async (span) => {
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
+
+        const result = (await streamObject({
+          ...params,
+          model: wrappedModel,
+        })) as ReturnType<StreamObjectType>;
+
+        _logTracedSpan(span, params, result);
+
+        return result;
+      },
+      {
+        name: "ai-sdk.streamObject",
+        spanAttributes: { type: SpanTypeAttribute.LLM },
+      },
+    );
+  };
 
   return {
-    generateText: wrapGenerateFunction(aiSdk.generateText, "generateText"),
-    streamText: wrapStreamFunction(aiSdk.streamText, "streamText"),
-    generateObject: wrapGenerateFunction(
-      aiSdk.generateObject,
-      "generateObject",
-    ),
-    streamObject: wrapStreamFunction(aiSdk.streamObject, "streamObject"),
+    generateText: wrappedGenerateText,
+    generateObject: wrappedGenerateObject,
+    streamText: wrappedStreamText,
+    streamObject: wrappedStreamObject,
   };
-}
+};
 
-function wrapGenerateFunction(
-  originalFn: ((options: Record<string, unknown>) => Promise<any>) | undefined,
-  functionName: string,
-): (options: Record<string, unknown>) => Promise<any> {
-  if (!originalFn) {
-    return async (options: Record<string, unknown>) => {
-      console.warn(`${functionName} is not available in the provided AI SDK`);
-      throw new Error(`${functionName} is not supported`);
-    };
-  }
-
-  return async (options: Record<string, unknown>) => {
-    const middleware = BraintrustAISDKV3Middleware(`ai-sdk.${functionName}`);
-
-    if (!middleware.wrapGenerate) {
-      return await originalFn(options);
-    }
-
-    // Wrap tool executions if present
-    const wrappedOptions = wrapToolExecutions(options);
-
-    return await middleware.wrapGenerate({
-      doGenerate: async () => await originalFn(wrappedOptions),
-      doStream: async () => {
-        throw new Error("Stream not supported in generate");
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      params: options as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      model: null as any, // Not used in our middleware
-    });
-  };
-}
-
-function wrapStreamFunction(
-  originalFn:
-    | ((options: Record<string, unknown>) => Promise<
-        {
-          stream: ReadableStream<LanguageModelV2StreamPart>;
-        } & Record<string, unknown>
-      >)
-    | undefined,
-  functionName: string,
-): (options: Record<string, unknown>) => Promise<
-  {
-    stream: ReadableStream<LanguageModelV2StreamPart>;
-  } & Record<string, unknown>
-> {
-  if (!originalFn) {
-    return async (options: Record<string, unknown>) => {
-      console.warn(`${functionName} is not available in the provided AI SDK`);
-      throw new Error(`${functionName} is not supported`);
-    };
-  }
-
-  return async (options: Record<string, unknown>) => {
-    const middleware = BraintrustAISDKV3Middleware(`ai-sdk.${functionName}`);
-
-    if (!middleware.wrapStream) {
-      return await originalFn(options);
-    }
-
-    // Wrap tool executions if present
-    const wrappedOptions = wrapToolExecutions(options);
-
-    return await middleware.wrapStream({
-      doGenerate: async () => {
-        throw new Error("Generate not supported in stream");
-      },
-      doStream: async () => await originalFn(wrappedOptions),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      params: options as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      model: null as any, // Not used in our middleware
-    });
-  };
-}
-
-function wrapToolExecutions(
-  options: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!options.tools) {
-    return options;
-  }
-
-  if (Array.isArray(options.tools)) {
-    const wrappedTools = options.tools.map((tool: any) => {
-      if (tool.type === "function" && tool.execute) {
-        const originalExecute = tool.execute;
-        const toolName = tool.function.name;
-
-        return {
-          ...tool,
-          execute: wrapTraced(
-            async function aiSdkToolExecute(args: unknown) {
-              return await originalExecute(args);
-            },
-            {
-              name: `ai-sdk.tool:${toolName}`,
-              spanAttributes: { type: "function" },
-            },
-          ),
-        };
-      }
-      return tool;
-    });
-
-    return {
-      ...options,
-      tools: wrappedTools,
-    };
-  }
-
-  if (typeof options.tools === "object") {
-    const originalTools = options.tools as Record<
-      string,
-      {
-        description?: string;
-        parameters?: unknown;
-        execute?: (args: unknown) => unknown | Promise<unknown>;
-      }
-    >;
-    const wrappedTools: typeof originalTools = {};
-
-    for (const [name, def] of Object.entries(originalTools)) {
-      if (def && typeof def === "object" && def.execute) {
-        const originalExecute = def.execute;
-        wrappedTools[name] = {
-          ...def,
-          execute: wrapTraced(
-            async function aiSdkToolExecute(args: unknown) {
-              return await originalExecute(args);
-            },
-            {
-              name: `ai-sdk.tool:${name}`,
-              spanAttributes: { type: "function" },
-            },
-          ),
-        };
-      } else {
-        wrappedTools[name] = def;
-      }
-    }
-
-    return {
-      ...options,
-      tools: wrappedTools,
-    };
-  }
-
-  return options;
-}
+export { wrapAISDK };
