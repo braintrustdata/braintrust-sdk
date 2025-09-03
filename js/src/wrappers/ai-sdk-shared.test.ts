@@ -1,0 +1,189 @@
+import { describe, it, expect } from "vitest";
+import {
+  detectProviderFromResult,
+  extractModelFromResult,
+  camelToSnake,
+  extractModelParameters,
+  getNumberProperty,
+  normalizeUsageMetrics,
+} from "./ai-sdk-shared";
+
+describe("ai-sdk-shared utilities", () => {
+  describe("detectProviderFromResult", () => {
+    it("should return first provider key from providerMetadata", () => {
+      const result = {
+        providerMetadata: {
+          openai: { id: "chatcmpl-123" },
+          anthropic: { id: "msg-456" },
+        },
+      };
+      expect(detectProviderFromResult(result)).toBe("openai");
+    });
+
+    it("should return undefined for missing providerMetadata", () => {
+      expect(detectProviderFromResult({})).toBeUndefined();
+      expect(
+        detectProviderFromResult({ providerMetadata: {} }),
+      ).toBeUndefined();
+    });
+  });
+
+  describe("extractModelFromResult", () => {
+    it("should extract model from response.modelId", () => {
+      const result = {
+        response: { modelId: "gpt-4" },
+        request: { body: { model: "gpt-3.5-turbo" } },
+      };
+      expect(extractModelFromResult(result)).toBe("gpt-4");
+    });
+
+    it("should fallback to request.body.model", () => {
+      const result = {
+        request: { body: { model: "gpt-3.5-turbo" } },
+      };
+      expect(extractModelFromResult(result)).toBe("gpt-3.5-turbo");
+    });
+
+    it("should return undefined if no model found", () => {
+      expect(extractModelFromResult({})).toBeUndefined();
+    });
+  });
+
+  describe("camelToSnake", () => {
+    it("should convert camelCase to snake_case", () => {
+      expect(camelToSnake("maxTokens")).toBe("max_tokens");
+      expect(camelToSnake("temperature")).toBe("temperature");
+      expect(camelToSnake("topP")).toBe("top_p");
+      expect(camelToSnake("frequencyPenalty")).toBe("frequency_penalty");
+    });
+  });
+
+  describe("extractModelParameters", () => {
+    it("should extract parameters excluding specified keys", () => {
+      const params = {
+        prompt: "Hello",
+        temperature: 0.7,
+        maxTokens: 100,
+        topP: 0.9,
+        model: "gpt-4",
+        tools: [],
+      };
+      const excludeKeys = new Set(["prompt", "model", "tools"]);
+
+      const result = extractModelParameters(params, excludeKeys);
+
+      expect(result).toEqual({
+        temperature: 0.7,
+        max_tokens: 100,
+        top_p: 0.9,
+      });
+    });
+
+    it("should skip undefined values", () => {
+      const params = {
+        temperature: 0.7,
+        maxTokens: undefined,
+        topP: 0.9,
+      };
+      const excludeKeys = new Set([]);
+
+      const result = extractModelParameters(params, excludeKeys);
+
+      expect(result).toEqual({
+        temperature: 0.7,
+        top_p: 0.9,
+      });
+    });
+  });
+
+  describe("getNumberProperty", () => {
+    it("should extract number properties", () => {
+      const obj = { tokens: 100, text: "hello", nested: { count: 5 } };
+      expect(getNumberProperty(obj, "tokens")).toBe(100);
+      expect(getNumberProperty(obj, "text")).toBeUndefined();
+      expect(getNumberProperty(obj, "missing")).toBeUndefined();
+    });
+
+    it("should handle non-objects", () => {
+      expect(getNumberProperty(null, "tokens")).toBeUndefined();
+      expect(getNumberProperty("string", "tokens")).toBeUndefined();
+      expect(getNumberProperty(123, "tokens")).toBeUndefined();
+    });
+  });
+
+  describe("normalizeUsageMetrics", () => {
+    it("should normalize standard AI SDK usage fields", () => {
+      const usage = {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        reasoningTokens: 2,
+        cachedInputTokens: 3,
+      };
+
+      const result = normalizeUsageMetrics(usage);
+
+      expect(result).toEqual({
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        tokens: 15,
+        completion_reasoning_tokens: 2,
+        prompt_cached_tokens: 3,
+      });
+    });
+
+    it("should handle Anthropic provider with cache tokens", () => {
+      const usage = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+      };
+      const providerMetadata = {
+        anthropic: {
+          usage: {
+            cache_read_input_tokens: 80,
+            cache_creation_input_tokens: 20,
+          },
+        },
+      };
+
+      const result = normalizeUsageMetrics(
+        usage,
+        "anthropic",
+        providerMetadata,
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          completion_tokens: 50,
+          // Anthropic token finalization may adjust these values
+          prompt_tokens: expect.any(Number),
+          tokens: expect.any(Number),
+        }),
+      );
+
+      // Should include cache-specific metrics
+      expect(typeof result.prompt_cached_tokens).toBe("number");
+    });
+
+    it("should handle missing or invalid usage", () => {
+      expect(normalizeUsageMetrics(null)).toEqual({});
+      expect(normalizeUsageMetrics(undefined)).toEqual({});
+      expect(normalizeUsageMetrics({})).toEqual({});
+    });
+
+    it("should skip non-number values", () => {
+      const usage = {
+        inputTokens: "invalid",
+        outputTokens: 5,
+        totalTokens: null,
+      };
+
+      const result = normalizeUsageMetrics(usage);
+
+      expect(result).toEqual({
+        completion_tokens: 5,
+      });
+    });
+  });
+});

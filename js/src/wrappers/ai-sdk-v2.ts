@@ -1,9 +1,13 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
 import {
-  finalizeAnthropicTokens,
-  extractAnthropicCacheTokens,
-} from "./anthropic-tokens-util";
+  detectProviderFromResult,
+  extractModelFromResult,
+  camelToSnake,
+  extractModelParameters,
+  getNumberProperty,
+  normalizeUsageMetrics,
+} from "./ai-sdk-shared";
 
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types
@@ -51,139 +55,14 @@ export interface MiddlewareConfig {
   name?: string;
 }
 
-function detectProviderFromResult(result: {
-  providerMetadata?: Record<string, unknown>;
-}): string | undefined {
-  if (!result?.providerMetadata) {
-    return undefined;
-  }
-
-  const keys = Object.keys(result.providerMetadata); // e.g. "openai", "anthropic"
-  return keys?.at(0);
-}
-
-function extractModelFromResult(result: {
-  response?: {
-    modelId?: string;
-  };
-  request?: {
-    body?: {
-      model?: string;
-    };
-  };
-}): string | undefined {
-  // For generateText, model is in response.modelId
-  if (result?.response?.modelId) {
-    return result.response.modelId;
-  }
-
-  // For streaming, model is in request.body.model
-  if (result?.request?.body?.model) {
-    return result.request.body.model;
-  }
-
-  return undefined;
-}
-
-function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-}
-
-function extractModelParameters(
-  params: ModelCallOptions,
-): Record<string, unknown> {
-  const modelParams: Record<string, unknown> = {};
-
-  // Parameters to exclude from metadata (already captured elsewhere or not relevant)
-  const excludeKeys = new Set([
-    "prompt", // Already captured as input
-    "system", // Already captured as input
-    "messages", // Already captured as input
-    "model", // Already captured in metadata.model
-    "providerOptions", // Internal AI SDK configuration
-  ]);
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && !excludeKeys.has(key)) {
-      const snakeKey = camelToSnake(key);
-      modelParams[snakeKey] = value;
-    }
-  }
-
-  return modelParams;
-}
-
-function getNumberProperty(obj: unknown, key: string): number | undefined {
-  if (!obj || typeof obj !== "object" || !(key in obj)) {
-    return undefined;
-  }
-  const value = Reflect.get(obj, key);
-  return typeof value === "number" ? value : undefined;
-}
-
-function normalizeUsageMetrics(
-  usage: unknown,
-  provider?: string,
-  providerMetadata?: Record<string, unknown>,
-): Record<string, number> {
-  const metrics: Record<string, number> = {};
-
-  // AI SDK provides these standard fields
-  const inputTokens = getNumberProperty(usage, "inputTokens");
-  if (inputTokens !== undefined) {
-    metrics.prompt_tokens = inputTokens;
-  }
-
-  const outputTokens = getNumberProperty(usage, "outputTokens");
-  if (outputTokens !== undefined) {
-    metrics.completion_tokens = outputTokens;
-  }
-
-  const totalTokens = getNumberProperty(usage, "totalTokens");
-  if (totalTokens !== undefined) {
-    metrics.tokens = totalTokens;
-  }
-
-  // Additional fields that may exist
-  const reasoningTokens = getNumberProperty(usage, "reasoningTokens");
-  if (reasoningTokens !== undefined) {
-    metrics.completion_reasoning_tokens = reasoningTokens;
-  }
-
-  const cachedInputTokens = getNumberProperty(usage, "cachedInputTokens");
-  if (cachedInputTokens !== undefined) {
-    metrics.prompt_cached_tokens = cachedInputTokens;
-  }
-
-  // For Anthropic providers, implement the same token aggregation logic as wrapAnthropic
-  if (provider === "anthropic") {
-    // Look for Anthropic-specific cache tokens in providerMetadata.anthropic
-    const anthropicMetadata = providerMetadata?.anthropic as any;
-
-    if (anthropicMetadata) {
-      const cacheReadTokens =
-        getNumberProperty(anthropicMetadata.usage, "cache_read_input_tokens") ||
-        0;
-      const cacheCreationTokens =
-        getNumberProperty(
-          anthropicMetadata.usage,
-          "cache_creation_input_tokens",
-        ) || 0;
-
-      // Add cache tokens to metrics
-      const cacheTokens = extractAnthropicCacheTokens(
-        cacheReadTokens,
-        cacheCreationTokens,
-      );
-      Object.assign(metrics, cacheTokens);
-
-      // Apply Anthropic token finalization logic
-      Object.assign(metrics, finalizeAnthropicTokens(metrics));
-    }
-  }
-
-  return metrics;
-}
+// V2-specific exclude keys for extractModelParameters
+const V2_EXCLUDE_KEYS = new Set([
+  "prompt", // Already captured as input
+  "system", // Already captured as input
+  "messages", // Already captured as input
+  "model", // Already captured in metadata.model
+  "providerOptions", // Internal AI SDK configuration
+]);
 
 /**
  * Creates a Braintrust middleware for AI SDK v2 that automatically traces
@@ -218,7 +97,7 @@ export function BraintrustMiddleware(
         event: {
           input: params.prompt,
           metadata: {
-            ...extractModelParameters(params),
+            ...extractModelParameters(params, V2_EXCLUDE_KEYS),
           },
         },
       };
@@ -273,7 +152,7 @@ export function BraintrustMiddleware(
         event: {
           input: params.prompt,
           metadata: {
-            ...extractModelParameters(params),
+            ...extractModelParameters(params, V2_EXCLUDE_KEYS),
           },
         },
       };
