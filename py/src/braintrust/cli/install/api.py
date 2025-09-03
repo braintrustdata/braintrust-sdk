@@ -248,6 +248,12 @@ def build_parser(subparsers, parents):
         help="The API key to use to configure your org's API URL and Proxy URL",
         default=os.environ.get("BRAINTRUST_API_KEY", None),
     )
+    parser.add_argument(
+        "--update-stack-url",
+        help="Update the organization's API URL to match the stack's universal URL",
+        action="store_true",
+        default=False,
+    )
 
     # Brainstore configuration
     parser.add_argument(
@@ -502,25 +508,31 @@ def main(args):
                 org_info = org_info[0]
 
         if org_info and (universal_url and org_info["api_url"] != universal_url):
-            _logger.info(f"Will update org {org_info['name']}'s urls.")
-            _logger.info(f"  They are currently set to:")
-            _logger.info(f"  API URL: {org_info['api_url']}")
-            _logger.info(f"  Proxy URL: {org_info['proxy_url']}")
-            _logger.info(f"And will update them to:")
+            if args.update_stack_url:
+                _logger.info(f"Will update org {org_info['name']}'s urls.")
+                _logger.info(f"  They are currently set to:")
+                _logger.info(f"  API URL: {org_info['api_url']}")
+                _logger.info(f"  Proxy URL: {org_info['proxy_url']}")
+                _logger.info(f"And will update them to:")
 
-            patch_args = {"id": org_info["id"]}
-            if universal_url and org_info["api_url"] != universal_url:
-                patch_args["api_url"] = universal_url
-                patch_args["is_universal_api"] = True
-                _logger.info(f"  API URL: {universal_url}")
-                _logger.warn(
-                    f"\nNOTE: You can delete the proxy URL from your org settings now. It is no longer needed."
-                )
+                patch_args = {"id": org_info["id"]}
+                if universal_url and org_info["api_url"] != universal_url:
+                    patch_args["api_url"] = universal_url
+                    patch_args["is_universal_api"] = True
+                    _logger.info(f"  API URL: {universal_url}")
+                    _logger.warn(
+                        f"\nNOTE: You can delete the proxy URL from your org settings now. It is no longer needed."
+                    )
 
-            # Make the actual request
-            response_raise_for_status(
-                app_conn().post(
-                    "api/organization/patch_id",
-                    json=patch_args,
+                # Make the actual request
+                response_raise_for_status(
+                    app_conn().post(
+                        "api/organization/patch_id",
+                        json=patch_args,
+                    )
                 )
-            )
+            else:
+                _logger.info(f"Stack URL differs from organization API URL:")
+                _logger.info(f"  Current API URL: {org_info['api_url']}")
+                _logger.info(f"  Stack Universal URL: {universal_url}")
+                _logger.info(f"To update the organization's API URL, rerun with --update-stack-url flag")
