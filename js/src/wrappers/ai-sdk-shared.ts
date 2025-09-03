@@ -2,6 +2,7 @@ import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
 } from "./anthropic-tokens-util";
+import { wrapTraced } from "../logger";
 
 /**
  * Shared utility functions for AI SDK wrappers
@@ -122,4 +123,206 @@ export function normalizeUsageMetrics(
   }
 
   return metrics;
+}
+
+// -------- Chat completion formatting helpers --------
+
+export function normalizeFinishReason(reason: any): string | undefined {
+  if (typeof reason !== "string") return undefined;
+  return reason.replace(/-/g, "_");
+}
+
+export function extractToolCallsFromSteps(steps: any[] | undefined) {
+  const toolCalls: any[] = [];
+  if (!Array.isArray(steps)) return toolCalls;
+  let idx = 0;
+  for (const step of steps) {
+    const blocks: any[] | undefined = (step as any)?.content;
+    if (!Array.isArray(blocks)) continue;
+    for (const block of blocks) {
+      if (
+        block &&
+        typeof block === "object" &&
+        (block as any).type === "tool-call"
+      ) {
+        toolCalls.push({
+          id: (block as any).toolCallId,
+          type: "function",
+          index: idx++,
+          function: {
+            name: (block as any).toolName,
+            arguments:
+              typeof (block as any).input === "string"
+                ? (block as any).input
+                : JSON.stringify((block as any).input ?? {}),
+          },
+        });
+      }
+    }
+  }
+  return toolCalls;
+}
+
+export function buildAssistantOutputWithToolCalls(
+  result: any,
+  toolCalls: any[],
+) {
+  return [
+    {
+      index: 0,
+      logprobs: null,
+      finish_reason:
+        normalizeFinishReason(result?.finishReason) ??
+        (toolCalls.length ? "tool_calls" : undefined),
+      message: {
+        role: "assistant",
+        tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+      },
+    },
+  ];
+}
+
+// Convenience: extract tool calls directly from a blocks array (e.g., result.content)
+export function extractToolCallsFromBlocks(blocks: any[] | undefined) {
+  if (!Array.isArray(blocks)) return [];
+  return extractToolCallsFromSteps([{ content: blocks }] as any);
+}
+
+// Build tool-result messages from steps to display tool outputs inline
+export function extractToolResultChoicesFromSteps(
+  steps: any[] | undefined,
+): any[] {
+  const choices: any[] = [];
+  if (!Array.isArray(steps)) return choices;
+  for (const step of steps) {
+    const blocks: any[] | undefined = (step as any)?.content;
+    if (!Array.isArray(blocks)) continue;
+    for (const block of blocks) {
+      if (
+        block &&
+        typeof block === "object" &&
+        (block as any).type === "tool-result"
+      ) {
+        const b: any = block as any;
+        const raw =
+          b.output &&
+          typeof b.output === "object" &&
+          "type" in b.output &&
+          b.output.type === "json"
+            ? b.output.value
+            : b.output ?? {};
+        const content = typeof raw === "string" ? raw : JSON.stringify(raw);
+        choices.push({
+          index: 0,
+          logprobs: null,
+          message: {
+            role: "tool",
+            tool_call_id: b.toolCallId,
+            content,
+          },
+        });
+      }
+    }
+  }
+  return choices;
+}
+
+// Extract the final assistant text message from steps (fallback to result.text)
+export function extractFinalAssistantTextChoice(
+  steps: any[] | undefined,
+  resultText?: string,
+): any | undefined {
+  if (Array.isArray(steps)) {
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const blocks: any[] | undefined = (steps[i] as any)?.content;
+      if (!Array.isArray(blocks)) continue;
+      for (let j = blocks.length - 1; j >= 0; j--) {
+        const b = blocks[j];
+        if (b && typeof b === "object" && (b as any).type === "text") {
+          return {
+            index: 0,
+            logprobs: null,
+            message: { role: "assistant", content: [b] },
+          };
+        }
+      }
+    }
+  }
+  if (typeof resultText === "string" && resultText.length > 0) {
+    return {
+      index: 0,
+      logprobs: null,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: resultText }],
+      },
+    };
+  }
+  return undefined;
+}
+
+// Build comprehensive assistant output: tool_calls header, tool-result messages, and final text
+export function buildAssistantOutputFromSteps(
+  result: any,
+  steps: any[] | undefined,
+) {
+  const out: any[] = [];
+
+  if (Array.isArray(steps) && steps.length > 0) {
+    for (const step of steps) {
+      // Emit tool_calls header for this step (if any)
+      const stepToolCalls = extractToolCallsFromSteps([step]);
+      if (stepToolCalls.length > 0) {
+        // Prefer step.finishReason when present, otherwise result.finishReason
+        const header = buildAssistantOutputWithToolCalls(
+          { finishReason: (step as any)?.finishReason ?? result?.finishReason },
+          stepToolCalls,
+        );
+        out.push(...header);
+      }
+
+      // Emit tool results for this step (if any)
+      const stepToolResults = extractToolResultChoicesFromSteps([step]);
+      if (stepToolResults.length > 0) {
+        out.push(...stepToolResults);
+      }
+    }
+  } else {
+    // Fallback: aggregate all tool calls if steps missing
+    const toolCalls = extractToolCallsFromSteps(steps);
+    out.push(...buildAssistantOutputWithToolCalls(result, toolCalls));
+  }
+
+  // Append the final assistant text message at the end (if present)
+  const finalAssistant = extractFinalAssistantTextChoice(steps, result?.text);
+  if (finalAssistant) out.push(finalAssistant);
+
+  return out;
+}
+
+export function wrapTools<TTools extends Record<string, unknown> | undefined>(
+  tools: TTools,
+): TTools {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrappedTools: Record<string, any> = {};
+  if (tools) {
+    for (const [key, tool] of Object.entries(tools)) {
+      wrappedTools[key] = tool;
+      if (
+        tool != null &&
+        typeof tool === "object" &&
+        "execute" in tool &&
+        typeof (tool as any).execute === "function"
+      ) {
+        wrappedTools[key].execute = wrapTraced(
+          (tool as any).execute.bind(tool),
+          {
+            name: key,
+            type: "tool",
+          },
+        );
+      }
+    }
+  }
+  return wrappedTools as unknown as TTools;
 }

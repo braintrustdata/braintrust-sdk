@@ -1,12 +1,29 @@
 import { BraintrustMiddleware } from "./ai-sdk-v2";
-import { wrapTraced, traced } from "../logger";
+import { traced } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
 import {
   extractModelParameters,
   normalizeUsageMetrics,
   detectProviderFromResult,
-  extractModelFromResult,
+  buildAssistantOutputFromSteps,
+  wrapTools,
 } from "./ai-sdk-shared";
+
+type AISDKV3 = typeof import("ai");
+
+type AISDKV3Methods = Pick<
+  AISDKV3,
+  | "wrapLanguageModel"
+  | "generateText"
+  | "streamText"
+  | "generateObject"
+  | "streamObject"
+>;
+
+type GenerateText = AISDKV3Methods["generateText"];
+type StreamText = AISDKV3Methods["streamText"];
+type GenerateObject = AISDKV3Methods["generateObject"];
+type StreamObject = AISDKV3Methods["streamObject"];
 
 // V3-specific exclude keys for extractModelParameters
 const V3_EXCLUDE_KEYS = new Set([
@@ -18,56 +35,13 @@ const V3_EXCLUDE_KEYS = new Set([
   "tools", // Already captured in metadata.tools
 ]);
 
-const _logTracedSpan = (
-  span: any,
-  params: Record<string, unknown>,
-  result: any,
-) => {
-  const provider = detectProviderFromResult(result);
-
-  span.log({
-    input: params.prompt,
-    output: result.content,
-    metadata: {
-      ...extractModelParameters(params, V3_EXCLUDE_KEYS),
-    },
-    metrics: normalizeUsageMetrics(
-      result.usage,
-      provider,
-      result.providerMetadata,
-    ),
-  });
-};
-
-const _wrapTools = (tools?: Record<string, unknown>) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wrappedTools: Record<string, any> = {};
-  if (tools) {
-    for (const [key, tool] of Object.entries(tools)) {
-      wrappedTools[key] = tool;
-      if (
-        tool != null &&
-        typeof tool === "object" &&
-        "execute" in tool &&
-        typeof tool.execute === "function"
-      ) {
-        wrappedTools[key].execute = wrapTraced(tool.execute.bind(tool), {
-          name: key,
-          type: "tool",
-        });
-      }
-    }
-  }
-  return wrappedTools;
-};
-
 /**
- * Wrap AI SDK v3 functions to add Braintrust tracing. Returns wrapped versions
+ * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
  * of generateText, streamText, generateObject, and streamObject that automatically
  * create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
- * @returns Object with wrapped functions
+ * @returns Object with AI SDK methods with Braintrust tracing
  *
  * @example
  * ```typescript
@@ -82,47 +56,42 @@ const _wrapTools = (tools?: Record<string, unknown>) => {
  * });
  * ```
  */
-const wrapAISDK = <
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  WrapLanguageModelType extends (...args: any[]) => any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  GenerateTextType extends (...args: any[]) => any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  StreamTextType extends (...args: any[]) => any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  StreamObjectType extends (...args: any[]) => any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  GenerateObjectType extends (...args: any[]) => any,
->({
+export function wrapAISDK({
   wrapLanguageModel,
   generateText,
   streamText,
-  streamObject,
   generateObject,
-}: {
-  wrapLanguageModel: WrapLanguageModelType;
-  generateText: GenerateTextType;
-  streamText: StreamTextType;
-  streamObject: StreamObjectType;
-  generateObject: GenerateObjectType;
-}) => {
-  const wrappedGenerateText = async (
-    params: Parameters<GenerateTextType>[0],
-  ) => {
+  streamObject,
+}: AISDKV3Methods) {
+  const wrappedGenerateText = ((params: Parameters<GenerateText>[0]) => {
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ name: "ai-sdk.doGenerate" }),
         });
 
-        const result = (await generateText({
-          ...params,
-          tools: _wrapTools(params.tools),
+        const result = await generateText({
+          ...(params as any),
+          tools: wrapTools(params.tools),
           model: wrappedModel,
-        })) as ReturnType<GenerateTextType>;
+        } as Parameters<GenerateText>[0]);
 
-        _logTracedSpan(span, params, result);
+        const steps = result.steps;
+        const provider = detectProviderFromResult(result);
+
+        span.log({
+          input: params.prompt,
+          output: buildAssistantOutputFromSteps(result, steps),
+          metadata: {
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          },
+          metrics: normalizeUsageMetrics(
+            result.usage,
+            provider,
+            result.providerMetadata,
+          ),
+        });
 
         return result;
       },
@@ -131,24 +100,28 @@ const wrapAISDK = <
         spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
-  };
+  }) as GenerateText;
 
-  const wrappedGenerateObject = async (
-    params: Parameters<GenerateObjectType>[0],
-  ) => {
+  const wrappedGenerateObject = ((params: Parameters<GenerateObject>[0]) => {
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ name: "ai-sdk.doGenerate" }),
         });
 
-        const result = (await generateObject({
+        const result = await generateObject({
           ...params,
           model: wrappedModel,
-        })) as ReturnType<GenerateObjectType>;
+        } as Parameters<GenerateObject>[0]);
 
-        _logTracedSpan(span, params, result);
+        span.log({
+          input: params.prompt,
+          output: result.object,
+          metadata: {
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          },
+        });
 
         return result;
       },
@@ -157,23 +130,29 @@ const wrapAISDK = <
         spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
-  };
+  }) as GenerateObject;
 
-  const wrappedStreamText = async (params: Parameters<StreamTextType>[0]) => {
+  const wrappedStreamText = ((params: Parameters<StreamText>[0]) => {
     return traced(
-      async (span) => {
+      (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ name: "ai-sdk.doStream" }),
         });
 
-        const result = (await streamText({
+        const result = streamText({
           ...params,
-          tools: _wrapTools(params.tools),
+          tools: wrapTools(params.tools),
           model: wrappedModel,
-        })) as ReturnType<StreamTextType>;
+        } as Parameters<StreamText>[0]);
 
-        _logTracedSpan(span, params, result);
+        span.log({
+          input: params.prompt,
+          output: result.textStream,
+          metadata: {
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          },
+        });
 
         return result;
       },
@@ -182,24 +161,28 @@ const wrapAISDK = <
         spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
-  };
+  }) as StreamText;
 
-  const wrappedStreamObject = async (
-    params: Parameters<StreamObjectType>[0],
-  ) => {
+  const wrappedStreamObject = ((params: Parameters<StreamObject>[0]) => {
     return traced(
-      async (span) => {
+      (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ name: "ai-sdk.doStream" }),
         });
 
-        const result = (await streamObject({
+        const result = streamObject({
           ...params,
           model: wrappedModel,
-        })) as ReturnType<StreamObjectType>;
+        } as Parameters<StreamObject>[0]);
 
-        _logTracedSpan(span, params, result);
+        span.log({
+          input: params.prompt,
+          output: result.object,
+          metadata: {
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          },
+        });
 
         return result;
       },
@@ -208,7 +191,7 @@ const wrapAISDK = <
         spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
-  };
+  }) as StreamObject;
 
   return {
     generateText: wrappedGenerateText,
@@ -216,6 +199,4 @@ const wrapAISDK = <
     streamText: wrappedStreamText,
     streamObject: wrappedStreamObject,
   };
-};
-
-export { wrapAISDK };
+}

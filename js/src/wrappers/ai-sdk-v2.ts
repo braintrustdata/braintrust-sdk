@@ -7,6 +7,9 @@ import {
   extractModelParameters,
   getNumberProperty,
   normalizeUsageMetrics,
+  extractToolCallsFromSteps,
+  extractToolCallsFromBlocks,
+  buildAssistantOutputWithToolCalls,
 } from "./ai-sdk-shared";
 
 // Minimal interface definitions that are compatible with AI SDK v2
@@ -90,7 +93,7 @@ export function BraintrustMiddleware(
   return {
     wrapGenerate: async ({ doGenerate, params }) => {
       const spanArgs = {
-        name: "ai-sdk.generateText",
+        name: config.name ?? "ai-sdk.generateText",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -123,8 +126,16 @@ export function BraintrustMiddleware(
           metadata.model = model;
         }
 
+        let toolCalls = extractToolCallsFromSteps((result as any)?.steps);
+        if (!toolCalls || toolCalls.length === 0) {
+          toolCalls = extractToolCallsFromBlocks((result as any)?.content);
+        }
+
         span.log({
-          output: result.content,
+          output:
+            toolCalls.length > 0
+              ? buildAssistantOutputWithToolCalls(result, toolCalls)
+              : result.content,
           metadata,
           metrics: normalizeUsageMetrics(
             result.usage,
@@ -145,7 +156,7 @@ export function BraintrustMiddleware(
     },
     wrapStream: async ({ doStream, params }) => {
       const spanArgs = {
-        name: "ai-sdk.streamText",
+        name: config.name ?? "ai-sdk.streamText",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -163,6 +174,7 @@ export function BraintrustMiddleware(
         const { stream, ...rest } = await doStream();
 
         const textChunks: string[] = [];
+        const toolBlocks: any[] = [];
         let finalUsage: unknown = {};
         let finalFinishReason: unknown = undefined;
         let providerMetadata: Record<string, unknown> = {};
@@ -174,6 +186,11 @@ export function BraintrustMiddleware(
               // Collect text deltas
               if (chunk.type === "text-delta" && chunk.delta) {
                 textChunks.push(chunk.delta);
+              }
+
+              // Collect tool call/result blocks for formatting later
+              if (chunk.type === "tool-call" || chunk.type === "tool-result") {
+                toolBlocks.push(chunk);
               }
 
               // Capture final metadata
@@ -198,7 +215,7 @@ export function BraintrustMiddleware(
             try {
               // Log the final aggregated result when stream completes
               const generatedText = textChunks.join("");
-              const output: unknown = generatedText
+              let output: unknown = generatedText
                 ? [{ type: "text", text: generatedText }]
                 : [];
 
@@ -207,6 +224,7 @@ export function BraintrustMiddleware(
                 providerMetadata,
                 response: rest.response,
                 ...rest,
+                finishReason: finalFinishReason,
               };
 
               const metadata: Record<string, unknown> = {};
@@ -223,6 +241,19 @@ export function BraintrustMiddleware(
               const model = extractModelFromResult(resultForDetection);
               if (model !== undefined) {
                 metadata.model = model;
+              }
+
+              // If tool calls streamed, prefer assistant tool_calls output
+              if (toolBlocks.length > 0) {
+                const toolCalls = extractToolCallsFromSteps([
+                  { content: toolBlocks },
+                ] as any);
+                if (toolCalls.length > 0) {
+                  output = buildAssistantOutputWithToolCalls(
+                    resultForDetection,
+                    toolCalls,
+                  );
+                }
               }
 
               span.log({
