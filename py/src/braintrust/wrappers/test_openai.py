@@ -950,7 +950,6 @@ def test_openai_responses_not_given_filtering(memory_logger):
     # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    # Don't check for response fields since we now include all response metadata
 
     # Test responses.parse with NOT_GIVEN filtering
     class NumberAnswer(BaseModel):
@@ -997,7 +996,6 @@ def test_openai_responses_not_given_filtering(memory_logger):
     # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    # Don't check for response fields since we now include all response metadata
     # Verify the output is properly logged in the span
     assert span["output"]
     assert isinstance(span["output"], list)
@@ -1338,5 +1336,4 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
     assert "input" in chat_span, "Chat completion span should have input logged"
     assert "output" in chat_span, "Chat completion span should have output logged"
     assert chat_span["metadata"]["model"] == TEST_MODEL, "Chat completion should use test model"
-    # Just verify there's some output content - don't check specific format
     assert len(str(chat_span["output"])) > 0, "Chat completion should have some output content"

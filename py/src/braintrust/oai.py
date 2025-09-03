@@ -263,15 +263,12 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Callable[..., Any], name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
         self.name = name
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
-        if self.create_fn is None:
-            raise RuntimeError("ResponseWrapper was not properly initialized: 'create_fn' is None. Please ensure you pass a valid create function when constructing ResponseWrapper.")
-
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
@@ -323,9 +320,6 @@ class ResponseWrapper:
                 span.end()
 
     async def acreate(self, *args: Any, **kwargs: Any) -> Any:
-        if self.acreate_fn is None:
-            raise RuntimeError("ResponseWrapper was not properly initialized with an async create function (acreate_fn is None). Please ensure you pass a valid async create function to the constructor.")
-
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
