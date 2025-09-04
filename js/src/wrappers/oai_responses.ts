@@ -59,7 +59,6 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 function parseEventFromResponseCreateResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output and process any generated images
   if (result?.output !== undefined) {
     data.output = processImagesInOutput(result.output);
   }
