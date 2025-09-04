@@ -261,7 +261,6 @@ export function extractFinalAssistantTextChoice(
   return undefined;
 }
 
-// Build comprehensive assistant output: tool_calls header, tool-result messages, and final text
 export function buildAssistantOutputFromSteps(
   result: any,
   steps: any[] | undefined,
@@ -270,10 +269,8 @@ export function buildAssistantOutputFromSteps(
 
   if (Array.isArray(steps) && steps.length > 0) {
     for (const step of steps) {
-      // Emit tool_calls header for this step (if any)
       const stepToolCalls = extractToolCallsFromSteps([step]);
       if (stepToolCalls.length > 0) {
-        // Prefer step.finishReason when present, otherwise result.finishReason
         const header = buildAssistantOutputWithToolCalls(
           { finishReason: (step as any)?.finishReason ?? result?.finishReason },
           stepToolCalls,
@@ -281,47 +278,76 @@ export function buildAssistantOutputFromSteps(
         out.push(...header);
       }
 
-      // Emit tool results for this step (if any)
       const stepToolResults = extractToolResultChoicesFromSteps([step]);
       if (stepToolResults.length > 0) {
         out.push(...stepToolResults);
       }
     }
   } else {
-    // Fallback: aggregate all tool calls if steps missing
     const toolCalls = extractToolCallsFromSteps(steps);
     out.push(...buildAssistantOutputWithToolCalls(result, toolCalls));
   }
 
-  // Append the final assistant text message at the end (if present)
   const finalAssistant = extractFinalAssistantTextChoice(steps, result?.text);
   if (finalAssistant) out.push(finalAssistant);
 
   return out;
 }
 
-export function wrapTools<TTools extends Record<string, unknown> | undefined>(
-  tools: TTools,
-): TTools {
+export function wrapTools<
+  TTools extends Record<string, unknown> | unknown[] | undefined,
+>(tools: TTools): TTools {
+  if (!tools) return tools;
+
+  // Helper to infer a useful tool name
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wrappedTools: Record<string, any> = {};
-  if (tools) {
-    for (const [key, tool] of Object.entries(tools)) {
-      wrappedTools[key] = tool;
+  const inferName = (tool: any, fallback: string) =>
+    (tool && (tool.name || tool.toolName || tool.id)) || fallback;
+
+  // Array form: return a shallow-cloned array with wrapped executes
+  if (Array.isArray(tools)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const arr = tools as any[];
+    const out = arr.map((tool, idx) => {
       if (
         tool != null &&
         typeof tool === "object" &&
         "execute" in tool &&
         typeof (tool as any).execute === "function"
       ) {
-        wrappedTools[key].execute = wrapTraced(
-          (tool as any).execute.bind(tool),
-          {
-            name: key,
+        const name = inferName(tool, `tool[${idx}]`);
+        return {
+          ...(tool as object),
+          execute: wrapTraced((tool as any).execute.bind(tool), {
+            name,
             type: "tool",
-          },
-        );
+          }),
+        };
       }
+      return tool;
+    });
+    return out as unknown as TTools;
+  }
+
+  // Object form: avoid mutating the original tool objects
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrappedTools: Record<string, any> = {};
+  for (const [key, tool] of Object.entries(tools as Record<string, unknown>)) {
+    if (
+      tool != null &&
+      typeof tool === "object" &&
+      "execute" in tool &&
+      typeof (tool as any).execute === "function"
+    ) {
+      wrappedTools[key] = {
+        ...(tool as object),
+        execute: wrapTraced((tool as any).execute.bind(tool), {
+          name: key,
+          type: "tool",
+        }),
+      };
+    } else {
+      wrappedTools[key] = tool;
     }
   }
   return wrappedTools as unknown as TTools;

@@ -135,7 +135,7 @@ export function BraintrustMiddleware(
           output:
             toolCalls.length > 0
               ? buildAssistantOutputWithToolCalls(result, toolCalls)
-              : result.content,
+              : (result as any)?.content,
           metadata,
           metrics: normalizeUsageMetrics(
             result.usage,
