@@ -3,9 +3,7 @@ import { startSpan, traced, withCurrent } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
 import {
   extractModelParameters,
-  normalizeUsageMetrics,
   detectProviderFromResult,
-  buildAssistantOutputFromSteps,
   wrapTools,
   extractModelFromResult,
   normalizeFinishReason,
@@ -79,37 +77,30 @@ export function wrapAISDK<T extends AISDKMethods>(
         const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
         const result = await generateText({
-          ...(params as any),
+          ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
         });
 
-        const steps = result.steps;
         const provider = detectProviderFromResult(result);
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result?.finishReason);
 
         span.log({
-          input: params.prompt ?? params.messages ?? params.system,
-          output: buildAssistantOutputFromSteps(result, steps),
+          input: extractInput(params),
+          output: result.text,
           metadata: {
-            ...sharedMetadata(params),
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
           },
-          metrics: normalizeUsageMetrics(
-            result.usage,
-            provider,
-            result.providerMetadata,
-          ),
         });
 
         return result;
       },
       {
         name: "ai-sdk.generateText",
-        spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
   };
@@ -127,31 +118,23 @@ export function wrapAISDK<T extends AISDKMethods>(
 
         const provider = detectProviderFromResult(result);
         const model = extractModelFromResult(result);
-        const finishReason = normalizeFinishReason(
-          (result as any)?.finishReason,
-        );
+        const finishReason = normalizeFinishReason(result.finishReason);
 
         span.log({
-          input: params.prompt ?? params.messages ?? params.system,
+          input: extractInput(params),
           output: result.object,
           metadata: {
-            ...sharedMetadata(params),
+            ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
           },
-          metrics: normalizeUsageMetrics(
-            (result as any)?.usage,
-            provider,
-            (result as any)?.providerMetadata,
-          ),
         });
 
         return result;
       },
       {
         name: "ai-sdk.generateObject",
-        spanAttributes: { type: SpanTypeAttribute.LLM },
       },
     );
   };
@@ -159,10 +142,9 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedStreamText = (params: any) => {
     const span = startSpan({
       name: "ai-sdk.streamText",
-      spanAttributes: { type: SpanTypeAttribute.LLM },
       event: {
-        input: params.prompt ?? params.messages ?? params.system,
-        metadata: sharedMetadata(params),
+        input: extractInput(params),
+        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
       },
     });
 
@@ -173,18 +155,20 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
-      const tfft = Date.now();
-      let receivedFirstToken = false;
+      const startTime = Date.now();
+      let receivedFirst = false;
       const result = withCurrent(span, () =>
         streamText({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
           onChunk: (chunk: any) => {
-            if (!receivedFirstToken) {
-              receivedFirstToken = true;
+            if (!receivedFirst) {
+              receivedFirst = true;
               span.log({
-                metrics: { time_to_first_token: (Date.now() - tfft) / 1000 },
+                metrics: {
+                  time_to_first_token: (Date.now() - startTime) / 1000,
+                },
               });
             }
 
@@ -202,16 +186,11 @@ export function wrapAISDK<T extends AISDKMethods>(
             span.log({
               output: event?.text,
               metadata: {
-                ...sharedMetadata(params),
+                ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
               },
-              metrics: normalizeUsageMetrics(
-                event?.usage,
-                provider,
-                event?.providerMetadata,
-              ),
             });
             span.end();
           },
@@ -240,39 +219,23 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedStreamObject = (params: any) => {
     const span = startSpan({
       name: "ai-sdk.streamObject",
-      spanAttributes: { type: SpanTypeAttribute.LLM },
       event: {
         input: params.prompt ?? params.messages ?? params.system,
-        metadata: sharedMetadata(params),
+        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
       },
     });
 
     const userOnFinish = params.onFinish;
     const userOnError = params.onError;
-    const userOnChunk = params.onChunk;
 
     try {
       const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
-      const tfft = Date.now();
-      let receivedFirstToken = false;
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
-          onChunk: (chunk: any) => {
-            if (!receivedFirstToken) {
-              receivedFirstToken = true;
-              span.log({
-                metrics: { time_to_first_token: (Date.now() - tfft) / 1000 },
-              });
-            }
-
-            if (typeof userOnChunk === "function") {
-              userOnChunk(chunk);
-            }
-          },
           onFinish: async (event: any) => {
             if (typeof userOnFinish === "function") {
               await userOnFinish(event);
@@ -283,16 +246,11 @@ export function wrapAISDK<T extends AISDKMethods>(
             span.log({
               output: event?.object,
               metadata: {
-                ...sharedMetadata(params),
+                ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
               },
-              metrics: normalizeUsageMetrics(
-                event?.usage,
-                provider,
-                event?.providerMetadata,
-              ),
             });
             span.end();
           },
@@ -308,7 +266,17 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      return result;
+      const startTime = Date.now();
+      const wrapStream = wrapStreamObject(result.partialObjectStream, () => {
+        span.log({
+          metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
+        });
+      });
+
+      return {
+        ...result,
+        partialObjectStream: wrapStream,
+      };
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),
@@ -336,8 +304,25 @@ function wrapModel(
   });
 }
 
-function sharedMetadata(params: any) {
-  return {
-    ...extractModelParameters(params, V3_EXCLUDE_KEYS),
-  } as Record<string, unknown>;
+function extractInput(params: any) {
+  return params.prompt ?? params.messages ?? params.system;
+}
+
+function wrapStreamObject<T>(
+  iterable: AsyncIterable<T>,
+  onFirst: () => void,
+): AsyncIterable<T> {
+  let sawFirst = false;
+
+  async function* wrapStream() {
+    for await (const chunk of iterable) {
+      if (!sawFirst) {
+        sawFirst = true;
+        onFirst();
+      }
+      yield chunk; // pass-through unchanged
+    }
+  }
+
+  return wrapStream();
 }
