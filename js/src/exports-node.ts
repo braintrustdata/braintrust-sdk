@@ -26,6 +26,7 @@ export * as graph from "./graph-framework";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { BraintrustMiddleware } from "./wrappers/ai-sdk-v2";
+export { wrapAISDKModel } from "./wrappers/ai-sdk-v1";
 export { wrapAISDK } from "./wrappers/ai-sdk-v3";
 export { wrapAnthropic } from "./wrappers/anthropic";
 export {
