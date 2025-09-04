@@ -3,9 +3,7 @@ import { startSpan } from "../logger";
 import {
   detectProviderFromResult,
   extractModelFromResult,
-  camelToSnake,
   extractModelParameters,
-  getNumberProperty,
   normalizeUsageMetrics,
   extractToolCallsFromSteps,
   extractToolCallsFromBlocks,

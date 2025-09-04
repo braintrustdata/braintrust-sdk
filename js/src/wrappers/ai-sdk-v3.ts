@@ -1,6 +1,5 @@
 import { BraintrustMiddleware } from "./ai-sdk-v2";
 import { startSpan, traced, withCurrent } from "../logger";
-import { SpanTypeAttribute } from "@braintrust/core";
 import {
   extractModelParameters,
   detectProviderFromResult,
@@ -74,7 +73,10 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedGenerateText = (params: any) => {
     return traced(
       async (span) => {
-        const wrappedModel = wrapModel(wrapLanguageModel, params.model);
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
 
         const result = await generateText({
           ...params,
@@ -108,8 +110,10 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedGenerateObject = (params: any) => {
     return traced(
       async (span) => {
-        const wrappedModel = wrapModel(wrapLanguageModel, params.model);
-
+        const wrappedModel = wrapLanguageModel({
+          model: params.model,
+          middleware: BraintrustMiddleware(),
+        });
         const result = await generateObject({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
@@ -153,7 +157,10 @@ export function wrapAISDK<T extends AISDKMethods>(
     const userOnChunk = params.onChunk;
 
     try {
-      const wrappedModel = wrapModel(wrapLanguageModel, params.model);
+      const wrappedModel = wrapLanguageModel({
+        model: params.model,
+        middleware: BraintrustMiddleware(),
+      });
 
       const startTime = Date.now();
       let receivedFirst = false;
@@ -229,7 +236,10 @@ export function wrapAISDK<T extends AISDKMethods>(
     const userOnError = params.onError;
 
     try {
-      const wrappedModel = wrapModel(wrapLanguageModel, params.model);
+      const wrappedModel = wrapLanguageModel({
+        model: params.model,
+        middleware: BraintrustMiddleware(),
+      });
 
       const result = withCurrent(span, () =>
         streamObject({
@@ -292,16 +302,6 @@ export function wrapAISDK<T extends AISDKMethods>(
     streamText: wrappedStreamText as T["streamText"],
     streamObject: wrappedStreamObject as T["streamObject"],
   };
-}
-
-function wrapModel(
-  wrapLanguageModel: AISDKMethods["wrapLanguageModel"],
-  model: unknown,
-) {
-  return wrapLanguageModel({
-    model,
-    middleware: BraintrustMiddleware(),
-  });
 }
 
 function extractInput(params: any) {
