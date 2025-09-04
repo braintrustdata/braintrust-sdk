@@ -85,17 +85,14 @@ function processImagesInOutput(output: any): any {
   }
 
   if (isObject(output)) {
-    // Handle image generation calls
     if (
       output.type === "image_generation_call" &&
       output.result &&
       typeof output.result === "string"
     ) {
-      // Extract file extension from output_format or default to png
       const fileExtension = output.output_format || "png";
       const contentType = `image/${fileExtension}`;
 
-      // Create filename based on revised_prompt or use generic name
       const baseFilename =
         output.revised_prompt && typeof output.revised_prompt === "string"
           ? output.revised_prompt.slice(0, 50).replace(/[^a-zA-Z0-9]/g, "_")
@@ -110,7 +107,6 @@ function processImagesInOutput(output: any): any {
       }
       const blob = new Blob([bytes], { type: contentType });
 
-      // Convert base64 result to Attachment
       const attachment = new Attachment({
         data: blob,
         filename: filename,
@@ -119,7 +115,7 @@ function processImagesInOutput(output: any): any {
 
       return {
         ...output,
-        result: attachment, // This will be automatically uploaded and replaced with AttachmentReference
+        result: attachment,
       };
     }
   }
@@ -153,7 +149,6 @@ function parseSpanFromResponseParseParams(params: any): TimedSpan {
 function parseEventFromResponseParseResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output and process any generated images
   if (result?.output !== undefined) {
     data.output = processImagesInOutput(result.output);
   }
@@ -214,7 +209,6 @@ function parseLogFromItem(item: any): {} {
     case "response.completed":
       const data: Record<string, any> = {};
 
-      // Extract output and process any generated images
       if (response?.output !== undefined) {
         data.output = processImagesInOutput(response.output);
       }
