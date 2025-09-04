@@ -122,13 +122,6 @@ function processImagesInOutput(output: any): any {
         result: attachment, // This will be automatically uploaded and replaced with AttachmentReference
       };
     }
-
-    // Recursively process nested objects
-    const processed: Record<string, any> = {};
-    for (const [key, value] of Object.entries(output)) {
-      processed[key] = processImagesInOutput(value);
-    }
-    return processed;
   }
 
   return output;
