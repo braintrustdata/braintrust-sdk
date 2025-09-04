@@ -11,7 +11,7 @@ import {
   normalizeFinishReason,
 } from "./ai-sdk-shared";
 
-// Define a neutral interface for the subset of AI SDK methods we use.
+// Define a neutral interface for the AI SDK methods we use.
 // This avoids importing `typeof import("ai")`, which can cause type-identity
 // conflicts when multiple copies/versions of `ai` exist in the workspace.
 interface AISDKMethods {
@@ -193,29 +193,61 @@ export function wrapAISDK<T extends AISDKMethods>(
     });
 
     try {
-      const result = withCurrent(span, () => {
-        const wrappedModel = wrapModel(
-          wrapLanguageModel,
-          params.model,
-          "stream",
-        );
+      const wrappedModel = wrapModel(wrapLanguageModel, params.model, "stream");
 
-        return streamText({
+      const userOnFinish = params.onFinish;
+      const userOnError = params.onError;
+
+      const result = withCurrent(span, () =>
+        streamText({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
-        });
-      });
-
-      const wrappedTextStream = _wrapAsyncIterable(
-        result.textStream,
-        (deltaMs) => span.log({ metrics: { time_to_first_token: deltaMs } }),
-        () => span.end(),
+          onFinish: async (event: any) => {
+            try {
+              if (typeof userOnFinish === "function") {
+                await userOnFinish(event);
+              }
+            } finally {
+              const provider = detectProviderFromResult(event);
+              const model = extractModelFromResult(event);
+              const finishReason = normalizeFinishReason(event?.finishReason);
+              span.log({
+                output: buildAssistantOutputFromSteps(
+                  { finishReason: event?.finishReason },
+                  event?.steps,
+                ),
+                metadata: {
+                  ...sharedMetadata(params),
+                  ...(provider ? { provider } : {}),
+                  ...(model ? { model } : {}),
+                  ...(finishReason ? { finish_reason: finishReason } : {}),
+                },
+                metrics: normalizeUsageMetrics(
+                  event?.usage,
+                  provider,
+                  event?.providerMetadata,
+                ),
+              });
+              span.end();
+            }
+          },
+          onError: async (err: unknown) => {
+            try {
+              if (typeof userOnError === "function") {
+                await userOnError(err);
+              }
+            } finally {
+              span.log({
+                error: err instanceof Error ? err.message : String(err),
+              });
+              span.end();
+            }
+          },
+        }),
       );
 
-      span.log({ output: wrappedTextStream });
-
-      return { ...result, textStream: wrappedTextStream };
+      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),
@@ -236,38 +268,58 @@ export function wrapAISDK<T extends AISDKMethods>(
     });
 
     try {
-      const result = withCurrent(span, () => {
-        const wrappedModel = wrapModel(
-          wrapLanguageModel,
-          params.model,
-          "stream",
-        );
+      const wrappedModel = wrapModel(wrapLanguageModel, params.model, "stream");
 
-        return streamObject({
+      const userOnFinish = params.onFinish;
+      const userOnError = params.onError;
+
+      const result = withCurrent(span, () =>
+        streamObject({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
-        });
-      });
+          onFinish: async (event: any) => {
+            try {
+              if (typeof userOnFinish === "function") {
+                await userOnFinish(event);
+              }
+            } finally {
+              const provider = detectProviderFromResult(event);
+              const model = extractModelFromResult(event);
+              const finishReason = normalizeFinishReason(event?.finishReason);
+              span.log({
+                output: event?.object,
+                metadata: {
+                  ...sharedMetadata(params),
+                  ...(provider ? { provider } : {}),
+                  ...(model ? { model } : {}),
+                  ...(finishReason ? { finish_reason: finishReason } : {}),
+                },
+                metrics: normalizeUsageMetrics(
+                  event?.usage,
+                  provider,
+                  event?.providerMetadata,
+                ),
+              });
+              span.end();
+            }
+          },
+          onError: async (err: unknown) => {
+            try {
+              if (typeof userOnError === "function") {
+                await userOnError(err);
+              }
+            } finally {
+              span.log({
+                error: err instanceof Error ? err.message : String(err),
+              });
+              span.end();
+            }
+          },
+        }),
+      );
 
-      const stream = (result as any).partialObjectStream as
-        | AsyncIterable<unknown>
-        | undefined;
-
-      if (stream && Symbol.asyncIterator in stream) {
-        const wrapped = _wrapAsyncIterable(
-          stream,
-          (deltaMs) => span.log({ metrics: { time_to_first_token: deltaMs } }),
-          () => span.end(),
-        );
-        span.log({ output: wrapped });
-        return { ...result, partialObjectStream: wrapped } as any;
-      } else {
-        // Fallback: no partial stream available
-        span.log({ output: (result as any).object });
-        span.end();
-        return result;
-      }
+      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),
@@ -302,25 +354,4 @@ function sharedMetadata(params: any) {
   return {
     ...extractModelParameters(params, V3_EXCLUDE_KEYS),
   } as Record<string, unknown>;
-}
-
-// Wrap an AsyncIterable to compute time_to_first_token and end span on completion
-async function* _wrapAsyncIterable<T>(
-  iterable: AsyncIterable<T>,
-  onFirst: (deltaMs: number) => void,
-  onDone: () => void,
-) {
-  const start = Date.now();
-  let first = true;
-  try {
-    for await (const chunk of iterable) {
-      if (first) {
-        first = false;
-        onFirst(Date.now() - start);
-      }
-      yield chunk;
-    }
-  } finally {
-    onDone();
-  }
 }
