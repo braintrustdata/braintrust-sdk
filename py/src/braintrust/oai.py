@@ -425,16 +425,16 @@ class ResponseWrapper:
                 if result.type == "response.output_item.added":
                     # Check if we already have an incomplete item from earlier deltas
                     if output and isinstance(output[-1], dict) and "id" not in output[-1] and "type" not in output[-1]:
-                        # Update the existing item with proper id and type
+                        # Update the existing placeholder item with proper id and type
                         output[-1].update({"id": result.item.id, "type": result.item.type})
                     else:
-                        # Create new item
-                        output.append({"id": result.item.id, "type": result.item.type})
+                        # Create new item with standard structure
+                        output.append({"id": result.item.id, "type": result.item.type, "content": []})
                 elif result.type == "response.output_text.delta" and hasattr(result, "delta"):
                     # Aggregate text deltas
                     if not output:
-                        # Create placeholder item that will be updated when output_item.added arrives
-                        output.append({"content": []})
+                        # Create placeholder item with standard structure that will be updated when output_item.added arrives
+                        output.append({"id": None, "type": None, "content": []})
                     if not output[-1].get("content"):
                         output[-1]["content"] = [{"text": ""}]
                     output[-1]["content"][-1]["text"] += result.delta
