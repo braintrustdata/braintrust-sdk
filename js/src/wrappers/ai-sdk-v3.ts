@@ -27,18 +27,6 @@ interface AISDKMethods {
   streamObject: (params: any) => any;
 }
 
-function isAISDKMethods(obj: unknown): obj is AISDKMethods {
-  if (!obj || typeof obj !== "object") return false;
-  const o = obj as Record<string, unknown>;
-  return (
-    typeof o.wrapLanguageModel === "function" &&
-    typeof o.generateText === "function" &&
-    typeof o.streamText === "function" &&
-    typeof o.generateObject === "function" &&
-    typeof o.streamObject === "function"
-  );
-}
-
 // V3-specific exclude keys for extractModelParameters
 const V3_EXCLUDE_KEYS = new Set([
   "prompt", // Already captured as input
@@ -78,12 +66,6 @@ export function wrapAISDK<T extends AISDKMethods>(
   generateObject: T["generateObject"];
   streamObject: T["streamObject"];
 } {
-  if (!isAISDKMethods(ai)) {
-    throw new Error(
-      'wrapAISDK expected a Vercel AI SDK namespace (e.g., `import * as ai from "ai"`). Missing required methods.',
-    );
-  }
-
   const {
     wrapLanguageModel,
     generateText,
@@ -184,14 +166,64 @@ export function wrapAISDK<T extends AISDKMethods>(
       },
     });
 
+    const userOnFinish = params.onFinish;
+    const userOnError = params.onError;
+    const userOnChunk = params.onChunk;
+
     try {
       const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
+      const tfft = Date.now();
+      let receivedFirstToken = false;
       const result = withCurrent(span, () =>
         streamText({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
+          onChunk: (chunk: any) => {
+            if (!receivedFirstToken) {
+              receivedFirstToken = true;
+              span.log({
+                metrics: { time_to_first_token: (Date.now() - tfft) / 1000 },
+              });
+            }
+
+            if (typeof userOnChunk === "function") {
+              userOnChunk(chunk);
+            }
+          },
+          onFinish: async (event: any) => {
+            if (typeof userOnFinish === "function") {
+              await userOnFinish(event);
+            }
+            const provider = detectProviderFromResult(event);
+            const model = extractModelFromResult(event);
+            const finishReason = normalizeFinishReason(event?.finishReason);
+            span.log({
+              output: event?.text,
+              metadata: {
+                ...sharedMetadata(params),
+                ...(provider ? { provider } : {}),
+                ...(model ? { model } : {}),
+                ...(finishReason ? { finish_reason: finishReason } : {}),
+              },
+              metrics: normalizeUsageMetrics(
+                event?.usage,
+                provider,
+                event?.providerMetadata,
+              ),
+            });
+            span.end();
+          },
+          onError: async (err: unknown) => {
+            if (typeof userOnError === "function") {
+              await userOnError(err);
+            }
+            span.log({
+              error: err instanceof Error ? err.message : String(err),
+            });
+            span.end();
+          },
         }),
       );
 
@@ -215,14 +247,64 @@ export function wrapAISDK<T extends AISDKMethods>(
       },
     });
 
+    const userOnFinish = params.onFinish;
+    const userOnError = params.onError;
+    const userOnChunk = params.onChunk;
+
     try {
       const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
+      const tfft = Date.now();
+      let receivedFirstToken = false;
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
+          onChunk: (chunk: any) => {
+            if (!receivedFirstToken) {
+              receivedFirstToken = true;
+              span.log({
+                metrics: { time_to_first_token: (Date.now() - tfft) / 1000 },
+              });
+            }
+
+            if (typeof userOnChunk === "function") {
+              userOnChunk(chunk);
+            }
+          },
+          onFinish: async (event: any) => {
+            if (typeof userOnFinish === "function") {
+              await userOnFinish(event);
+            }
+            const provider = detectProviderFromResult(event);
+            const model = extractModelFromResult(event);
+            const finishReason = normalizeFinishReason(event?.finishReason);
+            span.log({
+              output: event?.object,
+              metadata: {
+                ...sharedMetadata(params),
+                ...(provider ? { provider } : {}),
+                ...(model ? { model } : {}),
+                ...(finishReason ? { finish_reason: finishReason } : {}),
+              },
+              metrics: normalizeUsageMetrics(
+                event?.usage,
+                provider,
+                event?.providerMetadata,
+              ),
+            });
+            span.end();
+          },
+          onError: async (err: unknown) => {
+            if (typeof userOnError === "function") {
+              await userOnError(err);
+            }
+            span.log({
+              error: err instanceof Error ? err.message : String(err),
+            });
+            span.end();
+          },
         }),
       );
 
