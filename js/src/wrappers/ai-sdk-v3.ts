@@ -94,11 +94,7 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedGenerateText = (params: any) => {
     return traced(
       async (span) => {
-        const wrappedModel = wrapModel(
-          wrapLanguageModel,
-          params.model,
-          "generate",
-        );
+        const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
         const result = await generateText({
           ...(params as any),
@@ -139,11 +135,7 @@ export function wrapAISDK<T extends AISDKMethods>(
   const wrappedGenerateObject = (params: any) => {
     return traced(
       async (span) => {
-        const wrappedModel = wrapModel(
-          wrapLanguageModel,
-          params.model,
-          "generate",
-        );
+        const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
         const result = await generateObject({
           ...params,
@@ -193,57 +185,13 @@ export function wrapAISDK<T extends AISDKMethods>(
     });
 
     try {
-      const wrappedModel = wrapModel(wrapLanguageModel, params.model, "stream");
-
-      const userOnFinish = params.onFinish;
-      const userOnError = params.onError;
+      const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
       const result = withCurrent(span, () =>
         streamText({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
-          onFinish: async (event: any) => {
-            try {
-              if (typeof userOnFinish === "function") {
-                await userOnFinish(event);
-              }
-            } finally {
-              const provider = detectProviderFromResult(event);
-              const model = extractModelFromResult(event);
-              const finishReason = normalizeFinishReason(event?.finishReason);
-              span.log({
-                output: buildAssistantOutputFromSteps(
-                  { finishReason: event?.finishReason },
-                  event?.steps,
-                ),
-                metadata: {
-                  ...sharedMetadata(params),
-                  ...(provider ? { provider } : {}),
-                  ...(model ? { model } : {}),
-                  ...(finishReason ? { finish_reason: finishReason } : {}),
-                },
-                metrics: normalizeUsageMetrics(
-                  event?.usage,
-                  provider,
-                  event?.providerMetadata,
-                ),
-              });
-              span.end();
-            }
-          },
-          onError: async (err: unknown) => {
-            try {
-              if (typeof userOnError === "function") {
-                await userOnError(err);
-              }
-            } finally {
-              span.log({
-                error: err instanceof Error ? err.message : String(err),
-              });
-              span.end();
-            }
-          },
         }),
       );
 
@@ -268,54 +216,13 @@ export function wrapAISDK<T extends AISDKMethods>(
     });
 
     try {
-      const wrappedModel = wrapModel(wrapLanguageModel, params.model, "stream");
-
-      const userOnFinish = params.onFinish;
-      const userOnError = params.onError;
+      const wrappedModel = wrapModel(wrapLanguageModel, params.model);
 
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
           tools: params.tools ? wrapTools(params.tools) : undefined,
           model: wrappedModel,
-          onFinish: async (event: any) => {
-            try {
-              if (typeof userOnFinish === "function") {
-                await userOnFinish(event);
-              }
-            } finally {
-              const provider = detectProviderFromResult(event);
-              const model = extractModelFromResult(event);
-              const finishReason = normalizeFinishReason(event?.finishReason);
-              span.log({
-                output: event?.object,
-                metadata: {
-                  ...sharedMetadata(params),
-                  ...(provider ? { provider } : {}),
-                  ...(model ? { model } : {}),
-                  ...(finishReason ? { finish_reason: finishReason } : {}),
-                },
-                metrics: normalizeUsageMetrics(
-                  event?.usage,
-                  provider,
-                  event?.providerMetadata,
-                ),
-              });
-              span.end();
-            }
-          },
-          onError: async (err: unknown) => {
-            try {
-              if (typeof userOnError === "function") {
-                await userOnError(err);
-              }
-            } finally {
-              span.log({
-                error: err instanceof Error ? err.message : String(err),
-              });
-              span.end();
-            }
-          },
         }),
       );
 
@@ -340,13 +247,10 @@ export function wrapAISDK<T extends AISDKMethods>(
 function wrapModel(
   wrapLanguageModel: AISDKMethods["wrapLanguageModel"],
   model: unknown,
-  kind: "generate" | "stream",
 ) {
   return wrapLanguageModel({
     model,
-    middleware: BraintrustMiddleware({
-      name: kind === "generate" ? "ai-sdk.doGenerate" : "ai-sdk.doStream",
-    }),
+    middleware: BraintrustMiddleware(),
   });
 }
 

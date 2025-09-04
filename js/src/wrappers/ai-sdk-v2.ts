@@ -93,7 +93,7 @@ export function BraintrustMiddleware(
   return {
     wrapGenerate: async ({ doGenerate, params }) => {
       const spanArgs = {
-        name: config.name ?? "ai-sdk.generateText",
+        name: "ai-sdk.generateText",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -156,7 +156,7 @@ export function BraintrustMiddleware(
     },
     wrapStream: async ({ doStream, params }) => {
       const spanArgs = {
-        name: config.name ?? "ai-sdk.streamText",
+        name: "ai-sdk.streamText",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
