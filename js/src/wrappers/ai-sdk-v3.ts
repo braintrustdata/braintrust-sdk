@@ -241,6 +241,7 @@ export function wrapAISDK<T extends AISDKMethods>(
         middleware: BraintrustMiddleware(),
       });
 
+      const startTime = Date.now();
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
@@ -276,7 +277,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      const startTime = Date.now();
       const wrapStream = wrapStreamObject(result.partialObjectStream, () => {
         span.log({
           metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
