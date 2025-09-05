@@ -6,6 +6,8 @@ import {
   wrapTools,
   extractModelFromResult,
   normalizeFinishReason,
+  extractInput,
+  wrapStreamObject,
 } from "./ai-sdk-shared";
 
 // Define a neutral interface for the AI SDK methods we use.
@@ -227,7 +229,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     const span = startSpan({
       name: "ai-sdk.streamObject",
       event: {
-        input: params.prompt ?? params.messages ?? params.system,
+        input: extractInput(params),
         metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
       },
     });
@@ -302,27 +304,4 @@ export function wrapAISDK<T extends AISDKMethods>(
     streamText: wrappedStreamText as T["streamText"],
     streamObject: wrappedStreamObject as T["streamObject"],
   };
-}
-
-function extractInput(params: any) {
-  return params.prompt ?? params.messages ?? params.system;
-}
-
-function wrapStreamObject<T>(
-  iterable: AsyncIterable<T>,
-  onFirst: () => void,
-): AsyncIterable<T> {
-  let sawFirst = false;
-
-  async function* wrapStream() {
-    for await (const chunk of iterable) {
-      if (!sawFirst) {
-        sawFirst = true;
-        onFirst();
-      }
-      yield chunk; // pass-through unchanged
-    }
-  }
-
-  return wrapStream();
 }

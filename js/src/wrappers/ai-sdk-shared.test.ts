@@ -11,6 +11,8 @@ import {
   extractToolCallsFromSteps,
   buildAssistantOutputWithToolCalls,
   extractToolCallsFromBlocks,
+  extractInput,
+  wrapStreamObject,
 } from "./ai-sdk-shared";
 
 describe("ai-sdk-shared utilities", () => {
@@ -277,6 +279,78 @@ describe("ai-sdk-shared utilities", () => {
           message: { role: "assistant", tool_calls: undefined },
         },
       ]);
+    });
+  });
+
+  describe("extractInput", () => {
+    it("prefers prompt, then messages, then system", () => {
+      expect(extractInput({ prompt: "p", messages: [1], system: "s" })).toBe(
+        "p",
+      );
+      expect(
+        extractInput({ prompt: undefined, messages: [1], system: "s" }),
+      ).toEqual([1]);
+      expect(
+        extractInput({ prompt: undefined, messages: undefined, system: "s" }),
+      ).toBe("s");
+    });
+
+    it("returns undefined if none present", () => {
+      expect(extractInput({})).toBeUndefined();
+      expect(extractInput(undefined as any)).toBeUndefined();
+      expect(extractInput(null as any)).toBeUndefined();
+    });
+  });
+
+  describe("wrapStreamObject", () => {
+    it("calls onFirst once and yields unchanged values", async () => {
+      const events: string[] = [];
+      async function* src() {
+        events.push("producer-start");
+        yield 1;
+        yield 2;
+      }
+      let count = 0;
+      const wrapped = wrapStreamObject(src(), () => {
+        count++;
+        events.push("onFirst");
+      });
+
+      const out: number[] = [];
+      for await (const v of wrapped) out.push(v);
+
+      expect(out).toEqual([1, 2]);
+      expect(count).toBe(1);
+      // onFirst fires after producer starts producing the first chunk
+      expect(events[0]).toBe("producer-start");
+      expect(events[1]).toBe("onFirst");
+    });
+
+    it("does not call onFirst for empty iterable", async () => {
+      async function* empty() {}
+      let called = 0;
+      const wrapped = wrapStreamObject(empty(), () => {
+        called++;
+      });
+      for await (const _ of wrapped) {
+        // no-op
+      }
+      expect(called).toBe(0);
+    });
+
+    it("does not call onFirst until iteration begins", async () => {
+      async function* src() {
+        yield 42;
+      }
+      let called = 0;
+      const wrapped = wrapStreamObject(src(), () => {
+        called++;
+      });
+      // No iteration performed
+      expect(called).toBe(0);
+      // Now iterate to trigger
+      for await (const _ of wrapped) break;
+      expect(called).toBe(1);
     });
   });
 });
