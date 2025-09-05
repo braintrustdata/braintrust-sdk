@@ -198,9 +198,18 @@ def _get_braintrust_wheel():
     return wheels[0]
 
 
+def _otel_is_installed(session) -> bool:
+    out = session.run(
+        "python", "-c",
+        "import importlib.util; print(1 if importlib.util.find_spec('opentelemetry') else 0)",
+        silent=True, log=False
+    )
+    return out.strip() == "1"
+
 def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+    env = {"PY_OTEL_INSTALLED": "1" if _otel_is_installed(session) else "0"}
+    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR, env=env)
 
 
 def _run_tests(session, test_path, ignore_path="", env=None):
