@@ -392,10 +392,10 @@ class ResponseWrapper:
         """Parse event from response result - minimal processing like JS version."""
         data = {}
 
-        if result and "output" in result:
-            data["output"] = result["output"]
-
         if result:
+            if "output" in result:
+                data["output"] = result["output"]
+
             metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
             if metadata:
                 data["metadata"] = metadata
@@ -425,13 +425,10 @@ class ResponseWrapper:
                 if result.type == "response.output_item.added":
                     # Check if we already have an incomplete item from earlier deltas
                     if output and isinstance(output[-1], dict) and "id" not in output[-1] and "type" not in output[-1]:
-                        # Update the existing placeholder item with proper id and type
                         output[-1].update({"id": result.item.id, "type": result.item.type})
                     else:
-                        # Create new item with standard structure
                         output.append({"id": result.item.id, "type": result.item.type, "content": []})
                 elif result.type == "response.output_text.delta" and hasattr(result, "delta"):
-                    # Aggregate text deltas
                     if not output:
                         # Create placeholder item with standard structure that will be updated when output_item.added arrives
                         output.append({"id": None, "type": None, "content": []})
@@ -439,9 +436,7 @@ class ResponseWrapper:
                         output[-1]["content"] = [{"text": ""}]
                     output[-1]["content"][-1]["text"] += result.delta
                 elif result.type == "response.completed":
-                    # Use the completed response output if available
                     if hasattr(result, "response") and hasattr(result.response, "output"):
-                        # Make sure we have the metrics from this completed response
                         if hasattr(result.response, "usage"):
                             final_metrics = _parse_metrics_from_usage(result.response.usage)
                             metrics.update(final_metrics)
