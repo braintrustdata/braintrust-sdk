@@ -14,7 +14,7 @@ def uninstall_braintrust_otel():
     sys.modules.pop("braintrust.otel", None)
 
 
-def test_otel_import_behavior():
+def test_otel_import_behavior(uninstall_braintrust_otel):
     if OTEL_INSTALLED:
         from braintrust.otel import OtelExporter
 
@@ -114,6 +114,7 @@ def test_braintrust_api_url_env_var():
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "test-api-key")
         m.setenv("BRAINTRUST_PARENT", "project_name:test")
+        m.delenv("BRAINTRUST_API_URL", raising=False)  # Clear any existing API URL
 
         exporter = OtelExporter()
 
