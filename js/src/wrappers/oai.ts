@@ -313,10 +313,13 @@ function wrapChatCompletion<
   return (allParams: P & SpanInfo, options?: unknown): APIPromise<C> => {
     const { span_info: _, ...params } = allParams;
 
-    // Cache the execution promise to ensure we only execute once
+    // Lazy execution - we must defer the API call until the promise is actually consumed
+    // to avoid unhandled rejections when the underlying OpenAI call fails immediately.
+    // Without lazy execution, the promise chain starts before error handlers are attached.
     let executionPromise: Promise<EnhancedResponse> | null = null;
+    let dataPromise: Promise<C> | null = null;
 
-    const executeWrapped = (): Promise<EnhancedResponse> => {
+    const ensureExecuted = (): Promise<EnhancedResponse> => {
       if (!executionPromise) {
         executionPromise = (async () => {
           const span = startSpan(
@@ -381,28 +384,31 @@ function wrapChatCompletion<
       return executionPromise;
     };
 
-    // Create a Promise that resolves to just the data
-    const dataPromise = executeWrapped().then((result) => result.data);
-
-    // Create an APIPromise using a Proxy pattern:
-    // - The base object is a Promise<C> that resolves to the completion data
-    // - The Proxy intercepts property access to add the withResponse() method
-    // - This maintains full Promise compatibility while extending the API
-    // - The withResponse() method returns the same cached promise for both data and response
+    // Create an APIPromise using a Proxy pattern with lazy execution
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return new Proxy(dataPromise, {
+    return new Proxy({} as APIPromise<C>, {
       get(target, prop, receiver) {
         // Special handling for withResponse method
         if (prop === "withResponse") {
-          return executeWrapped;
+          return () => ensureExecuted();
         }
-        // Forward all other properties to the underlying Promise
-        const value = Reflect.get(target, prop, receiver);
-        // If it's a function, bind it to maintain correct `this` context
-        if (typeof value === "function") {
-          return value.bind(target);
+
+        // Handle Promise methods - trigger lazy execution and forward to data promise
+        if (
+          prop === "then" ||
+          prop === "catch" ||
+          prop === "finally" ||
+          prop in Promise.prototype
+        ) {
+          // Create data promise if needed (cache it for efficiency)
+          if (!dataPromise) {
+            dataPromise = ensureExecuted().then((result) => result.data);
+          }
+          const value = Reflect.get(dataPromise, prop, receiver);
+          return typeof value === "function" ? value.bind(dataPromise) : value;
         }
-        return value;
+
+        return Reflect.get(target, prop, receiver);
       },
     }) as APIPromise<C>;
   };
