@@ -201,6 +201,22 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
       let ttft = -1;
 
       responseStream.on("event", (event: any) => {
+        try {
+          // Optional debug: print raw events before transformation
+          const dbg = (globalThis as any)?.process?.env
+            ?.BRAINTRUST_DEBUG_STREAM_EVENTS;
+          if (dbg && ["1", "true", "True"].includes(String(dbg))) {
+            // eslint-disable-next-line no-console
+            console.log(
+              "[braintrust][responses.stream] event type:",
+              event?.type,
+              "raw:",
+              event,
+            );
+          }
+        } catch {
+          // ignore debug printing errors
+        }
         if (ttft === -1) {
           ttft = getCurrentUnixTimestamp() - timedSpan.start;
           span.log({ metrics: { time_to_first_token: ttft } });
