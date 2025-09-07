@@ -1,4 +1,4 @@
-import { SpanTypeAttribute } from "@braintrust/core";
+import { SpanTypeAttribute } from "../../util/index";
 import { startSpan } from "../logger";
 import {
   detectProviderFromResult,

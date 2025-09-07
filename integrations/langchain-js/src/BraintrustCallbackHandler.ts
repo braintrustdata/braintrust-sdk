@@ -1,4 +1,4 @@
-import { isObject } from "@braintrust/core";
+import { isObject } from "braintrust/util";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,

@@ -19,7 +19,7 @@ import path from "path";
 import { createGzip } from "zlib";
 import { addAzureBlobHeaders, isEmpty } from "../util";
 import { z } from "zod/v3";
-import { capitalize } from "@braintrust/core";
+import { capitalize } from "../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";
