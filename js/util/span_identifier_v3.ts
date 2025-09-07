@@ -83,7 +83,7 @@ export const spanComponentsV3Schema = z
     object_type: spanObjectTypeV3EnumSchema,
     // TODO(manu): We should have a more elaborate zod schema for
     // `propagated_event`. This will required zod-ifying the contents of
-    // sdk/core/js/src/object.ts.
+    // sdk/js/util/object.ts.
     propagated_event: z.record(z.unknown()).nullish(),
   })
   .and(
