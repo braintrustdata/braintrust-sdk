@@ -16,7 +16,7 @@ import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
-import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
+import { isEmpty, loadPrettyXact, prettifyXact } from "../../util/index";
 import { ProjectNameIdMap, toolFunctionDefinitionSchema } from "../framework2";
 import pluralize from "pluralize";
 

@@ -34,7 +34,7 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "@braintrust/core";
+} from "../util/index";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -90,7 +90,7 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
-import { prettifyXact } from "@braintrust/core";
+import { prettifyXact } from "../util/index";
 
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed

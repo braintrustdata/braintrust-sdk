@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SpanTypeAttribute } from "@braintrust/core";
+import { SpanTypeAttribute } from "../../util/index";
 import {
   CompiledPrompt,
   Span,
@@ -8,7 +8,7 @@ import {
   traced,
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
-import { mergeDicts } from "@braintrust/core";
+import { mergeDicts } from "../../util/index";
 import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
 
 interface BetaLike {

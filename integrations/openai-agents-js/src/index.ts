@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SpanTypeAttribute } from "@braintrust/core";
+import { SpanTypeAttribute } from "braintrust/util";
 import {
   Span as BraintrustSpan,
   startSpan,

@@ -32,7 +32,6 @@
     "zod": "^3.25.34"
   },
   "dependencies": {
-    "@braintrust/core": "workspace:*",
     "braintrust": "workspace:^"
   },
   "peerDependencies": {
