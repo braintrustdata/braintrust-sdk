@@ -417,7 +417,10 @@ class ResponseWrapper:
                 metrics.update(parsed_metrics)
 
             if result.type == "response.output_item.added":
-                output.append({"id": result.item.id, "type": result.item.type})
+                if hasattr(result.item, "role"):
+                    output.append({"id": result.item.id, "type": result.item.type, "role": result.item.role})
+                else:
+                    output.append({"id": result.item.id, "type": result.item.type})
                 continue
 
             if not hasattr(result, "output_index"):
@@ -440,6 +443,7 @@ class ResponseWrapper:
                 if content_index == len(current_output["content"]):
                     current_output["content"].append({})
                 current_content = current_output["content"][content_index]
+                current_content["type"] = "output_text"
                 if hasattr(result, "delta") and result.delta:
                     current_content["text"] = (current_content.get("text") or "") + result.delta
 
