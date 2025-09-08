@@ -68,7 +68,7 @@ def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
-    _run_core_tests(session, env={"PY_OTEL_INSTALLED": "1"})
+    _run_core_tests(session, env={"PY_OTEL_INSTALLED": "0"})
 
 
 @nox.session()
