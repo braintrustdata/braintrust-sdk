@@ -868,3 +868,243 @@ test("attachment with readable path returns data", async () => {
     await unlink(tmpFile).catch(() => {});
   }
 });
+
+describe("sensitive data redaction", () => {
+  let logger: any;
+  let state: BraintrustState;
+  let memoryLogger: any;
+
+  beforeEach(async () => {
+    state = await _exportsForTestingOnly.simulateLoginForTests();
+    memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    logger = initLogger({ projectName: "test", projectId: "test-id" });
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("SpanImpl redacts sensitive data in console.log", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Test custom inspect method (used by console.log in Node.js)
+    const inspectResult = (span as any)[
+      Symbol.for("nodejs.util.inspect.custom")
+    ]();
+    expect(inspectResult).toContain("SpanImpl");
+    expect(inspectResult).toContain("kind:");
+    expect(inspectResult).toContain("id:");
+    expect(inspectResult).toContain("spanId:");
+    expect(inspectResult).toContain("rootSpanId:");
+    // Should NOT contain sensitive data
+    expect(inspectResult).not.toContain("_state");
+    expect(inspectResult).not.toContain("loginToken");
+    expect(inspectResult).not.toContain("_apiConn");
+
+    span.end();
+  });
+
+  test("SpanImpl toJSON excludes sensitive data", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    const json = span.toJSON();
+    expect(json).toHaveProperty("kind", "span");
+    expect(json).toHaveProperty("id");
+    expect(json).toHaveProperty("spanId");
+    expect(json).toHaveProperty("rootSpanId");
+    expect(json).toHaveProperty("spanParents");
+    // Should NOT have sensitive properties
+    expect(json).not.toHaveProperty("_state");
+    expect(json).not.toHaveProperty("parentObjectId");
+    expect(json).not.toHaveProperty("_id");
+
+    span.end();
+  });
+
+  test("SpanImpl toString provides minimal info", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    const str = span.toString();
+    expect(str).toContain("SpanImpl");
+    expect(str).toContain(span.id);
+    expect(str).toContain(span.spanId);
+    // Should be concise
+    expect(str.length).toBeLessThan(200);
+
+    span.end();
+  });
+
+  test("NoopSpan redacts sensitive data", () => {
+    // Test custom inspect
+    const inspectResult = NOOP_SPAN[Symbol.for("nodejs.util.inspect.custom")]();
+    expect(inspectResult).toContain("NoopSpan");
+    expect(inspectResult).toContain("kind:");
+    expect(inspectResult).not.toContain("_state");
+
+    // Test toJSON
+    const json = NOOP_SPAN.toJSON();
+    expect(json).toHaveProperty("kind", "span");
+    expect(json).toHaveProperty("id");
+    expect(json).not.toHaveProperty("state");
+
+    // Test toString
+    const str = NOOP_SPAN.toString();
+    expect(str).toContain("NoopSpan");
+    expect(str.length).toBeLessThan(100);
+  });
+
+  test("BraintrustState redacts loginToken and connections", () => {
+    // Test custom inspect method
+    const inspectResult = state[Symbol.for("nodejs.util.inspect.custom")]();
+    expect(inspectResult).toContain("BraintrustState");
+    expect(inspectResult).toContain("orgId:");
+    expect(inspectResult).toContain("orgName:");
+    expect(inspectResult).toContain("loginToken: '[REDACTED]'");
+    // Should NOT contain actual token
+    expect(inspectResult).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(inspectResult).not.toContain("_apiConn");
+    expect(inspectResult).not.toContain("_appConn");
+    expect(inspectResult).not.toContain("_proxyConn");
+  });
+
+  test("BraintrustState toJSON excludes sensitive data", () => {
+    const json = state.toJSON();
+    expect(json).toHaveProperty("id");
+    expect(json).toHaveProperty("orgId", "test-org-id");
+    expect(json).toHaveProperty("orgName", "test-org-name");
+    expect(json).toHaveProperty("loggedIn", true);
+    // Should NOT have sensitive properties
+    expect(json).not.toHaveProperty("loginToken");
+    expect(json).not.toHaveProperty("_apiConn");
+    expect(json).not.toHaveProperty("_appConn");
+    expect(json).not.toHaveProperty("_proxyConn");
+    expect(json).not.toHaveProperty("_bgLogger");
+  });
+
+  test("BraintrustState toString provides minimal info", () => {
+    const str = state.toString();
+    expect(str).toContain("BraintrustState");
+    expect(str).toContain("test-org-name");
+    expect(str).toContain("loggedIn=true");
+    // Should NOT contain token
+    expect(str).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(str.length).toBeLessThan(150);
+  });
+
+  test("HTTPConnection redacts token", () => {
+    const conn = state.apiConn();
+
+    // Test custom inspect
+    const inspectResult = conn[Symbol.for("nodejs.util.inspect.custom")]();
+    expect(inspectResult).toContain("HTTPConnection");
+    expect(inspectResult).toContain("base_url:");
+    expect(inspectResult).toContain("token: '[REDACTED]'");
+    expect(inspectResult).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+
+    // Test toJSON
+    const json = conn.toJSON();
+    expect(json).toHaveProperty("base_url");
+    expect(json).not.toHaveProperty("token");
+    expect(json).not.toHaveProperty("headers");
+
+    // Test toString
+    const str = conn.toString();
+    expect(str).toContain("HTTPConnection");
+    expect(str).toContain(conn.base_url);
+    expect(str).not.toContain("token");
+  });
+
+  test("redaction works in nested objects and JSON.stringify", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Create a nested object containing sensitive objects
+    const nestedObj = {
+      message: "test",
+      span: span,
+      state: state,
+      connection: state.apiConn(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // JSON.stringify should use toJSON methods
+    const jsonStr = JSON.stringify(nestedObj, null, 2);
+    expect(jsonStr).toContain('"message": "test"');
+    expect(jsonStr).toContain('"kind": "span"');
+    expect(jsonStr).toContain('"orgName": "test-org-name"');
+    // Should NOT contain sensitive data
+    expect(jsonStr).not.toContain("loginToken");
+    expect(jsonStr).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(jsonStr).not.toContain("_apiConn");
+    expect(jsonStr).not.toContain("Authorization");
+
+    span.end();
+  });
+
+  test("redaction works with util.inspect", async () => {
+    const util = await import("util");
+    const span = logger.startSpan({ name: "test-span" });
+
+    // util.inspect should use Symbol.for("nodejs.util.inspect.custom")
+    const inspected = util.inspect(span);
+    expect(inspected).toContain("SpanImpl");
+    expect(inspected).toContain("kind:");
+    expect(inspected).not.toContain("_state");
+    expect(inspected).not.toContain("loginToken");
+
+    span.end();
+  });
+
+  test("export() still returns proper serialization for spans", async () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // export() should still work and return a string
+    const exported = await span.export();
+    expect(typeof exported).toBe("string");
+    expect(exported.length).toBeGreaterThan(0);
+
+    // The exported string should be parseable by SpanComponentsV3
+    const { SpanComponentsV3 } = await import("../util/span_identifier_v3");
+    const components = SpanComponentsV3.fromStr(exported);
+    expect(components.data.row_id).toBe(span.id);
+    expect(components.data.span_id).toBe(span.spanId);
+    expect(components.data.root_span_id).toBe(span.rootSpanId);
+
+    span.end();
+  });
+
+  test("exported span can be used as parent", async () => {
+    const parentSpan = logger.startSpan({ name: "parent-span" });
+    const exported = await parentSpan.export();
+    parentSpan.end();
+
+    // Should be able to use exported string as parent
+    const childSpan = logger.startSpan({
+      name: "child-span",
+      parent: exported,
+    });
+
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+    childSpan.end();
+  });
+
+  test("BraintrustState.serialize() still includes token", () => {
+    // serialize() is different from toJSON() - it's for legitimate serialization
+    // First, ensure the state has all required fields for serialization
+    state.proxyUrl = "https://proxy.example.com";
+
+    const serialized = state.serialize();
+
+    // serialize() SHOULD include the token for proper state restoration
+    expect(serialized).toHaveProperty(
+      "loginToken",
+      "___TEST_API_KEY__THIS_IS_NOT_REAL___",
+    );
+    expect(serialized).toHaveProperty("orgId", "test-org-id");
+    expect(serialized).toHaveProperty("orgName", "test-org-name");
+
+    // But toJSON() should NOT include the token
+    const json = state.toJSON();
+    expect(json).not.toHaveProperty("loginToken");
+  });
+});
