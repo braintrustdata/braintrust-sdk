@@ -50,6 +50,10 @@ def test_otel_exporter_creation():
                 OtelExporter()
     else:
         from braintrust.otel import OtelExporter
+        import braintrust.otel
+
+        assert braintrust.otel.OTEL_AVAILABLE is False
+        print(braintrust.otel.BatchSpanProcessor)
 
         with pytest.raises(ImportError, match="OpenTelemetry packages are not installed"):
             OtelExporter(api_key="fake-key")
