@@ -1,4 +1,4 @@
-// Mirror of core/py/src/braintrust_core/span_identifier_v3.py.
+// Mirror of py/src/braintrust/span_identifier_v3.py.
 
 import * as uuid from "uuid";
 import {
@@ -7,7 +7,7 @@ import {
   ParentPlaygroundLogIds,
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 import {
   base64ToUint8Array,
@@ -83,7 +83,7 @@ export const spanComponentsV3Schema = z
     object_type: spanObjectTypeV3EnumSchema,
     // TODO(manu): We should have a more elaborate zod schema for
     // `propagated_event`. This will required zod-ifying the contents of
-    // sdk/core/js/src/object.ts.
+    // sdk/js/util/object.ts.
     propagated_event: z.record(z.unknown()).nullish(),
   })
   .and(
@@ -237,6 +237,10 @@ export class SpanComponentsV3 {
         const _: never = this.data.object_type;
         throw new Error("Impossible");
     }
+  }
+
+  public async export(): Promise<string> {
+    return this.toStr();
   }
 
   private static fromJsonObj(jsonObj: unknown): SpanComponentsV3 {

@@ -1,4 +1,4 @@
-// Mirror of the functions in core/py/src/braintrust_core/graph_util.py.
+// Mirror of the functions in py/src/braintrust/graph_util.py.
 
 import { mapAt } from "./object_util";
 

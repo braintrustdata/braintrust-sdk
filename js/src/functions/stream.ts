@@ -11,7 +11,7 @@ import {
   ParsedEvent,
   ReconnectInterval,
 } from "eventsource-parser";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const braintrustStreamChunkSchema = z.union([
   z.object({

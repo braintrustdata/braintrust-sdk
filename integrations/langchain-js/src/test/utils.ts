@@ -1,4 +1,4 @@
-import { mergeDicts } from "@braintrust/core";
+import { mergeDicts } from "braintrust/util";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { bypass, HttpResponse, JsonBodyType } from "msw";
 import { TransformStream } from "stream/web";

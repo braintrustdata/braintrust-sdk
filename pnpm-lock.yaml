@@ -15,42 +15,8 @@ importers:
         specifier: ^2.5.6
         version: 2.5.6
 
-  core/js:
-    dependencies:
-      uuid:
-        specifier: ^9.0.1
-        version: 9.0.1
-      zod:
-        specifier: ^3.25.34
-        version: 3.25.34
-    devDependencies:
-      '@types/node':
-        specifier: ^20.10.5
-        version: 20.10.5
-      '@types/uuid':
-        specifier: ^9.0.7
-        version: 9.0.7
-      tsup:
-        specifier: ^8.3.5
-        version: 8.3.5(tsx@3.14.0)(typescript@5.3.3)
-      tsx:
-        specifier: ^3.14.0
-        version: 3.14.0
-      typescript:
-        specifier: ^5.3.3
-        version: 5.3.3
-      vite-tsconfig-paths:
-        specifier: ^4.3.2
-        version: 4.3.2(typescript@5.3.3)
-      vitest:
-        specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
-
   integrations/langchain-js:
     dependencies:
-      '@braintrust/core':
-        specifier: workspace:*
-        version: link:../../core/js
       braintrust:
         specifier: workspace:^
         version: link:../../js
@@ -72,7 +38,7 @@ importers:
         version: 2.6.6(@types/node@20.10.5)(typescript@5.3.3)
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(tsx@3.14.0)(typescript@5.3.3)
+        version: 8.3.5(typescript@5.3.3)
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
@@ -80,17 +46,14 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
       zod:
-        specifier: ^3.22.4
-        version: 3.24.0
+        specifier: ^3.25.34
+        version: 3.25.76
       zod-to-json-schema:
         specifier: ^3.22.5
-        version: 3.22.5(zod@3.24.0)
+        version: 3.22.5(zod@3.25.76)
 
   integrations/openai-agents-js:
     dependencies:
-      '@braintrust/core':
-        specifier: workspace:*
-        version: link:../../core/js
       '@openai/agents-core':
         specifier: '>=0.0.14 <1.0.0'
         version: 0.0.15(ws@8.18.3)(zod@3.25.67)
@@ -137,22 +100,19 @@ importers:
         version: 20.10.5
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(tsx@3.14.0)(typescript@5.3.3)
+        version: 8.3.5(typescript@5.3.3)
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
+        version: 2.1.9(@types/node@20.10.5)
 
   js:
     dependencies:
       '@ai-sdk/provider':
         specifier: ^1.1.3
         version: 1.1.3
-      '@braintrust/core':
-        specifier: workspace:*
-        version: link:../core/js
       '@next/env':
         specifier: ^14.2.3
         version: 14.2.3
@@ -309,7 +269,7 @@ importers:
         version: 4.3.2(typescript@5.4.4)
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
+        version: 2.1.9(@types/node@20.10.5)
 
 packages:
 
@@ -2490,8 +2450,8 @@ packages:
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 10.0.0
-      zod: 3.25.34
-      zod-to-json-schema: 3.22.5(zod@3.25.34)
+      zod: 3.25.76
+      zod-to-json-schema: 3.22.5(zod@3.25.76)
     transitivePeerDependencies:
       - openai
     dev: true
@@ -2525,7 +2485,7 @@ packages:
       '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.42)
       '@langchain/langgraph-sdk': 0.0.31
       uuid: 10.0.0
-      zod: 3.25.34
+      zod: 3.25.76
     dev: true
 
   /@langchain/openai@0.3.17(@langchain/core@0.3.42):
@@ -2536,9 +2496,9 @@ packages:
     dependencies:
       '@langchain/core': 0.3.42
       js-tiktoken: 1.0.21
-      openai: 4.104.0(zod@3.24.0)
-      zod: 3.24.0
-      zod-to-json-schema: 3.22.5(zod@3.24.0)
+      openai: 4.104.0(zod@3.25.76)
+      zod: 3.25.76
+      zod-to-json-schema: 3.22.5(zod@3.25.76)
     transitivePeerDependencies:
       - encoding
       - ws
@@ -3243,6 +3203,23 @@ packages:
       magic-string: 0.30.17
       msw: 2.6.6(@types/node@20.10.5)(typescript@5.3.3)
       vite: 5.4.14(@types/node@20.10.5)
+    dev: true
+
+  /@vitest/mocker@2.1.9(vite@5.4.14):
+    resolution: {integrity: sha512-tVL6uJgoUdi6icpxmdrn5YNo3g3Dxv+IHJBr0GXHaEdTcw3F+cPKnsXFhli6nO+f/6SDKPHEK1UN+k+TQv0Ehg==}
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^5.0.0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
+    dependencies:
+      '@vitest/spy': 2.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.17
+      vite: 5.4.14(@types/node@20.19.9)
     dev: true
 
   /@vitest/pretty-format@2.1.9:
@@ -6535,30 +6512,6 @@ packages:
       mimic-fn: 2.1.0
     dev: true
 
-  /openai@4.104.0(zod@3.24.0):
-    resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
-    hasBin: true
-    peerDependencies:
-      ws: ^8.18.0
-      zod: ^3.23.8
-    peerDependenciesMeta:
-      ws:
-        optional: true
-      zod:
-        optional: true
-    dependencies:
-      '@types/node': 18.19.123
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0
-      zod: 3.24.0
-    transitivePeerDependencies:
-      - encoding
-    dev: true
-
   /openai@4.104.0(zod@3.25.76):
     resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
     hasBin: true
@@ -7872,19 +7825,6 @@ packages:
     resolution: {integrity: sha512-nsZd8ZeNUzukXPlJmTBwUAuABDe/9qtVDelJeT/qW0ow3ZS3BsQJtNkan1802aM9Uf68/Y8ljw86Hu0h5IUW3w==}
     dev: true
 
-  /tsconfck@3.1.1(typescript@5.3.3):
-    resolution: {integrity: sha512-00eoI6WY57SvZEVjm13stEVE90VkEdJAFGgpFLTsZbJyW/LwFQ7uQxJHWpZ2hzSWgCPKc9AnBnNP+0X7o3hAmQ==}
-    engines: {node: ^18 || >=20}
-    hasBin: true
-    peerDependencies:
-      typescript: ^5.0.0
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-    dependencies:
-      typescript: 5.3.3
-    dev: true
-
   /tsconfck@3.1.1(typescript@5.4.4):
     resolution: {integrity: sha512-00eoI6WY57SvZEVjm13stEVE90VkEdJAFGgpFLTsZbJyW/LwFQ7uQxJHWpZ2hzSWgCPKc9AnBnNP+0X7o3hAmQ==}
     engines: {node: ^18 || >=20}
@@ -7900,49 +7840,6 @@ packages:
 
   /tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
-    dev: true
-
-  /tsup@8.3.5(tsx@3.14.0)(typescript@5.3.3):
-    resolution: {integrity: sha512-Tunf6r6m6tnZsG9GYWndg0z8dEV7fD733VBFzFJ5Vcm1FtlXB8xBD/rtrBi2a3YKEV7hHtxiZtW5EAVADoe1pA==}
-    engines: {node: '>=18'}
-    hasBin: true
-    peerDependencies:
-      '@microsoft/api-extractor': ^7.36.0
-      '@swc/core': ^1
-      postcss: ^8.4.12
-      typescript: '>=4.5.0'
-    peerDependenciesMeta:
-      '@microsoft/api-extractor':
-        optional: true
-      '@swc/core':
-        optional: true
-      postcss:
-        optional: true
-      typescript:
-        optional: true
-    dependencies:
-      bundle-require: 5.1.0(esbuild@0.24.2)
-      cac: 6.7.14
-      chokidar: 4.0.3
-      consola: 3.4.0
-      debug: 4.4.1
-      esbuild: 0.24.2
-      joycon: 3.1.1
-      picocolors: 1.1.1
-      postcss-load-config: 6.0.1(tsx@3.14.0)
-      resolve-from: 5.0.0
-      rollup: 4.35.0
-      source-map: 0.8.0-beta.0
-      sucrase: 3.35.0
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.12
-      tree-kill: 1.2.2
-      typescript: 5.3.3
-    transitivePeerDependencies:
-      - jiti
-      - supports-color
-      - tsx
-      - yaml
     dev: true
 
   /tsup@8.3.5(tsx@3.14.0)(typescript@5.4.4):
@@ -7981,6 +7878,49 @@ packages:
       tinyglobby: 0.2.12
       tree-kill: 1.2.2
       typescript: 5.4.4
+    transitivePeerDependencies:
+      - jiti
+      - supports-color
+      - tsx
+      - yaml
+    dev: true
+
+  /tsup@8.3.5(typescript@5.3.3):
+    resolution: {integrity: sha512-Tunf6r6m6tnZsG9GYWndg0z8dEV7fD733VBFzFJ5Vcm1FtlXB8xBD/rtrBi2a3YKEV7hHtxiZtW5EAVADoe1pA==}
+    engines: {node: '>=18'}
+    hasBin: true
+    peerDependencies:
+      '@microsoft/api-extractor': ^7.36.0
+      '@swc/core': ^1
+      postcss: ^8.4.12
+      typescript: '>=4.5.0'
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      '@swc/core':
+        optional: true
+      postcss:
+        optional: true
+      typescript:
+        optional: true
+    dependencies:
+      bundle-require: 5.1.0(esbuild@0.24.2)
+      cac: 6.7.14
+      chokidar: 4.0.3
+      consola: 3.4.0
+      debug: 4.4.1
+      esbuild: 0.24.2
+      joycon: 3.1.1
+      picocolors: 1.1.1
+      postcss-load-config: 6.0.1(tsx@3.14.0)
+      resolve-from: 5.0.0
+      rollup: 4.35.0
+      source-map: 0.8.0-beta.0
+      sucrase: 3.35.0
+      tinyexec: 0.3.2
+      tinyglobby: 0.2.12
+      tree-kill: 1.2.2
+      typescript: 5.3.3
     transitivePeerDependencies:
       - jiti
       - supports-color
@@ -8357,22 +8297,6 @@ packages:
       - terser
     dev: true
 
-  /vite-tsconfig-paths@4.3.2(typescript@5.3.3):
-    resolution: {integrity: sha512-0Vd/a6po6Q+86rPlntHye7F31zA2URZMbH8M3saAZ/xR9QoGN/L21bxEGfXdWmFdNkqPpRdxFT7nmNe12e9/uA==}
-    peerDependencies:
-      vite: '*'
-    peerDependenciesMeta:
-      vite:
-        optional: true
-    dependencies:
-      debug: 4.3.4
-      globrex: 0.1.2
-      tsconfck: 3.1.1(typescript@5.3.3)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-    dev: true
-
   /vite-tsconfig-paths@4.3.2(typescript@5.4.4):
     resolution: {integrity: sha512-0Vd/a6po6Q+86rPlntHye7F31zA2URZMbH8M3saAZ/xR9QoGN/L21bxEGfXdWmFdNkqPpRdxFT7nmNe12e9/uA==}
     peerDependencies:
@@ -8467,6 +8391,64 @@ packages:
       fsevents: 2.3.3
     dev: true
 
+  /vitest@2.1.9(@types/node@20.10.5):
+    resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@types/node': ^18.0.0 || >=20.0.0
+      '@vitest/browser': 2.1.9
+      '@vitest/ui': 2.1.9
+      happy-dom: '*'
+      jsdom: '*'
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+    dependencies:
+      '@types/node': 20.10.5
+      '@vitest/expect': 2.1.9
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
+      '@vitest/pretty-format': 2.1.9
+      '@vitest/runner': 2.1.9
+      '@vitest/snapshot': 2.1.9
+      '@vitest/spy': 2.1.9
+      '@vitest/utils': 2.1.9
+      chai: 5.2.0
+      debug: 4.4.0
+      expect-type: 1.2.0
+      magic-string: 0.30.17
+      pathe: 1.1.2
+      std-env: 3.8.1
+      tinybench: 2.9.0
+      tinyexec: 0.3.2
+      tinypool: 1.0.2
+      tinyrainbow: 1.2.0
+      vite: 5.4.14(@types/node@20.10.5)
+      vite-node: 2.1.9(@types/node@20.10.5)
+      why-is-node-running: 2.3.0
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+    dev: true
+
   /vitest@2.1.9(@types/node@20.10.5)(msw@2.6.6):
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -8552,7 +8534,7 @@ packages:
     dependencies:
       '@types/node': 20.19.9
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -8786,20 +8768,13 @@ packages:
     resolution: {integrity: sha512-rAbqEGa8ovJy4pyBxZM70hg4pE6gDgaQ0Sl9M3enG3I0d6H4XSAM3GeNGLKnsBpuijUow064sf7ww1nutC5/3w==}
     dev: false
 
-  /zod-to-json-schema@3.22.5(zod@3.24.0):
-    resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
-    peerDependencies:
-      zod: ^3.22.4
-    dependencies:
-      zod: 3.24.0
-    dev: true
-
   /zod-to-json-schema@3.22.5(zod@3.25.34):
     resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
     peerDependencies:
       zod: ^3.22.4
     dependencies:
       zod: 3.25.34
+    dev: false
 
   /zod-to-json-schema@3.22.5(zod@3.25.76):
     resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
@@ -8807,7 +8782,6 @@ packages:
       zod: ^3.22.4
     dependencies:
       zod: 3.25.76
-    dev: false
 
   /zod-to-json-schema@3.24.6(zod@3.25.34):
     resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
@@ -8823,10 +8797,6 @@ packages:
       zod: ^3.24.1
     dependencies:
       zod: 3.25.76
-
-  /zod@3.24.0:
-    resolution: {integrity: sha512-Hz+wiY8yD0VLA2k/+nsg2Abez674dDGTai33SwNvMPuf9uIrBC9eFgIMQxBBbHFxVXi8W+5nX9DcAh9YNSQm/w==}
-    dev: true
 
   /zod@3.25.34:
     resolution: {integrity: sha512-lZHvSc2PpWdcfpHlyB33HA9nqP16GpC9IpiG4lYq9jZCJVLZNnWd6Y1cj79bcLSBKTkxepfpjckPv5Y5VOPlwA==}

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const posSchema = z.strictObject({
   line: z.number(),
@@ -133,6 +133,7 @@ export const comparisonOps = [
   "ilike",
   "like",
   "match",
+  "in",
 ] as const;
 export type ComparisonOp = (typeof comparisonOps)[number];
 export interface ComparisonExpr {

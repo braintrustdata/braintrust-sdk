@@ -1,4 +1,4 @@
-import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
+import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
 import {
   GitMetadataSettings as GitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
@@ -153,7 +153,7 @@ export interface EvalHooks<
   tags: string[] | undefined;
 }
 
-// This happens to be compatible with ScorerArgs defined in @braintrust/core.
+// This happens to be compatible with ScorerArgs defined in "../util".
 export type EvalScorerArgs<
   Input,
   Output,

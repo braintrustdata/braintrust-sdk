@@ -1,8 +1,8 @@
-// Mirror of core/py/src/braintrust_core/span_identifier_v1.py.
+// Mirror of py/src/braintrust/span_identifier_v1.py.
 
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
   try {

@@ -677,6 +677,80 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(output[0].message.role).toBe("assistant");
     expect(output[0].message.content).toEqual(content);
   });
+
+  test("invalid API key does not cause unhandled rejection with withResponse", async () => {
+    // Create client with invalid API key
+    const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
+
+    // Track if any unhandled rejections occur
+    let unhandledRejection: any = null;
+    const handler = (reason: any) => {
+      unhandledRejection = reason;
+    };
+    process.on("unhandledRejection", handler);
+
+    try {
+      // This should throw an error but not cause an unhandled rejection
+      const streamPromise = invalidClient.chat.completions.create({
+        model: TEST_MODEL,
+        messages: [{ role: "user", content: "test" }],
+        stream: true,
+        stream_options: { include_usage: true },
+      });
+
+      // The promise should only execute when withResponse is called
+      await streamPromise.withResponse();
+
+      // Should not reach here
+      expect.fail("Expected an authentication error");
+    } catch (error: any) {
+      // Error should be caught properly
+      expect(error.message).toContain("api");
+    } finally {
+      process.removeListener("unhandledRejection", handler);
+    }
+
+    // Give a moment for any async unhandled rejections to be detected
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify no unhandled rejection occurred
+    expect(unhandledRejection).toBeNull();
+  });
+
+  test("invalid API key does not cause unhandled rejection without withResponse", async () => {
+    // Create client with invalid API key
+    const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
+
+    // Track if any unhandled rejections occur
+    let unhandledRejection: any = null;
+    const handler = (reason: any) => {
+      unhandledRejection = reason;
+    };
+    process.on("unhandledRejection", handler);
+
+    try {
+      // This should throw an error but not cause an unhandled rejection
+      const result = await invalidClient.chat.completions.create({
+        model: TEST_MODEL,
+        messages: [{ role: "user", content: "test" }],
+        stream: false,
+      });
+
+      // Should not reach here
+      expect.fail("Expected an authentication error");
+    } catch (error: any) {
+      // Error should be caught properly
+      expect(error.message).toContain("api");
+    } finally {
+      process.removeListener("unhandledRejection", handler);
+    }
+
+    // Give a moment for any async unhandled rejections to be detected
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify no unhandled rejection occurred
+    expect(unhandledRejection).toBeNull();
+  });
 });
 
 test("parseMetricsFromUsage", () => {
