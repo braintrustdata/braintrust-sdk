@@ -45,7 +45,6 @@ jobs:
           pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/')
       - name: Run tests
         run: |
-          python -m unittest discover ./core/py/src
           pytest ./integrations/langchain-py/src
 
       - name: Run nox tests
