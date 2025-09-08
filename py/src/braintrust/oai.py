@@ -291,15 +291,6 @@ class ResponseWrapper:
                         first = True
                         all_results = []
                         for item in raw_response:
-                            try:
-                                etype = getattr(item, "type", None)
-                                # Fall back to dict lookup if available
-                                if etype is None and isinstance(item, dict):
-                                    etype = item.get("type")
-                                print(f"[braintrust][responses.stream] event type: {etype} raw: {item}")
-                            except Exception:
-                                # Never let debug logging break streaming
-                                pass
                             if first:
                                 span.log(
                                     metrics={
@@ -354,13 +345,6 @@ class ResponseWrapper:
                         first = True
                         all_results = []
                         async for item in raw_response:
-                            try:
-                                etype = getattr(item, "type", None)
-                                if etype is None and isinstance(item, dict):
-                                    etype = item.get("type")
-                                print(f"[braintrust][responses.stream] event type: {etype} raw: {item}")
-                            except Exception:
-                                pass
                             if first:
                                 span.log(
                                     metrics={
