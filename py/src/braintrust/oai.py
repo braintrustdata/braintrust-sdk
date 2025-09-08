@@ -263,7 +263,7 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Callable[..., Any], name: str = "openai.responses.create"):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
         self.name = name
@@ -469,7 +469,6 @@ class BaseWrapper(abc.ABC):
             **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
             create_response = self._create_fn(*args, **kwargs)
-
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
                 log_headers(create_response, span)
