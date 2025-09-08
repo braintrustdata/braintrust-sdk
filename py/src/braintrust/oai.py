@@ -420,6 +420,12 @@ class ResponseWrapper:
             if hasattr(result, "usage"):
                 usage = getattr(result, "usage")
             elif result.type == "response.completed" and hasattr(result, "response"):
+                if hasattr(result.response, "output") and result.response.output:
+                    for output_item in result.response.output:
+                        if hasattr(output_item, "summary") and output_item.summary:
+                            for item in output:
+                                if item.get("id") == output_item.id:
+                                    item["summary"] = output_item.summary
                 usage = getattr(result.response, "usage")
 
             if usage:
