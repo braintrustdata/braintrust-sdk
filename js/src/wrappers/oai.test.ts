@@ -561,9 +561,6 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     }
 
     assert.lengthOf(await backgroundLogger.drain(), 0);
-
-    // No need to mock upload - we're just testing image processing
-
     // Create a mock client that will return a response with an image
     const mockClient = {
       responses: {
@@ -625,10 +622,6 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
       assert.ok(
         outputItem.result.reference.filename.includes("A_simple_test_image"),
       );
-
-      // The important verification is that base64 was converted to Attachment
-      // No need to test upload since that's mocked and guaranteed to be called
-
       const m = span.metrics;
       assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     } finally {
