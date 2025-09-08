@@ -68,7 +68,7 @@ def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
-    _run_core_tests(session)
+    _run_core_tests(session, env={"PY_OTEL_INSTALLED": "1"})
 
 
 @nox.session()
@@ -198,9 +198,9 @@ def _get_braintrust_wheel():
     return wheels[0]
 
 
-def _run_core_tests(session):
+def _run_core_tests(session, env=None):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR, env=env)
 
 
 def _run_tests(session, test_path, ignore_path="", env=None):
