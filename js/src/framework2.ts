@@ -21,7 +21,7 @@ import {
   ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
   type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
 } from "./generated_types";
-import { loadPrettyXact, TransactionId } from "@braintrust/core";
+import { loadPrettyXact, TransactionId } from "../util/index";
 import {
   _internalGetGlobalState,
   login,

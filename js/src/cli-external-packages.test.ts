@@ -29,7 +29,6 @@ describe("External Packages Plugin", () => {
       // Test hardcoded packages
       expect(filter.test("braintrust")).toBe(true);
       expect(filter.test("autoevals")).toBe(true);
-      expect(filter.test("@braintrust/core")).toBe(true);
       expect(filter.test("@mapbox/node-pre-gyp")).toBe(true);
       expect(filter.test("config")).toBe(true);
       expect(filter.test("lightningcss")).toBe(true);
@@ -92,7 +91,6 @@ describe("External Packages Plugin", () => {
       // Test subpaths
       expect(filter.test("braintrust/core")).toBe(true);
       expect(filter.test("braintrust/dist/index.js")).toBe(true);
-      expect(filter.test("@braintrust/core/lib/utils")).toBe(true);
       expect(
         filter.test("@mapbox/node-pre-gyp/lib/util/nw-pre-gyp/index.html"),
       ).toBe(true);
@@ -176,8 +174,6 @@ describe("External Packages Plugin", () => {
         "braintrust",
         "braintrust/core",
         "braintrust/dist/index.js",
-        "@braintrust/core",
-        "@braintrust/core/lib/utils",
         "@mapbox/node-pre-gyp",
         "@mapbox/node-pre-gyp/lib/util/nw-pre-gyp/index.html",
         "config",
@@ -202,19 +198,9 @@ describe("External Packages Plugin", () => {
       // Test prefix matching for @braintrust/ (ends with /)
       const braintrustPrefixTests = [
         {
-          input: "@braintrust/core",
-          expected: true,
-          description: "Should match @braintrust/ prefix",
-        },
-        {
           input: "@braintrust/utils",
           expected: true,
           description: "Should match @braintrust/ prefix",
-        },
-        {
-          input: "@braintrust/core/lib/index.js",
-          expected: true,
-          description: "Should match @braintrust/ prefix with subpath",
         },
         {
           input: "@braintrust-other/core",

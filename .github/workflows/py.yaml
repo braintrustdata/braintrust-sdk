@@ -33,7 +33,6 @@ jobs:
         run: |
           # This is already done by make install-dev, but we're keeping this as a separate step
           # to explicitly verify that installation works
-          python -m uv pip install -e ./core/py[all]
           python -m uv pip install -e ./py[all]
           python -m uv pip install -e ./integrations/langchain-py[all]
       - name: Test whether the Python SDK can be imported
@@ -46,7 +45,6 @@ jobs:
           pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/')
       - name: Run tests
         run: |
-          python -m unittest discover ./core/py/src
           pytest ./integrations/langchain-py/src
 
       - name: Run nox tests

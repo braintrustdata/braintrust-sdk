@@ -34,7 +34,7 @@ import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
   parseParent,
-} from "@braintrust/core";
+} from "../util/index";
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
