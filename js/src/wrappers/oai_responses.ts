@@ -1,6 +1,6 @@
 import { getCurrentUnixTimestamp, filterFrom, objectIsEmpty } from "../util";
 import { Span, startSpan, Attachment } from "../logger";
-import { isObject } from "@braintrust/core";
+import { isObject } from "../../util/index";
 
 export function responsesProxy(openai: any) {
   // This was added in v4.87.0 of the openai-node library

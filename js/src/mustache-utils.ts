@@ -1,4 +1,4 @@
-import { getObjValueByPath } from "@braintrust/core";
+import { getObjValueByPath } from "../util/index";
 import Mustache from "mustache";
 
 export function lintTemplate(
