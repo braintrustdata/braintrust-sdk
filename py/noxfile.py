@@ -16,6 +16,8 @@ import tempfile
 
 import nox
 
+from packaging.version import Version
+
 # much faster than pip
 nox.options.default_venv_backend = "uv"
 
@@ -68,7 +70,7 @@ def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
-    _run_core_tests(session, env={"PY_OTEL_INSTALLED": "0" if version == "0.1.9" else "1"})
+    _run_core_tests(session, env={"PY_OTEL_INSTALLED": "0" if Version(version) < Version("1.0.0") else "1"})
 
 
 @nox.session()
