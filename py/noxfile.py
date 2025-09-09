@@ -12,11 +12,10 @@ works with and without different dependencies. A few commands to check out:
 
 import glob
 import os
-import tempfile
 import sys
+import tempfile
 
 import nox
-
 from packaging.version import Version
 
 # much faster than pip
@@ -70,7 +69,7 @@ def test_core(session):
 def test_pydantic_ai(session, version):
     if Version(version) > Version("1.0.0") and sys.version_info < (3, 10):
         nox.skip("Pydantic AI is not supported on Python 3.9 for version 1.0.0 and above")
-        
+
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
