@@ -12,6 +12,7 @@ works with and without different dependencies. A few commands to check out:
 
 import glob
 import os
+import sys
 import tempfile
 
 import nox
@@ -49,7 +50,11 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
-PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+# pydantic_ai 1.x requires Python >= 3.10
+if sys.version_info >= (3, 10):
+    PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+else:
+    PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
