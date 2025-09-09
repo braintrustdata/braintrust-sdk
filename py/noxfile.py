@@ -49,7 +49,7 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
-PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
+PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
@@ -68,7 +68,13 @@ def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
-    _run_core_tests(session)
+
+    # pydantic_ai 1.0+ includes OpenTelemetry as a dependency
+    env = {}
+    if version == LATEST or (version and version.startswith("1.")):
+        env["PY_OTEL_INSTALLED"] = "1"
+
+    _run_core_tests(session, env=env)
 
 
 @nox.session()
@@ -198,9 +204,9 @@ def _get_braintrust_wheel():
     return wheels[0]
 
 
-def _run_core_tests(session):
+def _run_core_tests(session, env=None):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR, env=env)
 
 
 def _run_tests(session, test_path, ignore_path="", env=None):

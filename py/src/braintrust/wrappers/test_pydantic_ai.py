@@ -4,7 +4,17 @@ from typing import Any, Dict
 import pytest
 from openai import AsyncOpenAI
 from pydantic_ai import Agent  # pylint: disable=import-error
-from pydantic_ai.models.openai import OpenAIModel  # pylint: disable=import-error
+
+try:
+    # Try new API first (pydantic_ai >= 1.0)
+    from pydantic_ai.models.openai import OpenAIChatModel  # pylint: disable=import-error
+
+    OpenAIModelClass = OpenAIChatModel
+except ImportError:
+    # Fall back to old API (pydantic_ai < 1.0)
+    from pydantic_ai.models.openai import OpenAIModel  # pylint: disable=import-error
+
+    OpenAIModelClass = OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider  # pylint: disable=import-error
 
 from braintrust import logger, wrap_openai
@@ -16,9 +26,9 @@ MODEL = "gpt-3.5-turbo"  # Use a cheaper model for testing
 TEST_PROMPT = "What is the capital of Italy?"
 
 
-def get_pydantic_agents_client(model_name: str, client: AsyncOpenAI) -> OpenAIModel:
+def get_pydantic_agents_client(model_name: str, client: AsyncOpenAI):
     _provider = OpenAIProvider(openai_client=client)
-    return OpenAIModel(model_name, provider=_provider)
+    return OpenAIModelClass(model_name, provider=_provider)
 
 
 async def _run_prompt_streaming(client: AsyncOpenAI, prompt: str):
@@ -26,8 +36,13 @@ async def _run_prompt_streaming(client: AsyncOpenAI, prompt: str):
     agent = Agent(model=model)
     result_text = ""
     async with agent.run_stream(prompt) as result:
-        async for text in result.stream(debounce_by=0.01):
-            result_text = text
+        # Use stream_output if available (pydantic_ai >= 1.0), otherwise use stream
+        if hasattr(result, "stream_output"):
+            async for text in result.stream_output(debounce_by=0.01):
+                result_text = text
+        else:
+            async for text in result.stream(debounce_by=0.01):
+                result_text = text
     return result_text
 
 
