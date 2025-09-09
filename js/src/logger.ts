@@ -402,17 +402,6 @@ export class NoopSpan implements Span {
     return _internalGetGlobalState();
   }
 
-  // Custom serialization to avoid logging sensitive data
-  toJSON(): Record<string, any> {
-    return {
-      kind: this.kind,
-      id: this.id,
-      spanId: this.spanId,
-      rootSpanId: this.rootSpanId,
-      spanParents: this.spanParents,
-    };
-  }
-
   // Custom inspect for Node.js console.log
   [Symbol.for("nodejs.util.inspect.custom")](): string {
     return `NoopSpan {
@@ -993,14 +982,6 @@ class HTTPConnection {
       headers: { "Content-Type": "application/json" },
     });
     return await resp.json();
-  }
-
-  // Custom serialization to avoid logging sensitive data
-  toJSON(): Record<string, any> {
-    return {
-      base_url: this.base_url,
-      // Explicitly exclude token and headers (which contains Authorization header)
-    };
   }
 
   // Custom inspect for Node.js console.log
@@ -4387,7 +4368,9 @@ function validateAndSanitizeExperimentLogPartialArgs(
  * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
  * and not deep-copied.
  */
-function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+export function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(
+  event: T,
+): T {
   const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
@@ -5464,18 +5447,6 @@ export class SpanImpl implements Span {
 
   public state(): BraintrustState {
     return this._state;
-  }
-
-  // Custom serialization to avoid logging sensitive data
-  toJSON(): Record<string, any> {
-    return {
-      kind: this.kind,
-      id: this.id,
-      spanId: this.spanId,
-      rootSpanId: this.rootSpanId,
-      spanParents: this.spanParents,
-      // Explicitly exclude _state and other internal properties
-    };
   }
 
   // Custom inspect for Node.js console.log
