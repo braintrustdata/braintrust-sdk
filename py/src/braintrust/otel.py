@@ -102,9 +102,9 @@ class AISpanProcessor:
         if not span:
             return False
 
-        # Braintrust requires root spans, so always keep them
-        if span.parent is None:
-            return True
+        # # Braintrust requires root spans, so always keep them
+        # if span.parent is None:
+        #     return True
 
         # Apply custom filter if provided
         if self._custom_filter:
