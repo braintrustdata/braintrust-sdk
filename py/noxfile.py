@@ -67,7 +67,7 @@ def test_core(session):
 @nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
 def test_pydantic_ai(session, version):
     if version == LATEST and sys.version_info < (3, 10):
-        nox.skip("Pydantic AI is not supported on Python 3.9 for version 1.0.0 and above")
+        session.skip("Pydantic AI is not supported on Python 3.9 for version 1.0.0 and above")
 
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
