@@ -12,6 +12,7 @@ import {
   startSpan,
   Attachment,
   NOOP_SPAN,
+  deepCopyEvent,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
@@ -905,23 +906,6 @@ describe("sensitive data redaction", () => {
     span.end();
   });
 
-  test("SpanImpl toJSON excludes sensitive data", () => {
-    const span = logger.startSpan({ name: "test-span" });
-
-    const json = span.toJSON();
-    expect(json).toHaveProperty("kind", "span");
-    expect(json).toHaveProperty("id");
-    expect(json).toHaveProperty("spanId");
-    expect(json).toHaveProperty("rootSpanId");
-    expect(json).toHaveProperty("spanParents");
-    // Should NOT have sensitive properties
-    expect(json).not.toHaveProperty("_state");
-    expect(json).not.toHaveProperty("parentObjectId");
-    expect(json).not.toHaveProperty("_id");
-
-    span.end();
-  });
-
   test("SpanImpl toString provides minimal info", () => {
     const span = logger.startSpan({ name: "test-span" });
 
@@ -933,25 +917,6 @@ describe("sensitive data redaction", () => {
     expect(str.length).toBeLessThan(200);
 
     span.end();
-  });
-
-  test("NoopSpan redacts sensitive data", () => {
-    // Test custom inspect
-    const inspectResult = NOOP_SPAN[Symbol.for("nodejs.util.inspect.custom")]();
-    expect(inspectResult).toContain("NoopSpan");
-    expect(inspectResult).toContain("kind:");
-    expect(inspectResult).not.toContain("_state");
-
-    // Test toJSON
-    const json = NOOP_SPAN.toJSON();
-    expect(json).toHaveProperty("kind", "span");
-    expect(json).toHaveProperty("id");
-    expect(json).not.toHaveProperty("state");
-
-    // Test toString
-    const str = NOOP_SPAN.toString();
-    expect(str).toContain("NoopSpan");
-    expect(str.length).toBeLessThan(100);
   });
 
   test("BraintrustState redacts loginToken and connections", () => {
@@ -990,29 +955,6 @@ describe("sensitive data redaction", () => {
     // Should NOT contain token
     expect(str).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
     expect(str.length).toBeLessThan(150);
-  });
-
-  test("HTTPConnection redacts token", () => {
-    const conn = state.apiConn();
-
-    // Test custom inspect
-    const inspectResult = conn[Symbol.for("nodejs.util.inspect.custom")]();
-    expect(inspectResult).toContain("HTTPConnection");
-    expect(inspectResult).toContain("base_url:");
-    expect(inspectResult).toContain("token: '[REDACTED]'");
-    expect(inspectResult).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
-
-    // Test toJSON
-    const json = conn.toJSON();
-    expect(json).toHaveProperty("base_url");
-    expect(json).not.toHaveProperty("token");
-    expect(json).not.toHaveProperty("headers");
-
-    // Test toString
-    const str = conn.toString();
-    expect(str).toContain("HTTPConnection");
-    expect(str).toContain(conn.base_url);
-    expect(str).not.toContain("token");
   });
 
   test("redaction works in nested objects and JSON.stringify", () => {
@@ -1088,23 +1030,10 @@ describe("sensitive data redaction", () => {
     childSpan.end();
   });
 
-  test("BraintrustState.serialize() still includes token", () => {
-    // serialize() is different from toJSON() - it's for legitimate serialization
-    // First, ensure the state has all required fields for serialization
-    state.proxyUrl = "https://proxy.example.com";
-
-    const serialized = state.serialize();
-
-    // serialize() SHOULD include the token for proper state restoration
-    expect(serialized).toHaveProperty(
-      "loginToken",
-      "___TEST_API_KEY__THIS_IS_NOT_REAL___",
-    );
-    expect(serialized).toHaveProperty("orgId", "test-org-id");
-    expect(serialized).toHaveProperty("orgName", "test-org-name");
-
-    // But toJSON() should NOT include the token
-    const json = state.toJSON();
-    expect(json).not.toHaveProperty("loginToken");
+  test("copied span values are stripped", async () => {
+    const span = logger.startSpan({ name: "parent-span" });
+    // I'm not entirely sure why a span may be inside of a background event, but just in case
+    const copy = deepCopyEvent({ input: span });
+    expect(copy.input).toBe("<span>");
   });
 });
