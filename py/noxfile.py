@@ -68,13 +68,7 @@ def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
-
-    # pydantic_ai 1.0+ includes OpenTelemetry as a dependency
-    env = {}
-    if version == LATEST or (version and version.startswith("1.")):
-        env["PY_OTEL_INSTALLED"] = "1"
-
-    _run_core_tests(session, env=env)
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -133,7 +127,7 @@ def test_otel_installed(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
-    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "1"})
+    _run_tests(session, "braintrust/test_otel.py")
 
 
 @nox.session()
@@ -143,7 +137,7 @@ def test_otel_not_installed(session):
     otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
-    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "0"})
+    _run_tests(session, "braintrust/test_otel.py")
 
 
 @nox.session()
@@ -204,9 +198,9 @@ def _get_braintrust_wheel():
     return wheels[0]
 
 
-def _run_core_tests(session, env=None):
+def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR, env=env)
+    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
 
 
 def _run_tests(session, test_path, ignore_path="", env=None):
