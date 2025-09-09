@@ -401,6 +401,33 @@ export class NoopSpan implements Span {
   public state() {
     return _internalGetGlobalState();
   }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      kind: this.kind,
+      id: this.id,
+      spanId: this.spanId,
+      rootSpanId: this.rootSpanId,
+      spanParents: this.spanParents,
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `NoopSpan {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `NoopSpan(id=${this.id}, spanId=${this.spanId})`;
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -686,6 +713,40 @@ export class BraintrustState {
   public enforceQueueSizeLimit(enforce: boolean) {
     this._bgLogger.get().enforceQueueSizeLimit(enforce);
   }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      id: this.id,
+      orgId: this.orgId,
+      orgName: this.orgName,
+      appUrl: this.appUrl,
+      appPublicUrl: this.appPublicUrl,
+      apiUrl: this.apiUrl,
+      proxyUrl: this.proxyUrl,
+      loggedIn: this.loggedIn,
+      // Explicitly exclude loginToken, _apiConn, _appConn, _proxyConn and other sensitive fields
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `BraintrustState {
+  id: '${this.id}',
+  orgId: ${this.orgId ? `'${this.orgId}'` : "null"},
+  orgName: ${this.orgName ? `'${this.orgName}'` : "null"},
+  appUrl: ${this.appUrl ? `'${this.appUrl}'` : "null"},
+  apiUrl: ${this.apiUrl ? `'${this.apiUrl}'` : "null"},
+  proxyUrl: ${this.proxyUrl ? `'${this.proxyUrl}'` : "null"},
+  loggedIn: ${this.loggedIn},
+  loginToken: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `BraintrustState(id=${this.id}, org=${this.orgName || "none"}, loggedIn=${this.loggedIn})`;
+  }
 }
 
 let _globalState: BraintrustState;
@@ -932,6 +993,27 @@ class HTTPConnection {
       headers: { "Content-Type": "application/json" },
     });
     return await resp.json();
+  }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      base_url: this.base_url,
+      // Explicitly exclude token and headers (which contains Authorization header)
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `HTTPConnection {
+  base_url: '${this.base_url}',
+  token: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `HTTPConnection(${this.base_url})`;
   }
 }
 
@@ -5382,6 +5464,34 @@ export class SpanImpl implements Span {
 
   public state(): BraintrustState {
     return this._state;
+  }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      kind: this.kind,
+      id: this.id,
+      spanId: this.spanId,
+      rootSpanId: this.rootSpanId,
+      spanParents: this.spanParents,
+      // Explicitly exclude _state and other internal properties
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `SpanImpl {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `SpanImpl(id=${this.id}, spanId=${this.spanId})`;
   }
 }
 
