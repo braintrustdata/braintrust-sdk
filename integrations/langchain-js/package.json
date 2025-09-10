@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/langchain-js",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "SDK for integrating Braintrust with LangChain.js",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -35,7 +35,7 @@
     "zod-to-json-schema": "^3.22.5"
   },
   "dependencies": {
-    "braintrust": "workspace:^"
+    "braintrust": "^0.3.7"
   },
   "peerDependencies": {
     "@langchain/core": "^0.3.42"
