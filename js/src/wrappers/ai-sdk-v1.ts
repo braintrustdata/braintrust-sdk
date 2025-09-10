@@ -1,4 +1,11 @@
-import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
+import {
+  ChatCompletionContentPart as ContentPartSchema,
+  type ChatCompletionContentPartType as ContentPart,
+  ChatCompletionMessageParam as MessageSchema,
+  type ChatCompletionMessageParamType as Message,
+  ChatCompletionTool as ChatCompletionToolSchema,
+  type ChatCompletionToolType as ChatCompletionTool,
+} from "../generated_types";
 import { startSpan } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
@@ -248,7 +255,7 @@ function convertTools(
   tools: Array<
     LanguageModelV1FunctionTool | LanguageModelV1ProviderDefinedTool
   >,
-): Tools {
+): ChatCompletionTool[] {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return tools.map((tool) => {
     const { type: _, ...rest } = tool;
@@ -256,7 +263,7 @@ function convertTools(
       type: tool.type,
       function: rest,
     };
-  }) as Tools;
+  }) as ChatCompletionTool[];
 }
 
 export function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
@@ -339,23 +346,31 @@ export function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
   });
 }
 
-function postProcessOutput(
+export function postProcessOutput(
   text: string | undefined,
   toolCalls: LanguageModelV1FunctionToolCall[] | undefined,
   finishReason: LanguageModelV1FinishReason,
 ) {
-  return {
-    index: 0,
-    message: {
-      role: "assistant",
-      content:
-        text ??
-        (toolCalls
-          ? toolCalls.length === 1 && toolCalls[0].toolName === "json"
-            ? toolCalls[0].args
-            : JSON.stringify(toolCalls)
-          : ""),
+  return [
+    {
+      index: 0,
+      message: {
+        role: "assistant",
+        content: text ?? "",
+        ...(toolCalls && toolCalls.length > 0
+          ? {
+              tool_calls: toolCalls.map((toolCall) => ({
+                id: toolCall.toolCallId,
+                function: {
+                  name: toolCall.toolName,
+                  arguments: toolCall.args,
+                },
+                type: "function" as const,
+              })),
+            }
+          : {}),
+      },
+      finish_reason: finishReason,
     },
-    finish_reason: finishReason,
-  };
+  ];
 }

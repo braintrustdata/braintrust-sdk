@@ -1,16 +1,17 @@
 import {
-  CallEventSchema,
-  callEventSchema,
-  sseConsoleEventDataSchema,
-  sseProgressEventDataSchema,
-} from "@braintrust/core/typespecs";
+  CallEvent as CallEventSchemaImport,
+  type CallEventType as CallEventSchema,
+  CallEvent as callEventSchema,
+  SSEConsoleEventData as sseConsoleEventDataSchema,
+  SSEProgressEventData as sseProgressEventDataSchema,
+} from "../generated_types";
 import {
   createParser,
   EventSourceParser,
   ParsedEvent,
   ReconnectInterval,
 } from "eventsource-parser";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const braintrustStreamChunkSchema = z.union([
   z.object({

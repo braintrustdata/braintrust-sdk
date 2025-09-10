@@ -44,7 +44,7 @@ except ImportError:
     OTEL_AVAILABLE = False
 
 
-FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
+FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.", "traceloop.")
 
 
 class AISpanProcessor:
@@ -96,7 +96,7 @@ class AISpanProcessor:
         Keep spans if:
         1. It's a root span (no parent)
         2. Custom filter returns True/False (if provided)
-        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
+        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
         4. Any attribute name starts with those prefixes
         """
         if not span:
@@ -215,6 +215,7 @@ class BraintrustSpanProcessor:
         filter_ai_spans: bool = False,
         custom_filter=None,
         headers: Optional[Dict[str, str]] = None,
+        SpanProcessor: Optional[type] = None,
     ):
         """
         Initialize the BraintrustSpanProcessor.
@@ -226,6 +227,7 @@ class BraintrustSpanProcessor:
             filter_ai_spans: Whether to enable AI span filtering. Defaults to False.
             custom_filter: Optional custom filter function for filtering.
             headers: Additional headers to include in requests.
+            SpanProcessor: Optional span processor class (BatchSpanProcessor or SimpleSpanProcessor). Defaults to BatchSpanProcessor.
         """
         # Create the exporter
         # Convert api_url to the full endpoint URL that OtelExporter expects
@@ -242,15 +244,18 @@ class BraintrustSpanProcessor:
                 "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
             )
 
+        if SpanProcessor is None:
+            SpanProcessor = BatchSpanProcessor
+
         # Always create a BatchSpanProcessor first
-        batch_processor = BatchSpanProcessor(self._exporter)
+        processor = SpanProcessor(self._exporter)
 
         if filter_ai_spans:
             # Wrap the BatchSpanProcessor with filtering
-            self._processor = AISpanProcessor(batch_processor, custom_filter=custom_filter)
+            self._processor = AISpanProcessor(processor, custom_filter=custom_filter)
         else:
             # Use BatchSpanProcessor directly
-            self._processor = batch_processor
+            self._processor = processor
 
     def on_start(self, span, parent_context=None):
         """Forward span start events to the inner processor."""

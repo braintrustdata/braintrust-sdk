@@ -1,10 +1,10 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { Prompt } from "./logger";
 import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
 } from "./framework2";
-import { promptDataSchema } from "@braintrust/core/typespecs";
+import { PromptData as promptDataSchema } from "./generated_types";
 
 // Schema for evaluation parameters
 export const evalParametersSchema = z.record(

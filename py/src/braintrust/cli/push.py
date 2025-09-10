@@ -21,7 +21,7 @@ from braintrust.framework import _set_lazy_load
 
 from .. import api_conn, login, org_id, proxy_conn
 from ..framework2 import ProjectIdCache, global_
-from ..types import IfExists
+from ..generated_types import IfExists
 from ..util import add_azure_blob_headers
 
 

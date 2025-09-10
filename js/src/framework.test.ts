@@ -9,9 +9,11 @@ import {
 } from "vitest";
 import {
   defaultErrorScoreHandler,
+  Eval,
   EvalScorer,
   runEvaluator,
 } from "./framework";
+import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
 import { BarProgressReporter, type ProgressReporter } from "./progress";
 import { InternalAbortError } from "./util";
@@ -507,4 +509,206 @@ test("trialIndex with multiple inputs", async () => {
   // Each input should have been run with trial indices 0 and 1
   expect(input1Trials).toEqual([0, 1]);
   expect(input2Trials).toEqual([0, 1]);
+});
+
+test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  const result = await Eval(
+    "test-no-logs",
+    {
+      data: () => [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        () => ({ name: "simple_scorer", score: 0.8 }),
+      ],
+    },
+    { noSendLogs: true },
+  );
+
+  // Verify it returns results
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[0].scores.simple_scorer).toBe(0.8);
+
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+  expect(result.results[1].scores.simple_scorer).toBe(0.8);
+
+  // Verify it builds a local summary (no experimentUrl means local run)
+  expect(result.summary.projectName).toBe("test-no-logs");
+  expect(result.summary.experimentUrl).toBeUndefined();
+  expect(result.summary.scores.exact_match.score).toBe(1);
+  expect(result.summary.scores.simple_scorer.score).toBe(0.8);
+
+  // Most importantly: verify that no logs were sent
+  await memoryLogger.flush();
+  expect(await memoryLogger.drain()).toHaveLength(0);
+});
+
+test("tags can be appended and logged to root span", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-tags-append");
+
+  const initialTags = ["cookies n cream"];
+  const appendedTags = ["chocolate", "vanilla", "strawberry"];
+  const expectedTags = [
+    "cookies n cream",
+    "chocolate",
+    "vanilla",
+    "strawberry",
+  ];
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-append",
+      data: [{ input: "hello", expected: "hello world", tags: initialTags }],
+      task: (input, hooks) => {
+        for (const t of appendedTags) hooks.tags.push(t);
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(expectedTags);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
+});
+
+test.each([
+  {
+    title: "undefined list returns undefined for tags",
+    providedTags: undefined,
+    expectedTags: undefined,
+  },
+  {
+    title: "empty list returns undefined for tags",
+    providedTags: [],
+    expectedTags: undefined,
+  },
+  {
+    title: "tags can be set to a list",
+    providedTags: ["chocolate", "vanilla", "strawberry"],
+    expectedTags: ["chocolate", "vanilla", "strawberry"],
+  },
+])("$title", async ({ providedTags, expectedTags }) => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-list",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        hooks.tags = providedTags;
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(expectedTags);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
+});
+
+test("tags are persisted with a failing scorer", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
+
+  const expectedTags = ["chocolate", "vanilla", "strawberry"];
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-list",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        hooks.tags = expectedTags;
+        return input;
+      },
+      scores: [
+        () => ({ name: "simple_scorer", score: 0.8 }),
+        () => {
+          throw new Error("test error");
+        },
+      ],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(expectedTags);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
+});
+
+test("tags remain empty when not set", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-tags-append");
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-append",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(undefined);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(undefined);
 });

@@ -12,6 +12,7 @@ works with and without different dependencies. A few commands to check out:
 
 import glob
 import os
+import sys
 import tempfile
 
 import nox
@@ -49,7 +50,11 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
-PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
+# pydantic_ai 1.x requires Python >= 3.10
+if sys.version_info >= (3, 10):
+    PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+else:
+    PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
@@ -93,6 +98,9 @@ def test_openai(session, version):
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
     _install_test_deps(session)
+    # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
+    # https://github.com/BerriAI/litellm/issues/13711
+    session.install("openai<=1.99.9", "--force-reinstall")
     _install(session, "litellm", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
@@ -124,7 +132,7 @@ def test_otel_installed(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
-    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "1"})
+    _run_tests(session, "braintrust/test_otel.py")
 
 
 @nox.session()
@@ -134,7 +142,7 @@ def test_otel_not_installed(session):
     otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
-    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "0"})
+    _run_tests(session, "braintrust/test_otel.py")
 
 
 @nox.session()

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
 
+from .generated_types import PromptOptions
 from .serializable_data_class import SerializableDataClass
-from .types import PromptOptions
 
 # Keep these definitions in sync with sdk/core/js/typespecs/prompt.ts.
 
@@ -71,9 +71,9 @@ class PromptData(SerializableDataClass):
 
 @dataclass
 class PromptSchema(SerializableDataClass):
-    id: str
-    project_id: str
-    _xact_id: str
+    id: Optional[str]
+    project_id: Optional[str]
+    _xact_id: Optional[str]
     name: str
     slug: str
     description: Optional[str]

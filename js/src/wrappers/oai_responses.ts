@@ -1,5 +1,6 @@
 import { getCurrentUnixTimestamp, filterFrom, objectIsEmpty } from "../util";
-import { Span, startSpan } from "../logger";
+import { Span, startSpan, Attachment } from "../logger";
+import { isObject } from "../../util/index";
 
 export function responsesProxy(openai: any) {
   // This was added in v4.87.0 of the openai-node library
@@ -13,6 +14,8 @@ export function responsesProxy(openai: any) {
         return responsesCreateProxy(target.create.bind(target));
       } else if (name === "stream") {
         return responsesStreamProxy(target.stream.bind(target));
+      } else if (name === "parse") {
+        return responsesParseProxy(target.parse.bind(target));
       }
       return Reflect.get(target, name, receiver);
     },
@@ -32,22 +35,15 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
 
 // convert response.create params into a span
 function parseSpanFromResponseCreateParams(params: any): TimedSpan {
-  // responses.create is meant to take a single message and instruction.
-  // Convert that to the form our backend expects.
-  const input = [{ role: "user", content: params.input }];
-  if (params.instructions) {
-    input.push({ role: "system", content: params.instructions });
-  }
-
   const spanArgs = {
     name: "openai.responses.create",
     spanAttributes: {
       type: "llm",
     },
     event: {
-      input,
+      input: params.input,
       metadata: {
-        ...filterFrom(params, ["input", "instructions"]),
+        ...filterFrom(params, ["input"]),
         provider: "openai",
       },
     },
@@ -61,10 +57,113 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 
 // convert response.create result into an event
 function parseEventFromResponseCreateResult(result: any) {
-  return {
-    output: result?.output_text || "",
-    metrics: parseMetricsFromUsage(result?.usage),
+  const data: Record<string, any> = {};
+
+  if (result?.output !== undefined) {
+    data.output = processImagesInOutput(result.output);
+  }
+
+  // Extract metadata - preserve all response fields except output and usage
+  if (result) {
+    const { output, usage, ...metadata } = result;
+    if (Object.keys(metadata).length > 0) {
+      data.metadata = metadata;
+    }
+  }
+
+  // Extract metrics from usage
+  data.metrics = parseMetricsFromUsage(result?.usage);
+
+  return data;
+}
+
+// Process output to convert base64 images to attachments
+function processImagesInOutput(output: any): any {
+  if (Array.isArray(output)) {
+    return output.map(processImagesInOutput);
+  }
+
+  if (isObject(output)) {
+    if (
+      output.type === "image_generation_call" &&
+      output.result &&
+      typeof output.result === "string"
+    ) {
+      const fileExtension = output.output_format || "png";
+      const contentType = `image/${fileExtension}`;
+
+      const baseFilename =
+        output.revised_prompt && typeof output.revised_prompt === "string"
+          ? output.revised_prompt.slice(0, 50).replace(/[^a-zA-Z0-9]/g, "_")
+          : "generated_image";
+      const filename = `${baseFilename}.${fileExtension}`;
+
+      // Convert base64 string to Blob
+      const binaryString = atob(output.result);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: contentType });
+
+      const attachment = new Attachment({
+        data: blob,
+        filename: filename,
+        contentType: contentType,
+      });
+
+      return {
+        ...output,
+        result: attachment,
+      };
+    }
+  }
+
+  return output;
+}
+
+// convert response.parse params into a span
+function parseSpanFromResponseParseParams(params: any): TimedSpan {
+  const spanArgs = {
+    name: "openai.responses.parse",
+    spanAttributes: {
+      type: "llm",
+    },
+    event: {
+      input: params.input,
+      metadata: {
+        ...filterFrom(params, ["input"]),
+        provider: "openai",
+      },
+    },
+    startTime: getCurrentUnixTimestamp(),
   };
+  return {
+    span: startSpan(spanArgs),
+    start: spanArgs.startTime,
+  };
+}
+
+// convert response.parse result into an event
+function parseEventFromResponseParseResult(result: any) {
+  const data: Record<string, any> = {};
+
+  if (result?.output !== undefined) {
+    data.output = processImagesInOutput(result.output);
+  }
+
+  // Extract metadata - preserve all response fields except output and usage
+  if (result) {
+    const { output, usage, ...metadata } = result;
+    if (Object.keys(metadata).length > 0) {
+      data.metadata = metadata;
+    }
+  }
+
+  // Extract metrics from usage
+  data.metrics = parseMetricsFromUsage(result?.usage);
+
+  return data;
 }
 
 function traceResponseCreateStream(
@@ -107,20 +206,24 @@ function parseLogFromItem(item: any): {} {
   const response = item.response;
   switch (item.type) {
     case "response.completed":
-      // I think there is usually only one output, but since they are arrays
-      // we'll collect them all just in case.
-      const texts = [];
-      for (const output of response?.output || []) {
-        for (const content of output?.content || []) {
-          if (content?.type === "output_text") {
-            texts.push(content.text);
-          }
+      const data: Record<string, any> = {};
+
+      if (response?.output !== undefined) {
+        data.output = processImagesInOutput(response.output);
+      }
+
+      // Extract metadata - preserve response fields except usage and output
+      if (response) {
+        const { usage, output, ...metadata } = response;
+        if (Object.keys(metadata).length > 0) {
+          data.metadata = metadata;
         }
       }
-      return {
-        output: texts.join(""),
-        metrics: parseMetricsFromUsage(response?.usage),
-      };
+
+      // Extract metrics from usage
+      data.metrics = parseMetricsFromUsage(response?.usage);
+
+      return data;
     default:
       return {};
   }
@@ -159,6 +262,17 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
   });
 }
 
+function responsesParseProxy(target: any): (params: any) => Promise<any> {
+  const hooks = {
+    name: "openai.responses.parse",
+    toSpanFunc: parseSpanFromResponseParseParams,
+    resultToEventFunc: parseEventFromResponseParseResult,
+    traceStreamFunc: traceResponseCreateStream, // Reuse the same stream tracing
+  };
+
+  return proxyCreate(target, hooks);
+}
+
 const TOKEN_NAME_MAP: Record<string, string> = {
   input_tokens: "prompt_tokens",
   output_tokens: "completion_tokens",
@@ -190,11 +304,11 @@ export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
       const metricName = TOKEN_NAME_MAP[oai_name] || oai_name;
       metrics[metricName] = value;
     } else if (oai_name.endsWith("_tokens_details")) {
-      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
-      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
-      if (typeof value !== "object") {
+      if (!isObject(value)) {
         continue;
       }
+      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
+      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
       for (const [key, n] of Object.entries(value)) {
         if (typeof n !== "number") {
           continue;

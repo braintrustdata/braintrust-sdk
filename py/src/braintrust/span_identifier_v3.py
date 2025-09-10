@@ -6,7 +6,7 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 from uuid import UUID
 
 from .span_identifier_v2 import SpanComponentsV2
@@ -187,6 +187,10 @@ class SpanComponentsV3:
         else:
             raise Exception(f"Invalid object_type {self.object_type}")
 
+    def export(self) -> str:
+        """Return a serialized representation compatible with other exportable objects."""
+        return self.to_str()
+
     @staticmethod
     def _from_json_obj(json_obj: Dict) -> "SpanComponentsV3":
         kwargs = {
@@ -194,3 +198,59 @@ class SpanComponentsV3:
             "object_type": SpanObjectTypeV3(json_obj["object_type"]),
         }
         return SpanComponentsV3(**kwargs)
+
+
+def parse_parent(parent: Union[str, Dict, None]) -> Optional[str]:
+    """
+    Parse a parent object into a string representation.
+
+    Args:
+        parent: Can be:
+            - A string (returned as-is)
+            - A dict with object_type, object_id, and optional row_ids
+            - None (returns None)
+
+    Returns:
+        String representation of the parent or None
+    """
+    if isinstance(parent, str):
+        return parent
+    elif parent:
+        # Map object_type strings to SpanObjectTypeV3 enum values
+        object_type_map = {
+            "experiment": SpanObjectTypeV3.EXPERIMENT,
+            "playground_logs": SpanObjectTypeV3.PLAYGROUND_LOGS,
+            "project_logs": SpanObjectTypeV3.PROJECT_LOGS,
+        }
+
+        object_type = object_type_map.get(parent.get("object_type"))
+        if not object_type:
+            raise ValueError(f"Invalid object_type: {parent.get('object_type')}")
+
+        kwargs = {
+            "object_type": object_type,
+            "object_id": parent.get("object_id"),
+        }
+
+        # Handle row_ids if present
+        row_ids = parent.get("row_ids")
+        if row_ids:
+            kwargs.update({
+                "row_id": row_ids.get("id"),
+                "span_id": row_ids.get("span_id"),
+                "root_span_id": row_ids.get("root_span_id"),
+            })
+        else:
+            kwargs.update({
+                "row_id": None,
+                "span_id": None,
+                "root_span_id": None,
+            })
+
+        # Include propagated_event if present
+        if "propagated_event" in parent:
+            kwargs["propagated_event"] = parent.get("propagated_event")
+
+        return SpanComponentsV3(**kwargs).to_str()
+    else:
+        return None

@@ -1,7 +1,7 @@
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata
+from braintrust.logger import ObjectMetadata, OrgProjectMetadata, ProjectExperimentMetadata
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls
@@ -71,6 +71,31 @@ def init_test_logger(project_name: str):
     l = logger.init_logger(project=project_name)
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
     return l
+
+def init_test_exp(experiment_name: str, project_name: str = None):
+    """
+    Initialize an experiment for testing with fake project and experiment metadata.
+
+    This sets up an experiment with fake metadata to avoid requiring actual
+    API calls. This is useful for testing experiment validation behavior.
+
+    Args:
+        experiment_name: The name to use for the test experiment.
+        project_name: The name to use for the test project. Defaults to experiment_name.
+    """
+    if project_name is None:
+        project_name = experiment_name
+
+    import braintrust
+
+    project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
+    experiment_metadata = ObjectMetadata(id=experiment_name, name=experiment_name, full_info=dict())
+    metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+
+    exp = braintrust.init(project=project_name, experiment=experiment_name)
+    exp._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
+    return exp
 
 
 # ----------------------------------------------------------------------
@@ -172,16 +197,16 @@ def assert_dict_matches(actual, expected, exact_keys=False):
             _assert_sequence_matches(actual_val, expected_val, key, exact_keys)
         else:
             # Direct value comparison
-            assert (
-                actual_val == expected_val
-            ), f"Value mismatch for key '{key}': expected {expected_val}, got {actual_val}"
+            assert actual_val == expected_val, (
+                f"Value mismatch for key '{key}': expected {expected_val}, got {actual_val}"
+            )
 
 
 def _assert_sequence_matches(actual_seq, expected_seq, key, exact_keys=False):
     """Helper function to match sequences (lists/tuples) exactly."""
-    assert len(expected_seq) == len(
-        actual_seq
-    ), f"Sequence length mismatch for key '{key}': expected {len(expected_seq)} items, got {len(actual_seq)}"
+    assert len(expected_seq) == len(actual_seq), (
+        f"Sequence length mismatch for key '{key}': expected {len(expected_seq)} items, got {len(actual_seq)}"
+    )
 
     for i, (expected_item, actual_item) in enumerate(zip(expected_seq, actual_seq)):
         if isinstance(expected_item, dict) and isinstance(actual_item, dict):
@@ -192,9 +217,9 @@ def _assert_sequence_matches(actual_seq, expected_seq, key, exact_keys=False):
             _assert_sequence_matches(actual_item, expected_item, f"{key}[{i}]", exact_keys)
         else:
             # Direct value comparison
-            assert (
-                actual_item == expected_item
-            ), f"Sequence item mismatch for key '{key}' at index {i}: expected {expected_item}, got {actual_item}"
+            assert actual_item == expected_item, (
+                f"Sequence item mismatch for key '{key}' at index {i}: expected {expected_item}, got {actual_item}"
+            )
 
 
 def test_assert_dict_matches():

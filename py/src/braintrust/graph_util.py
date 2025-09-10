@@ -28,8 +28,7 @@ class FirstVisitF(Protocol):
 
 
 class LastVisitF(Protocol):
-    def __call__(self, vertex: int) -> None:
-        ...
+    def __call__(self, vertex: int) -> None: ...
 
 
 def depth_first_search(

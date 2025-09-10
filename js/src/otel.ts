@@ -32,6 +32,7 @@ interface ReadableSpan {
   parentSpanContext?: { spanId: string; traceId: string };
   attributes?: Record<string, any>;
   spanContext(): { spanId: string; traceId: string };
+  parentSpanId?: string; // NOTE: In OTel JS v1.x, ReadableSpan exposed `parentSpanId?: string`
 }
 
 interface Span extends ReadableSpan {
@@ -40,7 +41,13 @@ interface Span extends ReadableSpan {
   setStatus(status: { code: number; message?: string }): void;
 }
 
-const FILTER_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
+const FILTER_PREFIXES = [
+  "gen_ai.",
+  "braintrust.",
+  "llm.",
+  "ai.",
+  "traceloop.",
+] as const;
 
 /**
  * Custom filter function type for span filtering.
@@ -127,7 +134,7 @@ export class AISpanProcessor {
    * Keep spans if:
    * 1. It's a root span (no parent)
    * 2. Custom filter returns true/false (if provided)
-   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
+   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
    * 4. Any attribute name starts with those prefixes
    */
   private shouldKeepFilteredSpan(span: ReadableSpan): boolean {
@@ -135,8 +142,8 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent)
-    if (!span.parentSpanContext) {
+    // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
+    if (!span.parentSpanContext && !span.parentSpanId) {
       return true;
     }
 
@@ -299,11 +306,52 @@ export class BraintrustSpanProcessor {
         ...options.headers,
       };
 
-      exporter = new OTLPTraceExporter({
+      const baseExporter = new OTLPTraceExporter({
         url: new URL("otel/v1/traces", apiUrl).href,
         headers,
       });
+
+      exporter = new Proxy(baseExporter, {
+        get(target, prop, receiver) {
+          // If the code is trying to access the 'export' method, return our patched version.
+          if (prop === "export") {
+            return function (
+              spans: any[],
+              resultCallback: (result: any) => void,
+            ) {
+              // This patch handles OTel version mismatches
+              const fixedSpans = spans.map((span: any) => {
+                if (!span.instrumentationScope && span.instrumentationLibrary) {
+                  span.instrumentationScope = span.instrumentationLibrary;
+                }
+
+                if (!span.parentSpanContext && span.parentSpanId) {
+                  const spanContext = span.spanContext?.();
+                  if (spanContext?.traceId) {
+                    span.parentSpanContext = {
+                      spanId: span.parentSpanId,
+                      traceId: spanContext.traceId,
+                    };
+                  }
+                }
+
+                return span;
+              });
+
+              // Call the original export method with the fixed spans.
+              return Reflect.apply(target.export, target, [
+                fixedSpans,
+                resultCallback,
+              ]);
+            };
+          }
+
+          // For any other property, pass the access through to the original object.
+          return Reflect.get(target, prop, receiver);
+        },
+      });
     } catch (error) {
+      console.error(error);
       throw new Error(
         "Failed to create OTLP exporter. Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
       );

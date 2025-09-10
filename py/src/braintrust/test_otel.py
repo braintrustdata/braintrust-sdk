@@ -1,10 +1,22 @@
 # pylint: disable=not-context-manager
-import os
 import sys
 
 import pytest
 
-OTEL_INSTALLED = os.environ.get("PY_OTEL_INSTALLED", "0") == "1"
+
+def _check_otel_installed():
+    """Check if OpenTelemetry SDK is fully installed."""
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter  # noqa: F401
+        from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+OTEL_INSTALLED = _check_otel_installed()
 
 
 @pytest.fixture
@@ -15,21 +27,22 @@ def uninstall_braintrust_otel():
 
 
 def test_otel_import_behavior():
-    if OTEL_INSTALLED:
-        from braintrust.otel import OtelExporter
+    """Test that OtelExporter can be imported and behaves correctly based on OpenTelemetry availability."""
+    from braintrust.otel import OtelExporter
 
+    if _check_otel_installed():
+        # Should be able to create an instance with proper params
         assert hasattr(OtelExporter, "__init__")
     else:
-        with pytest.warns(UserWarning, match="OpenTelemetry packages are not installed"):
-            from braintrust.otel import OtelExporter
-
-            assert hasattr(OtelExporter, "__init__")
+        # Import succeeds but instantiation should raise ImportError
+        assert hasattr(OtelExporter, "__init__")
 
 
 def test_otel_exporter_creation():
-    if OTEL_INSTALLED:
-        from braintrust.otel import OtelExporter
+    """Test OtelExporter creation with and without full OpenTelemetry SDK."""
+    from braintrust.otel import OtelExporter
 
+    if _check_otel_installed():
         with pytest.MonkeyPatch.context() as m:
             # Clear any existing environment variables first
             m.delenv("BRAINTRUST_API_KEY", raising=False)
@@ -49,15 +62,14 @@ def test_otel_exporter_creation():
             with pytest.raises(ValueError, match="API key is required"):
                 OtelExporter()
     else:
-        from braintrust.otel import OtelExporter
-
+        # When SDK is not fully installed, instantiation should raise ImportError
         with pytest.raises(ImportError, match="OpenTelemetry packages are not installed"):
             OtelExporter(api_key="fake-key")
 
 
 def test_otel_exporter_with_explicit_params():
-    if not OTEL_INSTALLED:
-        pytest.skip("OpenTelemetry not installed, skipping test")
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
     from braintrust.otel import OtelExporter
 
@@ -81,8 +93,8 @@ def test_otel_exporter_with_explicit_params():
 
 
 def test_otel_exporter_no_parent(caplog):
-    if not OTEL_INSTALLED:
-        pytest.skip("OpenTelemetry not installed, skipping test")
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
     import logging
 
@@ -105,8 +117,8 @@ def test_otel_exporter_no_parent(caplog):
 
 
 def test_braintrust_api_url_env_var():
-    if not OTEL_INSTALLED:
-        pytest.skip("OpenTelemetry not installed, skipping test")
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
     from braintrust.otel import OtelExporter
 
@@ -145,8 +157,8 @@ def test_braintrust_api_url_env_var():
 
 
 def test_braintrust_otel_filter_ai_spans_environment_variable():
-    if not OTEL_INSTALLED:
-        pytest.skip("OpenTelemetry not installed, skipping test")
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
     import os
 
@@ -191,8 +203,8 @@ def test_braintrust_otel_filter_ai_spans_environment_variable():
 
 
 def test_braintrust_span_processor_class():
-    if not OTEL_INSTALLED:
-        pytest.skip("OpenTelemetry not installed, skipping test")
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
     from braintrust.otel import BraintrustSpanProcessor
 
@@ -257,8 +269,10 @@ def test_braintrust_span_processor_class():
 
 class TestSpanFiltering:
     def setup_method(self):
-        if not OTEL_INSTALLED:
-            pytest.skip("OpenTelemetry not installed, skipping AISpanProcessor tests")
+        try:
+            from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
+        except ImportError:
+            pytest.skip("OpenTelemetry SDK not fully installed, skipping AISpanProcessor tests")
 
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -334,6 +348,18 @@ class TestSpanFiltering:
         span_names = [span.name for span in spans]
         assert "ai.model_call" in span_names
 
+    def test_keeps_traceloop_spans(self):
+        with self.tracer.start_as_current_span("root"):
+            with self.tracer.start_as_current_span("traceloop.agent"):
+                pass
+            with self.tracer.start_as_current_span("traceloop.workflow.step"):
+                pass
+
+        spans = self.memory_exporter.get_finished_spans()
+        span_names = [span.name for span in spans]
+        assert "traceloop.agent" in span_names
+        assert "traceloop.workflow.step" in span_names
+
     def test_keeps_spans_with_llm_attributes(self):
         with self.tracer.start_as_current_span("root"):
             with self.tracer.start_as_current_span("some_operation") as span:
@@ -341,6 +367,8 @@ class TestSpanFiltering:
                 span.set_attribute("regular_data", "value")
             with self.tracer.start_as_current_span("another_operation") as span:
                 span.set_attribute("llm.tokens", 100)
+            with self.tracer.start_as_current_span("traceloop_operation") as span:
+                span.set_attribute("traceloop.agent_id", "agent-123")
             with self.tracer.start_as_current_span("third_operation") as span:
                 span.set_attribute("database.connection", "postgres")
 
@@ -350,6 +378,7 @@ class TestSpanFiltering:
         assert "root" in span_names
         assert "some_operation" in span_names  # has gen_ai.model attribute
         assert "another_operation" in span_names  # has llm.tokens attribute
+        assert "traceloop_operation" in span_names  # has traceloop.agent_id attribute
         assert "third_operation" not in span_names  # no LLM attributes
 
     def test_drops_non_llm_spans(self):

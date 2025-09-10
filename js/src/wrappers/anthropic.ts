@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Span, startSpan } from "../logger";
-import { SpanTypeAttribute } from "@braintrust/core";
+import { SpanTypeAttribute } from "../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
+import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
 
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
@@ -114,7 +115,9 @@ function createProxy(create: (params: any) => Promise<any>) {
           const event = parseEventFromMessage(msgOrStream);
           span.log({
             ...event,
-            metrics: event.metrics ? finalizeMetrics(event.metrics) : undefined,
+            metrics: event.metrics
+              ? finalizeAnthropicTokens(event.metrics)
+              : undefined,
           });
           span.end();
           return msgOrStream;
@@ -262,7 +265,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
       const output = deltas.join("");
       span.log({
         output: output,
-        metrics: finalizeMetrics(totals),
+        metrics: finalizeAnthropicTokens(totals),
         metadata: metadata,
       });
       span.end();
@@ -360,19 +363,6 @@ function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   saveIfExistsTo("cache_creation_input_tokens", "prompt_cache_creation_tokens");
 
   return metrics;
-}
-
-function finalizeMetrics(metrics: Metrics): Metrics {
-  const prompt_tokens =
-    (metrics.prompt_tokens || 0) +
-    (metrics.prompt_cached_tokens || 0) +
-    (metrics.prompt_cache_creation_tokens || 0);
-  return {
-    ...metrics,
-    // Anthropic's `input_tokens` does not include cache creation or cached read tokens.
-    prompt_tokens,
-    tokens: prompt_tokens + (metrics.completion_tokens || 0),
-  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

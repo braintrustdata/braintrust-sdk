@@ -1,8 +1,11 @@
 import {
-  CodeBundle,
-  FunctionObject,
-  IfExists,
-} from "@braintrust/core/typespecs";
+  CodeBundle as CodeBundleSchema,
+  type CodeBundleType as CodeBundle,
+  Function as FunctionObjectSchema,
+  type FunctionType as FunctionObject,
+  IfExists as IfExistsSchema,
+  type IfExistsType as IfExists,
+} from "../generated_types";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
 import {
@@ -15,8 +18,8 @@ import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { addAzureBlobHeaders, isEmpty } from "../util";
-import { z } from "zod";
-import { capitalize } from "@braintrust/core";
+import { z } from "zod/v3";
+import { capitalize } from "../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";

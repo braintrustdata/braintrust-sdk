@@ -34,34 +34,40 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "@braintrust/core";
+} from "../util/index";
 import {
-  AnyModelParam,
-  AttachmentReference,
-  BraintrustAttachmentReference,
-  ExternalAttachmentReference,
-  attachmentReferenceSchema,
-  ModelParams,
-  responseFormatJsonSchemaSchema,
-  AttachmentStatus,
-  attachmentStatusSchema,
-  BRAINTRUST_ATTACHMENT,
-  BRAINTRUST_PARAMS,
-  GitMetadataSettings,
-  gitMetadataSettingsSchema,
-  Message,
-  OpenAIMessage,
-  PromptData,
-  promptDataSchema,
-  Prompt as PromptRow,
-  promptSchema,
-  PromptSessionEvent,
-  RepoInfo,
-  Tools,
-  toolsSchema,
-  EXTERNAL_ATTACHMENT,
-  PromptBlockData,
-} from "@braintrust/core/typespecs";
+  type AnyModelParamsType as AnyModelParam,
+  AttachmentReference as attachmentReferenceSchema,
+  type AttachmentReferenceType as AttachmentReference,
+  BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
+  type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
+  BraintrustModelParams as braintrustModelParamsSchema,
+  ChatCompletionTool as chatCompletionToolSchema,
+  type ChatCompletionToolType as ChatCompletionTool,
+  ExternalAttachmentReference as ExternalAttachmentReferenceSchema,
+  type ExternalAttachmentReferenceType as ExternalAttachmentReference,
+  type ModelParamsType as ModelParams,
+  ResponseFormatJsonSchema as responseFormatJsonSchemaSchema,
+  AttachmentStatus as attachmentStatusSchema,
+  type AttachmentStatusType as AttachmentStatus,
+  GitMetadataSettings as gitMetadataSettingsSchema,
+  type GitMetadataSettingsType as GitMetadataSettings,
+  type ChatCompletionMessageParamType as Message,
+  type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
+  PromptData as promptDataSchema,
+  type PromptDataType as PromptData,
+  Prompt as promptSchema,
+  type PromptType as PromptRow,
+  type PromptSessionEventType as PromptSessionEvent,
+  type RepoInfoType as RepoInfo,
+  type PromptBlockDataType as PromptBlockData,
+} from "./generated_types";
+
+const BRAINTRUST_ATTACHMENT =
+  BraintrustAttachmentReferenceSchema.shape.type.value;
+const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import { z, ZodError } from "zod";
@@ -84,6 +90,64 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
+import { prettifyXact } from "../util/index";
+
+// Fields that should be passed to the masking function
+// Note: "tags" field is intentionally excluded, but can be added if needed
+const REDACTION_FIELDS = [
+  "input",
+  "output",
+  "expected",
+  "metadata",
+  "context",
+  "scores",
+  "metrics",
+] as const;
+
+class MaskingError {
+  constructor(
+    public readonly fieldName: string,
+    public readonly errorType: string,
+  ) {}
+
+  get errorMsg(): string {
+    return `ERROR: Failed to mask field '${this.fieldName}' - ${this.errorType}`;
+  }
+}
+
+/**
+ * Apply masking function to data and handle errors gracefully.
+ * If the masking function raises an exception, returns an error message.
+ * Returns MaskingError for scores/metrics fields to signal they should be dropped.
+ */
+function applyMaskingToField(
+  maskingFunction: (value: unknown) => unknown,
+  data: unknown,
+  fieldName: string,
+): unknown {
+  try {
+    return maskingFunction(data);
+  } catch (error) {
+    // Return a generic error message without the stack trace to avoid leaking PII
+    const errorType = error instanceof Error ? error.constructor.name : "Error";
+
+    // For scores and metrics fields, return a special error object
+    // to signal the field should be dropped and error logged
+    if (fieldName === "scores" || fieldName === "metrics") {
+      return new MaskingError(fieldName, errorType);
+    }
+
+    // For metadata field that expects object type, return an object with error key
+    if (fieldName === "metadata") {
+      return {
+        error: `ERROR: Failed to mask field '${fieldName}' - ${errorType}`,
+      };
+    }
+
+    // For other fields, return the error message as a string
+    return `ERROR: Failed to mask field '${fieldName}' - ${errorType}`;
+  }
+}
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -337,6 +401,22 @@ export class NoopSpan implements Span {
   public state() {
     return _internalGetGlobalState();
   }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `NoopSpan {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `NoopSpan(id=${this.id}, spanId=${this.spanId})`;
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -541,6 +621,12 @@ export class BraintrustState {
     this._appConn?.setFetch(fetch);
   }
 
+  public setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.bgLogger().setMaskingFunction(maskingFunction);
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
@@ -616,6 +702,40 @@ export class BraintrustState {
   public enforceQueueSizeLimit(enforce: boolean) {
     this._bgLogger.get().enforceQueueSizeLimit(enforce);
   }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      id: this.id,
+      orgId: this.orgId,
+      orgName: this.orgName,
+      appUrl: this.appUrl,
+      appPublicUrl: this.appPublicUrl,
+      apiUrl: this.apiUrl,
+      proxyUrl: this.proxyUrl,
+      loggedIn: this.loggedIn,
+      // Explicitly exclude loginToken, _apiConn, _appConn, _proxyConn and other sensitive fields
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `BraintrustState {
+  id: '${this.id}',
+  orgId: ${this.orgId ? `'${this.orgId}'` : "null"},
+  orgName: ${this.orgName ? `'${this.orgName}'` : "null"},
+  appUrl: ${this.appUrl ? `'${this.appUrl}'` : "null"},
+  apiUrl: ${this.apiUrl ? `'${this.apiUrl}'` : "null"},
+  proxyUrl: ${this.proxyUrl ? `'${this.proxyUrl}'` : "null"},
+  loggedIn: ${this.loggedIn},
+  loginToken: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `BraintrustState(id=${this.id}, org=${this.orgName || "none"}, loggedIn=${this.loggedIn})`;
+  }
 }
 
 let _globalState: BraintrustState;
@@ -635,6 +755,26 @@ function useTestBackgroundLogger(): TestBackgroundLogger {
 
 function clearTestBackgroundLogger() {
   _internalGetGlobalState()?.setOverrideBgLogger(null);
+}
+
+// Initialize a test Experiment without making network calls by injecting fake metadata.
+// Useful for unit tests that need an Experiment instance.
+function initTestExperiment(
+  experimentName: string,
+  projectName?: string,
+): Experiment {
+  setInitialTestState();
+  const state = _internalGetGlobalState();
+  const project = projectName ?? experimentName;
+
+  const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+    async () => ({
+      project: { id: project, name: project, fullInfo: {} },
+      experiment: { id: experimentName, name: experimentName, fullInfo: {} },
+    }),
+  );
+
+  return new Experiment(state, lazyMetadata);
 }
 
 /**
@@ -842,6 +982,19 @@ class HTTPConnection {
       headers: { "Content-Type": "application/json" },
     });
     return await resp.json();
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `HTTPConnection {
+  base_url: '${this.base_url}',
+  token: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `HTTPConnection(${this.base_url})`;
   }
 }
 
@@ -1084,6 +1237,8 @@ export class Attachment extends BaseAttachment {
 
   private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
     if (typeof data === "string") {
+      this.ensureFileReadable(data);
+
       const readFile = iso.readFile;
       if (!readFile) {
         throw new Error(
@@ -1095,6 +1250,22 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
       return new LazyValue(async () => new Blob([await readFile(data)]));
     } else {
       return new LazyValue(async () => new Blob([data]));
+    }
+  }
+
+  private ensureFileReadable(data: string) {
+    const statSync = iso.statSync;
+    if (!statSync) {
+      throw new Error(
+        `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+      );
+    }
+
+    try {
+      statSync(data);
+    } catch (e) {
+      console.warn(`Failed to read file: ${e}`);
     }
   }
 }
@@ -1917,13 +2088,23 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   async flush(): Promise<void> {
@@ -1943,7 +2124,48 @@ export class TestBackgroundLogger implements BackgroundLogger {
     }
 
     const batch = mergeRowBatch(events);
-    return batch.flat();
+    let flatBatch = batch.flat();
+
+    // Apply masking after merge, similar to HTTPBackgroundLogger
+    if (this.maskingFunction) {
+      flatBatch = flatBatch.map((item) => {
+        const maskedItem = { ...item };
+
+        // Only mask specific fields if they exist
+        for (const field of REDACTION_FIELDS) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((item as any)[field] !== undefined) {
+            const maskedValue = applyMaskingToField(
+              this.maskingFunction!,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (item as any)[field],
+              field,
+            );
+            if (maskedValue instanceof MaskingError) {
+              // Drop the field and add error message
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              delete (maskedItem as any)[field];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((maskedItem as any).error) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error =
+                  `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+              } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error = maskedValue.errorMsg;
+              }
+            } else {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (maskedItem as any)[field] = maskedValue;
+            }
+          }
+        }
+
+        return maskedItem as BackgroundLogEvent;
+      });
+    }
+
+    return flatBatch;
   }
 }
 
@@ -1960,6 +2182,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -2043,6 +2266,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
     this.onFlushError = opts.onFlushError;
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2169,7 +2398,50 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         const attachments: Attachment[] = [];
         items.forEach((item) => extractAttachments(item, attachments));
 
-        return [mergeRowBatch(items), attachments];
+        let mergedItems = mergeRowBatch(items);
+
+        // Apply masking after merge but before sending to backend
+        if (this.maskingFunction) {
+          mergedItems = mergedItems.map((batch) =>
+            batch.map((item) => {
+              const maskedItem = { ...item };
+
+              // Only mask specific fields if they exist
+              for (const field of REDACTION_FIELDS) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((item as any)[field] !== undefined) {
+                  const maskedValue = applyMaskingToField(
+                    this.maskingFunction!,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (item as any)[field],
+                    field,
+                  );
+                  if (maskedValue instanceof MaskingError) {
+                    // Drop the field and add error message
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    delete (maskedItem as any)[field];
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if ((maskedItem as any).error) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error =
+                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+                    } else {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error = maskedValue.errorMsg;
+                    }
+                  } else {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (maskedItem as any)[field] = maskedValue;
+                  }
+                }
+              }
+
+              return maskedItem as BackgroundLogEvent;
+            }),
+          );
+        }
+
+        return [mergedItems, attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -3020,6 +3292,7 @@ type LoadPromptOptions = FullLoginOptions & {
   id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
+  environment?: string;
   state?: BraintrustState;
 };
 
@@ -3031,6 +3304,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
  * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
@@ -3055,6 +3329,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  environment,
   id,
   defaults,
   noTrace = false,
@@ -3065,6 +3340,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -3085,7 +3365,10 @@ export async function loadPrompt({
     });
     if (id) {
       // Load prompt by ID using the /v1/prompt/{id} endpoint
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
       // Wrap single prompt response in objects array to match list API format
       if (response) {
         response = { objects: [response] };
@@ -3096,9 +3379,15 @@ export async function loadPrompt({
         project_id: projectId,
         slug,
         version,
+        ...(environment && { environment }),
       });
     }
   } catch (e) {
+    // If environment or version was specified, don't fall back to cache
+    if (environment || version) {
+      throw new Error(`Prompt not found with specified parameters: ${e}`);
+    }
+
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
     let prompt;
     if (id) {
@@ -3201,6 +3490,19 @@ export interface LoginOptions {
 export type FullLoginOptions = LoginOptions & {
   forceLogin?: boolean;
 };
+
+/**
+ * Set a global masking function that will be applied to all logged data before sending to Braintrust.
+ * The masking function will be applied after records are merged but before they are sent to the backend.
+ *
+ * @param maskingFunction A function that takes a JSON-serializable object and returns a masked version.
+ *                        Set to null to disable masking.
+ */
+export function setMaskingFunction(
+  maskingFunction: ((value: unknown) => unknown) | null,
+): void {
+  _globalState.setMaskingFunction(maskingFunction);
+}
 
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
@@ -3412,15 +3714,22 @@ export function currentSpan(options?: OptionalStateArg): Span {
 
 /**
  * Mainly for internal use. Return the parent object for starting a span in a global context.
+ * Applies precedence: current span > propagated parent string > experiment > logger.
  */
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): Span | Experiment | Logger<IsAsyncFlush> {
+  options?: AsyncFlushArg<IsAsyncFlush> &
+    OptionalStateArg & { parent?: string },
+): SpanComponentsV3 | Span | Experiment | Logger<IsAsyncFlush> {
   const state = options?.state ?? _globalState;
+
   const parentSpan = currentSpan({ state });
   if (!Object.is(parentSpan, NOOP_SPAN)) {
     return parentSpan;
   }
+
+  const parentStr = options?.parent ?? state.currentParent.getStore();
+  if (parentStr) return SpanComponentsV3.fromStr(parentStr);
+
   const experiment = currentExperiment();
   if (experiment) {
     return experiment;
@@ -3494,6 +3803,172 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 }
 
 /**
+ * Check if a function is a sync generator function.
+ *
+ * Note: This uses Object.prototype.toString which is sufficient for environments that
+ * support generator functions (ES6+). While our code is compiled to ES2022, consumers
+ * may run it in various environments. However, if generators aren't supported in their
+ * environment, the generator functions themselves won't work anyway, making detection moot.
+ *
+ * @param fn The function to check.
+ * @returns True if the function is a sync generator function.
+ */
+function isGeneratorFunction(fn: any): boolean {
+  return Object.prototype.toString.call(fn) === "[object GeneratorFunction]";
+}
+
+/**
+ * Check if a function is an async generator function.
+ *
+ * Note: see isGeneratorFunction disclaimer
+ * @param fn The function to check.
+ * @returns True if the function is an async generator function.
+ */
+function isAsyncGeneratorFunction(fn: any): boolean {
+  return (
+    Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]"
+  );
+}
+
+/**
+ * Wrap a sync generator function with tracing.
+ */
+function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
+  fn: F,
+  spanArgs: any,
+  noTraceIO: boolean,
+): F {
+  const wrapper = function* (this: any, ...fnArgs: Parameters<F>) {
+    const span = startSpan(spanArgs);
+    try {
+      if (!noTraceIO) {
+        span.log({ input: fnArgs });
+      }
+
+      const envValue = iso.getEnv("BRAINTRUST_MAX_GENERATOR_ITEMS");
+      const maxItems = envValue !== undefined ? Number(envValue) : 1000;
+
+      if (!noTraceIO && maxItems !== 0) {
+        let collected: any[] = [];
+        let truncated = false;
+
+        const gen = generatorWithCurrent(span, fn.apply(this, fnArgs));
+        try {
+          for (const value of gen) {
+            if (
+              maxItems === -1 ||
+              (!truncated && collected.length < maxItems)
+            ) {
+              collected.push(value);
+            } else {
+              truncated = true;
+              collected = [];
+              console.warn(
+                `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
+                  `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
+              );
+            }
+            yield value;
+          }
+
+          if (!truncated) {
+            span.log({ output: collected });
+          }
+        } catch (error) {
+          logError(span, error);
+          if (!truncated && collected.length > 0) {
+            span.log({ output: collected });
+          }
+          throw error;
+        }
+      } else {
+        // No output collection
+        const gen = generatorWithCurrent(span, fn.apply(this, fnArgs));
+        for (const value of gen) {
+          yield value;
+        }
+      }
+    } finally {
+      span.end();
+    }
+  };
+  // Preserve the original function name
+  Object.defineProperty(wrapper, "name", { value: fn.name });
+  return wrapper as F;
+}
+
+/**
+ * Wrap an async generator function with tracing.
+ */
+function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
+  fn: F,
+  spanArgs: any,
+  noTraceIO: boolean,
+): F {
+  const wrapper = async function* (this: any, ...fnArgs: Parameters<F>) {
+    const span = startSpan(spanArgs);
+    try {
+      if (!noTraceIO) {
+        span.log({ input: fnArgs });
+      }
+
+      const envValue = iso.getEnv("BRAINTRUST_MAX_GENERATOR_ITEMS");
+      const maxItems = envValue !== undefined ? Number(envValue) : 1000;
+
+      if (!noTraceIO && maxItems !== 0) {
+        let collected: any[] = [];
+        let truncated = false;
+
+        const gen = asyncGeneratorWithCurrent(span, fn.apply(this, fnArgs));
+        try {
+          for await (const value of gen) {
+            if (
+              maxItems === -1 ||
+              (!truncated && collected.length < maxItems)
+            ) {
+              collected.push(value);
+            } else {
+              truncated = true;
+              collected = [];
+              console.warn(
+                `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
+                  `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
+              );
+            }
+            yield value;
+          }
+
+          if (!truncated) {
+            span.log({ output: collected });
+          }
+        } catch (error) {
+          logError(span, error);
+          if (!truncated && collected.length > 0) {
+            span.log({ output: collected });
+          }
+          throw error;
+        }
+      } else {
+        // No output collection
+        const gen = asyncGeneratorWithCurrent(span, fn.apply(this, fnArgs));
+        for await (const value of gen) {
+          yield value;
+        }
+      }
+    } finally {
+      span.end();
+    }
+  };
+  // Preserve the original function name
+  Object.defineProperty(wrapper, "name", { value: fn.name });
+  return wrapper as F;
+}
+
+type WrapTracedArgs = {
+  noTraceIO?: boolean;
+};
+
+/**
  * Wrap a function with `traced`, using the arguments as `input` and return value as `output`.
  * Any functions wrapped this way will automatically be traced, similar to the `@traced` decorator
  * in Python. If you want to correctly propagate the function's name and define it in one go, then
@@ -3523,7 +3998,10 @@ export function wrapTraced<
   IsAsyncFlush extends boolean = true,
 >(
   fn: F,
-  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
+  args?: StartSpanArgs &
+    SetCurrentArg &
+    AsyncFlushArg<IsAsyncFlush> &
+    WrapTracedArgs,
 ): IsAsyncFlush extends false
   ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
   : F {
@@ -3539,6 +4017,16 @@ export function wrapTraced<
     args.event.input !== undefined;
   const hasExplicitOutput =
     args && args.event && args.event.output !== undefined;
+
+  const noTraceIO = args?.noTraceIO || hasExplicitInput || hasExplicitOutput;
+  // Check if the function is a generator
+  if (isGeneratorFunction(fn)) {
+    return wrapTracedSyncGenerator(fn, spanArgs, !!noTraceIO);
+  }
+
+  if (isAsyncGeneratorFunction(fn)) {
+    return wrapTracedAsyncGenerator(fn, spanArgs, !!noTraceIO);
+  }
 
   if (args?.asyncFlush) {
     return ((...fnArgs: Parameters<F>) =>
@@ -3627,48 +4115,45 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  const parentStr = args?.parent ?? state.currentParent.getStore();
+  const parentObject = getSpanParentObject<IsAsyncFlush>({
+    asyncFlush: args?.asyncFlush,
+    parent: args?.parent,
+    state,
+  });
 
-  const components: SpanComponentsV3 | undefined = parentStr
-    ? SpanComponentsV3.fromStr(parentStr)
-    : undefined;
-
-  if (components) {
-    const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
+  if (parentObject instanceof SpanComponentsV3) {
+    const parentSpanIds: ParentSpanIds | undefined = parentObject.data.row_id
       ? {
-          spanId: components.data.span_id,
-          rootSpanId: components.data.root_span_id,
+          spanId: parentObject.data.span_id,
+          rootSpanId: parentObject.data.root_span_id,
         }
       : undefined;
     const span = new SpanImpl({
       state,
       ...args,
-      parentObjectType: components.data.object_type,
+      parentObjectType: parentObject.data.object_type,
       parentObjectId: new LazyValue(
-        spanComponentsToObjectIdLambda(state, components),
+        spanComponentsToObjectIdLambda(state, parentObject),
       ),
       parentComputeObjectMetadataArgs:
-        components.data.compute_object_metadata_args ?? undefined,
+        parentObject.data.compute_object_metadata_args ?? undefined,
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        ((components.data.propagated_event ?? undefined) as
+        ((parentObject.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
     });
     return {
       span,
       isSyncFlushLogger:
-        components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
+        parentObject.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
         args?.asyncFlush === false,
     };
   } else {
-    const parentObject = getSpanParentObject<IsAsyncFlush>({
-      asyncFlush: args?.asyncFlush,
-    });
     const span = parentObject.startSpan(args);
     return {
       span,
@@ -3687,6 +4172,76 @@ export function withCurrent<R>(
   state: BraintrustState | undefined = undefined,
 ): R {
   return (state ?? _globalState).currentSpan.run(span, () => callback(span));
+}
+
+/**
+ * Wraps a sync generator to maintain the current span context across yields.
+ */
+function* generatorWithCurrent<T>(
+  span: Span,
+  gen: Generator<T, any, any>,
+  state: BraintrustState | undefined = undefined,
+): Generator<T, any, any> {
+  let nextValue: any;
+  while (true) {
+    const result = withCurrent(
+      span,
+      () => {
+        try {
+          return gen.next(nextValue);
+        } catch (e) {
+          // Handle generator.throw()
+          return { value: undefined, done: true, error: e };
+        }
+      },
+      state,
+    );
+
+    if ("error" in result) {
+      throw result.error;
+    }
+
+    if (result.done) {
+      return result.value;
+    }
+
+    nextValue = yield result.value;
+  }
+}
+
+/**
+ * Wraps an async generator to maintain the current span context across yields.
+ */
+async function* asyncGeneratorWithCurrent<T>(
+  span: Span,
+  gen: AsyncGenerator<T, any, any>,
+  state: BraintrustState | undefined = undefined,
+): AsyncGenerator<T, any, any> {
+  let nextValue: any;
+  while (true) {
+    const result = await withCurrent(
+      span,
+      async () => {
+        try {
+          return await gen.next(nextValue);
+        } catch (e) {
+          // Handle generator.throw()
+          return { value: undefined, done: true, error: e };
+        }
+      },
+      state,
+    );
+
+    if ("error" in result) {
+      throw result.error;
+    }
+
+    if (result.done) {
+      return result.value;
+    }
+
+    nextValue = yield result.value;
+  }
 }
 
 export function withParent<R>(
@@ -3813,7 +4368,9 @@ function validateAndSanitizeExperimentLogPartialArgs(
  * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
  * and not deep-copied.
  */
-function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+export function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(
+  event: T,
+): T {
   const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
@@ -4891,6 +5448,22 @@ export class SpanImpl implements Span {
   public state(): BraintrustState {
     return this._state;
   }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `SpanImpl {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `SpanImpl(id=${this.id}, spanId=${this.spanId})`;
+  }
 }
 
 function splitLoggingData({
@@ -5271,7 +5844,7 @@ export type CompiledPromptParams = Omit<
 
 export type ChatPrompt = {
   messages: OpenAIMessage[];
-  tools?: Tools;
+  tools?: ChatCompletionTool[];
 };
 export type CompletionPrompt = {
   prompt: string;
@@ -5644,7 +6217,9 @@ export class Prompt<
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
           ? {
-              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+              tools: chatCompletionToolSchema
+                .array()
+                .parse(JSON.parse(renderedPrompt.tools)),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
@@ -5903,6 +6478,79 @@ function simulateLogoutForTests() {
   return _globalState;
 }
 
+/**
+ * Get the versions for a prompt.
+ *
+ * @param projectId The ID of the project to query
+ * @param promptId The ID of the prompt to get versions for
+ * @returns Promise containing the version data
+ */
+export async function getPromptVersions(
+  projectId: string,
+  promptId: string,
+): Promise<any> {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("Must log in first");
+  }
+
+  await state.login({});
+
+  const query = {
+    from: {
+      op: "function",
+      name: {
+        op: "ident",
+        name: ["project_prompts"],
+      },
+      args: [
+        {
+          op: "literal",
+          value: projectId,
+        },
+      ],
+    },
+    select: [
+      {
+        op: "star",
+      },
+    ],
+    filter: {
+      op: "eq",
+      left: { op: "ident", name: ["id"] },
+      right: { op: "literal", value: promptId },
+    },
+  };
+
+  const response = await state.apiConn().post(
+    "btql",
+    {
+      query,
+      audit_log: true,
+      use_columnstore: false,
+      brainstore_realtime: true,
+    },
+    { headers: { "Accept-Encoding": "gzip" } },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const result = await response.json();
+
+  // Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
+  return (
+    result.data
+      ?.filter((entry: any) =>
+        ["upsert", "merge"].includes(entry.audit_data?.action),
+      )
+      .map((entry: any) => prettifyXact(entry._xact_id)) || []
+  );
+}
+
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
@@ -5911,4 +6559,7 @@ export const _exportsForTestingOnly = {
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,
+  initTestExperiment,
+  isGeneratorFunction,
+  isAsyncGeneratorFunction,
 };

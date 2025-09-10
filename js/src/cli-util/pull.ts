@@ -1,20 +1,22 @@
 import {
-  FunctionObject,
-  functionSchema,
-  SavedFunctionId,
-  ToolFunctionDefinition,
-} from "@braintrust/core/typespecs";
+  Function as functionSchema,
+  type FunctionType as FunctionObject,
+  SavedFunctionId as SavedFunctionIdSchema,
+  type SavedFunctionIdType as SavedFunctionId,
+  ToolFunctionDefinition as ToolFunctionDefinitionSchema,
+  type ToolFunctionDefinitionType as ToolFunctionDefinition,
+} from "../generated_types";
 import { _internalGetGlobalState } from "../logger";
 import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../framework";
-import { z } from "zod";
+import { z } from "zod/v3";
 import fs from "fs/promises";
 import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
-import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
+import { isEmpty, loadPrettyXact, prettifyXact } from "../../util/index";
 import { ProjectNameIdMap, toolFunctionDefinitionSchema } from "../framework2";
 import pluralize from "pluralize";
 
@@ -126,7 +128,7 @@ export async function pullCommand(args: PullArgs) {
       functions: projectNameToFunctions[projectName],
       hasSpecifiedFunction: !!args.slug || !!args.id,
     });
-    await fs.writeFile(projectFile, projectFileContents);
+    await fs.writeFile(projectFile, projectFileContents || "");
     console.log(`Wrote ${projectName} to ${doubleQuote(projectFile)}`);
   }
 }
@@ -169,12 +171,19 @@ ${functionDefinitions.join("\n")}
 
   const prettier = await getPrettierModule();
   if (prettier) {
-    const formatted = prettier.format(fileDef, {
-      parser: "typescript",
-    });
-    return formatted;
-  } else {
-    return fileDef;
+    try {
+      const formatted = prettier.format(fileDef, {
+        parser: "typescript",
+      });
+      return formatted;
+    } catch (error) {
+      console.warn(
+        warning(
+          `Failed to format with prettier (${error instanceof Error ? error.message : error}). Using unformatted output.`,
+        ),
+      );
+      return fileDef;
+    }
   }
 }
 
@@ -220,7 +229,7 @@ function makeFunctionDefinition({
   const promptContents =
     prompt.type === "completion"
       ? `prompt: ${doubleQuote(prompt.content)}`
-      : `messages: ${util.inspect(prompt.messages, { depth: null, maxStringLength: Infinity }).trimStart()}`;
+      : `messages: ${safeStringify(prompt.messages).trimStart()}`;
 
   const rawToolsParsed =
     prompt.type === "chat" && prompt.tools && prompt.tools.length > 0
@@ -244,7 +253,7 @@ function makeFunctionDefinition({
 
   const paramsString =
     params && Object.keys(params).length > 0
-      ? `params: ${util.inspect(params, { depth: null }).trimStart()},`
+      ? `params: ${safeStringify(params).trimStart()},`
       : "";
 
   const tools: (SavedFunctionId | ToolFunctionDefinition)[] = [
@@ -253,9 +262,7 @@ function makeFunctionDefinition({
   ];
 
   const toolsString =
-    tools.length > 0
-      ? `tools: ${util.inspect(tools, { depth: null }).trimStart()},`
-      : "";
+    tools.length > 0 ? `tools: ${safeStringify(tools).trimStart()},` : "";
 
   return `export const ${varName} = project.${pluralize(objectType)}.create({
   id: ${doubleQuote(func.id)},
@@ -294,18 +301,78 @@ function printOptionalField(
     : "";
 }
 
+let prettierImportAttempted = false;
+
 let prettierModule: typeof import("prettier") | undefined = undefined;
+
 async function getPrettierModule() {
-  if (!prettierModule) {
+  if (!prettierModule && !prettierImportAttempted) {
+    prettierImportAttempted = true;
+
     try {
-      prettierModule = await import("prettier");
+      // First try require() which is more stable in npx environments
+      prettierModule = require("prettier");
     } catch {
-      console.warn(
-        warning(
-          "Failed to load prettier module. Will not use prettier to format output.",
-        ),
-      );
+      try {
+        // Fallback to dynamic import with error boundary
+        const importWithTimeout = () => {
+          return new Promise<typeof import("prettier")>((resolve, reject) => {
+            let resolved = false;
+
+            // Set a timeout to prevent infinite hanging
+            const timeoutId = setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                reject(new Error("Prettier import timeout"));
+              }
+            }, 3000);
+
+            import("prettier")
+              .then((module) => {
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timeoutId);
+                  resolve(module);
+                }
+              })
+              .catch((error) => {
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timeoutId);
+                  reject(error);
+                }
+              });
+          });
+        };
+
+        prettierModule = await importWithTimeout();
+      } catch {
+        console.warn(
+          warning(
+            "Failed to load prettier module. Will not use prettier to format output.",
+          ),
+        );
+        prettierModule = undefined;
+      }
     }
   }
   return prettierModule;
+}
+
+function safeStringify(obj: unknown): string {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch (error) {
+    // Fallback for circular references or other JSON.stringify issues
+    try {
+      return util.inspect(obj, {
+        depth: 5,
+        maxStringLength: 1000,
+        breakLength: 80,
+        compact: false,
+      });
+    } catch {
+      return `[Object: Unable to serialize - ${error instanceof Error ? error.message : error}]`;
+    }
+  }
 }

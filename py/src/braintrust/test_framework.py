@@ -3,6 +3,7 @@ from typing import List
 import pytest
 
 from .framework import (
+    Eval,
     EvalCase,
     EvalHooks,
     EvalResultWithSummary,
@@ -10,6 +11,7 @@ from .framework import (
     run_evaluator,
 )
 from .score import Score, Scorer
+from .test_helpers import init_test_exp, with_memory_logger, with_simulate_login  # noqa: F401
 
 
 @pytest.mark.asyncio
@@ -237,3 +239,200 @@ async def test_hooks_trial_index_multiple_inputs():
     # Each input should have been run with trial indices 0 and 1
     assert sorted(input_1_trials) == [0, 1]
     assert sorted(input_2_trials) == [0, 1]
+
+@pytest.fixture
+def simple_scorer():
+    def simple_scorer_function(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+    return simple_scorer_function
+
+@pytest.mark.asyncio
+async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
+    """Test that Eval with no_send_logs=True runs locally without creating experiment."""
+
+    def exact_match(input, output, expected):
+        return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
+
+    result = await Eval(
+        "test-no-logs",
+        data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
+        task=lambda input_val: input_val + " world",
+        scores=[exact_match, simple_scorer],
+        no_send_logs=True,
+    )
+
+    # Verify it returns results
+    assert len(result.results) == 2
+    assert result.results[0].input == "hello"
+    assert result.results[0].output == "hello world"
+    assert result.results[0].scores["exact_match"] == 1.0
+    assert result.results[0].scores["simple_scorer"] == 0.8
+
+    assert result.results[1].input == "test"
+    assert result.results[1].output == "test world"
+    assert result.results[1].scores["exact_match"] == 1.0
+    assert result.results[1].scores["simple_scorer"] == 0.8
+
+    # Verify it builds a local summary (no experiment_url means local run)
+    assert result.summary.project_name == "test-no-logs"
+    assert result.summary.experiment_url is None
+    assert result.summary.scores["exact_match"].score == 1.0
+    assert result.summary.scores["simple_scorer"].score == 0.8
+
+    # Most importantly: verify that no logs were sent (should be empty)
+    logs = with_memory_logger.pop()
+    assert len(logs) == 0
+
+
+@pytest.mark.asyncio
+async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test that hooks.tags can be appended to and logged. """
+
+    initial_tags = ["cookies n cream"]
+    appended_tags = ["chocolate", "vanilla", "strawberry"]
+    expected_tags = ["cookies n cream", "chocolate", "vanilla", "strawberry"]
+
+    def task_with_hooks(input, hooks):
+        for x in appended_tags:
+            hooks.tags.append(x)
+        return input
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world", tags=initial_tags)],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == expected_tags
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tags", "expected_tags"), [(None, None),([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])])
+async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_scorer, tags, expected_tags):
+    """ Test that hooks.tags can be set to a list. """
+
+    def task_with_hooks(input, hooks):
+        hooks.tags = tags
+        return input
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == expected_tags
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
+
+@pytest.mark.asyncio
+async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test that hooks.tags can be set to a list. """
+
+    expected_tags = ["chocolate", "vanilla", "strawberry"]
+
+    def task_with_hooks(input, hooks):
+        hooks.tags = expected_tags
+        return input
+
+    def failing_scorer(input, output, expected):
+        raise Exception("test error")
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer, failing_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == expected_tags
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 4
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
+
+@pytest.mark.asyncio
+async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test that result contains an error for cases where hooks.tags is set to an invalid type. """
+    def task_with_hooks(input, hooks):
+        hooks.tags = 123
+        return input
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert len(result.results) == 1
+    assert isinstance(result.results[0].error, TypeError)
+
+
+@pytest.mark.asyncio
+async def test_hooks_without_setting_tags(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test where hooks.tags is not set """
+    def task_with_hooks(input, hooks):
+        return input
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == None
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == None

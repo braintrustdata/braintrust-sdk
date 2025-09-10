@@ -404,6 +404,12 @@ class ResponseWrapper:
             if hasattr(result, "usage"):
                 usage = getattr(result, "usage")
             elif result.type == "response.completed" and hasattr(result, "response"):
+                if hasattr(result.response, "output") and result.response.output:
+                    for output_item in result.response.output:
+                        if hasattr(output_item, "summary") and output_item.summary:
+                            for item in output:
+                                if item.get("id") == output_item.id:
+                                    item["summary"] = output_item.summary
                 usage = getattr(result.response, "usage")
 
             if usage:
@@ -411,7 +417,10 @@ class ResponseWrapper:
                 metrics.update(parsed_metrics)
 
             if result.type == "response.output_item.added":
-                output.append({"id": result.item.id, "type": result.item.type})
+                if hasattr(result.item, "role"):
+                    output.append({"id": result.item.id, "type": result.item.type, "role": result.item.role})
+                else:
+                    output.append({"id": result.item.id, "type": result.item.type})
                 continue
 
             if not hasattr(result, "output_index"):
@@ -434,6 +443,7 @@ class ResponseWrapper:
                 if content_index == len(current_output["content"]):
                     current_output["content"].append({})
                 current_content = current_output["content"][content_index]
+                current_content["type"] = "output_text"
                 if hasattr(result, "delta") and result.delta:
                     current_content["text"] = (current_content.get("text") or "") + result.delta
 
@@ -662,6 +672,9 @@ class ResponsesV1Wrapper(NamedWrapper):
     def create(self, *args: Any, **kwargs: Any) -> Any:
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
+    def parse(self, *args: Any, **kwargs: Any) -> Any:
+        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
     def __init__(self, responses: Any):
@@ -670,6 +683,10 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
         response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
+
+    async def parse(self, *args: Any, **kwargs: Any) -> Any:
+        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

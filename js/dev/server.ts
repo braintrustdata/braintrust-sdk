@@ -14,30 +14,27 @@ import { errorHandler } from "./errorHandler";
 import {
   authorizeRequest,
   baseAllowedHeaders,
-  checkAuthorized,
+  makeCheckAuthorized,
   checkOrigin,
 } from "./authorize";
 import {
-  FunctionId,
-  InvokeFunctionRequest,
-  RunEvalRequest,
-  SSEProgressEventData,
-} from "@braintrust/core/typespecs";
+  type FunctionIdType as FunctionId,
+  type InvokeFunctionType as InvokeFunctionRequest,
+  type RunEvalType as RunEvalRequest,
+  type SSEProgressEventDataType as SSEProgressEventData,
+} from "../src/generated_types";
 import {
   BaseMetadata,
   BraintrustState,
   EvalCase,
   getSpanParentObject,
   initDataset,
-  LoginOptions,
-  loginToState,
 } from "../src/logger";
-import { LRUCache } from "../src/prompt-cache/lru-cache";
 import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
   parseParent,
-} from "@braintrust/core";
+} from "../util/index";
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
@@ -46,12 +43,13 @@ import {
   evalParametersSerializedSchema,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import zodToJsonSchema from "zod-to-json-schema";
 export interface DevServerOpts {
   host: string;
   port: number;
+  orgName?: string;
 }
 
 export function runDevServer(
@@ -77,6 +75,8 @@ export function runDevServer(
     next();
   });
 
+  const checkAuthorized = makeCheckAuthorized(opts.orgName);
+
   app.use(
     cors({
       origin: checkOrigin,
@@ -100,7 +100,7 @@ export function runDevServer(
   });
 
   // List endpoint - returns all available evaluators and their metadata
-  app.get("/list", (req, res) => {
+  app.get("/list", checkAuthorized, (req, res) => {
     const evalDefs: EvaluatorDefinitions = Object.fromEntries(
       Object.entries(allEvaluators).map(([name, evaluator]) => [
         name,
@@ -132,7 +132,13 @@ export function runDevServer(
         stream,
       } = evalBodySchema.parse(req.body);
 
-      const state = await cachedLogin({ apiKey: req.ctx?.token });
+      if (!req.ctx?.state) {
+        res
+          .status(500)
+          .json({ error: "Braintrust state not initialized in request" });
+        return;
+      }
+      const state = req.ctx.state;
 
       const evaluator = allEvaluators[name];
       if (!evaluator) {
@@ -292,22 +298,6 @@ const asyncHandler =
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 
-const loginCache = new LRUCache<string, BraintrustState>({
-  max: 32, // TODO: Make this configurable
-});
-
-async function cachedLogin(options: LoginOptions): Promise<BraintrustState> {
-  const key = JSON.stringify(options);
-  const cached = loginCache.get(key);
-  if (cached) {
-    return cached;
-  }
-
-  const state = await loginToState(options);
-  loginCache.set(key, state);
-  return state;
-}
-
 async function getDataset(
   state: BraintrustState,
   data: RunEvalRequest["data"],
@@ -406,13 +396,18 @@ function makeEvalParametersSchema(
           },
         ];
       } else {
+        // Since this schema is bundled, it won't pass an instanceof check. For
+        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
+        // Type instantiation is excessively deep and possibly infinite.` So
+        // just using `any` to turn off the typesystem.
+        //
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const schema = zodToJsonSchema(value as any);
         return [
           name,
           {
             type: "data",
-            // Since this schema is bundled, it won't pass an instanceof check.
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            schema: zodToJsonSchema(value as z.ZodSchema),
+            schema,
             default: value.default,
             description: value.description,
           },
