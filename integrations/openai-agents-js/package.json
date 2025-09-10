@@ -36,6 +36,7 @@
   },
   "peerDependencies": {
     "@openai/agents": ">=0.0.14 <1.0.0",
-    "@openai/agents-core": ">=0.0.14 <1.0.0"
+    "@openai/agents-core": ">=0.0.14 <1.0.0",
+    "braintrust": ">=0.0.209"
   }
 }
