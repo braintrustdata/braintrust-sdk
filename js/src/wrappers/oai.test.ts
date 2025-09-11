@@ -15,6 +15,7 @@ import {
   initLogger,
   Logger,
   TestBackgroundLogger,
+  Attachment,
 } from "../logger";
 import { wrapOpenAI } from "../exports-node";
 import { getCurrentUnixTimestamp } from "../util";
@@ -552,6 +553,81 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(m.time_to_first_token > 0);
+  });
+
+  test("openai.responses with image processing", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+    // Create a mock client that will return a response with an image
+    const mockClient = {
+      responses: {
+        create: vi.fn().mockResolvedValue({
+          output: [
+            {
+              type: "image_generation_call",
+              result:
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", // Simple 1x1 PNG in base64
+              output_format: "png",
+              revised_prompt: "A simple test image",
+            },
+          ],
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+          },
+        }),
+      },
+    };
+
+    // Replace the client.responses.create method temporarily
+    const originalCreate = client.responses.create;
+    client.responses.create = mockClient.responses.create as any;
+
+    try {
+      const start = getCurrentUnixTimestamp();
+      const response = await client.responses.create({
+        model: TEST_MODEL,
+        input: "Generate a simple test image",
+      });
+      const end = getCurrentUnixTimestamp();
+
+      // Verify the response contains the expected structure
+      assert.ok(response);
+      assert.ok(response.output);
+      assert.isArray(response.output);
+
+      // Get the logged spans
+      const spans = await backgroundLogger.drain();
+      assert.lengthOf(spans, 1);
+      const span = spans[0] as any;
+
+      assert.equal(span.span_attributes.name, "openai.responses.create");
+      assert.equal(span.span_attributes.type, "llm");
+      assert.equal(span.input, "Generate a simple test image");
+      assert.ok(span.metadata.model.startsWith(TEST_MODEL));
+      assert.equal(span.metadata.provider, "openai");
+
+      // Verify the output was processed and contains an Attachment
+      assert.ok(span.output);
+      assert.isArray(span.output);
+      const outputItem = span.output[0];
+      assert.equal(outputItem.type, "image_generation_call");
+
+      // Verify that the base64 string was replaced with an Attachment
+      assert.instanceOf(outputItem.result, Attachment);
+      assert.equal(outputItem.result.reference.content_type, "image/png");
+      assert.ok(
+        outputItem.result.reference.filename.includes("A_simple_test_image"),
+      );
+      const m = span.metrics;
+      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    } finally {
+      // Restore the original method
+      client.responses.create = originalCreate;
+    }
   });
 
   const getFirstLog = async () => {

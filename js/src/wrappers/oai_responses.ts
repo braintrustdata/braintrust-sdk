@@ -1,5 +1,5 @@
 import { getCurrentUnixTimestamp, filterFrom, objectIsEmpty } from "../util";
-import { Span, startSpan } from "../logger";
+import { Span, startSpan, Attachment } from "../logger";
 import { isObject } from "../../util/index";
 
 export function responsesProxy(openai: any) {
@@ -59,9 +59,8 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 function parseEventFromResponseCreateResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output
   if (result?.output !== undefined) {
-    data.output = result.output;
+    data.output = processImagesInOutput(result.output);
   }
 
   // Extract metadata - preserve all response fields except output and usage
@@ -76,6 +75,51 @@ function parseEventFromResponseCreateResult(result: any) {
   data.metrics = parseMetricsFromUsage(result?.usage);
 
   return data;
+}
+
+// Process output to convert base64 images to attachments
+function processImagesInOutput(output: any): any {
+  if (Array.isArray(output)) {
+    return output.map(processImagesInOutput);
+  }
+
+  if (isObject(output)) {
+    if (
+      output.type === "image_generation_call" &&
+      output.result &&
+      typeof output.result === "string"
+    ) {
+      const fileExtension = output.output_format || "png";
+      const contentType = `image/${fileExtension}`;
+
+      const baseFilename =
+        output.revised_prompt && typeof output.revised_prompt === "string"
+          ? output.revised_prompt.slice(0, 50).replace(/[^a-zA-Z0-9]/g, "_")
+          : "generated_image";
+      const filename = `${baseFilename}.${fileExtension}`;
+
+      // Convert base64 string to Blob
+      const binaryString = atob(output.result);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: contentType });
+
+      const attachment = new Attachment({
+        data: blob,
+        filename: filename,
+        contentType: contentType,
+      });
+
+      return {
+        ...output,
+        result: attachment,
+      };
+    }
+  }
+
+  return output;
 }
 
 // convert response.parse params into a span
@@ -104,9 +148,8 @@ function parseSpanFromResponseParseParams(params: any): TimedSpan {
 function parseEventFromResponseParseResult(result: any) {
   const data: Record<string, any> = {};
 
-  // Extract output
   if (result?.output !== undefined) {
-    data.output = result.output;
+    data.output = processImagesInOutput(result.output);
   }
 
   // Extract metadata - preserve all response fields except output and usage
@@ -165,9 +208,8 @@ function parseLogFromItem(item: any): {} {
     case "response.completed":
       const data: Record<string, any> = {};
 
-      // Extract output
       if (response?.output !== undefined) {
-        data.output = response.output;
+        data.output = processImagesInOutput(response.output);
       }
 
       // Extract metadata - preserve response fields except usage and output

@@ -415,35 +415,71 @@ class ResponseWrapper:
             if hasattr(result, "usage"):
                 usage = getattr(result, "usage")
             elif hasattr(result, "type") and result.type == "response.completed" and hasattr(result, "response"):
+                # Handle summaries from completed response if present
+                if hasattr(result.response, "output") and result.response.output:
+                    for output_item in result.response.output:
+                        if hasattr(output_item, "summary") and output_item.summary:
+                            for item in output:
+                                if item.get("id") == output_item.id:
+                                    item["summary"] = output_item.summary
                 usage = getattr(result.response, "usage", None)
 
             if usage:
                 parsed_metrics = _parse_metrics_from_usage(usage)
                 metrics.update(parsed_metrics)
 
-            if hasattr(result, "type"):
-                if result.type == "response.output_item.added":
-                    # Check if we already have an incomplete item from earlier deltas
-                    if output and isinstance(output[-1], dict) and "id" not in output[-1] and "type" not in output[-1]:
-                        output[-1].update({"id": result.item.id, "type": result.item.type})
-                    else:
-                        output.append({"id": result.item.id, "type": result.item.type, "content": []})
-                elif result.type == "response.output_text.delta" and hasattr(result, "delta"):
-                    if not output:
-                        # Create placeholder item with standard structure that will be updated when output_item.added arrives
-                        output.append({"id": None, "type": None, "content": []})
-                    if not output[-1].get("content"):
-                        output[-1]["content"] = [{"text": ""}]
-                    output[-1]["content"][-1]["text"] += result.delta
-                elif result.type == "response.completed":
-                    if hasattr(result, "response") and hasattr(result.response, "output"):
-                        if hasattr(result.response, "usage"):
-                            final_metrics = _parse_metrics_from_usage(result.response.usage)
-                            metrics.update(final_metrics)
-                        return {
-                            "metrics": metrics,
-                            "output": result.response.output,
-                        }
+            # Skip processing if result doesn't have a type attribute
+            if not hasattr(result, "type"):
+                continue
+
+            if result.type == "response.output_item.added":
+                item_data = {"id": result.item.id, "type": result.item.type}
+                if hasattr(result.item, "role"):
+                    item_data["role"] = result.item.role
+                output.append(item_data)
+                continue
+
+            if result.type == "response.completed":
+                if hasattr(result, "response") and hasattr(result.response, "output"):
+                    return {
+                        "metrics": metrics,
+                        "output": result.response.output,
+                    }
+                continue
+
+            # Handle output_index based updates
+            if hasattr(result, "output_index"):
+                output_index = result.output_index
+                if output_index < len(output):
+                    current_output = output[output_index]
+
+                    if result.type == "response.output_item.done":
+                        current_output["status"] = result.item.status
+                        continue
+
+                    if result.type == "response.output_item.delta":
+                        current_output["delta"] = result.delta
+                        continue
+
+                    # Handle content_index based updates
+                    if hasattr(result, "content_index"):
+                        if "content" not in current_output:
+                            current_output["content"] = []
+                        content_index = result.content_index
+                        if content_index == len(current_output["content"]):
+                            current_output["content"].append({})
+                        current_content = current_output["content"][content_index]
+                        current_content["type"] = "output_text"
+                        if hasattr(result, "delta") and result.delta:
+                            current_content["text"] = (current_content.get("text") or "") + result.delta
+
+                        if result.type == "response.output_text.annotation.added":
+                            annotation_index = result.annotation_index
+                            if "annotations" not in current_content:
+                                current_content["annotations"] = []
+                            if annotation_index == len(current_content["annotations"]):
+                                current_content["annotations"].append({})
+                            current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
         return {
             "metrics": metrics,

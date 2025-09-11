@@ -1224,6 +1224,113 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
 
 
 @pytest.mark.asyncio
+async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
+    """Test that reproduces the concurrency bug where overlapping traces mix up first_input/last_output."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    import asyncio
+
+    import agents
+    from agents import Agent
+    from agents.run import AgentRunner
+
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    # Create a single shared processor instance
+    processor = BraintrustTracingProcessor()
+
+    # Set up tracing
+    agents.set_tracing_disabled(False)
+    agents.add_trace_processor(processor)
+
+    try:
+        # Create agents for testing
+        agent_a = Agent(
+            name="agent-a", model=TEST_MODEL, instructions="You are agent A. Just respond with 'A' and nothing else."
+        )
+
+        agent_b = Agent(
+            name="agent-b", model=TEST_MODEL, instructions="You are agent B. Just respond with 'B' and nothing else."
+        )
+
+        runner = AgentRunner()
+
+        # Define async functions to run agents
+        async def run_agent_a():
+            """Run agent A with a delay to ensure overlap"""
+            result = await runner.run(agent_a, "What's your name?")
+            # Add a small delay to ensure traces overlap
+            await asyncio.sleep(0.1)
+            return result
+
+        async def run_agent_b():
+            """Run agent B immediately"""
+            result = await runner.run(agent_b, "Who are you?")
+            return result
+
+        # Run both agents concurrently to create overlapping traces
+        results = await asyncio.gather(run_agent_a(), run_agent_b())
+
+        result_a, result_b = results
+        assert result_a is not None, "Agent A should return a result"
+        assert result_b is not None, "Agent B should return a result"
+
+    finally:
+        processor.shutdown()
+
+    # Get all spans
+    spans = memory_logger.pop()
+    assert len(spans) >= 2, f"Should have at least 2 trace spans, got {len(spans)}"
+
+    # Find the root trace spans (these are created by on_trace_start/on_trace_end)
+    # These are actually the "Agent workflow" spans, not the agent-a/agent-b spans
+    trace_spans = []
+    for span in spans:
+        span_name = span.get("span_attributes", {}).get("name", "")
+        # The actual traces are "Agent workflow" spans with no parents
+        if span_name == "Agent workflow" and not span.get("span_parents"):
+            trace_spans.append(span)
+
+    # We should have exactly 2 trace spans
+    assert len(trace_spans) == 2, f"Should have exactly 2 trace spans, got {len(trace_spans)}"
+
+    # Identify which trace is for which agent by looking at the input
+    agent_a_trace = None
+    agent_b_trace = None
+    for trace in trace_spans:
+        input_str = str(trace.get("input", ""))
+        if "What's your name?" in input_str:
+            agent_a_trace = trace
+        elif "Who are you?" in input_str:
+            agent_b_trace = trace
+
+    assert agent_a_trace is not None, "Could not find Agent A's trace"
+    assert agent_b_trace is not None, "Could not find Agent B's trace"
+
+    # With the fix, both traces should have their correct input and output
+    # Verify Agent A trace has correct input/output
+    assert agent_a_trace.get("input") is not None, "Agent A trace should have input"
+    assert agent_a_trace.get("output") is not None, "Agent A trace should have output"
+
+    # Verify Agent B trace has correct input/output
+    assert agent_b_trace.get("input") is not None, "Agent B trace should have input"
+    assert agent_b_trace.get("output") is not None, "Agent B trace should have output"
+
+    # Verify the inputs are different (they should be from different prompts)
+    assert agent_a_trace.get("input") != agent_b_trace.get("input"), (
+        "Agent A and B traces should have different inputs"
+    )
+
+    # Verify the outputs are different (agents respond differently)
+    if agent_a_trace.get("output") and agent_b_trace.get("output"):
+        assert agent_a_trace.get("output") != agent_b_trace.get("output"), (
+            "Agent A and B traces should have different outputs"
+        )
+
+
+@pytest.mark.asyncio
 async def test_agents_tool_openai_nested_spans(memory_logger):
     """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
     pytest.importorskip("agents", reason="agents package not available")
