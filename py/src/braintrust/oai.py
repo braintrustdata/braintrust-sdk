@@ -480,7 +480,7 @@ class ResponseWrapper:
                             annotation_index = result.annotation_index
                             if "annotations" not in current_content:
                                 current_content["annotations"] = []
-                            if annotation_index == len(current_content["annotations"]):
+                            if annotation_index >= len(current_content["annotations"]):
                                 current_content["annotations"].append({})
                             current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
