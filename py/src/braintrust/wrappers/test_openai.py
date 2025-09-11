@@ -172,6 +172,86 @@ def test_openai_responses_metrics(memory_logger):
 
 
 @pytest.mark.vcr
+def test_openai_responses_metadata_preservation(memory_logger):
+    """Test that additional metadata fields in responses are preserved."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    # Test with responses.create - the response object has various metadata fields
+    start = time.time()
+    response = client.responses.create(
+        model=TEST_MODEL,
+        input="What is 10 + 10?",
+        instructions="Respond with just the number",
+    )
+    end = time.time()
+
+    assert response
+    assert response.output
+
+    # Check that the response has metadata fields like id, created_at, object, etc.
+    assert hasattr(response, "id")
+    assert hasattr(response, "created_at")
+    assert hasattr(response, "object")
+    assert hasattr(response, "model")
+
+    # Verify spans capture metadata
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    # Check that span metadata includes the parameters
+    assert TEST_MODEL in span["metadata"]["model"]  # Model name may include version date
+    assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["instructions"] == "Respond with just the number"
+
+    # Check that response metadata is preserved (non-output, non-usage fields)
+    # The metadata should be in span["metadata"] after our changes
+    assert "metadata" in span
+    if "id" in span.get("metadata", {}):
+        # Response metadata like id, created, object should be preserved
+        assert span["metadata"]["id"] == response.id
+
+    # Verify metrics are properly extracted
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert "time_to_first_token" in metrics
+
+    # Test with responses.parse to ensure metadata is preserved there too
+    class SimpleAnswer(BaseModel):
+        value: int
+
+    start = time.time()
+    parse_response = client.responses.parse(
+        model=TEST_MODEL,
+        input="What is 15 + 15?",
+        text_format=SimpleAnswer,
+    )
+    end = time.time()
+
+    assert parse_response
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 30
+
+    # Verify metadata preservation in parse response
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    # Check parameters are in metadata
+    assert TEST_MODEL in span["metadata"]["model"]  # Model name may include version date
+    assert span["metadata"]["provider"] == "openai"
+
+    # Verify the structured output is captured
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 30
+
+    # Check metrics
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+
+
+@pytest.mark.vcr
 def test_openai_embeddings(memory_logger):
     assert not memory_logger.pop()
 
