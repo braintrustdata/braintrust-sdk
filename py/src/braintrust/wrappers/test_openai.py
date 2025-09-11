@@ -252,6 +252,90 @@ def test_openai_responses_metadata_preservation(memory_logger):
 
 
 @pytest.mark.vcr
+def test_openai_responses_sparse_indices(memory_logger):
+    """Test that streaming responses with sparse/out-of-order indices are handled correctly."""
+    assert not memory_logger.pop()
+
+    from braintrust.oai import ResponseWrapper
+
+    # Create a mock response with sparse content indices (e.g., indices 0, 2, 5)
+    # This simulates a streaming response where items arrive out of order or with gaps
+    class MockResult:
+        def __init__(self, type, content_index=None, delta=None, annotation_index=None, annotation=None, output_index=None, item=None):
+            self.type = type
+            if content_index is not None:
+                self.content_index = content_index
+            if delta is not None:
+                self.delta = delta
+            if annotation_index is not None:
+                self.annotation_index = annotation_index
+            if annotation is not None:
+                self.annotation = annotation
+            if output_index is not None:
+                self.output_index = output_index
+            if item is not None:
+                self.item = item
+
+    class MockItem:
+        def __init__(self, id="test_id", type="message"):
+            self.id = id
+            self.type = type
+
+    # Test sparse content indices
+    all_results = [
+        MockResult("response.output_item.added", item=MockItem()),
+        MockResult("response.output_text.delta", content_index=0, delta="First", output_index=0),
+        MockResult("response.output_text.delta", content_index=2, delta="Third", output_index=0),  # Gap at index 1
+        MockResult("response.output_text.delta", content_index=5, delta="Sixth", output_index=0),  # Gap at indices 3,4
+    ]
+
+    # Process the results
+    wrapper = ResponseWrapper(None, None)
+    output = [{}]  # Initialize with one output item
+    result = wrapper._postprocess_streaming_results(all_results)
+
+    # Verify the output was built correctly with gaps filled
+    assert "output" in result
+    assert len(result["output"]) == 1
+    content = result["output"][0].get("content", [])
+
+    # Should have 6 items (indices 0-5)
+    assert len(content) >= 6
+    assert content[0].get("text") == "First"
+    assert content[1].get("text", "") == ""  # Gap should be empty
+    assert content[2].get("text") == "Third"
+    assert content[3].get("text", "") == ""  # Gap should be empty
+    assert content[4].get("text", "") == ""  # Gap should be empty
+    assert content[5].get("text") == "Sixth"
+
+    # Test sparse annotation indices
+    all_results_with_annotations = [
+        MockResult("response.output_item.added", item=MockItem()),
+        MockResult("response.output_text.delta", content_index=0, delta="Text", output_index=0),
+        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=1, annotation={"text": "Second annotation"}, output_index=0),
+        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=3, annotation={"text": "Fourth annotation"}, output_index=0),
+    ]
+
+    result = wrapper._postprocess_streaming_results(all_results_with_annotations)
+
+    # Verify annotations were built correctly with gaps filled
+    assert "output" in result
+    content = result["output"][0].get("content", [])
+    assert len(content) >= 1
+    annotations = content[0].get("annotations", [])
+
+    # Should have 4 items (indices 0-3)
+    assert len(annotations) >= 4
+    assert annotations[0] == {}  # Gap should be empty dict
+    assert annotations[1] == {"text": "Second annotation"}
+    assert annotations[2] == {}  # Gap should be empty dict
+    assert annotations[3] == {"text": "Fourth annotation"}
+
+    # No spans should be generated from this unit test
+    assert not memory_logger.pop()
+
+
+@pytest.mark.vcr
 def test_openai_embeddings(memory_logger):
     assert not memory_logger.pop()
 

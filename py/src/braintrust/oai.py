@@ -467,7 +467,8 @@ class ResponseWrapper:
                         if "content" not in current_output:
                             current_output["content"] = []
                         content_index = result.content_index
-                        if content_index >= len(current_output["content"]):
+                        # Fill any gaps in the content array
+                        while len(current_output["content"]) <= content_index:
                             current_output["content"].append({})
                         current_content = current_output["content"][content_index]
                         current_content["type"] = "output_text"
@@ -478,7 +479,8 @@ class ResponseWrapper:
                             annotation_index = result.annotation_index
                             if "annotations" not in current_content:
                                 current_content["annotations"] = []
-                            if annotation_index >= len(current_content["annotations"]):
+                            # Fill any gaps in the annotations array
+                            while len(current_content["annotations"]) <= annotation_index:
                                 current_content["annotations"].append({})
                             current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
