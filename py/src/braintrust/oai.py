@@ -390,17 +390,20 @@ class ResponseWrapper:
     @classmethod
     def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
         """Parse event from response result - minimal processing like JS version."""
-        data = {}
+        data = {"metrics": {}}
 
-        if result:
-            if "output" in result:
-                data["output"] = result["output"]
+        if not result:
+            return data
 
-            metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
-            if metadata:
-                data["metadata"] = metadata
+        if "output" in result:
+            data["output"] = result["output"]
 
-        data["metrics"] = _parse_metrics_from_usage(result.get("usage"))
+        metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
+        if metadata:
+            data["metadata"] = metadata
+
+        if "usage" in result:
+            data["metrics"] = _parse_metrics_from_usage(result["usage"])
 
         return data
 
