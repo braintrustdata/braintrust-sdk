@@ -469,7 +469,7 @@ class ResponseWrapper:
                         if "content" not in current_output:
                             current_output["content"] = []
                         content_index = result.content_index
-                        if content_index == len(current_output["content"]):
+                        if content_index >= len(current_output["content"]):
                             current_output["content"].append({})
                         current_content = current_output["content"][content_index]
                         current_content["type"] = "output_text"
