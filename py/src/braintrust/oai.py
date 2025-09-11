@@ -414,10 +414,8 @@ class ResponseWrapper:
         output = []
 
         for result in all_results:
-            usage = None
-            if hasattr(result, "usage"):
-                usage = getattr(result, "usage")
-            elif hasattr(result, "type") and result.type == "response.completed" and hasattr(result, "response"):
+            usage = getattr(result, "usage", None)
+            if not usage and hasattr(result, "type") and result.type == "response.completed" and hasattr(result, "response"):
                 # Handle summaries from completed response if present
                 if hasattr(result.response, "output") and result.response.output:
                     for output_item in result.response.output:
