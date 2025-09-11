@@ -389,7 +389,7 @@ class ResponseWrapper:
 
     @classmethod
     def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse event from response result - minimal processing like JS version."""
+        """Parse event from response result"""
         data = {"metrics": {}}
 
         if not result:
