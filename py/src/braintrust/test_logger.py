@@ -318,6 +318,218 @@ class TestLogger(TestCase):
             },
         )
 
+    def test_extract_mustache_variables_simple(self):
+        """Test extraction of simple mustache variables."""
+        from braintrust.logger import _extract_mustache_variables
+
+        template = "Hello {{name}}, you are {{age}} years old"
+        variables = _extract_mustache_variables(template)
+        self.assertEqual(set(variables), {"name", "age"})
+
+    def test_extract_mustache_variables_nested(self):
+        """Test extraction of nested object variables."""
+        from braintrust.logger import _extract_mustache_variables
+
+        template = "User: {{user.name}}, Email: {{user.profile.email}}"
+        variables = _extract_mustache_variables(template)
+        self.assertEqual(set(variables), {"user.name", "user.profile.email"})
+
+    def test_extract_mustache_variables_array_extraction(self):
+        """Test that array variables are extracted without normalization."""
+        from braintrust.logger import _extract_mustache_variables
+
+        template = "Items: {{items.0}}, {{items.1}}, {{items.5}}"
+        variables = _extract_mustache_variables(template)
+        # Array variables should be extracted as-is, not normalized
+        self.assertEqual(set(variables), {"items.0", "items.1", "items.5"})
+
+    def test_get_nested_value_simple(self):
+        """Test getting values from flat objects."""
+        from braintrust.logger import _get_nested_value
+
+        data = {"name": "John", "age": 30}
+        self.assertEqual(_get_nested_value(data, "name"), "John")
+        self.assertEqual(_get_nested_value(data, "age"), 30)
+        self.assertIsNone(_get_nested_value(data, "missing"))
+
+    def test_get_nested_value_nested_object(self):
+        """Test getting values from nested objects."""
+        from braintrust.logger import _get_nested_value
+
+        data = {
+            "user": {
+                "name": "John",
+                "profile": {
+                    "email": "john@example.com"
+                }
+            }
+        }
+        self.assertEqual(_get_nested_value(data, "user.name"), "John")
+        self.assertEqual(_get_nested_value(data, "user.profile.email"), "john@example.com")
+        self.assertIsNone(_get_nested_value(data, "user.missing"))
+
+    def test_get_nested_value_array_access(self):
+        """Test getting values from arrays."""
+        from braintrust.logger import _get_nested_value
+
+        data = {
+            "items": ["first", "second", "third"],
+            "users": [{"name": "John"}, {"name": "Jane"}]
+        }
+        self.assertEqual(_get_nested_value(data, "items.0"), "first")
+        self.assertEqual(_get_nested_value(data, "items.2"), "third")
+        self.assertEqual(_get_nested_value(data, "users.1.name"), "Jane")
+        self.assertIsNone(_get_nested_value(data, "items.10"))
+
+    def test_lint_template_valid_variables(self):
+        """Test lint_template passes with all variables present."""
+        from braintrust.logger import lint_template
+
+        template = "Hello {{name}}, you are {{age}} years old"
+        args = {"name": "John", "age": 30}
+
+        # Should not raise any exception
+        try:
+            lint_template(template, args)
+        except ValueError:
+            self.fail("lint_template raised ValueError unexpectedly")
+
+    def test_lint_template_missing_variable(self):
+        """Test lint_template raises ValueError for missing variables."""
+        from braintrust.logger import lint_template
+
+        template = "Hello {{name}}, you are {{age}} years old"
+        args = {"name": "John"}  # Missing 'age'
+
+        with self.assertRaises(ValueError) as context:
+            lint_template(template, args)
+
+        self.assertIn("Variable 'age' does not exist", str(context.exception))
+
+    def test_prompt_build_strict_mode_enabled(self):
+        """Test Prompt.build with strict mode enabled validates variables."""
+        from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+
+        # Create prompt using the proper structure
+        prompt_schema = PromptSchema(
+            id="test-id",
+            project_id="test-project",
+            _xact_id="test-xact",
+            name="test-prompt",
+            slug="test-prompt",
+            description="test",
+            prompt_data=PromptData(
+                prompt=PromptChatBlock(
+                    messages=[
+                        PromptMessage(
+                            role="user",
+                            content="Hello {{name}}, please help with {{task}}"
+                        )
+                    ]
+                ),
+                options={"model": "gpt-4o"}
+            ),
+            tags=None
+        )
+        lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
+        prompt = Prompt(lazy_prompt, {}, False)
+
+        # Valid build with all variables
+        result = prompt.build(name="John", task="coding", strict=True)
+        self.assertEqual(result["messages"][0]["content"], "Hello John, please help with coding")
+
+        # Invalid build missing variables should raise ValueError
+        with self.assertRaises(ValueError) as context:
+            prompt.build(name="John", strict=True)  # Missing 'task'
+
+        self.assertIn("Variable 'task' does not exist", str(context.exception))
+
+    def test_prompt_build_strict_mode_disabled(self):
+        """Test Prompt.build with strict mode disabled allows missing variables."""
+        from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+
+        prompt_schema = PromptSchema(
+            id="test-id",
+            project_id="test-project",
+            _xact_id="test-xact",
+            name="test-prompt",
+            slug="test-prompt",
+            description="test",
+            prompt_data=PromptData(
+                prompt=PromptChatBlock(
+                    messages=[
+                        PromptMessage(
+                            role="user",
+                            content="Hello {{name}}, please help with {{task}}"
+                        )
+                    ]
+                ),
+                options={"model": "gpt-4o"}
+            ),
+            tags=None
+        )
+        lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
+        prompt = Prompt(lazy_prompt, {}, False)
+
+        # Should work even with missing variables when strict=False (default)
+        result = prompt.build(name="John")
+        # Missing variables render as empty strings in chevron
+        self.assertEqual(result["messages"][0]["content"], "Hello John, please help with ")
+
+    def _create_test_prompt(self, content: str):
+        """Helper to create a test prompt with the proper structure."""
+        from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+
+        prompt_schema = PromptSchema(
+            id="test-id",
+            project_id="test-project",
+            _xact_id="test-xact",
+            name="test-prompt",
+            slug="test-prompt",
+            description="test",
+            prompt_data=PromptData(
+                prompt=PromptChatBlock(
+                    messages=[PromptMessage(role="user", content=content)]
+                ),
+                options={"model": "gpt-4o"}
+            ),
+            tags=None
+        )
+        lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
+        return Prompt(lazy_prompt, {}, False)
+
+    def test_prompt_build_nested_variables_strict(self):
+        """Test Prompt.build with nested object variables in strict mode."""
+        prompt = self._create_test_prompt("User {{user.name}} with email {{user.profile.email}}")
+
+        # Valid nested data
+        user_data = {
+            "user": {
+                "name": "John",
+                "profile": {"email": "john@example.com"}
+            }
+        }
+        result = prompt.build(strict=True, **user_data)
+        expected = "User John with email john@example.com"
+        self.assertEqual(result["messages"][0]["content"], expected)
+
+        # Missing nested property should fail in strict mode
+        invalid_data = {"user": {"name": "John"}}  # Missing profile.email
+        with self.assertRaises(ValueError):
+            prompt.build(strict=True, **invalid_data)
+
+    def test_prompt_build_array_variables_strict(self):
+        """Test Prompt.build with array variables in strict mode."""
+        prompt = self._create_test_prompt("Items: {{items.0}}, {{items.1}}")
+
+        # Valid array with enough items
+        result = prompt.build(items=["first", "second", "third"], strict=True)
+        self.assertEqual(result["messages"][0]["content"], "Items: first, second")
+
+        # Array too short should fail in strict mode
+        with self.assertRaises(ValueError):
+            prompt.build(items=["only_one"], strict=True)
+
 
 def test_noop_permalink_issue_1837():
     # fixes issue #BRA-1837
