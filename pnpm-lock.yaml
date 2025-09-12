@@ -226,7 +226,7 @@ importers:
         specifier: ^9.0.7
         version: 9.0.7
       ai:
-        specifier: 5.0.42
+        specifier: ^5.0.42
         version: 5.0.42(zod@3.25.34)
       async:
         specifier: ^3.2.5
