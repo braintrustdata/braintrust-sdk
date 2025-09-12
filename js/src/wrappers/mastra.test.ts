@@ -80,11 +80,11 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
   test("generateVNext", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
-    wrapMastraAgent(agent as any, { name: "demoAgent" });
+    wrapMastraAgent(agent, { span_name: "demoAgent" });
 
     const res: any = await agent.generateVNext([
       { role: "user", content: "What is 2+2?" },
-    ] as any);
+    ]);
 
     const spans = (await testLogger.drain()) as any[];
     const wrapperSpan = spans.find(
@@ -99,7 +99,7 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
   test("streamVNext", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
-    wrapMastraAgent(agent as any, { name: "demoAgent" });
+    wrapMastraAgent(agent as any, { span_name: "demoAgent" });
 
     const res: any = await agent.streamVNext([
       { role: "user", content: "Say hello in two words" },

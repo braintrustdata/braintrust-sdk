@@ -14,20 +14,22 @@ MastraAgentMethods is a neutral interface for the Mastra agent methods we use.
 This avoids importing `typeof import("mastra")`, which can cause type-identity
 conflicts when multiple copies/versions of `mastra` exist in the workspace.
 */
+type AnyFunc = (...args: any[]) => any;
+
 interface MastraAgentMethods {
   name?: string;
   tools?: Record<string, unknown> | unknown[];
-  generate?: (...args: unknown[]) => Promise<unknown>;
-  generateVNext?: (...args: unknown[]) => Promise<unknown>;
-  stream?: (...args: unknown[]) => unknown;
-  streamVNext?: (...args: unknown[]) => unknown;
+  generate?: AnyFunc;
+  generateVNext?: AnyFunc;
+  stream?: AnyFunc;
+  streamVNext?: AnyFunc;
 }
 
 function hasAllMethods(a: MastraAgentMethods): a is MastraAgentMethods & {
-  generate: (...args: unknown[]) => Promise<unknown>;
-  generateVNext: (...args: unknown[]) => Promise<unknown>;
-  stream: (...args: unknown[]) => unknown;
-  streamVNext: (...args: unknown[]) => unknown;
+  generate: AnyFunc;
+  generateVNext: AnyFunc;
+  stream: AnyFunc;
+  streamVNext: AnyFunc;
 } {
   return (
     typeof a.generate === "function" &&
@@ -50,11 +52,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function wrapMastraAgent(
-  agent: MastraAgentMethods,
-  options?: { name?: string },
-): MastraAgentMethods {
-  const prefix = options?.name ?? agent.name ?? "mastraAgent";
+export function wrapMastraAgent<T extends MastraAgentMethods>(
+  agent: T,
+  options?: { name?: string; span_name?: string },
+): T {
+  const prefix =
+    options?.name ?? options?.span_name ?? agent.name ?? "mastraAgent";
 
   // Note: Do not assign to agent.tools (it may be a getter-only property).
   // Instead, wrap tools at call time using either params.tools or agent.tools.
