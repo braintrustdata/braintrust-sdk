@@ -24,6 +24,7 @@ class BraintrustOtelSpan(OtelSpan):
     def __init__(self, bt_span: SpanImpl):
         """Initialize with BT span as the source of truth."""
         self._bt_span = bt_span
+        self._otel_events = []
 
     def __enter__(self):
         self._bt_span.__enter__()
@@ -44,10 +45,16 @@ class BraintrustOtelSpan(OtelSpan):
 
     def add_event(self, name: str, attributes: Optional[Mapping[str, Any]] = None, timestamp: Optional[int] = None) -> None:
         """Add event to BT span."""
-        event_data = {'event': name}
+        # Store event in our list
+        event = {'name': name}
         if attributes:
-            event_data.update(attributes)
-        self._bt_span.log(**event_data)
+            event['attributes'] = dict(attributes)
+        if timestamp:
+            event['timestamp'] = timestamp
+        self._otel_events.append(event)
+
+        # Update BT span metadata with all events
+        self._bt_span.log(metadata={'otel.events': self._otel_events})
 
     def set_status(self, status: Status, description: Optional[str] = None) -> None:
         """Map OTEL status to BT span."""

@@ -98,6 +98,24 @@ def init_test_exp(experiment_name: str, project_name: str = None):
     return exp
 
 
+def check_otel_installed():
+    """Check if OpenTelemetry SDK is fully installed."""
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter  # noqa: F401
+        from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@pytest.fixture
+def if_otel_installed():
+    """Pytest fixture that skips test if OpenTelemetry is not installed."""
+    if not check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed")
+
+
 # ----------------------------------------------------------------------
 # Tests for the helper functions
 # ----------------------------------------------------------------------
