@@ -7,13 +7,11 @@ import {
   afterEach,
 } from "vitest";
 import { Agent } from "@mastra/core/agent";
-import { wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import { wrapMastraAgent } from "./mastra";
-import { BraintrustMiddleware } from "./ai-sdk-v2";
 import {
   _exportsForTestingOnly,
   Logger,
