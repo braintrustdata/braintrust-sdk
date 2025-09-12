@@ -44,6 +44,15 @@ except ImportError:
     OTEL_AVAILABLE = False
 
 
+# Import bridge classes for backward compatibility
+try:
+    from .bridge import BraintrustOtelSpan, Tracer, TracerProvider
+except ImportError:
+    # If bridge is not available, provide stubs
+    BraintrustOtelSpan = None
+    Tracer = None
+    TracerProvider = None
+
 FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.", "traceloop.")
 
 
