@@ -231,10 +231,11 @@ function wrapStreamVNext(
     wrappedOpts.onError = async (err: unknown) => {
       try {
         await userOnError?.(err);
+      } catch (userErrorHandlerError) {
+        logError(span, userErrorHandlerError);
       } finally {
         logError(span, err);
         span.end();
-        throw err;
       }
     };
 
