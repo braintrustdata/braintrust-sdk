@@ -9,7 +9,6 @@ import {
 import { wrapLanguageModel } from "ai";
 import { BraintrustMiddleware } from "./ai-sdk-v2";
 
-type AnyFunc = (...args: any[]) => any;
 let aiSDKFormatWarning = false;
 
 /*
@@ -22,17 +21,8 @@ interface MastraAgentMethods {
   tools?: Record<string, unknown> | unknown[];
   model?: any; // The language model used by the agent
   __setTools(tools: Record<string, unknown> | unknown[]): void;
-  generateVNext?: AnyFunc;
-  streamVNext?: AnyFunc;
-}
-
-function hasAllMethods(a: MastraAgentMethods): a is MastraAgentMethods & {
-  generateVNext: AnyFunc;
-  streamVNext: AnyFunc;
-} {
-  return (
-    typeof a.generateVNext === "function" && typeof a.streamVNext === "function"
-  );
+  generateVNext?: (params: any) => any;
+  streamVNext?: (params: any) => any;
 }
 
 /**
@@ -66,13 +56,9 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
 ): T {
   const prefix = options?.name ?? options?.span_name ?? agent.name ?? "Agent";
 
-  // Guard upfront that all methods exist, then override
   if (!hasAllMethods(agent)) {
     return agent;
   }
-
-  const _originalGenerateVNext = agent.generateVNext.bind(agent);
-  const _originalStreamVNext = agent.streamVNext.bind(agent);
 
   agent.model = wrapLanguageModel({
     model: agent.model,
@@ -82,13 +68,46 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
     agent.__setTools(wrapTools(agent.tools));
   }
 
-  // generateVNext (explicit override with _original style)
-  agent.generateVNext = function (...args: unknown[]) {
+  return new Proxy(agent, {
+    get(target, prop, receiver) {
+      const value: unknown = Reflect.get(target, prop, receiver);
+
+      if (prop === "generateVNext" && typeof value === "function") {
+        return wrapGenerateVNext(value, target, prefix);
+      }
+
+      if (prop === "streamVNext" && typeof value === "function") {
+        return wrapStreamVNext(value, target, prefix);
+      }
+
+      return value;
+    },
+  });
+}
+
+function hasAllMethods(a: MastraAgentMethods): a is MastraAgentMethods & {
+  generateVNext: (params: any) => any;
+  streamVNext: (params: any) => any;
+} {
+  return (
+    typeof a.generateVNext === "function" && typeof a.streamVNext === "function"
+  );
+}
+
+/**
+ * Creates a wrapped version of generateVNext with Braintrust tracing
+ */
+function wrapGenerateVNext(
+  original: Function,
+  target: MastraAgentMethods,
+  prefix: string,
+): Function {
+  return function (...args: unknown[]) {
     const input = args[0];
 
     return traced(
       async (span) => {
-        const result = await _originalGenerateVNext.call(agent, ...args);
+        const result = await original.apply(target, args);
 
         const provider = detectProviderFromResult(result);
         const model = extractModelFromResult(result);
@@ -105,9 +124,9 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
 
         span.log({
           input,
-          output: result.text ?? result.content ?? result,
+          output: result,
           metadata: {
-            agent_name: agent.name ?? prefix,
+            agent_name: target.name ?? prefix,
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
@@ -121,9 +140,17 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
       },
     );
   };
+}
 
-  // streamVNext (explicit override with hooks) - AI SDK v5 compatible
-  agent.streamVNext = function (...args: unknown[]) {
+/**
+ * Creates a wrapped version of streamVNext with Braintrust tracing
+ */
+function wrapStreamVNext(
+  original: Function,
+  target: MastraAgentMethods,
+  prefix: string,
+): Function {
+  return function (...args: unknown[]) {
     const input = args[0];
 
     const span = startSpan({
@@ -131,7 +158,7 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
       event: {
         input,
         metadata: {
-          agent_name: agent.name ?? prefix,
+          agent_name: target.name ?? prefix,
         },
       },
     });
@@ -148,7 +175,7 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
     }
 
     // Use user's format if specified, otherwise default to 'aisdk'
-    const wrappedOpts = {
+    const wrappedOpts: any = {
       ...baseOpts,
       format: baseOpts.format || "aisdk", // Default to AI SDK v5 format if not specified
     };
@@ -157,57 +184,59 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
     const userOnFinish = baseOpts?.onFinish;
     const userOnError = baseOpts?.onError;
 
-    const startTime = Date.now();
-    let receivedFirst = false;
+    try {
+      const startTime = Date.now();
+      let receivedFirst = false;
 
-    wrappedOpts.onChunk = (chunk: unknown) => {
-      userOnChunk?.(chunk);
-      if (!receivedFirst) {
-        receivedFirst = true;
+      wrappedOpts.onChunk = (chunk: unknown) => {
+        userOnChunk?.(chunk);
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
+          });
+        }
+      };
+
+      wrappedOpts.onFinish = async (event: unknown) => {
+        await userOnFinish?.(event);
+
+        const e: any = event;
+        const provider = detectProviderFromResult(e);
+        const model = extractModelFromResult(e);
+        const finishReason = normalizeFinishReason(e?.finishReason);
+
+        // Extract usage metrics if available
+        const metrics = e?.usage
+          ? normalizeUsageMetrics(e.usage, provider, e.providerMetadata)
+          : {};
+
         span.log({
-          metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
+          output: e.text ?? e.content ?? e,
+          metadata: {
+            agent_name: target.name ?? prefix,
+            ...(provider ? { provider } : {}),
+            ...(model ? { model } : {}),
+            ...(finishReason ? { finish_reason: finishReason } : {}),
+          },
+          metrics,
         });
-      }
-    };
+        span.end();
+      };
 
-    wrappedOpts.onFinish = async (event: unknown) => {
-      await userOnFinish?.(event);
+      wrappedOpts.onError = async (err: unknown) => {
+        await userOnError?.(err);
+        logError(span, err);
+        span.end();
+      };
 
-      const e: any = event;
-      const provider = detectProviderFromResult(e);
-      const model = extractModelFromResult(e);
-      const finishReason = normalizeFinishReason(e?.finishReason);
-
-      // Extract usage metrics if available
-      const metrics = e?.usage
-        ? normalizeUsageMetrics(e.usage, provider, e.providerMetadata)
-        : {};
-
-      span.log({
-        output: e.text ?? e.content ?? e,
-        metadata: {
-          agent_name: agent.name ?? prefix,
-          ...(provider ? { provider } : {}),
-          ...(model ? { model } : {}),
-          ...(finishReason ? { finish_reason: finishReason } : {}),
-        },
-        metrics,
-      });
+      return withCurrent(span, () =>
+        original.apply(target, [args[0], wrappedOpts, ...args.slice(2)]),
+      );
+    } catch (error) {
+      logError(span, error);
       span.end();
-    };
-
-    wrappedOpts.onError = async (err: unknown) => {
-      logError(span, err);
-      span.end();
-      await userOnError?.(err);
-    };
-
-    const result = withCurrent(span, () =>
-      _originalStreamVNext.call(agent, args[0], wrappedOpts, ...args.slice(2)),
-    );
-
-    return result;
+      throw error;
+    }
   };
-
-  return agent;
 }

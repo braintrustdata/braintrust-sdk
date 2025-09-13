@@ -78,11 +78,9 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
   test("generateVNext", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
-    wrapMastraAgent(agent, { span_name: "demoAgent" });
+    const wrappedAgent = wrapMastraAgent(agent, { span_name: "demoAgent" });
 
-    const res: any = await agent.generateVNext([
-      { role: "user", content: "What is 2+2?" },
-    ]);
+    const res = await wrappedAgent.generateVNext("What is 2+2?");
 
     const spans = (await testLogger.drain()) as any[];
     const wrapperSpan = spans.find(
@@ -97,11 +95,9 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
   test("streamVNext", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
-    wrapMastraAgent(agent as any, { span_name: "demoAgent" });
+    const wrappedAgent = wrapMastraAgent(agent, { span_name: "demoAgent" });
 
-    const res: any = await agent.streamVNext([
-      { role: "user", content: "Say hello in two words" },
-    ] as any);
+    const res: any = await wrappedAgent.streamVNext("Say hello in two words");
     // prefer the promise shape returned by AI SDK-compatible wrappers
     const text =
       typeof res?.text?.then === "function" ? await res.text : undefined;
