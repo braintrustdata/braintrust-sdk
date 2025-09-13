@@ -2,9 +2,11 @@ import logging
 import os
 from typing import Optional, cast
 
+from .agent import Agent
+
 logger = logging.getLogger(__name__)
 
-__all__ = ["setup_braintrust"]
+__all__ = ["setup_braintrust", "Agent"]
 
 
 def setup_braintrust(
