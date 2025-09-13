@@ -184,23 +184,26 @@ function wrapStreamVNext(
     const userOnFinish = baseOpts?.onFinish;
     const userOnError = baseOpts?.onError;
 
-    try {
-      const startTime = Date.now();
-      let receivedFirst = false;
+    const startTime = Date.now();
+    let receivedFirst = false;
 
-      wrappedOpts.onChunk = (chunk: unknown) => {
+    wrappedOpts.onChunk = (chunk: unknown) => {
+      try {
         userOnChunk?.(chunk);
+      } finally {
         if (!receivedFirst) {
           receivedFirst = true;
           span.log({
             metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
           });
         }
-      };
+      }
+    };
 
-      wrappedOpts.onFinish = async (event: unknown) => {
+    wrappedOpts.onFinish = async (event: unknown) => {
+      try {
         await userOnFinish?.(event);
-
+      } finally {
         const e: any = event;
         const provider = detectProviderFromResult(e);
         const model = extractModelFromResult(e);
@@ -222,21 +225,21 @@ function wrapStreamVNext(
           metrics,
         });
         span.end();
-      };
+      }
+    };
 
-      wrappedOpts.onError = async (err: unknown) => {
+    wrappedOpts.onError = async (err: unknown) => {
+      try {
         await userOnError?.(err);
+      } finally {
         logError(span, err);
         span.end();
-      };
+        throw err;
+      }
+    };
 
-      return withCurrent(span, () =>
-        original.apply(target, [args[0], wrappedOpts, ...args.slice(2)]),
-      );
-    } catch (error) {
-      logError(span, error);
-      span.end();
-      throw error;
-    }
+    return withCurrent(span, () =>
+      original.apply(target, [args[0], wrappedOpts, ...args.slice(2)]),
+    );
   };
 }

@@ -49,21 +49,20 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
     const model = openai(OPENAI_MODEL);
     const calculatorTool = createTool({
       id: "calculator",
-      description: "Perform basic mathematical operations",
+      description: "Add two numbers",
       inputSchema: z.object({
-        operation: z.enum(["add"]).describe("The operation to perform"),
-        a: z.number().describe("The first number"),
-        b: z.number().describe("The second number"),
-      }),
-      outputSchema: z.object({
-        result: z.number(),
-        operation: z.string(),
         a: z.number(),
         b: z.number(),
-        formula: z.string(),
-      }),
+      }) as any,
+      outputSchema: z.object({
+        result: z.number(),
+      }) as any,
       execute: async ({ context }) => {
-        return (await context.a) + context.b;
+        const { a, b } = context;
+
+        return {
+          result: a + b,
+        };
       },
     });
     const agent = new Agent({
