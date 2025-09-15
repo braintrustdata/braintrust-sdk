@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z } from "zod/v4";
 import { forEachMissingKey } from "./object_util";
 
 export class ExtraFieldsError extends Error {
@@ -51,20 +51,11 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
 //
 // Basically the same as `z.partial()`, except instead of marking fields just
 // optional, it marks them nullish.
-export function objectNullish<
-  T extends z.ZodRawShape,
-  UnknownKeys extends z.UnknownKeysParam,
-  Catchall extends z.ZodTypeAny,
->(object: z.ZodObject<T, UnknownKeys, Catchall>) {
-  return new z.ZodObject({
-    ...object._def,
-    shape: () =>
-      Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [k, v.nullish()]),
-      ),
-  }) as z.ZodObject<
-    { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
-    UnknownKeys,
-    Catchall
-  >;
+export function objectNullish<T extends z.ZodRawShape>(object: z.ZodObject<T>) {
+  // In zod v4, create a new object with all fields made nullish
+  const newShape = Object.fromEntries(
+    Object.entries(object.shape).map(([k, v]) => [k, (v as any).nullish()]),
+  );
+
+  return z.object(newShape) as any;
 }
