@@ -6,8 +6,6 @@ import {
   normalizeUsageMetrics,
   wrapTools,
 } from "./ai-sdk-shared";
-import { wrapLanguageModel } from "ai";
-import { BraintrustMiddleware } from "./ai-sdk-v2";
 
 let aiSDKFormatWarning = false;
 
@@ -60,10 +58,6 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
     return agent;
   }
 
-  agent.model = wrapLanguageModel({
-    model: agent.model,
-    middleware: BraintrustMiddleware(),
-  });
   if (agent.tools) {
     agent.__setTools(wrapTools(agent.tools));
   }
