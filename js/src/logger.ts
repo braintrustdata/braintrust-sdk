@@ -70,7 +70,7 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { z, ZodError } from "zod";
+import { z, ZodError } from "zod/v4";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -1358,7 +1358,13 @@ const attachmentMetadataSchema = z.object({
   status: attachmentStatusSchema,
 });
 
-type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+type AttachmentMetadata = {
+  downloadUrl: string;
+  status: {
+    upload_status: "uploading" | "done" | "error";
+    error_message?: string;
+  };
+};
 
 /**
  * A readonly alternative to `Attachment`, which can be used for fetching
@@ -1431,7 +1437,9 @@ export class ReadonlyAttachment {
       throw new Error(`Invalid response from API server: ${errorStr}`);
     }
 
-    return attachmentMetadataSchema.parse(await resp.json());
+    return attachmentMetadataSchema.parse(
+      await resp.json(),
+    ) as AttachmentMetadata;
   }
 
   /**
@@ -5998,11 +6006,12 @@ export function renderPromptParams(
     .object({
       response_format: z.object({
         type: z.literal("json_schema"),
-        json_schema: responseFormatJsonSchemaSchema
-          .omit({ schema: true })
-          .extend({
-            schema: z.record(z.string(), z.any()),
-          }),
+        json_schema: z.object({
+          name: z.string().optional(),
+          description: z.string().optional(),
+          strict: z.boolean().optional(),
+          schema: z.any(),
+        }),
       }),
     })
     .safeParse(params);
