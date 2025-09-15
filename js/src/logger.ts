@@ -1162,7 +1162,7 @@ export class Attachment extends BaseAttachment {
         ({ signedUrl, headers } = z
           .object({
             signedUrl: z.string().url(),
-            headers: z.record(z.string()),
+            headers: z.record(z.string(), z.string()),
           })
           .parse(await metadataResponse.json()));
       } catch (error) {
@@ -6001,7 +6001,7 @@ export function renderPromptParams(
         json_schema: responseFormatJsonSchemaSchema
           .omit({ schema: true })
           .extend({
-            schema: z.unknown(),
+            schema: z.record(z.string(), z.any()),
           }),
       }),
     })
@@ -6191,7 +6191,9 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
@@ -6265,7 +6267,9 @@ export class Prompt<
       }
     };
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
