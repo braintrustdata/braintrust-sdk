@@ -74,6 +74,12 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
         return wrapStreamVNext(value, target, prefix);
       }
 
+      // Ensure all other function properties are bound to the original target
+      // so private fields and internal invariants are preserved.
+      if (typeof value === "function") {
+        return (value as Function).bind(target);
+      }
+
       return value;
     },
   });
