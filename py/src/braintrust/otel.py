@@ -258,7 +258,41 @@ class BraintrustSpanProcessor:
             self._processor = processor
 
     def on_start(self, span, parent_context=None):
-        """Forward span start events to the inner processor."""
+        """Forward span start events to the inner processor, adding Braintrust context."""
+        # Try to get current Braintrust context and set parent automatically
+        try:
+            from braintrust.otel.context import get_active_otel_span
+            active_otel = get_active_otel_span()
+            if active_otel and hasattr(active_otel, '_bt_span'):
+                bt_span = active_otel._bt_span
+                # Try to get the project name from the span context
+                project_name = getattr(bt_span, 'project', None)
+                if not project_name and hasattr(bt_span, '_logger') and hasattr(bt_span._logger, 'project'):
+                    project_name = bt_span._logger.project
+
+                if project_name:
+                    # Set braintrust.parent to the project name with root span ID
+                    span.set_attribute("braintrust.parent", f"{project_name}:{bt_span.root_span_id}")
+                    print(f"Auto-setting braintrust.parent: {project_name}:{bt_span.root_span_id}")
+                else:
+                    # Fallback: use the same parent that was configured for this processor
+                    if hasattr(self._exporter, 'parent') and self._exporter.parent:
+                        # Extract project name from the parent (format: "project_name:experiment")
+                        if ':' in self._exporter.parent:
+                            project_name = self._exporter.parent.split(':')[1]  # Get the experiment/project part
+                        else:
+                            project_name = self._exporter.parent
+
+                        # Use correct format: project_name:project
+                        span.set_attribute("braintrust.parent", f"project_name:{project_name}")
+                        print(f"Using processor parent for braintrust.parent: project_name:{project_name}")
+                    else:
+                        print(f"Could not determine project name for BT span {bt_span.span_id}")
+        except Exception as e:
+            print(f"Error in context detection: {e}")
+            # Ignore errors in context detection
+            pass
+
         self._processor.on_start(span, parent_context)
 
     def on_end(self, span):
