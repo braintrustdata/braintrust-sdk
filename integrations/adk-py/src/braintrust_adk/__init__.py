@@ -1,11 +1,10 @@
 import logging
 from contextlib import AbstractAsyncContextManager
 from functools import wraps
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
 from braintrust.logger import NOOP_SPAN, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
-from typing_extensions import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +53,13 @@ def setup_braintrust(
         return False
 
 
-def wrap_agent(Agent: type) -> type:
+def wrap_agent(Agent: Any) -> Any:
     if _is_patched(Agent):
         return Agent
 
-    def trace_run_wrapper(wrapped):
+    def trace_run_wrapper(wrapped: Any):
         @wraps(wrapped)
-        async def wrapper(instance: Any, *args, **kwargs):
+        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
             parent_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
 
             async def _trace():
@@ -89,13 +88,13 @@ def wrap_agent(Agent: type) -> type:
     return Agent
 
 
-def wrap_flow(Flow: type):
+def wrap_flow(Flow: Any):
     if _is_patched(Flow):
         return Flow
 
-    def trace_flow(wrapped):
+    def trace_flow(wrapped: Any):
         @wraps(wrapped)
-        async def wrapper(instance: Any, *args, **kwargs):
+        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
             invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
 
             async def _trace():
@@ -125,9 +124,9 @@ def wrap_flow(Flow: type):
 
     Flow.run_async = trace_flow(Flow.run_async)
 
-    def trace_call_llm(wrapped):
+    def trace_call_llm(wrapped: Any):
         @wraps(wrapped)
-        async def wrapper(instance, *args, **kwargs):
+        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
             invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
             llm_request = args[1] if len(args) > 1 else kwargs.get("llm_request")
             model_response_event = args[2] if len(args) > 2 else kwargs.get("model_response_event")
@@ -173,13 +172,13 @@ def wrap_flow(Flow: type):
     return Flow
 
 
-def wrap_runner(Runner: type):
+def wrap_runner(Runner: Any):
     if _is_patched(Runner):
         return Runner
 
-    def trace_run_sync_wrapper(wrapped):
+    def trace_run_sync_wrapper(wrapped: Any):
         @wraps(wrapped)
-        def wrapper(instance, *args, **kwargs):
+        def wrapper(instance: Any, *args: Any, **kwargs: Any):
             user_id = kwargs.get("user_id")
             session_id = kwargs.get("session_id")
             new_message = kwargs.get("new_message")
@@ -212,9 +211,9 @@ def wrap_runner(Runner: type):
 
     Runner.run = trace_run_sync_wrapper(Runner.run)
 
-    def trace_run_async_wrapper(wrapped):
+    def trace_run_async_wrapper(wrapped: Any):
         @wraps(wrapped)
-        async def wrapper(instance, *args, **kwargs):
+        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
             user_id = kwargs.get("user_id")
             session_id = kwargs.get("session_id")
             new_message = kwargs.get("new_message")
@@ -266,7 +265,7 @@ def _determine_llm_call_type(llm_request: Any) -> str:
     """
     try:
         # Convert to dict if it's a model object
-        request_dict = _try_dict(llm_request)
+        request_dict = cast(Dict[str, Any], _try_dict(llm_request))
 
         # Check if there are tools in the config
         has_tools = bool(request_dict.get("config", {}).get("tools"))
@@ -294,8 +293,7 @@ def _determine_llm_call_type(llm_request: Any) -> str:
         else:
             return "direct_response"
 
-    except Exception as e:
-        logger.debug(f"Error determining LLM call type: {e}")
+    except Exception:
         return "unknown"
 
 
@@ -303,7 +301,7 @@ def _is_patched(obj: Any):
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _try_dict(obj: Any):
+def _try_dict(obj: Any) -> Optional[Union[Iterable[Any], Dict[str, Any]]]:
     if hasattr(obj, "model_dump"):
         try:
             obj = obj.model_dump(exclude_none=True)
@@ -324,13 +322,16 @@ def _omit(obj: Any, keys: Iterable[str]):
     return {k: v for k, v in obj.items() if k not in keys}
 
 
+G = TypeVar("G", bound=AsyncGenerator[Any, None])
+
+
 # until we drop support for Python 3.9
-class aclosing(AbstractAsyncContextManager):
-    def __init__(self, async_generator):
+class aclosing(AbstractAsyncContextManager[G]):
+    def __init__(self, async_generator: G):
         self.async_generator = async_generator
 
     async def __aenter__(self):
         return self.async_generator
 
-    async def __aexit__(self, *exc_info):
+    async def __aexit__(self, *exc_info: Any):
         await self.async_generator.aclose()
