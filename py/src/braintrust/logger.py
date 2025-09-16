@@ -694,6 +694,19 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+def _get_unified_parent_info():
+    """Get parent information from unified context for BT span creation.
+
+    Returns None if unified context is not available or no active span.
+    """
+    try:
+        from braintrust.otel.unified_context import get_parent_info_for_bt_span
+        return get_parent_info_for_bt_span()
+    except ImportError:
+        # Unified context not available, return None
+        return None
+
+
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
 
@@ -3126,31 +3139,9 @@ def _start_span_parent_args_with_otel(
     parent_span_ids: Optional[ParentSpanIds],
     propagated_event: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Version of _start_span_parent_args that checks for active pure OTEL spans."""
-
-    # If no explicit parent is provided, check for active OTEL span
-    if not parent and not parent_span_ids:
-        try:
-            from braintrust.otel.context import get_otel_span_info
-            otel_info = get_otel_span_info()
-            if otel_info:
-                # Store OTEL span info for metadata (will be added in SpanImpl)
-                otel_event = {'_otel_context': otel_info}
-                if propagated_event:
-                    otel_event.update(propagated_event)
-
-                return dict(
-                    parent_object_type=parent_object_type,
-                    parent_object_id=parent_object_id,
-                    parent_compute_object_metadata_args=parent_compute_object_metadata_args,
-                    parent_span_ids=None,  # No BT parent, this will be a root span
-                    propagated_event=otel_event,
-                )
-        except ImportError:
-            # OTEL not available, fall through to normal logic
-            pass
-
-    # Fall back to original logic
+    """Version of _start_span_parent_args that uses unified context (no longer OTEL-specific)."""
+    # The unified context logic is now handled in SpanImpl.__init__
+    # This function just delegates to the normal logic
     return _start_span_parent_args(
         parent=parent,
         parent_object_type=parent_object_type,
@@ -3672,16 +3663,23 @@ class SpanImpl(Span):
             self.root_span_id = root_id.replace('-', '')
             self.span_parents = None
 
-        # Handle OTEL context if present
+        # Handle unified context if no explicit parents are set
+        if not parent_span_ids:
+            parent_info = _get_unified_parent_info()
+            if parent_info:
+                # Apply parent information from unified context
+                if 'root_span_id' in parent_info:
+                    self.root_span_id = parent_info['root_span_id']
+                if 'span_parents' in parent_info:
+                    self.span_parents = parent_info['span_parents']
+                if 'metadata' in parent_info:
+                    if 'metadata' not in event:
+                        event['metadata'] = {}
+                    event['metadata'].update(parent_info['metadata'])
+
+        # Clean up any legacy _otel_context data
         if '_otel_context' in event:
-            otel_context = event.pop('_otel_context')
-            # Use OTEL trace_id as root_span_id for unified tracing
-            self.root_span_id = otel_context['trace_id']
-            # Add OTEL correlation info to metadata
-            if 'metadata' not in event:
-                event['metadata'] = {}
-            event['metadata']['otel_trace_id'] = otel_context['trace_id']
-            event['metadata']['otel_span_id'] = otel_context['span_id']
+            event.pop('_otel_context')
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
