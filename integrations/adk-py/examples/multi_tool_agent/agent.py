@@ -2,13 +2,17 @@ import datetime
 from typing import Dict
 from zoneinfo import ZoneInfo
 
+from braintrust import init_logger, traced
+from braintrust_adk import wrap_agent
 from google.adk.agents import LlmAgent
 
 
+@traced
 def isNewYork(city: str) -> bool:
     return city.lower() == "new york"
 
 
+@traced
 def get_weather(city: str) -> Dict[str, str]:
     """Retrieves the current weather report for a specified city.
 
@@ -32,6 +36,7 @@ def get_weather(city: str) -> Dict[str, str]:
         }
 
 
+@traced
 def get_current_time(city: str) -> Dict[str, str]:
     """Returns the current time in a specified city.
 
@@ -56,7 +61,9 @@ def get_current_time(city: str) -> Dict[str, str]:
     return {"status": "success", "report": report}
 
 
-root_agent = LlmAgent(
+init_logger(project="adk-multi-tool")
+
+root_agent = wrap_agent(LlmAgent)(
     name="weather_time_agent",
     model="gemini-2.0-flash",
     description=("Agent to answer questions about the time and weather in a city."),
