@@ -3675,6 +3675,8 @@ class SpanImpl(Span):
         # Handle OTEL context if present
         if '_otel_context' in event:
             otel_context = event.pop('_otel_context')
+            # Use OTEL trace_id as root_span_id for unified tracing
+            self.root_span_id = otel_context['trace_id']
             # Add OTEL correlation info to metadata
             if 'metadata' not in event:
                 event['metadata'] = {}

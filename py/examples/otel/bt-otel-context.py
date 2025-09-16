@@ -71,6 +71,29 @@ def main():
 
     print()
 
+    # Demo 2: OTEL as root span with BT spans inside
+    print("=== Demo 2: OTEL as root, BT spans inside ===")
+    with tracer.start_as_current_span("2.otel.root") as otel_root:
+        otel_trace_id = format(otel_root.get_span_context().trace_id, '032x')
+        otel_root.set_attribute("type", "otel_root")
+        otel_root.add_event("otel_root_start")
+        print(f"OTEL trace ID: {otel_trace_id}")
+
+        # BT spans inside OTEL context - should inherit OTEL trace ID
+        with project.start_span("2.1.bt.child") as bt_span:
+            bt_span.log(input="BT span inside OTEL", metadata={"type": "bt_inside_otel"})
+            print(f"BT root_span_id: {bt_span.root_span_id}")
+            print(f"Trace IDs match: {bt_span.root_span_id == otel_trace_id}")
+
+            # Nested BT span should also inherit same trace ID
+            with bt_span.start_span("2.2.bt.grandchild") as bt_grandchild:
+                bt_grandchild.log(input="Nested BT span", output="unified trace", scores={"accuracy": 0.88})
+                print(f"BT grandchild root_span_id: {bt_grandchild.root_span_id}")
+                print(f"Grandchild trace matches: {bt_grandchild.root_span_id == otel_trace_id}")
+
+        otel_root.add_event("otel_root_end")
+
+    print()
 
     # Flush BT data first to create the parent traces
     project.flush()
