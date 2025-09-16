@@ -83,8 +83,8 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.2.4"
-source = { registry = "https://pypi.org/simple" }
+version = "0.2.7"
+source = { editable = "../../py" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -96,24 +96,47 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/c3/01db8b072d56b3bcebe443af7acc57466c87bf2f49612a444ea707f76a90/braintrust-0.2.4.tar.gz", hash = "sha256:b1866a646d2368bd4c2ccba305e5c1e1d97c7f8c715833d3fc69810644fdc66f", size = 159340, upload-time = "2025-08-20T21:15:18.8Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/32/4a48037e9956592f3a7cfae442ecf23c4ea6884950932126561916c089b4/braintrust-0.2.4-py3-none-any.whl", hash = "sha256:7dc30f32ec5e909b0b35e75ee6596090bdc15e4ed9f4d82eda52103b1aaaf721", size = 185252, upload-time = "2025-08-20T21:15:17.137Z" },
-]
 
-[package.optional-dependencies]
-otel = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-sdk" },
+[package.metadata]
+requires-dist = [
+    { name = "boto3", marker = "extra == 'all'" },
+    { name = "boto3", marker = "extra == 'cli'" },
+    { name = "chevron" },
+    { name = "exceptiongroup", specifier = ">=1.2.0" },
+    { name = "gitpython" },
+    { name = "openai-agents", marker = "extra == 'all'" },
+    { name = "openai-agents", marker = "extra == 'openai-agents'" },
+    { name = "opentelemetry-api", marker = "extra == 'all'" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'all'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'all'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'" },
+    { name = "psycopg2-binary", marker = "extra == 'all'" },
+    { name = "psycopg2-binary", marker = "extra == 'cli'" },
+    { name = "pydoc-markdown", marker = "extra == 'all'" },
+    { name = "pydoc-markdown", marker = "extra == 'doc'" },
+    { name = "python-dotenv" },
+    { name = "python-slugify" },
+    { name = "requests" },
+    { name = "sseclient-py" },
+    { name = "starlette", marker = "extra == 'all'" },
+    { name = "starlette", marker = "extra == 'cli'" },
+    { name = "tqdm" },
+    { name = "typing-extensions", specifier = ">=4.1.0" },
+    { name = "uv", marker = "extra == 'all'" },
+    { name = "uv", marker = "extra == 'cli'" },
+    { name = "uvicorn", marker = "extra == 'all'" },
+    { name = "uvicorn", marker = "extra == 'cli'" },
 ]
+provides-extras = ["cli", "doc", "openai-agents", "otel", "all"]
 
 [[package]]
 name = "braintrust-adk"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
-    { name = "braintrust", extra = ["otel"] },
+    { name = "braintrust" },
     { name = "google-adk" },
     { name = "opentelemetry-proto" },
     { name = "wrapt" },
@@ -129,7 +152,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", extras = ["otel"], specifier = ">=0.2.4" },
+    { name = "braintrust", editable = "../../py" },
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "opentelemetry-proto", specifier = ">=1.36.0" },
     { name = "wrapt", specifier = ">=1.14.0" },
@@ -1560,36 +1583,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c3/15/7556d54b01fb894497f69a98d57faa9caa45ffa59896e0bba6847a7f0d15/opentelemetry_exporter_gcp_trace-1.9.0.tar.gz", hash = "sha256:c3fc090342f6ee32a0cc41a5716a6bb716b4422d19facefcb22dc4c6b683ece8", size = 18568, upload-time = "2025-02-04T19:45:08.185Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/cd/6d7fbad05771eb3c2bace20f6360ce5dac5ca751c6f2122853e43830c32e/opentelemetry_exporter_gcp_trace-1.9.0-py3-none-any.whl", hash = "sha256:0a8396e8b39f636eeddc3f0ae08ddb40c40f288bc8c5544727c3581545e77254", size = 13973, upload-time = "2025-02-04T19:44:59.148Z" },
-]
-
-[[package]]
-name = "opentelemetry-exporter-otlp-proto-common"
-version = "1.36.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "opentelemetry-proto" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/34/da/7747e57eb341c59886052d733072bc878424bf20f1d8cf203d508bbece5b/opentelemetry_exporter_otlp_proto_common-1.36.0.tar.gz", hash = "sha256:6c496ccbcbe26b04653cecadd92f73659b814c6e3579af157d8716e5f9f25cbf", size = 20302, upload-time = "2025-07-29T15:12:07.71Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/ed/22290dca7db78eb32e0101738366b5bbda00d0407f00feffb9bf8c3fdf87/opentelemetry_exporter_otlp_proto_common-1.36.0-py3-none-any.whl", hash = "sha256:0fc002a6ed63eac235ada9aa7056e5492e9a71728214a61745f6ad04b923f840", size = 18349, upload-time = "2025-07-29T15:11:51.327Z" },
-]
-
-[[package]]
-name = "opentelemetry-exporter-otlp-proto-http"
-version = "1.36.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "googleapis-common-protos" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-common" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
-    { name = "requests" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/25/85/6632e7e5700ba1ce5b8a065315f92c1e6d787ccc4fb2bdab15139eaefc82/opentelemetry_exporter_otlp_proto_http-1.36.0.tar.gz", hash = "sha256:dd3637f72f774b9fc9608ab1ac479f8b44d09b6fb5b2f3df68a24ad1da7d356e", size = 16213, upload-time = "2025-07-29T15:12:08.932Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/41/a680d38b34f8f5ddbd78ed9f0042e1cc712d58ec7531924d71cb1e6c629d/opentelemetry_exporter_otlp_proto_http-1.36.0-py3-none-any.whl", hash = "sha256:3d769f68e2267e7abe4527f70deb6f598f40be3ea34c6adc35789bea94a32902", size = 18752, upload-time = "2025-07-29T15:11:53.164Z" },
 ]
 
 [[package]]

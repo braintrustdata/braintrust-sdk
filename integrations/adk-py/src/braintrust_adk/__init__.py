@@ -45,16 +45,29 @@ def wrap_agent(Agent: type) -> type:
     async def trace_run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         parent_context = args[0] if args else kwargs.get("parent_context")
 
-        # Create a parent span for the entire agent run
-        with start_span(
+        agent_span = start_span(
             name=f"agent_run [{instance.name}]",
             type=SpanTypeAttribute.TASK,
             metadata={"parent_context": _try_dict(parent_context), **_omit(kwargs, ["parent_context"])},
-        ) as agent_span:
+        )
+        agent_span.set_current()
+
+        try:
             async for event in wrapped(*args, **kwargs):
                 if event.is_final_response():
                     agent_span.log(output=_try_dict(event))
                 yield event
+        except Exception as e:
+            # TODO: use stringify_exception
+            agent_span.log(error=str(e))
+            raise
+        finally:
+            try:
+                agent_span.unset_current()
+            except Exception as e:
+                breakpoint()
+                print('hi')
+            agent_span.end()
 
 
     wrap_function_wrapper(Agent, "run_async", trace_run_wrapper)
@@ -70,7 +83,7 @@ def wrap_flow(Flow: type):
         invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
 
         # Create a child span - Braintrust will automatically use the current span as parent
-        with start_span(
+        llm_span = start_span(
             name=f"call_llm",
             type=SpanTypeAttribute.TASK,
             metadata=_try_dict(
@@ -79,13 +92,26 @@ def wrap_flow(Flow: type):
                     **_omit(kwargs, ["invocation_context"]),
                 }
             ),
-        ) as llm_span:
+        )
+        llm_span.set_current()
+        try:
             last_event = None
             async for event in wrapped(*args, **kwargs):
                 last_event = event
                 yield event
             if last_event:
-                llm_span.log(output=last_event)
+                    llm_span.log(output=last_event)
+        except Exception as e:
+            # TODO: use stringify_exception
+            llm_span.log(error=str(e))
+            raise
+        finally:
+            try:
+                llm_span.unset_current()
+            except Exception as e:
+                breakpoint()
+                print('hi')
+            llm_span.end()
 
     wrap_function_wrapper(Flow, "run_async", trace_flow)
 
@@ -98,7 +124,7 @@ def wrap_flow(Flow: type):
         call_type = _determine_llm_call_type(llm_request)
 
         # Create a child span - Braintrust will automatically use the current span as parent
-        with start_span(
+        llm_span = start_span(
             name=f"llm_call [{call_type}]",
             type=SpanTypeAttribute.LLM,
             input=_try_dict(llm_request),
@@ -111,13 +137,25 @@ def wrap_flow(Flow: type):
                     **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
                 }
             ),
-        ) as llm_span:
+        )
+        llm_span.set_current()
+        try:
             last_event = None
             async for event in wrapped(*args, **kwargs):
                 last_event = event
                 yield event
             if last_event:
                 llm_span.log(output=last_event)
+        except Exception as e:
+            llm_span.log(error=str(e))
+            raise
+        finally:
+            try:
+                llm_span.unset_current()
+            except Exception as e:
+                breakpoint()
+                print('hi')
+            llm_span.end()
 
     wrap_function_wrapper(Flow, "_call_llm_async", trace_call_llm)
     Flow._braintrust_patched = True
@@ -133,7 +171,7 @@ def wrap_runner(Runner: type):
         session_id = kwargs.get("session_id")
         new_message = kwargs.get("new_message")
 
-        with start_span(
+        runner_span = start_span(
             name=f"invocation [{instance.app_name}]",
             type=SpanTypeAttribute.TASK,
             input={"new_message": _try_dict(new_message)},
@@ -144,11 +182,23 @@ def wrap_runner(Runner: type):
                     **_omit(kwargs, ["user_id", "session_id", "new_message"]),
                 }
             ),
-        ) as runner_span:
+        )
+        runner_span.set_current()
+        try:
             for event in wrapped(*args, **kwargs):
                 if event.is_final_response():
                     runner_span.log(output=_try_dict(event))
                 yield event
+        except Exception as e:
+            runner_span.log(error=str(e))
+            raise
+        finally:
+            try:
+                runner_span.unset_current()
+            except Exception as e:
+                breakpoint()
+                print('hi')
+            runner_span.end()
 
     async def trace_run_async_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         user_id = kwargs.get("user_id")
@@ -231,9 +281,18 @@ def _is_patched(obj: Any):
 
 def _try_dict(obj: Any):
     if hasattr(obj, "model_dump"):
-        obj = obj.model_dump(exclude_none=True)
+        try:
+            obj = obj.model_dump(exclude_none=True)
+        except ValueError as e:
+            if "Circular reference" in str(e):
+                return
+            raise
+
     if isinstance(obj, dict):
         return {k: _try_dict(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_try_dict(item) for item in obj]
+
     return obj
 
 
