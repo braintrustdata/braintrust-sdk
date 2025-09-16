@@ -116,6 +116,7 @@ dependencies = [
     { name = "braintrust", extra = ["otel"] },
     { name = "google-adk" },
     { name = "opentelemetry-proto" },
+    { name = "wrapt" },
 ]
 
 [package.dev-dependencies]
@@ -131,6 +132,7 @@ requires-dist = [
     { name = "braintrust", extras = ["otel"], specifier = ">=0.2.4" },
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "opentelemetry-proto", specifier = ">=1.36.0" },
+    { name = "wrapt", specifier = ">=1.14.0" },
 ]
 
 [package.metadata.requires-dev]

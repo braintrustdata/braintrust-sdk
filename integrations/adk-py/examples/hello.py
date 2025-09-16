@@ -6,13 +6,11 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-setup_braintrust(project_name="googleadk")
 
-
-async def main():
+async def main(text: str = "hi"):
     # Tool with complex nested JSON output to test serialization
     def say_hello():
-        return {"greeting": "Hello Langfuse 👋"}
+        return {"greeting": "Hello 👋"}
 
     def get_user_info(name: str):
         """Get detailed user information - tests complex JSON serialization"""
@@ -49,28 +47,13 @@ async def main():
 
     runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
 
-    # Test 1: Simple greeting with nested spans (input/output bubbling)
-    user_msg = types.Content(role="user", parts=[types.Part(text="hi")])
-    for event in runner.run(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+    user_msg = types.Content(role="user", parts=[types.Part(text=text)])
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
         if event.is_final_response():
             text = event.content.parts[0].text if event.content and event.content.parts else "No response"
             print(f"Test 1 - Greeting: {text[:100] if text else 'No response'}...")
 
-    # # Test 2: Complex tool call to test JSON serialization
-    # user_msg = types.Content(role="user", parts=[types.Part(text="Get info for user John")])
-    # for event in runner.run(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
-    #     if event.is_final_response():
-    #         text = event.content.parts[0].text if event.content and event.content.parts else "No response"
-    #         print(f"Test 2 - Tool call: {text[:100] if text else 'No response'}...")
 
-    # # Test 3: Repeated calls to test cached token counting
-    # test_message = "What's the weather like?"
-    # for i in range(3):
-    #     user_msg = types.Content(role="user", parts=[types.Part(text=test_message)])
-    #     for event in runner.run(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
-    #         if event.is_final_response():
-    #             text = event.content.parts[0].text if event.content and event.content.parts else "No response"
-    #             print(f"Test 3.{i + 1}: {text[:80] if text else 'No response'}...")
-
-
-asyncio.run(main())
+if __name__ == "__main__":
+    setup_braintrust(project_name="googleadk")
+    asyncio.run(main())

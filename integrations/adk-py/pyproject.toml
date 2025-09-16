@@ -8,6 +8,7 @@ dependencies = [
     "braintrust[otel]>=0.2.4",
     "google-adk>=1.9.0",
     "opentelemetry-proto>=1.36.0",
+    "wrapt>=1.14.0",
 ]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]
