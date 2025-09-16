@@ -70,6 +70,8 @@ def init_test_logger(project_name: str):
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
     l = logger.init_logger(project=project_name)
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
+    # Force resolution of _lazy_id to ensure exports use the resolved ID instead of compute_object_metadata_args
+    _ = l._lazy_id.get()
     return l
 
 def init_test_exp(experiment_name: str, project_name: str = None):
