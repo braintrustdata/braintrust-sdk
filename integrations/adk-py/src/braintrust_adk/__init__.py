@@ -9,6 +9,8 @@ from typing_extensions import Iterable
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["setup_braintrust", "wrap_agent", "wrap_runner", "wrap_flow"]
+
 
 def setup_braintrust(
     api_key: Optional[str] = None,
@@ -16,6 +18,20 @@ def setup_braintrust(
     project_name: Optional[str] = None,
     SpanProcessor: Optional[type] = None,
 ) -> bool:
+    """
+    Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, and flows for automatic tracing.
+
+    If you prefer manual patching take a look at `wrap_agent`, `wrap_runner`, and `wrap_flow`.
+
+    Args:
+        api_key (Optional[str]): Braintrust API key.
+        project_id (Optional[str]): Braintrust project ID.
+        project_name (Optional[str]): Braintrust project name.
+        SpanProcessor (Optional[type]): Deprecated parameter.
+
+    Returns:
+        bool: True if setup was successful, False otherwise.
+    """
     if SpanProcessor is not None:
         logging.warning("SpanProcessor parameter is deprecated and will be ignored")
 
