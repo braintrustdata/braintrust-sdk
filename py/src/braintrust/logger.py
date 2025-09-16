@@ -81,6 +81,7 @@ from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
 from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
+from .span_context import SpanContext
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .util import (
@@ -341,12 +342,7 @@ class BraintrustState:
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
-        self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-            "braintrust_current_parent", default=None
-        )
-        self.current_span: contextvars.ContextVar[Span] = contextvars.ContextVar(
-            "braintrust_current_span", default=NOOP_SPAN
-        )
+        self._span_context = SpanContext()
 
         def default_get_api_conn():
             self.login()
@@ -1841,7 +1837,8 @@ def current_span() -> Span:
     See `Span` for full details.
     """
 
-    return _state.current_span.get()
+    span = _state._span_context.get_current_span()
+    return span if span is not None else NOOP_SPAN
 
 
 @contextlib.contextmanager
@@ -1859,11 +1856,11 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
             span = start_span("my-span")
     """
     state = state or _state
-    token = state.current_parent.set(parent)
+    token = state._span_context.set_current_parent(parent)
     try:
         yield
     finally:
-        state.current_parent.reset(token)
+        state._span_context.reset_current_parent(token)
 
 
 def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponentsV3, "Logger", "Experiment", Span]:
@@ -1874,7 +1871,7 @@ def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponents
     if span != NOOP_SPAN:
         return span
 
-    parent = parent or _state.current_parent.get()
+    parent = parent or _state._span_context.get_current_parent()
     if parent:
         return SpanComponentsV3.from_str(parent)
 
@@ -3819,11 +3816,11 @@ class SpanImpl(Span):
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = self.state.current_span.set(self)
+            self._context_token = self.state._span_context.set_current_span(self)
 
     def unset_current(self):
         if self.can_set_current:
-            self.state.current_span.reset(self._context_token)
+            self.state._span_context.reset_current_span(self._context_token)
 
     def __enter__(self) -> Span:
         self.set_current()
