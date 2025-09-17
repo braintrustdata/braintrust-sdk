@@ -1,12 +1,13 @@
 [project]
 name = "braintrust-adk"
-version = "0.2.0rc2"
+version = "0.2.0rc3"
 description = "Braintrust Google ADK integration"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "braintrust>=0.2.4",
     "google-adk>=1.14.1",
+    "wrapt>=1.17.3",
 ]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]

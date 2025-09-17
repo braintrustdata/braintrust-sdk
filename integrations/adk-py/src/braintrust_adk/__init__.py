@@ -1,10 +1,10 @@
 import logging
 from contextlib import AbstractAsyncContextManager
-from functools import wraps
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
 from braintrust.logger import NOOP_SPAN, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
+from wrapt import wrap_function_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -57,33 +57,29 @@ def wrap_agent(Agent: Any) -> Any:
     if _is_patched(Agent):
         return Agent
 
-    def trace_run_wrapper(wrapped: Any):
-        @wraps(wrapped)
-        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
-            parent_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
+    async def agent_run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        parent_context = args[0] if len(args) > 0 else kwargs.get("parent_context")
 
-            async def _trace():
-                with start_span(
-                    name=f"agent_run [{instance.name}]",
-                    type=SpanTypeAttribute.TASK,
-                    metadata={"parent_context": _try_dict(parent_context), **_omit(kwargs, ["parent_context"])},
-                ) as agent_span:
-                    last_event = None
-                    async with aclosing(wrapped(instance, *args, **kwargs)) as agen:
-                        async for event in agen:
-                            if event.is_final_response():
-                                last_event = event
-                            yield event
-                    if last_event:
-                        agent_span.log(output=_try_dict(last_event))
+        async def _trace():
+            with start_span(
+                name=f"agent_run [{instance.name}]",
+                type=SpanTypeAttribute.TASK,
+                metadata={"parent_context": _try_dict(parent_context), **_omit(kwargs, ["parent_context"])},
+            ) as agent_span:
+                last_event = None
+                async with aclosing(wrapped(*args, **kwargs)) as agen:
+                    async for event in agen:
+                        if event.is_final_response():
+                            last_event = event
+                        yield event
+                if last_event:
+                    agent_span.log(output=_try_dict(last_event))
 
-            async with aclosing(_trace()) as agen:
-                async for event in agen:
-                    yield event
+        async with aclosing(_trace()) as agen:
+            async for event in agen:
+                yield event
 
-        return wrapper
-
-    Agent.run_async = trace_run_wrapper(Agent.run_async)
+    wrap_function_wrapper(Agent, "run_async", agent_run_wrapper)
     Agent._braintrust_patched = True
     return Agent
 
@@ -92,82 +88,72 @@ def wrap_flow(Flow: Any):
     if _is_patched(Flow):
         return Flow
 
-    def trace_flow(wrapped: Any):
-        @wraps(wrapped)
-        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
-            invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
+    async def trace_flow(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
 
-            async def _trace():
-                with start_span(
-                    name=f"call_llm",
-                    type=SpanTypeAttribute.TASK,
-                    metadata=_try_dict(
-                        {
-                            "invocation_context": invocation_context,
-                            **_omit(kwargs, ["invocation_context"]),
-                        }
-                    ),
-                ) as llm_span:
-                    last_event = None
-                    async with aclosing(wrapped(instance, *args, **kwargs)) as agen:
-                        async for event in agen:
-                            last_event = event
-                            yield event
-                    if last_event:
-                        llm_span.log(output=_try_dict(last_event))
+        async def _trace():
+            with start_span(
+                name=f"call_llm",
+                type=SpanTypeAttribute.TASK,
+                metadata=_try_dict(
+                    {
+                        "invocation_context": invocation_context,
+                        **_omit(kwargs, ["invocation_context"]),
+                    }
+                ),
+            ) as llm_span:
+                last_event = None
+                async with aclosing(wrapped(*args, **kwargs)) as agen:
+                    async for event in agen:
+                        last_event = event
+                        yield event
+                if last_event:
+                    llm_span.log(output=_try_dict(last_event))
 
-            async with aclosing(_trace()) as agen:
-                async for event in agen:
-                    yield event
+        async with aclosing(_trace()) as agen:
+            async for event in agen:
+                yield event
 
-        return wrapper
+    wrap_function_wrapper(Flow, "run_async", trace_flow)
 
-    Flow.run_async = trace_flow(Flow.run_async)
+    async def trace_run_sync_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
+        llm_request = args[1] if len(args) > 1 else kwargs.get("llm_request")
+        model_response_event = args[2] if len(args) > 2 else kwargs.get("model_response_event")
 
-    def trace_call_llm(wrapped: Any):
-        @wraps(wrapped)
-        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
-            invocation_context = args[0] if len(args) > 0 else kwargs.get("invocation_context")
-            llm_request = args[1] if len(args) > 1 else kwargs.get("llm_request")
-            model_response_event = args[2] if len(args) > 2 else kwargs.get("model_response_event")
+        # Determine the type of LLM call based on the request content
+        call_type = _determine_llm_call_type(llm_request)
 
-            # Determine the type of LLM call based on the request content
-            call_type = _determine_llm_call_type(llm_request)
+        async def _trace():
+            with start_span(
+                name=f"llm_call [{call_type}]",
+                type=SpanTypeAttribute.LLM,
+                input=_try_dict(llm_request),
+                metadata=_try_dict(
+                    {
+                        "invocation_context": invocation_context,
+                        "model_response_event": model_response_event,
+                        "flow_class": instance.__class__.__name__,
+                        "llm_call_type": call_type,
+                        **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
+                    }
+                ),
+            ) as llm_span:
+                last_event = None
 
-            async def _trace():
-                with start_span(
-                    name=f"llm_call [{call_type}]",
-                    type=SpanTypeAttribute.LLM,
-                    input=_try_dict(llm_request),
-                    metadata=_try_dict(
-                        {
-                            "invocation_context": invocation_context,
-                            "model_response_event": model_response_event,
-                            "flow_class": instance.__class__.__name__,
-                            "llm_call_type": call_type,
-                            **_omit(
-                                kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]
-                            ),
-                        }
-                    ),
-                ) as llm_span:
-                    last_event = None
+                async with aclosing(wrapped(*args, **kwargs)) as agen:
+                    async for event in agen:
+                        last_event = event
+                        yield event
 
-                    async with aclosing(wrapped(instance, *args, **kwargs)) as agen:
-                        async for event in agen:
-                            last_event = event
-                            yield event
+                if last_event:
+                    llm_span.log(output=_try_dict(last_event))
 
-                    if last_event:
-                        llm_span.log(output=_try_dict(last_event))
+        async with aclosing(_trace()) as agen:
+            async for event in agen:
+                yield event
 
-            async with aclosing(_trace()) as agen:
-                async for event in agen:
-                    yield event
-
-        return wrapper
-
-    Flow._call_llm_async = trace_call_llm(Flow._call_llm_async)
+    wrap_function_wrapper(Flow, "_call_llm_async", trace_run_sync_wrapper)
     Flow._braintrust_patched = True
     return Flow
 
@@ -176,80 +162,71 @@ def wrap_runner(Runner: Any):
     if _is_patched(Runner):
         return Runner
 
-    def trace_run_sync_wrapper(wrapped: Any):
-        @wraps(wrapped)
-        def wrapper(instance: Any, *args: Any, **kwargs: Any):
-            user_id = kwargs.get("user_id")
-            session_id = kwargs.get("session_id")
-            new_message = kwargs.get("new_message")
+    def trace_run_sync_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        user_id = kwargs.get("user_id")
+        session_id = kwargs.get("session_id")
+        new_message = kwargs.get("new_message")
 
-            def _trace():
-                with start_span(
-                    name=f"invocation [{instance.app_name}]",
-                    type=SpanTypeAttribute.TASK,
-                    input={"new_message": _try_dict(new_message)},
-                    metadata=_try_dict(
-                        {
-                            "user_id": user_id,
-                            "session_id": session_id,
-                            **_omit(kwargs, ["user_id", "session_id", "new_message"]),
-                        }
-                    ),
-                ) as runner_span:
-                    last_event = None
-                    for event in wrapped(instance, *args, **kwargs):
+        def _trace():
+            with start_span(
+                name=f"invocation [{instance.app_name}]",
+                type=SpanTypeAttribute.TASK,
+                input={"new_message": _try_dict(new_message)},
+                metadata=_try_dict(
+                    {
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        **_omit(kwargs, ["user_id", "session_id", "new_message"]),
+                    }
+                ),
+            ) as runner_span:
+                last_event = None
+                for event in wrapped(*args, **kwargs):
+                    if event.is_final_response():
+                        last_event = event
+                    yield event
+                if last_event:
+                    runner_span.log(output=_try_dict(last_event))
+
+        for event in _trace():
+            yield event
+
+    wrap_function_wrapper(Runner, "run", trace_run_sync_wrapper)
+
+    async def trace_run_async_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        user_id = kwargs.get("user_id")
+        session_id = kwargs.get("session_id")
+        new_message = kwargs.get("new_message")
+        state_delta = kwargs.get("state_delta")
+
+        async def _trace():
+            with start_span(
+                name=f"invocation [{instance.app_name}]",
+                type=SpanTypeAttribute.TASK,
+                input={"new_message": _try_dict(new_message)},
+                metadata=_try_dict(
+                    {
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "state_delta": state_delta,
+                        **_omit(kwargs, ["user_id", "session_id", "new_message", "state_delta"]),
+                    }
+                ),
+            ) as runner_span:
+                last_event = None
+                async with aclosing(wrapped(*args, **kwargs)) as agen:
+                    async for event in agen:
                         if event.is_final_response():
                             last_event = event
                         yield event
-                    if last_event:
-                        runner_span.log(output=_try_dict(last_event))
+                if last_event:
+                    runner_span.log(output=_try_dict(last_event))
 
-            for event in _trace():
+        async with aclosing(_trace()) as agen:
+            async for event in agen:
                 yield event
 
-        return wrapper
-
-    Runner.run = trace_run_sync_wrapper(Runner.run)
-
-    def trace_run_async_wrapper(wrapped: Any):
-        @wraps(wrapped)
-        async def wrapper(instance: Any, *args: Any, **kwargs: Any):
-            user_id = kwargs.get("user_id")
-            session_id = kwargs.get("session_id")
-            new_message = kwargs.get("new_message")
-            state_delta = kwargs.get("state_delta")
-
-            async def _trace():
-                with start_span(
-                    name=f"invocation [{instance.app_name}]",
-                    type=SpanTypeAttribute.TASK,
-                    input={"new_message": _try_dict(new_message)},
-                    metadata=_try_dict(
-                        {
-                            "user_id": user_id,
-                            "session_id": session_id,
-                            "state_delta": state_delta,
-                            **_omit(kwargs, ["user_id", "session_id", "new_message", "state_delta"]),
-                        }
-                    ),
-                ) as runner_span:
-                    last_event = None
-                    async with aclosing(wrapped(instance, *args, **kwargs)) as agen:
-                        async for event in agen:
-                            if event.is_final_response():
-                                last_event = event
-                            yield event
-                    if last_event:
-                        runner_span.log(output=_try_dict(last_event))
-
-            async with aclosing(_trace()) as agen:
-                async for event in agen:
-                    yield event
-
-        return wrapper
-
-    Runner.run_async = trace_run_async_wrapper(Runner.run_async)
-
+    wrap_function_wrapper(Runner, "run_async", trace_run_async_wrapper)
     Runner._braintrust_patched = True
     return Runner
 
@@ -301,13 +278,13 @@ def _is_patched(obj: Any):
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _try_dict(obj: Any) -> Optional[Union[Iterable[Any], Dict[str, Any]]]:
+def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
     if hasattr(obj, "model_dump"):
         try:
             obj = obj.model_dump(exclude_none=True)
         except ValueError as e:
             if "Circular reference" in str(e):
-                return
+                return {}
             raise
 
     if isinstance(obj, dict):
