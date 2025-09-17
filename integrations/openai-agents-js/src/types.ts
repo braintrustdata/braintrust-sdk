@@ -44,7 +44,6 @@ export type TraceMetadata = {
 export interface OpenAIAgentsTraceProcessorOptions {
   logger?: Logger<any>;
   maxTraces?: number;
-  metadata?: Record<string, any>;
 }
 
 // Type guard functions

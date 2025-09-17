@@ -1610,26 +1610,32 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
     assert len(str(chat_span["output"])) > 0, "Chat completion should have some output content"
 
 
-def test_braintrust_tracing_processor_metadata_parameter():
-    """Test that the metadata parameter works correctly."""
+def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
+    """Test that trace metadata flows through to root span via on_trace_end."""
     pytest.importorskip("agents", reason="agents package not available")
     
     from braintrust.wrappers.openai import BraintrustTracingProcessor
     
-    # Test that the processor accepts metadata parameter
-    test_metadata = {
-        "conversation_id": "test-conv-123",
-        "user_id": "test-user-456",
-        "session_type": "test"
-    }
+    assert not memory_logger.pop()
     
-    processor = BraintrustTracingProcessor(metadata=test_metadata)
-    assert processor._metadata == test_metadata, "Processor should store the provided metadata"
+    processor = BraintrustTracingProcessor()
     
-    # Test with None metadata
-    processor_none = BraintrustTracingProcessor(metadata=None)
-    assert processor_none._metadata == {}, "Processor should handle None metadata gracefully"
+    # Mock trace with metadata (simulates native trace() API)
+    class MockTrace:
+        def __init__(self, trace_id, name, metadata):
+            self.trace_id = trace_id
+            self.name = name
+            self.metadata = metadata
     
-    # Test with no metadata parameter
-    processor_default = BraintrustTracingProcessor()
-    assert processor_default._metadata == {}, "Processor should default to empty metadata"
+    trace = MockTrace("test-trace", "Test Trace", {"conversation_id": "test-12345"})
+    
+    # Execute trace lifecycle
+    processor.on_trace_start(trace)
+    processor.on_trace_end(trace)
+    
+    # Verify metadata was logged to root span
+    spans = memory_logger.pop()
+    root_span = spans[0]
+    assert root_span["metadata"]["conversation_id"] == "test-12345", "Should log trace metadata"
+
+
