@@ -97,7 +97,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         trace_first_input = self._first_input.pop(trace.trace_id, None)
         trace_last_output = self._last_output.pop(trace.trace_id, None)
         span.log(
-            input=trace_first_input, 
+            input=trace_first_input,
             output=trace_last_output,
             metadata=getattr(trace, 'metadata', None) or {}
         )
@@ -256,3 +256,4 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             self._logger.flush()
         else:
             braintrust.flush()
+

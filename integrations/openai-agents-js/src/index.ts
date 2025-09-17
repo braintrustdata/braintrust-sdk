@@ -177,7 +177,7 @@ export class OpenAIAgentsTraceProcessor {
         output: traceData.metadata.lastOutput,
         metadata: {
           ...(trace.metadata || {}),
-        }
+        },
       });
       traceData.rootSpan.end();
 
