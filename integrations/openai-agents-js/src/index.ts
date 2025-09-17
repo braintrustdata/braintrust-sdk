@@ -87,6 +87,7 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
  *       If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
  *     - maxTraces: Maximum number of concurrent traces to keep in memory (default: 1000).
  *       When exceeded, oldest traces are evicted using LRU policy.
+ *     - metadata: Metadata to include in all traces. This will be merged with any trace-specific metadata.
  */
 
 export class OpenAIAgentsTraceProcessor {
@@ -94,6 +95,7 @@ export class OpenAIAgentsTraceProcessor {
 
   private logger?: Logger<any>;
   private maxTraces: number;
+  private metadata?: Record<string, any>;
   private traceSpans = new Map<
     string,
     {
@@ -111,6 +113,7 @@ export class OpenAIAgentsTraceProcessor {
     this.logger = options.logger;
     this.maxTraces =
       options.maxTraces ?? OpenAIAgentsTraceProcessor.DEFAULT_MAX_TRACES;
+    this.metadata = options.metadata;
   }
 
   private evictOldestTrace(): void {
@@ -175,6 +178,10 @@ export class OpenAIAgentsTraceProcessor {
       traceData.rootSpan.log({
         input: traceData.metadata.firstInput,
         output: traceData.metadata.lastOutput,
+        metadata: {
+          ...(this.metadata || {}),
+          ...(trace.metadata || {}),
+        }
       });
       traceData.rootSpan.end();
 

@@ -60,10 +60,16 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     Args:
         logger: A `braintrust.Span` or `braintrust.Experiment` or `braintrust.Logger` to use for logging.
             If `None`, the current span, experiment, or logger will be selected exactly as in `braintrust.start_span`.
+        metadata: Optional metadata to include in all traces. This will be merged with any trace-specific metadata.
     """
 
-    def __init__(self, logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None):
+    def __init__(
+        self, 
+        logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
         self._logger = logger
+        self._metadata = metadata or {}
         self._spans: Dict[str, braintrust.Span] = {}
         self._first_input: Dict[str, Any] = {}
         self._last_output: Dict[str, Any] = {}
@@ -96,7 +102,14 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         # Get the first input and last output for this specific trace
         trace_first_input = self._first_input.pop(trace.trace_id, None)
         trace_last_output = self._last_output.pop(trace.trace_id, None)
-        span.log(input=trace_first_input, output=trace_last_output)
+        span.log(
+            input=trace_first_input, 
+            output=trace_last_output,
+            metadata={
+                **self._metadata,
+                **(getattr(trace, 'metadata', None) or {})
+            }
+        )
         span.end()
         # TODO(sachin): Add end time when SDK provides it.
         # span.end(_timestamp_from_maybe_iso(trace.ended_at))

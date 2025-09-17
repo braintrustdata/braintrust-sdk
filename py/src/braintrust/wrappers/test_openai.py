@@ -1608,3 +1608,28 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
     assert "output" in chat_span, "Chat completion span should have output logged"
     assert chat_span["metadata"]["model"] == TEST_MODEL, "Chat completion should use test model"
     assert len(str(chat_span["output"])) > 0, "Chat completion should have some output content"
+
+
+def test_braintrust_tracing_processor_metadata_parameter():
+    """Test that the metadata parameter works correctly."""
+    pytest.importorskip("agents", reason="agents package not available")
+    
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+    
+    # Test that the processor accepts metadata parameter
+    test_metadata = {
+        "conversation_id": "test-conv-123",
+        "user_id": "test-user-456",
+        "session_type": "test"
+    }
+    
+    processor = BraintrustTracingProcessor(metadata=test_metadata)
+    assert processor._metadata == test_metadata, "Processor should store the provided metadata"
+    
+    # Test with None metadata
+    processor_none = BraintrustTracingProcessor(metadata=None)
+    assert processor_none._metadata == {}, "Processor should handle None metadata gracefully"
+    
+    # Test with no metadata parameter
+    processor_default = BraintrustTracingProcessor()
+    assert processor_default._metadata == {}, "Processor should default to empty metadata"
