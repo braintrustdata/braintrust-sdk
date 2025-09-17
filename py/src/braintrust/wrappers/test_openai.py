@@ -1639,4 +1639,3 @@ def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
     assert root_span["metadata"]["conversation_id"] == "test-12345", "Should log trace metadata"
 
 
-

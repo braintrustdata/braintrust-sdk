@@ -256,4 +256,3 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             self._logger.flush()
         else:
             braintrust.flush()
-
