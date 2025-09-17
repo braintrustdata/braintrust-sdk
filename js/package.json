@@ -110,7 +110,7 @@
     "cli-progress": "^3.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.25.9",
+    "esbuild": "^0.25.10",
     "eventsource-parser": "^1.1.2",
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",

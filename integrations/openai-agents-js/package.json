@@ -33,9 +33,5 @@
   },
   "dependencies": {
     "braintrust": "workspace:^"
-  },
-  "peerDependencies": {
-    "@openai/agents": ">=0.0.14 <1.0.0",
-    "@openai/agents-core": ">=0.0.14 <1.0.0"
   }
 }
