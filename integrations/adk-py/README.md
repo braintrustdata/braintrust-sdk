@@ -93,7 +93,7 @@ response = agent.send_message(
 
 ### Manual Patching
 
-The `setup_braintrust` will automatically patch Google ADK Runner, Agent, and Flow classes to automatically trace all agent interactions. If you prefer to manually patch classes, you can use the `wrap_agent`, `wrap_runner`, and `wrap_flow` functions. Take a look at the [hello example](./examples/hello.py).
+The `setup_braintrust` will automatically patch Google ADK Runner, Agent, and Flow classes to automatically trace all agent interactions. If you prefer to manually patch classes, you can use the `wrap_agent`, `wrap_runner`, and `wrap_flow` functions. Take a look at the [manual example](./examples/manual.py).
 
 Note that, as of writing, `adk web` does not support [custom Runners](https://github.com/google/adk-web/issues/72) and you will need to use `setup_braintrust` if you would like LLM traces.
 
@@ -128,7 +128,7 @@ uv sync
 cd examples
 
 # simple programmatic agent call
-uv run hello.py
+uv run manual.py
 
 # or use the adk web UI
 uv run adk web --port 8888

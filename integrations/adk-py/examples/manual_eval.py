@@ -1,15 +1,19 @@
+"""
+An example showing how Braintrust eval experiment traces will continue to work with adk traces.
+"""
+
 import asyncio
 from typing import Any
 
 from braintrust.framework import EvalAsync
 from braintrust_adk import setup_braintrust
-from hello import main as hello
+from manual import main as manual
 
 
 async def main():
     async def task(input: Any):
         setup_braintrust()
-        return await hello(input)
+        return await manual(input)
 
     await EvalAsync(
         name="hello",

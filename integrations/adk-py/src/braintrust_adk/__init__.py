@@ -284,6 +284,8 @@ def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
             obj = obj.model_dump(exclude_none=True)
         except ValueError as e:
             if "Circular reference" in str(e):
+                # Circular reference detected: ADK reuses objects (e.g., agent) in multiple locations
+                # Return empty dict as fallback - non-critical for logging/tracing purposes
                 return {}
             raise
 
