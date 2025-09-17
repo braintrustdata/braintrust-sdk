@@ -1,10 +1,25 @@
 import asyncio
 
-from braintrust_adk import setup_braintrust
+from braintrust.logger import init_logger
+from braintrust_adk import wrap_agent, wrap_flow, wrap_runner
 from google.adk import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+
+init_logger(project="googleadk")
+
+
+@wrap_agent
+class CustomAgent(Agent):
+    @property
+    def _llm_flow(self):
+        return wrap_flow(super()._llm_flow)
+
+
+@wrap_runner
+class CustomRunner(Runner):
+    pass
 
 
 async def main(text: str = "hi"):
@@ -31,7 +46,7 @@ async def main(text: str = "hi"):
             "status": "active",
         }
 
-    agent = Agent(
+    agent = CustomAgent(
         name="hello_agent",
         model="gemini-2.0-flash",
         instruction="Use the appropriate tool based on the user's request. For greetings, use say_hello. For user info requests, use get_user_info.",
@@ -45,7 +60,7 @@ async def main(text: str = "hi"):
     session_service = InMemorySessionService()
     await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
 
-    runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
+    runner = CustomRunner(agent=agent, app_name=APP_NAME, session_service=session_service)
 
     user_msg = types.Content(role="user", parts=[types.Part(text=text)])
     async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
@@ -55,5 +70,4 @@ async def main(text: str = "hi"):
 
 
 if __name__ == "__main__":
-    setup_braintrust(project_name="googleadk")
     asyncio.run(main())

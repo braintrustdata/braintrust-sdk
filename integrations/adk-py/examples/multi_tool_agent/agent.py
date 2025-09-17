@@ -2,8 +2,8 @@ import datetime
 from typing import Dict
 from zoneinfo import ZoneInfo
 
-from braintrust import init_logger, traced
-from braintrust_adk import wrap_agent
+from braintrust import traced
+from braintrust_adk import setup_braintrust
 from google.adk.agents import LlmAgent
 
 
@@ -61,9 +61,9 @@ def get_current_time(city: str) -> Dict[str, str]:
     return {"status": "success", "report": report}
 
 
-init_logger(project="adk-multi-tool")
+setup_braintrust(project_name="adk-multi-tool")
 
-root_agent = wrap_agent(LlmAgent)(
+root_agent = LlmAgent(
     name="weather_time_agent",
     model="gemini-2.0-flash",
     description=("Agent to answer questions about the time and weather in a city."),
