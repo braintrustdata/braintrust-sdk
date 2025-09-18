@@ -61,13 +61,13 @@ class ContextManager:
 
         return None
 
-    def set_current_span(self, span_object: Span) -> None:
+    def set_current_span(self, span_object: Span) -> Any:
         """Set the current active span in OTEL context."""
         from opentelemetry import context, trace
 
         if hasattr(span_object, 'get_span_context'):
             # This is an OTEL span - it will manage its own context
-            pass
+            return None
         else:
 
             # This is a BT span - store it in OTEL context AND set as current OTEL span
@@ -96,19 +96,16 @@ class ContextManager:
             # Set this as the current OTEL span
             ctx = context.set_value(trace._SPAN_KEY, non_recording_span, ctx)
             token = context.attach(ctx)
-            # Store the token on the span for proper cleanup
-            span_object._otel_context_token = token
+            # Return the token for the caller to store
+            return token
 
-    def unset_current_span(self, span_object: Any = None) -> None:
+    def unset_current_span(self, context_token: Any = None) -> None:
         """Unset the current active span from OTEL context."""
         from opentelemetry import context
 
-        if span_object and hasattr(span_object, '_otel_context_token'):
-            # Properly detach the context token stored on the span
-            token = span_object._otel_context_token
-            context.detach(token)
-            # Clean up the token reference
-            delattr(span_object, '_otel_context_token')
+        if context_token:
+            # Properly detach the context token
+            context.detach(context_token)
 
         # Clear BT span from context
         context.attach(context.set_value('braintrust_span', None))

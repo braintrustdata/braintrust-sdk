@@ -44,20 +44,23 @@ class ContextManager(ABC):
         pass
 
     @abstractmethod
-    def set_current_span(self, span_object: Any) -> None:
+    def set_current_span(self, span_object: Any) -> Any:
         """Set the current active span.
 
         Args:
             span_object: The span to set as current. Type depends on implementation.
+
+        Returns:
+            Context token for cleanup, or None if no cleanup is needed.
         """
         pass
 
     @abstractmethod
-    def unset_current_span(self, span_object: Any = None) -> None:
+    def unset_current_span(self, context_token: Any = None) -> None:
         """Unset the current active span.
 
         Args:
-            span_object: Optional span object for cleanup. Type depends on implementation.
+            context_token: Token returned by set_current_span for cleanup.
         """
         pass
 
@@ -99,13 +102,16 @@ class BraintrustContextManager(ContextManager):
 
         return None
 
-    def set_current_span(self, span_object: Any) -> None:
+    def set_current_span(self, span_object: Any) -> Any:
         """Set the current active span."""
-        self._current_span.set(span_object)
+        return self._current_span.set(span_object)
 
-    def unset_current_span(self, span_object: Any = None) -> None:
+    def unset_current_span(self, context_token: Any = None) -> None:
         """Unset the current active span."""
-        self._current_span.set(None)
+        if context_token:
+            self._current_span.reset(context_token)
+        else:
+            self._current_span.set(None)
 
 
 def get_context_manager() -> ContextManager:

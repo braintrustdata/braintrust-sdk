@@ -3597,9 +3597,9 @@ class SpanImpl(Span):
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
-        # OTEL context token for proper cleanup when OTEL integration is enabled
-        # This is set by the OTEL context manager when the span becomes active
-        self._otel_context_token: Optional[Any] = None
+        # Context token for proper cleanup - used by both OTEL and Braintrust context managers
+        # This is set by the context manager when the span becomes active
+        self._context_token: Optional[Any] = None
 
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
@@ -3865,13 +3865,14 @@ class SpanImpl(Span):
 
     def set_current(self):
         if self.can_set_current:
-            # Set in context manager
-            self.state.context_manager.set_current_span(self)
+            # Get token from context manager and store it
+            self._context_token = self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
         if self.can_set_current:
-            # Unset from context manager
-            self.state.context_manager.unset_current_span(self)
+            # Pass the stored token to context manager for cleanup
+            self.state.context_manager.unset_current_span(self._context_token)
+            self._context_token = None
 
     def __enter__(self) -> Span:
         self.set_current()
