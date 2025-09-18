@@ -258,74 +258,32 @@ class BraintrustSpanProcessor:
             self._processor = processor
 
     def on_start(self, span, parent_context=None):
-        """Forward span start events to the inner processor, adding Braintrust context."""
-        # Determine braintrust.parent attribute using multiple sources
         try:
             parent_value = None
 
-            # Priority 1: Check if we have an active BT span (this OTEL span is a child of a BT span)
-            from braintrust.otel.context import get_current_span_info
-            span_info = get_current_span_info()
+            # Priority 1: Check if braintrust.parent is in current OTEL context
+            from opentelemetry import context
+            current_context = context.get_current()
+            parent_value = context.get_value('braintrust.parent', current_context)
 
-            if span_info and hasattr(span_info.span_object, 'span_id'):
-                # We're within a BT span context, determine the best parent attribute
-                bt_span = span_info.span_object
-                parent_value = self._determine_parent_value(bt_span)
+            # Priority 2: Check if parent_context has braintrust.parent (backup)
+            if not parent_value and parent_context:
+                parent_value = context.get_value('braintrust.parent', parent_context)
 
-            # Priority 2: Check if parent OTEL span has braintrust.parent attribute (for nested OTEL spans)
+            # Priority 3: Check if parent OTEL span has braintrust.parent attribute
             if not parent_value and parent_context:
                 parent_value = self._get_parent_otel_braintrust_parent(parent_context)
-
-            # Priority 3: Use configured fallback parent
-            if not parent_value and hasattr(self._exporter, 'parent') and self._exporter.parent:
-                parent_value = self._exporter.parent
 
             # Set the attribute if we found a parent value
             if parent_value:
                 span.set_attribute("braintrust.parent", parent_value)
 
         except Exception as e:
-            # Fallback: use configured parent
-            if hasattr(self._exporter, 'parent') and self._exporter.parent:
-                span.set_attribute("braintrust.parent", self._exporter.parent)
+            # If there's an exception, just don't set braintrust.parent
+            pass
 
         self._processor.on_start(span, parent_context)
 
-    def _determine_parent_value(self, bt_span):
-        """Determine the best parent value for braintrust.parent attribute.
-
-        Priority order:
-        1. project_name:foo (if project name is available)
-        2. project_id:123 (if project ID is available)
-        3. experiment_id:123 (if experiment ID is available)
-        """
-        try:
-            # Use the existing _get_parent_info method which extracts parent info
-            parent_object_type, parent_info = bt_span._get_parent_info()
-
-            if not parent_info:
-                return None
-
-            # Priority 1: project_name (available for PROJECT_LOGS)
-            if "name" in parent_info and parent_info["name"]:
-                return f"project_name:{parent_info['name']}"
-
-            # Priority 2: project_id (available for PROJECT_LOGS)
-            if "id" in parent_info and parent_info["id"]:
-                from braintrust.logger import SpanObjectTypeV3
-                if parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
-                    return f"project_id:{parent_info['id']}"
-
-            # Priority 3: experiment_id (available for EXPERIMENT)
-            if "id" in parent_info and parent_info["id"]:
-                from braintrust.logger import SpanObjectTypeV3
-                if parent_object_type == SpanObjectTypeV3.EXPERIMENT:
-                    return f"experiment_id:{parent_info['id']}"
-
-            return None
-
-        except Exception:
-            return None
 
     def _get_parent_otel_braintrust_parent(self, parent_context):
         """Get braintrust.parent attribute from parent OTEL span if it exists."""

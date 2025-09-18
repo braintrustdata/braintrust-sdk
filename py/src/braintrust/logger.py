@@ -704,7 +704,7 @@ def _get_unified_parent_info():
     Returns None if unified context is not available or no active span.
     """
     try:
-        from braintrust.otel.unified_context import get_parent_info_for_bt_span
+        from braintrust.otel.context import get_parent_info_for_bt_span
         return get_parent_info_for_bt_span()
     except ImportError:
         # Unified context not available, return None
@@ -3895,16 +3895,20 @@ class SpanImpl(Span):
         # Also set as current in OTEL context if OTEL is available
         self._otel_context_token = None
         try:
-            from opentelemetry import context, trace
+            from opentelemetry import context
 
-            from braintrust.otel.context import BraintrustOtelSpanWrapper
+            from braintrust.otel.context import determine_braintrust_parent_value
 
-            # Create OTEL wrapper for this BT span
-            otel_wrapper = BraintrustOtelSpanWrapper(self)
+            # Determine the braintrust.parent value for this BT span
+            bt_parent_value = determine_braintrust_parent_value(self)
 
-            # Use proper OTEL context API - set span in context and attach
+            # Store the braintrust.parent value in OTEL context so child OTEL spans can inherit it
             current_context = context.get_current()
-            new_context = trace.set_span_in_context(otel_wrapper, current_context)
+            if bt_parent_value:
+                new_context = context.set_value('braintrust.parent', bt_parent_value, current_context)
+            else:
+                new_context = current_context
+
             self._otel_context_token = context.attach(new_context)
 
         except ImportError:
@@ -3924,15 +3928,8 @@ class SpanImpl(Span):
         finally:
             self.unset_current()
 
-            # Restore previous OTEL context if we set it
-            if hasattr(self, '_otel_context_token') and self._otel_context_token is not None:
-                try:
-                    from opentelemetry import context
-                    # Detach the context token to restore previous context
-                    context.detach(self._otel_context_token)
-                except Exception as e:
-                    import logging
-                    logging.debug(f"Failed to restore OTEL context: {e}")
+            # The context manager already handles OTEL context cleanup in unset_current()
+            # so we don't need to detach here - that would undo the cleanup
             self.end()
 
     def _get_parent_info(self):
@@ -3955,6 +3952,21 @@ class SpanImpl(Span):
                 return self.parent_object_type, {}
         else:
             return None, {}
+
+    def _get_otel_parent(self):
+        parent_type, info = self._get_parent_info()
+        if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
+            _id = info.get("id")
+            _name = info.get("name")
+            if _id:
+                return f"project_id:{_id}"
+            elif _name:
+                return f"project_name:{_name}"
+        if parent_type == SpanObjectTypeV3.EXPERIMENT:
+            _id = info.get("id")
+            if _id:
+                return f"experiment_id:{_id}"
+        return None
 
 
 def log_exc_info_to_span(
