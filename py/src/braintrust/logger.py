@@ -1858,7 +1858,11 @@ def current_span() -> Span:
     See `Span` for full details.
     """
 
-    return _state.current_span.get()
+    span_info = _state.context_manager.get_current_span_info()
+    if span_info and hasattr(span_info.span_object, 'span_id'):
+        # This is a BT span
+        return span_info.span_object
+    return NOOP_SPAN
 
 
 @contextlib.contextmanager
