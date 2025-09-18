@@ -18,6 +18,16 @@ try:
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 except ImportError:
+    class InMemorySpanExporter:
+        def __init__(self):
+            pass
+
+        def get_finished_spans(self):
+            return []
+
+        def clear(self):
+            pass
+
     OTEL_AVAILABLE = False
 
 from dataclasses import dataclass

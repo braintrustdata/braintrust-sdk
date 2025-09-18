@@ -348,9 +348,9 @@ class BraintrustState:
             "braintrust_current_span", default=NOOP_SPAN
         )
 
-        # Initialize context manager
-        from braintrust.otel.context import ContextManager
-        self.context_manager = ContextManager()
+        # Initialize context manager - factory chooses appropriate implementation
+        from braintrust.context import get_context_manager
+        self.context_manager = get_context_manager()
 
         def default_get_api_conn():
             self.login()
@@ -3582,6 +3582,10 @@ class SpanImpl(Span):
 
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
+
+        # OTEL context token for proper cleanup when OTEL integration is enabled
+        # This is set by the OTEL context manager when the span becomes active
+        self._otel_context_token: Optional[Any] = None
 
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id

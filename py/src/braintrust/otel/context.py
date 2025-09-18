@@ -22,7 +22,7 @@ class ContextManager:
     """Context manager that uses OTEL's built-in context as single storage."""
 
     def __init__(self):
-        self._context_tokens = {}  # Track context tokens for proper cleanup
+        pass
 
     def get_current_span_info(self) -> Optional['SpanInfo']:
         """Get information about the currently active span from OTEL context."""
@@ -95,20 +95,19 @@ class ContextManager:
             # Set this as the current OTEL span
             ctx = context.set_value(trace._SPAN_KEY, non_recording_span, ctx)
             token = context.attach(ctx)
-            # Store the token for proper cleanup
-            span_id = getattr(span_object, 'span_id', id(span_object))
-            self._context_tokens[span_id] = token
+            # Store the token on the span for proper cleanup
+            span_object._otel_context_token = token
 
     def unset_current_span(self, span_object: Any = None) -> None:
         """Unset the current active span from OTEL context."""
         from opentelemetry import context
 
-        if span_object and hasattr(span_object, 'span_id'):
-            # Properly detach the context token if we have one
-            span_id = span_object.span_id
-            if span_id in self._context_tokens:
-                token = self._context_tokens.pop(span_id)
-                context.detach(token)
+        if span_object and hasattr(span_object, '_otel_context_token'):
+            # Properly detach the context token stored on the span
+            token = span_object._otel_context_token
+            context.detach(token)
+            # Clean up the token reference
+            delattr(span_object, '_otel_context_token')
 
         # Clear BT span from context
         context.attach(context.set_value('braintrust_span', None))
@@ -144,69 +143,3 @@ class ContextManager:
                     'otel_span_id': span_info.span_id
                 }
             }
-
-
-# Global instance
-_unified_context = ContextManager()
-
-
-def get_unified_context() -> ContextManager:
-    """Get the global unified context manager."""
-    return _unified_context
-
-
-def get_current_span_info() -> Optional['SpanInfo']:
-    """Get information about the currently active span."""
-    return _unified_context.get_current_span_info()
-
-
-def set(span_object: Any) -> None:
-    """Set the current active span."""
-    _unified_context.set_current_span(span_object)
-
-
-def unset(span_object: Any = None) -> None:
-    """Unset the current active span."""
-    _unified_context.unset_current_span(span_object)
-
-
-def get_parent_info_for_bt_span() -> Optional[Dict[str, Any]]:
-    """Get parent information for creating a new BT span."""
-    return _unified_context.get_parent_info_for_bt_span()
-
-
-def determine_braintrust_parent_value(bt_span) -> Optional[str]:
-    """Determine the best parent value for braintrust.parent attribute from a BT span.
-
-    Priority order:
-    1. project_name:foo (if project name is available)
-    2. project_id:123 (if project ID is available)
-    3. experiment_id:123 (if experiment ID is available)
-    """
-    try:
-        # Use the existing _get_parent_info method which extracts parent info
-        parent_object_type, parent_info = bt_span._get_parent_info()
-
-        if not parent_info:
-            return None
-
-        # Priority 1: project_name (available for PROJECT_LOGS)
-        if "name" in parent_info and parent_info["name"]:
-            return f"project_name:{parent_info['name']}"
-
-        # Priority 2: project_id (available for PROJECT_LOGS)
-        if "id" in parent_info and parent_info["id"]:
-            from braintrust.logger import SpanObjectTypeV3
-            if parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
-                return f"project_id:{parent_info['id']}"
-
-        # Priority 3: experiment_id (available for EXPERIMENT)
-        if "id" in parent_info and parent_info["id"]:
-            from braintrust.logger import SpanObjectTypeV3
-            if parent_object_type == SpanObjectTypeV3.EXPERIMENT:
-                return f"experiment_id:{parent_info['id']}"
-
-        return None
-
-    except Exception:
-        return None
