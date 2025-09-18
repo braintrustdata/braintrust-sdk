@@ -138,8 +138,11 @@ def test_otel_installed(session):
 @nox.session()
 def test_otel_not_installed(session):
     _install_test_deps(session)
-    # Verify that installing braintrust doesn't install OpenTelemetry packages
-    otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
+    otel_packages = [
+        "opentelemetry",
+        "opentelemetry.trace",
+        "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+    ]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
     _run_tests(session, "braintrust/test_otel.py")
