@@ -698,17 +698,6 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
-def _get_unified_parent_info():
-    """Get parent information from unified context for BT span creation.
-
-    Returns None if unified context is not available or no active span.
-    """
-    try:
-        from braintrust.otel.context import get_parent_info_for_bt_span
-        return get_parent_info_for_bt_span()
-    except ImportError:
-        # Unified context not available, return None
-        return None
 
 
 class _MaskingError:
@@ -3653,7 +3642,7 @@ class SpanImpl(Span):
 
         # Handle unified context if no explicit parents are set
         if not parent_span_ids:
-            parent_info = _get_unified_parent_info()
+            parent_info = self.state.context_manager.get_parent_info_for_bt_span()
             if parent_info:
                 # Apply parent information from unified context
                 if 'root_span_id' in parent_info:
@@ -3665,9 +3654,6 @@ class SpanImpl(Span):
                         event['metadata'] = {}
                     event['metadata'].update(parent_info['metadata'])
 
-        # Clean up any legacy _otel_context data
-        if '_otel_context' in event:
-            event.pop('_otel_context')
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -3879,9 +3865,6 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             self.unset_current()
-
-            # The context manager already handles OTEL context cleanup in unset_current()
-            # so we don't need to detach here - that would undo the cleanup
             self.end()
 
     def _get_parent_info(self):
