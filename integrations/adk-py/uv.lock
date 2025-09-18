@@ -118,7 +118,7 @@ wheels = [
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.0rc3"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "braintrust" },
@@ -131,6 +131,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-vcr" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -146,6 +147,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },
     { name = "pytest-vcr", specifier = ">=1.0.2" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.12.9" },
 ]
 

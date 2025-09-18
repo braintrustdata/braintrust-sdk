@@ -1,0 +1,480 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "What''s the weather in San Francisco?"}],
+      "role": "user"}], "systemInstruction": {"parts": [{"text": "You are a helpful
+      weather assistant. Use the get_weather tool to answer questions about weather.\n\nYou
+      are an agent. Your internal name is \"weather_agent\"."}], "role": "user"},
+      "tools": [{"functionDeclarations": [{"description": "Get the weather for a location.",
+      "name": "get_weather", "parameters": {"properties": {"location": {"type": "STRING"}},
+      "required": ["location"], "type": "OBJECT"}}]}], "generationConfig": {}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '561'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+      x-goog-api-client:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61S0WqDMBR9z1dInmuxtnVlr10HhZW5TcagjHGntzYsJjaJG6X03xettuq2tylI
+        vOfknHtzciCOQ2MQCUvAoKbXztpWHOdQfUtMCoPCWKAp2WIOyly4p+fQWlvKphCxYVLMgfPO5hoX
+        kKGt0xTN2xeC2aKigz4JVKp/2WwRLmMo5UuJJxDOrQIRMx1L2uMeyV9/l/XrxZgqyau+Mpkgb8SO
+        DYFumGB6+4iga+/oPjz3TeEzvZNpruR72bY7Gwa+702DSeD59p2Oxuh6AWnMK1taaEhxhQZsAHAe
+        llqRLDeR/EAxl0UVwPTqZNTKq4MHNWykAd5FxoMfqvrGejLejrGVsB0fODP7csZo8RK1srH6naaa
+        MyKto+y3+E9mQdeL1MmcwnpGpesbkWJmc3L9oeduOOhtJUgV6lwKjcuk5EwW0QrC/ShcutnO6HC8
+        C4vZw4SSI/kGJXVRFhUDAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Thu, 18 Sep 2025 17:44:01 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=609
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"contents": [{"parts": [{"text": "What''s the weather in San Francisco?"}],
+      "role": "user"}, {"parts": [{"functionCall": {"args": {"location": "San Francisco"},
+      "name": "get_weather"}}], "role": "model"}, {"parts": [{"functionResponse":
+      {"name": "get_weather", "response": {"location": "San Francisco", "temperature":
+      "72\u00b0F", "condition": "sunny", "humidity": "45%", "wind": "5 mph NW"}}}],
+      "role": "user"}], "systemInstruction": {"parts": [{"text": "You are a helpful
+      weather assistant. Use the get_weather tool to answer questions about weather.\n\nYou
+      are an agent. Your internal name is \"weather_agent\"."}], "role": "user"},
+      "tools": [{"functionDeclarations": [{"description": "Get the weather for a location.",
+      "name": "get_weather", "parameters": {"properties": {"location": {"type": "STRING"}},
+      "required": ["location"], "type": "OBJECT"}}]}], "generationConfig": {}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '881'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+      x-goog-api-client:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61Ry07DMBC85ytWlrjRKm2TUrghHhKIl2h4SMBhabaNRWIHe8NDVf+Jb+DLsFNS
+        UriSQ7TaGe+MZuYBgJigSmWKTFbswJ3bAMzrv8e0YlLsgGblliUa/uEuv3lrdhSmN/9IJBnBKyFn
+        ZEAqGKOCQ4NqIu1Eg7RgK6Xe4VVyBghMRUkGuTIEegpb/c+Pwy74E1lVyFTyu38SxRvgHAP709IN
+        bhdDUWZwdtO9V6JlZLGaHzZ/7Budk/dW6JTyhr5oCGIqlbTZJaHVytPGyfmFWKH4MjvRs9LoR59A
+        J+yGYRiPhr0wHAzD7f4wirdH/aARr2VFZXFGp8ToQsZVlMIdKUpO9BOpPV3VIY+ipVCrkzV80OCs
+        GfM1qNcbbf65a/edqszbZbV6dAFg7lKtizq4TUQrJF631aQUtML8bfKfxAa/xILvcpZ9XZOxclnM
+        jApXVaffDTvTHG1WXxSGbKmVpaPUc6Kr5BSPZXU+HA+e2V7EZVV0diMRLIIv+M+0aPwCAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Thu, 18 Sep 2025 17:44:02 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=615
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      User-Agent:
+      - python-requests/2.32.5
+    method: POST
+    uri: http://localhost:3000/api/apikey/login
+  response:
+    body:
+      string: '{"org_info":[{"id":"590c91ad-4729-4772-acfe-d4428ccd3e78","name":"gemini","api_url":"http://127.0.0.1:8000","git_metadata":null,"is_universal_api":null,"proxy_url":"http://127.0.0.1:8000","realtime_url":"ws://127.0.0.1:8788"}]}'
+    headers:
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Allow-Headers:
+      - X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5,
+        Content-Type, Date, X-Api-Version
+      Access-Control-Allow-Methods:
+      - GET,OPTIONS,PATCH,DELETE,POST,PUT
+      Access-Control-Allow-Origin:
+      - '*'
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '227'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 18 Sep 2025 17:44:02 GMT
+      ETag:
+      - '"nyqcwocbn76b"'
+      Keep-Alive:
+      - timeout=5
+      Vary:
+      - Accept-Encoding
+      content-security-policy:
+      - script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'strict-dynamic' 'nonce-ZTcwNDQ3M2UtYzVlYi00Y2IwLTg3NzYtNWM4MTkxZDY3MWY1'  *.js.stripe.com
+        js.stripe.com maps.googleapis.com ; style-src 'self' 'unsafe-inline' *.braintrust.dev;
+        font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors
+        'none'; worker-src 'self' blob:; report-uri https://o4507221741076480.ingest.us.sentry.io/api/4507221754380288/security/?sentry_key=27fa5ac907cf7c6ce4a1ab2a03f805b4&sentry_environment=development&sentry_release=5;
+        report-to csp-endpoint-0
+      reporting-endpoints:
+      - csp-endpoint-0="https://o4507221741076480.ingest.us.sentry.io/api/4507221754380288/security/?sentry_key=27fa5ac907cf7c6ce4a1ab2a03f805b4&sentry_environment=development&sentry_release=5"
+      x-clerk-auth-message:
+      - Invalid JWT form. A JWT consists of three parts separated by dots. (reason=token-invalid,
+        token-carrier=header)
+      x-clerk-auth-reason:
+      - token-invalid
+      x-clerk-auth-status:
+      - signed-out
+      x-content-type-options:
+      - nosniff
+      x-middleware-rewrite:
+      - /api/apikey/login
+      x-nonce:
+      - ZTcwNDQ3M2UtYzVlYi00Y2IwLTg3NzYtNWM4MTkxZDY3MWY1
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"project_name": "test_adk", "org_id": "590c91ad-4729-4772-acfe-d4428ccd3e78"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '78'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: POST
+    uri: http://localhost:3000/api/project/register
+  response:
+    body:
+      string: '{"project":{"id":"506d7048-1127-4a08-bdd0-d88b3f72d746","org_id":"590c91ad-4729-4772-acfe-d4428ccd3e78","name":"test_adk","created":"2025-09-18T17:36:47.860Z","deleted_at":null,"user_id":"60fc4b05-a147-4945-b607-3f5624178ebb","settings":null}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '243'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 18 Sep 2025 17:44:06 GMT
+      ETag:
+      - '"gz7rwxqudh6r"'
+      Keep-Alive:
+      - timeout=5
+      Vary:
+      - Accept-Encoding
+      content-security-policy:
+      - script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'strict-dynamic' 'nonce-MDM1OTBiZjAtMWIwMS00ZmM1LWFiZjQtMzU0NzQ4YWQ3MzIz'  *.js.stripe.com
+        js.stripe.com maps.googleapis.com ; style-src 'self' 'unsafe-inline' *.braintrust.dev;
+        font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors
+        'none'; worker-src 'self' blob:; report-uri https://o4507221741076480.ingest.us.sentry.io/api/4507221754380288/security/?sentry_key=27fa5ac907cf7c6ce4a1ab2a03f805b4&sentry_environment=development&sentry_release=5;
+        report-to csp-endpoint-0
+      reporting-endpoints:
+      - csp-endpoint-0="https://o4507221741076480.ingest.us.sentry.io/api/4507221754380288/security/?sentry_key=27fa5ac907cf7c6ce4a1ab2a03f805b4&sentry_environment=development&sentry_release=5"
+      x-bt-was-udf-cached:
+      - 'true'
+      x-clerk-auth-message:
+      - Invalid JWT form. A JWT consists of three parts separated by dots. (reason=token-invalid,
+        token-carrier=header)
+      x-clerk-auth-reason:
+      - token-invalid
+      x-clerk-auth-status:
+      - signed-out
+      x-content-type-options:
+      - nosniff
+      x-middleware-rewrite:
+      - /api/project/register
+      x-nonce:
+      - MDM1OTBiZjAtMWIwMS00ZmM1LWFiZjQtMzU0NzQ4YWQ3MzIz
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"rows": [{"id": "c49c6c2b-4ac1-4eac-a61f-fe212522756c", "metrics": {"start":
+      1758217440.720622, "end": 1758217442.504441}, "span_attributes": {"type": "task",
+      "name": "invocation [weather_app]", "exec_counter": 1}, "context": {"caller_functionname":
+      "_trace", "caller_filename": "/Users/olmo/sources/braintrustdata/braintrust/sdk/integrations/adk-py/src/braintrust_adk/__init__.py",
+      "caller_lineno": 203}, "input": {"new_message": {"parts": [{"text": "What''s
+      the weather in San Francisco?"}], "role": "user"}}, "metadata": {"user_id":
+      "test-user", "session_id": "test-session", "state_delta": null}, "project_id":
+      "506d7048-1127-4a08-bdd0-d88b3f72d746", "log_id": "g", "output": {"content":
+      {"parts": [{"text": "The weather in San Francisco is sunny with a temperature
+      of 72\u00b0F. The humidity is 45% and the wind is 5 mph NW.\n"}], "role": "model"},
+      "finish_reason": "STOP", "usage_metadata": {"candidates_token_count": 34, "candidates_tokens_details":
+      [{"modality": "TEXT", "token_count": 34}], "prompt_token_count": 84, "prompt_tokens_details":
+      [{"modality": "TEXT", "token_count": 84}], "total_token_count": 118}, "invocation_id":
+      "e-d71e852e-752f-4054-b867-78dcea4fa950", "author": "weather_agent", "actions":
+      {"state_delta": {}, "artifact_delta": {}, "requested_auth_configs": {}, "requested_tool_confirmations":
+      {}}, "id": "0a0c9066-8061-446a-9077-13c6a1fb9524", "timestamp": 1758217441.810426},
+      "created": "2025-09-18T17:44:00.720627+00:00", "span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7",
+      "root_span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7", "span_parents": null},{"id":
+      "2a9e850d-045a-4706-bbae-fdabcdbcf90e", "metrics": {"start": 1758217440.7229161,
+      "end": 1758217442.5043259}, "span_attributes": {"type": "task", "name": "agent_run
+      [weather_agent]", "exec_counter": 2}, "context": {"caller_functionname": "_trace",
+      "caller_filename": "/Users/olmo/sources/braintrustdata/braintrust/sdk/integrations/adk-py/src/braintrust_adk/__init__.py",
+      "caller_lineno": 64}, "metadata": {"parent_context": {"session_service": "<google.adk.sessions.in_memory_session_service.InMemorySessionService
+      object at 0x12b190d60>", "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "agent": {"name": "weather_agent", "description": "", "sub_agents": []}, "user_content":
+      {"parts": [{"text": "What''s the weather in San Francisco?"}], "role": "user"},
+      "session": {"id": "test-session", "app_name": "weather_app", "user_id": "test-user",
+      "state": {}, "events": [{"content": {"parts": [{"text": "What''s the weather
+      in San Francisco?"}], "role": "user"}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "user", "actions": {"state_delta": {}, "artifact_delta": {}, "requested_auth_configs":
+      {}, "requested_tool_confirmations": {}}, "id": "f21624e4-93d2-43bc-9e91-bfc3e92197c7",
+      "timestamp": 1758217440.721631}], "last_update_time": 1758217440.721631}, "end_invocation":
+      false, "run_config": {"save_input_blobs_as_artifacts": false, "support_cfc":
+      false, "streaming_mode": "StreamingMode.NONE", "max_llm_calls": 500}, "plugin_manager":
+      "<google.adk.plugins.plugin_manager.PluginManager object at 0x12b1904f0>"}},
+      "project_id": "506d7048-1127-4a08-bdd0-d88b3f72d746", "log_id": "g", "output":
+      {"content": {"parts": [{"text": "The weather in San Francisco is sunny with
+      a temperature of 72\u00b0F. The humidity is 45% and the wind is 5 mph NW.\n"}],
+      "role": "model"}, "finish_reason": "STOP", "usage_metadata": {"candidates_token_count":
+      34, "candidates_tokens_details": [{"modality": "TEXT", "token_count": 34}],
+      "prompt_token_count": 84, "prompt_tokens_details": [{"modality": "TEXT", "token_count":
+      84}], "total_token_count": 118}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "id":
+      "0a0c9066-8061-446a-9077-13c6a1fb9524", "timestamp": 1758217441.810426}, "created":
+      "2025-09-18T17:44:00.722917+00:00", "span_id": "8b248628-5d24-4d4c-a1a4-8eaddb6cd219",
+      "root_span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7", "span_parents": ["185f4c87-4c8a-4f86-a035-5d06035db7a7"]},{"id":
+      "468fd1c1-47b5-4b6f-ba3c-212ff62aa136", "metrics": {"start": 1758217440.723335,
+      "end": 1758217442.5042}, "span_attributes": {"type": "task", "name": "call_llm",
+      "exec_counter": 3}, "context": {"caller_functionname": "_trace", "caller_filename":
+      "/Users/olmo/sources/braintrustdata/braintrust/sdk/integrations/adk-py/src/braintrust_adk/__init__.py",
+      "caller_lineno": 95}, "metadata": {"invocation_context": {"session_service":
+      "<google.adk.sessions.in_memory_session_service.InMemorySessionService object
+      at 0x12b190d60>", "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "agent": {"name": "weather_agent", "description": "", "sub_agents": []}, "user_content":
+      {"parts": [{"text": "What''s the weather in San Francisco?"}], "role": "user"},
+      "session": {"id": "test-session", "app_name": "weather_app", "user_id": "test-user",
+      "state": {}, "events": [{"content": {"parts": [{"text": "What''s the weather
+      in San Francisco?"}], "role": "user"}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "user", "actions": {"state_delta": {}, "artifact_delta": {}, "requested_auth_configs":
+      {}, "requested_tool_confirmations": {}}, "id": "f21624e4-93d2-43bc-9e91-bfc3e92197c7",
+      "timestamp": 1758217440.721631}], "last_update_time": 1758217440.721631}, "end_invocation":
+      false, "run_config": {"save_input_blobs_as_artifacts": false, "support_cfc":
+      false, "streaming_mode": "StreamingMode.NONE", "max_llm_calls": 500}, "plugin_manager":
+      "<google.adk.plugins.plugin_manager.PluginManager object at 0x12b1904f0>"}},
+      "project_id": "506d7048-1127-4a08-bdd0-d88b3f72d746", "log_id": "g", "output":
+      {"content": {"parts": [{"text": "The weather in San Francisco is sunny with
+      a temperature of 72\u00b0F. The humidity is 45% and the wind is 5 mph NW.\n"}],
+      "role": "model"}, "finish_reason": "STOP", "usage_metadata": {"candidates_token_count":
+      34, "candidates_tokens_details": [{"modality": "TEXT", "token_count": 34}],
+      "prompt_token_count": 84, "prompt_tokens_details": [{"modality": "TEXT", "token_count":
+      84}], "total_token_count": 118}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "id":
+      "0a0c9066-8061-446a-9077-13c6a1fb9524", "timestamp": 1758217441.810426}, "created":
+      "2025-09-18T17:44:00.723336+00:00", "span_id": "a78f8b53-9f01-4ed9-8e7b-08504b2a1d66",
+      "root_span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7", "span_parents": ["8b248628-5d24-4d4c-a1a4-8eaddb6cd219"]},{"id":
+      "de812307-d680-4d50-b292-415d04abbec0", "metrics": {"start": 1758217440.724237,
+      "end": 1758217441.8101702}, "span_attributes": {"type": "llm", "name": "llm_call
+      [tool_selection]", "exec_counter": 4}, "context": {"caller_functionname": "_trace",
+      "caller_filename": "/Users/olmo/sources/braintrustdata/braintrust/sdk/integrations/adk-py/src/braintrust_adk/__init__.py",
+      "caller_lineno": 128}, "input": {"model": "gemini-2.0-flash", "contents": [{"parts":
+      [{"text": "What''s the weather in San Francisco?"}], "role": "user"}], "config":
+      {"system_instruction": "You are a helpful weather assistant. Use the get_weather
+      tool to answer questions about weather.\n\nYou are an agent. Your internal name
+      is \"weather_agent\".", "tools": [{"function_declarations": [{"description":
+      "Get the weather for a location.", "name": "get_weather", "parameters": {"properties":
+      {"location": {"type": "STRING"}}, "required": ["location"], "type": "OBJECT"}}]}]},
+      "live_connect_config": {}}, "metadata": {"invocation_context": {"session_service":
+      "<google.adk.sessions.in_memory_session_service.InMemorySessionService object
+      at 0x12b190d60>", "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "agent": {"name": "weather_agent", "description": "", "sub_agents": []}, "user_content":
+      {"parts": [{"text": "What''s the weather in San Francisco?"}], "role": "user"},
+      "session": {"id": "test-session", "app_name": "weather_app", "user_id": "test-user",
+      "state": {}, "events": [{"content": {"parts": [{"text": "What''s the weather
+      in San Francisco?"}], "role": "user"}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "user", "actions": {"state_delta": {}, "artifact_delta": {}, "requested_auth_configs":
+      {}, "requested_tool_confirmations": {}}, "id": "f21624e4-93d2-43bc-9e91-bfc3e92197c7",
+      "timestamp": 1758217440.721631}], "last_update_time": 1758217440.721631}, "end_invocation":
+      false, "run_config": {"save_input_blobs_as_artifacts": false, "support_cfc":
+      false, "streaming_mode": "StreamingMode.NONE", "max_llm_calls": 500}, "plugin_manager":
+      "<google.adk.plugins.plugin_manager.PluginManager object at 0x12b1904f0>"},
+      "model_response_event": {"invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "id":
+      "de1482f5-6fc0-48a6-8cc9-21c4b13941d6", "timestamp": 1758217440.724089}, "flow_class":
+      "AutoFlow", "llm_call_type": "tool_selection"}, "project_id": "506d7048-1127-4a08-bdd0-d88b3f72d746",
+      "log_id": "g", "output": {"content": {"parts": [{"function_call": {"args": {"location":
+      "San Francisco"}, "name": "get_weather"}}], "role": "model"}, "finish_reason":
+      "STOP", "usage_metadata": {"candidates_token_count": 6, "candidates_tokens_details":
+      [{"modality": "TEXT", "token_count": 6}], "prompt_token_count": 57, "prompt_tokens_details":
+      [{"modality": "TEXT", "token_count": 57}], "total_token_count": 63}}, "created":
+      "2025-09-18T17:44:00.724238+00:00", "span_id": "22642427-8e0c-481e-9a73-0a4c005bb31b",
+      "root_span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7", "span_parents": ["a78f8b53-9f01-4ed9-8e7b-08504b2a1d66"]},{"id":
+      "eeb1ae6a-757f-4c29-b322-f0e1921f107a", "metrics": {"start": 1758217441.810549,
+      "end": 1758217442.504072}, "span_attributes": {"type": "llm", "name": "llm_call
+      [response_generation]", "exec_counter": 5}, "context": {"caller_functionname":
+      "_trace", "caller_filename": "/Users/olmo/sources/braintrustdata/braintrust/sdk/integrations/adk-py/src/braintrust_adk/__init__.py",
+      "caller_lineno": 128}, "input": {"model": "gemini-2.0-flash", "contents": [{"parts":
+      [{"text": "What''s the weather in San Francisco?"}], "role": "user"}, {"parts":
+      [{"function_call": {"args": {"location": "San Francisco"}, "name": "get_weather"}}],
+      "role": "model"}, {"parts": [{"function_response": {"name": "get_weather", "response":
+      {"location": "San Francisco", "temperature": "72\u00b0F", "condition": "sunny",
+      "humidity": "45%", "wind": "5 mph NW"}}}], "role": "user"}], "config": {"system_instruction":
+      "You are a helpful weather assistant. Use the get_weather tool to answer questions
+      about weather.\n\nYou are an agent. Your internal name is \"weather_agent\".",
+      "tools": [{"function_declarations": [{"description": "Get the weather for a
+      location.", "name": "get_weather", "parameters": {"properties": {"location":
+      {"type": "STRING"}}, "required": ["location"], "type": "OBJECT"}}]}]}, "live_connect_config":
+      {}}, "metadata": {"invocation_context": {"session_service": "<google.adk.sessions.in_memory_session_service.InMemorySessionService
+      object at 0x12b190d60>", "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "agent": {"name": "weather_agent", "description": "", "sub_agents": []}, "user_content":
+      {"parts": [{"text": "What''s the weather in San Francisco?"}], "role": "user"},
+      "session": {"id": "test-session", "app_name": "weather_app", "user_id": "test-user",
+      "state": {}, "events": [{"content": {"parts": [{"text": "What''s the weather
+      in San Francisco?"}], "role": "user"}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "user", "actions": {"state_delta": {}, "artifact_delta": {}, "requested_auth_configs":
+      {}, "requested_tool_confirmations": {}}, "id": "f21624e4-93d2-43bc-9e91-bfc3e92197c7",
+      "timestamp": 1758217440.721631}, {"content": {"parts": [{"function_call": {"id":
+      "adk-4b24273f-5492-4f3e-8f89-f846fc6b2ec4", "args": {"location": "San Francisco"},
+      "name": "get_weather"}}], "role": "model"}, "finish_reason": "STOP", "usage_metadata":
+      {"candidates_token_count": 6, "candidates_tokens_details": [{"modality": "TEXT",
+      "token_count": 6}], "prompt_token_count": 57, "prompt_tokens_details": [{"modality":
+      "TEXT", "token_count": 57}], "total_token_count": 63}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "long_running_tool_ids":
+      [], "id": "de1482f5-6fc0-48a6-8cc9-21c4b13941d6", "timestamp": 1758217440.724089},
+      {"content": {"parts": [{"function_response": {"id": "adk-4b24273f-5492-4f3e-8f89-f846fc6b2ec4",
+      "name": "get_weather", "response": {"location": "San Francisco", "temperature":
+      "72\u00b0F", "condition": "sunny", "humidity": "45%", "wind": "5 mph NW"}}}],
+      "role": "user"}, "invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "id":
+      "5dad9400-1c6d-45ab-9981-b46011497a82", "timestamp": 1758217441.809431}], "last_update_time":
+      1758217441.809431}, "end_invocation": false, "run_config": {"save_input_blobs_as_artifacts":
+      false, "support_cfc": false, "streaming_mode": "StreamingMode.NONE", "max_llm_calls":
+      500}, "plugin_manager": "<google.adk.plugins.plugin_manager.PluginManager object
+      at 0x12b1904f0>"}, "model_response_event": {"invocation_id": "e-d71e852e-752f-4054-b867-78dcea4fa950",
+      "author": "weather_agent", "actions": {"state_delta": {}, "artifact_delta":
+      {}, "requested_auth_configs": {}, "requested_tool_confirmations": {}}, "id":
+      "0a0c9066-8061-446a-9077-13c6a1fb9524", "timestamp": 1758217441.810426}, "flow_class":
+      "AutoFlow", "llm_call_type": "response_generation"}, "project_id": "506d7048-1127-4a08-bdd0-d88b3f72d746",
+      "log_id": "g", "output": {"content": {"parts": [{"text": "The weather in San
+      Francisco is sunny with a temperature of 72\u00b0F. The humidity is 45% and
+      the wind is 5 mph NW.\n"}], "role": "model"}, "finish_reason": "STOP", "usage_metadata":
+      {"candidates_token_count": 34, "candidates_tokens_details": [{"modality": "TEXT",
+      "token_count": 34}], "prompt_token_count": 84, "prompt_tokens_details": [{"modality":
+      "TEXT", "token_count": 84}], "total_token_count": 118}}, "created": "2025-09-18T17:44:01.810551+00:00",
+      "span_id": "73fa4719-f530-4a7d-bd6e-314f38711f18", "root_span_id": "185f4c87-4c8a-4f86-a035-5d06035db7a7",
+      "span_parents": ["a78f8b53-9f01-4ed9-8e7b-08504b2a1d66"]}], "api_version": 2}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '14778'
+      User-Agent:
+      - python-requests/2.32.5
+    method: POST
+    uri: http://localhost:8000/logs3
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAExXMyWlDUQwAwF50/gJJX29zKyEEreCzfQiE9B4yBcwPPPMFjw8IPTFDHNWCUcsC
+        bXJjl7AMkTVmwAVip/agRNJhqIsmulthp3mkRx8quEDn7uT/aPlA9dnodgcKS/cUM74nXJC1WW5a
+        mHMTag5ClyOoPJLU3CsILqhytpqGa6xGDTnotwg2FR/hZloGnxd8W7y/ngkPYCLiMzbvdXgQb1nw
+        +wcm/fwK7AAAAA==
+    headers:
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Expose-Headers:
+      - x-bt-cursor,x-bt-found-existing,x-bt-query-plan
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 18 Sep 2025 17:44:06 GMT
+      ETag:
+      - W/"ec-ul1SY/MDk5QvtV7mgrve/0m5Mzw"
+      Keep-Alive:
+      - timeout=5
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin, Accept-Encoding
+      x-bt-internal-trace-id:
+      - 7c52b1aac54d0a393ed6d10f28486ba7
+    status:
+      code: 200
+      message: OK
+version: 1
