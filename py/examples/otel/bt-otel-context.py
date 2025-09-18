@@ -52,6 +52,10 @@ def main():
             otel_span.set_attribute("type", "otel_inside_bt")
             otel_span.add_event("start")
 
+            # Nested OTEL spans to test parent propagation
+            with tracer.start_as_current_span("1.1.1.otel_nested") as nested_otel:
+                nested_otel.set_attribute("type", "nested_otel")
+
             # BT span for AI evaluation (nested under session)
             with session_span.start_span("1.2.bt.child") as llm_span:
                 llm_span.log(input="BT child", output="result", scores={"score": 0.95})

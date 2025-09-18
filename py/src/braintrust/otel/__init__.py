@@ -259,45 +259,91 @@ class BraintrustSpanProcessor:
 
     def on_start(self, span, parent_context=None):
         """Forward span start events to the inner processor, adding Braintrust context."""
-        # Try to get current Braintrust context using unified context system
+        # Determine braintrust.parent attribute using multiple sources
         try:
-            from braintrust.otel.unified_context import get_active_span_info
-            active_info = get_active_span_info()
+            parent_value = None
 
-            # Check if we have active BT context (when BT spans are active)
-            if active_info and active_info.span_type == 'bt':
-                # We're within a BT span context, use its info for parent tagging
-                trace_id = active_info.trace_id
+            # Priority 1: Check if we have an active BT span (this OTEL span is a child of a BT span)
+            from braintrust.otel.context import get_current_span_info
+            span_info = get_current_span_info()
 
-                # Try to determine project name from configured parent or use default
-                if hasattr(self._exporter, 'parent') and self._exporter.parent:
-                    if ':' in self._exporter.parent:
-                        project_name = self._exporter.parent.split(':')[0].replace('project_name', '').strip(':')
-                        if not project_name:
-                            project_name = self._exporter.parent.split(':')[1]
-                    else:
-                        project_name = self._exporter.parent
-                else:
-                    project_name = "unknown"
+            if span_info and hasattr(span_info.span_object, 'span_id'):
+                # We're within a BT span context, determine the best parent attribute
+                bt_span = span_info.span_object
+                parent_value = self._determine_parent_value(bt_span)
 
-                # Set braintrust.parent with project name and trace ID
-                parent_value = f"project_name:{project_name}:{trace_id}"
+            # Priority 2: Check if parent OTEL span has braintrust.parent attribute (for nested OTEL spans)
+            if not parent_value and parent_context:
+                parent_value = self._get_parent_otel_braintrust_parent(parent_context)
+
+            # Priority 3: Use configured fallback parent
+            if not parent_value and hasattr(self._exporter, 'parent') and self._exporter.parent:
+                parent_value = self._exporter.parent
+
+            # Set the attribute if we found a parent value
+            if parent_value:
                 span.set_attribute("braintrust.parent", parent_value)
-                print(f"Auto-setting braintrust.parent from BT context: {parent_value}")
-
-            else:
-                # Fallback: use the configured parent for this processor
-                if hasattr(self._exporter, 'parent') and self._exporter.parent:
-                    span.set_attribute("braintrust.parent", self._exporter.parent)
-                    print(f"Using configured braintrust.parent: {self._exporter.parent}")
 
         except Exception as e:
-            print(f"Error in BT context detection: {e}")
             # Fallback: use configured parent
             if hasattr(self._exporter, 'parent') and self._exporter.parent:
                 span.set_attribute("braintrust.parent", self._exporter.parent)
 
         self._processor.on_start(span, parent_context)
+
+    def _determine_parent_value(self, bt_span):
+        """Determine the best parent value for braintrust.parent attribute.
+
+        Priority order:
+        1. project_name:foo (if project name is available)
+        2. project_id:123 (if project ID is available)
+        3. experiment_id:123 (if experiment ID is available)
+        """
+        try:
+            # Use the existing _get_parent_info method which extracts parent info
+            parent_object_type, parent_info = bt_span._get_parent_info()
+
+            if not parent_info:
+                return None
+
+            # Priority 1: project_name (available for PROJECT_LOGS)
+            if "name" in parent_info and parent_info["name"]:
+                return f"project_name:{parent_info['name']}"
+
+            # Priority 2: project_id (available for PROJECT_LOGS)
+            if "id" in parent_info and parent_info["id"]:
+                from braintrust.logger import SpanObjectTypeV3
+                if parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
+                    return f"project_id:{parent_info['id']}"
+
+            # Priority 3: experiment_id (available for EXPERIMENT)
+            if "id" in parent_info and parent_info["id"]:
+                from braintrust.logger import SpanObjectTypeV3
+                if parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+                    return f"experiment_id:{parent_info['id']}"
+
+            return None
+
+        except Exception:
+            return None
+
+    def _get_parent_otel_braintrust_parent(self, parent_context):
+        """Get braintrust.parent attribute from parent OTEL span if it exists."""
+        try:
+            from opentelemetry import trace
+
+            # Get the current span from the parent context
+            current_span = trace.get_current_span(parent_context)
+
+            if current_span and hasattr(current_span, 'attributes') and current_span.attributes:
+                # Check if parent span has braintrust.parent attribute
+                attributes = dict(current_span.attributes)
+                return attributes.get("braintrust.parent")
+
+            return None
+
+        except Exception:
+            return None
 
     def on_end(self, span):
         """Forward span end events to the inner processor."""

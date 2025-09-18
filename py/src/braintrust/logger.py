@@ -3947,7 +3947,12 @@ class SpanImpl(Span):
             is_resolved, experiment_id = self.parent_object_id.get_sync()
             if is_resolved:
                 return self.parent_object_type, {"id": experiment_id}
-            return self.parent_object_type, {}
+            # For experiments, we can resolve the ID by calling get()
+            try:
+                experiment_id = self.parent_object_id.get()
+                return self.parent_object_type, {"id": experiment_id}
+            except Exception:
+                return self.parent_object_type, {}
         else:
             return None, {}
 
