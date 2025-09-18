@@ -5,12 +5,14 @@ Tests that OTEL and Braintrust spans are properly grouped in unified traces
 when created in mixed contexts.
 """
 
+import os
 
 import pytest
 
 from braintrust import current_span
+from braintrust.logger import _internal_with_memory_background_logger
 from braintrust.otel import BraintrustSpanProcessor
-from braintrust.test_helpers import init_test_exp, init_test_logger, memory_logger
+from braintrust.test_helpers import init_test_exp, init_test_logger
 
 OTEL_AVAILABLE = True
 try:
@@ -32,40 +34,56 @@ except ImportError:
 
 from dataclasses import dataclass
 
-# FIXME[matt] pyright keeps deleting memory_logger because it doesn't
-# know how to handle pytest fixtures.
-_ = memory_logger
 
 @dataclass
 class OtelFixture:
     tracer: object
     exporter: InMemorySpanExporter
+    memory_logger: object
 
 
 @pytest.fixture
 def otel_fixture():
+    """ otel fixture configures everything we need to run mixed otel/bt tracing tests
+        that export to memory.
+    """
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    parent = "project_name:otel-fixture-test"
-    exporter = InMemorySpanExporter()
-    processor = SimpleSpanProcessor(exporter)
+    # 1. Set environment variable first
+    os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
 
-    # FIXME[matt]: this is a hack to get the test to pass. Refactor BraintrustSpanProcessor to use
-    # an instance of the processor instead of the exporter
-    btsp = BraintrustSpanProcessor(parent=parent)
-    btsp._processor = processor
+    try:
+        # 2. Set up memory logger with proper context manager
+        with _internal_with_memory_background_logger() as memory_logger:
+            # 3. Set up OTEL components
+            parent = "project_name:otel-fixture-test"
+            exporter = InMemorySpanExporter()
+            processor = SimpleSpanProcessor(exporter)
 
-    tp = TracerProvider()
-    tp.add_span_processor(btsp)
-    tracer = tp.get_tracer("otel-fixture-test")
-    yield OtelFixture(exporter=exporter, tracer=tracer)
+            # FIXME[matt]: this is a hack to get the test to pass. Refactor BraintrustSpanProcessor to use
+            # an instance of the processor instead of the exporter
+            btsp = BraintrustSpanProcessor(parent=parent)
+            btsp._processor = processor
+
+            tp = TracerProvider()
+            tp.add_span_processor(btsp)
+            tracer = tp.get_tracer("otel-fixture-test")
+
+            fixture = OtelFixture(exporter=exporter, tracer=tracer, memory_logger=memory_logger)
+
+            yield fixture
+
+    finally:
+        # Reset environment
+        os.environ['BRAINTRUST_ENABLE_OTEL'] = '0'
 
 
-def test_mixed_otel_bt_tracing_with_bt_logger_first(memory_logger, otel_fixture):
+def test_mixed_otel_bt_tracing_with_bt_logger_first(otel_fixture):
     project_name = "mixed-tracing-with-bt-logger-first"
     tracer = otel_fixture.tracer
     otel_mem_exporter = otel_fixture.exporter
+    memory_logger = otel_fixture.memory_logger
 
     logger = init_test_logger(project_name)
 
@@ -105,10 +123,11 @@ def test_mixed_otel_bt_tracing_with_bt_logger_first(memory_logger, otel_fixture)
     assert s2_span_id in s3["span_parents"]
 
 
-def test_mixed_otel_bt_tracing_with_experiment_parent(memory_logger, otel_fixture):
+def test_mixed_otel_bt_tracing_with_experiment_parent(otel_fixture):
     experiment = init_test_exp("otel-bt-mixed", "test-mixed-tracing-experiment")
     tracer = otel_fixture.tracer
     otel_memory_exporter = otel_fixture.exporter
+    memory_logger = otel_fixture.memory_logger
 
     with experiment.start_span(name="1") as span1:
         assert current_span() == span1
@@ -146,10 +165,11 @@ def test_mixed_otel_bt_tracing_with_experiment_parent(memory_logger, otel_fixtur
     assert s2_span_id in s3["span_parents"]
 
 
-def test_mixed_otel_bt_tracing_with_otel_first(memory_logger, otel_fixture):
+def test_mixed_otel_bt_tracing_with_otel_first(otel_fixture):
     logger = init_test_logger(__name__)
     tracer = otel_fixture.tracer
     otel_memory_exporter = otel_fixture.exporter
+    memory_logger = otel_fixture.memory_logger
 
     with tracer.start_as_current_span("1"):
         with logger.start_span(name="2") as span2:
@@ -189,10 +209,11 @@ def test_mixed_otel_bt_tracing_with_otel_first(memory_logger, otel_fixture):
     assert s1_span_id in s2["span_parents"]
 
 
-def test_separate_traces_should_not_be_unified(memory_logger, otel_fixture):
+def test_separate_traces_should_not_be_unified(otel_fixture):
     """Test that separate, non-nested traces should remain separate (this should currently FAIL)."""
     logger = init_test_logger(__name__)
     tracer = otel_fixture.tracer
+    memory_logger = otel_fixture.memory_logger
 
     # First trace: BT only
     trace1_spans = []
@@ -225,7 +246,7 @@ def test_separate_traces_should_not_be_unified(memory_logger, otel_fixture):
     assert trace1_spans[0] != trace3_spans[1], "BT span in trace3 should NOT reuse trace1's ID"
 
 
-def test_otel_spans_inherit_parent_attribute(memory_logger, otel_fixture):
+def test_otel_spans_inherit_parent_attribute(otel_fixture):
     """Test that OTEL spans created inside BT contexts get braintrust.parent attribute."""
     test_cases = [
         ("exp-666", "experiment_id:exp-666", lambda parent_name: init_test_exp(parent_name, "test-project")),
@@ -234,6 +255,7 @@ def test_otel_spans_inherit_parent_attribute(memory_logger, otel_fixture):
 
     tracer = otel_fixture.tracer
     otel_memory_exporter = otel_fixture.exporter
+    memory_logger = otel_fixture.memory_logger
 
     for parent_name, expected_parent, parent_factory in test_cases:
         parent = parent_factory(parent_name)
@@ -255,6 +277,55 @@ def test_otel_spans_inherit_parent_attribute(memory_logger, otel_fixture):
         bt_spans = memory_logger.pop()
         assert len(bt_spans) == 1
 
+
+
+def test_uses_braintrust_context_manager_when_otel_disabled():
+    """Test that BraintrustContextManager is used when OTEL is not enabled."""
+    # Ensure OTEL is disabled
+    os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
+
+    try:
+        from braintrust.context import get_context_manager
+        cm = get_context_manager()
+
+        # Should be BraintrustContextManager, not OTEL ContextManager
+        assert type(cm).__name__ == "BraintrustContextManager"
+
+        # Verify it has the expected interface
+        assert hasattr(cm, 'get_current_span_info')
+        assert hasattr(cm, 'get_parent_info_for_bt_span')
+        assert hasattr(cm, 'set_current_span')
+        assert hasattr(cm, 'unset_current_span')
+
+    finally:
+        # Clean up - remove any environment variable we might have set
+        os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
+
+
+def test_uses_otel_context_manager_when_enabled():
+    """Test that OTEL ContextManager is used when BRAINTRUST_ENABLE_OTEL=1."""
+    if not OTEL_AVAILABLE:
+        pytest.skip("OpenTelemetry not installed")
+
+    try:
+        # Enable OTEL
+        os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
+
+        from braintrust.context import get_context_manager
+        cm = get_context_manager()
+
+        # Should be OTEL ContextManager, not BraintrustContextManager
+        assert type(cm).__name__ == "ContextManager"
+
+        # Verify it has the expected interface
+        assert hasattr(cm, 'get_current_span_info')
+        assert hasattr(cm, 'get_parent_info_for_bt_span')
+        assert hasattr(cm, 'set_current_span')
+        assert hasattr(cm, 'unset_current_span')
+
+    finally:
+        # Clean up
+        os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
 
 
 if __name__ == "__main__":

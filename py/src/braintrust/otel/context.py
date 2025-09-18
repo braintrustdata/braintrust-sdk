@@ -4,6 +4,9 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from opentelemetry import context, trace
+from opentelemetry.trace import SpanContext, TraceFlags
+
 from braintrust.logger import Span
 
 log = logging.getLogger(__name__)
@@ -26,7 +29,6 @@ class ContextManager:
 
     def get_current_span_info(self) -> Optional['SpanInfo']:
         """Get information about the currently active span from OTEL context."""
-        from opentelemetry import context, trace
 
         # Get the current span from OTEL context
         current_span = trace.get_current_span()
@@ -62,7 +64,6 @@ class ContextManager:
     def set_current_span(self, span_object: Span) -> None:
         """Set the current active span in OTEL context."""
         from opentelemetry import context, trace
-        from opentelemetry.trace import SpanContext, TraceFlags
 
         if hasattr(span_object, 'get_span_context'):
             # This is an OTEL span - it will manage its own context

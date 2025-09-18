@@ -348,9 +348,9 @@ class BraintrustState:
             "braintrust_current_span", default=NOOP_SPAN
         )
 
-        # Initialize context manager - factory chooses appropriate implementation
-        from braintrust.context import get_context_manager
-        self.context_manager = get_context_manager()
+        # Context manager is dynamically selected based on current environment
+        self._context_manager = None
+        self._last_otel_setting = None
 
         def default_get_api_conn():
             self.login()
@@ -403,6 +403,20 @@ class BraintrustState:
         self._api_conn: Optional[HTTPConnection] = None
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
+
+    @property
+    def context_manager(self):
+        """Get the appropriate context manager based on current environment."""
+        import os
+        current_otel_setting = os.environ.get('BRAINTRUST_ENABLE_OTEL', '')
+
+        # Cache the context manager unless the environment variable changed
+        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+            from braintrust.context import get_context_manager
+            self._context_manager = get_context_manager()
+            self._last_otel_setting = current_otel_setting
+
+        return self._context_manager
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""

@@ -9,6 +9,10 @@ pure OTEL instrumentation and Braintrust observability.
 Key concept: No bridge needed - just pure OTEL + pure Braintrust with automatic correlation.
 """
 
+import os
+
+os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
+
 import braintrust
 from braintrust.otel import BraintrustSpanProcessor
 
