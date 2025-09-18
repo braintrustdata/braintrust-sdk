@@ -259,39 +259,43 @@ class BraintrustSpanProcessor:
 
     def on_start(self, span, parent_context=None):
         """Forward span start events to the inner processor, adding Braintrust context."""
-        # Try to get current Braintrust context and set parent automatically
+        # Try to get current Braintrust context using unified context system
         try:
-            from braintrust.otel.context import get_active_otel_span
-            active_otel = get_active_otel_span()
-            if active_otel and hasattr(active_otel, '_bt_span'):
-                bt_span = active_otel._bt_span
-                # Try to get the project name from the span context
-                project_name = getattr(bt_span, 'project', None)
-                if not project_name and hasattr(bt_span, '_logger') and hasattr(bt_span._logger, 'project'):
-                    project_name = bt_span._logger.project
+            from braintrust.otel.unified_context import get_active_span_info
+            active_info = get_active_span_info()
 
-                if project_name:
-                    # Set braintrust.parent to the project name with root span ID
-                    span.set_attribute("braintrust.parent", f"{project_name}:{bt_span.root_span_id}")
-                    print(f"Auto-setting braintrust.parent: {project_name}:{bt_span.root_span_id}")
-                else:
-                    # Fallback: use the same parent that was configured for this processor
-                    if hasattr(self._exporter, 'parent') and self._exporter.parent:
-                        # Extract project name from the parent (format: "project_name:experiment")
-                        if ':' in self._exporter.parent:
-                            project_name = self._exporter.parent.split(':')[1]  # Get the experiment/project part
-                        else:
-                            project_name = self._exporter.parent
+            # Check if we have active BT context (when BT spans are active)
+            if active_info and active_info.span_type == 'bt':
+                # We're within a BT span context, use its info for parent tagging
+                trace_id = active_info.trace_id
 
-                        # Use correct format: project_name:project
-                        span.set_attribute("braintrust.parent", f"project_name:{project_name}")
-                        print(f"Using processor parent for braintrust.parent: project_name:{project_name}")
+                # Try to determine project name from configured parent or use default
+                if hasattr(self._exporter, 'parent') and self._exporter.parent:
+                    if ':' in self._exporter.parent:
+                        project_name = self._exporter.parent.split(':')[0].replace('project_name', '').strip(':')
+                        if not project_name:
+                            project_name = self._exporter.parent.split(':')[1]
                     else:
-                        print(f"Could not determine project name for BT span {bt_span.span_id}")
+                        project_name = self._exporter.parent
+                else:
+                    project_name = "unknown"
+
+                # Set braintrust.parent with project name and trace ID
+                parent_value = f"project_name:{project_name}:{trace_id}"
+                span.set_attribute("braintrust.parent", parent_value)
+                print(f"Auto-setting braintrust.parent from BT context: {parent_value}")
+
+            else:
+                # Fallback: use the configured parent for this processor
+                if hasattr(self._exporter, 'parent') and self._exporter.parent:
+                    span.set_attribute("braintrust.parent", self._exporter.parent)
+                    print(f"Using configured braintrust.parent: {self._exporter.parent}")
+
         except Exception as e:
-            print(f"Error in context detection: {e}")
-            # Ignore errors in context detection
-            pass
+            print(f"Error in BT context detection: {e}")
+            # Fallback: use configured parent
+            if hasattr(self._exporter, 'parent') and self._exporter.parent:
+                span.set_attribute("braintrust.parent", self._exporter.parent)
 
         self._processor.on_start(span, parent_context)
 

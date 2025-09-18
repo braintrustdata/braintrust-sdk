@@ -1,166 +1,145 @@
-"""OTEL context integration for Braintrust spans."""
+"""Unified context management using OTEL's built-in context."""
 
 import logging
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 log = logging.getLogger(__name__)
 
 
-def get_active_otel_span() -> Optional[Any]:
-    """Get the currently active pure OTEL span if available."""
-    try:
-        from opentelemetry import trace
+@dataclass
+class SpanInfo:
+    """Information about a span in the context."""
+    trace_id: str
+    span_id: str
+    span_object: Any = None
+    metadata: Optional[Dict[str, Any]] = None
 
+
+class ContextManager:
+    """Context manager that uses OTEL's built-in context as single storage."""
+
+    def get_current_span_info(self) -> Optional['SpanInfo']:
+        """Get information about the currently active span from OTEL context."""
+        from opentelemetry import context, trace
+
+        # Get the current span from OTEL context
         current_span = trace.get_current_span()
-        # Check if it's a real span (not NoOpSpan)
+
         if current_span and hasattr(current_span, 'get_span_context'):
             span_context = current_span.get_span_context()
-            # Check if it's a valid span context (not invalid/unsampled)
             if span_context and span_context.span_id != 0:
-                return current_span
-        return None
-    except ImportError:
-        # OTEL not installed
-        return None
-    except Exception as e:
-        log.debug(f"Failed to get active OTEL span: {e}")
-        return None
+                # Check if this is a BT span stored in OTEL context
+                bt_span = context.get_value('braintrust_span')
 
-
-def get_otel_span_info() -> Optional[dict]:
-    """Get OTEL span information for Braintrust parent correlation."""
-    otel_span = get_active_otel_span()
-    if not otel_span:
-        return None
-
-    try:
-        span_context = otel_span.get_span_context()
-        return {
-            'trace_id': format(span_context.trace_id, '032x'),
-            'span_id': format(span_context.span_id, '016x'),
-            'otel_span': otel_span
-        }
-    except Exception as e:
-        log.debug(f"Failed to extract OTEL span info: {e}")
-        return None
-
-
-def should_use_otel_context() -> bool:
-    """Check if OTEL context should be used for span parenting."""
-    return get_active_otel_span() is not None
-
-
-try:
-    from opentelemetry.trace import Span as OtelSpan
-    BaseSpan = OtelSpan
-except ImportError:
-    BaseSpan = object
-
-class BraintrustOtelSpanWrapper(BaseSpan):
-    """Wrapper that makes a Braintrust span look like an OTEL span for context purposes."""
-
-    def __init__(self, bt_span):
-        if hasattr(super(), '__init__'):
-            super().__init__()
-        self._bt_span = bt_span
-        self._span_context = None
-
-    def get_span_context(self):
-        """Create OTEL span context from BT span."""
-        if self._span_context is None:
-            try:
-                from opentelemetry.trace import SpanContext, TraceFlags
-                from opentelemetry.trace.span import TraceState
-
-                # Convert Braintrust UUID span IDs to OTEL integer format
-                # The goal: make OTEL byteArrayToHex() output match BT's UUID format
-                def uuid_to_int(uuid_string, bit_length):
-                    """Convert UUID string to integer, preserving exact structure."""
-                    # Remove dashes to get clean hex
-                    hex_clean = uuid_string.replace('-', '')
-
-                    if bit_length == 64:  # span_id - use last 64 bits of UUID
-                        hex_clean = hex_clean[-16:]  # Last 16 hex chars (64 bits)
-                    elif bit_length == 128:  # trace_id - use full UUID (128 bits)
-                        hex_clean = hex_clean  # All 32 hex chars (128 bits)
-
-                    return int(hex_clean, 16)
-
-                # Convert BT span ID to OTEL span_id (64-bit)
-                span_id_int = uuid_to_int(self._bt_span.span_id, 64)
-
-                # Convert BT root_span_id to OTEL trace_id
-                # When the server does byteArrayToHex(trace_id), it should produce
-                # the same hex string as BT's UUID without dashes
-                if hasattr(self._bt_span, 'root_span_id') and self._bt_span.root_span_id:
-                    trace_id_int = uuid_to_int(self._bt_span.root_span_id, 128)
+                if bt_span:
+                    # Return BT span info
+                    return SpanInfo(
+                        trace_id=bt_span.root_span_id,
+                        span_id=bt_span.span_id,
+                        span_object=bt_span
+                    )
                 else:
-                    trace_id_int = uuid_to_int(self._bt_span.span_id, 128)
+                    # Return OTEL span info
+                    return SpanInfo(
+                        trace_id=format(span_context.trace_id, '032x'),
+                        span_id=format(span_context.span_id, '016x'),
+                        span_object=current_span
+                    )
 
-                self._span_context = SpanContext(
-                    trace_id=trace_id_int,
-                    span_id=span_id_int,
-                    is_remote=False,
-                    trace_flags=TraceFlags(TraceFlags.SAMPLED),
-                    trace_state=TraceState()
-                )
-            except Exception as e:
-                log.debug(f"Failed to create span context: {e}")
-                return None
+        return None
 
-        return self._span_context
+    def set_current_span(self, span_object: Any) -> None:
+        """Set the current active span in OTEL context."""
+        from opentelemetry import context, trace
+        from opentelemetry.trace import SpanContext, TraceFlags
 
-    def is_recording(self):
-        """BT spans are always recording."""
-        return True
+        if hasattr(span_object, 'get_span_context'):
+            # This is an OTEL span - it will manage its own context
+            pass
+        else:
+            # This is a BT span - store it in OTEL context AND set as current OTEL span
+            # First store the BT span
+            ctx = context.set_value('braintrust_span', span_object)
 
-    # Implement required OTEL Span abstract methods
-    def add_event(self, name, attributes=None, timestamp=None):
-        """Add event - forward to BT span if possible."""
-        if hasattr(self._bt_span, 'log'):
-            metadata = {'otel_event': name}
-            if attributes:
-                metadata.update(attributes)
-            self._bt_span.log(metadata=metadata)
+            # Create OTEL span context from BT span to set as current
+            bt_trace_id_hex = span_object.root_span_id.replace('-', '')
+            bt_span_id_hex = span_object.span_id.replace('-', '')[:16]  # Span ID should be 64-bit (16 hex chars)
 
-    def end(self, end_time=None):
-        """End span - BT spans handle their own lifecycle."""
-        pass
+            trace_id_int = int(bt_trace_id_hex, 16)
+            span_id_int = int(bt_span_id_hex, 16)
 
-    def record_exception(self, exception, attributes=None, timestamp=None, escaped=False):
-        """Record exception on BT span."""
-        if hasattr(self._bt_span, 'log'):
-            self._bt_span.log(error=str(exception))
-            if attributes:
-                self._bt_span.log(metadata=dict(attributes))
+            otel_span_context = SpanContext(
+                trace_id=trace_id_int,
+                span_id=span_id_int,
+                is_remote=False,
+                trace_flags=TraceFlags(TraceFlags.SAMPLED)
+            )
 
-    def set_attribute(self, key, value):
-        """Set attribute - forward to BT span metadata."""
-        if hasattr(self._bt_span, 'log'):
-            self._bt_span.log(metadata={key: value})
+            # Create a non-recording span to represent the BT span in OTEL context
+            non_recording_span = trace.NonRecordingSpan(otel_span_context)
 
-    def set_attributes(self, attributes):
-        """Set multiple attributes."""
-        if hasattr(self._bt_span, 'log') and attributes:
-            self._bt_span.log(metadata=dict(attributes))
+            # Set this as the current OTEL span
+            ctx = context.set_value(trace._SPAN_KEY, non_recording_span, ctx)
+            context.attach(ctx)
 
-    def set_status(self, status, description=None):
-        """Set status - map to BT span if error."""
-        if hasattr(self._bt_span, 'log'):
-            try:
-                from opentelemetry.trace.status import StatusCode
-                if status.status_code == StatusCode.ERROR:
-                    self._bt_span.log(error=description or "OTEL span failed")
-            except Exception:
-                pass
+    def unset_current_span(self, span_object: Any = None) -> None:
+        """Unset the current active span from OTEL context."""
+        from opentelemetry import context
 
-    def update_name(self, name):
-        """Update name - BT spans don't support name updates."""
-        pass
+        # Clear BT span from context
+        context.attach(context.set_value('braintrust_span', None))
 
-    def __getattr__(self, name):
-        """Forward unknown attributes to BT span or return no-op."""
-        if hasattr(self._bt_span, name):
-            return getattr(self._bt_span, name)
-        # Return no-op function for OTEL-specific methods
-        return lambda *args, **kwargs: None
+    def get_parent_info_for_bt_span(self) -> Optional[Dict[str, Any]]:
+        """Get parent information for creating a new BT span."""
+        span_info = self.get_current_span_info()
+        if not span_info:
+            return None
+
+        # Check if the current span is a BT span or OTEL span
+        if hasattr(span_info.span_object, 'root_span_id'):
+            # Current span is a BT span - use normal BT parenting
+            bt_span = span_info.span_object
+            return {
+                'root_span_id': bt_span.root_span_id,
+                'span_parents': [bt_span.span_id]
+            }
+        else:
+            # Current span is an OTEL span - BT should inherit from OTEL
+            return {
+                'root_span_id': span_info.trace_id,
+                'span_parents': [span_info.span_id],
+                'metadata': {
+                    'otel_trace_id': span_info.trace_id,
+                    'otel_span_id': span_info.span_id
+                }
+            }
+
+
+# Global instance
+_unified_context = ContextManager()
+
+
+def get_unified_context() -> ContextManager:
+    """Get the global unified context manager."""
+    return _unified_context
+
+
+def get_current_span_info() -> Optional['SpanInfo']:
+    """Get information about the currently active span."""
+    return _unified_context.get_current_span_info()
+
+
+def set(span_object: Any) -> None:
+    """Set the current active span."""
+    _unified_context.set_current_span(span_object)
+
+
+def unset(span_object: Any = None) -> None:
+    """Unset the current active span."""
+    _unified_context.unset_current_span(span_object)
+
+
+def get_parent_info_for_bt_span() -> Optional[Dict[str, Any]]:
+    """Get parent information for creating a new BT span."""
+    return _unified_context.get_parent_info_for_bt_span()

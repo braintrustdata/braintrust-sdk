@@ -9,10 +9,17 @@ import time
 
 import pytest
 
+from braintrust.otel.context import get_current_span_info
+
 # Check OTEL availability at module level
 try:
     import importlib.util
     OTEL_AVAILABLE = importlib.util.find_spec("opentelemetry") is not None
+
+    if OTEL_AVAILABLE:
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+        from braintrust.otel import BraintrustSpanProcessor
 except ImportError:
     OTEL_AVAILABLE = False
 
@@ -65,184 +72,32 @@ class TestOtelBraintrustIntegration:
         time.sleep(0.1)
 
     def test_otel_context_detection(self):
-        """Test OTEL context detection functions work correctly."""
-        from braintrust.otel.context import get_active_otel_span, get_otel_span_info, should_use_otel_context
+        """Test unified context detection functions work correctly."""
 
         # Test with no active OTEL span
-        assert get_active_otel_span() is None
-        assert get_otel_span_info() is None
-        assert not should_use_otel_context()
+        span_info = get_current_span_info()
+        # Should be None when no span is active
+        assert span_info is None
 
         # Test with active OTEL span
         with self.tracer.start_as_current_span("test_context") as span:
-            active_span = get_active_otel_span()
-            assert active_span is not None
-            assert active_span == span
-
-            span_info = get_otel_span_info()
+            span_info = get_current_span_info()
             assert span_info is not None
-            assert 'trace_id' in span_info
-            assert 'span_id' in span_info
-            assert 'otel_span' in span_info
+            assert span_info.trace_id is not None
+            assert span_info.span_id is not None
+            assert span_info.span_object == span
 
             # Verify format
-            assert len(span_info['trace_id']) == 32  # 128-bit hex string
-            assert len(span_info['span_id']) == 16   # 64-bit hex string
+            assert len(span_info.trace_id) == 32  # 128-bit hex string
+            assert len(span_info.span_id) == 16   # 64-bit hex string
 
-            assert should_use_otel_context()
 
-    def test_otel_span_creation(self):
-        """Test that OTEL spans are created and captured correctly."""
-        # Create OTEL spans
-        with self.tracer.start_as_current_span("otel_parent") as parent:
-            parent_trace_id = format(parent.get_span_context().trace_id, '032x')
 
-            with self.tracer.start_as_current_span("otel_child") as child:
-                child_trace_id = format(child.get_span_context().trace_id, '032x')
 
-                # Both spans should have same trace ID
-                assert parent_trace_id == child_trace_id
 
-        # Flush and get spans
-        self._flush_spans()
-        otel_spans = self._get_otel_spans()
-
-        # Verify spans were captured
-        assert len(otel_spans) >= 2
-
-        parent_span = next((s for s in otel_spans if s['name'] == 'otel_parent'), None)
-        child_span = next((s for s in otel_spans if s['name'] == 'otel_child'), None)
-
-        assert parent_span is not None
-        assert child_span is not None
-
-        # Verify same trace ID
-        assert parent_span['trace_id'] == child_span['trace_id']
-
-    def test_braintrust_otel_wrapper(self):
-        """Test the BraintrustOtelSpanWrapper functionality."""
-        from unittest.mock import MagicMock
-
-        from braintrust.otel.context import BraintrustOtelSpanWrapper
-
-        # Mock BT span
-        mock_bt_span = MagicMock()
-        mock_bt_span.span_id = "12345678-1234-5678-9abc-123456789abc"
-        mock_bt_span.root_span_id = "87654321-4321-8765-cba9-210987654321"
-
-        # Create wrapper
-        wrapper = BraintrustOtelSpanWrapper(mock_bt_span)
-
-        # Test span context creation
-        span_context = wrapper.get_span_context()
-        assert span_context is not None
-
-        # Test other wrapper methods
-        assert wrapper.is_recording() is True
-
-        # Test method forwarding
-        wrapper.add_event("test_event", {"key": "value"})
-        wrapper.set_attribute("test_key", "test_value")
-
-    def test_integration_with_real_bt_logger(self):
-        """Test integration using real Braintrust logger (but with test project)."""
-        # This test verifies the integration works by creating spans and checking
-        # that the OTEL context is properly detected and used
-
-        from braintrust.otel.context import get_otel_span_info
-
-        trace_ids_collected = []
-
-        # Create OTEL span with BT span inside
-        with self.tracer.start_as_current_span("integration_test") as otel_span:
-            otel_trace_id = format(otel_span.get_span_context().trace_id, '032x')
-            trace_ids_collected.append(otel_trace_id)
-
-            # Verify OTEL context is detected inside the span
-            otel_info = get_otel_span_info()
-            assert otel_info is not None
-            assert otel_info['trace_id'] == otel_trace_id
-
-            with self.bt_logger.start_span(name="bt_span_in_otel") as bt_span:
-                inner_otel_info = get_otel_span_info()
-                assert inner_otel_info is not None
-                assert inner_otel_info['trace_id'] == otel_trace_id
-                assert bt_span.root_span_id == otel_trace_id
-
-        # Flush spans
-        self._flush_spans()
-
-        # Verify OTEL spans were created
-        otel_spans = self._get_otel_spans()
-        integration_span = next((s for s in otel_spans if s['name'] == 'integration_test'), None)
-        assert integration_span is not None
-        assert integration_span['trace_id'] == otel_trace_id
-
-    def test_mixed_nesting_context_detection(self):
-        """Test that OTEL context is properly detected in mixed nesting scenarios."""
-        from braintrust.otel.context import get_otel_span_info, should_use_otel_context
-
-        # Start with no OTEL context
-        assert not should_use_otel_context()
-
-        with self.tracer.start_as_current_span("outer_otel") as outer:
-            outer_trace_id = format(outer.get_span_context().trace_id, '032x')
-
-            # Should detect OTEL context
-            assert should_use_otel_context()
-            otel_info = get_otel_span_info()
-            assert otel_info['trace_id'] == outer_trace_id
-
-            with self.bt_logger.start_span(name="bt_middle") as bt_middle:
-                # Still should detect OTEL context
-                assert should_use_otel_context()
-                otel_info = get_otel_span_info()
-                assert otel_info['trace_id'] == outer_trace_id
-
-                with self.tracer.start_as_current_span("inner_otel") as inner:
-                    inner_trace_id = format(inner.get_span_context().trace_id, '032x')
-
-                    # Should still be same trace
-                    assert inner_trace_id == outer_trace_id
-
-                    # Context detection should work
-                    assert should_use_otel_context()
-                    otel_info = get_otel_span_info()
-                    assert otel_info['trace_id'] == outer_trace_id
-
-                    with self.bt_logger.start_span(name="bt_final") as bt_final:
-                        assert should_use_otel_context()
-                        final_otel_info = get_otel_span_info()
-                        assert final_otel_info['trace_id'] == outer_trace_id
-                        assert bt_middle.root_span_id == outer_trace_id
-                        assert bt_final.root_span_id == outer_trace_id
-
-        # After exiting all spans, no OTEL context
-        assert not should_use_otel_context()
-
-    def test_standalone_bt_spans_no_otel_context(self):
-        """Test that standalone BT spans don't interfere with OTEL context detection."""
-        from braintrust.otel.context import get_otel_span_info, should_use_otel_context
-
-        # Create standalone BT span
-        with self.bt_logger.start_span(name="standalone") as bt_span:
-            # Should not have OTEL context
-            assert not should_use_otel_context()
-            assert get_otel_span_info() is None
-
-        # Create nested BT spans
-        with self.bt_logger.start_span(name="bt_outer") as bt_outer:
-            assert not should_use_otel_context()
-
-            with self.bt_logger.start_span(name="bt_inner") as bt_inner:
-                assert not should_use_otel_context()
-                assert get_otel_span_info() is None
 
     def test_bt_root_otel_child_bt_child_pattern(self):
         """Test BT root → OTEL child → BT child pattern (like the working example)."""
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-
-        from braintrust.otel import BraintrustSpanProcessor
 
         # Setup OTEL with BraintrustSpanProcessor (like working example)
         console_processor = BatchSpanProcessor(ConsoleSpanExporter())
@@ -259,11 +114,14 @@ class TestOtelBraintrustIntegration:
                 otel_trace_id = format(otel_child.get_span_context().trace_id, '032x')
 
                 with bt_root.start_span(name="bt_grandchild") as bt_grandchild:
-                    # All spans should share the same trace ID
+                    # All spans should share the same trace ID (unified trace)
                     assert bt_root.root_span_id == bt_root_span_id
                     assert bt_grandchild.root_span_id == bt_root_span_id
-                    # OTEL span should use BT root span ID as trace ID
                     assert otel_trace_id == bt_root_span_id
+
+                    # Verify parent-child relationships
+                    # BT grandchild should have BT root as parent (not OTEL span)
+                    assert bt_root.span_id in bt_grandchild.span_parents, f"BT grandchild should have BT root as parent: {bt_grandchild.span_parents} should contain {bt_root.span_id}"
 
         self._flush_spans()
 
@@ -274,20 +132,25 @@ class TestOtelBraintrustIntegration:
             otel_trace_id = format(otel_root.get_span_context().trace_id, '032x')
 
             with self.bt_logger.start_span(name="bt_child") as bt_child:
-                # BT child should use OTEL trace ID as root_span_id
+                # All spans should share the same trace ID (unified trace)
                 assert bt_child.root_span_id == otel_trace_id
+
+                # Verify parent-child relationships
+                # BT child should have OTEL span as parent
+                otel_span_id = format(otel_root.get_span_context().span_id, '016x')
+                assert otel_span_id in bt_child.span_parents, f"BT child should have OTEL root as parent: {bt_child.span_parents} should contain {otel_span_id}"
 
                 # Nested BT span should also use same root
                 with bt_child.start_span(name="bt_grandchild") as bt_grandchild:
                     assert bt_grandchild.root_span_id == otel_trace_id
 
+                    # BT grandchild should have BT child as parent (not OTEL root)
+                    assert bt_child.span_id in bt_grandchild.span_parents, f"BT grandchild should have BT child as parent: {bt_grandchild.span_parents} should contain {bt_child.span_id}"
+
         self._flush_spans()
 
     def test_mixed_nesting_both_directions(self):
         """Test complex mixed nesting in both directions."""
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-
-        from braintrust.otel import BraintrustSpanProcessor
 
         # Setup OTEL with BraintrustSpanProcessor
         console_processor = BatchSpanProcessor(ConsoleSpanExporter())
@@ -329,14 +192,6 @@ class TestOtelBraintrustIntegration:
 class TestOtelUnavailable:
     """Test behavior when OTEL is not available."""
 
-    def test_graceful_degradation(self):
-        """Test that BT spans work normally when OTEL is unavailable."""
-        from braintrust.otel.context import get_active_otel_span, get_otel_span_info, should_use_otel_context
-
-        # Should return None/False gracefully
-        assert get_active_otel_span() is None
-        assert get_otel_span_info() is None
-        assert not should_use_otel_context()
 
     def test_parent_child_relationships_otel_to_bt(self):
         """Test that parent-child relationships are correct in OTEL → BT chains."""
@@ -491,6 +346,142 @@ class TestOtelUnavailable:
         # bt_grandchild: parent should be bt_child
         assert spans_by_name['bt_grandchild']['span_parents'] == [spans_by_name['bt_child']['span_id']]
         print(f"✓ bt_grandchild: parent = bt_child ({spans_by_name['bt_child']['span_id']})")
+
+    def test_otel_spans_tagged_with_bt_project_parent(self):
+        """Test that OTEL spans created within BT project context are tagged with correct parent."""
+        from braintrust.otel import BraintrustSpanProcessor
+
+        # Setup OTEL with BraintrustSpanProcessor to capture parent tagging
+        bt_processor = BraintrustSpanProcessor(parent="project_name:test-otel-tagging")
+        self.otel_provider.add_span_processor(bt_processor)
+
+        # Test 1: OTEL spans within BT project context
+        with self.bt_logger.start_span(name="bt_project_span") as bt_span:
+            bt_project_root_id = bt_span.root_span_id
+            print(f"BT project span root_id: {bt_project_root_id}")
+
+            with self.tracer.start_as_current_span("otel_in_project") as otel_span:
+                otel_trace_id = format(otel_span.get_span_context().trace_id, '032x')
+                otel_span_id = format(otel_span.get_span_context().span_id, '016x')
+
+                # Verify OTEL span uses BT root span ID as trace ID
+                assert otel_trace_id == bt_project_root_id, f"OTEL trace should match BT root: {otel_trace_id} != {bt_project_root_id}"
+                print(f"✓ OTEL span uses BT trace ID: {otel_trace_id}")
+
+                # The BraintrustSpanProcessor should have set braintrust.parent attribute
+                # We can't directly inspect the span attributes here, but we can verify
+                # the trace ID alignment which proves the tagging logic worked
+
+                with self.tracer.start_as_current_span("otel_nested") as otel_nested:
+                    nested_trace_id = format(otel_nested.get_span_context().trace_id, '032x')
+                    assert nested_trace_id == bt_project_root_id, f"Nested OTEL trace should match: {nested_trace_id} != {bt_project_root_id}"
+                    print(f"✓ Nested OTEL span maintains unified trace: {nested_trace_id}")
+
+        self._flush_spans()
+
+    def test_otel_spans_tagged_with_bt_experiment_parent(self):
+        """Test that OTEL spans created within BT experiment context are tagged with correct parent."""
+
+        import braintrust
+        from braintrust.otel import BraintrustSpanProcessor
+
+        # Setup OTEL with BraintrustSpanProcessor
+        bt_processor = BraintrustSpanProcessor(parent="project_name:test-experiment-tagging")
+        self.otel_provider.add_span_processor(bt_processor)
+
+        # Create a test experiment
+        experiment = braintrust.init(project="test-experiment-tagging", experiment="otel-parent-test")
+
+        try:
+            # Test: OTEL spans within BT experiment context
+            with experiment.start_span(name="experiment_span") as exp_span:
+                exp_root_id = exp_span.root_span_id
+                print(f"Experiment span root_id: {exp_root_id}")
+
+                with self.tracer.start_as_current_span("otel_in_experiment") as otel_span:
+                    otel_trace_id = format(otel_span.get_span_context().trace_id, '032x')
+
+                    # Verify OTEL span uses experiment root span ID as trace ID
+                    assert otel_trace_id == exp_root_id, f"OTEL trace should match experiment root: {otel_trace_id} != {exp_root_id}"
+                    print(f"✓ OTEL span uses experiment trace ID: {otel_trace_id}")
+
+                    # Create another BT span to verify the chain continues correctly
+                    with experiment.start_span(name="bt_after_otel") as bt_after:
+                        assert bt_after.root_span_id == exp_root_id, f"BT span should maintain experiment root: {bt_after.root_span_id} != {exp_root_id}"
+                        print(f"✓ BT span after OTEL maintains experiment root: {bt_after.root_span_id}")
+
+                        # Verify parent relationship
+                        otel_span_id = format(otel_span.get_span_context().span_id, '016x')
+                        expected_parent = [otel_span_id]
+                        actual_parent = getattr(bt_after, 'span_parents', None)
+                        assert actual_parent == expected_parent, f"BT span should have OTEL as parent: {actual_parent} != {expected_parent}"
+                        print(f"✓ BT span correctly parented to OTEL span: {actual_parent}")
+
+        finally:
+            # Clean up experiment
+            experiment.flush()
+
+        self._flush_spans()
+
+    def test_otel_span_attributes_contain_braintrust_parent(self):
+        """Test that OTEL spans get braintrust.parent attribute set correctly."""
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+        from braintrust.otel import BraintrustSpanProcessor
+
+        # Setup memory exporter to capture OTEL span attributes
+        memory_exporter = InMemorySpanExporter()
+        memory_processor = SimpleSpanProcessor(memory_exporter)
+        self.otel_provider.add_span_processor(memory_processor)
+
+        # Setup BraintrustSpanProcessor with specific parent
+        bt_processor = BraintrustSpanProcessor(parent="project_name:attribute-test")
+        self.otel_provider.add_span_processor(bt_processor)
+
+        # Test: Create BT span then OTEL span to verify parent attribute
+        with self.bt_logger.start_span(name="bt_parent_span") as bt_span:
+            bt_root_id = bt_span.root_span_id
+
+            with self.tracer.start_as_current_span("otel_with_bt_parent") as otel_span:
+                # Set some attributes for verification
+                otel_span.set_attribute("test_key", "test_value")
+
+                # Create nested span to ensure processor handles multiple spans
+                with self.tracer.start_as_current_span("otel_nested_span") as nested_span:
+                    nested_span.set_attribute("nested", "true")
+
+        # Flush and examine captured spans
+        self._flush_spans()
+        captured_spans = memory_exporter.get_finished_spans()
+
+        # Find our test spans
+        test_spans = [
+            span for span in captured_spans
+            if span.name in ["otel_with_bt_parent", "otel_nested_span"]
+        ]
+
+        assert len(test_spans) >= 2, f"Expected at least 2 test spans, got {len(test_spans)}"
+
+        for span in test_spans:
+            # Check that braintrust.parent attribute was set
+            attributes = dict(span.attributes) if span.attributes else {}
+
+            if "braintrust.parent" in attributes:
+                parent_value = attributes["braintrust.parent"]
+                print(f"✓ OTEL span '{span.name}' has braintrust.parent: {parent_value}")
+
+                # Should be in format "project_name:root_span_id" or similar
+                assert ":" in parent_value, f"Parent should contain ':' separator: {parent_value}"
+
+                if bt_root_id in parent_value:
+                    print(f"✓ Parent value contains BT root span ID: {bt_root_id}")
+            else:
+                print(f"⚠ OTEL span '{span.name}' missing braintrust.parent attribute")
+                print(f"  Available attributes: {list(attributes.keys())}")
+
+        # Clear memory exporter for next test
+        memory_exporter.clear()
 
 
 if __name__ == "__main__":

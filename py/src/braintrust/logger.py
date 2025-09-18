@@ -348,6 +348,10 @@ class BraintrustState:
             "braintrust_current_span", default=NOOP_SPAN
         )
 
+        # Initialize context manager
+        from braintrust.otel.context import ContextManager
+        self.context_manager = ContextManager()
+
         def default_get_api_conn():
             self.login()
             return self.api_conn()
@@ -3873,11 +3877,13 @@ class SpanImpl(Span):
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = self.state.current_span.set(self)
+            # Set in context manager
+            self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
         if self.can_set_current:
-            self.state.current_span.reset(self._context_token)
+            # Unset from context manager
+            self.state.context_manager.unset_current_span(self)
 
     def __enter__(self) -> Span:
         self.set_current()
