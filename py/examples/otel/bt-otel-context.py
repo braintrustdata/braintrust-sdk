@@ -10,29 +10,20 @@ Key concept: No bridge needed - just pure OTEL + pure Braintrust with automatic 
 """
 
 import braintrust
+from braintrust.otel import BraintrustSpanProcessor
 
-# Setup OTEL (pure, standard OTEL - no Braintrust bridge)
-try:
-    from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
-except ImportError:
-    print("OpenTelemetry not installed. Install with: pip install opentelemetry-api opentelemetry-sdk")
-    exit(1)
+PROJECT_NAME = "mixed-otel-braintrust-python"
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+
 
 def setup_otel():
     """Setup OTEL instrumentation with Braintrust processor to send OTEL spans to server."""
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-
     provider = TracerProvider()
 
-    # Add console exporter to verify span data
-    console_exporter = ConsoleSpanExporter()
-    console_processor = BatchSpanProcessor(console_exporter)
-    provider.add_span_processor(console_processor)
-
     # Add Braintrust span processor to send OTEL spans to Braintrust
-    from braintrust.otel import BraintrustSpanProcessor
-    processor = BraintrustSpanProcessor(parent="project_name:otel-context-demo")
+    processor = BraintrustSpanProcessor(parent=f"project_name:{PROJECT_NAME}")
     provider.add_span_processor(processor)
 
     # Set as global tracer provider
@@ -44,7 +35,7 @@ def main():
     # Setup
     tracer = setup_otel()
     project = braintrust.init_logger(
-        project="otel-context-demo"
+        project=PROJECT_NAME
     )
 
     print("🚀 Starting OTEL + Braintrust context correlation demo...")

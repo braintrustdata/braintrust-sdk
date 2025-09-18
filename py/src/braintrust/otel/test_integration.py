@@ -120,6 +120,83 @@ def test_mixed_otel_bt_tracing_with_experiment_parent(memory_logger, otel_memory
     assert s2_span_id in s3["span_parents"]
 
 
+def test_mixed_otel_bt_tracing_with_otel_first(memory_logger, otel_memory_exporter):
+    logger = init_test_logger(__name__)
+    tracer = opentelemetry.trace.get_tracer(__name__)
+
+    with tracer.start_as_current_span("1"):
+        with logger.start_span(name="2") as span2:
+            assert current_span() == span2
+            with tracer.start_as_current_span("3"):
+                pass
+
+    bt_spans = memory_logger.pop()
+    assert len(bt_spans) == 1
+
+    otel_spans = otel_memory_exporter.get_finished_spans()
+    assert len(otel_spans) == 2
+
+    # Create one dict of spans by name
+    spans_by_name = {}
+    for span in bt_spans:
+        spans_by_name[span["span_attributes"]["name"]] = span
+    for span in otel_spans:
+        spans_by_name[span.name] = span
+
+    assert len(spans_by_name) == 3
+
+    s1, s2, s3 = spans_by_name["1"], spans_by_name["2"], spans_by_name["3"]
+
+    # Verify unified trace IDs - convert OTEL traces to hex string for comparison
+    s1_trace_id = format(s1.context.trace_id, '032x')
+    s1_span_id = format(s1.context.span_id, '016x')
+    s3_trace_id = format(s3.context.trace_id, '032x')
+    s3_span_id = format(s3.context.span_id, '016x')
+
+    assert s1_trace_id == s2["root_span_id"]
+    assert s1_trace_id == s3_trace_id
+    assert s2["root_span_id"] == s3_trace_id
+
+    # Verify parent relationships - BT span should have OTEL span as parent
+    assert s2["span_parents"] == [s1_span_id]
+    assert s1_span_id in s2["span_parents"]
+
+
+def test_separate_traces_should_not_be_unified(memory_logger, otel_memory_exporter):
+    """Test that separate, non-nested traces should remain separate (this should currently FAIL)."""
+    logger = init_test_logger(__name__)
+    tracer = opentelemetry.trace.get_tracer(__name__)
+
+    # First trace: BT only
+    trace1_spans = []
+    with logger.start_span(name="bt_trace1") as bt_span1:
+        trace1_spans.append(bt_span1.root_span_id)
+        bt_span1.log(input="First trace")
+
+    # Second trace: OTEL only
+    trace2_spans = []
+    with tracer.start_as_current_span("otel_trace2") as otel_span2:
+        trace2_id = format(otel_span2.context.trace_id, '032x')
+        trace2_spans.append(trace2_id)
+        otel_span2.set_attribute("test", "second_trace")
+
+    # Third trace: OTEL root with BT child (like the example)
+    trace3_spans = []
+    with tracer.start_as_current_span("otel_trace3_root") as otel_span3:
+        otel3_trace_id = format(otel_span3.context.trace_id, '032x')
+        trace3_spans.append(otel3_trace_id)
+
+        # BT span inside OTEL - should inherit OTEL trace ID, not previous BT trace
+        with logger.start_span(name="bt_inside_otel3") as bt_span3:
+            trace3_spans.append(bt_span3.root_span_id)
+
+    # Verify we have 3 separate traces
+    assert len(set(trace1_spans + trace2_spans + trace3_spans)) == 3, \
+        f"Expected 3 separate traces, but got overlapping trace IDs: {trace1_spans + trace2_spans + trace3_spans}"
+
+    # Specifically check that trace3 BT span uses OTEL trace ID, not trace1 BT trace ID
+    assert trace3_spans[0] == trace3_spans[1], "BT span should inherit OTEL trace ID"
+    assert trace1_spans[0] != trace3_spans[1], "BT span in trace3 should NOT reuse trace1's ID"
 
 
 if __name__ == "__main__":

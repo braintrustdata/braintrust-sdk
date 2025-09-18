@@ -19,6 +19,9 @@ class SpanInfo:
 class ContextManager:
     """Context manager that uses OTEL's built-in context as single storage."""
 
+    def __init__(self):
+        self._context_tokens = {}  # Track context tokens for proper cleanup
+
     def get_current_span_info(self) -> Optional['SpanInfo']:
         """Get information about the currently active span from OTEL context."""
         from opentelemetry import context, trace
@@ -81,11 +84,21 @@ class ContextManager:
 
             # Set this as the current OTEL span
             ctx = context.set_value(trace._SPAN_KEY, non_recording_span, ctx)
-            context.attach(ctx)
+            token = context.attach(ctx)
+            # Store the token for proper cleanup
+            span_id = getattr(span_object, 'span_id', id(span_object))
+            self._context_tokens[span_id] = token
 
     def unset_current_span(self, span_object: Any = None) -> None:
         """Unset the current active span from OTEL context."""
         from opentelemetry import context
+
+        if span_object and hasattr(span_object, 'span_id'):
+            # Properly detach the context token if we have one
+            span_id = span_object.span_id
+            if span_id in self._context_tokens:
+                token = self._context_tokens.pop(span_id)
+                context.detach(token)
 
         # Clear BT span from context
         context.attach(context.set_value('braintrust_span', None))
