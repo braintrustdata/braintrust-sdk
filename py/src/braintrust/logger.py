@@ -3139,26 +3139,6 @@ def _start_span_parent_args(
     )
 
 
-def _start_span_parent_args_with_otel(
-    parent: Optional[str],
-    parent_object_type: SpanObjectTypeV3,
-    parent_object_id: LazyValue[str],
-    parent_compute_object_metadata_args: Optional[Dict[str, Any]],
-    parent_span_ids: Optional[ParentSpanIds],
-    propagated_event: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
-    """Version of _start_span_parent_args that uses unified context (no longer OTEL-specific)."""
-    # The unified context logic is now handled in SpanImpl.__init__
-    # This function just delegates to the normal logic
-    return _start_span_parent_args(
-        parent=parent,
-        parent_object_type=parent_object_type,
-        parent_object_id=parent_object_id,
-        parent_compute_object_metadata_args=parent_compute_object_metadata_args,
-        parent_span_ids=parent_span_ids,
-        propagated_event=propagated_event,
-    )
-
 
 @dataclasses.dataclass
 class ExperimentIdentifier:
@@ -3509,7 +3489,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         **event: Any,
     ) -> Span:
         return SpanImpl(
-            **_start_span_parent_args_with_otel(
+            **_start_span_parent_args(
                 parent=parent,
                 parent_object_type=self._parent_object_type(),
                 parent_object_id=self._lazy_id,
@@ -3784,7 +3764,7 @@ class SpanImpl(Span):
         else:
             parent_span_ids = ParentSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
         return SpanImpl(
-            **_start_span_parent_args_with_otel(
+            **_start_span_parent_args(
                 parent=parent,
                 parent_object_type=self.parent_object_type,
                 parent_object_id=self.parent_object_id,
@@ -3891,34 +3871,6 @@ class SpanImpl(Span):
 
     def __enter__(self) -> Span:
         self.set_current()
-
-        # Also set as current in OTEL context if OTEL is available
-        self._otel_context_token = None
-        try:
-            from opentelemetry import context
-
-            from braintrust.otel.context import determine_braintrust_parent_value
-
-            # Determine the braintrust.parent value for this BT span
-            bt_parent_value = determine_braintrust_parent_value(self)
-
-            # Store the braintrust.parent value in OTEL context so child OTEL spans can inherit it
-            current_context = context.get_current()
-            if bt_parent_value:
-                new_context = context.set_value('braintrust.parent', bt_parent_value, current_context)
-            else:
-                new_context = current_context
-
-            self._otel_context_token = context.attach(new_context)
-
-        except ImportError:
-            # OTEL not available
-            pass
-        except Exception as e:
-            # Log but don't fail
-            import logging
-            logging.debug(f"Failed to set BT span in OTEL context: {e}")
-
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -4775,7 +4727,7 @@ class Logger(Exportable):
         **event: Any,
     ) -> Span:
         return SpanImpl(
-            **_start_span_parent_args_with_otel(
+            **_start_span_parent_args(
                 parent=parent,
                 parent_object_type=self._parent_object_type(),
                 parent_object_id=self._lazy_id,
