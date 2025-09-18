@@ -64,7 +64,7 @@ def wrap_agent(Agent: Any) -> Any:
             with start_span(
                 name=f"agent_run [{instance.name}]",
                 type=SpanTypeAttribute.TASK,
-                metadata={"parent_context": _try_dict(parent_context), **_omit(kwargs, ["parent_context"])},
+                metadata=_try_dict({"parent_context": parent_context, **_omit(kwargs, ["parent_context"])}),
             ) as agent_span:
                 last_event = None
                 async with aclosing(wrapped(*args, **kwargs)) as agen:

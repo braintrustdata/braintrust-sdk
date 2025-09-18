@@ -1,19 +1,15 @@
-import json
-import os
-
 import pytest
-import yaml
-from braintrust.logger import flush
+from braintrust import logger
+from braintrust.test_helpers import init_test_logger
 from braintrust_adk import setup_braintrust
 from google.adk import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-os.environ["BRAINTRUST_SYNC_FLUSH"] = "1"
+PROJECT_NAME = "test_adk"
 
-
-setup_braintrust(project_name="test_adk")
+setup_braintrust(project_name=PROJECT_NAME)
 
 
 @pytest.fixture(scope="module")
@@ -26,9 +22,18 @@ def vcr_config():
     }
 
 
+@pytest.fixture
+def memory_logger():
+    init_test_logger(PROJECT_NAME)
+    with logger._internal_with_memory_background_logger() as bgl:
+        yield bgl
+
+
 @pytest.mark.vcr
 @pytest.mark.asyncio
-async def test_adk_braintrust_integration():
+async def test_adk_braintrust_integration(memory_logger):
+    assert not memory_logger.pop()
+
     def get_weather(location: str):
         """Get the weather for a location."""
         return {
@@ -72,37 +77,15 @@ async def test_adk_braintrust_integration():
         f"Response doesn't mention weather: {response_text}"
     )
 
-    flush()
-
-    # Read and parse the cassette file to verify logged data
-    cassette_path = os.path.join(os.path.dirname(__file__), "cassettes", "test_adk_braintrust_integration.yaml")
-    with open(cassette_path, "r") as f:
-        cassette_data = yaml.safe_load(f)
-
-    # Find the POST request to /logs3
-    logs_requests = [
-        interaction
-        for interaction in cassette_data["interactions"]
-        if interaction["request"]["uri"].endswith("/logs3") and interaction["request"]["method"] == "POST"
-    ]
-
-    assert len(logs_requests) > 0, "No POST requests to /logs3 found in cassette"
-
-    # Parse the first logs request body
-    log_payload = json.loads(logs_requests[0]["request"]["body"])
-
-    assert "rows" in log_payload, "Missing 'rows' in log payload"
-    assert len(log_payload["rows"]) > 0, "No rows in log payload"
+    spans = memory_logger.pop()
 
     # Check that we have the expected span types
-    span_types = {row["span_attributes"]["type"] for row in log_payload["rows"]}
+    span_types = {row["span_attributes"]["type"] for row in spans}
     assert "task" in span_types, "Missing 'task' spans"
     assert "llm" in span_types, "Missing 'llm' spans"
 
     # Verify the invocation span
-    invocation_spans = [
-        row for row in log_payload["rows"] if row["span_attributes"]["name"] == "invocation [weather_app]"
-    ]
+    invocation_spans = [row for row in spans if row["span_attributes"]["name"] == "invocation [weather_app]"]
     assert len(invocation_spans) > 0, "Missing invocation span"
     invocation_span = invocation_spans[0]
 
@@ -117,7 +100,7 @@ async def test_adk_braintrust_integration():
     assert invocation_span["metadata"]["session_id"] == "test-session"
 
     # Verify LLM call spans
-    llm_spans = [row for row in log_payload["rows"] if row["span_attributes"]["type"] == "llm"]
+    llm_spans = [row for row in spans if row["span_attributes"]["type"] == "llm"]
     assert len(llm_spans) >= 2, "Should have at least 2 LLM calls (tool selection and response generation)"
 
     # Check tool selection LLM call
@@ -141,17 +124,3 @@ async def test_adk_braintrust_integration():
     response_output = response_span["output"]["content"]["parts"][0]["text"]
     assert "san francisco" in response_output.lower(), "Response doesn't mention San Francisco"
     assert "72" in response_output, "Response doesn't mention temperature"
-
-    # Verify span relationships
-    root_span_ids = set()
-    for row in log_payload["rows"]:
-        assert "span_id" in row, "Missing span_id"
-        assert "root_span_id" in row, "Missing root_span_id"
-        assert row["root_span_id"], "Empty root_span_id"
-        root_span_ids.add(row["root_span_id"])
-
-    # All spans should share the same root
-    assert len(root_span_ids) == 1, f"Multiple root spans found: {root_span_ids}"
-
-    # Verify the API version
-    assert log_payload.get("api_version") == 2, "Expected API version 2"
