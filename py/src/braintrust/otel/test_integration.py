@@ -10,7 +10,7 @@ import pytest
 
 from braintrust import current_span
 from braintrust.otel import BraintrustSpanProcessor
-from braintrust.test_helpers import init_test_exp, init_test_logger
+from braintrust.test_helpers import init_test_exp, init_test_logger, memory_logger
 
 OTEL_AVAILABLE = True
 try:
@@ -22,6 +22,9 @@ except ImportError:
 
 from dataclasses import dataclass
 
+# FIXME[matt] pyright keeps deleting memory_logger because it doesn't
+# know how to handle pytest fixtures.
+_ = memory_logger
 
 @dataclass
 class OtelFixture:
