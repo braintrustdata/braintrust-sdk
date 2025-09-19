@@ -105,11 +105,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         # Get the first input and last output for this specific trace
         trace_first_input = self._first_input.pop(trace.trace_id, None)
         trace_last_output = self._last_output.pop(trace.trace_id, None)
-        span.log(
-            input=trace_first_input,
-            output=trace_last_output,
-            metadata=getattr(trace, 'metadata', None) or {}
-        )
+        span.log(input=trace_first_input, output=trace_last_output)
         span.end()
         # TODO(sachin): Add end time when SDK provides it.
         # span.end(_timestamp_from_maybe_iso(trace.ended_at))
