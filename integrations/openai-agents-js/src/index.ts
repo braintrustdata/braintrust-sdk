@@ -151,7 +151,7 @@ export class OpenAIAgentsTraceProcessor {
     span.log({
       input: "Agent workflow started",
       metadata: {
-        group_id: trace.group_id,
+        group_id: trace.groupId,
         ...(trace.metadata || {}),
       },
     });
