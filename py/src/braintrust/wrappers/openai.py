@@ -69,17 +69,25 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         self._last_output: Dict[str, Any] = {}
 
     def on_trace_start(self, trace: tracing.Trace) -> None:
+        trace_meta = trace.export() or {}
+        metadata = {
+            "group_id": trace_meta.get("group_id"),
+            **(trace_meta.get("metadata", {})),
+        }
+
         current_context = braintrust.current_span()
         if current_context != NOOP_SPAN:
             self._spans[trace.trace_id] = current_context.start_span(
                 name=trace.name,
                 span_attributes={"type": "task", "name": trace.name},
+                metadata=metadata,
             )
         elif self._logger is not None:
             self._spans[trace.trace_id] = self._logger.start_span(
                 span_attributes={"type": "task", "name": trace.name},
                 span_id=trace.trace_id,
                 root_span_id=trace.trace_id,
+                metadata=metadata,
                 # TODO(sachin): Add start time when SDK provides it.
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
@@ -87,6 +95,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             self._spans[trace.trace_id] = braintrust.start_span(
                 id=trace.trace_id,
                 span_attributes={"type": "task", "name": trace.name},
+                metadata=metadata,
                 # TODO(sachin): Add start time when SDK provides it.
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
