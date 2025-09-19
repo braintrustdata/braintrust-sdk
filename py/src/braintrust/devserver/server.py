@@ -29,7 +29,7 @@ from ..framework import EvalAsync, EvalScorer, Evaluator, ExperimentSummary, SSE
 from ..generated_types import FunctionId
 from ..logger import BraintrustState, bt_iscoroutinefunction
 from ..parameters import parameters_to_json_schema, validate_parameters
-from ..span_identifier_v3 import parse_parent
+from ..span_identifier_v4 import parse_parent
 from .auth import AuthorizationMiddleware
 from .cache import cached_login
 from .cors import create_cors_middleware
