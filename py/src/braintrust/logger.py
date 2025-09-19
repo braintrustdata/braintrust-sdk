@@ -9,6 +9,7 @@ import inspect
 import json
 import logging
 import os
+import secrets
 import sys
 import textwrap
 import threading
@@ -523,6 +524,16 @@ _state: BraintrustState = None  # type: ignore
 
 
 _http_adapter: Optional[HTTPAdapter] = None
+
+
+def _generate_trace_id() -> str:
+    """Generate OTEL-compatible 16-byte trace ID as hex string"""
+    return secrets.token_hex(16)
+
+
+def _generate_span_id() -> str:
+    """Generate OTEL-compatible 8-byte span ID as hex string"""
+    return secrets.token_hex(8)
 
 
 def set_http_adapter(adapter: HTTPAdapter) -> None:
@@ -3648,14 +3659,12 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = span_id or str(uuid.uuid4())
+        self.span_id = span_id or _generate_span_id()
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            root_id = root_span_id or self.span_id
-            # Convert to hex format (no dashes) to match OTEL byteArrayToHex() output
-            self.root_span_id = root_id.replace('-', '')
+            self.root_span_id = root_span_id or _generate_trace_id()
             self.span_parents = None
 
         # Handle unified context if no explicit parents are set
