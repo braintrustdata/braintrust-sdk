@@ -936,6 +936,7 @@ async function run(args: RunArgs) {
     runDevServer(allEvaluators, {
       host: args.dev_host,
       port: args.dev_port,
+      orgName: args.dev_org_name,
     });
     return;
   }
@@ -1062,7 +1063,7 @@ async function main() {
   });
   parser_run.add_argument("--dev", {
     action: "store_true",
-    help: "Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground.",
+    help: "Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground's remote evals feature.",
   });
   parser_run.add_argument("--dev-host", {
     help: "The host to bind the dev server to. Defaults to localhost. Set to 0.0.0.0 to bind to all interfaces.",
@@ -1073,6 +1074,10 @@ async function main() {
     help: "The port to bind the dev server to. Defaults to 8300.",
     type: Number,
     default: 8300,
+  });
+  parser_run.add_argument("--dev-org-name", {
+    help: "Only allow users that belong this to this org name to run remote evals.",
+    type: String,
   });
   parser_run.set_defaults({ func: run });
 

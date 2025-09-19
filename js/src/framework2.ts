@@ -1,7 +1,7 @@
 import path from "path";
 import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
-import { z } from "zod";
+import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
   IfExists as IfExistsSchema,
@@ -21,7 +21,7 @@ import {
   ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
   type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
 } from "./generated_types";
-import { loadPrettyXact, TransactionId } from "@braintrust/core";
+import { loadPrettyXact, TransactionId } from "../util/index";
 import {
   _internalGetGlobalState,
   login,

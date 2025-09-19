@@ -71,9 +71,9 @@ class PromptData(SerializableDataClass):
 
 @dataclass
 class PromptSchema(SerializableDataClass):
-    id: str
-    project_id: str
-    _xact_id: str
+    id: Optional[str]
+    project_id: Optional[str]
+    _xact_id: Optional[str]
     name: str
     slug: str
     description: Optional[str]

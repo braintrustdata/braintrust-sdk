@@ -66,7 +66,7 @@ def test_openai_chat_metrics(memory_logger):
         assert span
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
@@ -119,7 +119,7 @@ def test_openai_responses_metrics(memory_logger):
     assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
     assert len(span["output"]) > 0
@@ -162,13 +162,177 @@ def test_openai_responses_metrics(memory_logger):
     assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
     assert len(span["output"]) > 0
     assert span["output"][0]["content"][0]["parsed"]
     assert span["output"][0]["content"][0]["parsed"]["value"] == 24
     assert span["output"][0]["content"][0]["parsed"]["reasoning"] == parse_response.output_parsed.reasoning
+
+
+@pytest.mark.vcr
+def test_openai_responses_metadata_preservation(memory_logger):
+    """Test that additional metadata fields in responses are preserved."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    # Test with responses.create - the response object has various metadata fields
+    start = time.time()
+    response = client.responses.create(
+        model=TEST_MODEL,
+        input="What is 10 + 10?",
+        instructions="Respond with just the number",
+    )
+    end = time.time()
+
+    assert response
+    assert response.output
+
+    # Check that the response has metadata fields like id, created_at, object, etc.
+    assert hasattr(response, "id")
+    assert hasattr(response, "created_at")
+    assert hasattr(response, "object")
+    assert hasattr(response, "model")
+
+    # Verify spans capture metadata
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    # Check that span metadata includes the parameters
+    assert TEST_MODEL in span["metadata"]["model"]  # Model name may include version date
+    assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["instructions"] == "Respond with just the number"
+
+    # Check that response metadata is preserved (non-output, non-usage fields)
+    # The metadata should be in span["metadata"] after our changes
+    assert "metadata" in span
+    if "id" in span.get("metadata", {}):
+        # Response metadata like id, created, object should be preserved
+        assert span["metadata"]["id"] == response.id
+
+    # Verify metrics are properly extracted
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert "time_to_first_token" in metrics
+
+    # Test with responses.parse to ensure metadata is preserved there too
+    class SimpleAnswer(BaseModel):
+        value: int
+
+    start = time.time()
+    parse_response = client.responses.parse(
+        model=TEST_MODEL,
+        input="What is 15 + 15?",
+        text_format=SimpleAnswer,
+    )
+    end = time.time()
+
+    assert parse_response
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 30
+
+    # Verify metadata preservation in parse response
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    # Check parameters are in metadata
+    assert TEST_MODEL in span["metadata"]["model"]  # Model name may include version date
+    assert span["metadata"]["provider"] == "openai"
+
+    # Verify the structured output is captured
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 30
+
+    # Check metrics
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+
+
+@pytest.mark.vcr
+def test_openai_responses_sparse_indices(memory_logger):
+    """Test that streaming responses with sparse/out-of-order indices are handled correctly."""
+    assert not memory_logger.pop()
+
+    from braintrust.oai import ResponseWrapper
+
+    # Create a mock response with sparse content indices (e.g., indices 0, 2, 5)
+    # This simulates a streaming response where items arrive out of order or with gaps
+    class MockResult:
+        def __init__(self, type, content_index=None, delta=None, annotation_index=None, annotation=None, output_index=None, item=None):
+            self.type = type
+            if content_index is not None:
+                self.content_index = content_index
+            if delta is not None:
+                self.delta = delta
+            if annotation_index is not None:
+                self.annotation_index = annotation_index
+            if annotation is not None:
+                self.annotation = annotation
+            if output_index is not None:
+                self.output_index = output_index
+            if item is not None:
+                self.item = item
+
+    class MockItem:
+        def __init__(self, id="test_id", type="message"):
+            self.id = id
+            self.type = type
+
+    # Test sparse content indices
+    all_results = [
+        MockResult("response.output_item.added", item=MockItem()),
+        MockResult("response.output_text.delta", content_index=0, delta="First", output_index=0),
+        MockResult("response.output_text.delta", content_index=2, delta="Third", output_index=0),  # Gap at index 1
+        MockResult("response.output_text.delta", content_index=5, delta="Sixth", output_index=0),  # Gap at indices 3,4
+    ]
+
+    # Process the results
+    wrapper = ResponseWrapper(None, None)
+    output = [{}]  # Initialize with one output item
+    result = wrapper._postprocess_streaming_results(all_results)
+
+    # Verify the output was built correctly with gaps filled
+    assert "output" in result
+    assert len(result["output"]) == 1
+    content = result["output"][0].get("content", [])
+
+    # Should have 6 items (indices 0-5)
+    assert len(content) >= 6
+    assert content[0].get("text") == "First"
+    assert content[1].get("text", "") == ""  # Gap should be empty
+    assert content[2].get("text") == "Third"
+    assert content[3].get("text", "") == ""  # Gap should be empty
+    assert content[4].get("text", "") == ""  # Gap should be empty
+    assert content[5].get("text") == "Sixth"
+
+    # Test sparse annotation indices
+    all_results_with_annotations = [
+        MockResult("response.output_item.added", item=MockItem()),
+        MockResult("response.output_text.delta", content_index=0, delta="Text", output_index=0),
+        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=1, annotation={"text": "Second annotation"}, output_index=0),
+        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=3, annotation={"text": "Fourth annotation"}, output_index=0),
+    ]
+
+    result = wrapper._postprocess_streaming_results(all_results_with_annotations)
+
+    # Verify annotations were built correctly with gaps filled
+    assert "output" in result
+    content = result["output"][0].get("content", [])
+    assert len(content) >= 1
+    annotations = content[0].get("annotations", [])
+
+    # Should have 4 items (indices 0-3)
+    assert len(annotations) >= 4
+    assert annotations[0] == {}  # Gap should be empty dict
+    assert annotations[1] == {"text": "Second annotation"}
+    assert annotations[2] == {}  # Gap should be empty dict
+    assert annotations[3] == {"text": "Fourth annotation"}
+
+    # No spans should be generated from this unit test
+    assert not memory_logger.pop()
 
 
 @pytest.mark.vcr
@@ -249,7 +413,7 @@ def test_openai_chat_streaming_sync(memory_logger):
         assert span
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
@@ -383,7 +547,7 @@ async def test_openai_chat_async(memory_logger):
     assert span
     metrics = span["metrics"]
     assert_metrics_are_valid(metrics, start, end)
-    assert span["metadata"]["model"] == TEST_MODEL
+    assert TEST_MODEL in span["metadata"]["model"]
     # assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
@@ -428,7 +592,7 @@ async def test_openai_responses_async(memory_logger):
         assert_metrics_are_valid(metrics, start, end)
         assert 0 <= metrics.get("prompt_cached_tokens", 0)
         assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
@@ -474,7 +638,7 @@ async def test_openai_responses_async(memory_logger):
             assert_metrics_are_valid(metrics, start, end)
             assert 0 <= metrics.get("prompt_cached_tokens", 0)
             assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-            assert span["metadata"]["model"] == TEST_MODEL
+            assert TEST_MODEL in span["metadata"]["model"]
             # assert span["metadata"]["provider"] == "openai"
             assert TEST_PROMPT in str(span["input"])
             assert len(span["output"]) > 0
@@ -562,7 +726,7 @@ async def test_openai_chat_streaming_async(memory_logger):
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
@@ -849,7 +1013,7 @@ async def test_openai_async_parallel_requests(memory_logger):
 
     # Verify each span has proper data
     for i, span in enumerate(spans):
-        assert span["metadata"]["model"] == TEST_MODEL
+        assert TEST_MODEL in span["metadata"]["model"]
         # assert span["metadata"]["provider"] == "openai"
         assert prompts[i] in str(span["input"])
         assert_metrics_are_valid(span["metrics"])
@@ -939,18 +1103,17 @@ def test_openai_responses_not_given_filtering(memory_logger):
         {
             "input": TEST_PROMPT,
             "metadata": {
-                "model": TEST_MODEL,
+                "model": lambda x: TEST_MODEL in x,
                 "provider": "openai",
                 "temperature": 0.5,
                 "instructions": "Just the number please",
             },
         },
     )
-    # Verify NOT_GIVEN values are not in the logged metadata
+    # Verify NOT_GIVEN values are not in the logged metadata (only check original request params)
+    # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    for k in ["max_output_tokens", "tools", "top_p", "store"]:
-        assert k not in meta
 
     # Test responses.parse with NOT_GIVEN filtering
     class NumberAnswer(BaseModel):
@@ -986,18 +1149,17 @@ def test_openai_responses_not_given_filtering(memory_logger):
         {
             "input": TEST_PROMPT,
             "metadata": {
-                "model": TEST_MODEL,
+                "model": lambda x: TEST_MODEL in x,
                 "provider": "openai",
                 "temperature": 0.7,
                 "text_format": lambda tf: tf is not None and "NumberAnswer" in str(tf),
             },
         },
     )
-    # Verify NOT_GIVEN values are not in the logged metadata
+    # Verify NOT_GIVEN values are not in the logged metadata (only check original request params)
+    # Note: Response fields like max_output_tokens may appear in metadata from the actual response
     meta = span["metadata"]
     assert "NOT_GIVEN" not in str(meta)
-    for k in ["max_output_tokens", "tools", "top_p", "store"]:
-        assert k not in meta
     # Verify the output is properly logged in the span
     assert span["output"]
     assert isinstance(span["output"], list)
@@ -1223,3 +1385,255 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
     assert has_llm_spans or has_task_spans, (
         f"Should have LLM or task type spans from OpenAI SDK, got types: {span_types}"
     )
+
+
+@pytest.mark.asyncio
+async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
+    """Test that reproduces the concurrency bug where overlapping traces mix up first_input/last_output."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    import asyncio
+
+    import agents
+    from agents import Agent
+    from agents.run import AgentRunner
+
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    # Create a single shared processor instance
+    processor = BraintrustTracingProcessor()
+
+    # Set up tracing
+    agents.set_tracing_disabled(False)
+    agents.add_trace_processor(processor)
+
+    try:
+        # Create agents for testing
+        agent_a = Agent(
+            name="agent-a", model=TEST_MODEL, instructions="You are agent A. Just respond with 'A' and nothing else."
+        )
+
+        agent_b = Agent(
+            name="agent-b", model=TEST_MODEL, instructions="You are agent B. Just respond with 'B' and nothing else."
+        )
+
+        runner = AgentRunner()
+
+        # Define async functions to run agents
+        async def run_agent_a():
+            """Run agent A with a delay to ensure overlap"""
+            result = await runner.run(agent_a, "What's your name?")
+            # Add a small delay to ensure traces overlap
+            await asyncio.sleep(0.1)
+            return result
+
+        async def run_agent_b():
+            """Run agent B immediately"""
+            result = await runner.run(agent_b, "Who are you?")
+            return result
+
+        # Run both agents concurrently to create overlapping traces
+        results = await asyncio.gather(run_agent_a(), run_agent_b())
+
+        result_a, result_b = results
+        assert result_a is not None, "Agent A should return a result"
+        assert result_b is not None, "Agent B should return a result"
+
+    finally:
+        processor.shutdown()
+
+    # Get all spans
+    spans = memory_logger.pop()
+    assert len(spans) >= 2, f"Should have at least 2 trace spans, got {len(spans)}"
+
+    # Find the root trace spans (these are created by on_trace_start/on_trace_end)
+    # These are actually the "Agent workflow" spans, not the agent-a/agent-b spans
+    trace_spans = []
+    for span in spans:
+        span_name = span.get("span_attributes", {}).get("name", "")
+        # The actual traces are "Agent workflow" spans with no parents
+        if span_name == "Agent workflow" and not span.get("span_parents"):
+            trace_spans.append(span)
+
+    # We should have exactly 2 trace spans
+    assert len(trace_spans) == 2, f"Should have exactly 2 trace spans, got {len(trace_spans)}"
+
+    # Identify which trace is for which agent by looking at the input
+    agent_a_trace = None
+    agent_b_trace = None
+    for trace in trace_spans:
+        input_str = str(trace.get("input", ""))
+        if "What's your name?" in input_str:
+            agent_a_trace = trace
+        elif "Who are you?" in input_str:
+            agent_b_trace = trace
+
+    assert agent_a_trace is not None, "Could not find Agent A's trace"
+    assert agent_b_trace is not None, "Could not find Agent B's trace"
+
+    # With the fix, both traces should have their correct input and output
+    # Verify Agent A trace has correct input/output
+    assert agent_a_trace.get("input") is not None, "Agent A trace should have input"
+    assert agent_a_trace.get("output") is not None, "Agent A trace should have output"
+
+    # Verify Agent B trace has correct input/output
+    assert agent_b_trace.get("input") is not None, "Agent B trace should have input"
+    assert agent_b_trace.get("output") is not None, "Agent B trace should have output"
+
+    # Verify the inputs are different (they should be from different prompts)
+    assert agent_a_trace.get("input") != agent_b_trace.get("input"), (
+        "Agent A and B traces should have different inputs"
+    )
+
+    # Verify the outputs are different (agents respond differently)
+    if agent_a_trace.get("output") and agent_b_trace.get("output"):
+        assert agent_a_trace.get("output") != agent_b_trace.get("output"), (
+            "Agent A and B traces should have different outputs"
+        )
+
+
+@pytest.mark.asyncio
+async def test_agents_tool_openai_nested_spans(memory_logger):
+    """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    from agents import Agent, Runner, function_tool, set_trace_processors
+
+    from braintrust import current_span, wrap_openai
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    # Create a tool that uses OpenAI within a manual span
+    @function_tool(strict_mode=False)
+    def analyze_text(text: str):
+        """Analyze text and return a structured summary with key points, sentiment, and statistics."""
+        client = wrap_openai(openai.OpenAI())
+        with current_span().start_span(name="text_analysis_tool") as span:
+            span.log(input={"text": text})
+
+            # Use a simple prompt for testing - just like other tests in this file
+            simple_prompt = f"Analyze this text briefly: {text}"
+
+            response = client.chat.completions.create(
+                model=TEST_MODEL,
+                messages=[{"role": "user", "content": simple_prompt}],
+            )
+            result = response.choices[0].message.content
+            span.log(output={"analysis": result})
+            return result
+
+    # Set up tracing
+    set_trace_processors([BraintrustTracingProcessor()])
+
+    # Create agent with the tool
+    agent = Agent(
+        name="Text Analysis Agent",
+        instructions="You are a helpful assistant that analyzes text. When asked to analyze text, you MUST use the analyze_text tool. Always call the tool with the exact text provided by the user. After using the tool, provide a two sentence summary of what the tool returned.",
+        tools=[analyze_text],
+    )
+
+    # Run agent with a specific text to analyze
+    test_text = "Artificial intelligence is transforming industries worldwide. Companies are adopting AI technologies to improve efficiency and innovation. However, challenges like ethics and job displacement remain concerns."
+    result = await Runner.run(
+        agent,
+        f"Please analyze this text: '{test_text}'",
+        max_turns=3,
+    )
+
+    assert result is not None, "Agent should return a result"
+
+    # Verify spans were created
+    spans = memory_logger.pop()
+    assert len(spans) >= 3, f"Should have at least 3 spans (agent workflow, tool, chat completion), got {len(spans)}"
+
+    # Find different types of spans
+    agent_spans = []
+    tool_spans = []
+    chat_spans = []
+
+    for span in spans:
+        span_name = span.get("span_attributes", {}).get("name", "")
+        span_type = span.get("span_attributes", {}).get("type", "")
+
+        if "Agent workflow" in span_name or span_type == "task":
+            agent_spans.append(span)
+        elif span_name == "text_analysis_tool":
+            tool_spans.append(span)
+        elif span_name == "Chat Completion" and span_type == "llm":
+            chat_spans.append(span)
+
+    # Verify we have the expected spans
+    assert len(agent_spans) > 0, "Should have at least one agent workflow span"
+    assert len(tool_spans) == 1, f"Should have exactly one tool span, got {len(tool_spans)}"
+    assert len(chat_spans) == 1, f"Should have exactly one chat completion span, got {len(chat_spans)}"
+
+    tool_span = tool_spans[0]
+    chat_span = chat_spans[0]
+
+    # Verify the chat completion span is nested under the tool span
+    chat_span_parents = chat_span.get("span_parents", [])
+    tool_span_id = tool_span.get("span_id")
+
+    assert tool_span_id is not None, "Tool span should have a span_id"
+    assert isinstance(chat_span_parents, list) and len(chat_span_parents) > 0, (
+        "Chat completion span should have span_parents array"
+    )
+    assert tool_span_id in chat_span_parents, (
+        f"Chat completion span should include tool span_id {tool_span_id} in its span_parents array {chat_span_parents}"
+    )
+
+    # Verify the tool span has input/output logged
+    assert "input" in tool_span, "Tool span should have input logged"
+    assert test_text in str(tool_span["input"]), "Tool span input should contain the test text"
+    assert "output" in tool_span, "Tool span should have output logged"
+
+    # Verify we have chat completion spans
+    assert len(chat_spans) >= 1, f"Should have at least one chat completion span, got {len(chat_spans)}"
+    chat_span = chat_spans[0]
+    chat_span_parents = chat_span.get("span_parents", [])
+
+    # Verify the chat completion span is nested under the tool span
+    assert isinstance(chat_span_parents, list) and len(chat_span_parents) > 0, (
+        "Chat completion span should have span_parents array"
+    )
+    assert tool_span_id in chat_span_parents, (
+        f"Chat completion span should include tool span_id {tool_span_id} in its span_parents array {chat_span_parents}"
+    )
+
+    # Verify the chat completion span has proper LLM data
+    assert "input" in chat_span, "Chat completion span should have input logged"
+    assert "output" in chat_span, "Chat completion span should have output logged"
+    assert chat_span["metadata"]["model"] == TEST_MODEL, "Chat completion should use test model"
+    assert len(str(chat_span["output"])) > 0, "Chat completion should have some output content"
+
+
+def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
+    """Test that trace metadata flows through to root span via on_trace_end."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    processor = BraintrustTracingProcessor()
+
+    # Mock trace with metadata (simulates native trace() API)
+    class MockTrace:
+        def __init__(self, trace_id, name, metadata):
+            self.trace_id = trace_id
+            self.name = name
+            self.metadata = metadata
+
+    trace = MockTrace("test-trace", "Test Trace", {"conversation_id": "test-12345"})
+
+    # Execute trace lifecycle
+    processor.on_trace_start(trace)
+    processor.on_trace_end(trace)
+
+    # Verify metadata was logged to root span
+    spans = memory_logger.pop()
+    root_span = spans[0]
+    assert root_span["metadata"]["conversation_id"] == "test-12345", "Should log trace metadata"

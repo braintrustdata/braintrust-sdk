@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/langchain-js",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "description": "SDK for integrating Braintrust with LangChain.js",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -25,18 +25,17 @@
   "devDependencies": {
     "@langchain/core": "^0.3.42",
     "@langchain/langgraph": "^0.2.25",
-    "@langchain/openai": "^0.3.14",
+    "@langchain/openai": "^0.3.17",
     "@types/node": "^20.10.5",
     "msw": "^2.6.6",
     "tsup": "^8.3.5",
     "typescript": "^5.3.3",
     "vitest": "^2.1.9",
-    "zod": "^3.22.4",
+    "zod": "^3.25.34",
     "zod-to-json-schema": "^3.22.5"
   },
   "dependencies": {
-    "@braintrust/core": "workspace:*",
-    "braintrust": "workspace:^"
+    "braintrust": "^0.3.7"
   },
   "peerDependencies": {
     "@langchain/core": "^0.3.42"

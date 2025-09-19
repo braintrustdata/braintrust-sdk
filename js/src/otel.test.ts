@@ -303,6 +303,169 @@ describe("AISpanProcessor", () => {
 
     customProvider.shutdown();
   });
+
+  describe("cross-version span filtering", () => {
+    it.each([
+      // Root spans (no parent) - should always be kept
+      {
+        name: "v1 root span",
+        spanName: "v1-root-span",
+        parentSpanContext: undefined,
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "root spans are always kept",
+      },
+      {
+        name: "v2 root span",
+        spanName: "v2-root-span",
+        parentSpanContext: undefined,
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "root spans are always kept",
+      },
+
+      // Child spans without AI prefixes - should be dropped
+      {
+        name: "v1 child span (no AI prefix)",
+        spanName: "database.query",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+      {
+        name: "v2 child span (no AI prefix)",
+        spanName: "http.request",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+      {
+        name: "mixed child span (no AI prefix)",
+        spanName: "regular.operation",
+        parentSpanContext: { spanId: "parent-mixed", traceId: "trace-mixed" },
+        parentSpanId: "parent-mixed-id",
+        attributes: {},
+        expected: false,
+        reason: "child spans without AI prefixes are dropped",
+      },
+
+      // Child spans with AI prefixes - should be kept
+      {
+        name: "v1 child span with gen_ai prefix",
+        spanName: "gen_ai.completion",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v2 child span with llm prefix",
+        spanName: "llm.generate",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v1 child span with braintrust prefix",
+        spanName: "braintrust.eval",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "v2 child span with ai prefix",
+        spanName: "ai.model_call",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+      {
+        name: "mixed child span with traceloop prefix",
+        spanName: "traceloop.agent",
+        parentSpanContext: { spanId: "parent-mixed", traceId: "trace-mixed" },
+        parentSpanId: "parent-mixed-id",
+        attributes: {},
+        expected: true,
+        reason: "child spans with AI prefixes are kept",
+      },
+
+      // Child spans with AI attribute prefixes - should be kept
+      {
+        name: "v1 child span with gen_ai attribute",
+        spanName: "some.operation",
+        parentSpanContext: undefined,
+        parentSpanId: "parent-123",
+        attributes: { "gen_ai.model": "gpt-4" },
+        expected: true,
+        reason: "child spans with AI attribute prefixes are kept",
+      },
+      {
+        name: "v2 child span with llm attribute",
+        spanName: "some.operation",
+        parentSpanContext: { spanId: "parent-456", traceId: "trace-789" },
+        parentSpanId: undefined,
+        attributes: { "llm.temperature": 0.7 },
+        expected: true,
+        reason: "child spans with AI attribute prefixes are kept",
+      },
+    ])(
+      "should filter spans correctly across OTel versions: $name",
+      ({
+        spanName,
+        parentSpanContext,
+        parentSpanId,
+        attributes,
+        expected,
+        reason,
+      }) => {
+        const filterProcessor = new AISpanProcessor({} as any);
+
+        const mockSpan = {
+          name: spanName,
+          attributes,
+          parentSpanContext,
+          parentSpanId,
+          spanContext: () => ({
+            spanId: "test-span-id",
+            traceId: "test-trace-id",
+          }),
+          kind: 0,
+          startTime: [Date.now(), 0],
+          endTime: [Date.now(), 0],
+          status: { code: 0 },
+          ended: true,
+          duration: [0, 1000000],
+          events: [],
+          links: [],
+          resource: {} as any,
+          instrumentationLibrary: {} as any,
+          instrumentationScope: {} as any,
+          droppedAttributesCount: 0,
+          droppedEventsCount: 0,
+          droppedLinksCount: 0,
+        } as ReadableSpan;
+
+        const result = (filterProcessor as any).shouldKeepFilteredSpan(
+          mockSpan,
+        );
+
+        expect(result).toBe(expected);
+      },
+    );
+  });
 });
 
 describe("BraintrustSpanProcessor", () => {
@@ -784,5 +947,42 @@ describe("BraintrustExporter", () => {
     );
 
     consoleSpy.mockRestore();
+  });
+
+  it("proxy exporter should make OTEL v1 traces compatible with v2", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const exporter = new BraintrustExporter();
+    const processor = (exporter as any).processor;
+    const batchProcessor = (processor as any).processor;
+    const proxiedExporter = (batchProcessor as any)._exporter;
+
+    const mockExport = vi.fn();
+    proxiedExporter.export = mockExport;
+
+    const v1Span = {
+      name: "gen_ai.completion",
+      spanContext: () => ({ traceId: "trace-123", spanId: "span-456" }),
+      parentSpanId: "parent-789",
+      instrumentationLibrary: { name: "openai", version: "1.0.0" },
+    } as any;
+
+    proxiedExporter.export([v1Span], () => {});
+    expect(mockExport).toHaveBeenCalledOnce();
+    const [transformedSpans] = mockExport.mock.calls[0];
+
+    expect(transformedSpans).toHaveLength(1);
+    const transformedSpan = transformedSpans[0];
+
+    // transformed span should have OTEL v2 fields
+    const expectedV2Span = {
+      ...v1Span,
+      parentSpanContext: {
+        spanId: v1Span.parentSpanId,
+        traceId: v1Span.spanContext().traceId,
+      },
+      instrumentationScope: v1Span.instrumentationLibrary,
+    } as any;
+    expect(transformedSpan).toEqual(expectedV2Span);
   });
 });
