@@ -8,9 +8,9 @@ import type {
   HandoffSpanData,
   CustomSpanData,
   GuardrailSpanData,
-} from "@openai/agents-core/dist/tracing/spans";
-
-import type { Trace, Span } from "@openai/agents";
+  Trace,
+  Span,
+} from "./openai-agents-types";
 
 export enum SpanType {
   AGENT = "agent",
