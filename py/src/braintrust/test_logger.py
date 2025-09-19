@@ -1731,3 +1731,90 @@ def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_si
     parents = forced_log.get("span_parents") or []
     assert outer_log["span_id"] in parents
     assert inner_log["span_id"] not in parents
+
+
+def test_otel_compatible_span_export_import():
+    """Test that spans with OTEL-compatible IDs can be exported and imported correctly."""
+    from braintrust.span_identifier_v4 import SpanComponentsV4, SpanObjectTypeV3, _generate_span_id, _generate_trace_id
+
+    # Generate OTEL-compatible IDs
+    trace_id = _generate_trace_id()  # 32-char hex (16 bytes)
+    span_id = _generate_span_id()    # 16-char hex (8 bytes)
+
+    # Test that trace_id is 32 chars and span_id is 16 chars
+    assert len(trace_id) == 32
+    assert len(span_id) == 16
+    assert all(c in '0123456789abcdef' for c in trace_id)
+    assert all(c in '0123456789abcdef' for c in span_id)
+
+    # Create span components
+    components = SpanComponentsV4(
+        object_type=SpanObjectTypeV3.PROJECT_LOGS,
+        object_id='test-project-id',
+        row_id='test-row-id',
+        span_id=span_id,
+        root_span_id=trace_id
+    )
+
+    # Test export/import cycle
+    exported = components.to_str()
+    imported = SpanComponentsV4.from_str(exported)
+
+    # Verify all fields match exactly
+    assert imported.object_type == components.object_type
+    assert imported.object_id == components.object_id
+    assert imported.row_id == components.row_id
+    assert imported.span_id == span_id
+    assert imported.root_span_id == trace_id
+
+
+def test_span_with_otel_ids_export_import():
+    """Test that actual Span objects with OTEL IDs can export and be used as parent context."""
+    init_test_logger(__name__)
+
+    with logger.start_span(name="test") as span:
+        # Verify the span has OTEL-compatible IDs
+        assert len(span.span_id) == 16  # 8-byte hex
+        assert len(span.root_span_id) == 32  # 16-byte hex
+        assert all(c in '0123456789abcdef' for c in span.span_id)
+        assert all(c in '0123456789abcdef' for c in span.root_span_id)
+
+        # Export the span
+        exported = span.export()
+
+        # Parse it back
+        from braintrust.span_identifier_v3 import SpanComponentsV3
+        imported = SpanComponentsV3.from_str(exported)
+
+        # Verify IDs are preserved exactly
+        assert imported.span_id == span.span_id
+        assert imported.root_span_id == span.root_span_id
+
+
+def test_parent_context_with_otel_ids(with_memory_logger):
+    """Test that parent_context works correctly with OTEL-compatible IDs."""
+    init_test_logger(__name__)
+
+    # Create a span and export it
+    with logger.start_span(name="parent") as parent_span:
+        parent_export = parent_span.export()
+        original_span_id = parent_span.span_id
+        original_root_span_id = parent_span.root_span_id
+
+    # Use the exported span as parent context
+    with parent_context(parent_export):
+        with logger.start_span(name="child") as child_span:
+            # Child should inherit the root_span_id from parent
+            assert child_span.root_span_id == original_root_span_id
+            # Child should have parent in span_parents
+            assert original_span_id in child_span.span_parents
+
+    # Verify logs were created correctly
+    logs = with_memory_logger.pop()
+    parent_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "parent")
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+
+    assert parent_log["span_id"] == original_span_id
+    assert parent_log["root_span_id"] == original_root_span_id
+    assert child_log["root_span_id"] == original_root_span_id
+    assert parent_log["span_id"] in child_log.get("span_parents", [])
