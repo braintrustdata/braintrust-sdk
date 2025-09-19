@@ -691,5 +691,55 @@ describe(
         processor.shutdown();
       }
     });
+
+    test("onTraceEnd logs trace metadata properly", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-metadata",
+        name: "metadata-test",
+        metadata: { userId: "test-user-123", sessionId: "session-456" },
+      };
+
+      const span = {
+        spanId: "test-span",
+        traceId: trace.traceId,
+        spanData: {
+          type: "response",
+          name: "test-response",
+          _input: "test input",
+          _response: { output: "test output" },
+        },
+        error: null,
+      } as any;
+
+      // Execute trace lifecycle
+      await processor.onTraceStart(trace);
+      await processor.onSpanStart(span);
+      await processor.onSpanEnd(span);
+      await processor.onTraceEnd(trace);
+
+      // Verify metadata was logged to root span
+      const spans = await backgroundLogger.drain();
+      const rootSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "metadata-test",
+      );
+
+      assert.ok(rootSpan, "Should find root span");
+      const spanMetadata = (rootSpan as any).metadata;
+      assert.ok(spanMetadata, "Root span should have metadata");
+      assert.equal(
+        spanMetadata.userId,
+        "test-user-123",
+        "Should log trace metadata",
+      );
+      assert.equal(
+        spanMetadata.sessionId,
+        "session-456",
+        "Should log trace metadata",
+      );
+    });
   },
 );
