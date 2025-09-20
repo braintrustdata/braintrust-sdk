@@ -9,7 +9,7 @@ import pytest
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
-from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context
+from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -318,93 +318,26 @@ class TestLogger(TestCase):
             },
         )
 
-    def test_extract_mustache_variables_simple(self):
-        """Test extraction of simple mustache variables."""
-        from braintrust.logger import _extract_mustache_variables
-
-        template = "Hello {{name}}, you are {{age}} years old"
-        variables = _extract_mustache_variables(template)
-        self.assertEqual(set(variables), {"name", "age"})
-
-    def test_extract_mustache_variables_nested(self):
-        """Test extraction of nested object variables."""
-        from braintrust.logger import _extract_mustache_variables
-
-        template = "User: {{user.name}}, Email: {{user.profile.email}}"
-        variables = _extract_mustache_variables(template)
-        self.assertEqual(set(variables), {"user.name", "user.profile.email"})
-
-    def test_extract_mustache_variables_array_extraction(self):
-        """Test that array variables are extracted without normalization."""
-        from braintrust.logger import _extract_mustache_variables
-
-        template = "Items: {{items.0}}, {{items.1}}, {{items.5}}"
-        variables = _extract_mustache_variables(template)
-        # Array variables should be extracted as-is, not normalized
-        self.assertEqual(set(variables), {"items.0", "items.1", "items.5"})
-
-    def test_get_nested_value_simple(self):
-        """Test getting values from flat objects."""
-        from braintrust.logger import _get_nested_value
-
-        data = {"name": "John", "age": 30}
-        self.assertEqual(_get_nested_value(data, "name"), "John")
-        self.assertEqual(_get_nested_value(data, "age"), 30)
-        self.assertIsNone(_get_nested_value(data, "missing"))
-
-    def test_get_nested_value_nested_object(self):
-        """Test getting values from nested objects."""
-        from braintrust.logger import _get_nested_value
-
-        data = {
-            "user": {
-                "name": "John",
-                "profile": {
-                    "email": "john@example.com"
-                }
-            }
-        }
-        self.assertEqual(_get_nested_value(data, "user.name"), "John")
-        self.assertEqual(_get_nested_value(data, "user.profile.email"), "john@example.com")
-        self.assertIsNone(_get_nested_value(data, "user.missing"))
-
-    def test_get_nested_value_array_access(self):
-        """Test getting values from arrays."""
-        from braintrust.logger import _get_nested_value
-
-        data = {
-            "items": ["first", "second", "third"],
-            "users": [{"name": "John"}, {"name": "Jane"}]
-        }
-        self.assertEqual(_get_nested_value(data, "items.0"), "first")
-        self.assertEqual(_get_nested_value(data, "items.2"), "third")
-        self.assertEqual(_get_nested_value(data, "users.1.name"), "Jane")
-        self.assertIsNone(_get_nested_value(data, "items.10"))
-
     def test_lint_template_valid_variables(self):
         """Test lint_template passes with all variables present."""
-        from braintrust.logger import lint_template
 
         template = "Hello {{name}}, you are {{age}} years old"
         args = {"name": "John", "age": 30}
 
         # Should not raise any exception
         try:
-            lint_template(template, args)
+            render_mustache(template, args, strict=True)
         except ValueError:
             self.fail("lint_template raised ValueError unexpectedly")
 
     def test_lint_template_missing_variable(self):
-        """Test lint_template raises ValueError for missing variables."""
-        from braintrust.logger import lint_template
-
         template = "Hello {{name}}, you are {{age}} years old"
         args = {"name": "John"}  # Missing 'age'
 
         with self.assertRaises(ValueError) as context:
-            lint_template(template, args)
+            render_mustache(template, args, strict=True)
 
-        self.assertIn("Variable 'age' does not exist", str(context.exception))
+        self.assertIn("Template rendering failed: Could not find key 'age'", str(context.exception))
 
     def test_prompt_build_strict_mode_enabled(self):
         """Test Prompt.build with strict mode enabled validates variables."""
@@ -420,16 +353,11 @@ class TestLogger(TestCase):
             description="test",
             prompt_data=PromptData(
                 prompt=PromptChatBlock(
-                    messages=[
-                        PromptMessage(
-                            role="user",
-                            content="Hello {{name}}, please help with {{task}}"
-                        )
-                    ]
+                    messages=[PromptMessage(role="user", content="Hello {{name}}, please help with {{task}}")]
                 ),
-                options={"model": "gpt-4o"}
+                options={"model": "gpt-4o"},
             ),
-            tags=None
+            tags=None,
         )
         lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
         prompt = Prompt(lazy_prompt, {}, False)
@@ -442,7 +370,7 @@ class TestLogger(TestCase):
         with self.assertRaises(ValueError) as context:
             prompt.build(name="John", strict=True)  # Missing 'task'
 
-        self.assertIn("Variable 'task' does not exist", str(context.exception))
+        self.assertIn("Template rendering failed: Could not find key 'task'", str(context.exception))
 
     def test_prompt_build_strict_mode_disabled(self):
         """Test Prompt.build with strict mode disabled allows missing variables."""
@@ -457,16 +385,11 @@ class TestLogger(TestCase):
             description="test",
             prompt_data=PromptData(
                 prompt=PromptChatBlock(
-                    messages=[
-                        PromptMessage(
-                            role="user",
-                            content="Hello {{name}}, please help with {{task}}"
-                        )
-                    ]
+                    messages=[PromptMessage(role="user", content="Hello {{name}}, please help with {{task}}")]
                 ),
-                options={"model": "gpt-4o"}
+                options={"model": "gpt-4o"},
             ),
-            tags=None
+            tags=None,
         )
         lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
         prompt = Prompt(lazy_prompt, {}, False)
@@ -488,12 +411,10 @@ class TestLogger(TestCase):
             slug="test-prompt",
             description="test",
             prompt_data=PromptData(
-                prompt=PromptChatBlock(
-                    messages=[PromptMessage(role="user", content=content)]
-                ),
-                options={"model": "gpt-4o"}
+                prompt=PromptChatBlock(messages=[PromptMessage(role="user", content=content)]),
+                options={"model": "gpt-4o"},
             ),
-            tags=None
+            tags=None,
         )
         lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
         return Prompt(lazy_prompt, {}, False)
@@ -503,12 +424,7 @@ class TestLogger(TestCase):
         prompt = self._create_test_prompt("User {{user.name}} with email {{user.profile.email}}")
 
         # Valid nested data
-        user_data = {
-            "user": {
-                "name": "John",
-                "profile": {"email": "john@example.com"}
-            }
-        }
+        user_data = {"user": {"name": "John", "profile": {"email": "john@example.com"}}}
         result = prompt.build(strict=True, **user_data)
         expected = "User John with email john@example.com"
         self.assertEqual(result["messages"][0]["content"], expected)
@@ -1349,12 +1265,12 @@ def test_masking_function_logger(with_memory_logger, with_simulate_login):
     def masking_function(data):
         """Replace any occurrence of 'sensitive' with 'REDACTED'"""
         if isinstance(data, str):
-            return data.replace('sensitive', 'REDACTED')
+            return data.replace("sensitive", "REDACTED")
         elif isinstance(data, dict):
             masked = {}
             for k, v in data.items():
-                if isinstance(v, str) and 'sensitive' in v:
-                    masked[k] = v.replace('sensitive', 'REDACTED')
+                if isinstance(v, str) and "sensitive" in v:
+                    masked[k] = v.replace("sensitive", "REDACTED")
                 elif isinstance(v, dict):
                     masked[k] = masking_function(v)
                 elif isinstance(v, list):
@@ -1401,15 +1317,15 @@ def test_masking_function_experiment(with_memory_logger, with_simulate_login):
     def masking_function(data):
         """Replace any occurrence of 'password' with 'XXX'"""
         if isinstance(data, str):
-            return data.replace('password', 'XXX')
+            return data.replace("password", "XXX")
         elif isinstance(data, dict):
             masked = {}
             for k, v in data.items():
                 if k == "password":
                     # Mask the value when the key is "password"
                     masked[k] = "XXX"
-                elif isinstance(v, str) and 'password' in v:
-                    masked[k] = v.replace('password', 'XXX')
+                elif isinstance(v, str) and "password" in v:
+                    masked[k] = v.replace("password", "XXX")
                 elif isinstance(v, dict):
                     masked[k] = masking_function(v)
                 elif isinstance(v, list):
@@ -1426,6 +1342,7 @@ def test_masking_function_experiment(with_memory_logger, with_simulate_login):
 
     # Create test experiment
     from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
+
     project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
     experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
     metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
@@ -1527,7 +1444,7 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
         if isinstance(data, dict):
             masked = {}
             for k, v in data.items():
-                if isinstance(v, str) and '@' in v and '.' in v:
+                if isinstance(v, str) and "@" in v and "." in v:
                     # Simple email detection
                     masked[k] = "EMAIL_REDACTED"
                 elif isinstance(v, dict):
@@ -1546,6 +1463,7 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
 
     # Create test dataset
     from braintrust.logger import Dataset, ObjectMetadata, ProjectDatasetMetadata
+
     project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
     dataset_metadata = ObjectMetadata(id="test_dataset", name="test_dataset", full_info=dict())
     metadata = ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata)
@@ -1573,7 +1491,6 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
 
     # Clean up
     braintrust.set_masking_function(None)
-
 
 
 def test_masking_function_with_error(with_memory_logger, with_simulate_login):
@@ -1608,6 +1525,7 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
 
     # Create test experiment
     from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
+
     project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
     experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
     metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
@@ -1620,7 +1538,7 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
         output="This contains SECRET information",
         expected=["item1", "item2"],
         metadata={"safe": "data"},
-        scores={"score": 1.0}  # Add a safe score that won't trigger error
+        scores={"score": 1.0},  # Add a safe score that won't trigger error
     )
 
     experiment.flush()
@@ -1700,16 +1618,10 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
     test_logger = init_test_logger("test_masking_errors_logger")
 
     with test_logger.start_span("parent") as parent:
-        parent.log(
-            input={"api_key": "key123", "password": "secret"},
-            metadata={"request_id": "req-123"}
-        )
+        parent.log(input={"api_key": "key123", "password": "secret"}, metadata={"request_id": "req-123"})
 
         with parent.start_span("child") as child:
-            child.log(
-                output="Result with secret data",
-                expected=[1, 2, 3]
-            )
+            child.log(output="Result with secret data", expected=[1, 2, 3])
 
     test_logger.flush()
 
@@ -1730,6 +1642,7 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
 
     # Clean up
     braintrust.set_masking_function(None)
+
 
 def test_attachment_unreadable_path_logs_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="braintrust"):

@@ -6,10 +6,10 @@ import contextvars
 import dataclasses
 import datetime
 import inspect
+import io
 import json
 import logging
 import os
-import re
 import sys
 import textwrap
 import threading
@@ -48,7 +48,6 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
-from chevron.tokenizer import tokenize
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -404,19 +403,21 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update({
-            k: v
-            for (k, v) in other.__dict__.items()
-            if k
-            not in (
-                "current_experiment",
-                "current_logger",
-                "current_parent",
-                "current_span",
-                "_global_bg_logger",
-                "_override_bg_logger",
-            )
-        })
+        self.__dict__.update(
+            {
+                k: v
+                for (k, v) in other.__dict__.items()
+                if k
+                not in (
+                    "current_experiment",
+                    "current_logger",
+                    "current_parent",
+                    "current_span",
+                    "_global_bg_logger",
+                    "_override_bg_logger",
+                )
+            }
+        )
 
     def login(
         self,
@@ -3085,17 +3086,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert parent_object_id.get() == parent_components_object_id, (
-                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
-            )
+            assert (
+                parent_object_id.get() == parent_components_object_id
+            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -4196,10 +4197,12 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
@@ -4258,90 +4261,10 @@ def _create_custom_render():
 _custom_render = _create_custom_render()
 
 
-def _extract_mustache_variables(template: str) -> List[str]:
-    """
-    Extract mustache variables from a template string using chevron's tokenizer.
-    This provides the same functionality as the JavaScript getMustacheVars.
-    """
-    variables = []
-    try:
-        tokens = tokenize(template)
-        for token in tokens:
-            if token[0] == "variable" or token[0] == "no escape":
-                variable = token[1].strip()
-                variables.append(variable)
-    except Exception:
-        # If tokenization fails, return empty list (matches TypeScript behavior)
-        return []
-    return variables
-
-
-def _get_nested_value(obj: Any, path: str) -> Any:
-    """Get a nested value from an object using dot notation."""
-    if not path:
-        return obj
-
-    parts = path.split(".")
-    current = obj
-
-    try:
-        for part in parts:
-            if isinstance(current, dict):
-                current = current.get(part)
-            elif isinstance(current, (list, tuple)) and part.isdigit():
-                index = int(part)
-                if 0 <= index < len(current):
-                    current = current[index]
-                else:
-                    return None
-            else:
-                # Try to get attribute
-                current = getattr(current, part, None)
-
-            if current is None:
-                return None
-
-        return current
-    except (KeyError, IndexError, AttributeError, TypeError):
-        return None
-
-
-def lint_template(template: str, context: Dict[str, Any]) -> None:
-    """
-    Validate that all mustache variables in a template have corresponding values in the context.
-    Raises ValueError if any variables are missing.
-    """
-    variables = _extract_mustache_variables(template)
-
-    for variable in variables:
-        # Check if the actual variable exists
-        value = _get_nested_value(context, variable)
-        if value is None:
-            # For array access, check if it's because the index is out of bounds vs array doesn't exist
-            if re.search(r"\.\d+", variable):
-                # This is an array access - check if the base array exists
-                base_path = re.sub(r"\.\d+.*$", "", variable)
-                base_value = _get_nested_value(context, base_path)
-                if base_value is None:
-                    raise ValueError(f"Variable '{variable}' does not exist.")
-                elif not isinstance(base_value, (list, tuple)):
-                    raise ValueError(f"Variable '{variable}' does not exist.")
-                else:
-                    # Array exists, but index is out of bounds
-                    raise ValueError(f"Variable '{variable}' does not exist.")
-            else:
-                # Simple variable doesn't exist
-                if variable not in context:
-                    raise ValueError(f"Variable '{variable}' does not exist.")
-
-
 def render_templated_object(obj: Any, args: Any) -> Any:
     strict = args.get("strict", False) if isinstance(args, dict) else False
-
     if isinstance(obj, str):
-        if strict:
-            lint_template(obj, args)
-        return _custom_render(obj, data=args)  # pylint: disable=not-callable
+        return render_mustache(obj, data=args, renderer=_custom_render, strict=strict)
     elif isinstance(obj, list):
         return [render_templated_object(item, args) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
@@ -4372,6 +4295,27 @@ def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
 
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
+
+
+def render_mustache(template: str, data: Any, *, strict: bool = False, renderer: Optional[Callable[..., Any]] = None):
+    if renderer is None:
+        renderer = chevron.render
+
+    if not strict:
+        return renderer(template, data=data)
+
+    # Capture stderr to check for missing keys
+    stderr_capture = io.StringIO()
+    with contextlib.redirect_stderr(stderr_capture):
+        result = renderer(template, data=data, warn=True)
+
+    stderr_output = stderr_capture.getvalue()
+
+    # Check if there are missing keys in the stderr output
+    if "Could not find key" in stderr_output:
+        raise ValueError(f"Template rendering failed: {stderr_output.strip()}")
+
+    return result
 
 
 class Prompt:
@@ -4486,22 +4430,16 @@ class Prompt:
             raise ValueError("Empty prompt")
 
         if self.prompt.type == "completion":
-            if strict:
-                lint_template(self.prompt.content, build_args)
-            ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
+            ret["prompt"] = render_mustache(self.prompt.content, data=build_args, strict=strict)
         elif self.prompt.type == "chat":
 
             def render(template: str):
-                if strict:
-                    lint_template(template, build_args)
-                return chevron.render(template, data=build_args)
+                return render_mustache(template, data=build_args, strict=strict)
 
             ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
 
             if self.prompt.tools and self.prompt.tools.strip():
-                if strict:
-                    lint_template(self.prompt.tools, build_args)
-                ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
+                ret["tools"] = json.loads(render_mustache(self.prompt.tools, data=build_args, strict=strict))
 
         return ret
 
