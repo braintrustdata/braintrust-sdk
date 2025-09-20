@@ -6,6 +6,7 @@ import contextvars
 import dataclasses
 import datetime
 import inspect
+import io
 import json
 import logging
 import os
@@ -402,19 +403,21 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update({
-            k: v
-            for (k, v) in other.__dict__.items()
-            if k
-            not in (
-                "current_experiment",
-                "current_logger",
-                "current_parent",
-                "current_span",
-                "_global_bg_logger",
-                "_override_bg_logger",
-            )
-        })
+        self.__dict__.update(
+            {
+                k: v
+                for (k, v) in other.__dict__.items()
+                if k
+                not in (
+                    "current_experiment",
+                    "current_logger",
+                    "current_parent",
+                    "current_span",
+                    "_global_bg_logger",
+                    "_override_bg_logger",
+                )
+            }
+        )
 
     def login(
         self,
@@ -3083,17 +3086,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert parent_object_id.get() == parent_components_object_id, (
-                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
-            )
+            assert (
+                parent_object_id.get() == parent_components_object_id
+            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -4194,10 +4197,12 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
@@ -4257,8 +4262,9 @@ _custom_render = _create_custom_render()
 
 
 def render_templated_object(obj: Any, args: Any) -> Any:
+    strict = args.get("strict", False) if isinstance(args, dict) else False
     if isinstance(obj, str):
-        return _custom_render(obj, data=args)  # pylint: disable=not-callable
+        return render_mustache(obj, data=args, renderer=_custom_render, strict=strict)
     elif isinstance(obj, list):
         return [render_templated_object(item, args) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
@@ -4289,6 +4295,27 @@ def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
 
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
+
+
+def render_mustache(template: str, data: Any, *, strict: bool = False, renderer: Optional[Callable[..., Any]] = None):
+    if renderer is None:
+        renderer = chevron.render
+
+    if not strict:
+        return renderer(template, data=data)
+
+    # Capture stderr to check for missing keys
+    stderr_capture = io.StringIO()
+    with contextlib.redirect_stderr(stderr_capture):
+        result = renderer(template, data=data, warn=True)
+
+    stderr_output = stderr_capture.getvalue()
+
+    # Check if there are missing keys in the stderr output
+    if "Could not find key" in stderr_output:
+        raise ValueError(f"Template rendering failed: {stderr_output.strip()}")
+
+    return result
 
 
 class Prompt:
@@ -4368,8 +4395,12 @@ class Prompt:
         be forwarded to the mustache template that defines the prompt and rendered with
         the `chevron` library.
 
+        :param build_args: Arguments to forward to the prompt template. Can include 'strict=True' to enable strict mode validation.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
+
+        # Extract strict mode setting from build_args (using get to avoid modifying the original dict)
+        strict = build_args.get("strict", False)
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
@@ -4399,16 +4430,16 @@ class Prompt:
             raise ValueError("Empty prompt")
 
         if self.prompt.type == "completion":
-            ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
+            ret["prompt"] = render_mustache(self.prompt.content, data=build_args, strict=strict)
         elif self.prompt.type == "chat":
 
             def render(template: str):
-                return chevron.render(template, data=build_args)
+                return render_mustache(template, data=build_args, strict=strict)
 
             ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
 
             if self.prompt.tools and self.prompt.tools.strip():
-                ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
+                ret["tools"] = json.loads(render_mustache(self.prompt.tools, data=build_args, strict=strict))
 
         return ret
 
