@@ -32,7 +32,12 @@ export class ClaudeClient {
   }
 
   async analyzeCodebase(projectPath: string): Promise<any> {
+    const ora = await import("ora");
+    const chalk = await import("chalk");
+
+    const fileSpinner = ora.default("Reading project files...").start();
     const files = await this.readProjectFiles(projectPath);
+    fileSpinner.succeed(`Found ${files.length} relevant files`);
 
     const prompt = `${PROJECT_ANALYSIS_PROMPT}
 
@@ -45,6 +50,8 @@ ${files.map((f) => `**${f.path}**:\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")}
 Please analyze this codebase and return the analysis in the specified JSON format. Use the search_docs tool to get relevant Braintrust examples.`;
 
     let analysis = {};
+    console.log(chalk.default.blue("\n🔍 Claude Analysis Stream:"));
+    console.log(chalk.default.gray("─".repeat(60)));
 
     for await (const message of query({
       prompt,
@@ -56,11 +63,36 @@ Please analyze this codebase and return the analysis in the specified JSON forma
         ],
       },
     })) {
-      if (message.type === "result" && message.subtype === "success") {
+      if (message.type === "text") {
+        // Print raw Claude output like Claude Code
+        process.stdout.write(message.text);
+      } else if (message.type === "tool_use") {
+        console.log(chalk.default.cyan(`\n🔧 Using tool: ${message.tool}`));
+        console.log(
+          chalk.default.gray(
+            `   Input: ${JSON.stringify(message.input, null, 2)}`,
+          ),
+        );
+      } else if (message.type === "tool_result") {
+        console.log(chalk.default.green(`✓ Tool completed`));
+        if (
+          message.result &&
+          typeof message.result === "string" &&
+          message.result.length < 200
+        ) {
+          console.log(
+            chalk.default.gray(`   Result: ${message.result.slice(0, 200)}...`),
+          );
+        }
+      } else if (message.type === "result" && message.subtype === "success") {
+        console.log(chalk.default.green("\n✓ Analysis complete"));
         analysis = this.parseAnalysisResponse(message.result);
         break;
       } else if (message.type === "error") {
-        console.error("Analysis failed:", message.error);
+        console.log(
+          chalk.default.red(`\n❌ Analysis failed: ${message.error}`),
+        );
+        console.log(chalk.default.yellow("Using fallback analysis..."));
         // Fallback to basic analysis
         analysis = this.createFallbackAnalysis(files);
         break;
@@ -78,6 +110,8 @@ Please analyze this codebase and return the analysis in the specified JSON forma
     filesToModify: { path: string; content: string }[];
     commands: string[];
   }> {
+    const chalk = await import("chalk");
+
     const prompt = `${BRAINTRUST_SETUP_PROMPT}
 
 ${IMPLEMENTATION_PROMPT}
@@ -104,6 +138,9 @@ Format your response as JSON with keys: changes, filesToModify, commands`;
       commands: [],
     };
 
+    console.log(chalk.default.blue("\n⚙️  Claude Setup Stream:"));
+    console.log(chalk.default.gray("─".repeat(60)));
+
     for await (const message of query({
       prompt,
       options: {
@@ -115,14 +152,34 @@ Format your response as JSON with keys: changes, filesToModify, commands`;
         ],
       },
     })) {
-      if (message.type === "result" && message.subtype === "success") {
+      if (message.type === "text") {
+        // Print raw Claude output like Claude Code
+        process.stdout.write(message.text);
+      } else if (message.type === "tool_use") {
+        console.log(chalk.default.cyan(`\n🔧 Using tool: ${message.tool}`));
+        console.log(
+          chalk.default.gray(
+            `   Input: ${JSON.stringify(message.input, null, 2)}`,
+          ),
+        );
+      } else if (message.type === "tool_result") {
+        console.log(chalk.default.green(`✓ Tool completed`));
+        if (
+          message.result &&
+          typeof message.result === "string" &&
+          message.result.length < 200
+        ) {
+          console.log(
+            chalk.default.gray(`   Result: ${message.result.slice(0, 200)}...`),
+          );
+        }
+      } else if (message.type === "result" && message.subtype === "success") {
+        console.log(chalk.default.green("\n✓ Setup planning complete"));
         result = this.parseImplementationResponse(message.result);
         break;
       } else if (message.type === "error") {
-        console.error("Setup failed:", message.error);
+        console.log(chalk.default.red(`\n❌ Setup failed: ${message.error}`));
         break;
-      } else if (message.type === "text") {
-        console.log("Claude:", message.text);
       }
     }
 

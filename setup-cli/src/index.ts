@@ -31,11 +31,10 @@ export async function setupBraintrust(options: SetupOptions): Promise<void> {
 
     // Initialize Claude client with MCP
     const claude = new ClaudeClient(options.projectPath);
-    spinner.text = "Analyzing codebase with Claude...";
+    spinner.succeed("Claude client initialized");
 
     // Step 1: Analyze the codebase
     const analysis = await claude.analyzeCodebase(options.projectPath);
-    spinner.succeed("Codebase analysis complete");
 
     // Show analysis results
     console.log(chalk.blue("\n📊 Analysis Results:"));
@@ -74,15 +73,10 @@ export async function setupBraintrust(options: SetupOptions): Promise<void> {
     }
 
     // Step 2: Set up tracing using Claude
-    const setupSpinner = ora(
-      "Claude is setting up Braintrust tracing...",
-    ).start();
-
     const setupResult = await claude.setupTracing(
       options.projectPath,
       analysis,
     );
-    setupSpinner.succeed("Setup complete!");
 
     // Show results
     console.log(chalk.green("\n🎉 Braintrust Tracing Setup Complete!\n"));
