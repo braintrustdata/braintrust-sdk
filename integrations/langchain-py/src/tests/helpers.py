@@ -91,7 +91,7 @@ def mock_openai(responses: List[Dict[str, Any]]) -> Generator[respx.MockRouter, 
         flush()
 
 
-def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[str], Optional[str]]:
+def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[Span], Optional[str]]:
     """Convert logs to spans format, merging duplicate span IDs."""
     if not logs:
         raise ValueError("No logs to convert to spans")
@@ -116,7 +116,13 @@ def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[str], Op
                     else:
                         existing_span[key] = value
 
-    return spans, spans[0]["span_id"] if spans else None, spans[0].get("metadata", {}).get("runId") if spans else None
+    if not spans:
+        return spans, None, None
+
+    root_span = spans[0]
+    run_id = root_span.get("metadata", {}).get("runId")
+
+    return spans, root_span, run_id
 
 
 def find_spans_by_attributes(spans: List[Span], **attributes: Any) -> List[Span]:
