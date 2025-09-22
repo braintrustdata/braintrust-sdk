@@ -11,12 +11,14 @@ try:
 
     OTEL_AVAILABLE = True
 except ImportError:
-    warnings.warn(
-        "OpenTelemetry packages are not installed. "
-        "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]",
-        UserWarning,
-        stacklevel=2,
-    )
+    # Don't warn in tests, it's annoying.
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        warnings.warn(
+            "OpenTelemetry packages are not installed. "
+            "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Create stub classes if OpenTelemetry is not available
     class OTLPSpanExporter:

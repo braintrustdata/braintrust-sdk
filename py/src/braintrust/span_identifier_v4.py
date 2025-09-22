@@ -5,7 +5,6 @@ import base64
 import dataclasses
 import gzip
 import json
-import secrets
 from typing import Dict, Optional, Union
 
 from .span_identifier_v3 import (
@@ -15,15 +14,6 @@ from .span_identifier_v3 import (
 
 ENCODING_VERSION_NUMBER_V4 = 4
 
-
-def _generate_span_id() -> str:
-    """Generate an OTEL-compatible span ID (8 bytes as hex string)."""
-    return secrets.token_hex(8)
-
-
-def _generate_trace_id() -> str:
-    """Generate an OTEL-compatible trace ID (16 bytes as hex string)."""
-    return secrets.token_hex(16)
 
 
 # Abbreviated field names for compact serialization

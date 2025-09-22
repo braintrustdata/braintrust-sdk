@@ -10,6 +10,7 @@ import pytest
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
+from braintrust.id_gen import OTELIDGenerator
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -1735,11 +1736,12 @@ def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_si
 
 def test_otel_compatible_span_export_import():
     """Test that spans with OTEL-compatible IDs can be exported and imported correctly."""
-    from braintrust.span_identifier_v4 import SpanComponentsV4, SpanObjectTypeV3, _generate_span_id, _generate_trace_id
+    from braintrust.span_identifier_v4 import SpanComponentsV4, SpanObjectTypeV3
 
     # Generate OTEL-compatible IDs
-    trace_id = _generate_trace_id()  # 32-char hex (16 bytes)
-    span_id = _generate_span_id()    # 16-char hex (8 bytes)
+    otel_gen = OTELIDGenerator()
+    trace_id = otel_gen.get_trace_id()  # 32-char hex (16 bytes)
+    span_id = otel_gen.get_span_id()    # 16-char hex (8 bytes)
 
     # Test that trace_id is 32 chars and span_id is 16 chars
     assert len(trace_id) == 32

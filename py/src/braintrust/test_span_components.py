@@ -7,8 +7,9 @@ from uuid import uuid4
 
 import pytest
 
+from braintrust.id_gen import OTELIDGenerator
 from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
-from braintrust.span_identifier_v4 import SpanComponentsV4, _generate_span_id, _generate_trace_id
+from braintrust.span_identifier_v4 import SpanComponentsV4
 
 
 class TestSpanComponentsV3:
@@ -50,8 +51,9 @@ class TestSpanComponentsV3:
 
     def test_otel_ids_fail_roundtrip(self):
         """Test that V3 fails to preserve OTEL hex strings for 16-byte IDs (converts to UUID format)."""
-        trace_id = _generate_trace_id()  # 32-char hex (16 bytes)
-        span_id = _generate_span_id()    # 16-char hex (8 bytes)
+        otel_gen = OTELIDGenerator()
+        trace_id = otel_gen.get_trace_id()  # 32-char hex (16 bytes)
+        span_id = otel_gen.get_span_id()    # 16-char hex (8 bytes)
 
         # Use 16-byte hex strings for object_id and root_span_id to see UUID conversion
         components = SpanComponentsV3(
@@ -75,8 +77,9 @@ class TestSpanComponentsV4:
 
     def test_otel_hex_strings_preserved(self):
         """Test that V4 preserves OTEL hex strings exactly."""
-        trace_id = _generate_trace_id()  # 32-char hex
-        span_id = _generate_span_id()    # 16-char hex
+        otel_gen = OTELIDGenerator()
+        trace_id = otel_gen.get_trace_id()  # 32-char hex
+        span_id = otel_gen.get_span_id()    # 16-char hex
 
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.PROJECT_LOGS,
@@ -123,8 +126,9 @@ class TestSpanComponentsV4:
     def test_mixed_formats(self):
         """Test V4 with mixed UUID and hex string formats."""
         uuid_object_id = str(uuid4())  # UUID format
-        hex_span_id = _generate_span_id()  # Hex format
-        hex_trace_id = _generate_trace_id()  # Hex format
+        otel_gen = OTELIDGenerator()
+        hex_span_id = otel_gen.get_span_id()  # Hex format
+        hex_trace_id = otel_gen.get_trace_id()  # Hex format
 
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.EXPERIMENT,
