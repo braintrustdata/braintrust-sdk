@@ -322,3 +322,79 @@ class TestObjectIdFields:
             components.object_id_fields()
 
         assert "cannot invoke `object_id_fields`" in str(exc_info.value)
+
+
+class TestExportFormatSelection:
+    """Test that span export format is selected based on BRAINTRUST_OTEL_COMPAT environment variable."""
+
+    def test_export_format_based_on_env_variable(self):
+        """Test that export format changes based on BRAINTRUST_OTEL_COMPAT environment variable."""
+        import os
+
+        from braintrust.test_helpers import init_test_logger
+
+        # Test with OTEL_COMPAT=false (should use V3)
+        original_env = os.environ.get("BRAINTRUST_OTEL_COMPAT")
+        try:
+            os.environ["BRAINTRUST_OTEL_COMPAT"] = "false"
+
+            # Initialize test logger and create a span
+            l = init_test_logger("test_export_v3")
+            with l.start_span(name="test_span") as span:
+                export_v3_mode = span.export()
+
+            # Verify it can be parsed by V3
+            parsed_as_v3 = SpanComponentsV3.from_str(export_v3_mode)
+            assert parsed_as_v3 is not None
+
+            # Test with OTEL_COMPAT=true (should use V4)
+            os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
+
+            # Initialize test logger and create a span
+            l = init_test_logger("test_export_v4")
+            with l.start_span(name="test_span") as span:
+                export_v4_mode = span.export()
+
+            # Verify it can be parsed by V4
+            parsed_as_v4 = SpanComponentsV4.from_str(export_v4_mode)
+            assert parsed_as_v4 is not None
+
+            # Both should be parseable by V4 (backward compatibility)
+            v4_from_v3 = SpanComponentsV4.from_str(export_v3_mode)
+            v4_from_v4 = SpanComponentsV4.from_str(export_v4_mode)
+            assert v4_from_v3 is not None
+            assert v4_from_v4 is not None
+
+        finally:
+            # Clean up environment
+            if original_env is not None:
+                os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env
+            elif "BRAINTRUST_OTEL_COMPAT" in os.environ:
+                del os.environ["BRAINTRUST_OTEL_COMPAT"]
+
+    def test_export_uses_v3_by_default(self):
+        """Test that export uses V3 format by default when BRAINTRUST_OTEL_COMPAT is not set."""
+        import os
+
+        from braintrust.test_helpers import init_test_logger
+
+        # Ensure environment variable is not set
+        original_env = os.environ.get("BRAINTRUST_OTEL_COMPAT")
+        try:
+            if "BRAINTRUST_OTEL_COMPAT" in os.environ:
+                del os.environ["BRAINTRUST_OTEL_COMPAT"]
+
+            # Initialize test logger and create a span
+            l = init_test_logger("test_default_v3")
+            with l.start_span(name="test_span") as span:
+                export_default = span.export()
+
+            # Should be parseable by V3 since V3 is the default
+            parsed_as_v3 = SpanComponentsV3.from_str(export_default)
+            assert parsed_as_v3 is not None
+            assert parsed_as_v3.object_type is not None
+
+        finally:
+            # Restore environment
+            if original_env is not None:
+                os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env

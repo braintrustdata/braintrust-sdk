@@ -82,7 +82,8 @@ from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
 from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
-from .span_identifier_v4 import SpanComponentsV4, SpanObjectTypeV3
+from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
+from .span_identifier_v4 import SpanComponentsV4
 from .span_types import SpanTypeAttribute
 from .util import (
     GLOBAL_PROJECT,
@@ -3774,7 +3775,11 @@ class SpanImpl(Span):
             object_id = self.parent_object_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV4(
+        # Choose SpanComponents version based on BRAINTRUST_OTEL_COMPAT env var
+        use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
+        span_components_class = SpanComponentsV4 if use_v4 else SpanComponentsV3
+
+        return span_components_class(
             object_type=self.parent_object_type,
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
