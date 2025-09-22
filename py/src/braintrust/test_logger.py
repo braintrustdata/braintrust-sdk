@@ -1770,44 +1770,92 @@ def test_otel_compatible_span_export_import():
 
 def test_span_with_otel_ids_export_import():
     """Test that actual Span objects with OTEL IDs can export and be used as parent context."""
-    init_test_logger(__name__)
+    # Set OTEL compatibility mode
+    import os
+    original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
+    os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
-    with logger.start_span(name="test") as span:
-        # Verify the span has OTEL-compatible IDs
-        assert len(span.span_id) == 16  # 8-byte hex
-        assert len(span.root_span_id) == 32  # 16-byte hex
-        assert all(c in '0123456789abcdef' for c in span.span_id)
-        assert all(c in '0123456789abcdef' for c in span.root_span_id)
+    try:
+        from braintrust import id_gen
+        id_gen._reset()  # Reset to pick up new environment variable
 
-        # Export the span
-        exported = span.export()
+        init_test_logger(__name__)
 
-        # Parse it back
-        from braintrust.span_identifier_v3 import SpanComponentsV3
-        imported = SpanComponentsV3.from_str(exported)
+        with logger.start_span(name="test") as span:
+            # Debug what we actually got
+            print(f"span_id: {span.span_id} (len={len(span.span_id)})")
+            print(f"root_span_id: {span.root_span_id} (len={len(span.root_span_id)})")
 
-        # Verify IDs are preserved exactly
-        assert imported.span_id == span.span_id
-        assert imported.root_span_id == span.root_span_id
+            # Verify the span has OTEL-compatible IDs
+            assert len(span.span_id) == 16  # 8-byte hex
+            assert len(span.root_span_id) == 32  # 16-byte hex
+            assert all(c in '0123456789abcdef' for c in span.span_id)
+            assert all(c in '0123456789abcdef' for c in span.root_span_id)
+
+            # Export the span
+            exported = span.export()
+
+            # Parse it back
+            from braintrust.span_identifier_v4 import SpanComponentsV4
+            imported = SpanComponentsV4.from_str(exported)
+
+            # Verify IDs are preserved exactly
+            assert imported.span_id == span.span_id
+            assert imported.root_span_id == span.root_span_id
+
+    finally:
+        # Restore environment and reset
+        id_gen._reset()
+        if original_env is not None:
+            os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env
+        elif "BRAINTRUST_OTEL_COMPAT" in os.environ:
+            del os.environ["BRAINTRUST_OTEL_COMPAT"]
 
 
 def test_parent_context_with_otel_ids(with_memory_logger):
     """Test that parent_context works correctly with OTEL-compatible IDs."""
-    init_test_logger(__name__)
+    # Set OTEL compatibility mode
+    import os
+    original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
+    os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
-    # Create a span and export it
-    with logger.start_span(name="parent") as parent_span:
-        parent_export = parent_span.export()
-        original_span_id = parent_span.span_id
-        original_root_span_id = parent_span.root_span_id
+    try:
+        from braintrust import id_gen
+        id_gen._reset()  # Reset to pick up new environment variable
 
-    # Use the exported span as parent context
-    with parent_context(parent_export):
-        with logger.start_span(name="child") as child_span:
-            # Child should inherit the root_span_id from parent
-            assert child_span.root_span_id == original_root_span_id
-            # Child should have parent in span_parents
-            assert original_span_id in child_span.span_parents
+        init_test_logger(__name__)
+
+        # Create a span and export it
+        with logger.start_span(name="parent") as parent_span:
+            parent_export = parent_span.export()
+            original_span_id = parent_span.span_id
+            original_root_span_id = parent_span.root_span_id
+
+        def is_hex(s):
+            return all(c in '0123456789abcdef' for c in s.lower())
+
+        assert is_hex(original_span_id)
+        assert is_hex(original_root_span_id)
+
+        # Use the exported span as parent context
+        with parent_context(parent_export):
+            with logger.start_span(name="child") as child_span:
+                # Child should inherit the root_span_id from parent
+                assert child_span.root_span_id == original_root_span_id
+                print(f"DEBUG child_span.root_span_id: {child_span.root_span_id}")
+                print(f"DEBUG original_root_span_id: {original_root_span_id}")
+                # Child should have parent in span_parents
+                assert original_span_id in child_span.span_parents
+                print(f"DEBUG original_span_id: {original_span_id}")
+                print(f"DEBUG child_span.span_parents: {child_span.span_parents}")
+
+    finally:
+        # Restore environment and reset
+        id_gen._reset()
+        if original_env is not None:
+            os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env
+        elif "BRAINTRUST_OTEL_COMPAT" in os.environ:
+            del os.environ["BRAINTRUST_OTEL_COMPAT"]
 
     # Verify logs were created correctly
     logs = with_memory_logger.pop()
