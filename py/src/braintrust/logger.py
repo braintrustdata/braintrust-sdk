@@ -53,6 +53,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
+from . import id_gen
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
@@ -3636,7 +3637,6 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        from . import id_gen
         self.span_id = span_id or id_gen.get_span_id()
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id

@@ -1773,7 +1773,6 @@ def test_otel_compatible_span_export_import():
 def test_span_with_otel_ids_export_import():
     """Test that actual Span objects with OTEL IDs can export and be used as parent context."""
     # Set OTEL compatibility mode
-    import os
     original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
     os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
@@ -1817,7 +1816,6 @@ def test_span_with_otel_ids_export_import():
 def test_parent_context_with_otel_ids(with_memory_logger):
     """Test that parent_context works correctly with OTEL-compatible IDs."""
     # Set OTEL compatibility mode
-    import os
     original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
     os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
