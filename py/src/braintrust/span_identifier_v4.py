@@ -1,10 +1,10 @@
-# SpanComponentsV4: JSON + gzip serialization with abbreviated field names
-# Treats all IDs as opaque strings - no assumptions about format
+# SpanComponentsV4: Binary serialization like V3 but with hex string compression
+# Uses 16-byte encoding for trace IDs and 8-byte encoding for span IDs
 
 import base64
 import dataclasses
-import gzip
 import json
+from enum import Enum
 from typing import Dict, Optional, Union
 
 from .span_identifier_v3 import (
@@ -14,18 +14,42 @@ from .span_identifier_v3 import (
 
 ENCODING_VERSION_NUMBER_V4 = 4
 
+def _try_make_hex_trace_id(s):
+    """Try to convert hex string to 16-byte binary (for trace IDs)"""
+    try:
+        if isinstance(s, str) and len(s) == 32:  # 32 hex chars = 16 bytes
+            ret = bytes.fromhex(s)
+            assert len(ret) == 16
+            return ret, True
+    except Exception:
+        pass
+    return None, False
 
+def _try_make_hex_span_id(s):
+    """Try to convert hex string to 8-byte binary (for span IDs)"""
+    try:
+        if isinstance(s, str) and len(s) == 16:  # 16 hex chars = 8 bytes
+            ret = bytes.fromhex(s)
+            assert len(ret) == 8
+            return ret, True
+    except Exception:
+        pass
+    return None, False
 
-# Abbreviated field names for compact serialization
-class FieldNames:
-    VERSION = "v"                    # version
-    OBJECT_TYPE = "t"               # object_type
-    OBJECT_ID = "o"                 # object_id
-    COMPUTE_OBJECT_METADATA = "c"   # compute_object_metadata_args
-    ROW_ID = "r"                    # row_id
-    SPAN_ID = "s"                   # span_id
-    ROOT_SPAN_ID = "R"              # root_span_id
-    PROPAGATED_EVENT = "p"          # propagated_event
+INVALID_ENCODING_ERRMSG_V4 = f"SpanComponents string is not properly encoded. This library only supports encoding versions up to {ENCODING_VERSION_NUMBER_V4}. Please make sure the SDK library used to decode the SpanComponents is at least as new as any library used to encode it."
+
+class Fields(Enum):
+    OBJECT_ID = 1
+    ROW_ID = 2
+    SPAN_ID = 3  # 8-byte hex
+    ROOT_SPAN_ID = 4  # 16-byte hex
+
+_FIELDS_ID_TO_NAME = {
+    Fields.OBJECT_ID: "object_id",
+    Fields.ROW_ID: "row_id",
+    Fields.SPAN_ID: "span_id",
+    Fields.ROOT_SPAN_ID: "root_span_id",
+}
 
 
 @dataclasses.dataclass
@@ -66,67 +90,103 @@ class SpanComponentsV4:
             assert not self.root_span_id
 
     def to_str(self) -> str:
-        # Create a dict with abbreviated field names to save space
-        data = {
-            FieldNames.VERSION: ENCODING_VERSION_NUMBER_V4,
-            FieldNames.OBJECT_TYPE: self.object_type.value,
-        }
+        # V3-style binary encoding with hex string compression
+        # Binary format: version_byte + object_type_byte + num_hex_fields + hex_entries + json_remainder
+        json_obj = dict(
+            compute_object_metadata_args=self.compute_object_metadata_args or None,
+            propagated_event=self.propagated_event or None,
+        )
+        json_obj = {k: v for k, v in json_obj.items() if v is not None}
 
-        if self.object_id is not None:
-            data[FieldNames.OBJECT_ID] = self.object_id
-        if self.compute_object_metadata_args is not None:
-            data[FieldNames.COMPUTE_OBJECT_METADATA] = self.compute_object_metadata_args
-        if self.row_id is not None:
-            data[FieldNames.ROW_ID] = self.row_id
-        if self.span_id is not None:
-            data[FieldNames.SPAN_ID] = self.span_id
-        if self.root_span_id is not None:
-            data[FieldNames.ROOT_SPAN_ID] = self.root_span_id
-        if self.propagated_event is not None:
-            data[FieldNames.PROPAGATED_EVENT] = self.propagated_event
+        raw_bytes = bytes([
+            ENCODING_VERSION_NUMBER_V4,
+            self.object_type.value,
+        ])
 
-        # Serialize as JSON + gzip compression
-        json_str = json.dumps(data, separators=(',', ':'))
-        compressed = gzip.compress(json_str.encode())
-        return base64.b64encode(compressed).decode()
+        hex_entries = []
+
+        def add_hex_field(orig_val, field_id):
+            nonlocal hex_entries
+
+            if field_id == Fields.SPAN_ID:
+                hex_bytes, is_hex = _try_make_hex_span_id(orig_val)
+            elif field_id == Fields.ROOT_SPAN_ID:
+                hex_bytes, is_hex = _try_make_hex_trace_id(orig_val)
+            else:
+                hex_bytes, is_hex = None, False
+
+            if is_hex:
+                hex_entries.append(bytes([field_id.value]) + hex_bytes)
+            else:
+                json_obj[_FIELDS_ID_TO_NAME[field_id]] = orig_val
+
+        if self.object_id:
+            add_hex_field(self.object_id, Fields.OBJECT_ID)
+        if self.row_id:
+            add_hex_field(self.row_id, Fields.ROW_ID)
+        if self.span_id:
+            add_hex_field(self.span_id, Fields.SPAN_ID)
+        if self.root_span_id:
+            add_hex_field(self.root_span_id, Fields.ROOT_SPAN_ID)
+
+        if len(hex_entries) > 255:
+            raise Exception("Impossible: too many hex entries to encode")
+        raw_bytes += bytes([len(hex_entries)])
+        for entry in hex_entries:
+            raw_bytes += entry
+        if json_obj:
+            raw_bytes += bytes(json.dumps(json_obj, separators=(",", ":")).encode())
+        return base64.b64encode(raw_bytes).decode()
 
     @staticmethod
     def from_str(s: str) -> "SpanComponentsV4":
         try:
             raw_bytes = base64.b64decode(s.encode())
+            json_obj = {}
 
-            # Try to decode as V4 format (compressed JSON)
-            try:
-                decompressed = gzip.decompress(raw_bytes)
-                json_str = decompressed.decode()
-                data = json.loads(json_str)
-                if isinstance(data, dict) and data.get(FieldNames.VERSION) == ENCODING_VERSION_NUMBER_V4:
-                    return SpanComponentsV4(
-                        object_type=SpanObjectTypeV3(data[FieldNames.OBJECT_TYPE]),
-                        object_id=data.get(FieldNames.OBJECT_ID),
-                        compute_object_metadata_args=data.get(FieldNames.COMPUTE_OBJECT_METADATA),
-                        row_id=data.get(FieldNames.ROW_ID),
-                        span_id=data.get(FieldNames.SPAN_ID),
-                        root_span_id=data.get(FieldNames.ROOT_SPAN_ID),
-                        propagated_event=data.get(FieldNames.PROPAGATED_EVENT),
-                    )
-            except:
-                pass
+            if raw_bytes[0] < ENCODING_VERSION_NUMBER_V4:
+                # Handle older versions by delegating to V3
+                v3_components = SpanComponentsV3.from_str(s)
+                return SpanComponentsV4(
+                    object_type=v3_components.object_type,
+                    object_id=v3_components.object_id,
+                    compute_object_metadata_args=v3_components.compute_object_metadata_args,
+                    row_id=v3_components.row_id,
+                    span_id=v3_components.span_id,
+                    root_span_id=v3_components.root_span_id,
+                    propagated_event=v3_components.propagated_event,
+                )
+            else:
+                # V4 binary format
+                json_obj["object_type"] = SpanObjectTypeV3(raw_bytes[1])
+                num_hex_entries = raw_bytes[2]
+                byte_offset = 3
 
-            # Fall back to V3 compatibility
-            v3_components = SpanComponentsV3.from_str(s)
-            return SpanComponentsV4(
-                object_type=v3_components.object_type,
-                object_id=v3_components.object_id,
-                compute_object_metadata_args=v3_components.compute_object_metadata_args,
-                row_id=v3_components.row_id,
-                span_id=v3_components.span_id,
-                root_span_id=v3_components.root_span_id,
-                propagated_event=v3_components.propagated_event,
-            )
-        except Exception as e:
-            v4_errmsg = f"SpanComponents string is not properly encoded. This library only supports encoding versions up to {ENCODING_VERSION_NUMBER_V4}. Please make sure the SDK library used to decode the SpanComponents is at least as new as any library used to encode it."
-            raise Exception(v4_errmsg) from e
+                for i in range(num_hex_entries):
+                    field_id = Fields(raw_bytes[byte_offset])
+                    if field_id == Fields.SPAN_ID:
+                        # 8-byte span ID
+                        hex_bytes = raw_bytes[byte_offset + 1 : byte_offset + 9]
+                        byte_offset += 9
+                        json_obj[_FIELDS_ID_TO_NAME[field_id]] = hex_bytes.hex()
+                    elif field_id == Fields.ROOT_SPAN_ID:
+                        # 16-byte trace ID
+                        hex_bytes = raw_bytes[byte_offset + 1 : byte_offset + 17]
+                        byte_offset += 17
+                        json_obj[_FIELDS_ID_TO_NAME[field_id]] = hex_bytes.hex()
+                    else:
+                        # Should not happen for object_id/row_id in V4, but handle gracefully
+                        hex_bytes = raw_bytes[byte_offset + 1 : byte_offset + 17]  # assume 16 bytes
+                        byte_offset += 17
+                        json_obj[_FIELDS_ID_TO_NAME[field_id]] = hex_bytes.hex()
+
+                if byte_offset < len(raw_bytes):
+                    remaining_json_obj = json.loads(raw_bytes[byte_offset:].decode())
+                    json_obj.update(remaining_json_obj)
+
+            return SpanComponentsV4._from_json_obj(json_obj)
+        except Exception:
+            raise Exception(INVALID_ENCODING_ERRMSG_V4)
 
     def object_id_fields(self) -> Dict[str, str]:
         # Reuse V3 logic
@@ -145,6 +205,14 @@ class SpanComponentsV4:
 
     def export(self) -> str:
         return self.to_str()
+
+    @staticmethod
+    def _from_json_obj(json_obj: Dict) -> "SpanComponentsV4":
+        kwargs = {
+            **json_obj,
+            "object_type": SpanObjectTypeV3(json_obj["object_type"]),
+        }
+        return SpanComponentsV4(**kwargs)
 
 
 
