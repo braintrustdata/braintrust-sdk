@@ -72,7 +72,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         trace_meta = trace.export() or {}
         metadata = {
             "group_id": trace_meta.get("group_id"),
-            **(trace_meta.get("metadata", {})),
+            **(trace_meta.get("metadata") or {}),
         }
 
         current_context = braintrust.current_span()
