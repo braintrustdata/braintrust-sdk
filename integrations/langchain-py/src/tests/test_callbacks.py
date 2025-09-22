@@ -42,7 +42,8 @@ def test_llm_calls(logs: List[LogRequest]):
         chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
         chain.invoke({"number": "2"}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans, root_span, _ = logs_to_spans(logs)
+    root_span_id = root_span["root_span_id"]
 
     assert_matches_object(
         spans,
@@ -54,7 +55,6 @@ def test_llm_calls(logs: List[LogRequest]):
                 },
                 "input": {"number": "2"},
                 "metadata": {"tags": []},
-                "span_id": root_span_id,
                 "root_span_id": root_span_id,
             },
             {
@@ -63,7 +63,7 @@ def test_llm_calls(logs: List[LogRequest]):
                 "output": "What is 1 + 2?",
                 "metadata": {"tags": ["seq:step:1"]},
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
@@ -83,7 +83,7 @@ def test_llm_calls(logs: List[LogRequest]):
                     "n": 1,
                 },
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
         ],
     )
@@ -103,7 +103,8 @@ def test_chain_with_memory(logs: List[LogRequest]):
             config={"callbacks": [cast(BaseCallbackHandler, handler)], "tags": ["test"]},
         )
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans, root_span, _ = logs_to_spans(logs)
+    root_span_id = root_span["root_span_id"]
 
     assert_matches_object(
         spans,
@@ -115,7 +116,6 @@ def test_chain_with_memory(logs: List[LogRequest]):
                 },
                 "input": {"input": "What's your name?", "history": "Assistant: Hello! How can I assist you today?"},
                 "metadata": {"tags": ["test"]},
-                "span_id": root_span_id,
                 "root_span_id": root_span_id,
             },
             {
@@ -124,7 +124,7 @@ def test_chain_with_memory(logs: List[LogRequest]):
                 "output": "Assistant: Hello! How can I assist you today? User: What's your name?",
                 "metadata": {"tags": ["seq:step:1", "test"]},
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
@@ -139,7 +139,7 @@ def test_chain_with_memory(logs: List[LogRequest]):
                 ],
                 "metadata": {"tags": ["seq:step:2", "test"], "model": "gpt-4o-mini"},
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
         ],
     )
@@ -178,13 +178,13 @@ def test_tool_usage(logs: List[LogRequest]):
         model_with_tools = model.bind_tools([calculator])
         model_with_tools.invoke("What is 3 * 12", config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans, root_span, _ = logs_to_spans(logs)
+    root_span_id = root_span["root_span_id"]
 
     assert_matches_object(
         spans,
         [
             {
-                "span_id": root_span_id,
                 "root_span_id": root_span_id,
                 "span_attributes": {
                     "name": "ChatOpenAI",
@@ -435,7 +435,8 @@ def test_chain_null_values(logs: List[LogRequest]):
 
     flush()
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans, root_span, _ = logs_to_spans(logs)
+    root_span_id = root_span["root_span_id"]
 
     assert_matches_object(
         spans,

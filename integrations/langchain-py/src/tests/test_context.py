@@ -37,7 +37,8 @@ def test_global_handler(logs: List[LogRequest]):
 
         message = chain.invoke({"number": "2"})
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans, root_span, _ = logs_to_spans(logs)
+    root_span_id = root_span["root_span_id"]
 
     # Spans would be empty if the handler was not registered, let's make sure it logged what we expect
     assert_matches_object(
@@ -50,7 +51,6 @@ def test_global_handler(logs: List[LogRequest]):
                 },
                 "input": {"number": "2"},
                 "metadata": {"tags": []},
-                "span_id": root_span_id,
                 "root_span_id": root_span_id,
             },
             {
@@ -59,7 +59,7 @@ def test_global_handler(logs: List[LogRequest]):
                 "output": "What is 1 + 2?",
                 "metadata": {"tags": ["seq:step:1"]},
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
@@ -79,7 +79,7 @@ def test_global_handler(logs: List[LogRequest]):
                     "n": 1,
                 },
                 "root_span_id": root_span_id,
-                "span_parents": [root_span_id],
+                "span_parents": [root_span["span_id"]],
             },
         ],
     )
