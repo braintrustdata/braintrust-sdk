@@ -14,14 +14,26 @@ def get_span_id():
 
 
 def _get_id_generator():
-    # Always create a new generator based on current environment
-    # FIXME[matt] cache this
+    global _id_generator
+
+    if _id_generator is not None:
+        return _id_generator
+
+    # Cache for production use, but not during tests
     use_otel = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
-    return  OTELIDGenerator() if use_otel else UUIDGenerator()
+    generator = OTELIDGenerator() if use_otel else UUIDGenerator()
+
+    # Only cache if not in test mode
+    if not os.getenv("PYTEST_CURRENT_TEST"):
+        _id_generator = generator
+
+    return generator
 
 
 def _reset():
-    pass
+    """Reset the cached ID generator. Mainly for testing purposes."""
+    global _id_generator
+    _id_generator = None
 
 
 class IDGenerator(ABC):
