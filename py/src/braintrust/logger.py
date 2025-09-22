@@ -913,7 +913,14 @@ class _HTTPBackgroundLogger:
             try:
                 self.flush()
             except:
-                traceback.print_exc(file=self.outfile)
+                # Print exception but don't worry if stderr is closed because the process is shutting down.
+                try:
+                    traceback.print_exc(file=self.outfile)
+                except ValueError as e:
+                    if "operation on closed file" in str(e):
+                        pass
+                    else:
+                        raise
 
     def flush(self, batch_size: Optional[int] = None):
         if batch_size is None:
