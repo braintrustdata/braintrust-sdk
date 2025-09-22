@@ -401,6 +401,12 @@ class BraintrustState:
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
 
+    def reset_parent_state(self):
+        self.current_experiment = None
+        self.current_logger = None
+        self.current_parent.set(None)
+        self.current_span.set(NOOP_SPAN)
+
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
         self.__dict__.update(
@@ -3629,12 +3635,13 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = span_id or str(uuid.uuid4())
+        from . import id_gen
+        self.span_id = span_id or id_gen.get_span_id()
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = root_span_id or self.span_id
+            self.root_span_id = root_span_id or id_gen.get_trace_id()
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span

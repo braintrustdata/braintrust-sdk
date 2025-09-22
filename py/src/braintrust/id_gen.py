@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 _id_generator = None
 
 
-
 def get_trace_id():
     return _get_id_generator().get_trace_id()
 
@@ -15,19 +14,14 @@ def get_span_id():
 
 
 def _get_id_generator():
-    global _id_generator
-    if _id_generator is None:
-        if os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true":
-            _id_generator = OTELIDGenerator()
-        else:
-            _id_generator = UUIDGenerator()
-    return _id_generator
+    # Always create a new generator based on current environment
+    # FIXME[matt] cache this
+    use_otel = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
+    return  OTELIDGenerator() if use_otel else UUIDGenerator()
 
 
 def _reset():
-    global _id_generator
-    _id_generator = None
-
+    pass
 
 
 class IDGenerator(ABC):
