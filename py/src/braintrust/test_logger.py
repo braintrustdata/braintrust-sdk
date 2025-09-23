@@ -1790,10 +1790,18 @@ def test_span_with_otel_ids_export_import(reset_id_generator_state):
     init_test_logger(__name__)
     os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
+    # Test that OTEL generator should not share root_span_id
+    from braintrust.id_gen import get_id_generator
+    generator = get_id_generator()
+    assert generator.share_root_span_id() == False
+
     with logger.start_span(name="test") as span:
         # Debug what we actually got
         print(f"span_id: {span.span_id} (len={len(span.span_id)})")
         print(f"root_span_id: {span.root_span_id} (len={len(span.root_span_id)})")
+
+        # Test that OTEL spans should not share span_id and root_span_id
+        assert span.span_id != span.root_span_id
 
         # Verify the span has OTEL-compatible IDs
         assert len(span.span_id) == 16  # 8-byte hex
@@ -1811,6 +1819,25 @@ def test_span_with_otel_ids_export_import(reset_id_generator_state):
         # Verify IDs are preserved exactly
         assert imported.span_id == span.span_id
         assert imported.root_span_id == span.root_span_id
+
+
+def test_span_with_uuid_ids_share_root_span_id(reset_id_generator_state):
+    """Test that UUID generators share span_id as root_span_id for backwards compatibility."""
+    import os
+    # Ensure UUID generator is used (default behavior)
+    if 'BRAINTRUST_OTEL_COMPAT' in os.environ:
+        del os.environ['BRAINTRUST_OTEL_COMPAT']
+
+    init_test_logger(__name__)
+
+    # Test that UUID generator should share root_span_id
+    from braintrust.id_gen import get_id_generator
+    generator = get_id_generator()
+    assert generator.share_root_span_id() == True
+
+    with logger.start_span(name="test") as span:
+        # Test that UUID spans should share span_id and root_span_id for backwards compatibility
+        assert span.span_id == span.root_span_id
 
 
 def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_state):

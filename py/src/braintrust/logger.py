@@ -3661,7 +3661,14 @@ class SpanImpl(Span):
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = root_span_id or id_generator.get_trace_id()
+            if root_span_id:
+                self.root_span_id = root_span_id
+            elif id_generator.share_root_span_id():
+                # NOTE: uuid style id gen shared root_span_id and span_id for parents, so I'm keeping
+                # this behaviour to be backwards compatible / conservative.
+                self.root_span_id = self.span_id
+            else:
+                self.root_span_id = id_generator.get_trace_id()
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span

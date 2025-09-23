@@ -37,6 +37,11 @@ class IDGenerator(ABC):
     def get_trace_id(self):
         pass
 
+    @abstractmethod
+    def share_root_span_id(self):
+        """Return True if the generator should use span_id as root_span_id for backwards compatibility."""
+        pass
+
 
 class UUIDGenerator(IDGenerator):
     """ID generator that uses UUID4 for both span and trace IDs."""
@@ -46,6 +51,9 @@ class UUIDGenerator(IDGenerator):
 
     def get_trace_id(self):
         return str(uuid.uuid4())
+
+    def share_root_span_id(self):
+        return True
 
 
 class OTELIDGenerator(IDGenerator):
@@ -60,3 +68,6 @@ class OTELIDGenerator(IDGenerator):
     def get_trace_id(self):
         # Generate 16 random bytes and convert to hex
         return secrets.token_hex(16)
+
+    def share_root_span_id(self):
+        return False
