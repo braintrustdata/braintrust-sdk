@@ -1,3 +1,5 @@
+from unittest.mock import ANY
+
 import pytest
 from braintrust import flush
 from braintrust_langchain import BraintrustCallbackHandler
@@ -6,6 +8,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
 from tests.conftest import LoggerMemoryLogger
+from tests.helpers import assert_matches_object
 
 PROJECT_NAME = "langchain-anthropic"
 MODEL = "claude-sonnet-4-20250514"
@@ -59,6 +62,17 @@ def test_langchain_anthropic_integration(
                 break
     else:
         assert False, "No LLM span contained the expected answer '3'"
+
+    assert_matches_object(
+        llm_span["metrics"],
+        {
+            "completion_tokens": 13,
+            "end": ANY,
+            "prompt_tokens": 16,
+            "start": ANY,
+            "total_tokens": 29,
+        },
+    )
 
 
 @pytest.mark.vcr

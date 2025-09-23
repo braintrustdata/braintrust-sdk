@@ -365,16 +365,14 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         if run_id not in self.spans:
             return
 
-        llm_output: Dict[str, Any] = response.llm_output or {}  # type: ignore
-        generations = response.generations
         metadata = {k: v for k, v in response.model_dump().items() if k not in ("llm_output", "generations")}
-
-        model_name = llm_output.get("model_name") or llm_output.get("model") or ""
+        metrics = _get_metrics_from_response(response)
+        model_name = _get_model_name_from_response(response)
 
         self._end_span(
             run_id,
-            output=output_from_generations(generations),
-            metrics=_get_metrics(llm_output),
+            output=output_from_generations(response.generations),
+            metrics=metrics,
             tags=tags,
             metadata=self.clean_metadata({**metadata, "model_name": model_name}),
         )
@@ -642,7 +640,7 @@ def parse_chain_value(output: Any) -> Any:
 
 
 def input_from_chain_values(inputs: Any) -> Any:
-    inputs_list = cast(List[Any], [inputs] if not isinstance(inputs, list) else inputs)
+    inputs_list = [inputs] if not isinstance(inputs, list) else inputs
     parsed = [parse_chain_value(x) for x in inputs_list]
     return parsed[0] if len(parsed) == 1 else parsed
 
@@ -651,35 +649,56 @@ def last_item(items: List[Any]) -> Any:
     return items[-1] if items else None
 
 
-def _get_metrics(llm_output: Dict[str, Any]) -> Dict[str, Any]:
-    if "token_usage" in llm_output:
-        # openai
-        token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+def _walk_generations(response: LLMResult):
+    for generations in response.generations or []:
+        for generation in generations or []:
+            yield generation
 
-        return clean_object(
-            {
-                "tokens": token_usage.get("total_tokens"),
-                "prompt_tokens": token_usage.get("prompt_tokens"),
-                "completion_tokens": token_usage.get("completion_tokens"),
-            }
-        )
-    elif "usage" in llm_output:
-        # anthropic
-        usage: Dict[str, Any] = llm_output.get("usage") or {}
-        return clean_object(
-            {
-                # anthropic
-                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
-                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
-                "input_tokens": usage.get("input_tokens"),
-                "output_tokens": usage.get("output_tokens"),
-                # openai layer
-                "tokens": (usage.get("input_tokens") or 0) + (usage.get("output_tokens") or 0),
-                "prompt_tokens": usage.get("input_tokens"),
-                "completion_tokens": usage.get("output_tokens"),
-            }
-        )
 
-    # give up
+def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
+    model_name = None
+    for generation in _walk_generations(response):
+        message = getattr(generation, "message", None)
+        if not message:
+            continue
 
-    return {}
+        response_metadata = getattr(message, "response_metadata", None)
+        if response_metadata and isinstance(response_metadata, dict):
+            model_name = response_metadata.get("model_name")
+
+        if model_name:
+            break
+
+    if not model_name:
+        llm_output: Dict[str, Any] = response.llm_output or {}
+        model_name = llm_output.get("model_name") or llm_output.get("model") or ""
+
+    return model_name
+
+
+def _get_metrics_from_response(response: LLMResult):
+    metrics = {}
+
+    for generation in _walk_generations(response):
+        message = getattr(generation, "message", None)
+        if not message:
+            continue
+
+        usage_metadata = getattr(message, "usage_metadata", None)
+
+        if usage_metadata and isinstance(usage_metadata, dict):
+            metrics.update(
+                clean_object(
+                    {
+                        "total_tokens": usage_metadata.get("total_tokens"),
+                        "prompt_tokens": usage_metadata.get("input_tokens"),
+                        "completion_tokens": usage_metadata.get("output_tokens"),
+                    }
+                )
+            )
+
+    if not metrics or not any(metrics.values()):
+        llm_output: Dict[str, Any] = response.llm_output or {}
+        metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+
+    return clean_object(metrics)
