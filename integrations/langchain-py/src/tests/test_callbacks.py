@@ -26,7 +26,14 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
 
     handler = BraintrustCallbackHandler(logger=logger)
     prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=1,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+        n=1,
+    )
     chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
     chain.invoke({"number": "2"}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
@@ -171,7 +178,14 @@ def test_tool_usage(logger_memory_logger: LoggerMemoryLogger):
         else:
             raise ValueError("Invalid operation.")
 
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=1,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+        n=1,
+    )
     model_with_tools = model.bind_tools([calculator])
     model_with_tools.invoke("What is 3 * 12", config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
@@ -263,7 +277,14 @@ def test_parallel_execution(logger_memory_logger: LoggerMemoryLogger):
 
     handler = BraintrustCallbackHandler(logger=logger)
 
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=1,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+        n=1,
+    )
 
     joke_chain = PromptTemplate.from_template("Tell me a joke about {topic}").pipe(model)
     poem_chain = PromptTemplate.from_template("write a 2-line poem about {topic}").pipe(model)

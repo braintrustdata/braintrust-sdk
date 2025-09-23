@@ -27,7 +27,14 @@ def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
 
     # Here's what a typical user would do
     prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=1,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+        n=1,
+    )
     chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
 
     message = chain.invoke({"number": "2"})

@@ -29,6 +29,10 @@ def setup_braintrust():
 
 @pytest.fixture(scope="module")
 def vcr_config():
+    # In CI, use "none" to never make real requests
+    # Locally, use "once" to record new cassettes if they don't exist
+    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+
     return {
         "filter_headers": [
             "authorization",
@@ -37,13 +41,10 @@ def vcr_config():
             "api-key",
             "openai-api-key",
         ],
-        "filter_post_data_parameters": [
-            "api_key",
-        ],
-        "record_mode": "once",  # Record interactions once, then replay
-        "match_on": ["uri", "method", "body"],  # Match cassettes based on URI, method, and body
-        "cassette_library_dir": "src/tests/cassettes",  # Directory to store cassettes
-        "path_transformer": lambda path: path.replace(".yaml", ""),  # Optional: customize cassette paths
+        "record_mode": record_mode,
+        "match_on": ["uri", "method", "body"],
+        "cassette_library_dir": "src/tests/cassettes",
+        "path_transformer": lambda path: path.replace(".yaml", ""),
     }
 
 
