@@ -3,37 +3,27 @@ import secrets
 import uuid
 from abc import ABC, abstractmethod
 
-_id_generator = None
-
 
 def get_trace_id():
-    return _get_id_generator().get_trace_id()
+    return get_id_generator().get_trace_id()
 
 def get_span_id():
-    return _get_id_generator().get_span_id()
+    return get_id_generator().get_span_id()
 
 
-def _get_id_generator():
-    global _id_generator
+def get_id_generator():
+    """Factory function that creates a new ID generator instance each time.
 
-    if _id_generator is not None:
-        return _id_generator
-
-    # Cache for production use, but not during tests
+    This eliminates global state and makes tests parallelizable.
+    Each caller gets their own generator instance.
+    """
     use_otel = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
-    generator = OTELIDGenerator() if use_otel else UUIDGenerator()
-
-    # Only cache if not in test mode
-    if not os.getenv("PYTEST_CURRENT_TEST"):
-        _id_generator = generator
-
-    return generator
+    return OTELIDGenerator() if use_otel else UUIDGenerator()
 
 
 def _reset():
-    """Reset the cached ID generator. Mainly for testing purposes."""
-    global _id_generator
-    _id_generator = None
+    """Legacy function for backward compatibility. No longer needed since there's no global state."""
+    pass
 
 
 class IDGenerator(ABC):

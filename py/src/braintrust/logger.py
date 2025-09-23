@@ -365,6 +365,8 @@ class BraintrustState:
             lambda: _HTTPBackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
         )
 
+        self._id_generator = None
+
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
         # thread-local to prevent the possibility that tests running on
@@ -404,10 +406,25 @@ class BraintrustState:
         self._user_info: Optional[Mapping[str, Any]] = None
 
     def reset_parent_state(self):
+        # reset possible parent state for tests
         self.current_experiment = None
         self.current_logger = None
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
+
+    def _reset_id_generator(self):
+        # used in tests when we want to test with a different id generators
+        # which are controlled by env vars.
+        self._id_generator = None
+
+    @property
+    def id_generator(self):
+        """ Return the active id generator. """
+        # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
+        # so that we could possibly have parallel tests using different id generators.
+        if self._id_generator is None:
+            self._id_generator = id_gen.get_id_generator()
+        return self._id_generator
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -3637,12 +3654,14 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = span_id or id_gen.get_span_id()
+
+        id_generator = self.state.id_generator
+        self.span_id = span_id or id_generator.get_span_id()
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = root_span_id or id_gen.get_trace_id()
+            self.root_span_id = root_span_id or id_generator.get_trace_id()
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span

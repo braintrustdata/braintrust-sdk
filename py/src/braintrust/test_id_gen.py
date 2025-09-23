@@ -11,12 +11,10 @@ from braintrust import id_gen
 def reset_id_generator_state():
     """Reset ID generator state and environment variables before each test"""
     original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
-    id_gen._reset()  # Reset the global generator
 
     try:
         yield
     finally:
-        id_gen._reset()  # Reset again after test
         if "BRAINTRUST_OTEL_COMPAT" in os.environ:
             del os.environ["BRAINTRUST_OTEL_COMPAT"]
         if original_env:
