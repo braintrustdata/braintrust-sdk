@@ -1036,4 +1036,210 @@ describe("sensitive data redaction", () => {
     const copy = deepCopyEvent({ input: span });
     expect(copy.input).toBe("<span>");
   });
+
+  describe("ID Generation Integration", () => {
+    let originalEnv: string | undefined;
+
+    beforeEach(() => {
+      originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
+      _exportsForTestingOnly.setInitialTestState();
+    });
+
+    afterEach(() => {
+      if (originalEnv !== undefined) {
+        process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
+      } else {
+        delete process.env.BRAINTRUST_OTEL_COMPAT;
+      }
+      _exportsForTestingOnly.resetIdGenStateForTests();
+    });
+
+    test("UUID generator should share span_id as root_span_id for backwards compatibility", async () => {
+      // Ensure UUID generator is used (default behavior)
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-uuid-integration",
+        projectId: "test-project-id",
+      });
+
+      const span = testLogger.startSpan({ name: "test-uuid-span" });
+
+      // UUID generators should share span_id as root_span_id for backwards compatibility
+      expect(span.spanId).toBe(span.rootSpanId);
+
+      // Verify UUID format (36 characters with dashes)
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(span.spanId).toMatch(uuidRegex);
+      expect(span.rootSpanId).toMatch(uuidRegex);
+
+      span.end();
+    });
+
+    test("OTEL generator should not share span_id as root_span_id", async () => {
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-otel-integration",
+        projectId: "test-project-id",
+      });
+
+      const span = testLogger.startSpan({ name: "test-otel-span" });
+
+      // OTEL generators should not share span_id as root_span_id
+      expect(span.spanId).not.toBe(span.rootSpanId);
+
+      // Verify OTEL hex format
+      expect(span.spanId.length).toBe(16); // 8 bytes = 16 hex characters
+      expect(span.rootSpanId.length).toBe(32); // 16 bytes = 32 hex characters
+      expect(/^[0-9a-f]{16}$/.test(span.spanId)).toBe(true);
+      expect(/^[0-9a-f]{32}$/.test(span.rootSpanId)).toBe(true);
+
+      span.end();
+    });
+
+    test("parent-child relationships work with UUID generators", async () => {
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-uuid-parent-child",
+        projectId: "test-project-id",
+      });
+
+      const parentSpan = testLogger.startSpan({ name: "uuid-parent" });
+
+      // Parent should have span_id === root_span_id
+      expect(parentSpan.spanId).toBe(parentSpan.rootSpanId);
+
+      const childSpan = parentSpan.startSpan({ name: "uuid-child" });
+
+      // Child should inherit parent's root_span_id
+      expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+
+      // Child should have parent in spanParents
+      expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+      // Child should have its own span_id (different from parent)
+      expect(childSpan.spanId).not.toBe(parentSpan.spanId);
+
+      parentSpan.end();
+      childSpan.end();
+    });
+
+    test("parent-child relationships work with OTEL generators", async () => {
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-otel-parent-child",
+        projectId: "test-project-id",
+      });
+
+      const parentSpan = testLogger.startSpan({ name: "otel-parent" });
+
+      // Parent should have span_id !== root_span_id for OTEL
+      expect(parentSpan.spanId).not.toBe(parentSpan.rootSpanId);
+
+      const childSpan = parentSpan.startSpan({ name: "otel-child" });
+
+      // Child should inherit parent's root_span_id
+      expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+
+      // Child should have parent in spanParents
+      expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+      // Child should have its own span_id (different from parent)
+      expect(childSpan.spanId).not.toBe(parentSpan.spanId);
+
+      // All IDs should be proper hex format
+      expect(/^[0-9a-f]{16}$/.test(parentSpan.spanId)).toBe(true);
+      expect(/^[0-9a-f]{32}$/.test(parentSpan.rootSpanId)).toBe(true);
+      expect(/^[0-9a-f]{16}$/.test(childSpan.spanId)).toBe(true);
+      expect(/^[0-9a-f]{32}$/.test(childSpan.rootSpanId)).toBe(true);
+
+      parentSpan.end();
+      childSpan.end();
+    });
+
+    test("environment variable switching works correctly", async () => {
+      // Test default (UUID)
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const uuidLogger = initLogger({
+        projectName: "test-env-uuid",
+        projectId: "test-project-id",
+      });
+
+      const uuidSpan = uuidLogger.startSpan({ name: "uuid-test" });
+      expect(uuidSpan.spanId).toBe(uuidSpan.rootSpanId);
+      expect(uuidSpan.spanId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+      uuidSpan.end();
+
+      // Switch to OTEL
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const otelLogger = initLogger({
+        projectName: "test-env-otel",
+        projectId: "test-project-id",
+      });
+
+      const otelSpan = otelLogger.startSpan({ name: "otel-test" });
+      expect(otelSpan.spanId).not.toBe(otelSpan.rootSpanId);
+      expect(otelSpan.spanId.length).toBe(16);
+      expect(otelSpan.rootSpanId.length).toBe(32);
+      otelSpan.end();
+
+      // Switch back to UUID
+      process.env.BRAINTRUST_OTEL_COMPAT = "false";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const uuidLogger2 = initLogger({
+        projectName: "test-env-uuid2",
+        apiKey: "test-key",
+      });
+
+      const uuidSpan2 = uuidLogger2.startSpan({ name: "uuid-test2" });
+      expect(uuidSpan2.spanId).toBe(uuidSpan2.rootSpanId);
+      expect(uuidSpan2.spanId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+      uuidSpan2.end();
+    });
+
+    test("case insensitive environment variable", async () => {
+      // Test uppercase
+      process.env.BRAINTRUST_OTEL_COMPAT = "TRUE";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const logger1 = initLogger({
+        projectName: "test-case-upper",
+        apiKey: "test-key",
+      });
+
+      const span1 = logger1.startSpan({ name: "test" });
+      expect(span1.spanId).not.toBe(span1.rootSpanId); // Should be OTEL
+      span1.end();
+
+      // Test mixed case
+      process.env.BRAINTRUST_OTEL_COMPAT = "True";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const logger2 = initLogger({
+        projectName: "test-case-mixed",
+        apiKey: "test-key",
+      });
+
+      const span2 = logger2.startSpan({ name: "test" });
+      expect(span2.spanId).not.toBe(span2.rootSpanId); // Should be OTEL
+      span2.end();
+    });
+  });
 });
