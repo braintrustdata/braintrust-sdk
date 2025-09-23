@@ -26,6 +26,9 @@ def test_uuid_generator():
     # Test interface implementation
     generator = id_gen.UUIDGenerator()
 
+    # Test that UUID generators should share root_span_id for backwards compatibility
+    assert generator.share_root_span_id() == True
+
     for gen_func in [generator.get_span_id, generator.get_trace_id]:
         ids = gen_func(), gen_func()
         assert ids[0] != ids[1]
@@ -35,6 +38,9 @@ def test_uuid_generator():
 
 def test_otel_id_generator():
     generator = id_gen.OTELIDGenerator()
+
+    # Test that OTEL generators should not share root_span_id
+    assert generator.share_root_span_id() == False
 
     # Test ID generation with regular loops
     test_cases = [
