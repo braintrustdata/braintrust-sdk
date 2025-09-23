@@ -203,21 +203,6 @@ class TestBackwardCompatibility:
         assert v4_imported.root_span_id == v3_components.root_span_id
         assert v4_imported.propagated_event == v3_components.propagated_event
 
-    def test_v3_cannot_read_v4_data(self):
-        """Test that V3 cannot read data serialized by V4 (higher version)."""
-        # Note: V3 might be able to read some V4 data due to fallback logic
-        # This test documents the current behavior rather than enforcing strict incompatibility
-        v4_components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            object_id='test-id',
-        )
-
-        v4_exported = v4_components.to_str()
-
-        # V3 may or may not be able to read V4 data depending on fallback logic
-        # Just verify that we can create V4 data and it's different format
-        assert v4_exported is not None
-        assert len(v4_exported) > 0
 
 
 class TestErrorHandling:
