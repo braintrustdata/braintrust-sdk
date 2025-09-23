@@ -3,9 +3,6 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-/**
- * Generate random hex string of specified byte length
- */
 function generateHexId(bytes: number): string {
   let result = "";
   for (let i = 0; i < bytes; i++) {

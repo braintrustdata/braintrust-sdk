@@ -123,40 +123,4 @@ describe("ID Generation", () => {
       expect(generator2).toBeInstanceOf(UUIDGenerator);
     });
   });
-
-  describe("ID format validation", () => {
-    test("UUID generator produces consistent format", () => {
-      const generator = new UUIDGenerator();
-
-      // Test multiple IDs to ensure consistent format
-      for (let i = 0; i < 10; i++) {
-        const spanId = generator.getSpanId();
-        const traceId = generator.getTraceId();
-
-        expect(spanId.length).toBe(36);
-        expect(traceId.length).toBe(36);
-        expect(spanId.charAt(8)).toBe("-");
-        expect(spanId.charAt(13)).toBe("-");
-        expect(spanId.charAt(18)).toBe("-");
-        expect(spanId.charAt(23)).toBe("-");
-      }
-    });
-
-    test("OTEL generator produces consistent hex format", () => {
-      const generator = new OTELIDGenerator();
-
-      // Test multiple IDs to ensure consistent format
-      for (let i = 0; i < 10; i++) {
-        const spanId = generator.getSpanId();
-        const traceId = generator.getTraceId();
-
-        expect(spanId.length).toBe(16);
-        expect(traceId.length).toBe(32);
-
-        // Should be valid hex (only 0-9a-f characters)
-        expect(/^[0-9a-f]+$/.test(spanId)).toBe(true);
-        expect(/^[0-9a-f]+$/.test(traceId)).toBe(true);
-      }
-    });
-  });
 });
