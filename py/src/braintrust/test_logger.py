@@ -9,8 +9,8 @@ import pytest
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
-from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
 from braintrust.id_gen import OTELIDGenerator
+from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
