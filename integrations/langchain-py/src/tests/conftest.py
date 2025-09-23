@@ -1,0 +1,57 @@
+# pyright: reportPrivateUsage=none
+import os
+
+import pytest
+from braintrust import Tuple
+from braintrust.logger import (
+    Logger,
+    _internal_reset_global_state,
+    _internal_with_memory_background_logger,
+    _MemoryBackgroundLogger,
+)
+from braintrust.test_helpers import init_test_logger
+from braintrust_langchain.context import clear_global_handler
+
+
+@pytest.fixture(autouse=True)
+def setup_braintrust():
+    os.environ["BRAINTRUST_SYNC_FLUSH"] = "1"
+    os.environ.setdefault("BRAINTRUST_API_URL", "http://localhost:8000")
+    os.environ.setdefault("BRAINTRUST_APP_URL", "http://localhost:3000")
+    os.environ.setdefault("BRAINTRUST_API_KEY", "your_api_key_here")
+    os.environ.setdefault("ANTHROPIC_API_KEY", "your_anthropic_api_key_here")
+    os.environ.setdefault("OPENAI_API_KEY", "your_openai_api_key_here")
+
+    _internal_reset_global_state()
+    clear_global_handler()
+    yield
+
+
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [
+            "authorization",
+            "x-goog-api-key",
+            "x-api-key",
+            "api-key",
+            "openai-api-key",
+        ],
+        "filter_post_data_parameters": [
+            "api_key",
+        ],
+        "record_mode": "once",  # Record interactions once, then replay
+        "match_on": ["uri", "method", "body"],  # Match cassettes based on URI, method, and body
+        "cassette_library_dir": "src/tests/cassettes",  # Directory to store cassettes
+        "path_transformer": lambda path: path.replace(".yaml", ""),  # Optional: customize cassette paths
+    }
+
+
+@pytest.fixture
+def logger_memory_logger():
+    logger = init_test_logger("langchain-py")
+    with _internal_with_memory_background_logger() as bgl:
+        yield (logger, bgl)
+
+
+LoggerMemoryLogger = Tuple[Logger, _MemoryBackgroundLogger]

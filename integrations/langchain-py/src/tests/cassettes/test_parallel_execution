@@ -1,0 +1,234 @@
+interactions:
+- request:
+    body: '{"messages": [{"content": "Tell me a joke about bear", "role": "user"}],
+      "model": "gpt-4o-mini", "frequency_penalty": 0.0, "n": 1, "presence_penalty":
+      0.0, "stream": false, "temperature": 1.0, "top_p": 1.0}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '188'
+      content-type:
+      - application/json
+      host:
+      - localhost:8000
+      user-agent:
+      - OpenAI/Python 1.108.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.108.2
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.13
+    method: POST
+    uri: http://localhost:8000/v1/proxy/chat/completions
+  response:
+    body:
+      string: "{\n  \"id\": \"chatcmpl-CJ3vA6tl1z95spYoDxT9RtqqzDF8n\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1758659340,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+        \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
+        \"assistant\",\n        \"content\": \"Why don\u2019t bears ever get lost?\\n\\nBecause
+        they always take the bear necessities! \U0001F43B\",\n        \"refusal\":
+        null,\n        \"annotations\": []\n      },\n      \"logprobs\": null,\n
+        \     \"finish_reason\": \"stop\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\":
+        13,\n    \"completion_tokens\": 19,\n    \"total_tokens\": 32,\n    \"prompt_tokens_details\":
+        {\n      \"cached_tokens\": 0,\n      \"audio_tokens\": 0\n    },\n    \"completion_tokens_details\":
+        {\n      \"reasoning_tokens\": 0,\n      \"audio_tokens\": 0,\n      \"accepted_prediction_tokens\":
+        0,\n      \"rejected_prediction_tokens\": 0\n    }\n  },\n  \"service_tier\":
+        \"default\",\n  \"system_fingerprint\": \"fp_51db84afab\"\n}\n"
+    headers:
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Expose-Headers:
+      - x-bt-cursor,x-bt-found-existing,x-bt-span-id,x-bt-span-export,x-bt-query-plan,x-bt-internal-trace-id
+      Connection:
+      - keep-alive
+      Date:
+      - Tue, 23 Sep 2025 20:29:00 GMT
+      Keep-Alive:
+      - timeout=5
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      cf-ray:
+      - 983ccaa98d189e59-SJC
+      content-type:
+      - application/json
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '742'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      set-cookie:
+      - _cfuvid=h4eOl14etTzzF9eOjCE9SDq4Y79ZdPOJeIYnqb.tN3E-1758659340929-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-bt-cached:
+      - MISS
+      x-bt-internal-trace-id:
+      - ba7859db365b14edae0dc1d75360d5cb
+      x-content-type-options:
+      - nosniff
+      x-envoy-upstream-service-time:
+      - '912'
+      x-openai-proxy-wasm:
+      - v0.1
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149999990'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_31748d3aea8d488c9f1b1b7764b3a5d7
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "write a 2-line poem about bear", "role": "user"}],
+      "model": "gpt-4o-mini", "frequency_penalty": 0.0, "n": 1, "presence_penalty":
+      0.0, "stream": false, "temperature": 1.0, "top_p": 1.0}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '193'
+      content-type:
+      - application/json
+      host:
+      - localhost:8000
+      user-agent:
+      - OpenAI/Python 1.108.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.108.2
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.13
+    method: POST
+    uri: http://localhost:8000/v1/proxy/chat/completions
+  response:
+    body:
+      string: "{\n  \"id\": \"chatcmpl-CJ3vAwrz88GjVnlchECG5UbilcrZG\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1758659340,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+        \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
+        \"assistant\",\n        \"content\": \"In forest shadows, a bear roams free,
+        \ \\nMajestic guardian of the ancient tree.\",\n        \"refusal\": null,\n
+        \       \"annotations\": []\n      },\n      \"logprobs\": null,\n      \"finish_reason\":
+        \"stop\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\": 15,\n    \"completion_tokens\":
+        19,\n    \"total_tokens\": 34,\n    \"prompt_tokens_details\": {\n      \"cached_tokens\":
+        0,\n      \"audio_tokens\": 0\n    },\n    \"completion_tokens_details\":
+        {\n      \"reasoning_tokens\": 0,\n      \"audio_tokens\": 0,\n      \"accepted_prediction_tokens\":
+        0,\n      \"rejected_prediction_tokens\": 0\n    }\n  },\n  \"service_tier\":
+        \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
+    headers:
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Expose-Headers:
+      - x-bt-cursor,x-bt-found-existing,x-bt-span-id,x-bt-span-export,x-bt-query-plan,x-bt-internal-trace-id
+      Connection:
+      - keep-alive
+      Date:
+      - Tue, 23 Sep 2025 20:29:01 GMT
+      Keep-Alive:
+      - timeout=5
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      cf-ray:
+      - 983ccaa99f09cecd-SJC
+      content-type:
+      - application/json
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '909'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      set-cookie:
+      - _cfuvid=I8TMI8qNGmqspYd_94RtBiCEVRDIffMScd.j_yw35Es-1758659341697-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-bt-cached:
+      - MISS
+      x-bt-internal-trace-id:
+      - 7d350d2a8b4d267107b257e3a1989c5a
+      x-content-type-options:
+      - nosniff
+      x-envoy-upstream-service-time:
+      - '1375'
+      x-openai-proxy-wasm:
+      - v0.1
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149999990'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_891af1935bbf49c39105d7299babb315
+    status:
+      code: 200
+      message: OK
+version: 1

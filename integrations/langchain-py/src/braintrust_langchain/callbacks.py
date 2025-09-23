@@ -59,6 +59,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
         self.skipped_runs: Set[UUID] = set()
+        # Set run_inline=True to avoid thread executor in async contexts
+        # This ensures memory logger context is preserved
+        self.run_inline = True
 
     def _start_span(
         self,
@@ -364,26 +367,14 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         llm_output: Dict[str, Any] = response.llm_output or {}  # type: ignore
         generations = response.generations
-        metadata = {
-            k: v
-            # for 3.8 we need to use dict()
-            for k, v in response.dict().items()  # type: ignore
-            if k not in ("llm_output", "generations")
-        }
+        metadata = {k: v for k, v in response.model_dump().items() if k not in ("llm_output", "generations")}
 
-        model_name = llm_output.get("model_name")
-        token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+        model_name = llm_output.get("model_name") or llm_output.get("model") or ""
 
         self._end_span(
             run_id,
             output=output_from_generations(generations),
-            metrics=clean_object(
-                {
-                    "tokens": token_usage.get("total_tokens"),
-                    "prompt_tokens": token_usage.get("prompt_tokens"),
-                    "completion_tokens": token_usage.get("completion_tokens"),
-                }
-            ),
+            metrics=_get_metrics(llm_output),
             tags=tags,
             metadata=self.clean_metadata({**metadata, "model_name": model_name}),
         )
@@ -658,3 +649,37 @@ def input_from_chain_values(inputs: Any) -> Any:
 
 def last_item(items: List[Any]) -> Any:
     return items[-1] if items else None
+
+
+def _get_metrics(llm_output: Dict[str, Any]) -> Dict[str, Any]:
+    if "token_usage" in llm_output:
+        # openai
+        token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+
+        return clean_object(
+            {
+                "tokens": token_usage.get("total_tokens"),
+                "prompt_tokens": token_usage.get("prompt_tokens"),
+                "completion_tokens": token_usage.get("completion_tokens"),
+            }
+        )
+    elif "usage" in llm_output:
+        # anthropic
+        usage: Dict[str, Any] = llm_output.get("usage") or {}
+        return clean_object(
+            {
+                # anthropic
+                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+                "input_tokens": usage.get("input_tokens"),
+                "output_tokens": usage.get("output_tokens"),
+                # openai layer
+                "tokens": (usage.get("input_tokens") or 0) + (usage.get("output_tokens") or 0),
+                "prompt_tokens": usage.get("input_tokens"),
+                "completion_tokens": usage.get("output_tokens"),
+            }
+        )
+
+    # give up
+
+    return {}

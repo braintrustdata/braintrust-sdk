@@ -1,6 +1,68 @@
+[project]
+name = "braintrust-langchain"
+version = "0.0.5"
+description = "Integration for LangChain and Braintrust Tracing"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "braintrust>=0.2.1",
+    "langchain",
+]
+license = "MIT"
+authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]
+keywords = ["braintrust", "langchain", "llm", "tracing", "ai", "agents"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://www.braintrust.dev"
+Repository = "https://github.com/braintrustdata/braintrust-sdk"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[dependency-groups]
+dev = [
+    "black",
+    "build",
+    "flake8",
+    "flake8-isort",
+    "httpx",
+    "isort==5.12.0",
+    "langchain-anthropic>=0.3.20",
+    "langchain-openai",
+    "langgraph>=0.2.1,<0.4.0; python_version >= '3.9'",
+    "pre-commit",
+    "pytest",
+    "pytest-asyncio>=1.1.0",
+    "pytest-vcr>=1.0.2",
+    "tenacity",
+    "twine",
+]
+
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py39']
 
 [tool.isort]
 profile = "black"

@@ -1,43 +1,41 @@
-# pyright: reportUnknownVariableType=none
-# pyright: reportUnknownArgumentType=none
-# pyright: reportUnknownMemberType=none
 # pyright: reportTypedDictNotRequiredAccess=none
-from typing import List
+from typing import Dict
 
-import responses
+import pytest
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.callbacks import CallbackManager
+from langchain_core.messages import BaseMessage
+from langchain_core.runnables import RunnableSerializable
 from langchain_openai import ChatOpenAI
 
-from .fixtures import (
-    CHAT_MATH,
-    logs,  # noqa: F401 # type: ignore[reportUnusedImport]
-    mock_braintrust,  # noqa: F401 # type: ignore[reportUnusedImport]
-    setup,  # noqa: F401 # type: ignore[reportUnusedImport]
-)
-from .helpers import assert_matches_object, logs_to_spans, mock_openai
-from .types import LogRequest
+from .conftest import LoggerMemoryLogger
+from .helpers import assert_matches_object
 
 
-@responses.activate
-def test_global_handler(logs: List[LogRequest]):
-    handler = BraintrustCallbackHandler(debug=True)
+@pytest.mark.vcr
+def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    handler = BraintrustCallbackHandler(logger=logger, debug=True)
     set_global_handler(handler)
 
     # Make sure the handler is registered in the LangChain library
     manager = CallbackManager.configure()
     assert next((h for h in manager.handlers if isinstance(h, BraintrustCallbackHandler)), None) == handler
 
-    with mock_openai([CHAT_MATH]):
-        # Here's what a typical user would do
-        prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
-        model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
-        chain = prompt.pipe(model)
+    # Here's what a typical user would do
+    prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
+    chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
 
-        message = chain.invoke({"number": "2"})
+    message = chain.invoke({"number": "2"})
 
-    spans, root_span_id, _ = logs_to_spans(logs)
+    spans = memory_logger.pop()
+    assert len(spans) > 0
+
+    root_span_id = spans[0]["span_id"]
 
     # Spans would be empty if the handler was not registered, let's make sure it logged what we expect
     assert_matches_object(
