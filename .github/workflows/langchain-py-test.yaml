@@ -50,4 +50,4 @@ jobs:
       - name: Test import
         run: |
           uv run python -c "import braintrust_langchain; print('braintrust_langchain imported successfully')"
-          uv run python -c "from braintrust_langchain import BraintrustTracer; print('BraintrustTracer imported successfully')"
+          uv run python -c "from braintrust_langchain import BraintrustCallbackHandler; print('BraintrustCallbackHandler imported successfully')"
