@@ -41,7 +41,7 @@ interface Span extends ReadableSpan {
   setStatus(status: { code: number; message?: string }): void;
 }
 
-const FILTER_PREFIXES = [
+export const AI_FILTER_PREFIXES = [
   "gen_ai.",
   "braintrust.",
   "llm.",
@@ -158,25 +158,10 @@ export class AISpanProcessor {
       // customResult is null/undefined - continue with default logic
     }
 
-    // Check span name
-    if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
-      return true;
-    }
-
-    // Check attribute names
-    const attributes = span.attributes;
-    if (attributes) {
-      const attributeNames = Object.keys(attributes);
-      if (
-        attributeNames.some((name) =>
-          FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
-        )
-      ) {
-        return true;
-      }
-    }
-
-    return false;
+    return shouldKeepAISpan({
+      name: span.name,
+      attributes: span.attributes,
+    });
   }
 }
 
@@ -495,4 +480,42 @@ export class BraintrustExporter {
   forceFlush(): Promise<void> {
     return this.processor.forceFlush();
   }
+}
+
+/**
+ * Generic interface for filtering spans based on name and attributes for use
+ * as client-side or server-side processing.
+ */
+interface FilterableSpanProperties {
+  name?: string | null;
+  attributes?: Record<string, unknown> | null;
+}
+
+/**
+ * Determines if a span should be kept when AI filtering is enabled.
+ * Keeps spans that match either:
+ * 1. Span name starts with one of the AI filter prefixes
+ * 2. Any attribute key starts with one of the AI filter prefixes
+ *
+ * @param span - The span properties to evaluate for filtering
+ * @returns true if the span should be kept, false if it should be filtered out
+ */
+export function shouldKeepAISpan({
+  name,
+  attributes,
+}: FilterableSpanProperties): boolean {
+  // Check if span name starts with any filter prefix
+  if (name && AI_FILTER_PREFIXES.some((prefix) => name.startsWith(prefix))) {
+    return true;
+  }
+
+  // Check attributes for keys starting with filter prefixes
+  if (attributes) {
+    const keys = Object.keys(attributes);
+    return keys.some((key) =>
+      AI_FILTER_PREFIXES.some((prefix) => key.startsWith(prefix)),
+    );
+  }
+
+  return false;
 }

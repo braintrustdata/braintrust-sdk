@@ -34,4 +34,6 @@ export {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
+  AI_FILTER_PREFIXES,
+  shouldKeepAISpan,
 } from "./otel";
