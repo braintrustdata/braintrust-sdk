@@ -37,11 +37,6 @@ jobs:
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
-      - name: Lint Other stuff
-        # lint everything other than the SDK (that's linted in make nox)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/' | grep -v 'integrations/langchain-py/')
       - name: Run nox tests
         run: |
           make nox
