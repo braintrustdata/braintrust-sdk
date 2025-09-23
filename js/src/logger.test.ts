@@ -1043,6 +1043,7 @@ describe("sensitive data redaction", () => {
     beforeEach(() => {
       originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
       _exportsForTestingOnly.setInitialTestState();
+      _exportsForTestingOnly.resetIdGenStateForTests();
     });
 
     afterEach(() => {
@@ -1057,7 +1058,6 @@ describe("sensitive data redaction", () => {
     test("UUID generator should share span_id as root_span_id for backwards compatibility", async () => {
       // Ensure UUID generator is used (default behavior)
       delete process.env.BRAINTRUST_OTEL_COMPAT;
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const testLogger = initLogger({
         projectName: "test-uuid-integration",
@@ -1080,7 +1080,6 @@ describe("sensitive data redaction", () => {
 
     test("OTEL generator should not share span_id as root_span_id", async () => {
       process.env.BRAINTRUST_OTEL_COMPAT = "true";
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const testLogger = initLogger({
         projectName: "test-otel-integration",
@@ -1103,7 +1102,6 @@ describe("sensitive data redaction", () => {
 
     test("parent-child relationships work with UUID generators", async () => {
       delete process.env.BRAINTRUST_OTEL_COMPAT;
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const testLogger = initLogger({
         projectName: "test-uuid-parent-child",
@@ -1132,7 +1130,6 @@ describe("sensitive data redaction", () => {
 
     test("parent-child relationships work with OTEL generators", async () => {
       process.env.BRAINTRUST_OTEL_COMPAT = "true";
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const testLogger = initLogger({
         projectName: "test-otel-parent-child",
@@ -1168,7 +1165,6 @@ describe("sensitive data redaction", () => {
     test("environment variable switching works correctly", async () => {
       // Test default (UUID)
       delete process.env.BRAINTRUST_OTEL_COMPAT;
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const uuidLogger = initLogger({
         projectName: "test-env-uuid",
@@ -1217,7 +1213,6 @@ describe("sensitive data redaction", () => {
     test("case insensitive environment variable", async () => {
       // Test uppercase
       process.env.BRAINTRUST_OTEL_COMPAT = "TRUE";
-      _exportsForTestingOnly.resetIdGenStateForTests();
 
       const logger1 = initLogger({
         projectName: "test-case-upper",

@@ -476,7 +476,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
-  public idGenerator: IDGenerator;
+  private _idGenerator: IDGenerator | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -513,7 +513,6 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
-    this.idGenerator = getIdGenerator();
   }
 
   public resetLoginInfo() {
@@ -533,8 +532,15 @@ export class BraintrustState {
   }
 
   public resetIdGenState() {
-    // Recreate the ID generator to pick up current environment variables
-    this.idGenerator = getIdGenerator();
+    // Reset the ID generator so it gets recreated with current environment variables
+    this._idGenerator = null;
+  }
+
+  public get idGenerator(): IDGenerator {
+    if (this._idGenerator === null) {
+      this._idGenerator = getIdGenerator();
+    }
+    return this._idGenerator;
   }
 
   public copyLoginInfo(other: BraintrustState) {
