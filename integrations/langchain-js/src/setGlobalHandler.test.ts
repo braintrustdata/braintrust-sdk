@@ -76,7 +76,7 @@ describe("setGlobalHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { number: "2" },
         output: "What is 1 + 2?",
         metadata: { tags: ["seq:step:1"] },
@@ -97,6 +97,13 @@ describe("setGlobalHandler", () => {
             role: "assistant",
           },
         ],
+        metrics: {
+          completion_tokens: 8,
+          end: expect.any(Number),
+          prompt_tokens: 15,
+          start: expect.any(Number),
+          total_tokens: 23,
+        },
         metadata: {
           tags: ["seq:step:2"],
           model: "gpt-4o-mini-2024-07-18",
