@@ -15,7 +15,6 @@ def _omit(obj, keys):
     return {k: v for k, v in obj.items() if k not in keys}
 
 
-
 class AgentWrapper(Wrapper):
     """Wrapper for Agno Agent with Braintrust observability."""
 
@@ -25,39 +24,40 @@ class AgentWrapper(Wrapper):
         self.__original_methods = original_methods or {}
 
     def run(self, *args, **kwargs):
-        wrapped_method = self.__original_methods.get('run', self.__agent.run)
+        wrapped_method = self.__original_methods.get("run", self.__agent.run)
 
-        agent_name = getattr(self.__agent, 'name', None) or 'Agent'
+        agent_name = getattr(self.__agent, "name", None) or "Agent"
         span_name = f"{agent_name}.run"
 
         with start_span(
-                    name=span_name,
-                    span_attributes={"type": SpanTypeAttribute.TASK},
-                    input=args,
-                    metadata=_omit(kwargs, ['audio', 'images', 'videos'])) as span:
-                        result = wrapped_method(self.__agent, *args, **kwargs)
-                        span.log(output=result, metrics=self._extract_run_metrics(result), metadata=self._extract_agent_metadata())
-                        return result
+            name=span_name,
+            span_attributes={"type": SpanTypeAttribute.TASK},
+            input=args,
+            metadata=_omit(kwargs, ["audio", "images", "videos"]),
+        ) as span:
+            result = wrapped_method(self.__agent, *args, **kwargs)
+            span.log(output=result, metrics=self._extract_run_metrics(result), metadata=self._extract_agent_metadata())
+            return result
 
     async def _arun(self, *args, **kwargs):
-        original_method = self.__original_methods.get('_arun', self.__agent._arun)
+        original_method = self.__original_methods.get("_arun", self.__agent._arun)
         return await self._trace_arun(original_method, Operations.RUN, *args, **kwargs)
 
     def _run_stream(self, *args, **kwargs):
-        original_method = self.__original_methods.get('_run_stream', self.__agent._run_stream)
+        original_method = self.__original_methods.get("_run_stream", self.__agent._run_stream)
         return self._trace_run_stream(original_method, Operations.RUN_STREAM, *args, **kwargs)
 
     def _arun_stream(self, *args, **kwargs):
-        original_method = self.__original_methods.get('_arun_stream', self.__agent._arun_stream)
+        original_method = self.__original_methods.get("_arun_stream", self.__agent._arun_stream)
         return self._trace_arun_stream(original_method, Operations.RUN_STREAM, *args, **kwargs)
 
     def print_response(self, *args, **kwargs):
-        original_method = self.__original_methods.get('print_response', self.__agent.print_response)
+        original_method = self.__original_methods.get("print_response", self.__agent.print_response)
         return self._trace_run(original_method, Operations.PRINT_RESPONSE, *args, **kwargs)
 
     def _trace_run(self, wrapped_method: Callable, operation_name: str, *args, **kwargs):
         """Trace a synchronous run operation with proper span context for nesting."""
-        agent_name = getattr(self.__agent, 'name', None) or 'Agent'
+        agent_name = getattr(self.__agent, "name", None) or "Agent"
         span_name = f"{agent_name}.{operation_name}"
 
         input_data = self._extract_input(*args, **kwargs)
@@ -66,6 +66,7 @@ class AgentWrapper(Wrapper):
         span = None
         try:
             import braintrust
+
             logger = braintrust.current_logger()
             if logger:
                 span = logger.start_span(
@@ -73,21 +74,21 @@ class AgentWrapper(Wrapper):
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
                     metadata=metadata,
-                    parent=None
+                    parent=None,
                 )
             else:
                 span = braintrust.start_span(
                     name=span_name,
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             span.set_current()
         except Exception:
             pass
 
         try:
-            if hasattr(wrapped_method, '__self__'):
+            if hasattr(wrapped_method, "__self__"):
                 result = wrapped_method(*args, **kwargs)
             else:
                 result = wrapped_method(self.__agent, *args, **kwargs)
@@ -98,17 +99,16 @@ class AgentWrapper(Wrapper):
             raise
 
         if span:
-            self._safe_trace(lambda: span.log(
-                output=self._extract_output(result),
-                metrics=self._extract_run_metrics(result)
-            ))
+            self._safe_trace(
+                lambda: span.log(output=self._extract_output(result), metrics=self._extract_run_metrics(result))
+            )
             self._safe_trace(lambda: span.end())
 
         return result
 
     async def _trace_arun(self, wrapped_method: Callable, operation_name: str, *args, **kwargs):
         """Trace an asynchronous run operation with proper span context for nesting."""
-        agent_name = getattr(self.__agent, 'name', None) or 'Agent'
+        agent_name = getattr(self.__agent, "name", None) or "Agent"
         span_name = f"{agent_name}.{operation_name}"
 
         input_data = self._extract_input(*args, **kwargs)
@@ -117,6 +117,7 @@ class AgentWrapper(Wrapper):
         span = None
         try:
             import braintrust
+
             logger = braintrust.current_logger()
             if logger:
                 span = logger.start_span(
@@ -124,21 +125,21 @@ class AgentWrapper(Wrapper):
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
                     metadata=metadata,
-                    parent=None
+                    parent=None,
                 )
             else:
                 span = braintrust.start_span(
                     name=span_name,
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             span.set_current()
         except Exception:
             pass
 
         try:
-            if hasattr(wrapped_method, '__self__'):
+            if hasattr(wrapped_method, "__self__"):
                 result = await wrapped_method(*args, **kwargs)
             else:
                 result = await wrapped_method(self.__agent, *args, **kwargs)
@@ -149,21 +150,20 @@ class AgentWrapper(Wrapper):
             raise
 
         if span:
-            self._safe_trace(lambda: span.log(
-                output=self._extract_output(result),
-                metrics=self._extract_run_metrics(result)
-            ))
+            self._safe_trace(
+                lambda: span.log(output=self._extract_output(result), metrics=self._extract_run_metrics(result))
+            )
             self._safe_trace(lambda: span.end())
 
         return result
 
     def _trace_run_stream(self, wrapped_method: Callable, operation_name: str, *args, **kwargs):
         """Trace a synchronous streaming operation."""
-        agent_name = getattr(self.__agent, 'name', None) or 'Agent'
+        agent_name = getattr(self.__agent, "name", None) or "Agent"
         span_name = f"{agent_name}.{operation_name}"
 
         try:
-            if hasattr(wrapped_method, '__self__'):
+            if hasattr(wrapped_method, "__self__"):
                 stream = wrapped_method(*args, **kwargs)
             else:
                 stream = wrapped_method(self.__agent, *args, **kwargs)
@@ -175,7 +175,7 @@ class AgentWrapper(Wrapper):
 
     async def _trace_arun_stream(self, wrapped_method: Callable, operation_name: str, *args, **kwargs):
         """Trace an asynchronous streaming operation."""
-        agent_name = getattr(self.__agent, 'name', None) or 'Agent'
+        agent_name = getattr(self.__agent, "name", None) or "Agent"
         span_name = f"{agent_name}.{operation_name}"
 
         try:
@@ -198,7 +198,7 @@ class AgentWrapper(Wrapper):
                     name=span_name,
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
-                    metadata=metadata
+                    metadata=metadata,
                 )
                 if span:
                     span.set_current()
@@ -209,7 +209,7 @@ class AgentWrapper(Wrapper):
                 for chunk in stream:
                     yield chunk
 
-                if span and hasattr(self.__agent, 'run_response'):
+                if span and hasattr(self.__agent, "run_response"):
                     self._safe_trace(lambda: span.log(output=self._extract_output(self.__agent.run_response)))
 
             except Exception as e:
@@ -234,7 +234,7 @@ class AgentWrapper(Wrapper):
                     name=span_name,
                     span_attributes={"type": SpanTypeAttribute.TASK},
                     input=input_data,
-                    metadata=metadata
+                    metadata=metadata,
                 )
                 if span:
                     span.set_current()
@@ -245,7 +245,7 @@ class AgentWrapper(Wrapper):
                 async for chunk in stream:
                     yield chunk
 
-                if span and hasattr(self.__agent, 'run_response'):
+                if span and hasattr(self.__agent, "run_response"):
                     self._safe_trace(lambda: span.log(output=self._extract_output(self.__agent.run_response)))
 
             except Exception as e:
@@ -266,14 +266,14 @@ class AgentWrapper(Wrapper):
         """Extract metadata about the agent."""
         metadata = {"component": "agent"}
 
-        if hasattr(self.__agent, 'name') and self.__agent.name:
-            metadata['agent_name'] = self.__agent.name
-        if hasattr(self.__agent, 'model') and self.__agent.model:
+        if hasattr(self.__agent, "name") and self.__agent.name:
+            metadata["agent_name"] = self.__agent.name
+        if hasattr(self.__agent, "model") and self.__agent.model:
             # Extract just the model ID instead of the full object
-            if hasattr(self.__agent.model, 'id'):
-                metadata['model'] = self.__agent.model.id
+            if hasattr(self.__agent.model, "id"):
+                metadata["model"] = self.__agent.model.id
             else:
-                metadata['model'] = str(self.__agent.model.__class__.__name__)
+                metadata["model"] = str(self.__agent.model.__class__.__name__)
 
         return metadata
 
@@ -281,18 +281,18 @@ class AgentWrapper(Wrapper):
         """Extract metrics from agent run result using standard Braintrust names."""
         metrics = {}
 
-        if hasattr(result, 'metrics'):
+        if hasattr(result, "metrics"):
             agno_metrics = result.metrics
 
-            if hasattr(agno_metrics, 'input_tokens') and agno_metrics.input_tokens:
-                metrics['prompt_tokens'] = agno_metrics.input_tokens
-            if hasattr(agno_metrics, 'output_tokens') and agno_metrics.output_tokens:
-                metrics['completion_tokens'] = agno_metrics.output_tokens
-            if hasattr(agno_metrics, 'total_tokens') and agno_metrics.total_tokens:
-                metrics['total_tokens'] = agno_metrics.total_tokens
-            if hasattr(agno_metrics, 'duration') and agno_metrics.duration:
-                metrics['duration'] = agno_metrics.duration
-            if hasattr(agno_metrics, 'time_to_first_token') and agno_metrics.time_to_first_token:
-                metrics['time_to_first_token'] = agno_metrics.time_to_first_token
+            if hasattr(agno_metrics, "input_tokens") and agno_metrics.input_tokens:
+                metrics["prompt_tokens"] = agno_metrics.input_tokens
+            if hasattr(agno_metrics, "output_tokens") and agno_metrics.output_tokens:
+                metrics["completion_tokens"] = agno_metrics.output_tokens
+            if hasattr(agno_metrics, "total_tokens") and agno_metrics.total_tokens:
+                metrics["total_tokens"] = agno_metrics.total_tokens
+            if hasattr(agno_metrics, "duration") and agno_metrics.duration:
+                metrics["duration"] = agno_metrics.duration
+            if hasattr(agno_metrics, "time_to_first_token") and agno_metrics.time_to_first_token:
+                metrics["time_to_first_token"] = agno_metrics.time_to_first_token
 
         return metrics if metrics else None
