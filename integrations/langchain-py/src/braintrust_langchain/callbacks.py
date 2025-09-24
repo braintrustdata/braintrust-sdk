@@ -374,7 +374,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             output=output_from_generations(response.generations),
             metrics=metrics,
             tags=tags,
-            metadata=self.clean_metadata({**metadata, "model_name": model_name}),
+            metadata=self.clean_metadata({**metadata, "model": model_name}),
         )
 
     def on_tool_start(
