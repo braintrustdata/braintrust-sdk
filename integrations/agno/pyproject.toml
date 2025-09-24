@@ -39,7 +39,6 @@ where = ["src"]
 
 [tool.uv.workspace]
 members = [
-    "examples",
     ".",
 ]
 
@@ -50,6 +49,9 @@ dev = [
     "pytest-vcr>=1.0.2",
     "pyyaml>=6.0",
     "ruff>=0.12.9",
+    "agno>=0.1.0",
+    "openai>=1.109.1",
+    "yfinance>=0.2.66",
 ]
 
 [tool.isort]
