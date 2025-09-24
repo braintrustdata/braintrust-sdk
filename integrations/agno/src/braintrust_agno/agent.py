@@ -37,7 +37,7 @@ class AgentWrapper(Wrapper):
         ) as span:
             result = wrapped_method(self.__agent, *args, **kwargs)
             span.log(
-                output=_try_dict(result),
+                output=result,
                 metrics=self._extract_run_metrics(result),
                 metadata=self._extract_agent_metadata(),
             )
@@ -300,61 +300,3 @@ class AgentWrapper(Wrapper):
                 metrics["time_to_first_token"] = agno_metrics.time_to_first_token
 
         return metrics if metrics else None
-
-
-def _try_dict(result: Any) -> Dict[str, Any]:
-    try:
-        # Convert defaultdict to regular dict if present in metrics field
-        if hasattr(result, "metrics") and result.metrics is not None:
-            from collections import defaultdict
-
-            if isinstance(result.metrics, defaultdict):
-                result.metrics = dict(result.metrics)
-
-        # Try the standard to_dict() method
-        return result.to_dict()
-    except Exception as e:
-        # Fallback: manually construct dict from dataclass
-        import json
-        from dataclasses import fields, is_dataclass
-
-        if is_dataclass(result):
-            output = {}
-            for field in fields(result):
-                value = getattr(result, field.name)
-
-                # Handle special cases
-                if value is None:
-                    continue
-                elif field.name == "metrics":
-                    # Convert defaultdict or any dict-like object
-                    from collections import defaultdict
-
-                    if isinstance(value, (dict, defaultdict)):
-                        output[field.name] = dict(value)
-                    else:
-                        output[field.name] = value
-                elif field.name == "messages" and hasattr(value, "__iter__"):
-                    # Handle messages list
-                    output[field.name] = [m.to_dict() if hasattr(m, "to_dict") else str(m) for m in value]
-                elif hasattr(value, "to_dict"):
-                    output[field.name] = value.to_dict()
-                elif hasattr(value, "model_dump"):
-                    output[field.name] = value.model_dump()
-                elif isinstance(value, (str, int, float, bool, list, dict)):
-                    output[field.name] = value
-                else:
-                    # Try JSON serialization as last resort
-                    try:
-                        json.dumps(value)
-                        output[field.name] = value
-                    except:
-                        output[field.name] = str(value)
-
-            return output
-        else:
-            # Not a dataclass, return as-is or convert to dict
-            if hasattr(result, "__dict__"):
-                return result.__dict__
-            else:
-                return {"result": result}

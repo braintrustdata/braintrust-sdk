@@ -14,25 +14,25 @@ resolution-markers = [
 
 [[package]]
 name = "agno"
-version = "0.1.0"
+version = "2.0.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docstring-parser" },
     { name = "gitpython" },
     { name = "httpx" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "rich" },
-    { name = "tomli" },
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/29/89/8deb48f2286ba86b21b506cceb10a2897079d4702c4de3de6371d86a2930/agno-0.1.0.tar.gz", hash = "sha256:94fb75b1fbdba32021344de72983d8c655fd027f8de6084c46d7889c7f86c8f3", size = 322743, upload-time = "2025-01-23T00:03:38.216Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/d8/d60f0a0e145334b4bf6f7d04e022f2b74f27175e1195c96153fc44ae400b/agno-2.0.8.tar.gz", hash = "sha256:0f5928f8d7f79456efaeac3439c2480df7aa31aecd4641de9ab62cd84fda2fbc", size = 868425, upload-time = "2025-09-22T18:10:27.553Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/3d/bd28690a6b851e251b659952a046b9abe8a8a924b6d4510e6d437b340099/agno-0.1.0-py3-none-any.whl", hash = "sha256:96360201b326dc137344e2a42d31e220221b607d5a893734abefdc20776db406", size = 453358, upload-time = "2025-01-23T00:03:35.957Z" },
+    { url = "https://files.pythonhosted.org/packages/00/a1/1eaffda3e9a421efb7749d33cdeec814c880c8616b6626cd1709c1b204be/agno-2.0.8-py3-none-any.whl", hash = "sha256:1a1ec728a957f88aae81e45011be3825ad4ecc034b0e7fb3f19ad11aeab87132", size = 1092635, upload-time = "2025-09-22T18:10:25.372Z" },
 ]
 
 [[package]]
@@ -137,7 +137,7 @@ provides-extras = ["agno"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "agno", specifier = ">=0.1.0" },
+    { name = "agno", specifier = ">=2.0.8" },
     { name = "openai", specifier = ">=1.109.1" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },
