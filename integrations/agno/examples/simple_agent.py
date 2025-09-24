@@ -13,8 +13,7 @@ agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
     tools=[YFinanceTools()],
     instructions="You are a stock price agent. Answer questions in the style of a stock analyst.",
-    debug_mode=True,
 )
 
-# Use the agent
-agent.print_response("What is the current price of FIG?")
+response = agent.run("What is the current price of FIG?")
+print(response.content)

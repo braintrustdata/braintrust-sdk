@@ -12,12 +12,6 @@ resolution-markers = [
     "python_full_version < '3.10' and platform_python_implementation != 'PyPy'",
 ]
 
-[manifest]
-members = [
-    "braintrust-agno",
-    "braintrust-agno-examples",
-]
-
 [[package]]
 name = "agno"
 version = "0.1.0"
@@ -123,11 +117,14 @@ agno = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "agno" },
+    { name = "openai" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-vcr" },
     { name = "pyyaml" },
     { name = "ruff" },
+    { name = "yfinance" },
 ]
 
 [package.metadata]
@@ -140,31 +137,13 @@ provides-extras = ["agno"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "agno", specifier = ">=0.1.0" },
+    { name = "openai", specifier = ">=1.109.1" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },
     { name = "pytest-vcr", specifier = ">=1.0.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.12.9" },
-]
-
-[[package]]
-name = "braintrust-agno-examples"
-version = "0.1.0"
-source = { virtual = "examples" }
-dependencies = [
-    { name = "agno" },
-    { name = "braintrust-agno" },
-    { name = "openai" },
-    { name = "python-multipart" },
-    { name = "yfinance" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agno", specifier = ">=0.1.0" },
-    { name = "braintrust-agno", editable = "." },
-    { name = "openai", specifier = ">=1.109.1" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "yfinance", specifier = ">=0.2.66" },
 ]
 
