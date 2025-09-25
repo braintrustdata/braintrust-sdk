@@ -15,8 +15,7 @@ def reset_id_generator_state():
     try:
         yield
     finally:
-        if "BRAINTRUST_OTEL_COMPAT" in os.environ:
-            del os.environ["BRAINTRUST_OTEL_COMPAT"]
+        os.environ.pop("BRAINTRUST_OTEL_COMPAT", None)
         if original_env:
             os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env
 
@@ -57,50 +56,27 @@ def test_otel_id_generator():
         assert _is_hex(id2)
 
 
-def test_environment_variable_default():
-    """Test that default behavior uses UUID generator when BRAINTRUST_OTEL_COMPAT is not set"""
-    # Ensure environment variable is not set
-    if "BRAINTRUST_OTEL_COMPAT" in os.environ:
-        del os.environ["BRAINTRUST_OTEL_COMPAT"]
+def test_id_get_env_var(reset_id_generator_state):
+    cases = [
+        (None, lambda _id: uuid.UUID(_id)),
+        ("true", lambda _id: _assert_is_hex(_id)),
+        ("True", lambda _id: _assert_is_hex(_id)),
+        ("TRUE", lambda _id: _assert_is_hex(_id)),
+        ("false", lambda _id: uuid.UUID(_id)),
+        ("False", lambda _id: uuid.UUID(_id)),
+    ]
 
-    # Test that we get UUID format IDs by default
-    span_id = id_gen.get_span_id()
-    trace_id = id_gen.get_trace_id()
-
-    # Should be UUID format (36 characters)
-    assert len(span_id) == 36
-    assert len(trace_id) == 36
-    uuid.UUID(span_id)  # Should not raise exception
-    uuid.UUID(trace_id)  # Should not raise exception
-
-
-def test_environment_variable_otel_false():
-    """Test that UUID generator is used when BRAINTRUST_OTEL_COMPAT=false"""
-    os.environ["BRAINTRUST_OTEL_COMPAT"] = "false"
-
-    span_id = id_gen.get_span_id()
-    trace_id = id_gen.get_trace_id()
-
-    # Should be UUID format (36 characters)
-    assert len(span_id) == 36
-    assert len(trace_id) == 36
-    uuid.UUID(span_id)  # Should not raise exception
-    uuid.UUID(trace_id)  # Should not raise exception
-
-
-def test_environment_variable_otel_true():
-    """Test that OTEL generator is used when BRAINTRUST_OTEL_COMPAT=true"""
-    os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
-
-    span_id = id_gen.get_span_id()
-    trace_id = id_gen.get_trace_id()
-
-    # Should be OTEL format (16 and 32 hex characters)
-    assert len(span_id) == 16
-    assert len(trace_id) == 32
-    assert _is_hex(span_id)
-    assert _is_hex(trace_id)
+    for env_var_value, assert_func in cases:
+        os.environ.pop("BRAINTRUST_OTEL_COMPAT", None)
+        if env_var_value is not None:
+            os.environ["BRAINTRUST_OTEL_COMPAT"] = env_var_value
+        generator = id_gen.get_id_generator()
+        assert_func(generator.get_span_id())
+        assert_func(generator.get_trace_id())
 
 
 def _is_hex(s):
     return all(c in '0123456789abcdef' for c in s.lower())
+
+def _assert_is_hex(x):
+    assert _is_hex(x)

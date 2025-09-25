@@ -4,13 +4,6 @@ import uuid
 from abc import ABC, abstractmethod
 
 
-def get_trace_id():
-    return get_id_generator().get_trace_id()
-
-def get_span_id():
-    return get_id_generator().get_span_id()
-
-
 def get_id_generator():
     """Factory function that creates a new ID generator instance each time.
 
@@ -19,11 +12,6 @@ def get_id_generator():
     """
     use_otel = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
     return OTELIDGenerator() if use_otel else UUIDGenerator()
-
-
-def _reset():
-    """Legacy function for backward compatibility. No longer needed since there's no global state."""
-    pass
 
 
 class IDGenerator(ABC):
