@@ -324,7 +324,9 @@ type MetricsOrUndefined = Metrics | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseEventFromMessage(message: any) {
   // FIXME[matt] the whole content or just the text?
-  const output = message?.content || null;
+  const output = message
+    ? { role: message.role, content: message.content }
+    : null;
   const metrics = parseMetricsFromUsage(message?.usage);
   const metas = ["stop_reason", "stop_sequence"];
   const metadata: Record<string, unknown> = {};
