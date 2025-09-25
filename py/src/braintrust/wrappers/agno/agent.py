@@ -1,20 +1,12 @@
-import time
-from typing import Any
+from dataclasses import asdict
+from typing import Any, Dict, Optional
 
 from wrapt import wrap_function_wrapper
 
 from braintrust.logger import start_span
 from braintrust.span_types import SpanTypeAttribute
 
-from .utils import (
-    _aggregate_agent_chunks,
-    extract_metadata,
-    extract_metrics,
-    extract_streaming_metrics,
-    is_patched,
-    mark_patched,
-    omit,
-)
+from .utils import is_patched, mark_patched, omit
 
 
 def wrap_agent(Agent: Any) -> Any:
@@ -25,41 +17,35 @@ def wrap_agent(Agent: Any) -> Any:
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.run"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        run_messages = args[1] if args else kwargs.get("run_messages")
-
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": run_response, "run_messages": run_messages},
-            metadata={**omit(kwargs, ["run_response", "run_messages"]), **extract_metadata(instance, "agent")},
+            input=args,
+            metadata=omit(kwargs, ["audio", "images", "videos"]),
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
-                output=result,
-                metrics=extract_metrics(result),
+                output=result.to_dict(),
+                metrics=_extract_run_metrics(result),
+                metadata=_extract_agent_metadata(instance, result),
             )
             return result
 
-    wrap_function_wrapper(Agent, "_run", run_wrapper)
+    wrap_function_wrapper(Agent, "run", run_wrapper)
 
     async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.arun"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        input = args[1] if args else kwargs.get("input")
-
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": run_response, "input": input},
-            metadata={**omit(kwargs, ["run_response", "input"]), **extract_metadata(instance, "agent")},
+            input=args,
+            metadata=omit(kwargs, ["audio", "images", "videos"]),
         ) as span:
             result = await wrapped(*args, **kwargs)
             span.log(
-                output=result,
-                metrics=extract_metrics(result),
+                output=result, metrics=_extract_run_metrics(result), metadata=_extract_agent_metadata(instance, result)
             )
             return result
 
@@ -70,48 +56,20 @@ def wrap_agent(Agent: Any) -> Any:
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.run_stream"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        run_messages = args[1] if args else kwargs.get("run_messages")
-
         def _trace_stream():
-            start = time.time()
-            span = start_span(
+            with start_span(
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
-                input={"run_response": run_response, "run_messages": run_messages},
-                metadata={**omit(kwargs, ["run_response", "run_messages"]), **extract_metadata(instance, "agent")},
-            )
-            span.set_current()
-
-            try:
-                first = True
-                all_chunks = []
-
+                input=args if args else None,
+                metadata=_extract_metadata(instance, kwargs),
+            ) as span:
+                collected_output = []
                 for chunk in wrapped(*args, **kwargs):
-                    if first:
-                        span.log(
-                            metrics={
-                                "time_to_first_token": time.time() - start,
-                            }
-                        )
-                        first = False
-                    all_chunks.append(chunk)
+                    collected_output.append(chunk)
                     yield chunk
 
-                aggregated = _aggregate_agent_chunks(all_chunks)
-
-                span.log(
-                    output=aggregated,
-                    metrics=extract_streaming_metrics(aggregated, start),
-                )
-            except Exception as e:
-                span.log(
-                    error=str(e),
-                )
-                raise e
-            finally:
-                span.unset_current()
-                span.end()
+                result = getattr(instance, "run_response", None) or collected_output
+                span.log(output=result)
 
         return _trace_stream()
 
@@ -122,48 +80,20 @@ def wrap_agent(Agent: Any) -> Any:
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.arun_stream"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        input = args[2] if args else kwargs.get("input")
-
-        def _trace_stream():
-            start = time.time()
-            span = start_span(
+        async def _trace_stream():
+            with start_span(
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
-                input={"run_response": run_response, "input": input},
-                metadata={**omit(kwargs, ["run_response", "input"]), **extract_metadata(instance, "agent")},
-            )
-            span.set_current()
-
-            try:
-                first = True
-                all_chunks = []
-
-                for chunk in wrapped(*args, **kwargs):
-                    if first:
-                        span.log(
-                            metrics={
-                                "time_to_first_token": time.time() - start,
-                            }
-                        )
-                        first = False
-                    all_chunks.append(chunk)
+                input=args if args else None,
+                metadata=_extract_metadata(instance, kwargs),
+            ) as span:
+                collected_output = []
+                async for chunk in wrapped(*args, **kwargs):
+                    collected_output.append(chunk)
                     yield chunk
 
-                aggregated = _aggregate_agent_chunks(all_chunks)
-
-                span.log(
-                    output=aggregated,
-                    metrics=extract_streaming_metrics(aggregated, start),
-                )
-            except Exception as e:
-                span.log(
-                    error=str(e),
-                )
-                raise e
-            finally:
-                span.unset_current()
-                span.end()
+                result = getattr(instance, "run_response", None) or collected_output
+                span.log(output=result)
 
         return _trace_stream()
 
@@ -172,3 +102,82 @@ def wrap_agent(Agent: Any) -> Any:
 
     mark_patched(Agent)
     return Agent
+
+
+def _extract_metadata(instance: Any, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract metadata from an agent instance and kwargs."""
+    metadata = {"component": "agent"}
+
+    # Add agent metadata
+    if hasattr(instance, "name") and instance.name:
+        metadata["agent_name"] = instance.name
+
+    if hasattr(instance, "model") and instance.model:
+        # Extract model information
+        if hasattr(instance.model, "id"):
+            metadata["model"] = instance.model.id
+        elif hasattr(instance.model, "name"):
+            metadata["model"] = instance.model.name
+        else:
+            metadata["model"] = str(instance.model.__class__.__name__)
+
+    if hasattr(instance, "instructions") and instance.instructions:
+        metadata["instructions"] = instance.instructions[:200]  # Truncate long instructions
+
+    if hasattr(instance, "tools") and instance.tools:
+        # Extract tool names if available
+        tool_names = []
+        for tool in instance.tools:
+            if hasattr(tool, "__name__"):
+                tool_names.append(tool.__name__)
+            elif hasattr(tool, "name"):
+                tool_names.append(tool.name)
+            else:
+                tool_names.append(str(tool))
+        metadata["tools"] = tool_names  # pyright: ignore
+
+    # Add relevant kwargs, excluding sensitive data
+    metadata.update(omit(kwargs, ["audio", "images", "videos", "api_key", "secret"]))
+
+    return metadata
+
+
+def _extract_agent_metadata(instance: Any, result: Any) -> Dict[str, Any]:
+    """Extract metadata about the agent."""
+    metadata = {"component": "agent"}
+
+    if hasattr(instance, "name") and instance.name:
+        metadata["agent_name"] = instance.name
+    if hasattr(instance, "model") and instance.model:
+        # Extract just the model ID instead of the full object
+        if hasattr(instance.model, "id"):
+            metadata["model"] = instance.model.id
+        else:
+            metadata["model"] = str(instance.model.__class__.__name__)
+
+    return metadata
+
+
+def _extract_run_metrics(result: Any) -> Optional[Dict[str, Any]]:
+    try:
+        metrics = asdict(result.metrics)
+        metrics["timer"] = result.metrics.timer.to_dict()
+        return {}
+    except:
+        return {}
+
+    if hasattr(result, "metrics"):
+        agno_metrics = result.metrics
+
+        if hasattr(agno_metrics, "input_tokens") and agno_metrics.input_tokens:
+            metrics["prompt_tokens"] = agno_metrics.input_tokens
+        if hasattr(agno_metrics, "output_tokens") and agno_metrics.output_tokens:
+            metrics["completion_tokens"] = agno_metrics.output_tokens
+        if hasattr(agno_metrics, "total_tokens") and agno_metrics.total_tokens:
+            metrics["total_tokens"] = agno_metrics.total_tokens
+        if hasattr(agno_metrics, "duration") and agno_metrics.duration:
+            metrics["duration"] = agno_metrics.duration
+        if hasattr(agno_metrics, "time_to_first_token") and agno_metrics.time_to_first_token:
+            metrics["time_to_first_token"] = agno_metrics.time_to_first_token
+
+    return metrics if metrics else None

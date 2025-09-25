@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 
 from wrapt import wrap_function_wrapper
 
@@ -16,20 +16,17 @@ def wrap_function_call(FunctionCall: Any) -> Any:
         function_name = _get_function_name(instance)
         span_name = f"{function_name}.execute"
 
-        entrypoint_args = instance._build_entrypoint_args()
+        input_data = _extract_tool_input(instance, *args, **kwargs)
+        metadata = _extract_tool_metadata(instance)
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TOOL,
-            input=(instance.arguments or {}),
-            metadata={
-                "name": instance.function.name,
-                "entrypoint": instance.function.entrypoint.__name__,
-                **(entrypoint_args or {}),
-            },
+            input=input_data,
+            metadata=metadata,
         ) as span:
             result = wrapped(*args, **kwargs)
-            span.log(output=result)
+            span.log(output=_extract_tool_output(instance, result))
             return result
 
     if hasattr(FunctionCall, "execute"):
@@ -39,20 +36,17 @@ def wrap_function_call(FunctionCall: Any) -> Any:
         function_name = _get_function_name(instance)
         span_name = f"{function_name}.aexecute"
 
-        entrypoint_args = instance._build_entrypoint_args()
+        input_data = _extract_tool_input(instance, *args, **kwargs)
+        metadata = _extract_tool_metadata(instance)
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TOOL,
-            input=(instance.arguments or {}),
-            metadata={
-                "name": instance.function.name,
-                "entrypoint": instance.function.entrypoint.__name__,
-                **(entrypoint_args or {}),
-            },
+            input=input_data,
+            metadata=metadata,
         ) as span:
             result = await wrapped(*args, **kwargs)
-            span.log(output=result)
+            span.log(output=_extract_tool_output(instance, result))
             return result
 
     if hasattr(FunctionCall, "aexecute"):
@@ -66,3 +60,40 @@ def _get_function_name(instance) -> str:
     if hasattr(instance, "function") and hasattr(instance.function, "name"):
         return instance.function.name
     return "Unknown"
+
+
+def _extract_tool_input(instance, *args, **kwargs) -> Any:
+    """Extract input data from function call."""
+    if hasattr(instance, "arguments"):
+        return instance.arguments
+    return {}
+
+
+def _extract_tool_metadata(instance) -> Dict[str, Any]:
+    """Extract metadata about the function."""
+    metadata = {"provider": "agno"}
+
+    function_name = _get_function_name(instance)
+    if function_name != "Unknown":
+        metadata["function_name"] = function_name
+
+    if hasattr(instance, "function") and hasattr(instance.function, "description"):
+        metadata["function_description"] = instance.function.description
+
+    # Add OpenAI-compatible tool metadata for better Braintrust display
+    if hasattr(instance, "id"):
+        metadata["tool_call_id"] = instance.id
+
+    return metadata
+
+
+def _extract_tool_output(instance, result: Any) -> Any:
+    """Extract output from function execution result."""
+    if hasattr(result, "status") and result.status == "success":
+        if hasattr(instance, "result"):
+            return instance.result
+    elif hasattr(result, "status") and result.status == "failure":
+        if hasattr(instance, "error"):
+            return {"error": instance.error}
+
+    return str(result)
