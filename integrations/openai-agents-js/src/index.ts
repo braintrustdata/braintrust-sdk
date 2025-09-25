@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SpanTypeAttribute } from "@braintrust/core";
+import { SpanTypeAttribute } from "braintrust/util";
 import {
   Span as BraintrustSpan,
   startSpan,
@@ -87,7 +87,7 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
  *       If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
  *     - maxTraces: Maximum number of concurrent traces to keep in memory (default: 1000).
  *       When exceeded, oldest traces are evicted using LRU policy.
- */
+ * */
 
 export class OpenAIAgentsTraceProcessor {
   private static readonly DEFAULT_MAX_TRACES = 10000;
@@ -151,6 +151,7 @@ export class OpenAIAgentsTraceProcessor {
     span.log({
       input: "Agent workflow started",
       metadata: {
+        group_id: trace.groupId,
         ...(trace.metadata || {}),
       },
     });

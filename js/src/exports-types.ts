@@ -10,7 +10,7 @@ export type {
   LogCommentFullArgs,
   CommentEvent,
   DatasetRecord,
-} from "@braintrust/core";
+} from "../util/index";
 export type {
   EvaluatorManifest,
   EvalParameterSerializedSchema,

@@ -51,4 +51,18 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
+  {
+    entry: ["util/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "util/dist",
+    external: ["esbuild", "prettier", "typescript"],
+    dts: {
+      // Split DTS generation to reduce memory usage
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
+    splitting: true,
+    clean: true,
+  },
 ]);

@@ -42,7 +42,7 @@ install-dev: install-build-deps
 	python -m uv pip install -r requirements-dev.txt
 
 install-optional:
-	python -m uv pip install anthropic openai pydantic_ai
+	python -m uv pip install anthropic openai pydantic_ai litellm
 
 _publish:
 	./scripts/publish.sh

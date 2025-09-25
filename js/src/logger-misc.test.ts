@@ -17,9 +17,9 @@ import {
   permalink,
   BraintrustState,
 } from "./logger";
-import { SpanObjectTypeV3 } from "@braintrust/core";
+import { SpanObjectTypeV3 } from "../util/index";
 import { LazyValue } from "./util";
-import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
+import { BackgroundLogEvent, IS_MERGE_FIELD } from "../util/index";
 import { configureNode } from "./node";
 
 configureNode();

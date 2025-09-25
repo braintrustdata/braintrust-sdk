@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const posSchema = z.strictObject({
   line: z.number(),
@@ -133,6 +133,7 @@ export const comparisonOps = [
   "ilike",
   "like",
   "match",
+  "in",
 ] as const;
 export type ComparisonOp = (typeof comparisonOps)[number];
 export interface ComparisonExpr {
@@ -317,6 +318,24 @@ export const fromFunctionSchema = functionSchema.and(
   }),
 );
 
+export const rateSampleSchema = z.strictObject({
+  type: z.literal("rate"),
+  value: z.number().min(0).max(1),
+});
+export type RateSample = z.infer<typeof rateSampleSchema>;
+
+export const countSampleSchema = z.strictObject({
+  type: z.literal("count"),
+  value: z.number().int().min(1),
+});
+export type CountSample = z.infer<typeof countSampleSchema>;
+
+export const sampleSchema = z.object({
+  method: z.union([rateSampleSchema, countSampleSchema]),
+  seed: z.number().int().nullish(),
+});
+export type Sample = z.infer<typeof sampleSchema>;
+
 export const parsedQuerySchema = z.strictObject({
   dimensions: z.array(aliasExpr).nullish(),
   pivot: z.array(aliasExpr).nullish(),
@@ -334,5 +353,6 @@ export const parsedQuerySchema = z.strictObject({
   custom_columns: z.array(aliasExpr).nullish(),
   preview_length: z.number().int().nullish(),
   inference_budget: z.number().int().nullish(),
+  sample: sampleSchema.nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;

@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "braintrust-adk",
-    "google-adk>=1.9.0",
+    "google-adk>=1.14.1",
     "python-multipart>=0.0.20",
 ]
 

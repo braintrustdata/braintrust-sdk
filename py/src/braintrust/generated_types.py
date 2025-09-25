@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 1ac2b47b4b217608a0eea90a6f5299afce9e1a64) -- do not modify"""
+"""Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -6,6 +6,8 @@ from ._generated_types import (
     AISecret,
     AnyModelParams,
     ApiKey,
+    AsyncScoringControl,
+    AsyncScoringState,
     AttachmentReference,
     AttachmentStatus,
     BraintrustAttachmentReference,
@@ -48,6 +50,7 @@ from ._generated_types import (
     MessageRole,
     ModelParams,
     ObjectReference,
+    ObjectReferenceNullish,
     OnlineScoreConfig,
     Organization,
     Permission,
@@ -73,6 +76,7 @@ from ._generated_types import (
     RepoInfo,
     ResponseFormat,
     ResponseFormatJsonSchema,
+    ResponseFormatNullish,
     RetentionObjectType,
     Role,
     RunEval,
@@ -99,6 +103,8 @@ __all__ = [
     "AclObjectType",
     "AnyModelParams",
     "ApiKey",
+    "AsyncScoringControl",
+    "AsyncScoringState",
     "AttachmentReference",
     "AttachmentStatus",
     "BraintrustAttachmentReference",
@@ -141,6 +147,7 @@ __all__ = [
     "MessageRole",
     "ModelParams",
     "ObjectReference",
+    "ObjectReferenceNullish",
     "OnlineScoreConfig",
     "Organization",
     "Permission",
@@ -166,6 +173,7 @@ __all__ = [
     "RepoInfo",
     "ResponseFormat",
     "ResponseFormatJsonSchema",
+    "ResponseFormatNullish",
     "RetentionObjectType",
     "Role",
     "RunEval",

@@ -24,7 +24,7 @@ install_requires = [
 ]
 
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary", "uv"],
+    "cli": ["boto3", "psycopg2-binary", "uv", "starlette", "uvicorn"],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],

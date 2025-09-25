@@ -34,7 +34,7 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "@braintrust/core";
+} from "../util/index";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -90,7 +90,64 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
-import { prettifyXact } from "@braintrust/core";
+import { prettifyXact } from "../util/index";
+
+// Fields that should be passed to the masking function
+// Note: "tags" field is intentionally excluded, but can be added if needed
+const REDACTION_FIELDS = [
+  "input",
+  "output",
+  "expected",
+  "metadata",
+  "context",
+  "scores",
+  "metrics",
+] as const;
+
+class MaskingError {
+  constructor(
+    public readonly fieldName: string,
+    public readonly errorType: string,
+  ) {}
+
+  get errorMsg(): string {
+    return `ERROR: Failed to mask field '${this.fieldName}' - ${this.errorType}`;
+  }
+}
+
+/**
+ * Apply masking function to data and handle errors gracefully.
+ * If the masking function raises an exception, returns an error message.
+ * Returns MaskingError for scores/metrics fields to signal they should be dropped.
+ */
+function applyMaskingToField(
+  maskingFunction: (value: unknown) => unknown,
+  data: unknown,
+  fieldName: string,
+): unknown {
+  try {
+    return maskingFunction(data);
+  } catch (error) {
+    // Return a generic error message without the stack trace to avoid leaking PII
+    const errorType = error instanceof Error ? error.constructor.name : "Error";
+
+    // For scores and metrics fields, return a special error object
+    // to signal the field should be dropped and error logged
+    if (fieldName === "scores" || fieldName === "metrics") {
+      return new MaskingError(fieldName, errorType);
+    }
+
+    // For metadata field that expects object type, return an object with error key
+    if (fieldName === "metadata") {
+      return {
+        error: `ERROR: Failed to mask field '${fieldName}' - ${errorType}`,
+      };
+    }
+
+    // For other fields, return the error message as a string
+    return `ERROR: Failed to mask field '${fieldName}' - ${errorType}`;
+  }
+}
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -344,6 +401,22 @@ export class NoopSpan implements Span {
   public state() {
     return _internalGetGlobalState();
   }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `NoopSpan {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `NoopSpan(id=${this.id}, spanId=${this.spanId})`;
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -548,6 +621,12 @@ export class BraintrustState {
     this._appConn?.setFetch(fetch);
   }
 
+  public setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.bgLogger().setMaskingFunction(maskingFunction);
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
@@ -622,6 +701,40 @@ export class BraintrustState {
 
   public enforceQueueSizeLimit(enforce: boolean) {
     this._bgLogger.get().enforceQueueSizeLimit(enforce);
+  }
+
+  // Custom serialization to avoid logging sensitive data
+  toJSON(): Record<string, any> {
+    return {
+      id: this.id,
+      orgId: this.orgId,
+      orgName: this.orgName,
+      appUrl: this.appUrl,
+      appPublicUrl: this.appPublicUrl,
+      apiUrl: this.apiUrl,
+      proxyUrl: this.proxyUrl,
+      loggedIn: this.loggedIn,
+      // Explicitly exclude loginToken, _apiConn, _appConn, _proxyConn and other sensitive fields
+    };
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `BraintrustState {
+  id: '${this.id}',
+  orgId: ${this.orgId ? `'${this.orgId}'` : "null"},
+  orgName: ${this.orgName ? `'${this.orgName}'` : "null"},
+  appUrl: ${this.appUrl ? `'${this.appUrl}'` : "null"},
+  apiUrl: ${this.apiUrl ? `'${this.apiUrl}'` : "null"},
+  proxyUrl: ${this.proxyUrl ? `'${this.proxyUrl}'` : "null"},
+  loggedIn: ${this.loggedIn},
+  loginToken: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `BraintrustState(id=${this.id}, org=${this.orgName || "none"}, loggedIn=${this.loggedIn})`;
   }
 }
 
@@ -869,6 +982,19 @@ class HTTPConnection {
       headers: { "Content-Type": "application/json" },
     });
     return await resp.json();
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `HTTPConnection {
+  base_url: '${this.base_url}',
+  token: '[REDACTED]'
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `HTTPConnection(${this.base_url})`;
   }
 }
 
@@ -2023,13 +2149,23 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   async flush(): Promise<void> {
@@ -2049,7 +2185,48 @@ export class TestBackgroundLogger implements BackgroundLogger {
     }
 
     const batch = mergeRowBatch(events);
-    return batch.flat();
+    let flatBatch = batch.flat();
+
+    // Apply masking after merge, similar to HTTPBackgroundLogger
+    if (this.maskingFunction) {
+      flatBatch = flatBatch.map((item) => {
+        const maskedItem = { ...item };
+
+        // Only mask specific fields if they exist
+        for (const field of REDACTION_FIELDS) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((item as any)[field] !== undefined) {
+            const maskedValue = applyMaskingToField(
+              this.maskingFunction!,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (item as any)[field],
+              field,
+            );
+            if (maskedValue instanceof MaskingError) {
+              // Drop the field and add error message
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              delete (maskedItem as any)[field];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((maskedItem as any).error) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error =
+                  `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+              } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error = maskedValue.errorMsg;
+              }
+            } else {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (maskedItem as any)[field] = maskedValue;
+            }
+          }
+        }
+
+        return maskedItem as BackgroundLogEvent;
+      });
+    }
+
+    return flatBatch;
   }
 }
 
@@ -2066,6 +2243,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -2149,6 +2327,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
     this.onFlushError = opts.onFlushError;
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2275,7 +2459,50 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         const attachments: Attachment[] = [];
         items.forEach((item) => extractAttachments(item, attachments));
 
-        return [mergeRowBatch(items), attachments];
+        let mergedItems = mergeRowBatch(items);
+
+        // Apply masking after merge but before sending to backend
+        if (this.maskingFunction) {
+          mergedItems = mergedItems.map((batch) =>
+            batch.map((item) => {
+              const maskedItem = { ...item };
+
+              // Only mask specific fields if they exist
+              for (const field of REDACTION_FIELDS) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((item as any)[field] !== undefined) {
+                  const maskedValue = applyMaskingToField(
+                    this.maskingFunction!,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (item as any)[field],
+                    field,
+                  );
+                  if (maskedValue instanceof MaskingError) {
+                    // Drop the field and add error message
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    delete (maskedItem as any)[field];
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if ((maskedItem as any).error) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error =
+                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+                    } else {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error = maskedValue.errorMsg;
+                    }
+                  } else {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (maskedItem as any)[field] = maskedValue;
+                  }
+                }
+              }
+
+              return maskedItem as BackgroundLogEvent;
+            }),
+          );
+        }
+
+        return [mergedItems, attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -3326,6 +3553,19 @@ export type FullLoginOptions = LoginOptions & {
 };
 
 /**
+ * Set a global masking function that will be applied to all logged data before sending to Braintrust.
+ * The masking function will be applied after records are merged but before they are sent to the backend.
+ *
+ * @param maskingFunction A function that takes a JSON-serializable object and returns a masked version.
+ *                        Set to null to disable masking.
+ */
+export function setMaskingFunction(
+  maskingFunction: ((value: unknown) => unknown) | null,
+): void {
+  _globalState.setMaskingFunction(maskingFunction);
+}
+
+/**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
  * https://www.braintrust.dev/app/token. This method is called automatically by `init()`.
  *
@@ -3535,15 +3775,22 @@ export function currentSpan(options?: OptionalStateArg): Span {
 
 /**
  * Mainly for internal use. Return the parent object for starting a span in a global context.
+ * Applies precedence: current span > propagated parent string > experiment > logger.
  */
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): Span | Experiment | Logger<IsAsyncFlush> {
+  options?: AsyncFlushArg<IsAsyncFlush> &
+    OptionalStateArg & { parent?: string },
+): SpanComponentsV3 | Span | Experiment | Logger<IsAsyncFlush> {
   const state = options?.state ?? _globalState;
+
   const parentSpan = currentSpan({ state });
   if (!Object.is(parentSpan, NOOP_SPAN)) {
     return parentSpan;
   }
+
+  const parentStr = options?.parent ?? state.currentParent.getStore();
+  if (parentStr) return SpanComponentsV3.fromStr(parentStr);
+
   const experiment = currentExperiment();
   if (experiment) {
     return experiment;
@@ -3929,48 +4176,45 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  const parentStr = args?.parent ?? state.currentParent.getStore();
+  const parentObject = getSpanParentObject<IsAsyncFlush>({
+    asyncFlush: args?.asyncFlush,
+    parent: args?.parent,
+    state,
+  });
 
-  const components: SpanComponentsV3 | undefined = parentStr
-    ? SpanComponentsV3.fromStr(parentStr)
-    : undefined;
-
-  if (components) {
-    const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
+  if (parentObject instanceof SpanComponentsV3) {
+    const parentSpanIds: ParentSpanIds | undefined = parentObject.data.row_id
       ? {
-          spanId: components.data.span_id,
-          rootSpanId: components.data.root_span_id,
+          spanId: parentObject.data.span_id,
+          rootSpanId: parentObject.data.root_span_id,
         }
       : undefined;
     const span = new SpanImpl({
       state,
       ...args,
-      parentObjectType: components.data.object_type,
+      parentObjectType: parentObject.data.object_type,
       parentObjectId: new LazyValue(
-        spanComponentsToObjectIdLambda(state, components),
+        spanComponentsToObjectIdLambda(state, parentObject),
       ),
       parentComputeObjectMetadataArgs:
-        components.data.compute_object_metadata_args ?? undefined,
+        parentObject.data.compute_object_metadata_args ?? undefined,
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        ((components.data.propagated_event ?? undefined) as
+        ((parentObject.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
     });
     return {
       span,
       isSyncFlushLogger:
-        components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
+        parentObject.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
         args?.asyncFlush === false,
     };
   } else {
-    const parentObject = getSpanParentObject<IsAsyncFlush>({
-      asyncFlush: args?.asyncFlush,
-    });
     const span = parentObject.startSpan(args);
     return {
       span,
@@ -4185,7 +4429,9 @@ function validateAndSanitizeExperimentLogPartialArgs(
  * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
  * and not deep-copied.
  */
-function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+export function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(
+  event: T,
+): T {
   const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
@@ -5262,6 +5508,22 @@ export class SpanImpl implements Span {
 
   public state(): BraintrustState {
     return this._state;
+  }
+
+  // Custom inspect for Node.js console.log
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `SpanImpl {
+  kind: '${this.kind}',
+  id: '${this.id}',
+  spanId: '${this.spanId}',
+  rootSpanId: '${this.rootSpanId}',
+  spanParents: ${JSON.stringify(this.spanParents)}
+}`;
+  }
+
+  // Custom toString
+  toString(): string {
+    return `SpanImpl(id=${this.id}, spanId=${this.spanId})`;
   }
 }
 

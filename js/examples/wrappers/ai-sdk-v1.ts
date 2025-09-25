@@ -1,7 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { wrapAISDKModel, initLogger, traced } from "../../dist/index.js";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 initLogger({
   projectName: "AI SDK Tool Calls Demo",

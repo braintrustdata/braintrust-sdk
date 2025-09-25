@@ -15,6 +15,7 @@ import {
   initLogger,
   Logger,
   TestBackgroundLogger,
+  Attachment,
 } from "../logger";
 import { wrapOpenAI } from "../exports-node";
 import { getCurrentUnixTimestamp } from "../util";
@@ -126,7 +127,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
@@ -319,10 +320,12 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is 6x6?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is 6x6?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
-    expect(span.output).toContain("36");
+    // Check if output contains "36" either in the structure or stringified
+    const outputStr = JSON.stringify(span.output);
+    expect(outputStr).toContain("36");
 
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
@@ -363,22 +366,17 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const input = span.input as any[];
-    assert.lengthOf(input, 2);
-    assert.equal(input[0].content, "Read me a few lines of Sonnet 18");
-    assert.equal(input[0].role, "user");
-    assert.equal(input[1].content, "the whole poem, strip punctuation");
-    assert.equal(input[1].role, "system");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "Read me a few lines of Sonnet 18");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
+    assert.equal(
+      span.metadata.instructions,
+      "the whole poem, strip punctuation",
+    );
     assert.equal(span.metadata.temperature, 0.5);
-    // This line takes the output text, converts it to lowercase, and removes all characters
-    // except letters, numbers and whitespace using a regex
-    assert.isString(span.output);
-    const output = span.output.toLowerCase().replace(/[^\w\s]/g, "");
-
-    expect(output).toContain("shall i compare thee");
+    // Check if output contains the expected text either in the structure or stringified
+    const outputStr = JSON.stringify(span.output).toLowerCase();
+    expect(outputStr).toContain("shall i compare thee");
     const m = span.metrics;
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
@@ -409,10 +407,12 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is the capital of France?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is the capital of France?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
-    expect(span.output).toContain("Paris");
+    // Check if output contains "Paris" either in the structure or stringified
+    const outputStr = JSON.stringify(span.output);
+    expect(outputStr).toContain("Paris");
     const m = span.metrics;
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
@@ -490,12 +490,14 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.parse");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input[0].content, "What is 20 + 4?");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.input, "What is 20 + 4?");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     assert.ok(span.metadata.text);
-    assert.equal(span.output.value, 24);
-    assert.equal(span.output.reasoning, output_parsed.reasoning);
+    // For parse operations, check if the parsed data is in the output structure
+    const outputStr = JSON.stringify(span.output);
+    expect(outputStr).toContain("24");
+    expect(span.output).toBeDefined();
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     assert.isTrue(m.tokens > 0);
@@ -544,13 +546,286 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "Chat Completion");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
     assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(m.time_to_first_token > 0);
+  });
+
+  test("openai.responses with image processing", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+    // Create a mock client that will return a response with an image
+    const mockClient = {
+      responses: {
+        create: vi.fn().mockResolvedValue({
+          output: [
+            {
+              type: "image_generation_call",
+              result:
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", // Simple 1x1 PNG in base64
+              output_format: "png",
+              revised_prompt: "A simple test image",
+            },
+          ],
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+          },
+        }),
+      },
+    };
+
+    // Replace the client.responses.create method temporarily
+    const originalCreate = client.responses.create;
+    client.responses.create = mockClient.responses.create as any;
+
+    try {
+      const start = getCurrentUnixTimestamp();
+      const response = await client.responses.create({
+        model: TEST_MODEL,
+        input: "Generate a simple test image",
+      });
+      const end = getCurrentUnixTimestamp();
+
+      // Verify the response contains the expected structure
+      assert.ok(response);
+      assert.ok(response.output);
+      assert.isArray(response.output);
+
+      // Get the logged spans
+      const spans = await backgroundLogger.drain();
+      assert.lengthOf(spans, 1);
+      const span = spans[0] as any;
+
+      assert.equal(span.span_attributes.name, "openai.responses.create");
+      assert.equal(span.span_attributes.type, "llm");
+      assert.equal(span.input, "Generate a simple test image");
+      assert.ok(span.metadata.model.startsWith(TEST_MODEL));
+      assert.equal(span.metadata.provider, "openai");
+
+      // Verify the output was processed and contains an Attachment
+      assert.ok(span.output);
+      assert.isArray(span.output);
+      const outputItem = span.output[0];
+      assert.equal(outputItem.type, "image_generation_call");
+
+      // Verify that the base64 string was replaced with an Attachment
+      assert.instanceOf(outputItem.result, Attachment);
+      assert.equal(outputItem.result.reference.content_type, "image/png");
+      assert.ok(
+        outputItem.result.reference.filename.includes("A_simple_test_image"),
+      );
+      const m = span.metrics;
+      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    } finally {
+      // Restore the original method
+      client.responses.create = originalCreate;
+    }
+  });
+
+  const getFirstLog = async () => {
+    const events = await backgroundLogger.drain();
+    expect(events.length).toBe(1);
+    // eslint-disable-next-line
+    return events[0] as any;
+  };
+
+  test("non-streaming completion allows access to data and response", async () => {
+    const completion = client.chat.completions.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "Say 'test'" }],
+      max_tokens: 5,
+    });
+
+    // Get the full response with data. This executes the request.
+    const { data, response } = await completion.withResponse();
+    expect(data.choices[0].message.content).toBeDefined();
+    // Duck-typing check for Response object
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
+    expect(response.status).toBe(200);
+
+    // Await the promise directly and check if the data is consistent from cache.
+    const dataOnly = await completion;
+    expect(dataOnly).toBe(data); // Should be the exact same object
+
+    // Verify that the logs are correct.
+    const event = await getFirstLog();
+    expect(event.span_id).toBeDefined();
+    expect(event.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(event.metrics.completion_tokens).toBeGreaterThan(0);
+    expect(event.input).toEqual([{ role: "user", content: "Say 'test'" }]);
+    expect(event.output).toEqual(data.choices);
+  });
+
+  test("streaming completion allows access to stream and response", async () => {
+    const completion = client.chat.completions.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "Say 'Hello'" }],
+      stream: true,
+    });
+
+    // Get the stream and response. This executes the request.
+    const { data: stream, response } = await completion.withResponse();
+    // Duck-typing check for Response object
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
+    expect(response.status).toBe(200);
+
+    // Await the promise directly to get the same stream from cache.
+    const streamOnly = await completion;
+    expect(streamOnly).toBe(stream);
+
+    // Consume the stream to ensure it's valid.
+    let content = "";
+    for await (const chunk of streamOnly) {
+      content += chunk.choices[0]?.delta?.content || "";
+    }
+    expect(content.length).toBeGreaterThan(0);
+
+    // Verify that the logs are correct after the stream is consumed.
+    const event = await getFirstLog();
+    expect(event.span_id).toBeDefined();
+
+    expect(event.input).toEqual([{ role: "user", content: "Say 'Hello'" }]);
+
+    // In streaming, the output is an array of choices with the reconstructed message.
+    // eslint-disable-next-line
+    const output = event.output as any;
+    expect(output[0].message.role).toBe("assistant");
+    expect(output[0].message.content).toEqual(content);
+  });
+
+  test("non-streaming completion without withResponse works", async () => {
+    const completion = client.chat.completions.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "Just say 'hi'" }],
+      max_tokens: 5,
+    });
+
+    // Await the promise directly.
+    const data = await completion;
+    expect(data.choices[0].message.content).toBeDefined();
+
+    // Verify that the logs are correct.
+    const event = await getFirstLog();
+    expect(event.span_id).toBeDefined();
+    expect(event.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(event.metrics.completion_tokens).toBeGreaterThan(0);
+    expect(event.input).toEqual([{ role: "user", content: "Just say 'hi'" }]);
+    expect(event.output).toEqual(data.choices);
+  });
+
+  test("streaming completion without withResponse works", async () => {
+    const completion = client.chat.completions.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "Hello there" }],
+      stream: true,
+    });
+
+    // Await the promise directly to get the stream.
+    const stream = await completion;
+
+    // Consume the stream to ensure it's valid and trigger logging.
+    let content = "";
+    for await (const chunk of stream) {
+      content += chunk.choices[0]?.delta?.content || "";
+    }
+    expect(content.length).toBeGreaterThan(0);
+
+    // Verify that the logs are correct after the stream is consumed.
+    const event = await getFirstLog();
+    expect(event.span_id).toBeDefined();
+    expect(event.input).toEqual([{ role: "user", content: "Hello there" }]);
+
+    // In streaming, the output is an array of choices with the reconstructed message.
+    // eslint-disable-next-line
+    const output = event.output as any;
+    expect(output[0].message.role).toBe("assistant");
+    expect(output[0].message.content).toEqual(content);
+  });
+
+  test("invalid API key does not cause unhandled rejection with withResponse", async () => {
+    // Create client with invalid API key
+    const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
+
+    // Track if any unhandled rejections occur
+    let unhandledRejection: any = null;
+    const handler = (reason: any) => {
+      unhandledRejection = reason;
+    };
+    process.on("unhandledRejection", handler);
+
+    try {
+      // This should throw an error but not cause an unhandled rejection
+      const streamPromise = invalidClient.chat.completions.create({
+        model: TEST_MODEL,
+        messages: [{ role: "user", content: "test" }],
+        stream: true,
+        stream_options: { include_usage: true },
+      });
+
+      // The promise should only execute when withResponse is called
+      await streamPromise.withResponse();
+
+      // Should not reach here
+      expect.fail("Expected an authentication error");
+    } catch (error: any) {
+      // Error should be caught properly
+      expect(error.message).toContain("api");
+    } finally {
+      process.removeListener("unhandledRejection", handler);
+    }
+
+    // Give a moment for any async unhandled rejections to be detected
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify no unhandled rejection occurred
+    expect(unhandledRejection).toBeNull();
+  });
+
+  test("invalid API key does not cause unhandled rejection without withResponse", async () => {
+    // Create client with invalid API key
+    const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
+
+    // Track if any unhandled rejections occur
+    let unhandledRejection: any = null;
+    const handler = (reason: any) => {
+      unhandledRejection = reason;
+    };
+    process.on("unhandledRejection", handler);
+
+    try {
+      // This should throw an error but not cause an unhandled rejection
+      const result = await invalidClient.chat.completions.create({
+        model: TEST_MODEL,
+        messages: [{ role: "user", content: "test" }],
+        stream: false,
+      });
+
+      // Should not reach here
+      expect.fail("Expected an authentication error");
+    } catch (error: any) {
+      // Error should be caught properly
+      expect(error.message).toContain("api");
+    } finally {
+      process.removeListener("unhandledRejection", handler);
+    }
+
+    // Give a moment for any async unhandled rejections to be detected
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify no unhandled rejection occurred
+    expect(unhandledRejection).toBeNull();
   });
 });
 

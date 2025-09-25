@@ -263,16 +263,17 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
+        self.name = name
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self.name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
@@ -285,7 +286,6 @@ class ResponseWrapper:
             else:
                 raw_response = create_response
             if stream:
-
                 def gen():
                     try:
                         first = True
@@ -307,15 +307,13 @@ class ResponseWrapper:
 
                 should_end = False
                 return gen()
-
             else:
                 log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage"))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["output"],
-                )
+                event_data = self._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
+                span.log(**event_data)
                 return raw_response
         finally:
             if should_end:
@@ -326,7 +324,7 @@ class ResponseWrapper:
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self.name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
@@ -339,7 +337,6 @@ class ResponseWrapper:
             else:
                 raw_response = create_response
             if stream:
-
                 async def gen():
                     try:
                         first = True
@@ -364,12 +361,11 @@ class ResponseWrapper:
                 return AsyncResponseWrapper(streamer)
             else:
                 log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage"))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["output"],
-                )
+                event_data = self._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
+                span.log(**event_data)
                 return raw_response
         finally:
             if should_end:
@@ -382,68 +378,111 @@ class ResponseWrapper:
 
         # Then, copy the rest of the params
         params = prettify_params(params)
-        input = params.pop("input", None)
+        input_data = params.pop("input", None)
         return merge_dicts(
             ret,
             {
-                "input": input,
+                "input": input_data,
                 "metadata": {**params, "provider": "openai"},
             },
         )
 
     @classmethod
+    def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse event from response result"""
+        data = {"metrics": {}}
+
+        if not result:
+            return data
+
+        if "output" in result:
+            data["output"] = result["output"]
+
+        metadata = {k: v for k, v in result.items() if k not in ["output", "usage"]}
+        if metadata:
+            data["metadata"] = metadata
+
+        if "usage" in result:
+            data["metrics"] = _parse_metrics_from_usage(result["usage"])
+
+        return data
+
+    @classmethod
     def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
-        role = None
-        content = None
-        tool_calls = None
-        finish_reason = None
+        """Process streaming results - minimal version focused on metrics extraction."""
         metrics = {}
         output = []
+
         for result in all_results:
-            usage = None
-            if hasattr(result, "usage"):
-                usage = getattr(result, "usage")
-            elif result.type == "response.completed" and hasattr(result, "response"):
-                usage = getattr(result.response, "usage")
+            usage = getattr(result, "usage", None)
+            if not usage and hasattr(result, "type") and result.type == "response.completed" and hasattr(result, "response"):
+                # Handle summaries from completed response if present
+                if hasattr(result.response, "output") and result.response.output:
+                    for output_item in result.response.output:
+                        if hasattr(output_item, "summary") and output_item.summary:
+                            for item in output:
+                                if item.get("id") == output_item.id:
+                                    item["summary"] = output_item.summary
+                usage = getattr(result.response, "usage", None)
 
             if usage:
                 parsed_metrics = _parse_metrics_from_usage(usage)
                 metrics.update(parsed_metrics)
 
+            # Skip processing if result doesn't have a type attribute
+            if not hasattr(result, "type"):
+                continue
+
             if result.type == "response.output_item.added":
-                output.append({"id": result.item.id, "type": result.item.type})
+                item_data = {"id": result.item.id, "type": result.item.type}
+                if hasattr(result.item, "role"):
+                    item_data["role"] = result.item.role
+                output.append(item_data)
                 continue
 
-            if not hasattr(result, "output_index"):
+            if result.type == "response.completed":
+                if hasattr(result, "response") and hasattr(result.response, "output"):
+                    return {
+                        "metrics": metrics,
+                        "output": result.response.output,
+                    }
                 continue
 
-            output_index = result.output_index
-            current_output = output[output_index]
-            if result.type == "response.output_item.done":
-                current_output["status"] = result.item.status
-                continue
+            # Handle output_index based updates
+            if hasattr(result, "output_index"):
+                output_index = result.output_index
+                if output_index < len(output):
+                    current_output = output[output_index]
 
-            if result.type == "response.output_item.delta":
-                current_output["delta"] = result.delta
-                continue
+                    if result.type == "response.output_item.done":
+                        current_output["status"] = result.item.status
+                        continue
 
-            if hasattr(result, "content_index"):
-                if "content" not in current_output:
-                    current_output["content"] = []
-                content_index = result.content_index
-                if content_index == len(current_output["content"]):
-                    current_output["content"].append({})
-                current_content = current_output["content"][content_index]
-                if hasattr(result, "delta") and result.delta:
-                    current_content["text"] = (current_content.get("text") or "") + result.delta
+                    if result.type == "response.output_item.delta":
+                        current_output["delta"] = result.delta
+                        continue
 
-                if result.type == "response.output_text.annotation.added":
-                    annotation_index = result.annotation_index
-                    if "annotations" not in current_content:
-                        current_content["annotations"] = []
-                    if annotation_index == len(current_content["annotations"]):
-                        current_content["annotations"].append({})
-                    current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
+                    # Handle content_index based updates
+                    if hasattr(result, "content_index"):
+                        if "content" not in current_output:
+                            current_output["content"] = []
+                        content_index = result.content_index
+                        # Fill any gaps in the content array
+                        while len(current_output["content"]) <= content_index:
+                            current_output["content"].append({})
+                        current_content = current_output["content"][content_index]
+                        current_content["type"] = "output_text"
+                        if hasattr(result, "delta") and result.delta:
+                            current_content["text"] = (current_content.get("text") or "") + result.delta
+
+                        if result.type == "response.output_text.annotation.added":
+                            annotation_index = result.annotation_index
+                            if "annotations" not in current_content:
+                                current_content["annotations"] = []
+                            # Fill any gaps in the annotations array
+                            while len(current_content["annotations"]) <= annotation_index:
+                                current_content["annotations"].append({})
+                            current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
         return {
             "metrics": metrics,
@@ -469,7 +508,6 @@ class BaseWrapper(abc.ABC):
             **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
             create_response = self._create_fn(*args, **kwargs)
-
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
                 log_headers(create_response, span)
@@ -663,7 +701,7 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
     def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+        return ResponseWrapper(self.__responses.parse, None, "openai.responses.parse").create(*args, **kwargs)
 
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
@@ -676,7 +714,7 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         return AsyncResponseWrapper(response)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.parse, "openai.responses.parse").acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

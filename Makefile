@@ -20,7 +20,6 @@ VENV_PYTHON_PACKAGES := venv/.python_packages
 
 ${VENV_PYTHON_PACKAGES}: ${VENV_INITIALIZED}
 	bash -c 'source venv/bin/activate && python -m pip install --upgrade pip setuptools'
-	bash -c 'source venv/bin/activate && python -m pip install -e core/py'
 	bash -c 'source venv/bin/activate && python -m pip install -e py[all]'
 	@touch $@
 

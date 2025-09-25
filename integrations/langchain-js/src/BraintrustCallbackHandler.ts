@@ -1,4 +1,4 @@
-import { isObject } from "@braintrust/core";
+import { isObject } from "braintrust/util";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -35,6 +35,8 @@ export interface BraintrustCallbackHandlerOptions<
 > {
   logger?: Logger<IsAsyncFlush> | Span;
   debug: boolean;
+  /** The parent span to associate for this callback handler. */
+  parent?: Span | (() => Span);
   excludeMetadataProps: RegExp;
 }
 
@@ -44,6 +46,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 {
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
+  private parent?: Span | (() => Span);
   private rootRunId?: string;
   private options: BraintrustCallbackHandlerOptions<IsAsyncFlush>;
 
@@ -53,6 +56,8 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     super();
 
     this.spans = new Map();
+
+    this.parent = options?.parent;
 
     this.options = {
       debug: options?.debug ?? false,
@@ -96,7 +101,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       },
     };
 
-    const currentParent = currentSpan();
+    const currentParent =
+      (typeof this.parent === "function" ? this.parent() : this.parent) ??
+      currentSpan();
     let parentSpan: Span;
     if (parentRunId && this.spans.has(parentRunId)) {
       parentSpan = this.spans.get(parentRunId)!;

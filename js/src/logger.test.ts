@@ -8,7 +8,11 @@ import {
   BraintrustState,
   wrapTraced,
   currentSpan,
+  withParent,
+  startSpan,
   Attachment,
+  NOOP_SPAN,
+  deepCopyEvent,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
@@ -351,6 +355,7 @@ describe("wrapTraced generator support", () => {
       delete process.env.BRAINTRUST_MAX_GENERATOR_ITEMS;
     }
     _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   test("traced sync generator", async () => {
@@ -741,6 +746,93 @@ describe("wrapTraced generator support", () => {
   });
 });
 
+describe("parent precedence", () => {
+  let memory: any;
+
+  beforeEach(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    memory = _exportsForTestingOnly.useTestBackgroundLogger();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("withParent + wrapTraced: child spans attach to current span (not directly to withParent)", async () => {
+    const logger = initLogger({ projectName: "test", projectId: "pid" });
+    const outer = logger.startSpan({ name: "outer" });
+    const parentStr = await outer.export();
+    outer.end();
+
+    const inner = wrapTraced(
+      async function inner() {
+        startSpan({ name: "child" }).end();
+      },
+      { name: "inner" },
+    );
+
+    await withParent(parentStr, () => inner());
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+
+    expect(byName.outer).toBeTruthy();
+    expect(byName.inner).toBeTruthy();
+    expect(byName.child).toBeTruthy();
+
+    expect(byName.child.span_parents || []).toContain(byName.inner.span_id);
+    expect(byName.child.root_span_id).toBe(byName.outer.root_span_id);
+  });
+
+  test("wrapTraced baseline: child spans attach to current span", async () => {
+    initLogger({ projectName: "test", projectId: "pid" });
+
+    const top = wrapTraced(
+      async function top() {
+        startSpan({ name: "child" }).end();
+      },
+      { name: "top" },
+    );
+
+    await top();
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+    expect(byName.child.span_parents).toContain(byName.top.span_id);
+  });
+
+  test("explicit parent overrides current span", async () => {
+    const logger = initLogger({ projectName: "test", projectId: "pid" });
+    const outer = logger.startSpan({ name: "outer" });
+    const parentStr = await outer.export();
+    outer.end();
+
+    const inner = wrapTraced(
+      async function inner() {
+        startSpan({ name: "forced", parent: parentStr }).end();
+      },
+      { name: "inner" },
+    );
+
+    await inner();
+
+    await memory.flush();
+    const events = await memory.drain();
+    const byName: any = Object.fromEntries(
+      events.map((e: any) => [e.span_attributes?.name, e]),
+    );
+    expect(byName.forced.span_parents).toContain(byName.outer.span_id);
+    expect(byName.forced.span_parents).not.toContain(byName.inner.span_id);
+  });
+});
+
 test("attachment with unreadable path logs warning", () => {
   const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -776,4 +868,172 @@ test("attachment with readable path returns data", async () => {
   } finally {
     await unlink(tmpFile).catch(() => {});
   }
+});
+
+describe("sensitive data redaction", () => {
+  let logger: any;
+  let state: BraintrustState;
+  let memoryLogger: any;
+
+  beforeEach(async () => {
+    state = await _exportsForTestingOnly.simulateLoginForTests();
+    memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    logger = initLogger({ projectName: "test", projectId: "test-id" });
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("SpanImpl redacts sensitive data in console.log", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Test custom inspect method (used by console.log in Node.js)
+    const inspectResult = (span as any)[
+      Symbol.for("nodejs.util.inspect.custom")
+    ]();
+    expect(inspectResult).toContain("SpanImpl");
+    expect(inspectResult).toContain("kind:");
+    expect(inspectResult).toContain("id:");
+    expect(inspectResult).toContain("spanId:");
+    expect(inspectResult).toContain("rootSpanId:");
+    // Should NOT contain sensitive data
+    expect(inspectResult).not.toContain("_state");
+    expect(inspectResult).not.toContain("loginToken");
+    expect(inspectResult).not.toContain("_apiConn");
+
+    span.end();
+  });
+
+  test("SpanImpl toString provides minimal info", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    const str = span.toString();
+    expect(str).toContain("SpanImpl");
+    expect(str).toContain(span.id);
+    expect(str).toContain(span.spanId);
+    // Should be concise
+    expect(str.length).toBeLessThan(200);
+
+    span.end();
+  });
+
+  test("BraintrustState redacts loginToken and connections", () => {
+    // Test custom inspect method
+    const inspectResult = state[Symbol.for("nodejs.util.inspect.custom")]();
+    expect(inspectResult).toContain("BraintrustState");
+    expect(inspectResult).toContain("orgId:");
+    expect(inspectResult).toContain("orgName:");
+    expect(inspectResult).toContain("loginToken: '[REDACTED]'");
+    // Should NOT contain actual token
+    expect(inspectResult).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(inspectResult).not.toContain("_apiConn");
+    expect(inspectResult).not.toContain("_appConn");
+    expect(inspectResult).not.toContain("_proxyConn");
+  });
+
+  test("BraintrustState toJSON excludes sensitive data", () => {
+    const json = state.toJSON();
+    expect(json).toHaveProperty("id");
+    expect(json).toHaveProperty("orgId", "test-org-id");
+    expect(json).toHaveProperty("orgName", "test-org-name");
+    expect(json).toHaveProperty("loggedIn", true);
+    // Should NOT have sensitive properties
+    expect(json).not.toHaveProperty("loginToken");
+    expect(json).not.toHaveProperty("_apiConn");
+    expect(json).not.toHaveProperty("_appConn");
+    expect(json).not.toHaveProperty("_proxyConn");
+    expect(json).not.toHaveProperty("_bgLogger");
+  });
+
+  test("BraintrustState toString provides minimal info", () => {
+    const str = state.toString();
+    expect(str).toContain("BraintrustState");
+    expect(str).toContain("test-org-name");
+    expect(str).toContain("loggedIn=true");
+    // Should NOT contain token
+    expect(str).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(str.length).toBeLessThan(150);
+  });
+
+  test("redaction works in nested objects and JSON.stringify", () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Create a nested object containing sensitive objects
+    const nestedObj = {
+      message: "test",
+      span: span,
+      state: state,
+      connection: state.apiConn(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // JSON.stringify should use toJSON methods
+    const jsonStr = JSON.stringify(nestedObj, null, 2);
+    expect(jsonStr).toContain('"message": "test"');
+    expect(jsonStr).toContain('"kind": "span"');
+    expect(jsonStr).toContain('"orgName": "test-org-name"');
+    // Should NOT contain sensitive data
+    expect(jsonStr).not.toContain("loginToken");
+    expect(jsonStr).not.toContain("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(jsonStr).not.toContain("_apiConn");
+    expect(jsonStr).not.toContain("Authorization");
+
+    span.end();
+  });
+
+  test("redaction works with util.inspect", async () => {
+    const util = await import("util");
+    const span = logger.startSpan({ name: "test-span" });
+
+    // util.inspect should use Symbol.for("nodejs.util.inspect.custom")
+    const inspected = util.inspect(span);
+    expect(inspected).toContain("SpanImpl");
+    expect(inspected).toContain("kind:");
+    expect(inspected).not.toContain("_state");
+    expect(inspected).not.toContain("loginToken");
+
+    span.end();
+  });
+
+  test("export() still returns proper serialization for spans", async () => {
+    const span = logger.startSpan({ name: "test-span" });
+
+    // export() should still work and return a string
+    const exported = await span.export();
+    expect(typeof exported).toBe("string");
+    expect(exported.length).toBeGreaterThan(0);
+
+    // The exported string should be parseable by SpanComponentsV3
+    const { SpanComponentsV3 } = await import("../util/span_identifier_v3");
+    const components = SpanComponentsV3.fromStr(exported);
+    expect(components.data.row_id).toBe(span.id);
+    expect(components.data.span_id).toBe(span.spanId);
+    expect(components.data.root_span_id).toBe(span.rootSpanId);
+
+    span.end();
+  });
+
+  test("exported span can be used as parent", async () => {
+    const parentSpan = logger.startSpan({ name: "parent-span" });
+    const exported = await parentSpan.export();
+    parentSpan.end();
+
+    // Should be able to use exported string as parent
+    const childSpan = logger.startSpan({
+      name: "child-span",
+      parent: exported,
+    });
+
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+    childSpan.end();
+  });
+
+  test("copied span values are stripped", async () => {
+    const span = logger.startSpan({ name: "parent-span" });
+    // I'm not entirely sure why a span may be inside of a background event, but just in case
+    const copy = deepCopyEvent({ input: span });
+    expect(copy.input).toBe("<span>");
+  });
 });
