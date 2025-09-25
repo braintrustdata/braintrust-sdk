@@ -61,7 +61,7 @@ class StandardMetrics(TokenMetrics, TimingMetrics, total=False):
 
 # For backward compatibility and flexibility, we also define a more open Metrics type
 # that allows any string key with numeric values
-class Metrics(StandardMetrics, total=False):
+class Metrics(StandardMetrics):
     """
     Metrics tracked by Braintrust for LLM operations and spans.
     All fields are optional to maintain flexibility.
