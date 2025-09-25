@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict
+from typing import Dict, Optional, TypedDict, Union
 
 
 class TokenMetrics(TypedDict, total=False):
@@ -52,6 +52,7 @@ class TimingMetrics(TypedDict, total=False):
     """Total duration in seconds (calculated as end - start)"""
 
 
+# pylint: disable-next-line=duplicate-bases
 class StandardMetrics(TokenMetrics, TimingMetrics, total=False):
     """Standard metrics tracked by Braintrust, combining token and timing metrics."""
 
@@ -59,30 +60,4 @@ class StandardMetrics(TokenMetrics, TimingMetrics, total=False):
     """1 if response was cached, 0 or undefined otherwise"""
 
 
-# For backward compatibility and flexibility, we also define a more open Metrics type
-# that allows any string key with numeric values
-class Metrics(StandardMetrics):
-    """
-    Metrics tracked by Braintrust for LLM operations and spans.
-    All fields are optional to maintain flexibility.
-    Supports standard metrics plus any custom numeric metrics.
-
-    Example:
-        metrics: Metrics = {
-            # Token metrics
-            "prompt_tokens": 100,
-            "completion_tokens": 50,
-            "tokens": 150,
-
-            # Timing metrics
-            "time_to_first_token": 0.5,
-
-            # Custom metrics
-            "custom_score": 0.95,
-            "user_satisfaction": 4.5
-        }
-    """
-
-    # This is a TypedDict, so we can't directly add arbitrary keys
-    # In practice, users can still add custom metrics at runtime
-    # This serves as documentation of the standard fields
+Metrics = Union[StandardMetrics, Dict[str, int]]
