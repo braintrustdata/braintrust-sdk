@@ -18,22 +18,22 @@ Usage:
     response = agent.run(...)
 """
 
-__all__ = ["setup_braintrust"]
+__all__ = ["setup_agno", "wrap_agent", "wrap_function_call", "wrap_model", "wrap_team"]
 
 import logging
 from typing import Optional
 
 from braintrust.logger import NOOP_SPAN, current_span, init_logger
 
-from braintrust_agno.agent import wrap_agent
-from braintrust_agno.function_call import wrap_function_call
-from braintrust_agno.model import wrap_model
-from braintrust_agno.team import wrap_team
+from .agent import wrap_agent
+from .function_call import wrap_function_call
+from .model import wrap_model
+from .team import wrap_team
 
 logger = logging.getLogger(__name__)
 
 
-def setup_braintrust(
+def setup_agno(
     api_key: Optional[str] = None,
     project_id: Optional[str] = None,
     project_name: Optional[str] = None,
@@ -56,12 +56,12 @@ def setup_braintrust(
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
 
     try:
-        from agno import agent, models, team, tools
+        from agno import agent, models, team, tools  # pyright: ignore
 
-        agent.Agent = wrap_agent(agent.Agent)
-        team.Team = wrap_team(team.Team)
-        models.base.Model = wrap_model(models.base.Model)
-        tools.function.FunctionCall = wrap_function_call(tools.function.FunctionCall)
+        agent.Agent = wrap_agent(agent.Agent)  # pyright: ignore[reportUnknownMemberType]
+        team.Team = wrap_team(team.Team)  # pyright: ignore[reportUnknownMemberType]
+        models.base.Model = wrap_model(models.base.Model)  # pyright: ignore[reportUnknownMemberType]
+        tools.function.FunctionCall = wrap_function_call(tools.function.FunctionCall)  # pyright: ignore[reportUnknownMemberType]
         return True
     except ImportError as e:
         logger.error(f"Failed to import Agno: {e}")

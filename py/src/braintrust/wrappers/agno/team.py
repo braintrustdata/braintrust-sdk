@@ -1,9 +1,10 @@
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
+from wrapt import wrap_function_wrapper
+
 from braintrust.logger import start_span
 from braintrust.span_types import SpanTypeAttribute
-from wrapt import wrap_function_wrapper
 
 from .utils import is_patched, mark_patched, omit
 

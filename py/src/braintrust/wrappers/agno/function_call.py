@@ -1,10 +1,11 @@
 from typing import Any, Dict
 
-from braintrust.logger import start_span
-from braintrust.span_types import SpanTypeAttribute
 from wrapt import wrap_function_wrapper
 
-from braintrust_agno.utils import is_patched
+from braintrust.logger import start_span
+from braintrust.span_types import SpanTypeAttribute
+
+from .utils import is_patched
 
 
 def wrap_function_call(FunctionCall: Any) -> Any:
