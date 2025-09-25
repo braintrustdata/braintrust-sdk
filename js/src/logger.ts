@@ -5190,7 +5190,11 @@ export class SpanImpl implements Span {
           ? args.parentSpanIds.parentSpanIds
           : [args.parentSpanIds.spanId];
     } else {
-      // Use shareRootSpanId() to decide root span behavior
+      // Root span ID behavior differs between UUID and OTEL generators:
+      // - UUID (legacy): root_span_id === span_id for backwards compatibility
+      // - OTEL: root_span_id is a separate trace ID, following OpenTelemetry convention
+      //   where trace_id (root_span_id) represents the entire trace, distinct from
+      //   the individual span's ID
       if (this._state.idGenerator.shareRootSpanId()) {
         this._rootSpanId = this._spanId;
       } else {
