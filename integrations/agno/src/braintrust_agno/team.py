@@ -8,51 +8,52 @@ from wrapt import wrap_function_wrapper
 from .utils import is_patched, mark_patched, omit
 
 
-def wrap_agent(Agent: Any) -> Any:
-    if is_patched(Agent):
-        return Agent
+def wrap_team(Team: Any) -> Any:
+    if is_patched(Team):
+        return Team
 
     def run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
-        agent_name = getattr(instance, "name", None) or "Agent"
+        agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.run"
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
             input=args,
-            metadata=omit(kwargs, ["audio", "images", "videos"]),
+            # metadata=omit(kwargs, ["audio", "images", "videos"]),
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
                 output=result.to_dict(),
-                metrics=_extract_run_metrics(result),
-                metadata=_extract_agent_metadata(instance, result),
+                # metrics=_extract_run_metrics(result),
+                # metadata=_extract_agent_metadata(instance, result),
             )
             return result
 
-    wrap_function_wrapper(Agent, "run", run_wrapper)
+    wrap_function_wrapper(Team, "run", run_wrapper)
 
     async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
-        agent_name = getattr(instance, "name", None) or "Agent"
+        agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.arun"
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
             input=args,
-            metadata=omit(kwargs, ["audio", "images", "videos"]),
+            # metadata=omit(kwargs, ["audio", "images", "videos"]),
         ) as span:
             result = await wrapped(*args, **kwargs)
             span.log(
-                output=result, metrics=_extract_run_metrics(result), metadata=_extract_agent_metadata(instance, result)
+                output=result,
+                # metrics=_extract_run_metrics(result), metadata=_extract_agent_metadata(instance, result)
             )
             return result
 
-    if hasattr(Agent, "_arun"):
-        wrap_function_wrapper(Agent, "_arun", arun_wrapper)
+    if hasattr(Team, "_arun"):
+        wrap_function_wrapper(Team, "_arun", arun_wrapper)
 
     def run_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
-        agent_name = getattr(instance, "name", None) or "Agent"
+        agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.run_stream"
 
         def _trace_stream():
@@ -60,7 +61,7 @@ def wrap_agent(Agent: Any) -> Any:
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
                 input=args if args else None,
-                metadata=_extract_metadata(instance, kwargs),
+                # metadata=_extract_metadata(instance, kwargs),
             ) as span:
                 collected_output = []
                 for chunk in wrapped(*args, **kwargs):
@@ -72,11 +73,11 @@ def wrap_agent(Agent: Any) -> Any:
 
         return _trace_stream()
 
-    if hasattr(Agent, "_run_stream"):
-        wrap_function_wrapper(Agent, "_run_stream", run_stream_wrapper)
+    if hasattr(Team, "_run_stream"):
+        wrap_function_wrapper(Team, "_run_stream", run_stream_wrapper)
 
     async def arun_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
-        agent_name = getattr(instance, "name", None) or "Agent"
+        agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.arun_stream"
 
         async def _trace_stream():
@@ -84,7 +85,7 @@ def wrap_agent(Agent: Any) -> Any:
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
                 input=args if args else None,
-                metadata=_extract_metadata(instance, kwargs),
+                # metadata=_extract_metadata(instance, kwargs),
             ) as span:
                 collected_output = []
                 async for chunk in wrapped(*args, **kwargs):
@@ -96,11 +97,11 @@ def wrap_agent(Agent: Any) -> Any:
 
         return _trace_stream()
 
-    if hasattr(Agent, "_arun_stream"):
-        wrap_function_wrapper(Agent, "_arun_stream", arun_stream_wrapper)
+    if hasattr(Team, "_arun_stream"):
+        wrap_function_wrapper(Team, "_arun_stream", arun_stream_wrapper)
 
-    mark_patched(Agent)
-    return Agent
+    mark_patched(Team)
+    return Team
 
 
 def _extract_metadata(instance: Any, kwargs: Dict[str, Any]) -> Dict[str, Any]:
