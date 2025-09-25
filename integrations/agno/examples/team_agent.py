@@ -44,17 +44,18 @@ investment_team = Team(
     debug_mode=True,
 )
 
+
 investment_team.print_response(
     "I'm considering investing in Apple (AAPL). Can you analyze the current stock performance and give me investment advice?",
-    session_id="team_session_apple"
+    session_id="team_session_apple",
 )
 
 investment_team.print_response(
     "Compare Microsoft (MSFT) and Google (GOOGL) for a long-term investment. Which would be better for a conservative portfolio?",
-    session_id="team_session_comparison"
+    session_id="team_session_comparison",
 )
 
 investment_team.print_response(
     "What are the current trends in the tech sector? Should I be worried about market volatility?",
-    session_id="team_session_trends"
+    session_id="team_session_trends",
 )

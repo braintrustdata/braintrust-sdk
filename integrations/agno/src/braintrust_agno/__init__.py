@@ -28,6 +28,7 @@ from braintrust.logger import NOOP_SPAN, current_span, init_logger
 from braintrust_agno.agent import wrap_agent
 from braintrust_agno.function_call import wrap_function_call
 from braintrust_agno.model import wrap_model
+from braintrust_agno.team import wrap_team
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,10 @@ def setup_braintrust(
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
 
     try:
-        from agno import agent, models, tools
+        from agno import agent, models, team, tools
 
         agent.Agent = wrap_agent(agent.Agent)
+        team.Team = wrap_team(team.Team)
         models.base.Model = wrap_model(models.base.Model)
         tools.function.FunctionCall = wrap_function_call(tools.function.FunctionCall)
         return True
