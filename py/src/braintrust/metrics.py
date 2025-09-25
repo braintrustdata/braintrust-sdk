@@ -35,6 +35,9 @@ class TokenMetrics(TypedDict, total=False):
     completion_audio_tokens: Optional[float]
     """Number of audio tokens in completion (multimodal)"""
 
+    time_to_first_token: Optional[float]
+    """Time from request start to first token received (in seconds)"""
+
 
 class TimingMetrics(TypedDict, total=False):
     """Timing and performance metrics."""
@@ -47,9 +50,6 @@ class TimingMetrics(TypedDict, total=False):
 
     duration: Optional[float]
     """Total duration in seconds (calculated as end - start)"""
-
-    time_to_first_token: Optional[float]
-    """Time from request start to first token received (in seconds)"""
 
 
 class StandardMetrics(TokenMetrics, TimingMetrics, total=False):
