@@ -275,7 +275,9 @@ def _log_message_to_span(message, span):
     with _catch_exceptions():
         metrics = _finalize_metrics(_extract_metrics(getattr(message, "usage", {})))
         content = getattr(message, "content", None)
-        span.log(output=content, metrics=metrics)
+        role = getattr(message, "role", None)
+        output = {"role": role, "content": content} if role and content else None
+        span.log(output=output, metrics=metrics)
 
 
 def _extract_metrics(usage):
