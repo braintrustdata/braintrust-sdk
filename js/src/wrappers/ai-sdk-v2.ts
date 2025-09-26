@@ -3,6 +3,7 @@ import { startSpan } from "../logger";
 import {
   detectProviderFromResult,
   extractModelFromResult,
+  extractModelFromWrapGenerateCallback,
   extractModelParameters,
   normalizeUsageMetrics,
   extractToolCallsFromSteps,
@@ -89,7 +90,11 @@ export function BraintrustMiddleware(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): LanguageModelV2Middleware<any, any> {
   return {
-    wrapGenerate: async ({ doGenerate, params }) => {
+    wrapGenerate: async ({
+      doGenerate,
+      params,
+      model: modelFromWrapGenerate,
+    }) => {
       const spanArgs = {
         name: "ai-sdk.generateText",
         spanAttributes: {
@@ -122,6 +127,14 @@ export function BraintrustMiddleware(
         const model = extractModelFromResult(result);
         if (model !== undefined) {
           metadata.model = model;
+        } else if (modelFromWrapGenerate) {
+          // Use the model from the wrapGenerate call if it's not in the result
+          const modelId = extractModelFromWrapGenerateCallback(
+            modelFromWrapGenerate,
+          );
+          if (modelId) {
+            metadata.model = modelId;
+          }
         }
 
         let toolCalls = extractToolCallsFromSteps((result as any)?.steps);
