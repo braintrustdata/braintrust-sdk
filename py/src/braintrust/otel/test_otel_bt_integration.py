@@ -50,9 +50,7 @@ def otel_fixture():
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT'):
-
-
+    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT', 'BRAINTRUST_API_KEY'):
         # 1. Set environment variable first
         os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
         # Set dummy API key for tests
@@ -306,7 +304,7 @@ def test_uses_otel_context_manager_when_enabled():
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    try:
+    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT'):
         # Enable OTEL
         os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
 
@@ -321,10 +319,6 @@ def test_uses_otel_context_manager_when_enabled():
         assert hasattr(cm, 'get_parent_info_for_bt_span')
         assert hasattr(cm, 'set_current_span')
         assert hasattr(cm, 'unset_current_span')
-
-    finally:
-        # Clean up
-        os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
 
 
 if __name__ == "__main__":

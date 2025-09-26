@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 
 import pytest
 
@@ -64,6 +65,7 @@ def memory_logger():
         yield bgl
     logger._state.current_experiment = None
 
+@contextmanager
 def preserve_env_vars(*vars):
     original_env = {v: os.environ.get(v) for v in vars}
     try:
