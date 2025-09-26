@@ -76,7 +76,7 @@ def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
                 ],
                 "metadata": {
                     "tags": ["seq:step:2"],
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-4o-mini-2024-07-18",
                     "temperature": 1,
                     "top_p": 1,
                     "frequency_penalty": 0,
