@@ -7,10 +7,10 @@ This integration provides:
 - Tool call tracing with correct parent-child relationships
 
 Usage:
-    from braintrust_agno import init_agno
+    from braintrust_agno import setup_agno
 
     # Initialize the integration
-    init_agno(project_name="my-project")
+    setup_agno(project_name="my-project")
 
     # Your Agno agent code will now be automatically traced
     import agno
