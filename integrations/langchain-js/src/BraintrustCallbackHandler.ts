@@ -414,6 +414,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
+      type: "llm",
       name: action.tool,
       event: {
         input: action,
