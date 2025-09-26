@@ -56,6 +56,13 @@ def with_memory_logger():
     # Clean up global state to prevent test contamination
     logger._state.reset_parent_state()
 
+@pytest.fixture
+def memory_logger():
+    with logger._internal_with_memory_background_logger() as bgl:
+        yield bgl
+    logger._state.current_experiment = None
+
+
 
 def init_test_logger(project_name: str):
     """

@@ -260,8 +260,50 @@ class BraintrustSpanProcessor:
             self._processor = processor
 
     def on_start(self, span, parent_context=None):
-        """Forward span start events to the inner processor."""
+        try:
+            parent_value = None
+
+            # Priority 1: Check if braintrust.parent is in current OTEL context
+            from opentelemetry import context
+            current_context = context.get_current()
+            parent_value = context.get_value('braintrust.parent', current_context)
+
+            # Priority 2: Check if parent_context has braintrust.parent (backup)
+            if not parent_value and parent_context:
+                parent_value = context.get_value('braintrust.parent', parent_context)
+
+            # Priority 3: Check if parent OTEL span has braintrust.parent attribute
+            if not parent_value and parent_context:
+                parent_value = self._get_parent_otel_braintrust_parent(parent_context)
+
+            # Set the attribute if we found a parent value
+            if parent_value:
+                span.set_attribute("braintrust.parent", parent_value)
+
+        except Exception as e:
+            # If there's an exception, just don't set braintrust.parent
+            pass
+
         self._processor.on_start(span, parent_context)
+
+
+    def _get_parent_otel_braintrust_parent(self, parent_context):
+        """Get braintrust.parent attribute from parent OTEL span if it exists."""
+        try:
+            from opentelemetry import trace
+
+            # Get the current span from the parent context
+            current_span = trace.get_current_span(parent_context)
+
+            if current_span and hasattr(current_span, 'attributes') and current_span.attributes:
+                # Check if parent span has braintrust.parent attribute
+                attributes = dict(current_span.attributes)
+                return attributes.get("braintrust.parent")
+
+            return None
+
+        except Exception:
+            return None
 
     def on_end(self, span):
         """Forward span end events to the inner processor."""
