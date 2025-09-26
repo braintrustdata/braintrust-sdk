@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import sys
 import textwrap
 import threading
@@ -351,6 +352,10 @@ class BraintrustState:
             "braintrust_current_span", default=NOOP_SPAN
         )
 
+        # Context manager is dynamically selected based on current environment
+        self._context_manager = None
+        self._last_otel_setting = None
+
         def default_get_api_conn():
             self.login()
             return self.api_conn()
@@ -425,6 +430,20 @@ class BraintrustState:
         if self._id_generator is None:
             self._id_generator = id_gen.get_id_generator()
         return self._id_generator
+
+    @property
+    def context_manager(self):
+        """Get the appropriate context manager based on current environment."""
+        import os
+        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
+
+        # Cache the context manager unless the environment variable changed
+        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+            from braintrust.context import get_context_manager
+            self._context_manager = get_context_manager()
+            self._last_otel_setting = current_otel_setting
+
+        return self._context_manager
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -533,6 +552,16 @@ _state: BraintrustState = None  # type: ignore
 
 
 _http_adapter: Optional[HTTPAdapter] = None
+
+
+def _generate_trace_id() -> str:
+    """Generate OTEL-compatible 16-byte trace ID as hex string"""
+    return secrets.token_hex(16)
+
+
+def _generate_span_id() -> str:
+    """Generate OTEL-compatible 8-byte span ID as hex string"""
+    return secrets.token_hex(8)
 
 
 def set_http_adapter(adapter: HTTPAdapter) -> None:
@@ -720,6 +749,8 @@ def _check_json_serializable(event):
         return bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+
 
 
 class _MaskingError:
@@ -1876,7 +1907,11 @@ def current_span() -> Span:
     See `Span` for full details.
     """
 
-    return _state.current_span.get()
+    span_info = _state.context_manager.get_current_span_info()
+    if span_info and hasattr(span_info.span_object, 'span_id'):
+        # This is a BT span
+        return span_info.span_object
+    return NOOP_SPAN
 
 
 @contextlib.contextmanager
@@ -3153,6 +3188,7 @@ def _start_span_parent_args(
     )
 
 
+
 @dataclasses.dataclass
 class ExperimentIdentifier:
     id: str
@@ -3607,6 +3643,10 @@ class SpanImpl(Span):
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
+        # Context token for proper cleanup - used by both OTEL and Braintrust context managers
+        # This is set by the context manager when the span becomes active
+        self._context_token: Optional[Any] = None
+
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_compute_object_metadata_args = parent_compute_object_metadata_args
@@ -3670,6 +3710,21 @@ class SpanImpl(Span):
             else:
                 self.root_span_id = id_generator.get_trace_id()
             self.span_parents = None
+
+        # Handle unified context if no explicit parents are set
+        if not parent_span_ids:
+            parent_info = self.state.context_manager.get_parent_info_for_bt_span()
+            if parent_info:
+                # Apply parent information from unified context
+                if 'root_span_id' in parent_info:
+                    self.root_span_id = parent_info['root_span_id']
+                if 'span_parents' in parent_info:
+                    self.span_parents = parent_info['span_parents']
+                if 'metadata' in parent_info:
+                    if 'metadata' not in event:
+                        event['metadata'] = {}
+                    event['metadata'].update(parent_info['metadata'])
+
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -3867,11 +3922,14 @@ class SpanImpl(Span):
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = self.state.current_span.set(self)
+            # Get token from context manager and store it
+            self._context_token = self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
         if self.can_set_current:
-            self.state.current_span.reset(self._context_token)
+            # Pass the stored token to context manager for cleanup
+            self.state.context_manager.unset_current_span(self._context_token)
+            self._context_token = None
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -3897,9 +3955,29 @@ class SpanImpl(Span):
             is_resolved, experiment_id = self.parent_object_id.get_sync()
             if is_resolved:
                 return self.parent_object_type, {"id": experiment_id}
-            return self.parent_object_type, {}
+            # For experiments, we can resolve the ID by calling get()
+            try:
+                experiment_id = self.parent_object_id.get()
+                return self.parent_object_type, {"id": experiment_id}
+            except Exception:
+                return self.parent_object_type, {}
         else:
             return None, {}
+
+    def _get_otel_parent(self):
+        parent_type, info = self._get_parent_info()
+        if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
+            _id = info.get("id")
+            _name = info.get("name")
+            if _id:
+                return f"project_id:{_id}"
+            elif _name:
+                return f"project_name:{_name}"
+        if parent_type == SpanObjectTypeV3.EXPERIMENT:
+            _id = info.get("id")
+            if _id:
+                return f"experiment_id:{_id}"
+        return None
 
 
 def log_exc_info_to_span(
