@@ -371,7 +371,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         if run_id not in self.spans:
             return
 
-        metadata = {k: v for k, v in response.model_dump().items() if k not in ("llm_output", "generations")}
+        metadata = {k: v for k, v in _to_dict(response).items() if k not in ("llm_output", "generations")}
         metrics = _get_metrics_from_response(response)
         model_name = _get_model_name_from_response(response)
 
@@ -708,3 +708,11 @@ def _get_metrics_from_response(response: LLMResult):
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
 
     return clean_object(metrics)
+
+
+def _to_dict(obj: Any) -> Dict[str, Any]:
+    """Convert a Pydantic object to dict, with backwards compatibility for v1/v2."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()  # Pydantic v2
+    else:
+        return obj.dict()  # Pydantic v1

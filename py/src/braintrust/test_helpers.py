@@ -29,7 +29,7 @@ def simulate_logout() -> None:
     """
     # Reset login state
     logger._state.reset_login_info()
-    logger._state.current_experiment = None
+    logger._state.reset_parent_state()
 
 
 def assert_logged_out():
@@ -50,9 +50,11 @@ def with_simulate_login():
 
 @pytest.fixture
 def with_memory_logger():
+    logger._state.reset_parent_state()
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
-    logger._state.current_experiment = None
+    # Clean up global state to prevent test contamination
+    logger._state.reset_parent_state()
 
 
 def init_test_logger(project_name: str):
@@ -70,6 +72,16 @@ def init_test_logger(project_name: str):
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
     l = logger.init_logger(project=project_name)
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
+
+    # Replace the global _compute_logger_metadata function with a resolved LazyValue
+    def fake_compute_logger_metadata(project_name=None, project_id=None):
+        if project_id:
+            project_metadata = ObjectMetadata(id=project_id, name=project_name, full_info=dict())
+        else:
+            project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
+        return OrgProjectMetadata(org_id=TEST_ORG_ID, project=project_metadata)
+
+    logger._compute_logger_metadata = fake_compute_logger_metadata
     return l
 
 def init_test_exp(experiment_name: str, project_name: str = None):

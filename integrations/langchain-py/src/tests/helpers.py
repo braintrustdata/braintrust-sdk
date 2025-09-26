@@ -56,11 +56,6 @@ def assert_matches_object(
 
                 assert matched, f"Expected {expected_item} in unordered sequence but couldn't find match in {actual}"
 
-            expected_set = set(deep_hashable_dict(e) for e in expected)
-            actual_set = set(deep_hashable_dict(a) for a in actual)
-            # for expected_item, actual_item in zip(expected_set, actual_set):
-            #     assert_matches_object(expected_item, actual_item)
-
     elif isinstance(expected, dict):
         assert isinstance(actual, dict), f"Expected dict but got {type(actual)}"
         for k, v in expected.items():
