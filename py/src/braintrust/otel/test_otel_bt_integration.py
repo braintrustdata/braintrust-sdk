@@ -51,7 +51,7 @@ def otel_fixture():
         pytest.skip("OpenTelemetry not installed")
 
     # 1. Set environment variable first
-    os.environ['BRAINTRUST_OTEL_COMPAT'] = '1'
+    os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
 
     try:
         # 2. Set up memory logger with proper context manager
@@ -309,7 +309,7 @@ def test_uses_otel_context_manager_when_enabled():
 
     try:
         # Enable OTEL
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = '1'
+        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
 
         from braintrust.context import get_context_manager
         cm = get_context_manager()

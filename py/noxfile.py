@@ -128,7 +128,7 @@ def test_braintrust_core(session):
 
 
 @nox.session()
-def test_otel_installed(session):
+def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
@@ -161,7 +161,6 @@ def pylint(session):
     if not files:
         return
     session.run("pylint", "--errors-only", *files)
-
 
 @nox.session()
 def test_latest_wrappers_novcr(session):
