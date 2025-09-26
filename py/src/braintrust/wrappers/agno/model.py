@@ -146,7 +146,7 @@ def wrap_model(Model: Any) -> Any:
             ) as span:
                 first = True
                 collected_chunks = []
-                for chunk in await wrapped(*args, **kwargs):
+                async for chunk in wrapped(*args, **kwargs):
                     if first:
                         span.log(
                             metrics={
