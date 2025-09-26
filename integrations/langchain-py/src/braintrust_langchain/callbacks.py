@@ -264,7 +264,13 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> Any:
         metadata = metadata or {}
-        resolved_name = metadata.get("langgraph_node") or name or last_item(serialized.get("id") or []) or "Chain"
+        resolved_name = (
+            metadata.get("langgraph_node")
+            or name
+            or serialized.get("name")
+            or last_item(serialized.get("id") or [])
+            or "Chain"
+        )
 
         tags = tags or []
 
@@ -303,7 +309,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        name = name or last_item(serialized.get("id") or []) or "LLM"
+        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
 
         self._start_span(
             parent_run_id,
@@ -338,7 +344,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Chat Model",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Chat Model",
             type=SpanTypeAttribute.LLM,
             event={
                 "input": input_from_messages(messages),
@@ -393,7 +399,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Tool",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool",
             event={
                 "input": inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,
@@ -429,7 +435,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Retriever",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Retriever",
             type=SpanTypeAttribute.FUNCTION,
             event={
                 "input": query,

@@ -73,7 +73,7 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
                 ],
                 "metadata": {
                     "tags": ["seq:step:2"],
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-4o-mini-2024-07-18",
                     "temperature": 1,
                     "top_p": 1,
                     "frequency_penalty": 0,
@@ -141,7 +141,7 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
                         "role": "assistant",
                     },
                 ],
-                "metadata": {"tags": ["seq:step:2", "test"], "model": "gpt-4o-mini"},
+                "metadata": {"tags": ["seq:step:2", "test"], "model": "gpt-4o-mini-2024-07-18"},
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
             },
@@ -210,7 +210,7 @@ def test_tool_usage(logger_memory_logger: LoggerMemoryLogger):
                 ],
                 "metadata": {
                     "tags": [],
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-4o-mini-2024-07-18",
                     "temperature": 1,
                     "top_p": 1,
                     "frequency_penalty": 0,
@@ -315,7 +315,7 @@ def test_parallel_execution(logger_memory_logger: LoggerMemoryLogger):
     # Verify common metadata for both spans
     for span in [joke_llm_span, poem_llm_span]:
         assert span["metadata"]["tags"] == ["seq:step:2"]
-        assert span["metadata"]["model"] == "gpt-4o-mini"
+        assert span["metadata"]["model"] == "gpt-4o-mini-2024-07-18"
         assert span["metadata"]["temperature"] == 1
         assert span["metadata"]["top_p"] == 1
         assert span["metadata"]["frequency_penalty"] == 0
@@ -409,7 +409,7 @@ def test_langgraph_state_management(logger_memory_logger: LoggerMemoryLogger):
                     },
                 ],
                 "metadata": {
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-4o-mini-2024-07-18",
                     "temperature": 1,
                     "top_p": 1,
                     "frequency_penalty": 0,
