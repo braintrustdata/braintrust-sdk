@@ -1,7 +1,7 @@
-from braintrust_agno import setup_braintrust
+from braintrust.wrappers.agno import setup_agno
 
 # Set up Braintrust observability
-setup_braintrust(project_name="team-agent-project")
+setup_agno(project_name="team-agent-project")
 
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
