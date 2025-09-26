@@ -177,7 +177,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? llm.id.at(-1)?.toString() ?? "LLM",
+      name: runName ?? llm.name ?? llm.id.at(-1)?.toString() ?? "LLM",
       type: "llm",
       event: {
         input: prompts,
@@ -264,7 +264,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? llm.id.at(-1)?.toString() ?? "Chat Model",
+      name: runName ?? llm.name ?? llm.id.at(-1)?.toString() ?? "Chat Model",
       type: "llm",
       event: {
         input: inputFromMessages(messages),
@@ -299,7 +299,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
+      name: runName ?? chain?.name ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
         input: inputFromChainValues(inputs),
         tags,
@@ -357,7 +357,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? tool.id.at(-1)?.toString() ?? "Tool",
+      name: runName ?? tool.name ?? tool.id.at(-1)?.toString() ?? "Tool",
       event: {
         input: safeParseSerializedJson(input),
         tags,
@@ -443,7 +443,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: name ?? retriever.id.at(-1)?.toString() ?? "Retriever",
+      name:
+        name ??
+        retriever.name ??
+        retriever.id.at(-1)?.toString() ??
+        "Retriever",
       type: "function",
       event: {
         input: query,
