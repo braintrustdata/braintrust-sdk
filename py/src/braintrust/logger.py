@@ -53,6 +53,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
+from . import id_gen
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
@@ -83,6 +84,7 @@ from .prompt_cache.prompt_cache import PromptCache
 from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
+from .span_identifier_v4 import SpanComponentsV4
 from .span_types import SpanTypeAttribute
 from .util import (
     GLOBAL_PROJECT,
@@ -181,7 +183,7 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
         Serialize the identifiers of this span. The return value can be used to identify this span when starting a subspan elsewhere, such as another process or service, without needing to access this `Span` object. See the parameters of `Span.start_span` for usage details.
 
-        Callers should treat the return value as opaque. The serialization format may change from time to time. If parsing is needed, use `SpanComponentsV3.from_str`.
+        Callers should treat the return value as opaque. The serialization format may change from time to time. If parsing is needed, use `SpanComponentsV4.from_str`.
 
         :returns: Serialized representation of this span's identifiers.
         """
@@ -363,6 +365,8 @@ class BraintrustState:
             lambda: _HTTPBackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
         )
 
+        self._id_generator = None
+
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
         # thread-local to prevent the possibility that tests running on
@@ -400,6 +404,27 @@ class BraintrustState:
         self._api_conn: Optional[HTTPConnection] = None
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
+
+    def reset_parent_state(self):
+        # reset possible parent state for tests
+        self.current_experiment = None
+        self.current_logger = None
+        self.current_parent.set(None)
+        self.current_span.set(NOOP_SPAN)
+
+    def _reset_id_generator(self):
+        # used in tests when we want to test with a different id generators
+        # which are controlled by env vars.
+        self._id_generator = None
+
+    @property
+    def id_generator(self):
+        """ Return the active id generator. """
+        # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
+        # so that we could possibly have parallel tests using different id generators.
+        if self._id_generator is None:
+            self._id_generator = id_gen.get_id_generator()
+        return self._id_generator
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -913,7 +938,14 @@ class _HTTPBackgroundLogger:
             try:
                 self.flush()
             except:
-                traceback.print_exc(file=self.outfile)
+                # Print exception but don't worry if stderr is closed because the process is shutting down.
+                try:
+                    traceback.print_exc(file=self.outfile)
+                except ValueError as e:
+                    if "operation on closed file" in str(e):
+                        pass
+                    else:
+                        raise
 
     def flush(self, batch_size: Optional[int] = None):
         if batch_size is None:
@@ -1869,7 +1901,7 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponentsV3, "Logger", "Experiment", Span]:
+def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
 
@@ -1879,7 +1911,7 @@ def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponents
 
     parent = parent or _state.current_parent.get()
     if parent:
-        return SpanComponentsV3.from_str(parent)
+        return SpanComponentsV4.from_str(parent)
 
     experiment = current_experiment()
     if experiment:
@@ -2102,7 +2134,7 @@ def start_span(
 
     parent_obj = get_span_parent_object(parent)
 
-    if isinstance(parent_obj, SpanComponentsV3):
+    if isinstance(parent_obj, SpanComponentsV4):
         if parent_obj.row_id and parent_obj.span_id and parent_obj.root_span_id:
             parent_span_ids = ParentSpanIds(span_id=parent_obj.span_id, root_span_id=parent_obj.root_span_id)
         else:
@@ -2901,7 +2933,7 @@ def _log_feedback_impl(
 
     update_event = _deep_copy_event(update_event)
 
-    parent_ids = lambda: SpanComponentsV3(
+    parent_ids = lambda: SpanComponentsV4(
         object_type=parent_object_type,
         object_id=parent_object_id.get(),
     ).object_id_fields()
@@ -2955,7 +2987,7 @@ def _update_span_impl(
 
     update_event = _deep_copy_event(update_event)
 
-    parent_ids = lambda: SpanComponentsV3(
+    parent_ids = lambda: SpanComponentsV4(
         object_type=parent_object_type,
         object_id=parent_object_id.get(),
     ).object_id_fields()
@@ -2987,7 +3019,7 @@ def update_span(exported: str, **event: Any) -> None:
             "Cannot specify id when updating a span with `update_span`. Use the output of `span.export()` instead."
         )
 
-    components = SpanComponentsV3.from_str(exported)
+    components = SpanComponentsV4.from_str(exported)
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
     return _update_span_impl(
@@ -3004,7 +3036,7 @@ class ParentSpanIds:
     root_span_id: str
 
 
-def _span_components_to_object_id_lambda(components: SpanComponentsV3) -> Callable[[], str]:
+def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
     if components.object_id:
         captured_object_id = components.object_id
         return lambda: captured_object_id
@@ -3018,9 +3050,9 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3) -> Callab
         raise Exception(f"Unknown object type: {components.object_type}")
 
 
-def span_components_to_object_id(components: SpanComponentsV3) -> str:
+def span_components_to_object_id(components: SpanComponentsV4) -> str:
     """
-    Utility function to resolve the object ID of a SpanComponentsV3 object. This
+    Utility function to resolve the object ID of a SpanComponentsV4 object. This
     function may trigger a login to braintrust if the object ID is encoded
     lazily.
     """
@@ -3057,7 +3089,7 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
                 raise Exception("Must either provide app_url explicitly or be logged in")
             app_url = _state.app_url
 
-        components = SpanComponentsV3.from_str(slug)
+        components = SpanComponentsV4.from_str(slug)
 
         object_type = str(components.object_type)
         object_id = span_components_to_object_id(components)
@@ -3085,10 +3117,10 @@ def _start_span_parent_args(
 ) -> Dict[str, Any]:
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
-        parent_components = SpanComponentsV3.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        parent_components = SpanComponentsV4.from_str(parent)
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
@@ -3443,7 +3475,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         )
 
     def export(self) -> str:
-        return SpanComponentsV3(object_type=self._parent_object_type(), object_id=self.id).to_str()
+        return SpanComponentsV4(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self) -> str:
         """This function is deprecated. You can simply remove it from your code."""
@@ -3622,12 +3654,21 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = span_id or str(uuid.uuid4())
+
+        id_generator = self.state.id_generator
+        self.span_id = span_id or id_generator.get_span_id()
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = root_span_id or self.span_id
+            if root_span_id:
+                self.root_span_id = root_span_id
+            elif id_generator.share_root_span_id():
+                # NOTE: uuid style id gen shared root_span_id and span_id for parents, so I'm keeping
+                # this behaviour to be backwards compatible / conservative.
+                self.root_span_id = self.span_id
+            else:
+                self.root_span_id = id_generator.get_trace_id()
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span
@@ -3693,7 +3734,7 @@ class SpanImpl(Span):
             return dict(
                 **serializable_partial_record,
                 **{k: v.get() for k, v in lazy_partial_record.items()},
-                **SpanComponentsV3(
+                **SpanComponentsV4(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
@@ -3760,7 +3801,11 @@ class SpanImpl(Span):
             object_id = self.parent_object_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV3(
+        # Choose SpanComponents version based on BRAINTRUST_OTEL_COMPAT env var
+        use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
+        span_components_class = SpanComponentsV4 if use_v4 else SpanComponentsV3
+
+        return span_components_class(
             object_type=self.parent_object_type,
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
@@ -4724,7 +4769,7 @@ class Logger(Exportable):
             object_id = self._lazy_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV3(
+        return SpanComponentsV4(
             object_type=self._parent_object_type(),
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
