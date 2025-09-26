@@ -12,7 +12,7 @@ import pytest
 from braintrust import current_span
 from braintrust.logger import _internal_with_memory_background_logger
 from braintrust.otel import BraintrustSpanProcessor
-from braintrust.test_helpers import init_test_exp, init_test_logger
+from braintrust.test_helpers import init_test_exp, init_test_logger, preserve_env_vars
 
 OTEL_AVAILABLE = True
 try:
@@ -50,10 +50,14 @@ def otel_fixture():
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    # 1. Set environment variable first
-    os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
+    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT'):
 
-    try:
+
+        # 1. Set environment variable first
+        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
+        # Set dummy API key for tests
+        os.environ['BRAINTRUST_API_KEY'] = 'test-api-key-for-fixture'
+
         # 2. Set up memory logger with proper context manager
         with _internal_with_memory_background_logger() as memory_logger:
             # 3. Set up OTEL components
@@ -71,12 +75,7 @@ def otel_fixture():
             tracer = tp.get_tracer("otel-fixture-test")
 
             fixture = OtelFixture(exporter=exporter, tracer=tracer, memory_logger=memory_logger)
-
             yield fixture
-
-    finally:
-        # Reset environment
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = '0'
 
 
 def test_mixed_otel_bt_tracing_with_bt_logger_first(otel_fixture):

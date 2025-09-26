@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from braintrust import logger
@@ -62,6 +64,16 @@ def memory_logger():
         yield bgl
     logger._state.current_experiment = None
 
+def preserve_env_vars(*vars):
+    original_env = {v: os.environ.get(v) for v in vars}
+    try:
+        yield
+    finally:
+        for v in vars:
+            os.environ.pop(v, None)
+        for v, val in original_env.items():
+            if val:
+                os.environ[v] = val
 
 
 def init_test_logger(project_name: str):
