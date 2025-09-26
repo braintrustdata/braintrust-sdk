@@ -30,14 +30,6 @@ from typing_extensions import NotRequired
 _logger = logging.getLogger("braintrust_langchain")
 
 
-def _to_dict(obj: Any) -> Dict[str, Any]:
-    """Convert a Pydantic object to dict, with backwards compatibility for v1/v2."""
-    if hasattr(obj, 'model_dump'):
-        return obj.model_dump()  # Pydantic v2
-    else:
-        return obj.dict()  # Pydantic v1
-
-
 class LogEvent(TypedDict):
     input: NotRequired[Any]
     output: NotRequired[Any]
@@ -67,13 +59,16 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
         self.skipped_runs: Set[UUID] = set()
+        # Set run_inline=True to avoid thread executor in async contexts
+        # This ensures memory logger context is preserved
+        self.run_inline = True
 
     def _start_span(
         self,
         parent_run_id: Optional[UUID],
         run_id: UUID,
         name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
+        type: Optional[SpanTypeAttribute] = SpanTypeAttribute.TASK,
         span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
@@ -240,6 +235,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
+            type=SpanTypeAttribute.LLM,
             name=action.tool,
             event={
                 "input": action.tool_input,  # type: ignore[arg-type]
@@ -269,7 +265,13 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> Any:
         metadata = metadata or {}
-        resolved_name = metadata.get("langgraph_node") or name or last_item(serialized.get("id") or []) or "Chain"
+        resolved_name = (
+            metadata.get("langgraph_node")
+            or name
+            or serialized.get("name")
+            or last_item(serialized.get("id") or [])
+            or "Chain"
+        )
 
         tags = tags or []
 
@@ -308,7 +310,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        name = name or last_item(serialized.get("id") or []) or "LLM"
+        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
 
         self._start_span(
             parent_run_id,
@@ -343,7 +345,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Chat Model",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Chat Model",
             type=SpanTypeAttribute.LLM,
             event={
                 "input": input_from_messages(messages),
@@ -370,29 +372,16 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         if run_id not in self.spans:
             return
 
-        llm_output: Dict[str, Any] = response.llm_output or {}  # type: ignore
-        generations = response.generations
-        metadata = {
-            k: v
-            for k, v in _to_dict(response).items()
-            if k not in ("llm_output", "generations")
-        }
-
-        model_name = llm_output.get("model_name")
-        token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+        metadata = {k: v for k, v in _to_dict(response).items() if k not in ("llm_output", "generations")}
+        metrics = _get_metrics_from_response(response)
+        model_name = _get_model_name_from_response(response)
 
         self._end_span(
             run_id,
-            output=output_from_generations(generations),
-            metrics=clean_object(
-                {
-                    "tokens": token_usage.get("total_tokens"),
-                    "prompt_tokens": token_usage.get("prompt_tokens"),
-                    "completion_tokens": token_usage.get("completion_tokens"),
-                }
-            ),
+            output=output_from_generations(response.generations),
+            metrics=metrics,
             tags=tags,
-            metadata=self.clean_metadata({**metadata, "model_name": model_name}),
+            metadata=self.clean_metadata({**metadata, "model": model_name}),
         )
 
     def on_tool_start(
@@ -411,7 +400,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Tool",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool",
             event={
                 "input": inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,
@@ -447,7 +436,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
-            name=name or last_item(serialized.get("id") or []) or "Retriever",
+            name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Retriever",
             type=SpanTypeAttribute.FUNCTION,
             event={
                 "input": query,
@@ -658,10 +647,73 @@ def parse_chain_value(output: Any) -> Any:
 
 
 def input_from_chain_values(inputs: Any) -> Any:
-    inputs_list = cast(List[Any], [inputs] if not isinstance(inputs, list) else inputs)
+    inputs_list = [inputs] if not isinstance(inputs, list) else inputs
     parsed = [parse_chain_value(x) for x in inputs_list]
     return parsed[0] if len(parsed) == 1 else parsed
 
 
 def last_item(items: List[Any]) -> Any:
     return items[-1] if items else None
+
+
+def _walk_generations(response: LLMResult):
+    for generations in response.generations or []:
+        for generation in generations or []:
+            yield generation
+
+
+def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
+    model_name = None
+    for generation in _walk_generations(response):
+        message = getattr(generation, "message", None)
+        if not message:
+            continue
+
+        response_metadata = getattr(message, "response_metadata", None)
+        if response_metadata and isinstance(response_metadata, dict):
+            model_name = response_metadata.get("model_name")
+
+        if model_name:
+            break
+
+    if not model_name:
+        llm_output: Dict[str, Any] = response.llm_output or {}
+        model_name = llm_output.get("model_name") or llm_output.get("model") or ""
+
+    return model_name
+
+
+def _get_metrics_from_response(response: LLMResult):
+    metrics = {}
+
+    for generation in _walk_generations(response):
+        message = getattr(generation, "message", None)
+        if not message:
+            continue
+
+        usage_metadata = getattr(message, "usage_metadata", None)
+
+        if usage_metadata and isinstance(usage_metadata, dict):
+            metrics.update(
+                clean_object(
+                    {
+                        "total_tokens": usage_metadata.get("total_tokens"),
+                        "prompt_tokens": usage_metadata.get("input_tokens"),
+                        "completion_tokens": usage_metadata.get("output_tokens"),
+                    }
+                )
+            )
+
+    if not metrics or not any(metrics.values()):
+        llm_output: Dict[str, Any] = response.llm_output or {}
+        metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
+
+    return clean_object(metrics)
+
+
+def _to_dict(obj: Any) -> Dict[str, Any]:
+    """Convert a Pydantic object to dict, with backwards compatibility for v1/v2."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()  # Pydantic v2
+    else:
+        return obj.dict()  # Pydantic v1

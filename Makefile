@@ -46,7 +46,6 @@ test-py-sdk: nox
 
 nox:
 	cd py && make test
-	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
 	cd py && make lint

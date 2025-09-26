@@ -1,11 +1,8 @@
-from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Sequence, Union, cast
 
-import httpx
-import respx
-from braintrust.logger import Span, flush
+from braintrust.logger import Span
 
-from .types import LogRequest, Span
+from .types import Span
 
 # Base types that can appear in values
 PrimitiveValue = Union[str, int, float, bool, None, Span]
@@ -59,11 +56,6 @@ def assert_matches_object(
 
                 assert matched, f"Expected {expected_item} in unordered sequence but couldn't find match in {actual}"
 
-            expected_set = set(deep_hashable_dict(e) for e in expected)
-            actual_set = set(deep_hashable_dict(a) for a in actual)
-            # for expected_item, actual_item in zip(expected_set, actual_set):
-            #     assert_matches_object(expected_item, actual_item)
-
     elif isinstance(expected, dict):
         assert isinstance(actual, dict), f"Expected dict but got {type(actual)}"
         for k, v in expected.items():
@@ -74,55 +66,6 @@ def assert_matches_object(
                 assert actual[k] == v, f"Key {k}: expected {v} but got {actual[k]}"
     else:
         assert actual == expected, f"Expected {expected} but got {actual}"
-
-
-@contextmanager
-def mock_openai(responses: List[Dict[str, Any]]) -> Generator[respx.MockRouter, None, None]:
-    """Context manager for mocking OpenAI API with custom responses."""
-    with respx.mock(assert_all_mocked=True) as respx_mock:
-
-        def success_response(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json=responses.pop(0))
-
-        respx_mock.post("https://api.openai.com/v1/chat/completions").mock(side_effect=success_response)
-
-        yield respx_mock
-
-        flush()
-
-
-def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[Span], Optional[str]]:
-    """Convert logs to spans format, merging duplicate span IDs."""
-    if not logs:
-        raise ValueError("No logs to convert to spans")
-
-    # Logs include partial updates (merges) for previous rows
-    # We need to dedupe these and merge them to see the final state
-    seen_ids: Set[str] = set()
-    spans: List[Span] = []
-
-    for log in logs:
-        for row in log["rows"]:
-            if row["span_id"] not in seen_ids:
-                seen_ids.add(row["span_id"])
-                spans.append(row)
-            else:
-                # Find and merge with existing span
-                existing_span = next(span for span in spans if span["span_id"] == row["span_id"])
-                # Merge dictionaries recursively
-                for key, value in row.items():
-                    if isinstance(value, dict) and key in existing_span:
-                        existing_span[key] = {**existing_span[key], **value}
-                    else:
-                        existing_span[key] = value
-
-    if not spans:
-        return spans, None, None
-
-    root_span = spans[0]
-    run_id = root_span.get("metadata", {}).get("runId")
-
-    return spans, root_span, run_id
 
 
 def find_spans_by_attributes(spans: List[Span], **attributes: Any) -> List[Span]:

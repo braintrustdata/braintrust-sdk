@@ -10,7 +10,7 @@ pip install braintrust-langchain
 
 ## Requirements
 
-- Python >= 3.8
+- Python >= 3.9
 - LangChain >= 0.1.0
 
 ## Usage
