@@ -277,7 +277,10 @@ def _log_message_to_span(message, span):
 
         # Create output dict with only truthy values for role and content
         output = {
-            k: v for k, v in message.items() if v and k in ("role", "content")
+            k: v for k, v in {
+                "role": getattr(message, "role", None),
+                "content": getattr(message, "content", None)
+            }.items() if v
         } or None
 
         span.log(output=output, metrics=metrics)
