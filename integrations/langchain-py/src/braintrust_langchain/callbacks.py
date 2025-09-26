@@ -30,6 +30,14 @@ from typing_extensions import NotRequired
 _logger = logging.getLogger("braintrust_langchain")
 
 
+def _to_dict(obj: Any) -> Dict[str, Any]:
+    """Convert a Pydantic object to dict, with backwards compatibility for v1/v2."""
+    if hasattr(obj, 'model_dump'):
+        return obj.model_dump()  # Pydantic v2
+    else:
+        return obj.dict()  # Pydantic v1
+
+
 class LogEvent(TypedDict):
     input: NotRequired[Any]
     output: NotRequired[Any]
@@ -366,8 +374,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         generations = response.generations
         metadata = {
             k: v
-            # for 3.8 we need to use dict()
-            for k, v in response.dict().items()  # type: ignore
+            for k, v in _to_dict(response).items()
             if k not in ("llm_output", "generations")
         }
 
