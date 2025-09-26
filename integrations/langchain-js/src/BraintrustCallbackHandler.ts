@@ -1,4 +1,4 @@
-import { isObject } from "braintrust/util";
+import { isObject, SpanTypeAttribute } from "braintrust/util";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -89,6 +89,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     }
 
     const tags = args.event?.tags;
+
+    const spanAttributes = args.spanAttributes || {};
+    spanAttributes.type =
+      args.type || spanAttributes.type || SpanTypeAttribute.TASK;
+
+    args.type = spanAttributes.type;
 
     args.event = {
       ...args.event,
@@ -408,6 +414,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
+      type: "llm",
       name: action.tool,
       event: {
         input: action,

@@ -68,7 +68,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID],
         run_id: UUID,
         name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
+        type: Optional[SpanTypeAttribute] = SpanTypeAttribute.TASK,
         span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
@@ -235,6 +235,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_span(
             parent_run_id,
             run_id,
+            type=SpanTypeAttribute.LLM,
             name=action.tool,
             event={
                 "input": action.tool_input,  # type: ignore[arg-type]

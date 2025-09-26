@@ -79,7 +79,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { number: "2" },
         output: "What is 1 + 2?",
         metadata: { tags: ["seq:step:1"] },
@@ -188,7 +188,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { topic: "parrot" },
         output: "tell me a four word joke about parrot",
         metadata: { tags: ["seq:step:1"] },
@@ -270,7 +270,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: {
           input: "What's your name?",
           history: "Assistant: Hello! How can I assist you today?",
@@ -468,11 +468,13 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableMap",
+          type: "task",
         },
       },
       {
         span_attributes: {
           name: "RunnableSequence",
+          type: "task",
         },
         metadata: {
           tags: ["map:key:joke"],
@@ -481,6 +483,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableSequence",
+          type: "task",
         },
         metadata: {
           tags: ["map:key:poem"],
@@ -489,6 +492,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
+          type: "task",
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -497,6 +501,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
+          type: "task",
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -727,6 +732,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "sayHello",
+          type: "task",
         },
         input: {},
         metadata: {
@@ -756,6 +762,13 @@ describe("BraintrustCallbackHandler", () => {
           n: 1,
           tags: [],
         },
+        metrics: {
+          completion_tokens: 9,
+          end: expect.any(Number),
+          prompt_tokens: 9,
+          start: expect.any(Number),
+          total_tokens: 18,
+        },
         output: [
           {
             content: "Hello! How can I assist you today?",
@@ -766,6 +779,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "sayBye",
+          type: "task",
         },
         input: {},
         metadata: {
