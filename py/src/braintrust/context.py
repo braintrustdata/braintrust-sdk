@@ -123,7 +123,7 @@ def get_context_manager() -> ContextManager:
     """
 
     # Check if OTEL should be explicitly enabled via environment variable
-    if os.environ.get('BRAINTRUST_ENABLE_OTEL', '').lower() in ('1', 'true', 'yes'):
+    if os.environ.get('BRAINTRUST_OTEL_COMPAT', '').lower() in ('1', 'true', 'yes'):
         try:
             from braintrust.otel.context import ContextManager as OtelContextManager
             return OtelContextManager()

@@ -51,7 +51,7 @@ def otel_fixture():
         pytest.skip("OpenTelemetry not installed")
 
     # 1. Set environment variable first
-    os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
+    os.environ['BRAINTRUST_OTEL_COMPAT'] = '1'
 
     try:
         # 2. Set up memory logger with proper context manager
@@ -76,7 +76,7 @@ def otel_fixture():
 
     finally:
         # Reset environment
-        os.environ['BRAINTRUST_ENABLE_OTEL'] = '0'
+        os.environ['BRAINTRUST_OTEL_COMPAT'] = '0'
 
 
 def test_mixed_otel_bt_tracing_with_bt_logger_first(otel_fixture):
@@ -282,7 +282,7 @@ def test_otel_spans_inherit_parent_attribute(otel_fixture):
 def test_uses_braintrust_context_manager_when_otel_disabled():
     """Test that BraintrustContextManager is used when OTEL is not enabled."""
     # Ensure OTEL is disabled
-    os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
+    os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
 
     try:
         from braintrust.context import get_context_manager
@@ -299,17 +299,17 @@ def test_uses_braintrust_context_manager_when_otel_disabled():
 
     finally:
         # Clean up - remove any environment variable we might have set
-        os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
+        os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
 
 
 def test_uses_otel_context_manager_when_enabled():
-    """Test that OTEL ContextManager is used when BRAINTRUST_ENABLE_OTEL=1."""
+    """Test that OTEL ContextManager is used when BRAINTRUST_OTEL_COMPAT=1."""
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
     try:
         # Enable OTEL
-        os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
+        os.environ['BRAINTRUST_OTEL_COMPAT'] = '1'
 
         from braintrust.context import get_context_manager
         cm = get_context_manager()
@@ -325,7 +325,7 @@ def test_uses_otel_context_manager_when_enabled():
 
     finally:
         # Clean up
-        os.environ.pop('BRAINTRUST_ENABLE_OTEL', None)
+        os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
 
 
 if __name__ == "__main__":

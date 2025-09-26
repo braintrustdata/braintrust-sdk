@@ -11,12 +11,12 @@ Key concept: No bridge needed - just pure OTEL + pure Braintrust with automatic 
 
 import os
 
-os.environ['BRAINTRUST_ENABLE_OTEL'] = '1'
+os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
 
 import braintrust
 from braintrust.otel import BraintrustSpanProcessor
 
-PROJECT_NAME = "mixed-otel-braintrust-python"
+PROJECT_NAME = "mixed-otel-braintrust-python-2"
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider

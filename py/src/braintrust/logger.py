@@ -435,7 +435,7 @@ class BraintrustState:
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
         import os
-        current_otel_setting = os.environ.get('BRAINTRUST_ENABLE_OTEL', '')
+        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
 
         # Cache the context manager unless the environment variable changed
         if self._context_manager is None or self._last_otel_setting != current_otel_setting:
