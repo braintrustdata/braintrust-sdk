@@ -22,3 +22,4 @@ export {
   evaluatorDefinitionsSchema,
 } from "../dev/types";
 export type { EvalParameters } from "./eval-parameters";
+export type { AttachmentReference } from "./generated_types";
