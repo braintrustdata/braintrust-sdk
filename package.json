@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "js",
-    "core/js"
+    "core/js",
+    "setup-cli"
   ],
   "scripts": {
     "build": "turbo run build",
