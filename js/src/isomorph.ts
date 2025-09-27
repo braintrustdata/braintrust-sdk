@@ -33,7 +33,7 @@ export interface Common {
   getRepoInfo: (
     settings?: GitMetadataSettings,
   ) => Promise<RepoInfo | undefined>;
-  getPastNAncestors: () => Promise<string[]>;
+  getPastNAncestors: (n?: number) => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
