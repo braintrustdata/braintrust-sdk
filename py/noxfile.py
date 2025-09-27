@@ -35,6 +35,7 @@ BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
 VENDOR_PACKAGES = (
+    "agno",
     "anthropic",
     "openai",
     "pydantic_ai",
