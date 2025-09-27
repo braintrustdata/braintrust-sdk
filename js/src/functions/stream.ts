@@ -1,5 +1,4 @@
 import {
-  CallEvent as CallEventSchemaImport,
   type CallEventType as CallEventSchema,
   CallEvent as callEventSchema,
   SSEConsoleEventData as sseConsoleEventDataSchema,
@@ -167,9 +166,28 @@ export class BraintrustStream {
   static parseRawEvent(event: CallEventSchema): BraintrustStreamChunk {
     switch (event.event) {
       case "text_delta":
+        const parsedData = JSON.parse(event.data);
+        // Handle Mistral thinking events: check if it's an array with thinking objects
+        if (
+          Array.isArray(parsedData) &&
+          parsedData.length > 0 &&
+          parsedData[0].type === "thinking"
+        ) {
+          const thinkingData = parsedData[0].thinking;
+          if (Array.isArray(thinkingData)) {
+            // Extract text from thinking array
+            const textParts = thinkingData
+              .filter((item) => item.type === "text")
+              .map((item) => item.text);
+            return {
+              type: "text_delta",
+              data: textParts.join(""),
+            };
+          }
+        }
         return {
           type: "text_delta",
-          data: JSON.parse(event.data),
+          data: parsedData,
         };
       case "reasoning_delta":
         return {
@@ -281,6 +299,18 @@ function btStreamParser() {
         }
         controller.enqueue(BraintrustStream.parseRawEvent(parsed.data));
       });
+    },
+    async transform(chunk, controller) {
+      if (chunk instanceof Uint8Array) {
+        parser.feed(decoder.decode(chunk));
+      } else if (typeof chunk === "string") {
+        parser.feed(chunk);
+      } else {
+        controller.enqueue(chunk);
+      }
+    },
+    async flush(controller) {
+      controller.terminate();
     },
     async transform(chunk, controller) {
       if (chunk instanceof Uint8Array) {
