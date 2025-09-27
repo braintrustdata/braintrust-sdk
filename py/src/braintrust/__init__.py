@@ -60,6 +60,12 @@ from .logger import (
     _internal_reset_global_state,  # noqa: F401 # type: ignore[reportUnusedImport]
     _internal_with_custom_background_logger,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
+from .metrics import (
+    Metrics,  # noqa: F401 # type: ignore[reportUnusedImport]
+    StandardMetrics,  # noqa: F401 # type: ignore[reportUnusedImport]
+    TimingMetrics,  # noqa: F401 # type: ignore[reportUnusedImport]
+    TokenMetrics,  # noqa: F401 # type: ignore[reportUnusedImport]
+)
 from .oai import (
     wrap_openai,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
