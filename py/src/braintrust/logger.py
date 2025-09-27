@@ -1378,7 +1378,7 @@ def init(
         elif base_experiment is not None:
             args["base_experiment"] = base_experiment
         else:
-            args["ancestor_commits"] = list(get_past_n_ancestors())[:1000]
+            args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
             args["dataset_id"] = dataset.id
