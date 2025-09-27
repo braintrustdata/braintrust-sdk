@@ -274,8 +274,16 @@ def _log_message_to_span(message, span):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
         metrics = _finalize_metrics(_extract_metrics(getattr(message, "usage", {})))
-        content = getattr(message, "content", None)
-        span.log(output=content, metrics=metrics)
+
+        # Create output dict with only truthy values for role and content
+        output = {
+            k: v for k, v in {
+                "role": getattr(message, "role", None),
+                "content": getattr(message, "content", None)
+            }.items() if v
+        } or None
+
+        span.log(output=output, metrics=metrics)
 
 
 def _extract_metrics(usage):
