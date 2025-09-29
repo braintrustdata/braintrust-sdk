@@ -250,7 +250,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     expect(metadata["temperature"]).toBe(0.5);
     expect(span?.input).toBeDefined();
     expect(span?.output).toBeDefined();
-    const output = span.output[0].text;
+    const output = span.output.content[0].text;
     expect(output).toContain("16");
     const metrics = span.metrics;
     const usage = response.usage;
@@ -317,7 +317,10 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         { role: "user", content: "What's 4*4?" },
         { role: "system", content: "Return the result only." },
       ],
-      output: [{ type: "text", text: "16" }],
+      output: {
+        role: "assistant",
+        content: [{ type: "text", text: "16" }],
+      },
       metrics: {
         prompt_tokens: expect.any(Number),
         completion_tokens: expect.any(Number),
