@@ -1874,25 +1874,23 @@ def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_sta
 
 
 def test_nested_spans_with_export(with_memory_logger):
-    """Test nested spans with export() calls.
+    """Test nested spans with login triggered during span execution.
 
-    This reproduces a bug where span.export() triggers lazy metadata computation
-    which calls state.login() -> copy_state(). If copy_state() doesn't exclude
-    _context_manager from copying, it overwrites the cached context manager with
-    None, causing a ContextVar token mismatch error when the span exits.
+    This reproduces a bug where calling state.login() during an active span
+    calls copy_state(), which would overwrite _context_manager with None,
+    causing a ContextVar token mismatch error when the span exits.
     """
-    import braintrust
+    from braintrust import logger
+    from braintrust.test_helpers import init_test_exp
 
-    experiment = braintrust.init(project="test-project")
+    experiment = init_test_exp("test-experiment", "test-project")
 
-    # Nested spans with export() calls - this pattern triggers the bug
+    # Start a span, then trigger login which calls copy_state()
     with experiment.start_span(name="s1") as span1:
         span1.log(input="one")
-        with experiment.start_span(parent=span1.export(), name="s2") as span2:
+        # Trigger login with TEST_API_KEY and force_login=True
+        # This calls copy_state() which should NOT overwrite _context_manager
+        experiment.state.login(api_key=logger.TEST_API_KEY, force_login=True)
+        # Continue with nested spans to ensure context manager still works
+        with experiment.start_span(name="s2") as span2:
             span2.log(input="two")
-            with span2.start_span(name="s3") as span3:
-                span3.log(input="three")
-                with experiment.start_span(parent=span3.export(), name="s4") as span4:
-                    span4.log(input="four")
-                with span3.start_span(name="s5") as span5:
-                    span5.log(input="five")
