@@ -73,7 +73,7 @@ type SdkMcpToolDefinition<T> = {
 export function wrapClaudeAgentQuery<
   T extends (...args: unknown[]) => AsyncGenerator<SDKMessage, void, unknown>,
 >(queryFn: T, defaultThis?: unknown): T {
-  const proxy = new Proxy(queryFn, {
+  const proxy: T = new Proxy(queryFn, {
     apply(target, thisArg, argArray) {
       const params = (argArray[0] ?? {}) as {
         prompt?: string | AsyncIterable<SDKMessage>;
@@ -132,58 +132,60 @@ export function wrapClaudeAgentQuery<
       };
 
       // Create wrapped async generator that maintains span context
-      const wrappedGenerator = (async function* () {
-        try {
-          const invocationTarget =
-            thisArg === proxy || thisArg === undefined
-              ? defaultThis ?? thisArg
-              : thisArg;
+      const wrappedGenerator: AsyncGenerator<SDKMessage, void, unknown> =
+        (async function* () {
+          try {
+            const invocationTarget: unknown =
+              thisArg === proxy || thisArg === undefined
+                ? defaultThis ?? thisArg
+                : thisArg;
 
-          const generator = withCurrent(span, () =>
-            Reflect.apply(target, invocationTarget, argArray),
-          );
+            const generator: AsyncGenerator<SDKMessage, void, unknown> =
+              withCurrent(span, () =>
+                Reflect.apply(target, invocationTarget, argArray),
+              ) as AsyncGenerator<SDKMessage, void, unknown>;
 
-          for await (const message of generator) {
-            const currentTime = getCurrentUnixTimestamp();
+            for await (const message of generator) {
+              const currentTime = getCurrentUnixTimestamp();
 
-            // Check if this is a new message ID
-            const messageId = message.message?.id;
-            if (messageId && messageId !== currentMessageId) {
-              // Create span for previous message group
-              await createLLMSpan();
+              // Check if this is a new message ID
+              const messageId = message.message?.id;
+              if (messageId && messageId !== currentMessageId) {
+                // Create span for previous message group
+                await createLLMSpan();
 
-              // Start new message group
-              currentMessageId = messageId;
-              currentMessageStartTime = currentTime;
+                // Start new message group
+                currentMessageId = messageId;
+                currentMessageStartTime = currentTime;
+              }
+
+              // Accumulate messages for the current message ID
+              if (message.type === "assistant" && message.message?.usage) {
+                currentMessages.push(message);
+              }
+
+              yield message;
             }
 
-            // Accumulate messages for the current message ID
-            if (message.type === "assistant" && message.message?.usage) {
-              currentMessages.push(message);
-            }
+            // Create span for final message group
+            await createLLMSpan();
 
-            yield message;
+            // Log final output to top-level span - just the last message content
+            span.log({
+              output:
+                finalResults.length > 0
+                  ? finalResults[finalResults.length - 1]
+                  : undefined,
+            });
+          } catch (error) {
+            span.log({
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          } finally {
+            endSpan();
           }
-
-          // Create span for final message group
-          await createLLMSpan();
-
-          // Log final output to top-level span - just the last message content
-          span.log({
-            output:
-              finalResults.length > 0
-                ? finalResults[finalResults.length - 1]
-                : undefined,
-          });
-        } catch (error) {
-          span.log({
-            error: error instanceof Error ? error.message : String(error),
-          });
-          throw error;
-        } finally {
-          endSpan();
-        }
-      })();
+        })();
 
       // Return the generator directly - avoid Proxy for compatibility
       return wrappedGenerator as ReturnType<T>;
