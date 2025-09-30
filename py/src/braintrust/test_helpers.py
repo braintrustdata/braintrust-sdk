@@ -1,3 +1,6 @@
+import os
+from contextlib import contextmanager
+
 import pytest
 
 from braintrust import logger
@@ -55,6 +58,24 @@ def with_memory_logger():
         yield bgl
     # Clean up global state to prevent test contamination
     logger._state.reset_parent_state()
+
+@pytest.fixture
+def memory_logger():
+    with logger._internal_with_memory_background_logger() as bgl:
+        yield bgl
+    logger._state.current_experiment = None
+
+@contextmanager
+def preserve_env_vars(*vars):
+    original_env = {v: os.environ.get(v) for v in vars}
+    try:
+        yield
+    finally:
+        for v in vars:
+            os.environ.pop(v, None)
+        for v, val in original_env.items():
+            if val:
+                os.environ[v] = val
 
 
 def init_test_logger(project_name: str):
