@@ -3344,7 +3344,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             ),
             self.dataset is not None,
         )
-        span = self._start_span_impl(start_time=self.last_start_time, **event)
+        span = self._start_span_impl(start_time=self.last_start_time, use_context_manager=False, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -3533,17 +3533,21 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        use_context_manager: bool = True,
         **event: Any,
     ) -> Span:
+        parent_args = _start_span_parent_args(
+            parent=parent,
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            parent_compute_object_metadata_args=None,
+            parent_span_ids=None,
+            propagated_event=propagated_event,
+        )
+        # Override use_context_manager from caller
+        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
-            **_start_span_parent_args(
-                parent=parent,
-                parent_object_type=self._parent_object_type(),
-                parent_object_id=self._lazy_id,
-                parent_compute_object_metadata_args=None,
-                parent_span_ids=None,
-                propagated_event=propagated_event,
-            ),
+            **parent_args,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.EVAL,
@@ -4703,6 +4707,7 @@ class Logger(Exportable):
 
         span = self._start_span_impl(
             start_time=self.last_start_time,
+            use_context_manager=False,
             input=input,
             output=output,
             expected=expected,
@@ -4810,17 +4815,21 @@ class Logger(Exportable):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
+        use_context_manager: bool = True,
         **event: Any,
     ) -> Span:
+        parent_args = _start_span_parent_args(
+            parent=parent,
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            parent_compute_object_metadata_args=self._compute_metadata_args,
+            parent_span_ids=None,
+            propagated_event=propagated_event,
+        )
+        # Override use_context_manager from caller
+        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
-            **_start_span_parent_args(
-                parent=parent,
-                parent_object_type=self._parent_object_type(),
-                parent_object_id=self._lazy_id,
-                parent_compute_object_metadata_args=self._compute_metadata_args,
-                parent_span_ids=None,
-                propagated_event=propagated_event,
-            ),
+            **parent_args,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.TASK,
