@@ -96,20 +96,14 @@ export function wrapClaudeAgentQuery<
         },
       });
 
-      let ended = false;
       const finalResults: Array<{ content: unknown; role: string }> = [];
+      let finalUsageMetrics: Record<string, number> | undefined;
+      let accumulatedOutputTokens = 0;
 
       // Track messages by message.message.id to group streaming updates
       let currentMessageId: string | undefined;
       let currentMessageStartTime = getCurrentUnixTimestamp();
       const currentMessages: SDKMessage[] = [];
-
-      const endSpan = () => {
-        if (!ended) {
-          ended = true;
-          span.end();
-        }
-      };
 
       // Create an LLM span for accumulated messages with the same message ID.
       // LLM spans can contain multiple streaming message updates. We create the span
@@ -126,6 +120,14 @@ export function wrapClaudeAgentQuery<
 
         if (finalMessageContent) {
           finalResults.push(finalMessageContent);
+        }
+
+        // Track accumulated output tokens
+        const lastMessage = currentMessages[currentMessages.length - 1];
+        if (lastMessage?.message?.usage) {
+          const outputTokens =
+            getNumberProperty(lastMessage.message.usage, "output_tokens") || 0;
+          accumulatedOutputTokens += outputTokens;
         }
 
         currentMessages.length = 0;
@@ -164,6 +166,31 @@ export function wrapClaudeAgentQuery<
                 currentMessages.push(message);
               }
 
+              // Capture final usage metrics from result message
+              if (message.type === "result" && message.usage) {
+                finalUsageMetrics = _extractUsageFromMessage(message);
+
+                // HACK: Adjust the last assistant message's output_tokens to match result total.
+                // The result message contains aggregated totals, so we calculate the difference:
+                // last message tokens = total result tokens - previously accumulated tokens
+                // The other metrics already accumulate correctly.
+                if (
+                  currentMessages.length > 0 &&
+                  finalUsageMetrics.completion_tokens !== undefined
+                ) {
+                  const lastMessage =
+                    currentMessages[currentMessages.length - 1];
+                  if (lastMessage?.message?.usage) {
+                    const adjustedTokens =
+                      finalUsageMetrics.completion_tokens -
+                      accumulatedOutputTokens;
+                    if (adjustedTokens >= 0) {
+                      lastMessage.message.usage.output_tokens = adjustedTokens;
+                    }
+                  }
+                }
+              }
+
               yield message;
             }
 
@@ -183,7 +210,7 @@ export function wrapClaudeAgentQuery<
             });
             throw error;
           } finally {
-            endSpan();
+            span.end();
           }
         })();
 
@@ -238,10 +265,7 @@ export function wrapClaudeAgentTool<T>(
         const result = await originalHandler(args, extra);
 
         span.log({
-          output: result.content,
-          metadata: {
-            is_error: result.isError ?? false,
-          },
+          output: result,
         });
 
         return result;
@@ -291,35 +315,7 @@ function _buildLLMInput(
 }
 
 /**
- * Extracts content from multiple SDK messages, filtering out undefined values.
- */
-function _extractMessagesContent(
-  messages: SDKMessage[],
-): Array<{ content: unknown; role: string }> {
-  return messages
-    .map(_extractMessageContent)
-    .filter((c): c is { content: unknown; role: string } => c !== undefined);
-}
-
-/**
- * Extracts content and role from SDK messages.
- */
-function _extractMessageContent(
-  message: SDKMessage,
-): { content: unknown; role: string } | undefined {
-  if (message.message?.content && message.message?.role) {
-    return {
-      content: message.message.content,
-      role: message.message.role,
-    };
-  }
-
-  return undefined;
-}
-
-/**
  * Extracts and normalizes usage metrics from a Claude Agent SDK message.
- * Handles Anthropic's cache token format from both assistant and result messages.
  */
 function _extractUsageFromMessage(message: SDKMessage): Record<string, number> {
   const metrics: Record<string, number> = {};
@@ -327,38 +323,44 @@ function _extractUsageFromMessage(message: SDKMessage): Record<string, number> {
   // Assistant messages contain usage in message.message.usage
   // Result messages contain usage in message.usage
   let usage: unknown;
-  if (message.type === "assistant" && message.message?.usage) {
-    usage = message.message.usage;
+  if (message.type === "assistant") {
+    usage = message.message?.usage;
+  } else if (message.type === "result") {
+    usage = message.usage;
+  }
 
-    // Standard token counts
-    const inputTokens = getNumberProperty(usage, "input_tokens");
-    if (inputTokens !== undefined) {
-      metrics.prompt_tokens = inputTokens;
-    }
+  if (!usage || typeof usage !== "object") {
+    return metrics;
+  }
 
-    const outputTokens = getNumberProperty(usage, "output_tokens");
-    if (outputTokens !== undefined) {
-      metrics.completion_tokens = outputTokens;
-    }
+  // Standard token counts
+  const inputTokens = getNumberProperty(usage, "input_tokens");
+  if (inputTokens !== undefined) {
+    metrics.prompt_tokens = inputTokens;
+  }
 
-    // Anthropic cache tokens
-    const cacheReadTokens =
-      getNumberProperty(usage, "cache_read_input_tokens") || 0;
-    const cacheCreationTokens =
-      getNumberProperty(usage, "cache_creation_input_tokens") || 0;
+  const outputTokens = getNumberProperty(usage, "output_tokens");
+  if (outputTokens !== undefined) {
+    metrics.completion_tokens = outputTokens;
+  }
 
-    if (cacheReadTokens > 0 || cacheCreationTokens > 0) {
-      const cacheTokens = extractAnthropicCacheTokens(
-        cacheReadTokens,
-        cacheCreationTokens,
-      );
-      Object.assign(metrics, cacheTokens);
-    }
+  // Anthropic cache tokens
+  const cacheReadTokens =
+    getNumberProperty(usage, "cache_read_input_tokens") || 0;
+  const cacheCreationTokens =
+    getNumberProperty(usage, "cache_creation_input_tokens") || 0;
 
-    // Finalize Anthropic token calculations
-    if (Object.keys(metrics).length > 0) {
-      Object.assign(metrics, finalizeAnthropicTokens(metrics));
-    }
+  if (cacheReadTokens > 0 || cacheCreationTokens > 0) {
+    const cacheTokens = extractAnthropicCacheTokens(
+      cacheReadTokens,
+      cacheCreationTokens,
+    );
+    Object.assign(metrics, cacheTokens);
+  }
+
+  // Finalize Anthropic token calculations
+  if (Object.keys(metrics).length > 0) {
+    Object.assign(metrics, finalizeAnthropicTokens(metrics));
   }
 
   return metrics;
@@ -390,7 +392,13 @@ async function _createLLMSpanForMessages(
   const model = lastMessage.message.model || options.model;
   const usage = _extractUsageFromMessage(lastMessage);
   const input = _buildLLMInput(prompt, conversationHistory);
-  const outputs = _extractMessagesContent(messages);
+  const outputs = messages
+    .map((m) =>
+      m.message?.content && m.message?.role
+        ? { content: m.message.content, role: m.message.role }
+        : undefined,
+    )
+    .filter((c): c is { content: unknown; role: string } => c !== undefined);
 
   await traced(
     (llmSpan) => {
@@ -411,7 +419,9 @@ async function _createLLMSpanForMessages(
     },
   );
 
-  return _extractMessageContent(lastMessage);
+  return lastMessage.message?.content && lastMessage.message?.role
+    ? { content: lastMessage.message.content, role: lastMessage.message.role }
+    : undefined;
 }
 
 /**

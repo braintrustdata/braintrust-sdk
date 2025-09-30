@@ -89,8 +89,10 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
       },
     );
 
-    // Run the example query
-    for await (const _message of query({
+    // Run the example query and capture the result message
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resultMessage: any;
+    for await (const message of query({
       prompt: "What is 15 multiplied by 7? Then subtract 5 from the result.",
       options: {
         model: TEST_MODEL,
@@ -104,7 +106,9 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
         },
       },
     })) {
-      // Stream messages (not captured in test)
+      if (message.type === "result") {
+        resultMessage = message;
+      }
     }
 
     const spans = await backgroundLogger.drain();
@@ -121,6 +125,37 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     );
     expect(taskSpan!.input).toContain("15 multiplied by 7");
     expect(taskSpan!.output).toBeDefined();
+
+    // Verify task span metrics match the result message usage
+    expect(resultMessage).toBeDefined();
+    expect(resultMessage.type).toBe("result");
+    expect(resultMessage.usage).toBeDefined();
+
+    const taskMetrics = taskSpan!.metrics as Record<string, number>;
+    expect(taskMetrics).toBeDefined();
+
+    // Apply the same transformations that the wrapper does to result message usage
+    const expectedMetrics: Record<string, number> = {};
+    const usage = resultMessage.usage;
+
+    console.log("usage", usage);
+    console.log("taskMetrics", taskMetrics);
+    // Standard token counts (mapped from Anthropic format)
+    if (usage.input_tokens !== undefined) {
+      const cacheReadTokens = usage.cache_read_input_tokens || 0;
+      const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+      expectedMetrics.prompt_tokens =
+        usage.input_tokens + cacheReadTokens + cacheCreationTokens;
+    }
+    if (usage.output_tokens !== undefined) {
+      expectedMetrics.completion_tokens = usage.output_tokens;
+    }
+
+    // Verify task metrics match expected transformed metrics
+    expect(taskMetrics.prompt_tokens).toBe(expectedMetrics.prompt_tokens);
+    expect(taskMetrics.completion_tokens).toBe(
+      expectedMetrics.completion_tokens,
+    );
 
     // Verify LLM spans (multiple anthropic.messages.create calls)
     const llmSpans = spans.filter(
