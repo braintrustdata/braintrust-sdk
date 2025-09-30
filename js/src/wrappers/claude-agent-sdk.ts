@@ -111,56 +111,21 @@ export function wrapClaudeAgentQuery<
         }
       };
 
-      // Flush messages with the same message ID into a single LLM span to deduplicate usage metrics.
-      const flushMessageGroup = async () => {
-        if (currentMessages.length === 0) return;
+      // Create an LLM span for accumulated messages with the same message ID.
+      // LLM spans can contain multiple streaming message updates. We create the span
+      // when we proceed to a new message ID or when the query completes.
+      const createLLMSpan = async () => {
+        const finalMessageContent = await _createLLMSpanForMessages(
+          currentMessages,
+          prompt,
+          finalResults,
+          options,
+          currentMessageStartTime,
+          await span.export(),
+        );
 
-        const lastMessage = currentMessages[currentMessages.length - 1];
-        if (lastMessage.type === "assistant" && lastMessage.message?.usage) {
-          await traced(
-            (llmSpan) => {
-              const model = lastMessage.message.model || options.model;
-              const usage = _extractUsageFromMessage(lastMessage);
-
-              // Build input from prompt + accumulated conversation history (before this turn)
-              const promptMessage =
-                typeof prompt === "string"
-                  ? { content: prompt, role: "user" }
-                  : undefined;
-
-              const inputParts = [
-                ...(promptMessage ? [promptMessage] : []),
-                ...finalResults,
-              ];
-              const input = inputParts.length > 0 ? inputParts : undefined;
-
-              // Collect all message contents for this message ID
-              const outputs = currentMessages
-                .map(_extractMessageContent)
-                .filter((c) => c !== undefined);
-
-              llmSpan.log({
-                input,
-                output: outputs,
-                metadata: model ? { model } : undefined,
-                metrics: usage,
-              });
-            },
-            {
-              name: "anthropic.messages.create",
-              spanAttributes: {
-                type: SpanTypeAttribute.LLM,
-              },
-              startTime: currentMessageStartTime,
-              parent: await span.export(),
-            },
-          );
-
-          // Add final message content to conversation history
-          const finalMessageContent = _extractMessageContent(lastMessage);
-          if (finalMessageContent) {
-            finalResults.push(finalMessageContent);
-          }
+        if (finalMessageContent) {
+          finalResults.push(finalMessageContent);
         }
 
         currentMessages.length = 0;
@@ -184,8 +149,8 @@ export function wrapClaudeAgentQuery<
             // Check if this is a new message ID
             const messageId = message.message?.id;
             if (messageId && messageId !== currentMessageId) {
-              // Flush previous message group
-              await flushMessageGroup();
+              // Create span for previous message group
+              await createLLMSpan();
 
               // Start new message group
               currentMessageId = messageId;
@@ -200,8 +165,8 @@ export function wrapClaudeAgentQuery<
             yield message;
           }
 
-          // Flush final message group
-          await flushMessageGroup();
+          // Create span for final message group
+          await createLLMSpan();
 
           // Log final output to top-level span - just the last message content
           span.log({
@@ -306,6 +271,35 @@ export function wrapClaudeAgentTools<T>(
 }
 
 /**
+ * Builds the input array for an LLM span from the initial prompt and conversation history.
+ */
+function _buildLLMInput(
+  prompt: string | AsyncIterable<SDKMessage> | undefined,
+  conversationHistory: Array<{ content: unknown; role: string }>,
+): Array<{ content: unknown; role: string }> | undefined {
+  const promptMessage =
+    typeof prompt === "string" ? { content: prompt, role: "user" } : undefined;
+
+  const inputParts = [
+    ...(promptMessage ? [promptMessage] : []),
+    ...conversationHistory,
+  ];
+
+  return inputParts.length > 0 ? inputParts : undefined;
+}
+
+/**
+ * Extracts content from multiple SDK messages, filtering out undefined values.
+ */
+function _extractMessagesContent(
+  messages: SDKMessage[],
+): Array<{ content: unknown; role: string }> {
+  return messages
+    .map(_extractMessageContent)
+    .filter((c): c is { content: unknown; role: string } => c !== undefined);
+}
+
+/**
  * Extracts content and role from SDK messages.
  */
 function _extractMessageContent(
@@ -366,6 +360,56 @@ function _extractUsageFromMessage(message: SDKMessage): Record<string, number> {
   }
 
   return metrics;
+}
+
+/**
+ * Creates an LLM span for a group of messages with the same message ID.
+ * Returns the final message content to add to conversation history.
+ */
+async function _createLLMSpanForMessages(
+  messages: SDKMessage[],
+  prompt: string | AsyncIterable<SDKMessage> | undefined,
+  conversationHistory: Array<{ content: unknown; role: string }>,
+  options: QueryOptions,
+  startTime: number,
+  parentSpan: Awaited<ReturnType<typeof startSpan>>["export"] extends (
+    ...args: infer _
+  ) => Promise<infer R>
+    ? R
+    : never,
+): Promise<{ content: unknown; role: string } | undefined> {
+  if (messages.length === 0) return undefined;
+
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage.type !== "assistant" || !lastMessage.message?.usage) {
+    return undefined;
+  }
+
+  const model = lastMessage.message.model || options.model;
+  const usage = _extractUsageFromMessage(lastMessage);
+  const input = _buildLLMInput(prompt, conversationHistory);
+  const outputs = _extractMessagesContent(messages);
+
+  await traced(
+    (llmSpan) => {
+      llmSpan.log({
+        input,
+        output: outputs,
+        metadata: model ? { model } : undefined,
+        metrics: usage,
+      });
+    },
+    {
+      name: "anthropic.messages.create",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
+      startTime,
+      parent: parentSpan,
+    },
+  );
+
+  return _extractMessageContent(lastMessage);
 }
 
 /**
