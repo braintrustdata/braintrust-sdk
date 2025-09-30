@@ -21,11 +21,12 @@ def setup_genai(
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
 
     try:
-        from google import genai  # pyright: ignore
+        import google.genai as genai  # pyright: ignore
         from google.genai import models
 
         genai.Client = wrap_client(genai.Client)
         models.Models = wrap_models(models.Models)
+        models.AsyncModels = wrap_async_models(models.AsyncModels)
         pass
     except ImportError as e:
         logger.error(f"Failed to import Google ADK agents: {e}")
@@ -48,9 +49,11 @@ def wrap_models(Models: Any):
         return Models
 
     def wrap_generate_content(wrapped: Any, instance: Any, args: Any, kwargs: Any):
-        input, kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
+        input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
 
-        with start_span(name="generate_content", type=SpanTypeAttribute.LLM, input=input, metadata=kwargs) as span:
+        with start_span(
+            name="generate_content", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
+        ) as span:
             result = wrapped(*args, **kwargs)
             span.log(output=result)
             return result
@@ -75,10 +78,48 @@ def wrap_models(Models: Any):
 
     wrap_function_wrapper(Models, "generate_content_stream", wrap_generate_content_stream)
 
-    # TODO: AsyncModels
-
     mark_patched(Models)
     return Models
+
+
+def wrap_async_models(AsyncModels: Any):
+    if is_patched(AsyncModels):
+        return AsyncModels
+
+    async def wrap_generate_content(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
+
+        with start_span(
+            name="generate_content", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
+        ) as span:
+            result = await wrapped(*args, **kwargs)
+            span.log(output=result)
+            return result
+
+    wrap_function_wrapper(AsyncModels, "generate_content", wrap_generate_content)
+
+    async def wrap_generate_content_stream(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
+
+        async def stream_generator():
+            start = time.time()
+            with start_span(
+                name="generate_content_stream", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
+            ) as span:
+                chunks = []
+                async for chunk in await wrapped(*args, **kwargs):
+                    chunks.append(chunk)
+                    yield chunk
+
+                aggregated, metrics = _aggregate_generate_content_chunks(chunks, start)
+                span.log(output=aggregated, metrics=metrics)
+
+        return stream_generator()
+
+    wrap_function_wrapper(AsyncModels, "generate_content_stream", wrap_generate_content_stream)
+
+    mark_patched(AsyncModels)
+    return AsyncModels
 
 
 def omit(obj: Dict[str, Any], keys: Iterable[str]):

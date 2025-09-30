@@ -7,7 +7,7 @@ import { join } from "path";
 const FIXTURES_DIR = join(__dirname, "..", "..", "..", "fixtures");
 
 initLogger({
-  projectName: "anthropic-golden-ts",
+  projectName: "golden-ts-anthropic",
 });
 
 const client = wrapAnthropic(new Anthropic());

@@ -7,7 +7,7 @@ import { join } from "path";
 const FIXTURES_DIR = join(__dirname, "..", "..", "..", "fixtures");
 
 initLogger({
-  projectName: "openai-golden-ts",
+  projectName: "golden-ts-openai",
 });
 
 const client = wrapOpenAI(new OpenAI());
