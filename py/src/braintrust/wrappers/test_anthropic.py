@@ -71,7 +71,8 @@ def test_anthropic_messages_create_stream_true(memory_logger):
     _assert_metrics_are_valid(metrics, start, end)
     assert span["input"] == kws["messages"]
     assert span["output"]
-    assert "12" in span["output"][0]["text"]
+    assert span["output"]["role"] == "assistant"
+    assert "12" in span["output"]["content"][0]["text"]
 
 
 @pytest.mark.vcr
@@ -104,7 +105,8 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
         logs = memory_logger.pop()
         assert len(logs) == 1
         log = logs[0]
-        assert "2" in log["output"][0]["text"]
+        assert log["output"]["role"] == "assistant"
+        assert "2" in log["output"]["content"][0]["text"]
         assert log["metadata"]["model"] == MODEL
         assert log["metadata"]["max_tokens"] == 300
         assert log["metadata"]["temperature"] == 0.5
@@ -171,7 +173,8 @@ async def test_anthropic_messages_create_async(memory_logger):
     assert span["metadata"]["model"] == MODEL
     assert span["metadata"]["max_tokens"] == 100
     assert span["input"] == params["messages"]
-    assert "7" in span["output"][0]["text"]
+    assert span["output"]["role"] == "assistant"
+    assert "7" in span["output"]["content"][0]["text"]
 
 
 @pytest.mark.vcr
@@ -197,7 +200,8 @@ async def test_anthropic_messages_create_async_stream_true(memory_logger):
     assert span["metadata"]["model"] == MODEL
     assert span["metadata"]["max_tokens"] == 100
     assert span["input"] == params["messages"]
-    assert "7" in span["output"][0]["text"]
+    assert span["output"]["role"] == "assistant"
+    assert "7" in span["output"]["content"][0]["text"]
 
 
 @pytest.mark.vcr
