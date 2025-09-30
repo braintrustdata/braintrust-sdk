@@ -21,11 +21,6 @@ type QueryOptions = {
   [key: string]: any;
 };
 
-type Query = AsyncGenerator<SDKMessage, void, unknown> & {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
-
 type CallToolResult = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: Array<any>;
@@ -47,30 +42,44 @@ type SdkMcpToolDefinition<T> = {
 };
 
 /**
+ * Filters options to include only specific serializable fields for logging.
+ */
+function filterSerializableOptions(
+  options: QueryOptions,
+): Record<string, unknown> {
+  const allowedKeys = [
+    "model",
+    "maxTurns",
+    "cwd",
+    "continue",
+    "allowedTools",
+    "disallowedTools",
+    "additionalDirectories",
+    "permissionMode",
+    "debug",
+    "apiKey",
+    "apiKeySource",
+    "agentName",
+    "instructions",
+  ];
+
+  const filtered: Record<string, unknown> = {};
+
+  for (const key of allowedKeys) {
+    if (options[key] !== undefined) {
+      filtered[key] = options[key];
+    }
+  }
+
+  return filtered;
+}
+
+/**
  * Wraps the Claude Agent SDK's query function to add Braintrust tracing.
  * Traces the entire agent interaction including all streaming messages.
- *
- * @param queryFn - The original query function from @anthropic-ai/claude-agent-sdk
- * @returns A wrapped query function with tracing
- *
- * @example
- * ```typescript
- * import { query } from "@anthropic-ai/claude-agent-sdk";
- * import { wrapClaudeAgentQuery } from "braintrust";
- *
- * const wrappedQuery = wrapClaudeAgentQuery(query);
- *
- * const result = wrappedQuery({
- *   prompt: "Write a hello world function",
- *   options: { model: "claude-3-5-sonnet-20241022" }
- * });
- *
- * for await (const message of result) {
- *   console.log(message);
- * }
- * ```
+ * Internal use only - use wrapClaudeAgentSDK instead.
  */
-export function wrapClaudeAgentQuery<
+function wrapClaudeAgentQuery<
   T extends (...args: unknown[]) => AsyncGenerator<SDKMessage, void, unknown>,
 >(queryFn: T, defaultThis?: unknown): T {
   const proxy: T = new Proxy(queryFn, {
@@ -92,7 +101,7 @@ export function wrapClaudeAgentQuery<
             typeof prompt === "string"
               ? prompt
               : { type: "streaming", description: "AsyncIterable<SDKMessage>" },
-          metadata: options,
+          metadata: filterSerializableOptions(options),
         },
       });
 
@@ -150,18 +159,13 @@ export function wrapClaudeAgentQuery<
             for await (const message of generator) {
               const currentTime = getCurrentUnixTimestamp();
 
-              // Check if this is a new message ID
               const messageId = message.message?.id;
               if (messageId && messageId !== currentMessageId) {
-                // Create span for previous message group
                 await createLLMSpan();
 
-                // Start new message group
                 currentMessageId = messageId;
                 currentMessageStartTime = currentTime;
               }
-
-              // Accumulate messages for the current message ID
               if (message.type === "assistant" && message.message?.usage) {
                 currentMessages.push(message);
               }
@@ -189,6 +193,20 @@ export function wrapClaudeAgentQuery<
                     }
                   }
                 }
+
+                // Log result metadata
+                const result_metadata: Record<string, unknown> = {};
+                if (message.num_turns !== undefined) {
+                  result_metadata.num_turns = message.num_turns;
+                }
+                if (message.session_id !== undefined) {
+                  result_metadata.session_id = message.session_id;
+                }
+                if (Object.keys(result_metadata).length > 0) {
+                  span.log({
+                    metadata: result_metadata,
+                  });
+                }
               }
 
               yield message;
@@ -214,7 +232,6 @@ export function wrapClaudeAgentQuery<
           }
         })();
 
-      // Return the generator directly - avoid Proxy for compatibility
       return wrappedGenerator as ReturnType<T>;
     },
   });
@@ -224,29 +241,9 @@ export function wrapClaudeAgentQuery<
 
 /**
  * Wraps a Claude Agent SDK tool definition to add Braintrust tracing for tool executions.
- *
- * @param toolDef - The tool definition created with the SDK's `tool()` function
- * @returns A wrapped tool definition with traced handler
- *
- * @example
- * ```typescript
- * import { tool } from "@anthropic-ai/claude-agent-sdk";
- * import { wrapClaudeAgentTool } from "braintrust";
- * import { z } from "zod";
- *
- * const myTool = tool(
- *   "calculator",
- *   "Performs basic arithmetic",
- *   { operation: z.enum(["add", "subtract"]), a: z.number(), b: z.number() },
- *   async (args) => ({
- *     content: [{ type: "text", text: String(args.a + args.b) }]
- *   })
- * );
- *
- * const wrappedTool = wrapClaudeAgentTool(myTool);
- * ```
+ * Internal use only - use wrapClaudeAgentSDK instead.
  */
-export function wrapClaudeAgentTool<T>(
+function wrapClaudeAgentTool<T>(
   toolDef: SdkMcpToolDefinition<T>,
 ): SdkMcpToolDefinition<T> {
   const originalHandler = toolDef.handler;
@@ -282,18 +279,6 @@ export function wrapClaudeAgentTool<T>(
     ...toolDef,
     handler: wrappedHandler,
   };
-}
-
-/**
- * Wraps all tools in an array of Claude Agent SDK tool definitions.
- *
- * @param tools - Array of tool definitions
- * @returns Array of wrapped tool definitions with tracing
- */
-export function wrapClaudeAgentTools<T>(
-  tools: Array<SdkMcpToolDefinition<T>>,
-): Array<SdkMcpToolDefinition<T>> {
-  return tools.map(wrapClaudeAgentTool);
 }
 
 /**

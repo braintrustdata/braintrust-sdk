@@ -6,7 +6,7 @@ import {
   beforeAll,
   afterEach,
 } from "vitest";
-import { wrapClaudeAgentSDK, wrapClaudeAgentQuery } from "./claude-agent-sdk";
+import { wrapClaudeAgentSDK } from "./claude-agent-sdk";
 import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
 import { z } from "zod";
