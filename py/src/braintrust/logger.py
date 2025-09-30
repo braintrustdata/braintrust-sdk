@@ -2183,6 +2183,7 @@ def start_span(
             propagated_event=coalesce(propagated_event, parent_obj.propagated_event),
             event=event,
             state=state,
+            use_context_manager=False,
         )
     else:
         return parent_obj.start_span(
@@ -3181,6 +3182,7 @@ def _start_span_parent_args(
         parent_compute_object_metadata_args=parent_compute_object_metadata_args,
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
+        use_context_manager=parent is None,
     )
 
 
@@ -3626,6 +3628,7 @@ class SpanImpl(Span):
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
         state: Optional[BraintrustState] = None,
+        use_context_manager: bool = True,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3707,8 +3710,8 @@ class SpanImpl(Span):
                 self.root_span_id = id_generator.get_trace_id()
             self.span_parents = None
 
-        # Handle unified context if no explicit parents are set
-        if not parent_span_ids:
+        # Handle unified context if no explicit parents are set and context manager is enabled
+        if not parent_span_ids and use_context_manager:
             # FIXME[matt] This should probably be done at a higher level, but there isn't one
             # place that calls this, so barring a larger refactor, we'll do it here.
             parent_info = self.state.context_manager.get_parent_info_for_bt_span()
