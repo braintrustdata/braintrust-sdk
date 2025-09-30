@@ -462,6 +462,9 @@ class BraintrustState:
                     "current_span",
                     "_global_bg_logger",
                     "_override_bg_logger",
+                    "_context_manager",
+                    "_last_otel_setting",
+                    "_context_manager_lock",
                 )
             }
         )

@@ -1871,3 +1871,28 @@ def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_sta
     assert parent_log["root_span_id"] == original_root_span_id
     assert child_log["root_span_id"] == original_root_span_id
     assert parent_log["span_id"] in child_log.get("span_parents", [])
+
+
+def test_nested_spans_with_export(with_memory_logger):
+    """Test nested spans with export() calls.
+
+    This reproduces a bug where span.export() triggers lazy metadata computation
+    which calls state.login() -> copy_state(). If copy_state() doesn't exclude
+    _context_manager from copying, it overwrites the cached context manager with
+    None, causing a ContextVar token mismatch error when the span exits.
+    """
+    import braintrust
+
+    experiment = braintrust.init(project="test-project")
+
+    # Nested spans with export() calls - this pattern triggers the bug
+    with experiment.start_span(name="s1") as span1:
+        span1.log(input="one")
+        with experiment.start_span(parent=span1.export(), name="s2") as span2:
+            span2.log(input="two")
+            with span2.start_span(name="s3") as span3:
+                span3.log(input="three")
+                with experiment.start_span(parent=span3.export(), name="s4") as span4:
+                    span4.log(input="four")
+                with span3.start_span(name="s5") as span5:
+                    span5.log(input="five")
