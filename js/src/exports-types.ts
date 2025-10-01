@@ -22,17 +22,3 @@ export {
   evaluatorDefinitionsSchema,
 } from "../dev/types";
 export type { EvalParameters } from "./eval-parameters";
-export type {
-  Metrics,
-  TokenMetrics,
-  TimingMetrics,
-  OtherMetrics,
-  StandardMetrics,
-} from "./metrics";
-export {
-  MetricsSchema,
-  TokenMetricsSchema,
-  TimingMetricsSchema,
-  OtherMetricsSchema,
-  StandardMetricsSchema,
-} from "./metrics";
