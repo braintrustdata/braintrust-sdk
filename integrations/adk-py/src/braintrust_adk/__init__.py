@@ -2,16 +2,22 @@ import logging
 from contextlib import AbstractAsyncContextManager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
+from wrapt import wrap_function_wrapper
+
 from braintrust.logger import NOOP_SPAN, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
-from wrapt import wrap_function_wrapper
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["setup_braintrust", "wrap_agent", "wrap_runner", "wrap_flow"]
 
 
-def setup_braintrust(
+def setup_braintrust(*args, **kwargs):
+    logger.warning("setup_braintrust is deprecated, use setup_adk instead")
+    return setup_adk(*args, **kwargs)
+
+
+def setup_adk(
     api_key: Optional[str] = None,
     project_id: Optional[str] = None,
     project_name: Optional[str] = None,
