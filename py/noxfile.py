@@ -44,6 +44,7 @@ VENDOR_PACKAGES = (
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
+    "claude-agent-sdk",
 )
 
 # Test matrix
