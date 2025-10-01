@@ -1,4 +1,4 @@
-import { isObject } from "braintrust/util";
+import { isObject, SpanTypeAttribute } from "braintrust/util";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -90,6 +90,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 
     const tags = args.event?.tags;
 
+    const spanAttributes = args.spanAttributes || {};
+    spanAttributes.type =
+      args.type || spanAttributes.type || SpanTypeAttribute.TASK;
+
+    args.type = spanAttributes.type;
+
     args.event = {
       ...args.event,
       // Tags are only allowed at the root span.
@@ -177,7 +183,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? llm.id.at(-1)?.toString() ?? "LLM",
+      name: runName ?? llm.name ?? llm.id.at(-1)?.toString() ?? "LLM",
       type: "llm",
       event: {
         input: prompts,
@@ -228,21 +234,20 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     tags?: string[],
   ): Promise<void> {
     if (this.spans.has(runId)) {
-      const { llmOutput, generations, ...metadata } = output;
+      const { generations, ...metadata } = output;
 
-      const tokenUsage =
-        llmOutput?.tokenUsage || llmOutput?.estimatedTokens || {};
+      const metrics = getMetricsFromResponse(output);
+      const modelName = getModelNameFromResponse(output);
 
       this.endSpan({
         runId,
         output: outputFromGenerations(generations),
-        metrics: {
-          tokens: tokenUsage.totalTokens,
-          prompt_tokens: tokenUsage.promptTokens,
-          completion_tokens: tokenUsage.completionTokens,
-        },
+        metrics,
         tags,
-        metadata: { ...this.cleanMetadata(metadata) },
+        metadata: cleanObject({
+          ...this.cleanMetadata(metadata),
+          model: modelName,
+        }),
       });
     }
   }
@@ -265,7 +270,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? llm.id.at(-1)?.toString() ?? "Chat Model",
+      name: runName ?? llm.name ?? llm.id.at(-1)?.toString() ?? "Chat Model",
       type: "llm",
       event: {
         input: inputFromMessages(messages),
@@ -300,7 +305,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
+      name: runName ?? chain?.name ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
         input: inputFromChainValues(inputs),
         tags,
@@ -358,7 +363,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? tool.id.at(-1)?.toString() ?? "Tool",
+      name: runName ?? tool.name ?? tool.id.at(-1)?.toString() ?? "Tool",
       event: {
         input: safeParseSerializedJson(input),
         tags,
@@ -409,6 +414,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
+      type: "llm",
       name: action.tool,
       event: {
         input: action,
@@ -444,7 +450,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.startSpan({
       runId,
       parentRunId,
-      name: name ?? retriever.id.at(-1)?.toString() ?? "Retriever",
+      name:
+        name ??
+        retriever.name ??
+        retriever.id.at(-1)?.toString() ??
+        "Retriever",
       type: "function",
       event: {
         input: query,
@@ -650,4 +660,84 @@ const inputFromChainValues = (inputs: ChainValues) => {
     parseChainValue,
   );
   return parsed.length === 1 ? parsed[0] : parsed;
+};
+
+const walkGenerations = (
+  response: LLMResult | ChatResult,
+): (Generation | ChatGeneration)[] => {
+  const result: (Generation | ChatGeneration)[] = [];
+  const generations = response.generations || [];
+  for (const batch of generations) {
+    if (Array.isArray(batch)) {
+      for (const generation of batch) {
+        result.push(generation);
+      }
+    } else {
+      result.push(batch);
+    }
+  }
+  return result;
+};
+
+const getModelNameFromResponse = (
+  response: LLMResult | ChatResult,
+): string | undefined => {
+  let modelName: string | undefined;
+
+  // First, try to get model name from message response_metadata
+  for (const generation of walkGenerations(response)) {
+    if ("message" in generation && generation.message) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const message: any = generation.message;
+      const responseMetadata = message.response_metadata;
+      if (responseMetadata && typeof responseMetadata === "object") {
+        modelName = responseMetadata.model_name || responseMetadata.model;
+      }
+      if (modelName) break;
+    }
+  }
+
+  // Fallback to llmOutput
+  if (!modelName) {
+    const llmOutput = response.llmOutput || {};
+    modelName = llmOutput.model_name || llmOutput.model;
+  }
+
+  return modelName;
+};
+
+const getMetricsFromResponse = (response: LLMResult | ChatResult) => {
+  const metrics: Record<string, number> = {};
+
+  // First, try to get metrics from message usage_metadata
+  for (const generation of walkGenerations(response)) {
+    if ("message" in generation && generation.message) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const message: any = generation.message;
+      const usageMetadata = message.usage_metadata;
+      if (usageMetadata && typeof usageMetadata === "object") {
+        const extracted = cleanObject({
+          total_tokens: usageMetadata.total_tokens,
+          prompt_tokens: usageMetadata.input_tokens,
+          completion_tokens: usageMetadata.output_tokens,
+        });
+        Object.assign(metrics, extracted);
+        break;
+      }
+    }
+  }
+
+  // Fallback to llmOutput if no metrics found
+  if (!Object.keys(metrics).length) {
+    const llmOutput = response.llmOutput || {};
+    const tokenUsage = llmOutput.tokenUsage || llmOutput.estimatedTokens || {};
+
+    return cleanObject({
+      total_tokens: tokenUsage.totalTokens,
+      prompt_tokens: tokenUsage.promptTokens,
+      completion_tokens: tokenUsage.completionTokens,
+    });
+  }
+
+  return metrics;
 };

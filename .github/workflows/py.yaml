@@ -34,19 +34,9 @@ jobs:
           # This is already done by make install-dev, but we're keeping this as a separate step
           # to explicitly verify that installation works
           python -m uv pip install -e ./py[all]
-          python -m uv pip install -e ./integrations/langchain-py[all]
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
-      - name: Lint Other stuff
-        # lint everything other than the SDK (that's linted in make nox)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/')
-      - name: Run tests
-        run: |
-          pytest ./integrations/langchain-py/src
-
       - name: Run nox tests
         run: |
           make nox
@@ -61,6 +51,19 @@ jobs:
     with:
       python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}
+    secrets: inherit
+
+  langchain-py:
+    uses: ./.github/workflows/langchain-py-test.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest]
+    with:
+      python-version: ${{ matrix.python-version }}
+      os: ${{ matrix.os }}
+    secrets: inherit
 
   upload-wheel:
     needs: build

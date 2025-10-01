@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   detectProviderFromResult,
   extractModelFromResult,
+  extractModelFromWrapGenerateCallback,
   camelToSnake,
   extractModelParameters,
   getNumberProperty,
@@ -53,6 +54,22 @@ describe("ai-sdk-shared utilities", () => {
 
     it("should return undefined if no model found", () => {
       expect(extractModelFromResult({})).toBeUndefined();
+    });
+  });
+
+  describe("extractModelFromWrapGenerateCallback", () => {
+    it("should extract model from wrapGenerate callback", () => {
+      expect(
+        extractModelFromWrapGenerateCallback({
+          modelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+          config: {
+            headers: {},
+          },
+          specificationVersion: "v2",
+          provider: "amazon-bedrock",
+          supportedUrls: {},
+        }),
+      ).toBe("us.anthropic.claude-sonnet-4-20250514-v1:0");
     });
   });
 

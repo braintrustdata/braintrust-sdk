@@ -4,6 +4,11 @@ import warnings
 from typing import Dict, Optional
 from urllib.parse import urljoin
 
+INSTALL_ERR_MSG = (
+    "OpenTelemetry packages are not installed. "
+    "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
+)
+
 try:
     from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -11,35 +16,27 @@ try:
 
     OTEL_AVAILABLE = True
 except ImportError:
-    warnings.warn(
-        "OpenTelemetry packages are not installed. "
-        "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]",
-        UserWarning,
-        stacklevel=2,
-    )
+    # Don't warn in tests, it's annoying.
+    if not os.environ.get("PYTEST_VERSION"):
+        warnings.warn(
+            INSTALL_ERR_MSG,
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Create stub classes if OpenTelemetry is not available
     class OTLPSpanExporter:
         def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "OpenTelemetry packages are not installed. "
-                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
-            )
+            raise ImportError(INSTALL_ERR_MSG)
 
     class BatchSpanProcessor:
         def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "OpenTelemetry packages are not installed. "
-                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
-            )
+            raise ImportError(INSTALL_ERR_MSG)
 
     class trace:
         @staticmethod
         def get_tracer_provider():
-            raise ImportError(
-                "OpenTelemetry packages are not installed. "
-                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
-            )
+            raise ImportError(INSTALL_ERR_MSG)
 
     OTEL_AVAILABLE = False
 
@@ -192,6 +189,25 @@ class OtelExporter(OTLPSpanExporter):
         super().__init__(endpoint=endpoint, headers=exporter_headers, **kwargs)
 
 
+def add_braintrust_span_processor(tracer_provider,
+    api_key: Optional[str] = None,
+    parent: Optional[str] = None,
+    api_url: Optional[str] = None,
+    filter_ai_spans: bool = False,
+    custom_filter=None,
+    headers: Optional[Dict[str, str]] = None,
+):
+    processor = BraintrustSpanProcessor(
+        api_key=api_key,
+        parent=parent,
+        api_url=api_url,
+        filter_ai_spans=filter_ai_spans,
+        custom_filter=custom_filter,
+        headers=headers,
+    )
+    tracer_provider.add_span_processor(processor)
+
+
 class BraintrustSpanProcessor:
     """
     A convenient all-in-one span processor for Braintrust OpenTelemetry integration.
@@ -213,7 +229,7 @@ class BraintrustSpanProcessor:
         parent: Optional[str] = None,
         api_url: Optional[str] = None,
         filter_ai_spans: bool = False,
-        custom_filter=None,
+        custom_filter = None,
         headers: Optional[Dict[str, str]] = None,
         SpanProcessor: Optional[type] = None,
     ):
@@ -258,8 +274,50 @@ class BraintrustSpanProcessor:
             self._processor = processor
 
     def on_start(self, span, parent_context=None):
-        """Forward span start events to the inner processor."""
+        try:
+            parent_value = None
+
+            # Priority 1: Check if braintrust.parent is in current OTEL context
+            from opentelemetry import context
+            current_context = context.get_current()
+            parent_value = context.get_value('braintrust.parent', current_context)
+
+            # Priority 2: Check if parent_context has braintrust.parent (backup)
+            if not parent_value and parent_context:
+                parent_value = context.get_value('braintrust.parent', parent_context)
+
+            # Priority 3: Check if parent OTEL span has braintrust.parent attribute
+            if not parent_value and parent_context:
+                parent_value = self._get_parent_otel_braintrust_parent(parent_context)
+
+            # Set the attribute if we found a parent value
+            if parent_value:
+                span.set_attribute("braintrust.parent", parent_value)
+
+        except Exception as e:
+            # If there's an exception, just don't set braintrust.parent
+            pass
+
         self._processor.on_start(span, parent_context)
+
+
+    def _get_parent_otel_braintrust_parent(self, parent_context):
+        """Get braintrust.parent attribute from parent OTEL span if it exists."""
+        try:
+            from opentelemetry import trace
+
+            # Get the current span from the parent context
+            current_span = trace.get_current_span(parent_context)
+
+            if current_span and hasattr(current_span, 'attributes') and current_span.attributes:
+                # Check if parent span has braintrust.parent attribute
+                attributes = dict(current_span.attributes)
+                return attributes.get("braintrust.parent")
+
+            return None
+
+        except Exception:
+            return None
 
     def on_end(self, span):
         """Forward span end events to the inner processor."""

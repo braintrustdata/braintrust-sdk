@@ -34,6 +34,16 @@ export function extractModelFromResult(result: {
   return undefined;
 }
 
+export function extractModelFromWrapGenerateCallback(model: {
+  modelId?: string;
+  config?: Record<string, unknown>;
+  specificationVersion?: string;
+  provider?: string;
+  supportedUrls?: Record<string, unknown>;
+}): string | undefined {
+  return model?.modelId;
+}
+
 export function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
