@@ -12,3 +12,14 @@ dependencies = [
 
 [tool.uv.sources]
 braintrust-adk = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "I",    # isort
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["braintrust_adk", "braintrust"]

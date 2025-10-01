@@ -26,10 +26,10 @@ The `braintrust-adk` integration automatically traces your ADK agents' execution
 
 ```python
 from google.adk.agents import LlmAgent
-from braintrust_adk import setup_braintrust
+from braintrust_adk import setup_adk
 
 # Initialize Braintrust tracing
-setup_braintrust(
+setup_adk(
     api_key="your-api-key",  # Or set BRAINTRUST_API_KEY env var
     project_name="my-adk-project"  # Optional: defaults to "default-google-adk-py"
 )
@@ -53,7 +53,7 @@ print(response.text)
 If you know your Braintrust project ID, you can use it directly:
 
 ```python
-setup_braintrust(
+setup_adk(
     api_key="your-api-key",
     project_id="your-project-id"  # Use project ID instead of name
 )
@@ -93,9 +93,9 @@ response = agent.send_message(
 
 ### Manual Patching
 
-The `setup_braintrust` will automatically patch Google ADK Runner, Agent, and Flow classes to automatically trace all agent interactions. If you prefer to manually patch classes, you can use the `wrap_agent`, `wrap_runner`, and `wrap_flow` functions. Take a look at the [manual example](./examples/manual.py).
+The `setup_adk` will automatically patch Google ADK Runner, Agent, and Flow classes to automatically trace all agent interactions. If you prefer to manually patch classes, you can use the `wrap_agent`, `wrap_runner`, and `wrap_flow` functions. Take a look at the [manual example](./examples/manual.py).
 
-Note that, as of writing, `adk web` does not support [custom Runners](https://github.com/google/adk-web/issues/72) and you will need to use `setup_braintrust` if you would like LLM traces.
+Note that, as of writing, `adk web` does not support [custom Runners](https://github.com/google/adk-web/issues/72) and you will need to use `setup_adk` if you would like LLM traces.
 
 ## Examples
 

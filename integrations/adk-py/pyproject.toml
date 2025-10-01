@@ -54,6 +54,17 @@ dev = [
 profile = "black"
 line_length = 120
 
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "I",    # isort
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["braintrust", "braintrust_adk"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
