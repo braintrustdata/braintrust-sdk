@@ -5,9 +5,8 @@ An example showing how Braintrust eval experiment traces will continue to work w
 import asyncio
 from typing import Any
 
-from manual import main as manual
-
 from braintrust.framework import EvalAsync
+from manual import main as manual
 
 
 async def main():

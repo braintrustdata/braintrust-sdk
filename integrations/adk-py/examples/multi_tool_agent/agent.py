@@ -2,10 +2,10 @@ import datetime
 from typing import Dict
 from zoneinfo import ZoneInfo
 
-from braintrust_adk import setup_adk
 from google.adk.agents import LlmAgent
 
 from braintrust import traced
+from braintrust_adk import setup_adk
 
 
 @traced
