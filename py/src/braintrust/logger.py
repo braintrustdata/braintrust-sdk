@@ -351,6 +351,11 @@ class BraintrustState:
             "braintrust_current_span", default=NOOP_SPAN
         )
 
+        # Context manager is dynamically selected based on current environment
+        self._context_manager = None
+        self._last_otel_setting = None
+        self._context_manager_lock = threading.Lock()
+
         def default_get_api_conn():
             self.login()
             return self.api_conn()
@@ -426,6 +431,23 @@ class BraintrustState:
             self._id_generator = id_gen.get_id_generator()
         return self._id_generator
 
+    @property
+    def context_manager(self):
+        """Get the appropriate context manager based on current environment."""
+        import os
+        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
+
+        # Cache the context manager unless the environment variable changed
+        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+            with self._context_manager_lock:
+                # Double-check after acquiring lock
+                if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+                    from braintrust.context import get_context_manager
+                    self._context_manager = get_context_manager()
+                    self._last_otel_setting = current_otel_setting
+
+        return self._context_manager
+
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
         self.__dict__.update(
@@ -440,6 +462,9 @@ class BraintrustState:
                     "current_span",
                     "_global_bg_logger",
                     "_override_bg_logger",
+                    "_context_manager",
+                    "_last_otel_setting",
+                    "_context_manager_lock",
                 )
             }
         )
@@ -720,6 +745,8 @@ def _check_json_serializable(event):
         return bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+
 
 
 class _MaskingError:
@@ -1876,7 +1903,11 @@ def current_span() -> Span:
     See `Span` for full details.
     """
 
-    return _state.current_span.get()
+    span_info = _state.context_manager.get_current_span_info()
+    if span_info and hasattr(span_info.span_object, 'span_id'):
+        # This is a BT span
+        return span_info.span_object
+    return NOOP_SPAN
 
 
 @contextlib.contextmanager
@@ -2152,6 +2183,7 @@ def start_span(
             propagated_event=coalesce(propagated_event, parent_obj.propagated_event),
             event=event,
             state=state,
+            use_context_manager=False,
         )
     else:
         return parent_obj.start_span(
@@ -3150,7 +3182,9 @@ def _start_span_parent_args(
         parent_compute_object_metadata_args=parent_compute_object_metadata_args,
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
+        use_context_manager=parent is None,
     )
+
 
 
 @dataclasses.dataclass
@@ -3310,7 +3344,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             ),
             self.dataset is not None,
         )
-        span = self._start_span_impl(start_time=self.last_start_time, **event)
+        span = self._start_span_impl(start_time=self.last_start_time, use_context_manager=False, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -3499,17 +3533,21 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        use_context_manager: bool = True,
         **event: Any,
     ) -> Span:
+        parent_args = _start_span_parent_args(
+            parent=parent,
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            parent_compute_object_metadata_args=None,
+            parent_span_ids=None,
+            propagated_event=propagated_event,
+        )
+        # Override use_context_manager from caller
+        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
-            **_start_span_parent_args(
-                parent=parent,
-                parent_object_type=self._parent_object_type(),
-                parent_object_id=self._lazy_id,
-                parent_compute_object_metadata_args=None,
-                parent_span_ids=None,
-                propagated_event=propagated_event,
-            ),
+            **parent_args,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.EVAL,
@@ -3594,6 +3632,7 @@ class SpanImpl(Span):
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
         state: Optional[BraintrustState] = None,
+        use_context_manager: bool = True,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3606,6 +3645,10 @@ class SpanImpl(Span):
 
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
+
+        # Context token for proper cleanup - used by both OTEL and Braintrust context managers
+        # This is set by the context manager when the span becomes active
+        self._context_token: Optional[Any] = None
 
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
@@ -3670,6 +3713,19 @@ class SpanImpl(Span):
             else:
                 self.root_span_id = id_generator.get_trace_id()
             self.span_parents = None
+
+        # Handle unified context if no explicit parents are set and context manager is enabled
+        if not parent_span_ids and use_context_manager:
+            # FIXME[matt] This should probably be done at a higher level, but there isn't one
+            # place that calls this, so barring a larger refactor, we'll do it here.
+            parent_info = self.state.context_manager.get_parent_info_for_bt_span()
+            if parent_info:
+                root_span_id = parent_info.root_span_id
+                span_parents = parent_info.span_parents
+                if root_span_id:
+                    self.root_span_id = root_span_id
+                if span_parents:
+                    self.span_parents = span_parents
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -3867,11 +3923,14 @@ class SpanImpl(Span):
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = self.state.current_span.set(self)
+            # Get token from context manager and store it
+            self._context_token = self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
         if self.can_set_current:
-            self.state.current_span.reset(self._context_token)
+            # Pass the stored token to context manager for cleanup
+            self.state.context_manager.unset_current_span(self._context_token)
+            self._context_token = None
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -3897,9 +3956,31 @@ class SpanImpl(Span):
             is_resolved, experiment_id = self.parent_object_id.get_sync()
             if is_resolved:
                 return self.parent_object_type, {"id": experiment_id}
-            return self.parent_object_type, {}
+            # For experiments, we resolve the ID by calling get(). We can't pass
+            # along the "lazy compuete metadata args" because we can't tell OTel to do that.
+            # We must pass along an explicit resolved parent.
+            try:
+                experiment_id = self.parent_object_id.get()
+                return self.parent_object_type, {"id": experiment_id}
+            except Exception:
+                return self.parent_object_type, {}
         else:
             return None, {}
+
+    def _get_otel_parent(self):
+        parent_type, info = self._get_parent_info()
+        if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
+            _id = info.get("id")
+            _name = info.get("name")
+            if _id:
+                return f"project_id:{_id}"
+            elif _name:
+                return f"project_name:{_name}"
+        if parent_type == SpanObjectTypeV3.EXPERIMENT:
+            _id = info.get("id")
+            if _id:
+                return f"experiment_id:{_id}"
+        return None
 
 
 def log_exc_info_to_span(
@@ -4626,6 +4707,7 @@ class Logger(Exportable):
 
         span = self._start_span_impl(
             start_time=self.last_start_time,
+            use_context_manager=False,
             input=input,
             output=output,
             expected=expected,
@@ -4733,17 +4815,21 @@ class Logger(Exportable):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
+        use_context_manager: bool = True,
         **event: Any,
     ) -> Span:
+        parent_args = _start_span_parent_args(
+            parent=parent,
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            parent_compute_object_metadata_args=self._compute_metadata_args,
+            parent_span_ids=None,
+            propagated_event=propagated_event,
+        )
+        # Override use_context_manager from caller
+        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
-            **_start_span_parent_args(
-                parent=parent,
-                parent_object_type=self._parent_object_type(),
-                parent_object_id=self._lazy_id,
-                parent_compute_object_metadata_args=self._compute_metadata_args,
-                parent_span_ids=None,
-                propagated_event=propagated_event,
-            ),
+            **parent_args,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.TASK,

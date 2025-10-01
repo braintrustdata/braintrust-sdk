@@ -9,7 +9,7 @@ import pytest
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
-from braintrust.id_gen import OTELIDGenerator
+from braintrust.id_gen import OTELIDGenerator, get_id_generator
 from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
@@ -1791,7 +1791,6 @@ def test_span_with_otel_ids_export_import(reset_id_generator_state):
     os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
     # Test that OTEL generator should not share root_span_id
-    from braintrust.id_gen import get_id_generator
     generator = get_id_generator()
     assert generator.share_root_span_id() == False
 
@@ -1831,7 +1830,6 @@ def test_span_with_uuid_ids_share_root_span_id(reset_id_generator_state):
     init_test_logger(__name__)
 
     # Test that UUID generator should share root_span_id
-    from braintrust.id_gen import get_id_generator
     generator = get_id_generator()
     assert generator.share_root_span_id() == True
 
@@ -1862,12 +1860,7 @@ def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_sta
         with logger.start_span(name="child") as child_span:
             # Child should inherit the root_span_id from parent
             assert child_span.root_span_id == original_root_span_id
-            print(f"DEBUG child_span.root_span_id: {child_span.root_span_id}")
-            print(f"DEBUG original_root_span_id: {original_root_span_id}")
-            # Child should have parent in span_parents
             assert original_span_id in child_span.span_parents
-            print(f"DEBUG original_span_id: {original_span_id}")
-            print(f"DEBUG child_span.span_parents: {child_span.span_parents}")
 
     # Verify logs were created correctly
     logs = with_memory_logger.pop()
@@ -1878,3 +1871,26 @@ def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_sta
     assert parent_log["root_span_id"] == original_root_span_id
     assert child_log["root_span_id"] == original_root_span_id
     assert parent_log["span_id"] in child_log.get("span_parents", [])
+
+
+def test_nested_spans_with_export(with_memory_logger):
+    """Test nested spans with login triggered during span execution.
+
+    This reproduces a bug where calling state.login() during an active span
+    calls copy_state(), which would overwrite _context_manager with None,
+    causing a ContextVar token mismatch error when the span exits.
+    """
+    from braintrust import logger
+    from braintrust.test_helpers import init_test_exp
+
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    # Start a span, then trigger login which calls copy_state()
+    with experiment.start_span(name="s1") as span1:
+        span1.log(input="one")
+        # Trigger login with TEST_API_KEY and force_login=True
+        # This calls copy_state() which should NOT overwrite _context_manager
+        experiment.state.login(api_key=logger.TEST_API_KEY, force_login=True)
+        # Continue with nested spans to ensure context manager still works
+        with experiment.start_span(name="s2") as span2:
+            span2.log(input="two")
