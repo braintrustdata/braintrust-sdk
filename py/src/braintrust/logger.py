@@ -3873,6 +3873,12 @@ class SpanImpl(Span):
             parent_span_ids = None
         else:
             parent_span_ids = ParentSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
+
+        # Always set lookup_span_parent=False because:
+        # - If parent is provided, _start_span_parent_args will extract parent info from it
+        # - If parent is not provided, we explicitly set parent_span_ids from self
+        # Either way, we don't want to look up parent from context manager
+        lookup_span_parent = False
         return SpanImpl(
             **_start_span_parent_args(
                 parent=parent,
@@ -3888,6 +3894,7 @@ class SpanImpl(Span):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            lookup_span_parent=lookup_span_parent,
             state=self.state,
         )
 
