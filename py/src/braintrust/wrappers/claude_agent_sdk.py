@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 # Thread-local storage to propagate parent span export to tool handlers
 # The Claude Agent SDK may execute tools in separate async contexts that don't
-# preserve contextvars, so we use threading.local() as a fallback
+# preserve contextvars, so we use threading.local()
 _thread_local = threading.local()
 
 
@@ -125,6 +125,52 @@ def _wrap_tool_handler(handler: Any, tool_name: Any) -> Callable[..., Any]:
 def _create_client_wrapper_class(original_client_class: Any) -> Any:
     """Creates a wrapper class for ClaudeSDKClient that wraps query and receive_response."""
 
+    class LLMSpanTracker:
+        """Manages LLM span lifecycle for Claude Agent SDK message streams.
+
+        Message flow per turn:
+        1. LLM call starts (tracked via next_start_time)
+        2. AssistantMessage - LLM response content (no usage yet) → create span
+        3. ResultMessage - usage metrics → log to span and end it
+        4. UserMessage - tool results → mark next LLM start time
+
+        We track start times separately because the SDK streams messages asynchronously,
+        so responses arrive before usage data, and we need accurate latency per turn.
+        """
+        def __init__(self):
+            self.current_span: Optional[Any] = None
+            self.next_start_time = time.time()
+
+        def start_llm_span(self, message: Any, prompt: Any, conversation_history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+            """Start a new LLM span, ending the previous one if it exists."""
+            if self.current_span:
+                self.current_span.end()
+
+            final_content, span = _create_llm_span_for_messages(
+                [message], prompt, conversation_history,
+                start_time=self.next_start_time
+            )
+            self.current_span = span
+            return final_content
+
+        def log_usage_and_end(self, usage_metrics: Dict[str, float]) -> None:
+            """Log usage metrics and end the current LLM span."""
+            if self.current_span:
+                if usage_metrics:
+                    self.current_span.log(metrics=usage_metrics)
+                self.current_span.end()
+                self.current_span = None
+
+        def mark_next_llm_start(self) -> None:
+            """Mark when the next LLM call will start (after tool results)."""
+            self.next_start_time = time.time()
+
+        def cleanup(self) -> None:
+            """End any unclosed spans."""
+            if self.current_span:
+                self.current_span.end()
+                self.current_span = None
+
     class WrappedClaudeSDKClient(Wrapper):
         def __init__(self, *args: Any, **kwargs: Any):
             # Create the original client instance
@@ -162,78 +208,42 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                 _thread_local.parent_span_export = span.export()
 
                 final_results: List[Dict[str, Any]] = []
-                last_llm_span: Optional[Any] = None
-                # Record start time for the first LLM call (starts immediately)
-                llm_start_time: Optional[float] = time.time()
+                llm_tracker = LLMSpanTracker()
 
                 try:
-                    try:
-                        async for message in generator:
-                            # Detect message type by class name
-                            message_type = type(message).__name__
+                    async for message in generator:
+                        message_type = type(message).__name__
 
-                            # Handle assistant messages - create LLM span immediately (no grouping)
-                            if message_type == "AssistantMessage":
-                                # End the previous LLM span if it exists
-                                if last_llm_span:
-                                    last_llm_span.end()
+                        if message_type == "AssistantMessage":
+                            final_content = llm_tracker.start_llm_span(message, self.__last_prompt, final_results)
+                            if final_content:
+                                final_results.append(final_content)
+                        elif message_type == "UserMessage":
+                            if hasattr(message, "content"):
+                                content = _serialize_content_blocks(message.content)
+                                final_results.append({"content": content, "role": "user"})
 
-                                final_content, llm_span = _create_llm_span_for_messages(
-                                    [message],
-                                    self.__last_prompt,
-                                    final_results,
-                                    start_time=llm_start_time,
-                                )
-                                if final_content:
-                                    final_results.append(final_content)
+                            llm_tracker.mark_next_llm_start()
+                        elif message_type == "ResultMessage":
+                            if hasattr(message, "usage"):
+                                usage_metrics = _extract_usage_from_result_message(message)
+                                llm_tracker.log_usage_and_end(usage_metrics)
 
-                                last_llm_span = llm_span
+                            result_metadata = {
+                                k: v for k, v in {
+                                    "num_turns": getattr(message, "num_turns", None),
+                                    "session_id": getattr(message, "session_id", None),
+                                }.items() if v is not None
+                            }
+                            if result_metadata:
+                                span.log(metadata=result_metadata)
 
-                                # Reset for next LLM call
-                                llm_start_time = None
-
-                            # Handle user messages (tool results) - add to conversation history
-                            elif message_type == "UserMessage":
-                                if hasattr(message, "content"):
-                                    content = _serialize_content_blocks(message.content)
-                                    final_results.append({"content": content, "role": "user"})
-
-                                # After tool results, the next LLM call starts
-                                llm_start_time = time.time()
-
-                            # Capture usage from result message and log to the last LLM span
-                            elif message_type == "ResultMessage":
-                                if hasattr(message, "usage") and last_llm_span:
-                                    # Extract usage metrics and log to the last LLM span
-                                    usage_metrics = _extract_usage_from_result_message(message)
-                                    if usage_metrics:
-                                        last_llm_span.log(metrics=usage_metrics)
-
-                                # Log metadata to the query TASK span
-                                result_metadata = {
-                                    k: v for k, v in {
-                                        "num_turns": getattr(message, "num_turns", None),
-                                        "session_id": getattr(message, "session_id", None),
-                                    }.items() if v is not None
-                                }
-                                if result_metadata:
-                                    span.log(metadata=result_metadata)
-
-                            yield message
-
-                        # Log final output to top-level span
-                        span.log(output=final_results[-1] if final_results else None)
-                    except Exception as e:
-                        log.warning("Error in tracing code", exc_info=e)
+                        yield message
+                    span.log(output=final_results[-1] if final_results else None)
+                except Exception as e:
+                    log.warning("Error in tracing code", exc_info=e)
                 finally:
-                    # Clean up: always end the last LLM span if it exists
-                    if last_llm_span:
-                        try:
-                            last_llm_span.end()
-                        except Exception as e:
-                            log.warning("Error ending LLM span", exc_info=e)
-
-                    # Clean up thread-local storage to prevent memory leaks
+                    llm_tracker.cleanup()
                     if hasattr(_thread_local, 'parent_span_export'):
                         delattr(_thread_local, 'parent_span_export')
 
@@ -267,27 +277,18 @@ def _create_llm_span_for_messages(
         return None, None
 
     last_message = messages[-1]
-    # Check if this is an AssistantMessage
     if type(last_message).__name__ != "AssistantMessage":
         return None, None
-
-    # Extract model from message
     model = getattr(last_message, "model", None)
-
-    # Build input from prompt and conversation history
     input_messages = _build_llm_input(prompt, conversation_history)
 
-    # Extract outputs from AssistantMessages
     outputs: List[Dict[str, Any]] = []
     for msg in messages:
         if hasattr(msg, "content"):
-            # Convert content blocks to a serializable format
             content = _serialize_content_blocks(msg.content)
             outputs.append({"content": content, "role": "assistant"})
 
-    # Create LLM span - automatically nests under current span
-    # Note: We don't use a context manager here because we need to return the span
-    # to log metrics to it later and end it when we get the ResultMessage.
+
     llm_span = start_span(
         name="anthropic.messages.create",
         span_attributes={"type": SpanTypeAttribute.LLM},
@@ -314,11 +315,9 @@ def _serialize_content_blocks(content: Any) -> Any:
     if isinstance(content, list):
         result = []
         for block in content:
-            # Claude Agent SDK content blocks are dataclasses
             if dataclasses.is_dataclass(block):
                 serialized = dataclasses.asdict(block)
 
-                # Add type field based on class name for Braintrust UI rendering
                 block_type = type(block).__name__
                 if block_type == "TextBlock":
                     serialized["type"] = "text"
@@ -327,19 +326,15 @@ def _serialize_content_blocks(content: Any) -> Any:
                 elif block_type == "ToolResultBlock":
                     serialized["type"] = "tool_result"
 
-                    # Simplify tool result content for better UI rendering
                     content_value = serialized.get("content")
-                    # If content is an array with a single text block, flatten it to just the text string
                     if isinstance(content_value, list) and len(content_value) == 1:
                         item = content_value[0]
                         if isinstance(item, dict) and item.get("type") == "text" and "text" in item:
                             serialized["content"] = item["text"]
 
-                    # Remove is_error field if it's None/null for cleaner schema compliance
                     if "is_error" in serialized and serialized["is_error"] is None:
                         del serialized["is_error"]
             else:
-                # Fallback for non-dataclass blocks (shouldn't happen with Claude Agent SDK)
                 serialized = block
 
             result.append(serialized)
@@ -359,7 +354,6 @@ def _extract_usage_from_result_message(result_message: Any) -> Dict[str, float]:
     if not usage:
         return {}
 
-    # Use shared utility to extract and finalize metrics
     metrics = extract_anthropic_usage(usage)
     if metrics:
         metrics = finalize_anthropic_tokens(metrics)
@@ -374,12 +368,10 @@ def _build_llm_input(
 
     Formats input to match Anthropic messages API format for proper UI rendering.
     """
-    # For the first LLM call, prepend the user prompt as a string (not array)
     if isinstance(prompt, str):
         if len(conversation_history) == 0:
             return [{"content": prompt, "role": "user"}]
         else:
-            # Include prompt at the beginning of conversation
             return [{"content": prompt, "role": "user"}] + conversation_history
 
     return conversation_history if conversation_history else None

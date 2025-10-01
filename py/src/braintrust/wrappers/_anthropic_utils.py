@@ -57,13 +57,18 @@ def extract_anthropic_usage(usage: Any) -> Dict[str, float]:
 
     # Anthropic cache tokens
     cache_read_tokens = get_value("cache_read_input_tokens")
+    if cache_read_tokens is not None:
+        try:
+            metrics["prompt_cached_tokens"] = float(cache_read_tokens)
+        except (ValueError, TypeError):
+            pass
+
     cache_creation_tokens = get_value("cache_creation_input_tokens")
-
-    if cache_read_tokens and isinstance(cache_read_tokens, (int, float)) and cache_read_tokens > 0:
-        metrics["prompt_cached_tokens"] = float(cache_read_tokens)
-
-    if cache_creation_tokens and isinstance(cache_creation_tokens, (int, float)) and cache_creation_tokens > 0:
-        metrics["prompt_cache_creation_tokens"] = float(cache_creation_tokens)
+    if cache_creation_tokens is not None:
+        try:
+            metrics["prompt_cache_creation_tokens"] = float(cache_creation_tokens)
+        except (ValueError, TypeError):
+            pass
 
     return metrics
 
@@ -78,9 +83,9 @@ def finalize_anthropic_tokens(metrics: Dict[str, float]) -> Dict[str, float]:
         metrics: Dictionary with token metrics
 
     Returns:
-        Updated metrics with corrected prompt_tokens and total tokens
+        Updated metrics with total tokens field
     """
-    prompt_tokens = (
+    total_prompt_tokens = (
         metrics.get("prompt_tokens", 0)
         + metrics.get("prompt_cached_tokens", 0)
         + metrics.get("prompt_cache_creation_tokens", 0)
@@ -88,6 +93,5 @@ def finalize_anthropic_tokens(metrics: Dict[str, float]) -> Dict[str, float]:
 
     return {
         **metrics,
-        "prompt_tokens": prompt_tokens,
-        "tokens": prompt_tokens + metrics.get("completion_tokens", 0),
+        "tokens": total_prompt_tokens + metrics.get("completion_tokens", 0),
     }
