@@ -70,9 +70,6 @@ from .util import (
 from .wrappers.anthropic import (
     wrap_anthropic,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
-from .wrappers.claude_agent_sdk import (
-    wrap_claude_agent_sdk,  # noqa: F401 # type: ignore[reportUnusedImport]
-)
 from .wrappers.litellm import (
     wrap_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
 )

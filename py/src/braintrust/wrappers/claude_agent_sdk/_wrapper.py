@@ -63,6 +63,9 @@ def _create_tool_wrapper_class(original_tool_class: Any) -> Any:
             wrapped_handler = _wrap_tool_handler(handler, name)
             super().__init__(name, description, input_schema, wrapped_handler, **kwargs)  # type: ignore[call-arg]
 
+        # Preserve generic typing support
+        __class_getitem__ = classmethod(lambda cls, params: cls)  # type: ignore[assignment]
+
     return WrappedSdkMcpTool
 
 
@@ -104,6 +107,9 @@ def _wrap_tool_handler(handler: Any, tool_name: Any) -> Callable[..., Any]:
     The Claude Agent SDK may execute tool handlers in a separate async context,
     so we try the context variable first, then fall back to current_span export.
     """
+    # Check if already wrapped to prevent double-wrapping
+    if hasattr(handler, '_braintrust_wrapped'):
+        return handler
 
     async def wrapped_handler(args: Any) -> Any:
         # Get parent span export from thread-local storage
@@ -119,6 +125,8 @@ def _wrap_tool_handler(handler: Any, tool_name: Any) -> Callable[..., Any]:
             span.log(output=result)
             return result
 
+    # Mark as wrapped to prevent double-wrapping
+    wrapped_handler._braintrust_wrapped = True  # type: ignore[attr-defined]
     return wrapped_handler
 
 
@@ -380,38 +388,3 @@ def _build_llm_input(
             return [{"content": prompt, "role": "user"}] + conversation_history
 
     return conversation_history if conversation_history else None
-
-
-def wrap_claude_agent_sdk(sdk: Any) -> Any:
-    """
-    Wrap the Claude Agent SDK module to add Braintrust tracing.
-
-    This wraps the query() function and tool creation to automatically trace:
-    - Agent interactions (as TASK spans)
-    - LLM calls (as LLM spans)
-    - Tool executions (as TOOL spans)
-
-    If Braintrust is not configured, tracing will be minimal overhead.
-
-    :param sdk: The claude_agent_sdk module
-    :return: Wrapped module with tracing
-
-    Example:
-        ```python
-        import claude_agent_sdk
-        from braintrust import init_logger, wrap_claude_agent_sdk
-
-        init_logger(project="my-project")
-        claude_agent_sdk = wrap_claude_agent_sdk(claude_agent_sdk)
-
-        # Use ClaudeSDKClient for automatic tracing
-        options = claude_agent_sdk.ClaudeAgentOptions(
-            model="claude-sonnet-4-5-20250929"
-        )
-        async with claude_agent_sdk.ClaudeSDKClient(options=options) as client:
-            await client.query("Hello!")
-            async for message in client.receive_response():
-                print(message)
-        ```
-    """
-    return ClaudeAgentSDKWrapper(sdk)

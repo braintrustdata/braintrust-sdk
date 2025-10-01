@@ -18,7 +18,7 @@ except ImportError:
 from braintrust import logger
 from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import init_test_logger
-from braintrust.wrappers.claude_agent_sdk import wrap_claude_agent_sdk
+from braintrust.wrappers.claude_agent_sdk import setup_claude_agent_sdk
 
 PROJECT_NAME = "test-claude-agent-sdk"
 TEST_MODEL = "claude-3-5-sonnet-20241022"
@@ -46,8 +46,8 @@ async def test_calculator_with_multiple_operations(memory_logger):
     """
     assert not memory_logger.pop()
 
-    # Wrap the SDK
-    wrapped_sdk = wrap_claude_agent_sdk(claude_agent_sdk)
+    # Setup Braintrust - patches claude_agent_sdk
+    setup_claude_agent_sdk(project=PROJECT_NAME)
 
     # Create calculator tool
     async def calculator_handler(args):
@@ -78,7 +78,7 @@ async def test_calculator_with_multiple_operations(memory_logger):
             "content": [{"type": "text", "text": f"The result of {operation}({a}, {b}) is {result}"}],
         }
 
-    calculator_tool = wrapped_sdk.SdkMcpTool(
+    calculator_tool = claude_agent_sdk.SdkMcpTool(
         name="calculator",
         description="Performs basic arithmetic operations",
         input_schema={
@@ -98,10 +98,10 @@ async def test_calculator_with_multiple_operations(memory_logger):
     )
 
     # Run the query using ClaudeSDKClient (required for tracing)
-    options = wrapped_sdk.ClaudeAgentOptions(
+    options = claude_agent_sdk.ClaudeAgentOptions(
         model=TEST_MODEL,
         mcp_servers={
-            "calculator": wrapped_sdk.create_sdk_mcp_server(
+            "calculator": claude_agent_sdk.create_sdk_mcp_server(
                 name="calculator",
                 version="1.0.0",
                 tools=[calculator_tool],
@@ -110,7 +110,7 @@ async def test_calculator_with_multiple_operations(memory_logger):
     )
 
     result_message = None
-    async with wrapped_sdk.ClaudeSDKClient(options=options) as client:
+    async with claude_agent_sdk.ClaudeSDKClient(options=options) as client:
         await client.query("What is 15 multiplied by 7? Then subtract 5 from the result.")
         async for message in client.receive_response():
             # Check for ResultMessage by class name
