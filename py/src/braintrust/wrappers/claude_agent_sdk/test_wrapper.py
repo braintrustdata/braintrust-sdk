@@ -18,7 +18,10 @@ except ImportError:
 from braintrust import logger
 from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import init_test_logger
-from braintrust.wrappers.claude_agent_sdk import setup_claude_agent_sdk
+from braintrust.wrappers.claude_agent_sdk._wrapper import (
+    _create_client_wrapper_class,
+    _create_tool_wrapper_class,
+)
 
 PROJECT_NAME = "test-claude-agent-sdk"
 TEST_MODEL = "claude-3-5-sonnet-20241022"
@@ -46,8 +49,12 @@ async def test_calculator_with_multiple_operations(memory_logger):
     """
     assert not memory_logger.pop()
 
-    # Setup Braintrust - patches claude_agent_sdk
-    setup_claude_agent_sdk(project=PROJECT_NAME)
+    # Patch claude_agent_sdk for tracing (logger already initialized by fixture)
+    original_client = claude_agent_sdk.ClaudeSDKClient
+    original_tool_class = claude_agent_sdk.SdkMcpTool
+
+    claude_agent_sdk.ClaudeSDKClient = _create_client_wrapper_class(original_client)
+    claude_agent_sdk.SdkMcpTool = _create_tool_wrapper_class(original_tool_class)
 
     # Create calculator tool
     async def calculator_handler(args):
