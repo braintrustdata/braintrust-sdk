@@ -1,9 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { postProcessOutput, postProcessPrompt } from "./ai-sdk-v1";
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
+import { describe, it, expect, vi } from "vitest";
+import {
+  wrapAISDKModel,
+  postProcessOutput,
+  postProcessPrompt,
+} from "./ai-sdk-v1";
 import { BraintrustMiddleware } from "../exports-node";
 import {
   LanguageModelV1Prompt,
   LanguageModelV1FunctionToolCall,
+  LanguageModelV1,
 } from "@ai-sdk/provider";
 
 describe("postProcessPrompt", () => {
@@ -100,6 +106,54 @@ describe("postProcessOutput", () => {
         finish_reason: "tool-calls",
       },
     ]);
+  });
+});
+
+describe("BraintrustLanguageModelWrapper", () => {
+  const createMockModel = (
+    overrides: Partial<LanguageModelV1> = {},
+  ): LanguageModelV1 => ({
+    specificationVersion: "v1",
+    provider: "test-provider",
+    modelId: "test-model",
+    defaultObjectGenerationMode: "json",
+    supportsImageUrls: true,
+    supportsStructuredOutputs: true,
+    doGenerate: vi.fn().mockResolvedValue({
+      text: "test",
+      finishReason: "stop",
+      usage: { promptTokens: 1, completionTokens: 1 },
+      rawCall: { rawPrompt: "", rawSettings: {} },
+    }),
+    doStream: vi.fn().mockResolvedValue({
+      stream: new ReadableStream(),
+      rawCall: { rawPrompt: "", rawSettings: {} },
+    }),
+    ...overrides,
+  });
+
+  it("should forward supportsUrl calls to the underlying model", () => {
+    const mockSupportsUrl = vi.fn((url: URL) => url.protocol === "https:");
+    const underlyingModel = createMockModel({ supportsUrl: mockSupportsUrl });
+
+    const wrapper = wrapAISDKModel(underlyingModel);
+    const testUrl = new URL("https://example.com");
+
+    const result = wrapper.supportsUrl?.(testUrl);
+
+    expect(mockSupportsUrl).toHaveBeenCalledWith(testUrl);
+    expect(result).toBe(true);
+  });
+
+  it("should return false when underlying model has no supportsUrl", () => {
+    const underlyingModel = createMockModel();
+
+    const wrapper = wrapAISDKModel(underlyingModel);
+    const testUrl = new URL("https://example.com");
+
+    const result = wrapper.supportsUrl?.(testUrl);
+
+    expect(result).toBe(false);
   });
 });
 

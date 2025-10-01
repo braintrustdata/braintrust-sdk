@@ -77,8 +77,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     return this.model.supportsStructuredOutputs;
   }
 
-  get supportsUrl(): ((url: URL) => boolean) | undefined {
-    return this.model.supportsUrl;
+  supportsUrl(url: URL): boolean {
+    return this.model.supportsUrl?.(url) ?? false;
   }
 
   // For the first cut, do not support custom span_info arguments. We can
