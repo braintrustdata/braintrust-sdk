@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import { describe, it, expect, vi } from "vitest";
 import {
   wrapAISDKModel,
