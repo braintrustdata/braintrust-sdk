@@ -4,8 +4,4 @@
 # for all users of the SDK, so we should be extremely careful about which
 # dependencies we add.
 py/setup.py @ankrgyl @manugoyal @clutchski
-core/py/setup.py @ankrgyl @manugoyal @clutchski
 js/package.json @ankrgyl @manugoyal @clutchski
-# Skipping core package.json for now because it's changed each time we bump the
-# version.
-# core/js/package.json @ankrgyl @manugoyal
