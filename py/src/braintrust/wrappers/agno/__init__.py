@@ -7,7 +7,7 @@ This integration provides:
 - Tool call tracing with correct parent-child relationships
 
 Usage:
-    from braintrust.wrapper.agno import setup_agno
+    from braintrust.wrappers.agno import setup_agno
 
     # Initialize the integration
     setup_agno(project_name="my-project")
