@@ -77,13 +77,13 @@ def finalize_anthropic_tokens(metrics: Dict[str, float]) -> Dict[str, float]:
     """Finalize Anthropic token calculations.
 
     Anthropic doesn't include cache tokens in the total, so we need to sum them.
-    Adds 'tokens' field with the total of all token types.
+    Updates 'prompt_tokens' to include cache tokens and adds 'tokens' field with the total.
 
     Args:
         metrics: Dictionary with token metrics
 
     Returns:
-        Updated metrics with total tokens field
+        Updated metrics with total prompt tokens and total tokens fields
     """
     total_prompt_tokens = (
         metrics.get("prompt_tokens", 0)
@@ -93,5 +93,6 @@ def finalize_anthropic_tokens(metrics: Dict[str, float]) -> Dict[str, float]:
 
     return {
         **metrics,
+        "prompt_tokens": total_prompt_tokens,
         "tokens": total_prompt_tokens + metrics.get("completion_tokens", 0),
     }

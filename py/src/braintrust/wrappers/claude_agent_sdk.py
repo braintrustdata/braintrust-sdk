@@ -129,41 +129,42 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
         """Manages LLM span lifecycle for Claude Agent SDK message streams.
 
         Message flow per turn:
-        1. LLM call starts (tracked via next_start_time)
-        2. AssistantMessage - LLM response content (no usage yet) → create span
-        3. ResultMessage - usage metrics → log to span and end it
-        4. UserMessage - tool results → mark next LLM start time
+        1. UserMessage (tool results) → mark the time when next LLM will start
+        2. AssistantMessage - LLM response arrives → create span with the marked start time, ending previous span
+        3. ResultMessage - usage metrics → log to span
 
-        We track start times separately because the SDK streams messages asynchronously,
-        so responses arrive before usage data, and we need accurate latency per turn.
+        We end the previous span when the next AssistantMessage arrives, using the marked
+        start time to ensure sequential timing (no overlapping LLM spans).
         """
-        def __init__(self):
+        def __init__(self, query_start_time: Optional[float] = None):
             self.current_span: Optional[Any] = None
-            self.next_start_time = time.time()
+            self.next_start_time: Optional[float] = query_start_time
 
         def start_llm_span(self, message: Any, prompt: Any, conversation_history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             """Start a new LLM span, ending the previous one if it exists."""
+            # Use the marked start time, or current time as fallback
+            start_time = self.next_start_time if self.next_start_time is not None else time.time()
+
+            # End the previous span at this start time to ensure sequential spans
             if self.current_span:
-                self.current_span.end()
+                self.current_span.end(end_time=start_time)
 
             final_content, span = _create_llm_span_for_messages(
                 [message], prompt, conversation_history,
-                start_time=self.next_start_time
+                start_time=start_time
             )
             self.current_span = span
+            self.next_start_time = None  # Reset for next span
             return final_content
-
-        def log_usage_and_end(self, usage_metrics: Dict[str, float]) -> None:
-            """Log usage metrics and end the current LLM span."""
-            if self.current_span:
-                if usage_metrics:
-                    self.current_span.log(metrics=usage_metrics)
-                self.current_span.end()
-                self.current_span = None
 
         def mark_next_llm_start(self) -> None:
             """Mark when the next LLM call will start (after tool results)."""
             self.next_start_time = time.time()
+
+        def log_usage(self, usage_metrics: Dict[str, float]) -> None:
+            """Log usage metrics to the current LLM span."""
+            if self.current_span and usage_metrics:
+                self.current_span.log(metrics=usage_metrics)
 
         def cleanup(self) -> None:
             """End any unclosed spans."""
@@ -178,9 +179,13 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
             super().__init__(client)
             self.__client = client
             self.__last_prompt: Optional[str] = None
+            self.__query_start_time: Optional[float] = None
 
         async def query(self, *args: Any, **kwargs: Any) -> Any:
-            """Wrap query to capture the prompt for tracing."""
+            """Wrap query to capture the prompt and start time for tracing."""
+            # Capture the time when query is called (when LLM call starts)
+            self.__query_start_time = time.time()
+
             # Capture the prompt for use in receive_response
             if args:
                 self.__last_prompt = str(args[0])
@@ -208,7 +213,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                 _thread_local.parent_span_export = span.export()
 
                 final_results: List[Dict[str, Any]] = []
-                llm_tracker = LLMSpanTracker()
+                llm_tracker = LLMSpanTracker(query_start_time=self.__query_start_time)
 
                 try:
                     async for message in generator:
@@ -227,7 +232,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                         elif message_type == "ResultMessage":
                             if hasattr(message, "usage"):
                                 usage_metrics = _extract_usage_from_result_message(message)
-                                llm_tracker.log_usage_and_end(usage_metrics)
+                                llm_tracker.log_usage(usage_metrics)
 
                             result_metadata = {
                                 k: v for k, v in {
