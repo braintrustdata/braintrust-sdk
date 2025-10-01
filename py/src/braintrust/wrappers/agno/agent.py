@@ -83,6 +83,7 @@ def wrap_agent(Agent: Any) -> Any:
             )
             span.set_current()
 
+            should_unset = True
             try:
                 first = True
                 all_chunks = []
@@ -104,13 +105,19 @@ def wrap_agent(Agent: Any) -> Any:
                     output=aggregated,
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
+            except GeneratorExit:
+                # Generator was closed early (e.g., break from for loop)
+                # Don't call unset_current() as context may have changed
+                should_unset = False
+                raise
             except Exception as e:
                 span.log(
                     error=str(e),
                 )
-                raise e
+                raise
             finally:
-                span.unset_current()
+                if should_unset:
+                    span.unset_current()
                 span.end()
 
         return _trace_stream()
@@ -135,6 +142,7 @@ def wrap_agent(Agent: Any) -> Any:
             )
             span.set_current()
 
+            should_unset = True
             try:
                 first = True
                 all_chunks = []
@@ -156,13 +164,19 @@ def wrap_agent(Agent: Any) -> Any:
                     output=aggregated,
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
+            except GeneratorExit:
+                # Generator was closed early (e.g., break from async for loop)
+                # Don't call unset_current() as context may have changed
+                should_unset = False
+                raise
             except Exception as e:
                 span.log(
                     error=str(e),
                 )
-                raise e
+                raise
             finally:
-                span.unset_current()
+                if should_unset:
+                    span.unset_current()
                 span.end()
 
         return _trace_stream()

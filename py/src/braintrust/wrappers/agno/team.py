@@ -83,6 +83,7 @@ def wrap_team(Team: Any) -> Any:
             )
             span.set_current()
 
+            should_unset = True
             try:
                 first = True
                 all_chunks = []
@@ -104,13 +105,19 @@ def wrap_team(Team: Any) -> Any:
                     output=aggregated,
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
+            except GeneratorExit:
+                # Generator was closed early (e.g., break from for loop)
+                # Don't call unset_current() as context may have changed
+                should_unset = False
+                raise
             except Exception as e:
                 span.log(
                     error=str(e),
                 )
-                raise e
+                raise
             finally:
-                span.unset_current()
+                if should_unset:
+                    span.unset_current()
                 span.end()
 
         return _trace_stream()
@@ -118,14 +125,14 @@ def wrap_team(Team: Any) -> Any:
     if hasattr(Team, "_run_stream"):
         wrap_function_wrapper(Team, "_run_stream", run_stream_wrapper)
 
-    async def arun_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def arun_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.arun_stream"
 
         run_response = args[0] if args else kwargs.get("run_response")
         input = args[2] if args else kwargs.get("input")
 
-        def _trace_stream():
+        async def _trace_stream():
             start = time.time()
             span = start_span(
                 name=span_name,
@@ -135,11 +142,12 @@ def wrap_team(Team: Any) -> Any:
             )
             span.set_current()
 
+            should_unset = True
             try:
                 first = True
                 all_chunks = []
 
-                for chunk in wrapped(*args, **kwargs):
+                async for chunk in wrapped(*args, **kwargs):
                     if first:
                         span.log(
                             metrics={
@@ -156,13 +164,19 @@ def wrap_team(Team: Any) -> Any:
                     output=aggregated,
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
+            except GeneratorExit:
+                # Generator was closed early (e.g., break from async for loop)
+                # Don't call unset_current() as context may have changed
+                should_unset = False
+                raise
             except Exception as e:
                 span.log(
                     error=str(e),
                 )
-                raise e
+                raise
             finally:
-                span.unset_current()
+                if should_unset:
+                    span.unset_current()
                 span.end()
 
         return _trace_stream()
