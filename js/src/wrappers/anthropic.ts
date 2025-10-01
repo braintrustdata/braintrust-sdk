@@ -334,10 +334,7 @@ type MetricsOrUndefined = Metrics | undefined;
 function parseEventFromMessage(message: any) {
   // FIXME[matt] the whole content or just the text?
   const output = message
-    ? {
-        role: message.role,
-        content: processAttachmentsInOutput(message.content),
-      }
+    ? { role: message.role, content: message.content }
     : null;
   const metrics = parseMetricsFromUsage(message?.usage);
   const metas = ["stop_reason", "stop_sequence"];
@@ -447,37 +444,6 @@ function processAttachmentsInInput(input: any): any {
   }
 
   return input;
-}
-
-// Process output to convert base64 attachments (images, PDFs, etc.) to Attachment objects
-function processAttachmentsInOutput(output: any): any {
-  if (Array.isArray(output)) {
-    return output.map(processAttachmentsInOutput);
-  }
-
-  if (isObject(output)) {
-    // Check for Anthropic's content blocks with base64 data
-    // Supports both "image" and "document" types (for PDFs, etc.)
-    if (
-      (output.type === "image" || output.type === "document") &&
-      isObject(output.source) &&
-      output.source.type === "base64"
-    ) {
-      return {
-        ...output,
-        source: convertBase64ToAttachment(output.source, output.type),
-      };
-    }
-
-    // Recursively process nested objects
-    const processed: any = {};
-    for (const [key, value] of Object.entries(output)) {
-      processed[key] = processAttachmentsInOutput(value);
-    }
-    return processed;
-  }
-
-  return output;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
