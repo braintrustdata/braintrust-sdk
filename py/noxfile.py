@@ -50,14 +50,12 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
+CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
 if sys.version_info >= (3, 10):
     PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
 else:
     PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
-# claude_agent_sdk requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
@@ -82,10 +80,14 @@ def test_pydantic_ai(session, version):
 @nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
-    _install_test_deps(session)
-    _install(session, "claude_agent_sdk", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_claude_agent_sdk.py")
-    _run_core_tests(session)
+    # claude_agent_sdk requires Python >= 3.10
+    if sys.version_info >= (3, 10):
+        _install_test_deps(session)
+        npm_bin = _install_npm_in_session(session)
+        session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
+        _install(session, "claude_agent_sdk", version)
+        _run_tests(session, f"{WRAPPER_DIR}/test_claude_agent_sdk.py")
+        _run_core_tests(session)
 
 @nox.session()
 @nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
@@ -183,6 +185,20 @@ def test_latest_wrappers_novcr(session):
     session.notify("test_anthropic(latest)", posargs=args)
     session.notify("test_pydantic_ai(latest)", posargs=args)
     session.notify("test_claude_agent_sdk(latest)", posargs=args)
+
+
+def _install_npm_in_session(session):
+    """Install Node.js and npm in the nox session using nodeenv."""
+    session.install("nodeenv", silent=SILENT_INSTALLS)
+    # Create a node environment in the session's temporary directory
+    node_dir = os.path.join(session.create_tmp(), "node_env")
+    session.run("nodeenv", node_dir, silent=SILENT_INSTALLS)
+    # Return the path to npm binary for direct use
+    if sys.platform == "win32":
+        npm_bin = os.path.join(node_dir, "Scripts", "npm.cmd")
+    else:
+        npm_bin = os.path.join(node_dir, "bin", "npm")
+    return npm_bin
 
 
 def _install_test_deps(session):
