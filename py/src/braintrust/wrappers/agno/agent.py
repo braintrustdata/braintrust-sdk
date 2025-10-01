@@ -118,14 +118,14 @@ def wrap_agent(Agent: Any) -> Any:
     if hasattr(Agent, "_run_stream"):
         wrap_function_wrapper(Agent, "_run_stream", run_stream_wrapper)
 
-    async def arun_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def arun_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.arun_stream"
 
         run_response = args[0] if args else kwargs.get("run_response")
         input = args[2] if args else kwargs.get("input")
 
-        def _trace_stream():
+        async def _trace_stream():
             start = time.time()
             span = start_span(
                 name=span_name,
@@ -139,7 +139,7 @@ def wrap_agent(Agent: Any) -> Any:
                 first = True
                 all_chunks = []
 
-                for chunk in wrapped(*args, **kwargs):
+                async for chunk in wrapped(*args, **kwargs):
                     if first:
                         span.log(
                             metrics={

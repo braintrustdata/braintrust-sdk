@@ -125,7 +125,7 @@ def wrap_model(Model: Any) -> Any:
     if hasattr(Model, "invoke_stream"):
         wrap_function_wrapper(Model, "invoke_stream", invoke_stream_wrapper)
 
-    async def ainvoke_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def ainvoke_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         model_name = _get_model_name(instance)
         span_name = f"{model_name}.ainvoke_stream"
 
@@ -263,7 +263,7 @@ def wrap_model(Model: Any) -> Any:
     if hasattr(Model, "response_stream"):
         wrap_function_wrapper(Model, "response_stream", response_stream_wrapper)
 
-    async def aresponse_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def aresponse_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         model_name = _get_model_name(instance)
         span_name = f"{model_name}.aresponse_stream"
 
