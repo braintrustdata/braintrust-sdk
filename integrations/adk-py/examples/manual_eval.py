@@ -5,14 +5,14 @@ An example showing how Braintrust eval experiment traces will continue to work w
 import asyncio
 from typing import Any
 
-from braintrust.framework import EvalAsync
-from braintrust_adk import setup_braintrust
 from manual import main as manual
+
+from braintrust.framework import EvalAsync
 
 
 async def main():
     async def task(input: Any):
-        setup_braintrust()
+        setup_adk()
         return await manual(input)
 
     await EvalAsync(

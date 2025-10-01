@@ -9,7 +9,7 @@ from braintrust.span_types import SpanTypeAttribute
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["setup_braintrust", "wrap_agent", "wrap_runner", "wrap_flow"]
+__all__ = ["setup_braintrust", "setup_adk", "wrap_agent", "wrap_runner", "wrap_flow"]
 
 
 def setup_braintrust(*args, **kwargs):

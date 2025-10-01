@@ -1,15 +1,16 @@
 import pytest
-from braintrust import logger
-from braintrust.test_helpers import init_test_logger
-from braintrust_adk import setup_braintrust
+from braintrust_adk import setup_adk
 from google.adk import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
+from braintrust import logger
+from braintrust.test_helpers import init_test_logger
+
 PROJECT_NAME = "test_adk"
 
-setup_braintrust(project_name=PROJECT_NAME)
+setup_adk(project_name=PROJECT_NAME)
 
 
 @pytest.fixture(scope="module")
@@ -73,9 +74,9 @@ async def test_adk_braintrust_integration(memory_logger):
     assert responses[0].content.parts
 
     response_text = responses[0].content.parts[0].text
-    assert any(word in response_text.lower() for word in ["weather", "san francisco", "72", "sunny"]), (
-        f"Response doesn't mention weather: {response_text}"
-    )
+    assert any(
+        word in response_text.lower() for word in ["weather", "san francisco", "72", "sunny"]
+    ), f"Response doesn't mention weather: {response_text}"
 
     spans = memory_logger.pop()
 
