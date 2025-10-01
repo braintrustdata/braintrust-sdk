@@ -1,5 +1,4 @@
 import pytest
-from braintrust_adk import setup_adk
 from google.adk import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -7,6 +6,7 @@ from google.genai import types
 
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
+from braintrust_adk import setup_adk
 
 PROJECT_NAME = "test_adk"
 
