@@ -1,11 +1,12 @@
 import logging
 import warnings
 from contextlib import contextmanager
-from typing import Any
 
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
+from braintrust.wrappers._anthropic_utils import Wrapper, extract_anthropic_usage, finalize_anthropic_tokens
 
 log = logging.getLogger(__name__)
+
 
 
 # This tracer depends on an internal anthropic method used to merge
@@ -35,14 +36,6 @@ METADATA_PARAMS = (
     "tools",
     "stream",
 )
-
-
-class Wrapper:
-    def __init__(self, wrapped: Any):
-        self.__wrapped = wrapped
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.__wrapped, name)
 
 
 class TracedAsyncAnthropic(Wrapper):
@@ -187,13 +180,14 @@ class TracedMessageStreamManager(Wrapper):
                 self.__close(exc_type, exc_value, traceback)
 
     def __close(self, exc_type, exc_value, traceback):
-        tms = self.__traced_message_stream
-        msg = tms._get_final_traced_message()
-        if msg:
-            _log_message_to_span(msg, self.__span)
-        if exc_type:
-            log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
-        self.__span.end()
+        with _catch_exceptions():
+            tms = self.__traced_message_stream
+            msg = tms._get_final_traced_message()
+            if msg:
+                _log_message_to_span(msg, self.__span)
+            if exc_type:
+                log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
+            self.__span.end()
 
 
 class TracedMessageStream(Wrapper):
@@ -233,7 +227,8 @@ class TracedMessageStream(Wrapper):
         return m
 
     def __process_message(self, m):
-        self.__snapshot = accumulate_event(event=m, current_snapshot=self.__snapshot)
+        with _catch_exceptions():
+            self.__snapshot = accumulate_event(event=m, current_snapshot=self.__snapshot)
 
 
 def _get_input_from_kwargs(kwargs):
@@ -273,7 +268,8 @@ def _start_span(name, kwargs):
 def _log_message_to_span(message, span):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
-        metrics = _finalize_metrics(_extract_metrics(getattr(message, "usage", {})))
+        usage = getattr(message, "usage", {})
+        metrics = finalize_anthropic_tokens(extract_anthropic_usage(usage))
 
         # Create output dict with only truthy values for role and content
         output = {
@@ -284,39 +280,6 @@ def _log_message_to_span(message, span):
         } or None
 
         span.log(output=output, metrics=metrics)
-
-
-def _extract_metrics(usage):
-    metrics = {}
-    if not usage:
-        return {}
-
-    def _save_if_exists_to(source, target=None):
-        n = getattr(usage, source, None)
-        if n is not None:
-            metrics[target or source] = n
-
-    _save_if_exists_to("input_tokens", "prompt_tokens")
-    _save_if_exists_to("output_tokens", "completion_tokens")
-    _save_if_exists_to("cache_read_input_tokens", "prompt_cached_tokens")
-    _save_if_exists_to("cache_creation_input_tokens", "prompt_cache_creation_tokens")
-
-    return metrics
-
-
-def _finalize_metrics(metrics):
-    prompt_tokens = (
-        metrics.get("prompt_tokens", 0)
-        + metrics.get("prompt_cached_tokens", 0)
-        + metrics.get("prompt_cache_creation_tokens", 0)
-    )
-    return {
-        **metrics,
-        "prompt_tokens": prompt_tokens,
-        "tokens": prompt_tokens + metrics.get("completion_tokens", 0),
-    }
-
-
 @contextmanager
 def _catch_exceptions():
     try:
