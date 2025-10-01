@@ -1894,3 +1894,108 @@ def test_nested_spans_with_export(with_memory_logger):
         # Continue with nested spans to ensure context manager still works
         with experiment.start_span(name="s2") as span2:
             span2.log(input="two")
+
+
+def test_span_start_span_with_explicit_parent(with_memory_logger):
+    """Test that span.start_span() with explicit parent doesn't inherit from context.
+
+    This verifies the fix where span.start_span(parent=exported) should use the
+    exported parent, not the current span from the context manager.
+    """
+    from braintrust.test_helpers import init_test_exp
+
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    # Create a root span, log to it (creates row_id), and export it
+    with experiment.start_span(name="root") as root_span:
+        root_span.log(input="root input")
+        root_export = root_span.export()
+        root_span_id = root_span.span_id
+        root_root_span_id = root_span.root_span_id
+
+    # Create another span
+    with experiment.start_span(name="span2") as span2:
+        span2_span_id = span2.span_id
+
+        # Within span2's context, create span3 with explicit parent=root_export
+        # span3 should NOT inherit from span2 (the active context)
+        # span3 should inherit from root (because root_export has row_id after logging)
+        with span2.start_span(parent=root_export, name="span3") as span3:
+            span3.log(input="test")
+
+    logs = with_memory_logger.pop()
+    span3_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "span3")
+
+    # span3 should NOT have span2 as parent (would happen if it inherited from context)
+    assert span2_span_id not in span3_log.get("span_parents", []), \
+        "span3 should not inherit from span2 context when explicit parent is provided"
+
+    # span3 should inherit from root (the explicit parent)
+    assert root_span_id in span3_log.get("span_parents", []), \
+        "span3 should have root_span_id in span_parents from explicit parent"
+    assert span3_log["root_span_id"] == root_root_span_id, \
+        "span3 should have root's root_span_id"
+
+
+def test_span_start_span_inherits_from_self(with_memory_logger):
+    """Test that span.start_span() without explicit parent inherits from self.
+
+    When no explicit parent is provided, the child should inherit from the current span.
+    """
+    from braintrust.test_helpers import init_test_exp
+
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    # Create a parent span
+    with experiment.start_span(name="parent") as parent_span:
+        parent_span_id = parent_span.span_id
+        parent_root_span_id = parent_span.root_span_id
+
+        # Create a child span without explicit parent - should inherit from parent_span
+        with parent_span.start_span(name="child") as child_span:
+            child_span.log(input="test")
+
+    logs = with_memory_logger.pop()
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+
+    # Child should inherit parent's root_span_id and have parent_span_id in span_parents
+    assert child_log["root_span_id"] == parent_root_span_id
+    assert parent_span_id in child_log.get("span_parents", []), \
+        "child should have parent_span_id in span_parents when no explicit parent is provided"
+
+
+def test_span_start_span_with_exported_span_parent(with_memory_logger):
+    """Test that span.start_span() with exported span parent uses the exported span.
+
+    When an exported span (with row_id) is provided as parent, it should be used
+    instead of the context manager's current span.
+    """
+    from braintrust.test_helpers import init_test_exp
+
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    # Create and export a span with row_id
+    with experiment.start_span(name="exported_parent") as exported_parent:
+        exported_parent.log(input="parent")
+        exported_parent_export = exported_parent.export()
+        exported_parent_span_id = exported_parent.span_id
+        exported_parent_root_span_id = exported_parent.root_span_id
+
+    # Create another span that will be the active context
+    with experiment.start_span(name="active_context") as active_context:
+        active_context_span_id = active_context.span_id
+
+        # Within active_context, create a child with explicit parent=exported_parent_export
+        # Should use exported_parent, not active_context
+        with active_context.start_span(parent=exported_parent_export, name="child") as child:
+            child.log(input="test")
+
+    logs = with_memory_logger.pop()
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+
+    # Child should inherit from exported_parent, not active_context
+    assert child_log["root_span_id"] == exported_parent_root_span_id
+    assert exported_parent_span_id in child_log.get("span_parents", []), \
+        "child should have exported_parent_span_id in span_parents"
+    assert active_context_span_id not in child_log.get("span_parents", []), \
+        "child should NOT have active_context_span_id in span_parents"

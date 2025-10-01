@@ -6,7 +6,7 @@ from typing import Any, Optional
 from opentelemetry import context, trace
 from opentelemetry.trace import SpanContext, TraceFlags
 
-from braintrust.context import ParentInfo, SpanInfo
+from braintrust.context import ParentSpanIds, SpanInfo
 from braintrust.logger import Span
 
 log = logging.getLogger(__name__)
@@ -112,12 +112,12 @@ class ContextManager:
             # This shouldn't normally happen, but handle it gracefully
             context.attach(context.set_value('braintrust_span', None))
 
-    def get_parent_info_for_bt_span(self) -> Optional[ParentInfo]:
+    def get_parent_span_ids(self) -> Optional[ParentSpanIds]:
         """Get parent information for creating a new BT span."""
         span_info = self.get_current_span_info()
         if not span_info:
             return None
-        return ParentInfo(
+        return ParentSpanIds(
             root_span_id=span_info.trace_id,
             span_parents=[span_info.span_id],
         )

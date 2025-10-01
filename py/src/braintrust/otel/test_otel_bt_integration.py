@@ -301,7 +301,7 @@ def test_uses_braintrust_context_manager_when_otel_disabled():
 
         # Verify it has the expected interface
         assert hasattr(cm, 'get_current_span_info')
-        assert hasattr(cm, 'get_parent_info_for_bt_span')
+        assert hasattr(cm, 'get_parent_span_ids')
         assert hasattr(cm, 'set_current_span')
         assert hasattr(cm, 'unset_current_span')
 
@@ -327,7 +327,7 @@ def test_uses_otel_context_manager_when_enabled():
 
         # Verify it has the expected interface
         assert hasattr(cm, 'get_current_span_info')
-        assert hasattr(cm, 'get_parent_info_for_bt_span')
+        assert hasattr(cm, 'get_parent_span_ids')
         assert hasattr(cm, 'set_current_span')
         assert hasattr(cm, 'unset_current_span')
 
@@ -335,7 +335,7 @@ def test_uses_otel_context_manager_when_enabled():
 def test_bt_span_without_explicit_parent_inherits_from_otel(otel_fixture):
     """Test that a BT span created without explicit parent inherits from OTEL context.
 
-    This test specifically exercises get_parent_info_for_bt_span() which should
+    This test specifically exercises get_parent_span_ids() which should
     retrieve parent information from the OTEL context manager.
     """
     logger = init_test_logger(__name__)
