@@ -53,7 +53,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
-from . import id_gen
+from . import context, id_gen
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
@@ -2183,7 +2183,7 @@ def start_span(
             propagated_event=coalesce(propagated_event, parent_obj.propagated_event),
             event=event,
             state=state,
-            use_context_manager=False,
+            lookup_span_parent=False,
         )
     else:
         return parent_obj.start_span(
@@ -3068,6 +3068,76 @@ class ParentSpanIds:
     root_span_id: str
 
 
+@dataclasses.dataclass
+class SpanIds:
+    """The three IDs that define a span's position in the trace tree."""
+    span_id: str
+    root_span_id: str
+    span_parents: Optional[List[str]]
+
+
+def _resolve_span_ids(
+    span_id: Optional[str],
+    root_span_id: Optional[str],
+    parent_span_ids: Optional[ParentSpanIds],
+    lookup_span_parent: bool,
+    id_generator: "id_gen.IDGenerator",
+    context_manager: "context.ContextManager",
+) -> SpanIds:
+    """Resolve all span IDs (span_id, root_span_id, span_parents) from explicit values, parent info, or context.
+
+    Args:
+        span_id: Optional explicit span_id (from public API)
+        root_span_id: Optional explicit root_span_id (from public API)
+        parent_span_ids: Optional explicit parent span IDs (from parent string or parent span)
+        lookup_span_parent: Whether to look up parent from context manager if no explicit parent.
+            - True (default): start_span() inherits parent/root ids from the active span (if it exists)
+            - False: don't look up parent in context (e.g. logger.log() .. )
+        id_generator: ID generator for creating new span/trace IDs
+        context_manager: Context manager for looking up parent spans
+
+    Returns:
+        SpanIds with resolved span_id, root_span_id, and span_parents
+        3. Otherwise → create new root span (generate or use explicit root_span_id)
+    """
+    # Generate span_id if not provided
+    if span_id is None:
+        span_id = id_generator.get_span_id()
+
+    # If we have explicit parent span ids, use them.
+    if parent_span_ids:
+        return SpanIds(
+            span_id=span_id,
+            root_span_id=parent_span_ids.root_span_id,
+            span_parents=[parent_span_ids.span_id]
+        )
+
+    # If we're using the context manager, get to see if there's an active parent
+    # span.
+    if lookup_span_parent:
+        parent_info = context_manager.get_parent_span_ids()
+        if parent_info:
+            return SpanIds(
+                span_id=span_id,
+                root_span_id=parent_info.root_span_id,
+                span_parents=parent_info.span_parents
+            )
+
+    # No parent - create new root span
+    if root_span_id:
+        resolved_root_span_id = root_span_id
+    elif id_generator.share_root_span_id():
+        resolved_root_span_id = span_id  # Backwards compat for UUID mode
+    else:
+        resolved_root_span_id = id_generator.get_trace_id()
+
+    return SpanIds(
+        span_id=span_id,
+        root_span_id=resolved_root_span_id,
+        span_parents=None
+    )
+
+
 def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
     if components.object_id:
         captured_object_id = components.object_id
@@ -3182,7 +3252,6 @@ def _start_span_parent_args(
         parent_compute_object_metadata_args=parent_compute_object_metadata_args,
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
-        use_context_manager=parent is None,
     )
 
 
@@ -3344,7 +3413,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             ),
             self.dataset is not None,
         )
-        span = self._start_span_impl(start_time=self.last_start_time, use_context_manager=False, **event)
+        span = self._start_span_impl(start_time=self.last_start_time, lookup_span_parent=False, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -3533,7 +3602,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        use_context_manager: bool = True,
+        lookup_span_parent: bool = True,
         **event: Any,
     ) -> Span:
         parent_args = _start_span_parent_args(
@@ -3544,12 +3613,11 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             parent_span_ids=None,
             propagated_event=propagated_event,
         )
-        # Override use_context_manager from caller
-        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
             **parent_args,
             name=name,
             type=type,
+            lookup_span_parent=lookup_span_parent,
             default_root_type=SpanTypeAttribute.EVAL,
             span_attributes=span_attributes,
             start_time=start_time,
@@ -3632,7 +3700,7 @@ class SpanImpl(Span):
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
         state: Optional[BraintrustState] = None,
-        use_context_manager: bool = True,
+        lookup_span_parent: bool = True,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3698,34 +3766,18 @@ class SpanImpl(Span):
             id = str(uuid.uuid4())
         self._id = id
 
-        id_generator = self.state.id_generator
-        self.span_id = span_id or id_generator.get_span_id()
-        if parent_span_ids:
-            self.root_span_id = parent_span_ids.root_span_id
-            self.span_parents = [parent_span_ids.span_id]
-        else:
-            if root_span_id:
-                self.root_span_id = root_span_id
-            elif id_generator.share_root_span_id():
-                # NOTE: uuid style id gen shared root_span_id and span_id for parents, so I'm keeping
-                # this behaviour to be backwards compatible / conservative.
-                self.root_span_id = self.span_id
-            else:
-                self.root_span_id = id_generator.get_trace_id()
-            self.span_parents = None
-
-        # Handle unified context if no explicit parents are set and context manager is enabled
-        if not parent_span_ids and use_context_manager:
-            # FIXME[matt] This should probably be done at a higher level, but there isn't one
-            # place that calls this, so barring a larger refactor, we'll do it here.
-            parent_info = self.state.context_manager.get_parent_info_for_bt_span()
-            if parent_info:
-                root_span_id = parent_info.root_span_id
-                span_parents = parent_info.span_parents
-                if root_span_id:
-                    self.root_span_id = root_span_id
-                if span_parents:
-                    self.span_parents = span_parents
+        # Resolve all span IDs (span_id, root_span_id, span_parents)
+        span_ids = _resolve_span_ids(
+            span_id=span_id,
+            root_span_id=root_span_id,
+            parent_span_ids=parent_span_ids,
+            lookup_span_parent=lookup_span_parent,
+            id_generator=self.state.id_generator,
+            context_manager=self.state.context_manager,
+        )
+        self.span_id = span_ids.span_id
+        self.root_span_id = span_ids.root_span_id
+        self.span_parents = span_ids.span_parents
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -3821,6 +3873,12 @@ class SpanImpl(Span):
             parent_span_ids = None
         else:
             parent_span_ids = ParentSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
+
+        # Always set lookup_span_parent=False because:
+        # - If parent is provided, _start_span_parent_args will extract parent info from it
+        # - If parent is not provided, we explicitly set parent_span_ids from self
+        # Either way, we don't want to look up parent from context manager
+        lookup_span_parent = False
         return SpanImpl(
             **_start_span_parent_args(
                 parent=parent,
@@ -3836,6 +3894,7 @@ class SpanImpl(Span):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            lookup_span_parent=lookup_span_parent,
             state=self.state,
         )
 
@@ -4707,7 +4766,7 @@ class Logger(Exportable):
 
         span = self._start_span_impl(
             start_time=self.last_start_time,
-            use_context_manager=False,
+            lookup_span_parent=False,
             input=input,
             output=output,
             expected=expected,
@@ -4815,7 +4874,7 @@ class Logger(Exportable):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
-        use_context_manager: bool = True,
+        lookup_span_parent: bool = True,
         **event: Any,
     ) -> Span:
         parent_args = _start_span_parent_args(
@@ -4826,8 +4885,6 @@ class Logger(Exportable):
             parent_span_ids=None,
             propagated_event=propagated_event,
         )
-        # Override use_context_manager from caller
-        parent_args['use_context_manager'] = use_context_manager
         return SpanImpl(
             **parent_args,
             name=name,
@@ -4839,6 +4896,7 @@ class Logger(Exportable):
             event=event,
             span_id=span_id,
             root_span_id=root_span_id,
+            lookup_span_parent=lookup_span_parent,
             state=self.state,
         )
 

@@ -1,17 +1,18 @@
 """
 An example showing how to use the `wrap_agent`, `wrap_flow`, and `wrap_runner` functions to manually patch the Google ADK classes.
 
-In most cases you should consider using `setup_braintrust`, but this may be helpful in specific cases.
+In most cases you should consider using `setup_adk`, but this may be helpful in specific cases.
 """
 
 import asyncio
 
-from braintrust.logger import init_logger
-from braintrust_adk import wrap_agent, wrap_flow, wrap_runner
 from google.adk import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+
+from braintrust.logger import init_logger
+from braintrust_adk import wrap_agent, wrap_flow, wrap_runner
 
 init_logger(project="googleadk")
 

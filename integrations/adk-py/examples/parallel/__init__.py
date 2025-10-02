@@ -1,5 +1,5 @@
-from braintrust_adk import setup_braintrust
+from braintrust_adk import setup_adk
 
 from . import agent  # noqa
 
-setup_braintrust(project_name="adk-parallel")
+setup_adk(project_name="adk-parallel")

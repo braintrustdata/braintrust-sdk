@@ -17,7 +17,7 @@ class SpanInfo:
 
 
 @dataclass
-class ParentInfo:
+class ParentSpanIds:
     root_span_id: str
     span_parents: List[str]
 
@@ -40,11 +40,11 @@ class ContextManager(ABC):
         pass
 
     @abstractmethod
-    def get_parent_info_for_bt_span(self) -> Optional[ParentInfo]:
-        """Get parent information for creating a new Braintrust span.
+    def get_parent_span_ids(self) -> Optional[ParentSpanIds]:
+        """Get parent span IDs for creating a new Braintrust span.
 
         Returns:
-            Dict with parent info (root_span_id, span_parents, metadata) if available,
+            ParentSpanIds with root_span_id and span_parents if available,
             None if no parent context exists.
         """
         pass
@@ -90,14 +90,14 @@ class BraintrustContextManager(ContextManager):
             span_object=current_span
         )
 
-    def get_parent_info_for_bt_span(self) -> Optional[ParentInfo]:
+    def get_parent_span_ids(self) -> Optional[ParentSpanIds]:
         """Get parent information for creating a new Braintrust span."""
         current_span = self._current_span.get()
         if not current_span:
             return None
 
         # If current span is a BT span, use it as parent
-        return ParentInfo(
+        return ParentSpanIds(
             root_span_id=current_span.root_span_id,
             span_parents=[current_span.span_id]
         )
