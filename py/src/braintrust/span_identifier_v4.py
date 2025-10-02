@@ -139,6 +139,17 @@ class SpanComponentsV4:
         return base64.b64encode(raw_bytes).decode()
 
     @staticmethod
+    def get_version(slug: str) -> int:
+        """
+        Extract the encoding version number from a serialized span components slug.
+
+        :param slug: Base64-encoded span components string
+        :returns: Version number (3 for V3, 4 for V4, etc.)
+        """
+        raw_bytes = base64.b64decode(slug)
+        return raw_bytes[0]
+
+    @staticmethod
     def from_str(s: str) -> "SpanComponentsV4":
         try:
             raw_bytes = base64.b64decode(s.encode())
