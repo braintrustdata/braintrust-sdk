@@ -59,7 +59,7 @@ pylint:
 .PHONY: js-build js-test js-docs js-verify-ci
 
 js-build:
-	pnpm install
+	pnpm install --frozen-lockfile
 	pnpm run build
 
 js-test: js-build
