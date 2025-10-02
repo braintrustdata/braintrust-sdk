@@ -144,15 +144,12 @@ describe("BraintrustLanguageModelWrapper", () => {
     expect(result).toBe(true);
   });
 
-  it("should return false when underlying model has no supportsUrl", () => {
+  it("should not define supportsUrl when underlying model has no supportsUrl", () => {
     const underlyingModel = createMockModel();
 
     const wrapper = wrapAISDKModel(underlyingModel);
-    const testUrl = new URL("https://example.com");
 
-    const result = wrapper.supportsUrl?.(testUrl);
-
-    expect(result).toBe(false);
+    expect(wrapper.supportsUrl).toBeUndefined();
   });
 });
 
