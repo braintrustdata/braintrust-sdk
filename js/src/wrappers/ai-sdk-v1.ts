@@ -1,9 +1,6 @@
 import {
-  ChatCompletionContentPart as ContentPartSchema,
   type ChatCompletionContentPartType as ContentPart,
-  ChatCompletionMessageParam as MessageSchema,
   type ChatCompletionMessageParamType as Message,
-  ChatCompletionTool as ChatCompletionToolSchema,
   type ChatCompletionToolType as ChatCompletionTool,
 } from "../generated_types";
 import { startSpan } from "../logger";
@@ -51,7 +48,14 @@ export function wrapAISDKModel<T extends object>(model: T): T {
 }
 
 class BraintrustLanguageModelWrapper implements LanguageModelV1 {
-  constructor(private model: LanguageModelV1) {}
+  supportsUrl?: (url: URL) => boolean;
+
+  constructor(private model: LanguageModelV1) {
+    // Only define supportsUrl if the model has this method
+    if (typeof this.model.supportsUrl === "function") {
+      this.supportsUrl = (url: URL) => this.model.supportsUrl!(url);
+    }
+  }
 
   get specificationVersion() {
     return this.model.specificationVersion;
@@ -75,10 +79,6 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
   get supportsStructuredOutputs(): boolean | undefined {
     return this.model.supportsStructuredOutputs;
-  }
-
-  supportsUrl(url: URL): boolean {
-    return this.model.supportsUrl?.(url) ?? false;
   }
 
   // For the first cut, do not support custom span_info arguments. We can
