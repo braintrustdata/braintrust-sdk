@@ -90,15 +90,12 @@ async function testImageInput() {
         role: "user",
         content: [
           {
-            type: "text",
-            text: "What color is this image?",
-          },
-          {
             type: "image_url",
             image_url: {
               url: `data:image/png;base64,${base64Image}`,
             },
           },
+          { type: "text", text: "What color is this image?" },
         ],
       },
     ],
@@ -107,19 +104,27 @@ async function testImageInput() {
   return response;
 }
 
-// Test 6: Document analysis (using vision for PDF pages)
-async function testDocumentAnalysis() {
-  console.log("\n=== Test 6: Document Analysis ===");
-  // Note: OpenAI doesn't directly support PDFs, but you can convert PDF pages to images
-  // For this example, we'll simulate with text extraction
+// Test 6: Document input (PDF)
+async function testDocumentInput() {
+  console.log("\n=== Test 6: Document Input ===");
+  const base64Pdf = readFileSync(`${FIXTURES_DIR}/test-document.pdf`, "base64");
+
   const response = await client.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 150,
     messages: [
       {
         role: "user",
-        content:
-          "Analyze this document content: [Document placeholder - in production, extract PDF text or convert to images]",
+        content: [
+          {
+            type: "file",
+            file: {
+              file_data: base64Pdf,
+              filename: "test-document.pdf",
+            },
+          },
+          { type: "text", text: "What is in this document?" },
+        ],
       },
     ],
   });
@@ -160,13 +165,13 @@ async function testStopSequences() {
     messages: [{ role: "user", content: "Write a short story about a robot." }],
   });
   console.log(response.choices[0].message.content);
-  console.log(`Finish reason: ${response.choices[0].finish_reason}`);
+  console.log(`Stop reason: ${response.choices[0].finish_reason}`);
   return response;
 }
 
-// Test 9: User parameter
-async function testUserParameter() {
-  console.log("\n=== Test 9: User Parameter ===");
+// Test 9: Metadata
+async function testMetadata() {
+  console.log("\n=== Test 9: Metadata ===");
   const response = await client.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 100,
@@ -192,44 +197,6 @@ async function testLongContext() {
     ],
   });
   console.log(response.choices[0].message.content);
-  return response;
-}
-
-// Test 11: JSON mode
-async function testJsonMode() {
-  console.log("\n=== Test 11: JSON Mode ===");
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 200,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "user",
-        content:
-          "Generate a JSON object with fields: name (string), age (number), and hobbies (array of strings).",
-      },
-    ],
-  });
-  console.log(response.choices[0].message.content);
-  return response;
-}
-
-// Test 12: Multiple choices
-async function testMultipleChoices() {
-  console.log("\n=== Test 12: Multiple Choices ===");
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 50,
-    n: 3,
-    temperature: 0.8,
-    messages: [
-      { role: "user", content: "Give me a creative name for a robot." },
-    ],
-  });
-  console.log("Generated names:");
-  response.choices.forEach((choice, i) => {
-    console.log(`  ${i + 1}. ${choice.message.content}`);
-  });
   return response;
 }
 
@@ -264,34 +231,19 @@ async function testMixedContent() {
   return response;
 }
 
-// Test 14: Seed parameter for deterministic output
-async function testSeedParameter() {
-  console.log("\n=== Test 14: Seed Parameter ===");
-  const seed = 12345;
-
-  const response1 = await client.chat.completions.create({
+// Test 14: Empty assistant message (prefill)
+async function testPrefill() {
+  console.log("\n=== Test 14: Prefill ===");
+  const response = await client.chat.completions.create({
     model: "gpt-4o",
-    max_tokens: 50,
-    seed: seed,
-    temperature: 0.7,
-    messages: [{ role: "user", content: "Generate a random story opening." }],
+    max_tokens: 200,
+    messages: [
+      { role: "user", content: "Write a haiku about coding." },
+      { role: "assistant", content: "Here is a haiku:" },
+    ],
   });
-
-  const response2 = await client.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 50,
-    seed: seed,
-    temperature: 0.7,
-    messages: [{ role: "user", content: "Generate a random story opening." }],
-  });
-
-  console.log("First response:", response1.choices[0].message.content);
-  console.log("Second response:", response2.choices[0].message.content);
-  console.log(
-    "Fingerprints match:",
-    response1.system_fingerprint === response2.system_fingerprint,
-  );
-  return response1;
+  console.log(response.choices[0].message.content);
+  return response;
 }
 
 // Test 15: Very short max_tokens
@@ -303,13 +255,13 @@ async function testShortMaxTokens() {
     messages: [{ role: "user", content: "What is AI?" }],
   });
   console.log(response.choices[0].message.content);
-  console.log(`Finish reason: ${response.choices[0].finish_reason}`);
+  console.log(`Stop reason: ${response.choices[0].finish_reason}`);
   return response;
 }
 
-// Test 16: Function calling (tools)
-async function testFunctionCalling() {
-  console.log("\n=== Test 16: Function Calling ===");
+// Test 16: Tool use (function calling)
+async function testToolUse() {
+  console.log("\n=== Test 16: Tool Use ===");
 
   const tools: OpenAI.Chat.ChatCompletionTool[] = [
     {
@@ -340,7 +292,6 @@ async function testFunctionCalling() {
     model: "gpt-4o",
     max_tokens: 500,
     tools: tools,
-    tool_choice: "auto",
     messages: [
       {
         role: "user",
@@ -349,25 +300,23 @@ async function testFunctionCalling() {
     ],
   });
 
-  console.log("Response:");
-  const message = response.choices[0].message;
-  if (message.content) {
-    console.log(`Content: ${message.content}`);
+  console.log("Response content:");
+  response.choices[0].message.tool_calls?.forEach((toolCall, i) => {
+    console.log(`Tool use block ${i}:`);
+    console.log(`  Tool: ${toolCall.function.name}`);
+    console.log(`  Input: ${toolCall.function.arguments}`);
+  });
+  if (response.choices[0].message.content) {
+    console.log(`Text: ${response.choices[0].message.content}`);
   }
-  if (message.tool_calls) {
-    message.tool_calls.forEach((toolCall, i) => {
-      console.log(`Tool call ${i}:`);
-      console.log(`  Function: ${toolCall.function.name}`);
-      console.log(`  Arguments: ${toolCall.function.arguments}`);
-    });
-  }
-  console.log(`Finish reason: ${response.choices[0].finish_reason}`);
+
+  console.log(`Stop reason: ${response.choices[0].finish_reason}`);
   return response;
 }
 
-// Test 17: Function calling with result (multi-turn)
-async function testFunctionCallingWithResult() {
-  console.log("\n=== Test 17: Function Calling With Result ===");
+// Test 17: Tool use with tool result (multi-turn)
+async function testToolUseWithResult() {
+  console.log("\n=== Test 17: Tool Use With Result ===");
 
   const tools: OpenAI.Chat.ChatCompletionTool[] = [
     {
@@ -398,7 +347,7 @@ async function testFunctionCallingWithResult() {
     },
   ];
 
-  // First request - OpenAI will use the function
+  // First request - OpenAI will use the tool
   const firstResponse = await client.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 500,
@@ -414,164 +363,32 @@ async function testFunctionCallingWithResult() {
   console.log("First response:");
   const toolCall = firstResponse.choices[0].message.tool_calls?.[0];
   if (toolCall) {
-    console.log(`Function called: ${toolCall.function.name}`);
-    console.log(`Arguments: ${toolCall.function.arguments}`);
-
-    // Parse arguments and simulate execution
-    const result = 127 * 49;
-
-    // Second request - provide function result
-    const secondResponse = await client.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 500,
-      tools: tools,
-      messages: [
-        { role: "user", content: "What is 127 multiplied by 49?" },
-        firstResponse.choices[0].message,
-        {
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: result.toString(),
-        },
-      ],
-    });
-
-    console.log("\nSecond response (with function result):");
-    console.log(secondResponse.choices[0].message.content);
-    return secondResponse;
-  } else {
-    console.log("No function was called");
-    return firstResponse;
+    console.log(`Tool called: ${toolCall.function.name}`);
+    console.log(`Input: ${toolCall.function.arguments}`);
   }
-}
 
-// Test 18: Logprobs
-async function testLogprobs() {
-  console.log("\n=== Test 18: Logprobs ===");
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 20,
-    logprobs: true,
-    top_logprobs: 3,
-    messages: [{ role: "user", content: "The capital of Japan is" }],
-  });
+  // Simulate tool execution
+  const result = 127 * 49;
 
-  console.log("Response:", response.choices[0].message.content);
-
-  const logprobs = response.choices[0].logprobs;
-  if (logprobs) {
-    console.log("\nTop logprobs for first few tokens:");
-    logprobs.content?.slice(0, 3).forEach((token, i) => {
-      console.log(`Token ${i}: "${token.token}"`);
-      token.top_logprobs.forEach((prob) => {
-        console.log(`  ${prob.token}: ${Math.exp(prob.logprob).toFixed(4)}`);
-      });
-    });
-  }
-  return response;
-}
-
-// Test 19: Frequency and presence penalty
-async function testPenalties() {
-  console.log("\n=== Test 19: Frequency and Presence Penalties ===");
-
-  const configs = [
-    { frequency_penalty: 0, presence_penalty: 0 },
-    { frequency_penalty: 1, presence_penalty: 0 },
-    { frequency_penalty: 0, presence_penalty: 1 },
-  ];
-
-  for (const config of configs) {
-    console.log(
-      `\nConfig: freq_penalty=${config.frequency_penalty}, pres_penalty=${config.presence_penalty}`,
-    );
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 100,
-      frequency_penalty: config.frequency_penalty,
-      presence_penalty: config.presence_penalty,
-      messages: [
-        {
-          role: "user",
-          content:
-            "Write a sentence about the ocean. Use the word 'water' as much as possible.",
-        },
-      ],
-    });
-    console.log(response.choices[0].message.content);
-  }
-}
-
-// Test 20: Parallel function calling
-async function testParallelFunctionCalling() {
-  console.log("\n=== Test 20: Parallel Function Calling ===");
-
-  const tools: OpenAI.Chat.ChatCompletionTool[] = [
-    {
-      type: "function",
-      function: {
-        name: "get_weather",
-        description: "Get the current weather for a location",
-        parameters: {
-          type: "object",
-          properties: {
-            location: {
-              type: "string",
-              description: "The city and state",
-            },
-          },
-          required: ["location"],
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "get_time",
-        description: "Get the current time in a location",
-        parameters: {
-          type: "object",
-          properties: {
-            location: {
-              type: "string",
-              description: "The city and state",
-            },
-          },
-          required: ["location"],
-        },
-      },
-    },
-  ];
-
-  const response = await client.chat.completions.create({
+  // Second request - provide tool result
+  const secondResponse = await client.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 500,
     tools: tools,
     messages: [
+      { role: "user", content: "What is 127 multiplied by 49?" },
+      firstResponse.choices[0].message,
       {
-        role: "user",
-        content:
-          "What's the weather and current time in both New York and Tokyo?",
+        role: "tool",
+        tool_call_id: toolCall!.id,
+        content: result.toString(),
       },
     ],
   });
 
-  console.log("Response:");
-  const message = response.choices[0].message;
-  if (message.tool_calls && message.tool_calls.length > 1) {
-    console.log(
-      `Parallel function calls detected: ${message.tool_calls.length} calls`,
-    );
-    message.tool_calls.forEach((toolCall, i) => {
-      console.log(
-        `Call ${i + 1}: ${toolCall.function.name}(${toolCall.function.arguments})`,
-      );
-    });
-  } else {
-    console.log("Single or no function call");
-    console.log(message);
-  }
-  return response;
+  console.log("\nSecond response (with tool result):");
+  console.log(secondResponse.choices[0].message.content);
+  return secondResponse;
 }
 
 // Run all tests
@@ -582,21 +399,16 @@ async function runAllTests() {
     testSystemPrompt,
     testStreaming,
     testImageInput,
-    testDocumentAnalysis,
+    testDocumentInput,
     testTemperatureVariations,
     testStopSequences,
-    testUserParameter,
+    testMetadata,
     testLongContext,
-    testJsonMode,
-    testMultipleChoices,
     testMixedContent,
-    testSeedParameter,
+    testPrefill,
     testShortMaxTokens,
-    testFunctionCalling,
-    testFunctionCallingWithResult,
-    testLogprobs,
-    testPenalties,
-    testParallelFunctionCalling,
+    testToolUse,
+    testToolUseWithResult,
   ];
 
   for (const test of tests) {
