@@ -3,23 +3,18 @@
 # pyright: reportUnknownParameterType=none
 # pyright: reportUnknownArgumentType=none
 import asyncio
-import base64
-import json
 import time
-from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from braintrust.wrappers.genai import setup_genai
-from google import genai
 from google.genai import types
-from pydantic import BaseModel
+from google.genai.client import Client
 
 setup_genai(project_name="golden-py-genai")
 
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures"
 
-client = genai.Client()
+client = Client()
 
 
 # Test 1: Basic text completion
@@ -39,20 +34,24 @@ def test_basic_completion():
 # Test 2: Multi-turn conversation
 def test_multi_turn():
     print("\n=== Test 2: Multi-turn Conversation ===")
-    chat = client.chats.create(model="gemini-2.0-flash-001")
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=[
+            types.Content(role="user", parts=[types.Part.from_text(text="Hi, my name is Alice.")]),
+            types.Content(role="model", parts=[types.Part.from_text(text="Hello Alice! Nice to meet you.")]),
+            types.Content(role="user", parts=[types.Part.from_text(text="What did I just tell you my name was?")]),
+        ],
+        config=types.GenerateContentConfig(
+            max_output_tokens=200,
+        ),
+    )
+    print(response.text)
+    return response
 
-    response1 = chat.send_message("Hi, my name is Alice.")
-    print(f"Assistant: {response1.text}")
 
-    response2 = chat.send_message("What did I just tell you my name was?")
-    print(f"Assistant: {response2.text}")
-
-    return response2
-
-
-# Test 3: System instructions
-def test_system_instructions():
-    print("\n=== Test 3: System Instructions ===")
+# Test 3: System prompt
+def test_system_prompt():
+    print("\n=== Test 3: System Prompt ===")
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
         contents="Tell me about the weather.",
@@ -89,23 +88,19 @@ def test_streaming():
 # Test 5: Image input (base64)
 def test_image_input():
     print("\n=== Test 5: Image Input ===")
-    # Create a simple test image if it doesn't exist
     image_path = FIXTURES_DIR / "test-image.png"
     if not image_path.exists():
         print(f"Warning: {image_path} does not exist. Skipping image test.")
         return None
 
     with open(image_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode()
+        image_data = f.read()
 
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
         contents=[
-            "What color is this image?",
-            types.Part.from_bytes(
-                data=base64.b64decode(image_data),
-                mime_type="image/png",
-            ),
+            types.Part.from_text(text="What color is this image?"),
+            types.Part.from_bytes(data=image_data, mime_type="image/png"),
         ],
         config=types.GenerateContentConfig(
             max_output_tokens=150,
@@ -115,9 +110,34 @@ def test_image_input():
     return response
 
 
-# Test 6: Temperature and top_p variations
+# Test 6: Document input (PDF)
+def test_document_input():
+    print("\n=== Test 6: Document Input ===")
+    pdf_path = FIXTURES_DIR / "test-document.pdf"
+    if not pdf_path.exists():
+        print(f"Warning: {pdf_path} does not exist. Skipping document test.")
+        return None
+
+    with open(pdf_path, "rb") as f:
+        pdf_data = f.read()
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=[
+            types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
+            types.Part.from_text(text="What is in this document?"),
+        ],
+        config=types.GenerateContentConfig(
+            max_output_tokens=150,
+        ),
+    )
+    print(response.text)
+    return response
+
+
+# Test 7: Temperature and top_p variations
 def test_temperature_variations():
-    print("\n=== Test 6: Temperature Variations ===")
+    print("\n=== Test 7: Temperature Variations ===")
     configs = [
         {"temperature": 0.0, "top_p": 1.0},
         {"temperature": 1.0, "top_p": 0.9},
@@ -142,12 +162,12 @@ def test_temperature_variations():
     return responses
 
 
-# Test 7: Stop sequences
+# Test 8: Stop sequences
 def test_stop_sequences():
-    print("\n=== Test 7: Stop Sequences ===")
+    print("\n=== Test 8: Stop Sequences ===")
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
-        contents="Write a short story about a robot. END the story when done.",
+        contents="Write a short story about a robot.",
         config=types.GenerateContentConfig(
             max_output_tokens=500,
             stop_sequences=["END", "\n\n"],
@@ -158,9 +178,13 @@ def test_stop_sequences():
     return response
 
 
-# Test 8: Long context
+# Test 9: Metadata
+# not supported by genai
+
+
+# Test 10: Long context
 def test_long_context():
-    print("\n=== Test 8: Long Context ===")
+    print("\n=== Test 10: Long Context ===")
     long_text = "The quick brown fox jumps over the lazy dog. " * 100
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
@@ -173,9 +197,9 @@ def test_long_context():
     return response
 
 
-# Test 9: Mixed content types
+# Test 13: Mixed content types
 def test_mixed_content():
-    print("\n=== Test 9: Mixed Content Types ===")
+    print("\n=== Test 13: Mixed Content Types ===")
     # Skip if image doesn't exist
     image_path = FIXTURES_DIR / "test-image.png"
     if not image_path.exists():
@@ -200,9 +224,26 @@ def test_mixed_content():
     return response
 
 
-# Test 10: Very short max_tokens
+# Test 14: Empty assistant message (prefill)
+def test_prefill():
+    print("\n=== Test 14: Prefill ===")
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=[
+            types.Content(role="user", parts=[types.Part.from_text(text="Write a haiku about coding.")]),
+            types.Content(role="model", parts=[types.Part.from_text(text="Here is a haiku:")]),
+        ],
+        config=types.GenerateContentConfig(
+            max_output_tokens=200,
+        ),
+    )
+    print(response.text)
+    return response
+
+
+# Test 15: Very short max_tokens
 def test_short_max_tokens():
-    print("\n=== Test 10: Very Short Max Tokens ===")
+    print("\n=== Test 15: Very Short Max Tokens ===")
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
         contents="What is AI?",
@@ -215,9 +256,9 @@ def test_short_max_tokens():
     return response
 
 
-# Test 11: Function calling
-def test_function_calling():
-    print("\n=== Test 11: Function Calling ===")
+# Test 16: Tool use
+def test_tool_use():
+    print("\n=== Test 16: Tool Use ===")
 
     # Define a function for getting weather
     def get_weather(location: str, unit: str = "celsius") -> str:
@@ -239,22 +280,22 @@ def test_function_calling():
         ),
     )
 
-    print("Response:")
-    print(response.text)
+    print("Response content:")
+    if response.text:
+        print(f"Text: {response.text}")
 
-    # Check if there were any function calls
     if hasattr(response, "function_calls") and response.function_calls:
-        print("\nFunction calls made:")
-        for call in response.function_calls:
-            print(f"  Function: {call.name}")
-            print(f"  Args: {call.args}")
+        for i, call in enumerate(response.function_calls):
+            print(f"Tool use block {i}:")
+            print(f"  Tool: {call.name}")
+            print(f"  Input: {call.args}")
 
     return response
 
 
-# Test 12: Manual function calling with tool declaration
-def test_manual_function_calling():
-    print("\n=== Test 12: Manual Function Calling ===")
+# Test 17: Tool use with result (multi-turn)
+def test_tool_use_with_result():
+    print("\n=== Test 17: Tool Use With Result ===")
     # Manually declare function
     function = types.FunctionDeclaration(
         name="calculate",
@@ -283,7 +324,7 @@ def test_manual_function_calling():
     tool = types.Tool(function_declarations=[function])
 
     # First request - model will use the tool
-    response1 = client.models.generate_content(
+    first_response = client.models.generate_content(
         model="gemini-2.0-flash-001",
         contents="What is 127 multiplied by 49?",
         config=types.GenerateContentConfig(
@@ -293,130 +334,48 @@ def test_manual_function_calling():
     )
 
     print("First response:")
-    if hasattr(response1, "function_calls") and response1.function_calls:
-        for call in response1.function_calls:
-            print(f"Tool called: {call.name}")
-            print(f"Args: {call.args}")
+    tool_call = None
+    if hasattr(first_response, "function_calls") and first_response.function_calls:
+        tool_call = first_response.function_calls[0]
+        print(f"Tool called: {tool_call.name}")
+        print(f"Input: {tool_call.args}")
 
-            # Simulate tool execution
-            if call.name == "calculate" and call.args and call.args.get("operation") == "multiply":
-                result = call.args["a"] * call.args["b"]
-                print(f"Result: {result}")
-    else:
-        print(response1.text)
+    # Simulate tool execution
+    result = 127 * 49
 
-    return response1
+    assert first_response.candidates
+    assert tool_call and tool_call.name
 
-
-# Test 13: JSON response schema with Pydantic
-def test_json_response_schema():
-    print("\n=== Test 13: JSON Response Schema ===")
-
-    class UserProfile(BaseModel):
-        username: str
-        age: Optional[int]
-        email: Optional[str]
-        interests: list[str]
-
-    response = client.models.generate_content(
+    # Second request - provide tool result
+    second_response = client.models.generate_content(
         model="gemini-2.0-flash-001",
-        contents="Give me a random user profile with username, age, email, and interests.",
+        contents=[
+            types.Content(role="user", parts=[types.Part.from_text(text="What is 127 multiplied by 49?")]),
+            first_response.candidates[0].content,
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name=tool_call.name,
+                        response={"result": result},
+                    )
+                ],
+            ),
+        ],
         config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=UserProfile,
-            max_output_tokens=200,
+            tools=[tool],
+            max_output_tokens=500,
         ),
     )
 
-    print("JSON Response:")
-    print(response.text)
-
-    # Try to parse the response
-    try:
-        user_data = json.loads(response.text or "")
-        print("\nParsed data:")
-        print(f"  Username: {user_data.get('username')}")
-        print(f"  Age: {user_data.get('age')}")
-        print(f"  Email: {user_data.get('email')}")
-        print(f"  Interests: {user_data.get('interests')}")
-    except json.JSONDecodeError as e:
-        print(f"Failed to parse JSON: {e}")
-
-    return response
-
-
-# Test 14: Enum response schema
-def test_enum_response():
-    print("\n=== Test 14: Enum Response ===")
-
-    class InstrumentEnum(str, Enum):
-        PERCUSSION = "Percussion"
-        STRING = "String"
-        WOODWIND = "Woodwind"
-        BRASS = "Brass"
-        KEYBOARD = "Keyboard"
-
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="What type of instrument is a piano?",
-        config=types.GenerateContentConfig(
-            response_mime_type="text/x.enum",
-            response_schema=InstrumentEnum,
-            max_output_tokens=50,
-        ),
-    )
-
-    print(f"Response: {response.text}")
-    return response
-
-
-# Test 15: Token counting
-def test_token_counting():
-    print("\n=== Test 15: Token Counting ===")
-    content = "Why is the sky blue? Explain in simple terms."
-
-    # Count tokens
-    count_response = client.models.count_tokens(
-        model="gemini-2.0-flash-001",
-        contents=content,
-    )
-
-    print(f"Input text: {content}")
-    print(f"Token count: {count_response}")
-
-    return count_response
-
-
-# Test 16: Embeddings
-def test_embeddings():
-    print("\n=== Test 16: Embeddings ===")
-    texts = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Machine learning is a subset of artificial intelligence.",
-        "Python is a popular programming language.",
-    ]
-
-    # Generate embeddings
-    response = client.models.embed_content(
-        model="text-embedding-004",
-        contents=texts,
-        config=types.EmbedContentConfig(
-            output_dimensionality=256,  # Reduce dimensionality for display
-        ),
-    )
-
-    print(f"Generated embeddings for {len(texts)} texts")
-    if hasattr(response, "embeddings"):
-        for i, embedding in enumerate(response.embeddings or []):
-            if hasattr(embedding, "values"):
-                print(f"  Text {i + 1}: embedding dimension = {len(embedding.values or [])}")
-
-    return response
+    print("\nSecond response (with tool result):")
+    print(second_response.text)
+    return second_response
 
 
 # Async test example
 async def test_async_generation():
-    print("\n=== Test 17: Async Generation ===")
+    print("\n=== Test 18: Async Generation ===")
     response = await client.aio.models.generate_content(
         model="gemini-2.0-flash-001",
         contents="Tell me a joke about programming.",
@@ -430,7 +389,7 @@ async def test_async_generation():
 
 # Async streaming test
 async def test_async_streaming():
-    print("\n=== Test 18: Async Streaming ===")
+    print("\n=== Test 19: Async Streaming ===")
     stream = await client.aio.models.generate_content_stream(
         model="gemini-2.0-flash-001",
         contents="List 5 programming languages and their main uses.",
@@ -454,20 +413,17 @@ def run_sync_tests():
     tests = [
         test_basic_completion,
         test_multi_turn,
-        test_system_instructions,
+        test_system_prompt,
         test_streaming,
         test_image_input,
+        test_document_input,
         test_temperature_variations,
         test_stop_sequences,
         test_long_context,
         test_mixed_content,
         test_short_max_tokens,
-        test_function_calling,
-        test_manual_function_calling,
-        test_json_response_schema,
-        test_enum_response,
-        test_token_counting,
-        test_embeddings,
+        test_tool_use,
+        test_tool_use_with_result,
     ]
 
     for test in tests:
