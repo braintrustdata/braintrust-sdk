@@ -120,6 +120,12 @@ TEST_API_KEY = "___TEST_API_KEY__"
 DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
+def _get_exporter():
+    """ Return the active exporter (e.g. the version of SpanComponentsv*) """
+    use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
+    return SpanComponentsV4 if use_v4 else SpanComponentsV3
+
+
 class Exportable(ABC):
     @abstractmethod
     def export(self) -> str:
@@ -2965,10 +2971,12 @@ def _log_feedback_impl(
 
     update_event = _deep_copy_event(update_event)
 
-    parent_ids = lambda: SpanComponentsV4(
-        object_type=parent_object_type,
-        object_id=parent_object_id.get(),
-    ).object_id_fields()
+    def parent_ids():
+        exporter = _get_exporter()
+        return exporter(
+            object_type=parent_object_type,
+            object_id=parent_object_id.get(),
+        ).object_id_fields()
 
     if len(update_event) > 0:
 
@@ -3019,10 +3027,12 @@ def _update_span_impl(
 
     update_event = _deep_copy_event(update_event)
 
-    parent_ids = lambda: SpanComponentsV4(
-        object_type=parent_object_type,
-        object_id=parent_object_id.get(),
-    ).object_id_fields()
+    def parent_ids():
+        exporter = _get_exporter()
+        return exporter(
+            object_type=parent_object_type,
+            object_id=parent_object_id.get(),
+        ).object_id_fields()
 
     def compute_record():
         return dict(
@@ -3578,7 +3588,8 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         )
 
     def export(self) -> str:
-        return SpanComponentsV4(object_type=self._parent_object_type(), object_id=self.id).to_str()
+        exporter = _get_exporter()
+        return exporter(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self) -> str:
         """This function is deprecated. You can simply remove it from your code."""
@@ -3839,10 +3850,11 @@ class SpanImpl(Span):
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record() -> Dict[str, Any]:
+            exporter = _get_exporter()
             return dict(
                 **serializable_partial_record,
                 **{k: v.get() for k, v in lazy_partial_record.items()},
-                **SpanComponentsV4(
+                **exporter(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
@@ -4913,7 +4925,8 @@ class Logger(Exportable):
             object_id = self._lazy_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV4(
+        exporter = _get_exporter()
+        return exporter(
             object_type=self._parent_object_type(),
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
