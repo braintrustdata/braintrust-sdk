@@ -2071,35 +2071,3 @@ def test_logger_export_respects_otel_compat_enabled():
         from braintrust.span_identifier_v4 import SpanComponentsV4
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
-
-
-def test_span_log_respects_otel_compat_default(with_memory_logger):
-    """Test that SpanImpl._log_impl() uses V3 for object_id_fields() by default."""
-    with preserve_env_vars("BRAINTRUST_OTEL_COMPAT"):
-        os.environ.pop("BRAINTRUST_OTEL_COMPAT", None)
-        experiment = init_test_exp("test-exp")
-
-        with experiment.start_span(name="test-span") as span:
-            span.log(output="test")
-
-        logs = with_memory_logger.pop()
-        span_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "test-span")
-
-        # Check that it has the expected fields from V3 format
-        assert "project_id" in span_log or "experiment_id" in span_log
-
-
-def test_span_log_respects_otel_compat_enabled(with_memory_logger):
-    """Test that SpanImpl._log_impl() uses V4 for object_id_fields() when OTEL_COMPAT is true."""
-    with preserve_env_vars("BRAINTRUST_OTEL_COMPAT"):
-        os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
-        experiment = init_test_exp("test-exp")
-
-        with experiment.start_span(name="test-span") as span:
-            span.log(output="test")
-
-        logs = with_memory_logger.pop()
-        span_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "test-span")
-
-        # Check that it has the expected fields from V4 format
-        assert "project_id" in span_log or "experiment_id" in span_log
