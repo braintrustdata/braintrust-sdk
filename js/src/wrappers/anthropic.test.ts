@@ -10,7 +10,7 @@ import {
 } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import { initLogger, _exportsForTestingOnly } from "../logger";
+import { initLogger, _exportsForTestingOnly, Attachment } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 
@@ -500,6 +500,62 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
 
     const { metrics } = span;
     assertValidMetrics(metrics, startTime, endTime);
+  });
+
+  test("test base64 image conversion to attachments in input", async () => {
+    // Create a small test image (1x1 red pixel PNG)
+    const base64Image =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
+    const response = await client.messages.create({
+      model: "claude-3-5-sonnet-20241022",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: base64Image,
+              },
+            },
+            {
+              type: "text",
+              text: "Describe this image in 3 words or less.",
+            },
+          ],
+        },
+      ],
+      max_tokens: 20,
+      temperature: 0.01,
+    });
+
+    expect(response).toBeDefined();
+    expect(response.content).toBeDefined();
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+
+    // Verify that the input was processed
+    expect(span.input).toBeDefined();
+    const userMessage = span.input.find((msg: any) => msg.role === "user");
+    expect(userMessage).toBeDefined();
+    expect(userMessage.content).toBeDefined();
+
+    // Find the image content block
+    const imageBlock = userMessage.content.find(
+      (block: any) => block.type === "image",
+    );
+    expect(imageBlock).toBeDefined();
+    expect(imageBlock.source).toBeDefined();
+
+    // Verify that the base64 data was replaced with an Attachment
+    expect(imageBlock.source.data).toBeInstanceOf(Attachment);
+    expect(imageBlock.source.data.reference.content_type).toBe("image/png");
+    expect(imageBlock.source.data.reference.filename).toBe("image.png");
   });
 });
 
