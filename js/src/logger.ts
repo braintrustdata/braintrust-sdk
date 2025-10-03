@@ -1952,6 +1952,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     return (async () => (await this.project).id)();
   }
 
+  public get loggingState(): BraintrustState {
+    return this.state;
+  }
+
   private parentObjectType() {
     return SpanObjectTypeV3.PROJECT_LOGS;
   }
@@ -4813,6 +4817,10 @@ export class Experiment
     })();
   }
 
+  public get loggingState(): BraintrustState {
+    return this.state;
+  }
+
   public get name(): Promise<string> {
     return (async () => {
       return (await this.lazyMetadata.get()).experiment.name;
@@ -5114,6 +5122,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return (async () => {
       return (await this.lazyMetadata.get()).experiment.name;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -5661,6 +5673,10 @@ export class Dataset<
     return (async () => {
       return (await this.lazyMetadata.get()).project;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {
