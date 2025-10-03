@@ -12,7 +12,7 @@ from google.genai.client import Client
 
 setup_genai(project_name="golden-py-genai")
 
-FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent.parent.parent / "fixtures"
 
 client = Client()
 
@@ -89,9 +89,6 @@ def test_streaming():
 def test_image_input():
     print("\n=== Test 5: Image Input ===")
     image_path = FIXTURES_DIR / "test-image.png"
-    if not image_path.exists():
-        print(f"Warning: {image_path} does not exist. Skipping image test.")
-        return None
 
     with open(image_path, "rb") as f:
         image_data = f.read()
@@ -114,9 +111,6 @@ def test_image_input():
 def test_document_input():
     print("\n=== Test 6: Document Input ===")
     pdf_path = FIXTURES_DIR / "test-document.pdf"
-    if not pdf_path.exists():
-        print(f"Warning: {pdf_path} does not exist. Skipping document test.")
-        return None
 
     with open(pdf_path, "rb") as f:
         pdf_data = f.read()
@@ -202,9 +196,6 @@ def test_mixed_content():
     print("\n=== Test 13: Mixed Content Types ===")
     # Skip if image doesn't exist
     image_path = FIXTURES_DIR / "test-image.png"
-    if not image_path.exists():
-        print(f"Warning: {image_path} does not exist. Skipping mixed content test.")
-        return None
 
     with open(image_path, "rb") as f:
         image_data = f.read()

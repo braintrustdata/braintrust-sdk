@@ -1,3 +1,4 @@
+import base64
 import logging
 import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -51,28 +52,43 @@ def wrap_models(Models: Any):
     def wrap_generate_content(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
 
+        input = _serialize_input(instance._api_client, input)
+
+        # known limitations with today's converters
+        clean_kwargs["model"] = input["model"]
+
+        start = time.time()
         with start_span(
             name="generate_content", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
         ) as span:
             result = wrapped(*args, **kwargs)
-            span.log(output=result)
+            metrics = _extract_generate_content_metrics(result, start)
+            span.log(output=result, metrics=metrics)
             return result
 
-    wrap_function_wrapper(Models, "generate_content", wrap_generate_content)
+    wrap_function_wrapper(Models, "_generate_content", wrap_generate_content)
 
     def wrap_generate_content_stream(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
 
+        input = _serialize_input(instance._api_client, input)
+
+        # known limitations with today's converters
+        clean_kwargs["model"] = input["model"]
+
         start = time.time()
+        first_token_time = None
         with start_span(
             name="generate_content_stream", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
         ) as span:
             chunks = []
             for chunk in wrapped(*args, **kwargs):
+                if first_token_time is None:
+                    first_token_time = time.time()
                 chunks.append(chunk)
                 yield chunk
 
-            aggregated, metrics = _aggregate_generate_content_chunks(chunks, start)
+            aggregated, metrics = _aggregate_generate_content_chunks(chunks, start, first_token_time)
             span.log(output=aggregated, metrics=metrics)
             return aggregated
 
@@ -89,11 +105,18 @@ def wrap_async_models(AsyncModels: Any):
     async def wrap_generate_content(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
 
+        input = _serialize_input(instance._api_client, input)
+
+        # known limitations with today's converters
+        clean_kwargs["model"] = input["model"]
+
+        start = time.time()
         with start_span(
             name="generate_content", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
         ) as span:
             result = await wrapped(*args, **kwargs)
-            span.log(output=result)
+            metrics = _extract_generate_content_metrics(result, start)
+            span.log(output=result, metrics=metrics)
             return result
 
     wrap_function_wrapper(AsyncModels, "generate_content", wrap_generate_content)
@@ -101,17 +124,25 @@ def wrap_async_models(AsyncModels: Any):
     async def wrap_generate_content_stream(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         input, clean_kwargs = get_args_kwargs(args, kwargs, ["model", "contents", "config"])
 
+        input = _serialize_input(instance._api_client, input)
+
+        # known limitations with today's converters
+        clean_kwargs["model"] = input["model"]
+
         async def stream_generator():
             start = time.time()
+            first_token_time = None
             with start_span(
                 name="generate_content_stream", type=SpanTypeAttribute.LLM, input=input, metadata=clean_kwargs
             ) as span:
                 chunks = []
                 async for chunk in await wrapped(*args, **kwargs):
+                    if first_token_time is None:
+                        first_token_time = time.time()
                     chunks.append(chunk)
                     yield chunk
 
-                aggregated, metrics = _aggregate_generate_content_chunks(chunks, start)
+                aggregated, metrics = _aggregate_generate_content_chunks(chunks, start, first_token_time)
                 span.log(output=aggregated, metrics=metrics)
 
         return stream_generator()
@@ -120,6 +151,92 @@ def wrap_async_models(AsyncModels: Any):
 
     mark_patched(AsyncModels)
     return AsyncModels
+
+
+def _serialize_input(api_client: Any, input: Dict[str, Any]):
+    config = _try_dict(input.get("config"))
+
+    if config is not None:
+        tools = _serialize_tools(api_client, input)
+
+        if tools is not None:
+            config["tools"] = tools
+
+        input["config"] = config
+
+    # Serialize contents to handle binary data (e.g., images)
+    if "contents" in input:
+        input["contents"] = _serialize_contents(input["contents"])
+
+    return input
+
+
+def _serialize_contents(contents: Any) -> Any:
+    """Serialize contents, converting binary data to base64-encoded data URLs."""
+    if contents is None:
+        return None
+
+    # Handle list of contents
+    if isinstance(contents, list):
+        return [_serialize_content_item(item) for item in contents]
+
+    # Handle single content item
+    return _serialize_content_item(contents)
+
+
+def _serialize_content_item(item: Any) -> Any:
+    """Serialize a single content item, handling binary data."""
+    # If it's already a dict, return as-is
+    if isinstance(item, dict):
+        return item
+
+    # Handle Part objects from google.genai
+    if hasattr(item, "__class__") and item.__class__.__name__ == "Part":
+        # Try to extract the data from the Part
+        if hasattr(item, "text") and item.text is not None:
+            return {"text": item.text}
+        elif hasattr(item, "inline_data"):
+            # Handle binary data (e.g., images)
+            inline_data = item.inline_data
+            if hasattr(inline_data, "data") and hasattr(inline_data, "mime_type"):
+                # Convert bytes to base64-encoded data URL
+                data = inline_data.data
+                mime_type = inline_data.mime_type
+
+                # Ensure data is bytes
+                if isinstance(data, bytes):
+                    base64_data = base64.b64encode(data).decode("utf-8")
+                    return {"image_url": {"url": f"data:{mime_type};base64,{base64_data}"}}
+
+        # Try to use built-in serialization if available
+        if hasattr(item, "model_dump"):
+            return item.model_dump()
+        elif hasattr(item, "dump"):
+            return item.dump()
+        elif hasattr(item, "to_dict"):
+            return item.to_dict()
+
+    # Return the item as-is if we can't serialize it
+    return item
+
+
+def _serialize_tools(api_client: Any, input: Optional[Any]):
+    try:
+        from google.genai.models import (
+            _GenerateContentParameters_to_mldev,  # pyright: ignore [reportPrivateUsage]
+            _GenerateContentParameters_to_vertex,  # pyright: ignore [reportPrivateUsage]
+        )
+
+        # cheat by reusing genai library's serializers (they deal with interpreting a function signature etc.)
+        if api_client.vertexai:
+            serialized = _GenerateContentParameters_to_vertex(api_client, input)
+        else:
+            serialized = _GenerateContentParameters_to_mldev(api_client, input)
+
+        tools = serialized.get("tools")
+        return tools
+    except Exception:
+        return None
 
 
 def omit(obj: Dict[str, Any], keys: Iterable[str]):
@@ -138,7 +255,47 @@ def get_args_kwargs(args: List[str], kwargs: Dict[str, Any], keys: Iterable[str]
     return {k: args[i] if args else kwargs.get(k) for i, k in enumerate(keys)}, omit(kwargs, keys)
 
 
-def _aggregate_generate_content_chunks(chunks: List[Any], start: float) -> Tuple[Dict[str, Any], StandardMetrics]:
+def _extract_generate_content_metrics(response: Any, start: float) -> StandardMetrics:
+    """Extract metrics from a non-streaming generate_content response."""
+    end_time = time.time()
+    metrics = StandardMetrics(
+        start=start,
+        end=end_time,
+        duration=end_time - start,
+    )
+
+    # Extract usage metadata if available
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        usage_metadata = response.usage_metadata
+
+        # Extract token metrics
+        if hasattr(usage_metadata, "prompt_token_count"):
+            metrics["prompt_tokens"] = usage_metadata.prompt_token_count
+        if hasattr(usage_metadata, "candidates_token_count"):
+            metrics["completion_tokens"] = usage_metadata.candidates_token_count
+        if hasattr(usage_metadata, "total_token_count"):
+            metrics["tokens"] = usage_metadata.total_token_count
+        if hasattr(usage_metadata, "cached_content_token_count"):
+            metrics["prompt_cached_tokens"] = usage_metadata.cached_content_token_count
+
+        # Extract additional metrics for thinking/reasoning tokens
+        if hasattr(usage_metadata, "thoughts_token_count"):
+            metrics["completion_reasoning_tokens"] = usage_metadata.thoughts_token_count
+
+        # Extract tool use prompt tokens if available
+        if hasattr(usage_metadata, "tool_use_prompt_token_count"):
+            # Add to prompt_tokens if not already counted
+            tool_tokens = usage_metadata.tool_use_prompt_token_count
+            if tool_tokens and "prompt_tokens" in metrics:
+                # Tool tokens are typically part of prompt tokens, but track separately if needed
+                pass
+
+    return StandardMetrics(**clean(dict(metrics)))
+
+
+def _aggregate_generate_content_chunks(
+    chunks: List[Any], start: float, first_token_time: Optional[float] = None
+) -> Tuple[Dict[str, Any], StandardMetrics]:
     """Aggregate streaming chunks into a single response with metrics."""
     end_time = time.time()
     metrics = StandardMetrics(
@@ -146,6 +303,10 @@ def _aggregate_generate_content_chunks(chunks: List[Any], start: float) -> Tuple
         end=end_time,
         duration=end_time - start,
     )
+
+    # Add time_to_first_token if available
+    if first_token_time is not None:
+        metrics["time_to_first_token"] = first_token_time - start
 
     if not chunks:
         return {}, metrics
@@ -225,12 +386,52 @@ def _aggregate_generate_content_chunks(chunks: List[Any], start: float) -> Tuple
         if hasattr(usage_metadata, "cached_content_token_count"):
             metrics["prompt_cached_tokens"] = usage_metadata.cached_content_token_count
 
+        # Extract additional metrics for thinking/reasoning tokens
+        if hasattr(usage_metadata, "thoughts_token_count"):
+            metrics["completion_reasoning_tokens"] = usage_metadata.thoughts_token_count
+
+        # Extract tool use prompt tokens if available
+        if hasattr(usage_metadata, "tool_use_prompt_token_count"):
+            # Add to prompt_tokens if not already counted
+            tool_tokens = usage_metadata.tool_use_prompt_token_count
+            if tool_tokens and "prompt_tokens" in metrics:
+                # Tool tokens are typically part of prompt tokens, but track separately if needed
+                pass
+
     # Add convenience text property
     if text:
         aggregated["text"] = text
 
-    return aggregated, clean(metrics)
+    clean_metrics = clean(dict(metrics))
+
+    return aggregated, StandardMetrics(**clean_metrics)
 
 
 def clean(obj: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in obj.items() if v is not None}
+
+
+def get_path(obj: Dict[str, Any], path: str, default: Any = None) -> Optional[Any]:
+    keys = path.split(".")
+    current = obj
+
+    for key in keys:
+        if not (isinstance(current, dict) and key in current):
+            return default
+        current = current[key]
+
+    return current
+
+
+def _try_dict(obj: Any) -> Optional[Dict[str, Any]]:
+    try:
+        return obj.model_dump()
+    except AttributeError:
+        pass
+
+    try:
+        return obj.dump()
+    except AttributeError:
+        pass
+
+    return obj
