@@ -1,5 +1,11 @@
-import { JSONAttachment } from "./logger";
+import {
+  JSONAttachment,
+  _exportsForTestingOnly,
+  BaseAttachment,
+} from "./logger";
 import { describe, expect, it } from "vitest";
+
+const { extractAttachments } = _exportsForTestingOnly;
 
 describe("JSONAttachment", () => {
   it("should create an attachment from JSON data", async () => {
@@ -93,5 +99,146 @@ describe("JSONAttachment", () => {
     // Verify the structure contains JSONAttachment instances
     expect(logData.input.transcript).toBeInstanceOf(JSONAttachment);
     expect(logData.metadata.renderedPrompt).toBeInstanceOf(JSONAttachment);
+  });
+
+  it("should handle null and undefined values", async () => {
+    const testData = {
+      nullValue: null,
+      undefinedValue: undefined,
+      nested: {
+        alsoNull: null,
+      },
+    };
+
+    const attachment = new JSONAttachment(testData);
+    const blob = await attachment.data();
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+
+    // undefined should be stripped by JSON.stringify
+    expect(parsed).toEqual({
+      nullValue: null,
+      nested: {
+        alsoNull: null,
+      },
+    });
+  });
+
+  it("should handle special characters and unicode", async () => {
+    const testData = {
+      emoji: "🚀 Hello World 🌍",
+      special: "quotes \"and\" 'apostrophes'",
+      unicode: "Iñtërnâtiônàlizætiøn",
+      newlines: "line1\nline2\ttabbed",
+    };
+
+    const attachment = new JSONAttachment(testData);
+    const blob = await attachment.data();
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+
+    expect(parsed).toEqual(testData);
+  });
+
+  it("should work with extractAttachments", () => {
+    const jsonAttachment = new JSONAttachment(
+      { foo: "bar" },
+      { filename: "test.json" },
+    );
+
+    const event = {
+      input: {
+        data: jsonAttachment,
+      },
+    };
+
+    const attachments: BaseAttachment[] = [];
+    extractAttachments(event, attachments);
+
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]).toBe(jsonAttachment);
+    expect(event.input.data).toEqual(jsonAttachment.reference);
+  });
+
+  it("should handle nested JSONAttachments in arrays", () => {
+    const attachment1 = new JSONAttachment({ id: 1 });
+    const attachment2 = new JSONAttachment({ id: 2 });
+
+    const event = {
+      messages: [attachment1, "text", attachment2],
+    };
+
+    const attachments: BaseAttachment[] = [];
+    extractAttachments(event, attachments);
+
+    expect(attachments).toHaveLength(2);
+    expect(attachments[0]).toBe(attachment1);
+    expect(attachments[1]).toBe(attachment2);
+    expect(event.messages[0]).toEqual(attachment1.reference);
+    expect(event.messages[1]).toBe("text");
+    expect(event.messages[2]).toEqual(attachment2.reference);
+  });
+
+  it("should create unique keys for each attachment", () => {
+    const attachment1 = new JSONAttachment({ test: 1 });
+    const attachment2 = new JSONAttachment({ test: 2 });
+
+    expect(attachment1.reference.key).toBeDefined();
+    expect(attachment2.reference.key).toBeDefined();
+    expect(attachment1.reference.key).not.toBe(attachment2.reference.key);
+  });
+
+  it("should handle empty objects and arrays", async () => {
+    const emptyObject = new JSONAttachment({});
+    const emptyArray = new JSONAttachment([]);
+
+    const objectBlob = await emptyObject.data();
+    const objectText = await objectBlob.text();
+    expect(JSON.parse(objectText)).toEqual({});
+
+    const arrayBlob = await emptyArray.data();
+    const arrayText = await arrayBlob.text();
+    expect(JSON.parse(arrayText)).toEqual([]);
+  });
+
+  it("should handle deeply nested structures", async () => {
+    const deepData = {
+      level1: {
+        level2: {
+          level3: {
+            level4: {
+              level5: {
+                value: "deep",
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const attachment = new JSONAttachment(deepData);
+    const blob = await attachment.data();
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+
+    expect(parsed).toEqual(deepData);
+  });
+
+  it("should handle numbers including special values", async () => {
+    const testData = {
+      integer: 42,
+      float: 3.14159,
+      negative: -100,
+      zero: 0,
+      // Note: Infinity, -Infinity, and NaN are not valid JSON
+      // and will be converted to null by JSON.stringify
+    };
+
+    const attachment = new JSONAttachment(testData);
+    const blob = await attachment.data();
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+
+    expect(parsed).toEqual(testData);
   });
 });
