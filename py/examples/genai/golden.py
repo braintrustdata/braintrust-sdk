@@ -96,8 +96,8 @@ def test_image_input():
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
         contents=[
-            types.Part.from_text(text="What color is this image?"),
             types.Part.from_bytes(data=image_data, mime_type="image/png"),
+            types.Part.from_text(text="What color is this image?"),
         ],
         config=types.GenerateContentConfig(
             max_output_tokens=150,
@@ -412,6 +412,7 @@ def run_sync_tests():
         test_stop_sequences,
         test_long_context,
         test_mixed_content,
+        test_prefill,
         test_short_max_tokens,
         test_tool_use,
         test_tool_use_with_result,
@@ -423,7 +424,6 @@ def run_sync_tests():
             # Rate limiting
             time.sleep(1)
         except Exception as e:
-            breakpoint()
             print(f"Test {test.__name__} failed: {e}")
 
 
@@ -440,7 +440,6 @@ async def run_async_tests():
             # Rate limiting
             await asyncio.sleep(1)
         except Exception as e:
-            breakpoint()
             print(f"Test {test.__name__} failed: {e}")
 
 

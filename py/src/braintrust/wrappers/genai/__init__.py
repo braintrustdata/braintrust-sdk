@@ -1,11 +1,10 @@
-import base64
 import logging
 import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from wrapt import wrap_function_wrapper
 
-from braintrust.logger import NOOP_SPAN, current_span, init_logger, start_span
+from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.metrics import StandardMetrics
 from braintrust.span_types import SpanTypeAttribute
 
@@ -199,14 +198,22 @@ def _serialize_content_item(item: Any) -> Any:
             # Handle binary data (e.g., images)
             inline_data = item.inline_data
             if hasattr(inline_data, "data") and hasattr(inline_data, "mime_type"):
-                # Convert bytes to base64-encoded data URL
+                # Convert bytes to Attachment
                 data = inline_data.data
                 mime_type = inline_data.mime_type
 
                 # Ensure data is bytes
                 if isinstance(data, bytes):
-                    base64_data = base64.b64encode(data).decode("utf-8")
-                    return {"image_url": {"url": f"data:{mime_type};base64,{base64_data}"}}
+                    # Determine file extension from mime type
+                    extension = mime_type.split("/")[1] if "/" in mime_type else "bin"
+                    filename = f"file.{extension}"
+
+                    # Create an Attachment object
+                    attachment = Attachment(data=data, filename=filename, content_type=mime_type)
+
+                    # Return the attachment object in image_url format
+                    # The SDK's _extract_attachments will replace it with its reference when logging
+                    return {"image_url": {"url": attachment}}
 
         # Try to use built-in serialization if available
         if hasattr(item, "model_dump"):
