@@ -6,13 +6,12 @@ import asyncio
 from typing import Any
 
 from braintrust.framework import EvalAsync
-from braintrust_adk import setup_braintrust
 from manual import main as manual
 
 
 async def main():
     async def task(input: Any):
-        setup_braintrust()
+        setup_adk()
         return await manual(input)
 
     await EvalAsync(

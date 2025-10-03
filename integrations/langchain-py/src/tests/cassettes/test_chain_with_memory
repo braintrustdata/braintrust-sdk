@@ -1,0 +1,118 @@
+interactions:
+- request:
+    body: '{"messages": [{"content": "Assistant: Hello! How can I assist you today?
+      User: What''s your name?", "role": "user"}], "model": "gpt-4o-mini", "stream":
+      false}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '149'
+      content-type:
+      - application/json
+      host:
+      - localhost:8000
+      user-agent:
+      - OpenAI/Python 1.108.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.108.2
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.13
+    method: POST
+    uri: http://localhost:8000/v1/proxy/chat/completions
+  response:
+    body:
+      string: "{\n  \"id\": \"chatcmpl-CJ3pSTx8NVvtJFY51xvv7gmxKCqAO\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1758658986,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+        \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
+        \"assistant\",\n        \"content\": \"Assistant: I don't have a personal
+        name, but you can call me Assistant. How can I help you today?\",\n        \"refusal\":
+        null,\n        \"annotations\": []\n      },\n      \"logprobs\": null,\n
+        \     \"finish_reason\": \"stop\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\":
+        24,\n    \"completion_tokens\": 23,\n    \"total_tokens\": 47,\n    \"prompt_tokens_details\":
+        {\n      \"cached_tokens\": 0,\n      \"audio_tokens\": 0\n    },\n    \"completion_tokens_details\":
+        {\n      \"reasoning_tokens\": 0,\n      \"audio_tokens\": 0,\n      \"accepted_prediction_tokens\":
+        0,\n      \"rejected_prediction_tokens\": 0\n    }\n  },\n  \"service_tier\":
+        \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
+    headers:
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Expose-Headers:
+      - x-bt-cursor,x-bt-found-existing,x-bt-span-id,x-bt-span-export,x-bt-query-plan,x-bt-internal-trace-id
+      Connection:
+      - keep-alive
+      Date:
+      - Tue, 23 Sep 2025 20:23:06 GMT
+      Keep-Alive:
+      - timeout=5
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      cf-ray:
+      - 983cc206fc1f67ef-SJC
+      content-type:
+      - application/json
+      openai-organization:
+      - braintrust-data
+      openai-processing-ms:
+      - '755'
+      openai-project:
+      - proj_vsCSXafhhByzWOThMrJcZiw9
+      openai-version:
+      - '2020-10-01'
+      set-cookie:
+      - _cfuvid=TIArUY3FKYo9t2vz5lADo0yFHggpjc9nkMoRBVQYfbA-1758658986949-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-bt-cached:
+      - MISS
+      x-bt-internal-trace-id:
+      - 899e875d60ba290b68341d027600a8fd
+      x-content-type-options:
+      - nosniff
+      x-envoy-upstream-service-time:
+      - '775'
+      x-openai-proxy-wasm:
+      - v0.1
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149999980'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_3b64f4bb78c14e2ea80001681e34611d
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -46,7 +46,6 @@ test-py-sdk: nox
 
 nox:
 	cd py && make test
-	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
 	cd py && make lint
@@ -60,7 +59,7 @@ pylint:
 .PHONY: js-build js-test js-docs js-verify-ci
 
 js-build:
-	pnpm install
+	pnpm install --frozen-lockfile
 	pnpm run build
 
 js-test: js-build

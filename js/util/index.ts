@@ -10,6 +10,7 @@ export * from "./type_util";
 export * from "./span_identifier_v1";
 export * from "./span_identifier_v2";
 export * from "./span_identifier_v3";
+export * from "./span_identifier_v4";
 export * from "./span_types";
 export * from "./git_fields";
 export * from "./xact-ids";

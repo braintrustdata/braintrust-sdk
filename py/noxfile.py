@@ -35,6 +35,7 @@ BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
 VENDOR_PACKAGES = (
+    "agno",
     "anthropic",
     "openai",
     "pydantic_ai",
@@ -50,11 +51,13 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
+CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
 if sys.version_info >= (3, 10):
     PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
 else:
     PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
+
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
@@ -75,6 +78,17 @@ def test_pydantic_ai(session, version):
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
 
+@nox.session()
+@nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
+def test_claude_agent_sdk(session, version):
+    # claude_agent_sdk requires Python >= 3.10
+    if sys.version_info >= (3, 10):
+        _install_test_deps(session)
+        npm_bin = _install_npm_in_session(session)
+        session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
+        _install(session, "claude_agent_sdk", version)
+        _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
+        _run_core_tests(session)
 
 @nox.session()
 @nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
@@ -128,7 +142,7 @@ def test_braintrust_core(session):
 
 
 @nox.session()
-def test_otel_installed(session):
+def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
@@ -138,8 +152,11 @@ def test_otel_installed(session):
 @nox.session()
 def test_otel_not_installed(session):
     _install_test_deps(session)
-    # Verify that installing braintrust doesn't install OpenTelemetry packages
-    otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
+    otel_packages = [
+        "opentelemetry",
+        "opentelemetry.trace",
+        "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+    ]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
     _run_tests(session, "braintrust/test_otel.py")
@@ -159,7 +176,6 @@ def pylint(session):
         return
     session.run("pylint", "--errors-only", *files)
 
-
 @nox.session()
 def test_latest_wrappers_novcr(session):
     """Run the latest wrapper tests without vcrpy."""
@@ -171,6 +187,21 @@ def test_latest_wrappers_novcr(session):
     session.notify("test_openai(latest)", posargs=args)
     session.notify("test_anthropic(latest)", posargs=args)
     session.notify("test_pydantic_ai(latest)", posargs=args)
+    session.notify("test_claude_agent_sdk(latest)", posargs=args)
+
+
+def _install_npm_in_session(session):
+    """Install Node.js and npm in the nox session using nodeenv."""
+    session.install("nodeenv", silent=SILENT_INSTALLS)
+    # Create a node environment in the session's temporary directory
+    node_dir = os.path.join(session.create_tmp(), "node_env")
+    session.run("nodeenv", node_dir, silent=SILENT_INSTALLS)
+    # Return the path to npm binary for direct use
+    if sys.platform == "win32":
+        npm_bin = os.path.join(node_dir, "Scripts", "npm.cmd")
+    else:
+        npm_bin = os.path.join(node_dir, "bin", "npm")
+    return npm_bin
 
 
 def _install_test_deps(session):

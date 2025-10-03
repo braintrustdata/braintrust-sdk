@@ -3,6 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
+import { IDGenerator, getIdGenerator } from "./id-gen";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -475,6 +476,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  private _idGenerator: IDGenerator | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -527,6 +529,18 @@ export class BraintrustState {
     this._appConn = null;
     this._apiConn = null;
     this._proxyConn = null;
+  }
+
+  public resetIdGenState() {
+    // Reset the ID generator so it gets recreated with current environment variables
+    this._idGenerator = null;
+  }
+
+  public get idGenerator(): IDGenerator {
+    if (this._idGenerator === null) {
+      this._idGenerator = getIdGenerator();
+    }
+    return this._idGenerator;
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -5228,8 +5242,8 @@ export class SpanImpl implements Span {
       created: new Date().toISOString(),
     };
 
-    this._id = eventId ?? uuidv4();
-    this._spanId = args.spanId ?? uuidv4();
+    this._id = eventId ?? this._state.idGenerator.getSpanId();
+    this._spanId = args.spanId ?? this._state.idGenerator.getSpanId();
     if (args.parentSpanIds) {
       this._rootSpanId = args.parentSpanIds.rootSpanId;
       this._spanParents =
@@ -5237,7 +5251,16 @@ export class SpanImpl implements Span {
           ? args.parentSpanIds.parentSpanIds
           : [args.parentSpanIds.spanId];
     } else {
-      this._rootSpanId = this._spanId;
+      // Root span ID behavior differs between UUID and OTEL generators:
+      // - UUID (legacy): root_span_id === span_id for backwards compatibility
+      // - OTEL: root_span_id is a separate trace ID, following OpenTelemetry convention
+      //   where trace_id (root_span_id) represents the entire trace, distinct from
+      //   the individual span's ID
+      if (this._state.idGenerator.shareRootSpanId()) {
+        this._rootSpanId = this._spanId;
+      } else {
+        this._rootSpanId = this._state.idGenerator.getTraceId();
+      }
       this._spanParents = undefined;
     }
 
@@ -6612,6 +6635,14 @@ export async function getPromptVersions(
   );
 }
 
+// Helper function to reset ID generator state for testing
+function resetIdGenStateForTests() {
+  const state = _internalGetGlobalState();
+  if (state) {
+    state.resetIdGenState();
+  }
+}
+
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
@@ -6623,4 +6654,5 @@ export const _exportsForTestingOnly = {
   initTestExperiment,
   isGeneratorFunction,
   isAsyncGeneratorFunction,
+  resetIdGenStateForTests,
 };

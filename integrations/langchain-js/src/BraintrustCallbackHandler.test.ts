@@ -49,7 +49,7 @@ describe("BraintrustCallbackHandler", () => {
 
     const prompt = ChatPromptTemplate.fromTemplate(`What is 1 + {number}?`);
     const model = new ChatOpenAI({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
     });
 
     const chain = prompt.pipe(model);
@@ -79,7 +79,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { number: "2" },
         output: "What is 1 + 2?",
         metadata: { tags: ["seq:step:1"] },
@@ -102,7 +102,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: ["seq:step:2"],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
           temperature: 1,
           top_p: 1,
           frequency_penalty: 0,
@@ -152,7 +152,7 @@ describe("BraintrustCallbackHandler", () => {
       `tell me a four word joke about {topic}`,
     );
     const model = new ChatOpenAI({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
       streaming: true,
     });
 
@@ -188,7 +188,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { topic: "parrot" },
         output: "tell me a four word joke about parrot",
         metadata: { tags: ["seq:step:1"] },
@@ -211,7 +211,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: ["seq:step:2"],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
         },
         root_span_id,
         span_parents: [root_span_id],
@@ -238,7 +238,7 @@ describe("BraintrustCallbackHandler", () => {
 
     const prompt = ChatPromptTemplate.fromTemplate(`{history} User: {input}`);
     const model = new ChatOpenAI({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
     });
 
     const chain = prompt.pipe(model);
@@ -270,7 +270,7 @@ describe("BraintrustCallbackHandler", () => {
         root_span_id,
       },
       {
-        span_attributes: { name: "ChatPromptTemplate" },
+        span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: {
           input: "What's your name?",
           history: "Assistant: Hello! How can I assist you today?",
@@ -299,7 +299,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: ["seq:step:2", "test"],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
         },
         root_span_id,
         span_parents: [root_span_id],
@@ -323,7 +323,7 @@ describe("BraintrustCallbackHandler", () => {
     );
 
     const llm = new ChatOpenAI({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
     });
 
     const calculatorSchema = z.object({
@@ -382,7 +382,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: [],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
           temperature: 1,
           top_p: 1,
           frequency_penalty: 0,
@@ -443,7 +443,7 @@ describe("BraintrustCallbackHandler", () => {
       }),
     );
 
-    const model = new ChatOpenAI({ model: "gpt-4o-mini" });
+    const model = new ChatOpenAI({ model: "gpt-4o-mini-2024-07-18" });
 
     const jokeChain = PromptTemplate.fromTemplate(
       "Tell me a joke about {topic}",
@@ -468,11 +468,13 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableMap",
+          type: "task",
         },
       },
       {
         span_attributes: {
           name: "RunnableSequence",
+          type: "task",
         },
         metadata: {
           tags: ["map:key:joke"],
@@ -481,6 +483,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableSequence",
+          type: "task",
         },
         metadata: {
           tags: ["map:key:poem"],
@@ -489,6 +492,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
+          type: "task",
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -497,6 +501,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
+          type: "task",
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -615,7 +620,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: ["seq:step:2"],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
           temperature: 1,
           top_p: 1,
           frequency_penalty: 0,
@@ -641,7 +646,7 @@ describe("BraintrustCallbackHandler", () => {
         ],
         metadata: {
           tags: ["seq:step:2"],
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
           temperature: 1,
           top_p: 1,
           frequency_penalty: 0,
@@ -683,7 +688,7 @@ describe("BraintrustCallbackHandler", () => {
       {};
 
     const model = new ChatOpenAI({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
       callbacks: [handler],
     });
 
@@ -727,6 +732,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "sayHello",
+          type: "task",
         },
         input: {},
         metadata: {
@@ -748,13 +754,20 @@ describe("BraintrustCallbackHandler", () => {
           },
         ],
         metadata: {
-          model: "gpt-4o-mini",
+          model: "gpt-4o-mini-2024-07-18",
           temperature: 1,
           top_p: 1,
           frequency_penalty: 0,
           presence_penalty: 0,
           n: 1,
           tags: [],
+        },
+        metrics: {
+          completion_tokens: 9,
+          end: expect.any(Number),
+          prompt_tokens: 9,
+          start: expect.any(Number),
+          total_tokens: 18,
         },
         output: [
           {
@@ -766,6 +779,7 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "sayBye",
+          type: "task",
         },
         input: {},
         metadata: {

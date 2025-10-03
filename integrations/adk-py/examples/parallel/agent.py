@@ -1,6 +1,7 @@
 # Researcher 1: Renewable Energy
-from braintrust import traced
 from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
+
+from braintrust import traced
 
 GEMINI_MODEL = "gemini-2.5-flash"
 

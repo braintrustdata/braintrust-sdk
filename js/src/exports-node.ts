@@ -2,6 +2,12 @@ export * from "./logger";
 export * from "./functions/stream";
 export * from "./functions/invoke";
 export {
+  IDGenerator,
+  UUIDGenerator,
+  OTELIDGenerator,
+  getIdGenerator,
+} from "./id-gen";
+export {
   BaseExperiment,
   Evaluator,
   EvalTask,
@@ -30,6 +36,7 @@ export { wrapAISDKModel } from "./wrappers/ai-sdk-v1";
 export { wrapAISDK } from "./wrappers/ai-sdk-v3";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapAnthropic } from "./wrappers/anthropic";
+export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk";
 export {
   AISpanProcessor,
   BraintrustSpanProcessor,
