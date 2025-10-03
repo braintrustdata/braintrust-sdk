@@ -2790,6 +2790,55 @@ class Attachment(BaseAttachment):
             _logger.warning(f"Failed to read file: {e}")
 
 
+class JSONAttachment(Attachment):
+    """
+    A convenience class for creating attachments from JSON-serializable objects.
+
+    `JSONAttachment` objects can be inserted anywhere in an event, allowing you to
+    log JSON data as an attachment. The SDK will serialize the object to JSON and
+    upload it asynchronously to object storage.
+    """
+
+    def __init__(
+        self,
+        data: Any,
+        *,
+        filename: str = "data.json",
+        pretty: bool = False,
+    ):
+        """
+        Construct a JSONAttachment from a JSON-serializable object.
+
+        :param data: The JSON object to attach. Must be JSON-serializable.
+        :param filename: The filename for the attachment (defaults to "data.json")
+        :param pretty: Whether to pretty-print the JSON (defaults to False)
+
+        Example:
+            ```python
+            large_transcript = [
+                {"role": "user", "content": "..."},
+                {"role": "assistant", "content": "..."},
+                # ... many more messages
+            ]
+
+            logger.log(
+                input={
+                    "type": "chat",
+                    "transcript": JSONAttachment(large_transcript, filename="transcript.json")
+                }
+            )
+            ```
+        """
+        json_string = json.dumps(data, indent=2 if pretty else None)
+        json_bytes = json_string.encode("utf-8")
+
+        super().__init__(
+            data=json_bytes,
+            filename=filename,
+            content_type="application/json",
+        )
+
+
 class ExternalAttachment(BaseAttachment):
     """
     Represents an attachment that resides in an external object store and the associated metadata.
@@ -3361,6 +3410,10 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def project(self) -> ObjectMetadata:
         return self._lazy_metadata.get().project
 
+    @property
+    def logging_state(self) -> BraintrustState:
+        return self.state
+
     @staticmethod
     def _parent_object_type():
         return SpanObjectTypeV3.EXPERIMENT
@@ -3672,6 +3725,10 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     @property
     def id(self) -> str:
         return self._lazy_metadata.get().experiment.id
+
+    @property
+    def logging_state(self) -> BraintrustState:
+        return self.state
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -4155,6 +4212,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     @property
     def project(self):
         return self._lazy_metadata.get().project
+
+    @property
+    def logging_state(self) -> BraintrustState:
+        return self.state
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
@@ -4734,6 +4795,10 @@ class Logger(Exportable):
     @property
     def id(self) -> str:
         return self.project.id
+
+    @property
+    def logging_state(self) -> BraintrustState:
+        return self.state
 
     @staticmethod
     def _parent_object_type():
