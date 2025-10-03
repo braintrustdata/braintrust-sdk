@@ -1,4 +1,6 @@
-from typing import Dict, NotRequired, TypedDict, Union
+from typing import Dict, TypedDict, Union
+
+from typing_extensions import NotRequired
 
 
 class TokenMetrics(TypedDict, total=False):
