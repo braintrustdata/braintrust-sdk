@@ -5,7 +5,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from wrapt import wrap_function_wrapper
 
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
-from braintrust.metrics import StandardMetrics
 from braintrust.span_types import SpanTypeAttribute
 
 logger = logging.getLogger(__name__)
@@ -262,10 +261,10 @@ def get_args_kwargs(args: List[str], kwargs: Dict[str, Any], keys: Iterable[str]
     return {k: args[i] if args else kwargs.get(k) for i, k in enumerate(keys)}, omit(kwargs, keys)
 
 
-def _extract_generate_content_metrics(response: Any, start: float) -> StandardMetrics:
+def _extract_generate_content_metrics(response: Any, start: float) -> Dict[str, Any]:
     """Extract metrics from a non-streaming generate_content response."""
     end_time = time.time()
-    metrics = StandardMetrics(
+    metrics = dict(
         start=start,
         end=end_time,
         duration=end_time - start,
@@ -297,15 +296,15 @@ def _extract_generate_content_metrics(response: Any, start: float) -> StandardMe
                 # Tool tokens are typically part of prompt tokens, but track separately if needed
                 pass
 
-    return StandardMetrics(**clean(dict(metrics)))
+    return clean(dict(metrics))
 
 
 def _aggregate_generate_content_chunks(
     chunks: List[Any], start: float, first_token_time: Optional[float] = None
-) -> Tuple[Dict[str, Any], StandardMetrics]:
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Aggregate streaming chunks into a single response with metrics."""
     end_time = time.time()
-    metrics = StandardMetrics(
+    metrics = dict(
         start=start,
         end=end_time,
         duration=end_time - start,
@@ -411,7 +410,7 @@ def _aggregate_generate_content_chunks(
 
     clean_metrics = clean(dict(metrics))
 
-    return aggregated, StandardMetrics(**clean_metrics)
+    return aggregated, clean_metrics
 
 
 def clean(obj: Dict[str, Any]) -> Dict[str, Any]:
