@@ -52,6 +52,7 @@ ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
+AGNO_VERSIONS = (LATEST, "2.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
 if sys.version_info >= (3, 10):
     PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
@@ -78,6 +79,7 @@ def test_pydantic_ai(session, version):
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
 
+
 @nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
@@ -89,6 +91,16 @@ def test_claude_agent_sdk(session, version):
         _install(session, "claude_agent_sdk", version)
         _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
         _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", AGNO_VERSIONS, ids=AGNO_VERSIONS)
+def test_agno(session, version):
+    _install_test_deps(session)
+    _install(session, "agno", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_agno.py")
+    _run_core_tests(session)
+
 
 @nox.session()
 @nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
@@ -152,11 +164,7 @@ def test_otel(session):
 @nox.session()
 def test_otel_not_installed(session):
     _install_test_deps(session)
-    otel_packages = [
-        "opentelemetry",
-        "opentelemetry.trace",
-        "opentelemetry.exporter.otlp.proto.http.trace_exporter"
-    ]
+    otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
     _run_tests(session, "braintrust/test_otel.py")
@@ -175,6 +183,7 @@ def pylint(session):
     if not files:
         return
     session.run("pylint", "--errors-only", *files)
+
 
 @nox.session()
 def test_latest_wrappers_novcr(session):
