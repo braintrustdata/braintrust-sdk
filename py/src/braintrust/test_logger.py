@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import time
@@ -2101,7 +2102,7 @@ class TestJSONAttachment(TestCase):
         self.assertIn("key", attachment.reference)
 
         data = attachment.data
-        parsed = __import__("json").loads(data.decode("utf-8"))
+        parsed = json.loads(data.decode("utf-8"))
         self.assertEqual(parsed, test_data)
 
     def test_custom_filename(self):
@@ -2141,7 +2142,7 @@ class TestJSONAttachment(TestCase):
         attachment = JSONAttachment(array_data)
 
         data = attachment.data
-        parsed = __import__("json").loads(data.decode("utf-8"))
+        parsed = json.loads(data.decode("utf-8"))
         self.assertEqual(parsed, array_data)
 
     def test_integration_with_logger_patterns(self):
