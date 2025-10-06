@@ -45,6 +45,7 @@ VENDOR_PACKAGES = (
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
+    "google.genai",
 )
 
 # Test matrix
@@ -60,6 +61,7 @@ else:
     PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
+GENAI_VERSIONS = (LATEST,)
 
 
 @nox.session()
@@ -108,6 +110,15 @@ def test_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", GENAI_VERSIONS, ids=GENAI_VERSIONS)
+def test_genai(session, version):
+    _install_test_deps(session)
+    _install(session, "google-genai", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_genai.py")
     _run_core_tests(session)
 
 

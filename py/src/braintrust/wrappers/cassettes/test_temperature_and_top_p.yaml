@@ -1,0 +1,64 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "Say something creative."}], "role":
+      "user"}], "generationConfig": {"temperature": 0.7, "topP": 0.95, "maxOutputTokens":
+      50}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '159'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.41.0 gl-python/3.13.3
+      x-goog-api-client:
+      - google-genai-sdk/1.41.0 gl-python/3.13.3
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61SXY/TMBB8z69Y+bmtcskdPXjlKr5FgQqdBAhtm01ineMN9qbHqep/x04uvRRe
+        yUPkeMYz450cEgC1Q1voAoW8egHfwg7AoX9HjK2QlQCMW2GzRSdP3OE5TNaBIvQ7HlKbmqBhtiBs
+        dVULaA8IDRmhArw2e3Lg20CYgRftnLZVwPcUAAHPXQtcBgSdX8AKdzXIvbZ3hgadkl3FEgLCvfb1
+        DLbddmuihDBIcPadK3FHUSN+9gkW362aZD2e1j9mTzd0bCjGb7ggM9KPI0GV2ga/z4SebaR92Xxc
+        qxOK++o9V63jbRzSPF0sr5eXWZ5d5enV8/x6mV0ko3PvqTqPFX0gwVACnkatgkLTyobvyL7kri/h
+        cjCZVHYG59kjLixozqFns39U/U3w1GZa5aTlcHc0Wh76Gle3GzWZj5yFGueTTMb4d8T/5JVn52bJ
+        Yy1DU1/JeT1UUlETSppni3ReGvT1PE0velXlKPxw1tObIvJu8Fbj2/Xu9RrLX+LX3btXPx8+rVRy
+        TP4A68C0Px0DAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Sun, 05 Oct 2025 17:04:14 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=627
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1
