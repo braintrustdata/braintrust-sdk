@@ -71,7 +71,7 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { z, ZodError } from "zod";
+import { z, ZodError } from "zod/v4";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -1176,7 +1176,7 @@ export class Attachment extends BaseAttachment {
         ({ signedUrl, headers } = z
           .object({
             signedUrl: z.string().url(),
-            headers: z.record(z.string()),
+            headers: z.record(z.string(), z.string()),
           })
           .parse(await metadataResponse.json()));
       } catch (error) {
@@ -1372,7 +1372,13 @@ const attachmentMetadataSchema = z.object({
   status: attachmentStatusSchema,
 });
 
-type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+type AttachmentMetadata = {
+  downloadUrl: string;
+  status: {
+    upload_status: "uploading" | "done" | "error";
+    error_message?: string;
+  };
+};
 
 /**
  * A readonly alternative to `Attachment`, which can be used for fetching
@@ -1445,7 +1451,9 @@ export class ReadonlyAttachment {
       throw new Error(`Invalid response from API server: ${errorStr}`);
     }
 
-    return attachmentMetadataSchema.parse(await resp.json());
+    return attachmentMetadataSchema.parse(
+      await resp.json(),
+    ) as AttachmentMetadata;
   }
 
   /**
@@ -6021,11 +6029,12 @@ export function renderPromptParams(
     .object({
       response_format: z.object({
         type: z.literal("json_schema"),
-        json_schema: responseFormatJsonSchemaSchema
-          .omit({ schema: true })
-          .extend({
-            schema: z.unknown(),
-          }),
+        json_schema: z.object({
+          name: z.string().optional(),
+          description: z.string().optional(),
+          strict: z.boolean().optional(),
+          schema: z.any(),
+        }),
       }),
     })
     .safeParse(params);
@@ -6214,7 +6223,9 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
@@ -6288,7 +6299,9 @@ export class Prompt<
       }
     };
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
