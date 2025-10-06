@@ -19,15 +19,15 @@ interface MastraAgentMethods {
   tools?: Record<string, unknown> | unknown[];
   model?: any; // The language model used by the agent
   __setTools(tools: Record<string, unknown> | unknown[]): void;
-  generateVNext?: (params: any) => any;
-  streamVNext?: (params: any) => any;
+  generate?: (params: any) => any;
+  stream?: (params: any) => any;
 }
 
 /**
  * Wraps a Mastra agent with Braintrust tracing. This function wraps the agent's
  * underlying language model with BraintrustMiddleware and traces all agent method calls.
  *
- * **Important**: This wrapper only supports AI SDK v5 methods such as `generateVNext` and `streamVNext`.
+ * **Important**: This wrapper only supports AI SDK v5 methods such as `generate` and `stream`.
  *
  * @param agent - The Mastra agent to wrap
  * @param options - Optional configuration for the wrapper
@@ -66,12 +66,12 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
     get(target, prop, receiver) {
       const value: unknown = Reflect.get(target, prop, receiver);
 
-      if (prop === "generateVNext" && typeof value === "function") {
-        return wrapGenerateVNext(value, target, prefix);
+      if (prop === "generate" && typeof value === "function") {
+        return wrapGenerate(value, target, prefix);
       }
 
-      if (prop === "streamVNext" && typeof value === "function") {
-        return wrapStreamVNext(value, target, prefix);
+      if (prop === "stream" && typeof value === "function") {
+        return wrapStream(value, target, prefix);
       }
 
       // Ensure all other function properties are bound to the original target
@@ -86,18 +86,16 @@ export function wrapMastraAgent<T extends MastraAgentMethods>(
 }
 
 function hasAllMethods(a: MastraAgentMethods): a is MastraAgentMethods & {
-  generateVNext: (params: any) => any;
-  streamVNext: (params: any) => any;
+  generate: (params: any) => any;
+  stream: (params: any) => any;
 } {
-  return (
-    typeof a.generateVNext === "function" && typeof a.streamVNext === "function"
-  );
+  return typeof a.generate === "function" && typeof a.stream === "function";
 }
 
 /**
- * Creates a wrapped version of generateVNext with Braintrust tracing
+ * Creates a wrapped version of generate with Braintrust tracing
  */
-function wrapGenerateVNext(
+function wrapGenerate(
   original: Function,
   target: MastraAgentMethods,
   prefix: string,
@@ -136,16 +134,16 @@ function wrapGenerateVNext(
         return result;
       },
       {
-        name: `${prefix}.generateVNext`,
+        name: `${prefix}.generate`,
       },
     );
   };
 }
 
 /**
- * Creates a wrapped version of streamVNext with Braintrust tracing
+ * Creates a wrapped version of stream with Braintrust tracing
  */
-function wrapStreamVNext(
+function wrapStream(
   original: Function,
   target: MastraAgentMethods,
   prefix: string,
@@ -154,7 +152,7 @@ function wrapStreamVNext(
     const input = args[0];
 
     const span = startSpan({
-      name: `${prefix}.streamVNext`,
+      name: `${prefix}.stream`,
       event: {
         input,
         metadata: {

@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Span, startSpan } from "../logger";
+import { Span, startSpan, Attachment } from "../logger";
 import { SpanTypeAttribute } from "../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
+import { isObject } from "../../util/index";
 
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
@@ -96,7 +97,7 @@ function createProxy(create: (params: any) => Promise<any>) {
           type: SpanTypeAttribute.LLM,
         },
         event: {
-          input,
+          input: processAttachmentsInInput(input),
           metadata: { ...metadata, provider: "anthropic" },
         },
         startTime: getCurrentUnixTimestamp(),
@@ -251,6 +252,8 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
   let metadata = {};
   let totals: Metrics = {};
   const span = sspan.span;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contentBlocks: any[] = [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
@@ -280,6 +283,12 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
           const event = parseEventFromMessage(msg);
           totals = { ...totals, ...event.metrics }; // save the first copy of our metrics.
           span.log(event);
+        }
+        break;
+      case "content_block_start":
+        // Track content blocks including images
+        if (item.content_block) {
+          contentBlocks[item.index] = item.content_block;
         }
         break;
       case "content_block_delta":
@@ -365,6 +374,76 @@ function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   saveIfExistsTo("cache_creation_input_tokens", "prompt_cache_creation_tokens");
 
   return metrics;
+}
+
+// Helper function to convert base64 content to an Attachment
+function convertBase64ToAttachment(
+  source: any,
+  contentType: "image" | "document",
+): any {
+  const mediaType =
+    typeof source.media_type === "string" ? source.media_type : "image/png";
+  const base64Data = source.data;
+
+  if (base64Data && typeof base64Data === "string") {
+    // Convert base64 string to Blob
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mediaType });
+
+    // Determine file extension from media type
+    const extension = mediaType.split("/")[1] || "bin";
+    // Use a descriptive prefix based on content type
+    const prefix = contentType === "document" ? "document" : "image";
+    const filename = `${prefix}.${extension}`;
+
+    const attachment = new Attachment({
+      data: blob,
+      filename: filename,
+      contentType: mediaType,
+    });
+
+    return {
+      ...source,
+      data: attachment,
+    };
+  }
+
+  return source;
+}
+
+// Process input to convert base64 attachments (images, PDFs, etc.) to Attachment objects
+function processAttachmentsInInput(input: any): any {
+  if (Array.isArray(input)) {
+    return input.map(processAttachmentsInInput);
+  }
+
+  if (isObject(input)) {
+    // Check for Anthropic's content blocks with base64 data
+    // Supports both "image" and "document" types (for PDFs, etc.)
+    if (
+      (input.type === "image" || input.type === "document") &&
+      isObject(input.source) &&
+      input.source.type === "base64"
+    ) {
+      return {
+        ...input,
+        source: convertBase64ToAttachment(input.source, input.type),
+      };
+    }
+
+    // Recursively process nested objects
+    const processed: any = {};
+    for (const [key, value] of Object.entries(input)) {
+      processed[key] = processAttachmentsInInput(value);
+    }
+    return processed;
+  }
+
+  return input;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
