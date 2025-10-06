@@ -74,16 +74,16 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
     return agent;
   }
 
-  test("generateVNext", async () => {
+  test("generate", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
     const wrappedAgent = wrapMastraAgent(agent, { span_name: "demoAgent" });
 
-    const res = await wrappedAgent.generateVNext("What is 2+2?");
+    const res = await wrappedAgent.generate("What is 2+2?");
 
     const spans = (await testLogger.drain()) as any[];
     const wrapperSpan = spans.find(
-      (s) => s?.span_attributes?.name === "demoAgent.generateVNext",
+      (s) => s?.span_attributes?.name === "demoAgent.generate",
     );
     expect(wrapperSpan).toBeTruthy();
     expect(
@@ -91,12 +91,12 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
     ).toBe(true);
   });
 
-  test("streamVNext", async () => {
+  test("stream", async () => {
     expect(await testLogger.drain()).toHaveLength(0);
     const agent = buildAgent();
     const wrappedAgent = wrapMastraAgent(agent, { span_name: "demoAgent" });
 
-    const res: any = await wrappedAgent.streamVNext("Say hello in two words");
+    const res: any = await wrappedAgent.stream("Say hello in two words");
     // prefer the promise shape returned by AI SDK-compatible wrappers
     const text =
       typeof res?.text?.then === "function" ? await res.text : undefined;
@@ -106,7 +106,7 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
     let spans = (await testLogger.drain()) as any[];
     let wrapperSpan = spans.find(
       (s) =>
-        s?.span_attributes?.name === "demoAgent.streamVNext" &&
+        s?.span_attributes?.name === "demoAgent.stream" &&
         typeof s?.output === "string",
     );
     if (!wrapperSpan) {
@@ -114,7 +114,7 @@ describe("mastra integration", TEST_SUITE_OPTIONS, () => {
       spans = (await testLogger.drain()) as any[];
       wrapperSpan = spans.find(
         (s) =>
-          s?.span_attributes?.name === "demoAgent.streamVNext" &&
+          s?.span_attributes?.name === "demoAgent.stream" &&
           typeof s?.output === "string",
       );
     }
