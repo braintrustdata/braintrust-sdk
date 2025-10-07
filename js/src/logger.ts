@@ -93,6 +93,12 @@ import {
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "../util/index";
 
+// Context management interfaces
+export interface ContextParentSpanIds {
+  rootSpanId: string;
+  spanParents: string[];
+}
+
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed
 const REDACTION_FIELDS = [
@@ -334,6 +340,63 @@ export interface Span extends Exportable {
   kind: "span";
 }
 
+export abstract class ContextManager {
+  abstract getParentSpanIds(): ContextParentSpanIds | undefined;
+  abstract runInContext<R>(span: Span, callback: () => R): R;
+  abstract getCurrentSpan(): Span | undefined;
+}
+
+class BraintrustContextManager extends ContextManager {
+  private _currentSpan: IsoAsyncLocalStorage<Span>;
+
+  constructor() {
+    super();
+    this._currentSpan = iso.newAsyncLocalStorage();
+  }
+
+  getParentSpanIds(): ContextParentSpanIds | undefined {
+    const currentSpan = this._currentSpan.getStore();
+    if (!currentSpan) {
+      return undefined;
+    }
+
+    return {
+      rootSpanId: currentSpan.rootSpanId,
+      spanParents: [currentSpan.spanId],
+    };
+  }
+
+  runInContext<R>(span: Span, callback: () => R): R {
+    return this._currentSpan.run(span, callback);
+  }
+
+  getCurrentSpan(): Span | undefined {
+    return this._currentSpan.getStore();
+  }
+}
+
+export function getContextManager(): ContextManager {
+  const useOtel =
+    typeof process !== "undefined" &&
+    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
+
+  if (useOtel) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { OtelContextManager } = require("./otel/context") as {
+        OtelContextManager: new () => ContextManager;
+      };
+      return new OtelContextManager();
+    } catch {
+      console.warn(
+        "OTEL not available, falling back to Braintrust-only context manager",
+      );
+    }
+  }
+
+  return new BraintrustContextManager();
+}
+
 /**
  * A fake implementation of the Span API which does nothing. This can be used as the default span.
  */
@@ -477,6 +540,7 @@ export class BraintrustState {
 
   public promptCache: PromptCache;
   private _idGenerator: IDGenerator | null = null;
+  private _contextManager: ContextManager | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -541,6 +605,13 @@ export class BraintrustState {
       this._idGenerator = getIdGenerator();
     }
     return this._idGenerator;
+  }
+
+  public get contextManager(): ContextManager {
+    if (this._contextManager === null) {
+      this._contextManager = getContextManager();
+    }
+    return this._contextManager;
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -3723,7 +3794,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
-  return state.currentSpan.getStore() ?? NOOP_SPAN;
+  return state.contextManager.getCurrentSpan() ?? NOOP_SPAN;
 }
 
 /**
@@ -4185,7 +4256,8 @@ export function withCurrent<R>(
   callback: (span: Span) => R,
   state: BraintrustState | undefined = undefined,
 ): R {
-  return (state ?? _globalState).currentSpan.run(span, () => callback(span));
+  const currentState = state ?? _globalState;
+  return currentState.contextManager.runInContext(span, () => callback(span));
 }
 
 /**
@@ -5097,6 +5169,79 @@ export function newId() {
   return uuidv4();
 }
 
+interface ResolvedSpanIds {
+  spanId: string;
+  rootSpanId: string;
+  spanParents: string[] | undefined;
+}
+
+/**
+ * Resolve all span IDs (span_id, root_span_id, span_parents) from explicit values, parent info, or context.
+ * Matches the Python implementation in logger.py::_resolve_span_ids.
+ *
+ * @param spanId - Optional explicit span_id (from public API)
+ * @param parentSpanIds - Optional explicit parent span IDs (from parent string or parent span)
+ * @param lookupSpanParent - Whether to look up parent from context manager if no explicit parent.
+ *   - True (default): start_span() inherits parent/root ids from the active span (if it exists)
+ *   - False: don't look up parent in context (e.g. logger.log() doesn't inherit context)
+ * @param idGenerator - ID generator for creating new span/trace IDs
+ * @param contextManager - Context manager for looking up parent spans
+ * @returns ResolvedSpanIds with resolved span_id, root_span_id, and span_parents
+ */
+function _resolveSpanIds(
+  spanId: string | undefined,
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined,
+  lookupSpanParent: boolean,
+  idGenerator: IDGenerator,
+  contextManager: ContextManager,
+): ResolvedSpanIds {
+  // Generate span_id if not provided
+  const resolvedSpanId = spanId ?? idGenerator.getSpanId();
+
+  // If we have explicit parent span ids, use them.
+  if (parentSpanIds) {
+    return {
+      spanId: resolvedSpanId,
+      rootSpanId: parentSpanIds.rootSpanId,
+      spanParents:
+        "parentSpanIds" in parentSpanIds
+          ? parentSpanIds.parentSpanIds
+          : [parentSpanIds.spanId],
+    };
+  }
+
+  // If we're using the context manager, see if there's an active parent span.
+  if (lookupSpanParent) {
+    const parentInfo = contextManager.getParentSpanIds();
+    if (parentInfo) {
+      return {
+        spanId: resolvedSpanId,
+        rootSpanId: parentInfo.rootSpanId,
+        spanParents: parentInfo.spanParents,
+      };
+    }
+  }
+
+  // No parent - create new root span
+  // Root span ID behavior differs between UUID and OTEL generators:
+  // - UUID (legacy): root_span_id === span_id for backwards compatibility
+  // - OTEL: root_span_id is a separate trace ID, following OpenTelemetry convention
+  //   where trace_id (root_span_id) represents the entire trace, distinct from
+  //   the individual span's ID
+  let resolvedRootSpanId: string;
+  if (idGenerator.shareRootSpanId()) {
+    resolvedRootSpanId = resolvedSpanId; // Backwards compat for UUID mode
+  } else {
+    resolvedRootSpanId = idGenerator.getTraceId();
+  }
+
+  return {
+    spanId: resolvedSpanId,
+    rootSpanId: resolvedRootSpanId,
+    spanParents: undefined,
+  };
+}
+
 /**
  * Primary implementation of the `Span` interface. See {@link Span} for full details on each method.
  *
@@ -5182,26 +5327,19 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? this._state.idGenerator.getSpanId();
-    this._spanId = args.spanId ?? this._state.idGenerator.getSpanId();
-    if (args.parentSpanIds) {
-      this._rootSpanId = args.parentSpanIds.rootSpanId;
-      this._spanParents =
-        "parentSpanIds" in args.parentSpanIds
-          ? args.parentSpanIds.parentSpanIds
-          : [args.parentSpanIds.spanId];
-    } else {
-      // Root span ID behavior differs between UUID and OTEL generators:
-      // - UUID (legacy): root_span_id === span_id for backwards compatibility
-      // - OTEL: root_span_id is a separate trace ID, following OpenTelemetry convention
-      //   where trace_id (root_span_id) represents the entire trace, distinct from
-      //   the individual span's ID
-      if (this._state.idGenerator.shareRootSpanId()) {
-        this._rootSpanId = this._spanId;
-      } else {
-        this._rootSpanId = this._state.idGenerator.getTraceId();
-      }
-      this._spanParents = undefined;
-    }
+
+    // Resolve span IDs using the helper function that matches Python's _resolve_span_ids
+    const resolvedIds = _resolveSpanIds(
+      args.spanId,
+      args.parentSpanIds,
+      true, // Always lookup span parent from context manager unless explicit parent provided
+      this._state.idGenerator,
+      this._state.contextManager,
+    );
+
+    this._spanId = resolvedIds.spanId;
+    this._rootSpanId = resolvedIds.rootSpanId;
+    this._spanParents = resolvedIds.spanParents;
 
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
