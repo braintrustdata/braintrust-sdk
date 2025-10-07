@@ -28,8 +28,9 @@ def setup_genai(
         models.AsyncModels = wrap_async_models(models.AsyncModels)
         pass
     except ImportError as e:
-        logger.error(f"Failed to import Google ADK agents: {e}")
-        logger.error("Google ADK is not installed. Please install it with: pip install google-adk")
+        logger.error(
+            f"Failed to import Google ADK agents: {e}. Google ADK is not installed. Please install it with: pip install google-adk"
+        )
         return False
 
 
@@ -52,7 +53,6 @@ def wrap_models(Models: Any):
 
         input = _serialize_input(instance._api_client, input)
 
-        # known limitations with today's converters
         clean_kwargs["model"] = input["model"]
 
         start = time.time()
@@ -71,7 +71,6 @@ def wrap_models(Models: Any):
 
         input = _serialize_input(instance._api_client, input)
 
-        # known limitations with today's converters
         clean_kwargs["model"] = input["model"]
 
         start = time.time()
@@ -105,7 +104,6 @@ def wrap_async_models(AsyncModels: Any):
 
         input = _serialize_input(instance._api_client, input)
 
-        # known limitations with today's converters
         clean_kwargs["model"] = input["model"]
 
         start = time.time()
@@ -124,7 +122,6 @@ def wrap_async_models(AsyncModels: Any):
 
         input = _serialize_input(instance._api_client, input)
 
-        # known limitations with today's converters
         clean_kwargs["model"] = input["model"]
 
         async def stream_generator():

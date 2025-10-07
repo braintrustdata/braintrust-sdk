@@ -6,7 +6,7 @@ import asyncio
 import time
 from pathlib import Path
 
-from braintrust.wrappers.genai import setup_genai
+from braintrust.wrappers.google_genai import setup_genai
 from google.genai import types
 from google.genai.client import Client
 
