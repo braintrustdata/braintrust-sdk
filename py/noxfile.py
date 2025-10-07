@@ -118,7 +118,7 @@ def test_anthropic(session, version):
 def test_genai(session, version):
     _install_test_deps(session)
     _install(session, "google-genai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_genai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_google_genai.py")
     _run_core_tests(session)
 
 
