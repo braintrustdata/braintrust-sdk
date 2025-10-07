@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 // Path from sdk/js/examples/anthropic to sdk/fixtures
-const FIXTURES_DIR = join(__dirname, "..", "..", "fixtures");
+const FIXTURES_DIR = join(__dirname, "fixtures");
 
 initLogger({
   projectName: "golden-ts-anthropic",
