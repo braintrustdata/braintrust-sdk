@@ -285,10 +285,13 @@ export function wrapAISDK<T extends AISDKMethods>(
         });
       });
 
-      return {
-        ...result,
-        partialObjectStream: wrapStream,
-      };
+      Object.defineProperty(result, "partialObjectStream", {
+        value: wrapStream,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),
