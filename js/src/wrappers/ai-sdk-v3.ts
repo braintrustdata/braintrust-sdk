@@ -277,7 +277,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      // Use a Proxy to track time to first stream access
       const startTime = Date.now();
       let receivedFirst = false;
 
