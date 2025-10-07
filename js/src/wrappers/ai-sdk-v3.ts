@@ -235,7 +235,6 @@ export function wrapAISDK<T extends AISDKMethods>(
 
     const userOnFinish = params.onFinish;
     const userOnError = params.onError;
-    const userOnChunk = params.onChunk;
 
     try {
       const wrappedModel = wrapLanguageModel({
@@ -278,7 +277,7 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      // Wrap all stream getters to track time to first access
+      // Use a Proxy to track time to first stream access
       const startTime = Date.now();
       let receivedFirst = false;
 
@@ -293,35 +292,22 @@ export function wrapAISDK<T extends AISDKMethods>(
         }
       };
 
-      // List of stream properties to wrap
-      const streamProps = [
+      // Stream properties that should trigger timing tracking
+      const streamProps = new Set([
         "partialObjectStream",
         "textStream",
         "fullStream",
         "elementStream",
-      ];
+      ]);
 
-      streamProps.forEach((propName) => {
-        const descriptor =
-          Object.getOwnPropertyDescriptor(result, propName) ||
-          Object.getOwnPropertyDescriptor(
-            Object.getPrototypeOf(result),
-            propName,
-          );
-
-        if (descriptor?.get) {
-          Object.defineProperty(result, propName, {
-            get() {
-              trackFirstAccess();
-              return descriptor.get!.call(this);
-            },
-            enumerable: true,
-            configurable: true,
-          });
-        }
+      return new Proxy(result, {
+        get(target, prop, receiver) {
+          if (typeof prop === "string" && streamProps.has(prop)) {
+            trackFirstAccess();
+          }
+          return Reflect.get(target, prop, receiver);
+        },
       });
-
-      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),
