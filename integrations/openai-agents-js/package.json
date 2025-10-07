@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/openai-agents",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "SDK for integrating Braintrust with OpenAI Agents",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -29,9 +29,10 @@
     "tsx": "^3.14.0",
     "typescript": "^5.3.3",
     "vitest": "^2.1.9",
-    "zod": "^3.25.34"
-  },
-  "dependencies": {
+    "zod": "^3.25.34",
     "braintrust": "workspace:^"
+  },
+  "peerDependencies": {
+    "braintrust": ">=0.4.0 <0.5.0"
   }
 }
