@@ -281,3 +281,55 @@ export function wrapStreamObject<T>(
 
   return wrapStream();
 }
+
+export function wrapReadableAsyncIterable<T>(
+  stream: AsyncIterable<T> & ReadableStream<T>,
+  onFirst: () => void,
+): AsyncIterable<T> & ReadableStream<T> {
+  let sawFirst = false;
+
+  const trackFirstAccess = () => {
+    if (!sawFirst) {
+      sawFirst = true;
+      onFirst();
+    }
+  };
+
+  async function* wrapAsyncIterable() {
+    for await (const chunk of stream) {
+      trackFirstAccess();
+      yield chunk;
+    }
+  }
+
+  const wrappedIterable = wrapAsyncIterable();
+
+  return new Proxy(stream, {
+    get(target, prop, receiver) {
+      if (prop === Symbol.asyncIterator) {
+        return () => wrappedIterable;
+      }
+
+      if (typeof prop === "string" && prop in target) {
+        const value = Reflect.get(target, prop, receiver);
+
+        if (
+          typeof value === "function" &&
+          (prop === "getReader" ||
+            prop === "pipeThrough" ||
+            prop === "pipeTo" ||
+            prop === "tee")
+        ) {
+          return function (...args: unknown[]) {
+            trackFirstAccess();
+            return (value as Function).apply(target, args);
+          };
+        }
+
+        return value;
+      }
+
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as AsyncIterable<T> & ReadableStream<T>;
+}

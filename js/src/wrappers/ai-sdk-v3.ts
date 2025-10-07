@@ -7,6 +7,8 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
+  wrapStreamObject,
+  wrapReadableAsyncIterable,
 } from "./ai-sdk-shared";
 
 // Define a neutral interface for the AI SDK methods we use.
@@ -291,18 +293,24 @@ export function wrapAISDK<T extends AISDKMethods>(
         }
       };
 
-      // Stream properties that should trigger timing tracking
-      const streamProps = new Set([
+      const asyncIterableStreamProps = new Set([
         "partialObjectStream",
-        "textStream",
         "fullStream",
         "elementStream",
       ]);
 
+      const readableAsyncIterableProps = new Set(["textStream"]);
+
       return new Proxy(result, {
         get(target, prop, receiver) {
-          if (typeof prop === "string" && streamProps.has(prop)) {
-            trackFirstAccess();
+          if (typeof prop === "string" && asyncIterableStreamProps.has(prop)) {
+            return wrapStreamObject(target[prop], trackFirstAccess);
+          }
+          if (
+            typeof prop === "string" &&
+            readableAsyncIterableProps.has(prop)
+          ) {
+            return wrapReadableAsyncIterable(target[prop], trackFirstAccess);
           }
           return Reflect.get(target, prop, receiver);
         },
