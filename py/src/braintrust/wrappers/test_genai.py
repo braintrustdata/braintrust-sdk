@@ -31,10 +31,6 @@ def vcr_config():
     }
 
 
-def _get_client():
-    return Client()
-
-
 @pytest.fixture(scope="module", autouse=True)
 def setup_wrapper():
     """Setup genai wrapper once for all tests."""
@@ -69,8 +65,7 @@ def test_basic_completion(memory_logger, mode):
     """Test basic text completion in sync modes."""
     assert not memory_logger.pop()
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
 
     if mode == "sync":
@@ -122,8 +117,7 @@ async def test_basic_completion_async(memory_logger, mode):
     """Test basic text completion in async modes."""
     assert not memory_logger.pop()
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
 
     if mode == "async":
@@ -179,8 +173,7 @@ def test_mixed_content(memory_logger, mode):
     with open(image_path, "rb") as f:
         image_data = f.read()
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
 
     if mode == "sync":
@@ -245,8 +238,7 @@ async def test_mixed_content_async(memory_logger, mode):
     with open(image_path, "rb") as f:
         image_data = f.read()
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
 
     if mode == "async":
@@ -305,7 +297,6 @@ def test_tool_use(memory_logger, mode):
     """Test function calling / tool use in sync modes."""
     assert not memory_logger.pop()
 
-    # Define a function for getting weather
     def get_weather(location: str, unit: str = "celsius") -> str:
         """Get the current weather for a location.
 
@@ -315,8 +306,7 @@ def test_tool_use(memory_logger, mode):
         """
         return f"22 degrees {unit} and sunny in {location}"
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
     has_function_call = False
 
@@ -377,7 +367,6 @@ async def test_tool_use_async(memory_logger, mode):
     """Test function calling / tool use in async modes."""
     assert not memory_logger.pop()
 
-    # Define a function for getting weather
     def get_weather(location: str, unit: str = "celsius") -> str:
         """Get the current weather for a location.
 
@@ -387,8 +376,7 @@ async def test_tool_use_async(memory_logger, mode):
         """
         return f"22 degrees {unit} and sunny in {location}"
 
-    client = _get_client()
-
+    client = Client()
     start = time.time()
     has_function_call = False
 
@@ -446,7 +434,7 @@ def test_system_prompt(memory_logger):
     """Test system instruction handling."""
     assert not memory_logger.pop()
 
-    client = _get_client()
+    client = Client()
     response = client.models.generate_content(
         model=MODEL,
         contents="Tell me about the weather.",
@@ -476,7 +464,7 @@ def test_multi_turn(memory_logger):
     """Test multi-turn conversation."""
     assert not memory_logger.pop()
 
-    client = _get_client()
+    client = Client()
     response = client.models.generate_content(
         model=MODEL,
         contents=[
@@ -508,7 +496,7 @@ def test_temperature_and_top_p(memory_logger):
     """Test temperature and top_p parameters."""
     assert not memory_logger.pop()
 
-    client = _get_client()
+    client = Client()
     response = client.models.generate_content(
         model=MODEL,
         contents="Say something creative.",
@@ -535,8 +523,7 @@ def test_error_handling(memory_logger):
     """Test that errors are properly logged."""
     assert not memory_logger.pop()
 
-    client = _get_client()
-
+    client = Client()
     fake_model = "there-is-no-such-model"
 
     try:
@@ -565,7 +552,7 @@ def test_stop_sequences(memory_logger):
     """Test stop sequences parameter."""
     assert not memory_logger.pop()
 
-    client = _get_client()
+    client = Client()
     response = client.models.generate_content(
         model=MODEL,
         contents="Write a short story about a robot.",
