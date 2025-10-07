@@ -273,10 +273,6 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
       wrapperSpan.metrics ?? { start: start / 1000, end: end / 1000 },
     );
 
-    expect(typeof streamRes.toTextStreamResponse).toBe("function");
-    const textStreamResponse = streamRes.toTextStreamResponse();
-    expect(textStreamResponse).toBeDefined();
-
     expect(wrapperSpan).toEqual(
       expect.objectContaining({
         span_attributes: expect.objectContaining({

@@ -7,7 +7,6 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
-  wrapStreamObject,
 } from "./ai-sdk-shared";
 
 // Define a neutral interface for the AI SDK methods we use.
@@ -236,6 +235,7 @@ export function wrapAISDK<T extends AISDKMethods>(
 
     const userOnFinish = params.onFinish;
     const userOnError = params.onError;
+    const userOnChunk = params.onChunk;
 
     try {
       const wrappedModel = wrapLanguageModel({
@@ -243,7 +243,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         middleware: BraintrustMiddleware(),
       });
 
-      const startTime = Date.now();
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
@@ -279,18 +278,49 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      const wrapStream = wrapStreamObject(result.partialObjectStream, () => {
-        span.log({
-          metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
-        });
+      // Wrap all stream getters to track time to first access
+      const startTime = Date.now();
+      let receivedFirst = false;
+
+      const trackFirstAccess = () => {
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+      };
+
+      // List of stream properties to wrap
+      const streamProps = [
+        "partialObjectStream",
+        "textStream",
+        "fullStream",
+        "elementStream",
+      ];
+
+      streamProps.forEach((propName) => {
+        const descriptor =
+          Object.getOwnPropertyDescriptor(result, propName) ||
+          Object.getOwnPropertyDescriptor(
+            Object.getPrototypeOf(result),
+            propName,
+          );
+
+        if (descriptor?.get) {
+          Object.defineProperty(result, propName, {
+            get() {
+              trackFirstAccess();
+              return descriptor.get!.call(this);
+            },
+            enumerable: true,
+            configurable: true,
+          });
+        }
       });
 
-      Object.defineProperty(result, "partialObjectStream", {
-        value: wrapStream,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
       return result;
     } catch (error) {
       span.log({
