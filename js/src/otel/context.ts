@@ -63,7 +63,7 @@ export class OtelContextManager extends ContextManager {
   }
 
   getParentSpanIds(): ContextParentSpanIds | undefined {
-    if (!OTEL_AVAILABLE || !otelTrace) return undefined;
+    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) return undefined;
 
     const currentSpan = otelTrace.getActiveSpan();
     if (!currentSpan || !isOtelSpan(currentSpan)) {
