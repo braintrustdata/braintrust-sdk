@@ -54,6 +54,22 @@ function isOtelSpan(span: unknown): span is {
   );
 }
 
+function isValidSpanContext(spanContext: unknown): boolean {
+  if (
+    !spanContext ||
+    typeof spanContext !== "object" ||
+    !("spanId" in spanContext) ||
+    !("traceId" in spanContext)
+  ) {
+    return false;
+  }
+  const ctx = spanContext as { spanId: string; traceId: string };
+  return (
+    ctx.spanId !== "0000000000000000" &&
+    ctx.traceId !== "00000000000000000000000000000000"
+  );
+}
+
 export class OtelContextManager extends ContextManager {
   constructor() {
     super();
@@ -71,7 +87,7 @@ export class OtelContextManager extends ContextManager {
     }
 
     const spanContext = currentSpan.spanContext();
-    if (!spanContext || spanContext.spanId === "0000000000000000") {
+    if (!isValidSpanContext(spanContext)) {
       return undefined;
     }
 
