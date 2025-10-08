@@ -7,8 +7,6 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
-  wrapStreamObject,
-  wrapReadableAsyncIterable,
 } from "./ai-sdk-shared";
 
 // Define a neutral interface for the AI SDK methods we use.
