@@ -293,28 +293,30 @@ export function wrapAISDK<T extends AISDKMethods>(
         }
       };
 
-      const asyncIterableStreamProps = new Set([
-        "partialObjectStream",
-        "fullStream",
-        "elementStream",
-      ]);
+      const [stream1, stream2] = result.baseStream.tee();
+      result.baseStream = stream2;
 
-      const readableAsyncIterableProps = new Set(["textStream"]);
+      stream1
+        .pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              trackFirstAccess();
+              controller.enqueue(chunk);
+            },
+          }),
+        )
+        .pipeTo(
+          new WritableStream({
+            write() {
+              // Discard chunks - we only care about the side effect
+            },
+          }),
+        )
+        .catch(() => {
+          // Silently ignore errors from the tracking stream
+        });
 
-      return new Proxy(result, {
-        get(target, prop, receiver) {
-          if (typeof prop === "string" && asyncIterableStreamProps.has(prop)) {
-            return wrapStreamObject(target[prop], trackFirstAccess);
-          }
-          if (
-            typeof prop === "string" &&
-            readableAsyncIterableProps.has(prop)
-          ) {
-            return wrapReadableAsyncIterable(target[prop], trackFirstAccess);
-          }
-          return Reflect.get(target, prop, receiver);
-        },
-      });
+      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),

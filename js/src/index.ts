@@ -59,3 +59,5 @@ export * from "./exports-node";
 export * from "./exports-types";
 import * as braintrust from "./exports-node";
 export default braintrust;
+
+export const VERSION = 1;
