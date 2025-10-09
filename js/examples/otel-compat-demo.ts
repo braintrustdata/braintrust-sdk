@@ -18,15 +18,6 @@ import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { initLogger, BraintrustSpanProcessor, login } from "../dist/index.js";
 
-// Verify OTEL compatibility mode is enabled
-if (process.env.BRAINTRUST_OTEL_COMPAT?.toLowerCase() !== "true") {
-  console.error("Error: BRAINTRUST_OTEL_COMPAT must be set to 'true'");
-  console.error(
-    "Run with: BRAINTRUST_OTEL_COMPAT=true npx tsx examples/otel-compat-demo.ts",
-  );
-  process.exit(1);
-}
-
 async function main() {
   await login();
   console.log("🚀 Starting OTEL + Braintrust Integration Demo\n");
