@@ -1,13 +1,28 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
-let otelApi: any = null;
-let otelSdk: any = null;
+interface OtelContext {
+  getValue?: (key: string) => unknown;
+}
+
+interface OtelApi {
+  context: {
+    active: () => OtelContext;
+  };
+  trace: {
+    getSpan: (ctx: OtelContext) => unknown;
+  };
+}
+
+let otelApi: OtelApi | null = null;
+let otelSdk: {
+  BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
+} | null = null;
 let OTEL_AVAILABLE = false;
 
 try {
   otelApi = require("@opentelemetry/api");
   otelSdk = require("@opentelemetry/sdk-trace-base");
   OTEL_AVAILABLE = true;
-} catch (error) {
+} catch {
   console.warn(
     "OpenTelemetry packages are not installed. " +
       "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
@@ -17,7 +32,7 @@ try {
 
 // Type definitions that don't depend on OpenTelemetry being installed
 interface Context {
-  [key: string]: any;
+  getValue?: (key: string) => unknown;
 }
 
 interface SpanProcessor {
@@ -293,7 +308,7 @@ export class BraintrustSpanProcessor {
     }
 
     // Create OTLP exporter
-    let exporter: any;
+    let exporter: unknown;
     try {
       const {
         OTLPTraceExporter,
@@ -311,16 +326,24 @@ export class BraintrustSpanProcessor {
         headers,
       });
 
+      interface RawSpan {
+        instrumentationScope?: unknown;
+        instrumentationLibrary?: unknown;
+        parentSpanContext?: unknown;
+        parentSpanId?: string;
+        spanContext?: () => { traceId: string };
+      }
+
       exporter = new Proxy(baseExporter, {
         get(target, prop, receiver) {
           // If the code is trying to access the 'export' method, return our patched version.
           if (prop === "export") {
             return function (
-              spans: any[],
-              resultCallback: (result: any) => void,
+              spans: RawSpan[],
+              resultCallback: (result: unknown) => void,
             ) {
               // This patch handles OTel version mismatches
-              const fixedSpans = spans.map((span: any) => {
+              const fixedSpans = spans.map((span: RawSpan) => {
                 if (!span.instrumentationScope && span.instrumentationLibrary) {
                   span.instrumentationScope = span.instrumentationLibrary;
                 }
@@ -339,10 +362,13 @@ export class BraintrustSpanProcessor {
               });
 
               // Call the original export method with the fixed spans.
-              return Reflect.apply(target.export, target, [
-                fixedSpans,
-                resultCallback,
-              ]);
+              return Reflect.apply(
+                (target as { export: unknown }).export as (
+                  ...args: unknown[]
+                ) => unknown,
+                target,
+                [fixedSpans, resultCallback],
+              );
             };
           }
 
@@ -377,7 +403,73 @@ export class BraintrustSpanProcessor {
   }
 
   onStart(span: Span, parentContext: Context): void {
+    try {
+      let parentValue: string | undefined;
+
+      // Priority 1: Check if braintrust.parent is in current OTEL context
+      if (otelApi && otelApi.context) {
+        const currentContext = otelApi.context.active();
+        const contextValue = currentContext.getValue?.("braintrust.parent");
+        if (typeof contextValue === "string") {
+          parentValue = contextValue;
+        }
+
+        // Priority 2: Check if parent_context has braintrust.parent (backup)
+        if (!parentValue && parentContext) {
+          const parentContextValue =
+            typeof parentContext.getValue === "function"
+              ? parentContext.getValue("braintrust.parent")
+              : undefined;
+          if (typeof parentContextValue === "string") {
+            parentValue = parentContextValue;
+          }
+        }
+
+        // Priority 3: Check if parent OTEL span has braintrust.parent attribute
+        if (!parentValue && parentContext) {
+          parentValue = this._getParentOtelBraintrustParent(parentContext);
+        }
+
+        // Set the attribute if we found a parent value
+        if (parentValue && typeof span.setAttributes === "function") {
+          span.setAttributes({ "braintrust.parent": parentValue });
+        }
+      }
+    } catch {
+      // If there's an exception, just don't set braintrust.parent
+    }
+
     this.aiSpanProcessor.onStart(span, parentContext);
+  }
+
+  private _getParentOtelBraintrustParent(
+    parentContext: Context,
+  ): string | undefined {
+    try {
+      if (!otelApi || !otelApi.trace) {
+        return undefined;
+      }
+
+      const currentSpan =
+        typeof otelApi.trace.getSpan === "function"
+          ? otelApi.trace.getSpan(parentContext)
+          : undefined;
+
+      if (
+        currentSpan &&
+        typeof currentSpan === "object" &&
+        "attributes" in currentSpan &&
+        typeof currentSpan.attributes === "object"
+      ) {
+        const attributes = currentSpan.attributes as Record<string, unknown>;
+        const parentAttr = attributes["braintrust.parent"];
+        return typeof parentAttr === "string" ? parentAttr : undefined;
+      }
+
+      return undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   onEnd(span: ReadableSpan): void {
@@ -461,7 +553,10 @@ export class BraintrustExporter {
   /**
    * Export spans to Braintrust by simulating span processor behavior.
    */
-  export(spans: ReadableSpan[], resultCallback: (result: any) => void): void {
+  export(
+    spans: ReadableSpan[],
+    resultCallback: (result: { code: number; error?: unknown }) => void,
+  ): void {
     try {
       // Process each span through the processor
       spans.forEach((span) => {
