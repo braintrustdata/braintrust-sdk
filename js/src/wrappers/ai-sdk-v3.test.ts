@@ -286,4 +286,103 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
       }),
     );
   });
+
+  test.each(PROVIDERS)(
+    "streamObject textStream (%s)",
+    async ({ name, model }) => {
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      const start = Date.now();
+      const streamRes = await streamObject({
+        model,
+        schema: simpleSchema,
+        prompt: "Stream a JSON object with key 'answer' set to 'ok'.",
+      });
+
+      // Consume the text stream so onFinish fires
+      for await (const _chunk of streamRes.textStream) {
+        // no-op: just draining
+      }
+      const end = Date.now();
+
+      const spans = (await testLogger.drain()) as any[];
+      const wrapperSpan = spans.find(
+        (s) =>
+          s?.span_attributes?.name === "ai-sdk.streamObject" &&
+          s?.output &&
+          typeof s.output === "object",
+      );
+      expect(wrapperSpan).toBeTruthy();
+      expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+    },
+  );
+
+  test.each(PROVIDERS)(
+    "streamObject fullStream (%s)",
+    async ({ name, model }) => {
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      const start = Date.now();
+      const streamRes = await streamObject({
+        model,
+        schema: simpleSchema,
+        prompt: "Stream a JSON object with key 'answer' set to 'ok'.",
+      });
+
+      // Consume the full stream so onFinish fires
+      for await (const _chunk of streamRes.fullStream) {
+        // no-op: just draining
+      }
+      const end = Date.now();
+
+      const spans = (await testLogger.drain()) as any[];
+      const wrapperSpan = spans.find(
+        (s) =>
+          s?.span_attributes?.name === "ai-sdk.streamObject" &&
+          s?.output &&
+          typeof s.output === "object",
+      );
+      expect(wrapperSpan).toBeTruthy();
+      expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+    },
+  );
+
+  test.each(PROVIDERS)(
+    "streamObject toTextStreamResponse (%s)",
+    async ({ name, model }) => {
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      const streamRes = await streamObject({
+        model,
+        schema: simpleSchema,
+        prompt: "Stream a JSON object with key 'answer' set to 'ok'.",
+      });
+
+      const response = streamRes.toTextStreamResponse();
+      expect(response).toBeInstanceOf(Response);
+      expect(response.body).toBeTruthy();
+
+      if (response.body) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(new TextDecoder().decode(value));
+        }
+        const fullText = chunks.join("");
+        expect(fullText.length).toBeGreaterThan(0);
+      }
+
+      const spans = await testLogger.drain();
+      const wrapperSpan = spans.find(
+        (s) =>
+          s?.span_attributes?.name === "ai-sdk.streamObject" &&
+          s?.output &&
+          typeof s.output === "object",
+      );
+      expect(wrapperSpan).toBeTruthy();
+      expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+    },
+  );
 });
