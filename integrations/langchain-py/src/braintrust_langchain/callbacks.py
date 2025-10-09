@@ -18,6 +18,7 @@ from uuid import UUID
 
 import braintrust
 from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
+from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
@@ -106,7 +107,12 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 **({"tags": tags}),
                 **(event.get("metadata") or {}),
                 **({"runId": run_id, "parentRunId": parent_run_id} if self.debug else {}),
-                "integration": {"name": "langchain-py", "version": version},
+                "braintrust": {
+                    "integration_name": "langchain-py",
+                    "integration_version": version,
+                    "sdk_version": sdk_version,
+                    "language": "python",
+                },
             },
         }
 
