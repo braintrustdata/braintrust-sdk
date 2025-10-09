@@ -1,7 +1,6 @@
 import asyncio
 import base64
 from pathlib import Path
-from typing import Literal, Union
 
 from braintrust import flush, init_logger, start_span
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
@@ -351,21 +350,21 @@ def test_short_max_tokens():
 def test_tool_use():
     print("\n=== Test 14: Tool Use ===")
     with start_span(name="test_tool_use"):
+
+        @tool
+        def get_weather(location: str, unit: str = "celsius") -> str:
+            """Get the current weather for a location.
+
+            Args:
+                location: The city and state, e.g. San Francisco, CA
+                unit: The unit of temperature (celsius or fahrenheit)
+            """
+            return f"22 degrees {unit} and sunny in {location}"
+
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
             ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500)),
         ):
-
-            @tool
-            def get_weather(location: str, unit: str = "celsius") -> str:
-                """Get the current weather for a location.
-
-                Args:
-                    location: The city and state, e.g. San Francisco, CA
-                    unit: The unit of temperature (celsius or fahrenheit)
-                """
-                return f"22 degrees {unit} and sunny in {location}"
-
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
 
@@ -388,34 +387,30 @@ def test_tool_use():
 def test_tool_use_with_result():
     print("\n=== Test 15: Tool Use With Result ===")
     with start_span(name="test_tool_use_with_result"):
+
+        @tool
+        def calculate(operation: str, a: float, b: float) -> float:
+            """Perform a mathematical calculation.
+
+            Args:
+                operation: The mathematical operation (add, subtract, multiply, divide)
+                a: First number
+                b: Second number
+            """
+            if operation == "add":
+                return a + b
+            elif operation == "subtract":
+                return a - b
+            elif operation == "multiply":
+                return a * b
+            elif operation == "divide":
+                return a / b if b != 0 else 0
+            return 0
+
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
             ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500)),
         ):
-
-            @tool
-            def calculate(
-                operation: Union[Literal["add"], Literal["subtract"], Literal["multiply"], Literal["divide"]],
-                a: float,
-                b: float,
-            ) -> float:
-                """Perform a mathematical calculation.
-
-                Args:
-                    operation: The mathematical operation (add, subtract, multiply, divide)
-                    a: First number
-                    b: Second number
-                """
-                if operation == "add":
-                    return a + b
-                elif operation == "subtract":
-                    return a - b
-                elif operation == "multiply":
-                    return a * b
-                elif operation == "divide":
-                    return a / b if b != 0 else 0
-                return 0
-
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
 

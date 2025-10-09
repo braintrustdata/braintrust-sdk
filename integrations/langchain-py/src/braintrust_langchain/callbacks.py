@@ -26,7 +26,7 @@ from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
 
-from braintrust_langchain import version
+from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")
 
