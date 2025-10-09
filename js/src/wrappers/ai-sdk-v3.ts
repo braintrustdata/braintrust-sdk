@@ -7,7 +7,6 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
-  wrapStreamObject,
 } from "./ai-sdk-shared";
 
 // Define a neutral interface for the AI SDK methods we use.
@@ -243,7 +242,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         middleware: BraintrustMiddleware(),
       });
 
-      const startTime = Date.now();
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
@@ -279,16 +277,44 @@ export function wrapAISDK<T extends AISDKMethods>(
         }),
       );
 
-      const wrapStream = wrapStreamObject(result.partialObjectStream, () => {
-        span.log({
-          metrics: { time_to_first_token: (Date.now() - startTime) / 1000 },
-        });
-      });
+      const startTime = Date.now();
+      let receivedFirst = false;
 
-      return {
-        ...result,
-        partialObjectStream: wrapStream,
+      const trackFirstAccess = () => {
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
       };
+
+      const [stream1, stream2] = result.baseStream.tee();
+      result.baseStream = stream2;
+
+      stream1
+        .pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              trackFirstAccess();
+              controller.enqueue(chunk);
+            },
+          }),
+        )
+        .pipeTo(
+          new WritableStream({
+            write() {
+              // Discard chunks - we only care about the side effect
+            },
+          }),
+        )
+        .catch(() => {
+          // Silently ignore errors from the tracking stream
+        });
+
+      return result;
     } catch (error) {
       span.log({
         error: error instanceof Error ? error.message : String(error),

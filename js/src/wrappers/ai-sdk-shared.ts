@@ -262,22 +262,3 @@ export function wrapTools<
 export function extractInput(params: any) {
   return params?.prompt ?? params?.messages ?? params?.system;
 }
-
-export function wrapStreamObject<T>(
-  iterable: AsyncIterable<T>,
-  onFirst: () => void,
-): AsyncIterable<T> {
-  let sawFirst = false;
-
-  async function* wrapStream() {
-    for await (const chunk of iterable) {
-      if (!sawFirst) {
-        sawFirst = true;
-        onFirst();
-      }
-      yield chunk; // pass-through unchanged
-    }
-  }
-
-  return wrapStream();
-}
