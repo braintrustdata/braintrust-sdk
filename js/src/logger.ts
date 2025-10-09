@@ -26,6 +26,7 @@ import {
   mergeRowBatch,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
+  SpanComponentsV4,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
   SpanType,
@@ -373,6 +374,15 @@ class BraintrustContextManager extends ContextManager {
   getCurrentSpan(): Span | undefined {
     return this._currentSpan.getStore();
   }
+}
+
+function getSpanComponentsClass():
+  | typeof SpanComponentsV3
+  | typeof SpanComponentsV4 {
+  const useV4 =
+    typeof process !== "undefined" &&
+    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
+  return useV4 ? SpanComponentsV4 : SpanComponentsV3;
 }
 
 export function getContextManager(): ContextManager {
@@ -2124,7 +2134,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     // `has_computed` is the same as the one we are passing into the span
     // logging functions. So that if the spans actually do get logged, then this
     // `_lazy_id` object specifically will also be marked as computed.
-    return new SpanComponentsV3({
+    return new (getSpanComponentsClass())({
       object_type: this.parentObjectType(),
       ...(this.computeMetadataArgs && !this.lazyId.hasSucceeded
         ? { compute_object_metadata_args: this.computeMetadataArgs }
@@ -5080,7 +5090,7 @@ export class Experiment
    * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
-    return new SpanComponentsV3({
+    return new (getSpanComponentsClass())({
       object_type: this.parentObjectType(),
       object_id: await this.id,
     }).toStr();
@@ -5513,7 +5523,7 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
-    return new SpanComponentsV3({
+    return new (getSpanComponentsClass())({
       object_type: this.parentObjectType,
       ...(this.parentComputeObjectMetadataArgs &&
       !this.parentObjectId.hasSucceeded

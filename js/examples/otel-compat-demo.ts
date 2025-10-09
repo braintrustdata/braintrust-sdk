@@ -18,9 +18,19 @@ import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { initLogger, BraintrustSpanProcessor, login } from "../dist/index.js";
 
+function getExportVersion(exportedSpan: string): number {
+  const exportedBytes = Buffer.from(exportedSpan, "base64");
+  return exportedBytes[0];
+}
+
 async function main() {
   await login();
   console.log("🚀 Starting OTEL + Braintrust Integration Demo\n");
+
+  const expectedVersion = process.env.BRAINTRUST_OTEL_COMPAT === "true" ? 4 : 3;
+  console.log(
+    `Expected export version: ${expectedVersion} (BRAINTRUST_OTEL_COMPAT=${process.env.BRAINTRUST_OTEL_COMPAT})\n`,
+  );
 
   // Try to import AsyncHooksContextManager - it's optional but required for context propagation
   let AsyncHooksContextManager: any;
@@ -77,8 +87,22 @@ async function main() {
     async (rootSpan) => {
       trace1Link = rootSpan.link();
       console.log(
-        `  trace1_root_bt: root_span_id=${rootSpan.rootSpanId.slice(0, 16)}...`,
+        `  trace1_root_bt: span_id=${rootSpan.spanId.slice(0, 16)}... root_span_id=${rootSpan.rootSpanId.slice(0, 16)}...`,
       );
+
+      // Export the span and verify format
+      const exported = await rootSpan.export();
+      const versionByte = getExportVersion(exported);
+      console.log(
+        `  exported (version ${versionByte}): ${exported.slice(0, 60)}...`,
+      );
+      if (versionByte !== expectedVersion) {
+        throw new Error(
+          `Expected version ${expectedVersion} but got ${versionByte}`,
+        );
+      }
+      console.log(`  ✓ Version verified: ${versionByte}`);
+
       rootSpan.log({ input: "BT root span", metadata: { type: "root" } });
 
       await tracer.startActiveSpan("trace1_child_otel", async (otelSpan) => {
@@ -103,7 +127,7 @@ async function main() {
         await logger.traced(
           async (btSpan) => {
             console.log(
-              `  trace1_grandchild_bt_traced: root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
+              `  trace1_grandchild_bt_traced: span_id=${btSpan.spanId.slice(0, 16)}... root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
             );
           },
           { name: "trace1_grandchild_bt_traced" },
@@ -116,7 +140,7 @@ async function main() {
       await logger.traced(
         async (btSpan) => {
           console.log(
-            `  trace1_child_bt_traced: root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
+            `  trace1_child_bt_traced: span_id=${btSpan.spanId.slice(0, 16)}... root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
           );
         },
         { name: "trace1_child_bt_traced" },
@@ -139,8 +163,22 @@ async function main() {
       async (btSpan) => {
         trace2Link = btSpan.link();
         console.log(
-          `  trace2_child_bt: root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
+          `  trace2_child_bt: span_id=${btSpan.spanId.slice(0, 16)}... root_span_id=${btSpan.rootSpanId.slice(0, 16)}...`,
         );
+
+        // Export the span and verify format
+        const exported = await btSpan.export();
+        const versionByte = getExportVersion(exported);
+        console.log(
+          `  exported (version ${versionByte}): ${exported.slice(0, 60)}...`,
+        );
+        if (versionByte !== expectedVersion) {
+          throw new Error(
+            `Expected version ${expectedVersion} but got ${versionByte}`,
+          );
+        }
+        console.log(`  ✓ Version verified: ${versionByte}`);
+
         btSpan.log({
           input: "BT span inside OTEL",
           metadata: { type: "bt_inside_otel" },
@@ -168,7 +206,7 @@ async function main() {
         await btSpan.traced(
           async (btGrandchild) => {
             console.log(
-              `  trace2_grandchild_bt: root_span_id=${btGrandchild.rootSpanId.slice(0, 16)}...`,
+              `  trace2_grandchild_bt: span_id=${btGrandchild.spanId.slice(0, 16)}... root_span_id=${btGrandchild.rootSpanId.slice(0, 16)}...`,
             );
             btGrandchild.log({
               input: "Nested BT span",
