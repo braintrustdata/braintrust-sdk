@@ -1,543 +1,533 @@
 interactions:
-- request:
-    body: '{"messages":[{"role":"user","content":"What''s the weather in New York
-      and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":false,"stream_options":null,"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
-      the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
-      location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
-      the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
-      timezone to get time for"}},"required":["timezone"]}}}]}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate
-      connection:
-      - keep-alive
-      content-length:
-      - '676'
-      content-type:
-      - application/json
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 2.2.0
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 2.2.0
-      x-stainless-read-timeout:
-      - '600'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.14.0rc2
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAAwAAAP//tFTbjtowEH3PV1jzTFpAATa8LVUF2ksvu9CqLavIOJNgcOzIdriKf6+S
-        LCSw23ZfmofImeMzc85k7L1DCPAQ+gTYnFqWpML98Hm2UqtdNEgnq9HAS8ZZcvP1Vtw8ZD/NGho5
-        Q80WyOyR9Y6pJBVouZIlzDRSi3nWVq/j+1etXqtbAIkKUeS0OLWup9yES+62m23Pbfbc1tUze644
-        QwN98sshhJB98c51yhA30CfNxjGSoDE0RuifNhECWok8AtQYbiyVFhoVyJS0KHPpMhOiBlilRMCo
-        EFXh8tnX1lWzqBCBHy02D9/o/W4y4V11t4gH4f1Hf3Zdq1em3qaFoCiT7NSkGn6K9y+KEQKSJgU3
-        Rhuskdo56gs6IUB1nCUobS4d9lMQitE84RT6ZAqfcE1+KL2cwgHOmIfa16HxJsvDmI6/h2Y4arbl
-        7ZeRnSwf78LNUP8vy5Yn+G+/+a6dklj6vTacvh+r5Vb93fFp/VQbA41RZqh4OR9USmWLrhYD8uRc
-        9A2EilOtZuaCChGX3MwDjdQUfuuT5hyFFBIgOxtmSLVKUhtYtcSiqO+VSaE6bxXoXT2DVlkqqnjL
-        azdeSReEaCkvhv10vhhlcwwranXOaBZyVQOcmvWXal7LXdrnMn5L+gpgDFOLYZBqDDk7d1xt05hf
-        R3/admpyIRgM6hVnGFiOOv8dIUY0E+UlAWZrLCZBxGWMOtW8uCkgSoNOt0mjLnY6PjgH5zcAAAD/
-        /wMArYVONjcFAAA=
-    headers:
-      CF-RAY:
-      - 98bae7416aba7ce4-EWR
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Thu, 09 Oct 2025 03:48:38 GMT
-      Server:
-      - cloudflare
-      Set-Cookie:
-      - __cf_bm=2sMG.IjfU6.MGSpX9wtsFrXMKVPEuX1NmprYlXjBp8I-1759981718-1.0.1.1-c7EBDVWPU3OqT0lISi.LaCzXLhZU1ICxEMdsAZiheJ.Zlq.aLNXoHCIY7.x995S8o_Hx58XigDgMLcf2hEEXYfiISD70Fn0iYj5za0RHDM0;
-        path=/; expires=Thu, 09-Oct-25 04:18:38 GMT; domain=.api.openai.com; HttpOnly;
-        Secure; SameSite=None
-      - _cfuvid=gkcVc6YjzX1K2PeKjtWsQR7HLQVimZFseXIAcAC1eLY-1759981718013-0.0.1.1-604800000;
-        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '1193'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '1206'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999985'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_93709d5ad8b545fe8a965eeb1de858df
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"role":"user","content":"What''s the weather in New York
-      and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":false,"stream_options":null,"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
-      the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
-      location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
-      the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
-      timezone to get time for"}},"required":["timezone"]}}}]}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate
-      connection:
-      - keep-alive
-      content-length:
-      - '676'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=2sMG.IjfU6.MGSpX9wtsFrXMKVPEuX1NmprYlXjBp8I-1759981718-1.0.1.1-c7EBDVWPU3OqT0lISi.LaCzXLhZU1ICxEMdsAZiheJ.Zlq.aLNXoHCIY7.x995S8o_Hx58XigDgMLcf2hEEXYfiISD70Fn0iYj5za0RHDM0;
-        _cfuvid=gkcVc6YjzX1K2PeKjtWsQR7HLQVimZFseXIAcAC1eLY-1759981718013-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 2.2.0
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 2.2.0
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-read-timeout:
-      - '600'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.14.0rc2
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAAwAAAP//tFRNb9swDL37Vwg8J5sd5PuWFVk3ZGixodjSLoWhyLSjRhY9SW6WBfnv
-        g+0mdtJu62U+GDKfHvkeTWnnMQYygjEDseJOpJlqX1wvH3/M57NH1f98S9OHDzij2dfJF5zcvd9A
-        q2DQ8gGFO7DeCEozhU6SrmBhkDsssgaD3mg0DAbBsARSilAVtCRz7S61U6llu+N3um1/0A6GT+wV
-        SYEWxuy7xxhju/Jd6NQR/oQx81uHSIrW8gRhfNzEGBhSRQS4tdI6rh20alCQdqgL6TpXqgE4IhUK
-        rlRduHp2jXXdLK5UOCdMr75d69R1ptvZJ+NfBEOx/thv1KtSb7NSUJxrcWxSAz/Gx2fFGAPN05Kb
-        oAs3yN0KzRmdMeAmyVPUrpAOuwUoErxIuIAxW8AVbtgtmfUC9nDC3De+9q1XWVaXl35P3aCe0mow
-        kMld5ov8HQ7+l2UnU/y332LXL9JY+Z1Yyd/e0HpLf3d8XN83xsBgnFuuns8H15pc2dVyQO69s76B
-        oiQztLRnVIillnYVGuS29NucNO8gpJQA+ckwQ2YozVzoaI1l0VG3Sgr1eavB7vAJdOS4quNBt9N6
-        IV0YoeOyHPbj+RJcrDCqqfU543kkqQF4DevP1byUu7IvdfKa9DUgBGYOozAzGElx6rjeZrC4jv60
-        7djkUjBYNI9SYOgkmuJ3RBjzXFWXBNitdZiGsdQJmszI8qaAOAt7fZ/Hfez1RuDtvd8AAAD//wMA
-        y32D6TcFAAA=
-    headers:
-      CF-RAY:
-      - 98bae749bfe37ce4-EWR
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Thu, 09 Oct 2025 03:48:39 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '1131'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '1147'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999985'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_93c7c11e4fe34b5298c6254b6a204113
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"role":"user","content":"What''s the weather in New York
-      and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":true,"stream_options":{"include_usage":true},"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
-      the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
-      location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
-      the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
-      timezone to get time for"}},"required":["timezone"]}}}]}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate
-      connection:
-      - keep-alive
-      content-length:
-      - '693'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=2sMG.IjfU6.MGSpX9wtsFrXMKVPEuX1NmprYlXjBp8I-1759981718-1.0.1.1-c7EBDVWPU3OqT0lISi.LaCzXLhZU1ICxEMdsAZiheJ.Zlq.aLNXoHCIY7.x995S8o_Hx58XigDgMLcf2hEEXYfiISD70Fn0iYj5za0RHDM0;
-        _cfuvid=gkcVc6YjzX1K2PeKjtWsQR7HLQVimZFseXIAcAC1eLY-1759981718013-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 2.2.0
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 2.2.0
-      x-stainless-read-timeout:
-      - '600'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.14.0rc2
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: 'data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}],"obfuscation":"EfsCGI"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_CkKLDUFkclGqrPATfusyyy4t","type":"function","function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"G0Sue"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"lo"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"SwwozkUTGItc"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"catio"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"QiCRoBRpuRcS"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"n\":
-        \"N"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"GUDNvlxUJ"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ew
-        Y"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"xydWr84W39ZWg"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ork\"}"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"3rdVKcazqpj"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_ReMNtE2tsmJHnjrWx5DtS1ls","type":"function","function":{"name":"get_time","arguments":""}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"cf1eP3eR"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"ti"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"zFkxJ04TabQ4"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"mezon"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"53EJZBMNjl5q"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"e\":
-        \"A"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ZFmujLR7P"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"sia/"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"SXLErOqscyj6p"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"Tokyo"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"pp2F1ujYL4aI"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"Y9Okd0rhm8xwtt"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"usage":null,"obfuscation":"Ax2m9t51Rmx45dR"}
-
-
-        data: {"id":"chatcmpl-CObvrRNNndcB45ajAbq6YZ2Re8NcW","object":"chat.completion.chunk","created":1759981719,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[],"usage":{"prompt_tokens":94,"completion_tokens":48,"total_tokens":142,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}},"obfuscation":"1Zm4jTnpL"}
-
-
-        data: [DONE]
-
-
-        '
-    headers:
-      CF-RAY:
-      - 98bae7517cd17ce4-EWR
-      Connection:
-      - keep-alive
-      Content-Type:
-      - text/event-stream; charset=utf-8
-      Date:
-      - Thu, 09 Oct 2025 03:48:40 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '1449'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '1477'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999982'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_40fa7a7a87cf48e3b933e4e527a78606
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"role":"user","content":"What''s the weather in New York
-      and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":true,"stream_options":{"include_usage":true},"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
-      the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
-      location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
-      the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
-      timezone to get time for"}},"required":["timezone"]}}}]}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate
-      connection:
-      - keep-alive
-      content-length:
-      - '693'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=2sMG.IjfU6.MGSpX9wtsFrXMKVPEuX1NmprYlXjBp8I-1759981718-1.0.1.1-c7EBDVWPU3OqT0lISi.LaCzXLhZU1ICxEMdsAZiheJ.Zlq.aLNXoHCIY7.x995S8o_Hx58XigDgMLcf2hEEXYfiISD70Fn0iYj5za0RHDM0;
-        _cfuvid=gkcVc6YjzX1K2PeKjtWsQR7HLQVimZFseXIAcAC1eLY-1759981718013-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 2.2.0
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 2.2.0
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-read-timeout:
-      - '600'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.14.0rc2
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: 'data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}],"obfuscation":"vOM2Ft"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_evuk4GSnY25gxynhT3kYIo82","type":"function","function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"YoDwK"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"lo"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"JWkrvzeREoWP"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"catio"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ZOm9pkBMiBaP"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"n\":
-        \"N"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"Q5JLF2o7U"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ew
-        Y"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"bSozJiNcl2oeu"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ork\"}"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ilRh0dbfI5Y"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_ByOvgI4O8lNsIUpDsIayq0yT","type":"function","function":{"name":"get_time","arguments":""}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"wH3z3kLt"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"ti"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ySFpkkQCOgLN"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"mezon"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"p3GcQjvI7qVM"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"e\":
-        \"A"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ariOR9zZo"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"sia/"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ak0HTIAnKt2Rt"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"Tokyo"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"P6ooOYU1XiOV"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"logprobs":null,"finish_reason":null}],"obfuscation":"ZqxEXiJAwhpbug"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"usage":null,"obfuscation":"CdRg5oAEzPItiXy"}
-
-
-        data: {"id":"chatcmpl-CObvtOGSJzRgehG77HLfnN68pEG8Y","object":"chat.completion.chunk","created":1759981721,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[],"usage":{"prompt_tokens":94,"completion_tokens":48,"total_tokens":142,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}},"obfuscation":"OOfWXU4Ze"}
-
-
-        data: [DONE]
-
-
-        '
-    headers:
-      CF-RAY:
-      - 98bae75bdcad7ce4-EWR
-      Connection:
-      - keep-alive
-      Content-Type:
-      - text/event-stream; charset=utf-8
-      Date:
-      - Thu, 09 Oct 2025 03:48:42 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '1394'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '1424'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999982'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_4a982d6ad01343b7aafbb2ab156b4296
-    status:
-      code: 200
-      message: OK
+  - request:
+      body:
+        '{"messages":[{"role":"user","content":"What''s the weather in New York
+        and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":false,"stream_options":null,"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
+        the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
+        location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
+        the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
+        timezone to get time for"}},"required":["timezone"]}}}]}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate
+        connection:
+          - keep-alive
+        content-length:
+          - "676"
+        content-type:
+          - application/json
+        host:
+          - api.openai.com
+        user-agent:
+          - OpenAI/Python 1.92.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - "false"
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.92.0
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string: !!binary |
+          H4sIAAAAAAAAA7RU32/aMBB+z19h3TNsQIMoeVt/TFOrVa2GWrZRRa5zJCaOndmXUkD871OSlgTa
+          bX1ZHiLnPn9333c5e+MxBjKCgIFIOIksV92TLH2is2Q9EJ9P7k5/nT6K8/T69Hpy8W2tFtApGeZh
+          gYJeWB+EyXKFJI2uYWGRE5ZZ+6Nhbzwcj0ejCshMhKqkxTl1fdPNpJbdQW/gd3ujbv/4mZ0YKdBB
+          wH56jDG2qd6lTh3hEwSs13mJZOgcjxGC3SbGwBpVRoA7Jx1xTdBpQGE0oS6l60KpFkDGqFBwpZrC
+          9bNprZtmcaXCxZBuM3989nVyNZ2u3HnqLqJkcela9erUq7wSNC+02DWphe/iwUExxkDzrOLGSOES
+          OSVoD+iMAbdxkaGmUjpsZqCM4GXCGQRsBle4ZN+NTWewhT3mtvW17bzLMuaJ+nF5Q+mXk3Xvzt3I
+          VCyn54b/L8skM/y333LX2mis/X5ykn+cmHRl/u54t75vjYHFeeG4ej0fXGtDVVerAbn3DvoGysS5
+          NQ/ugApzqaVLQovcVX7bk+a9CKkkQLE3zJBbk+UUkkmxKjr266TQnLcG9I+fQTLEVRPv+4POG+nC
+          CInLath350twkWDUUJtzxotImhbgtay/VvNW7tq+1PF70jeAEJgTRmFuMZJi33GzzWJ5Hf1p267J
+          lWBwaB+lwJAk2vJ3RDjnhaovCXArR5iFc6ljtLmV1U0B8zw88vnQ5zg+EuBtvd8AAAD//wMA/xPD
+          hjcFAAA=
+      headers:
+        CF-RAY:
+          - 955e85f4bc84c598-EWR
+        Connection:
+          - keep-alive
+        Content-Encoding:
+          - gzip
+        Content-Type:
+          - application/json
+        Date:
+          - Thu, 26 Jun 2025 17:46:18 GMT
+        Server:
+          - cloudflare
+        Set-Cookie:
+          - __cf_bm=ImsddYvCWfxjvgCkc.PQteneAt1.05OrnpctX.H9.6Q-1750959978-1.0.1.1-nNSwp_XWJ00JfcdLpEJJIkWuFwKp_G8OsvkqQJ1Y.t3LIgdq_FjD6D6k6xGKWUB1YmzkYT5DEps7_NG5XU.HYhGXfOrQ_qYymycHaizxQ64;
+            path=/; expires=Thu, 26-Jun-25 18:16:18 GMT; domain=.api.openai.com; HttpOnly;
+            Secure; SameSite=None
+          - _cfuvid=QM6hDu5SUhMw7byvxEvE9lxA0zi2uq0mxJsxgQgHJZQ-1750959978886-0.0.1.1-604800000;
+            path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "905"
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "911"
+        x-ratelimit-limit-requests:
+          - "30000"
+        x-ratelimit-limit-tokens:
+          - "150000000"
+        x-ratelimit-remaining-requests:
+          - "29999"
+        x-ratelimit-remaining-tokens:
+          - "149999984"
+        x-ratelimit-reset-requests:
+          - 2ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_ce9634fb6e411458288df8bbff2c6949
+      status:
+        code: 200
+        message: OK
+  - request:
+      body:
+        '{"messages":[{"role":"user","content":"What''s the weather in New York
+        and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":false,"stream_options":null,"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
+        the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
+        location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
+        the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
+        timezone to get time for"}},"required":["timezone"]}}}]}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate
+        connection:
+          - keep-alive
+        content-length:
+          - "676"
+        content-type:
+          - application/json
+        cookie:
+          - __cf_bm=ImsddYvCWfxjvgCkc.PQteneAt1.05OrnpctX.H9.6Q-1750959978-1.0.1.1-nNSwp_XWJ00JfcdLpEJJIkWuFwKp_G8OsvkqQJ1Y.t3LIgdq_FjD6D6k6xGKWUB1YmzkYT5DEps7_NG5XU.HYhGXfOrQ_qYymycHaizxQ64;
+            _cfuvid=QM6hDu5SUhMw7byvxEvE9lxA0zi2uq0mxJsxgQgHJZQ-1750959978886-0.0.1.1-604800000
+        host:
+          - api.openai.com
+        user-agent:
+          - OpenAI/Python 1.92.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - "false"
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.92.0
+        x-stainless-raw-response:
+          - "true"
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string: !!binary |
+          H4sIAAAAAAAAAwAAAP//tFRNc9owEL37V2j2jFswBDA3kqbJTNo0ZTKdZkrGI+S1UZAlR5L5CMN/
+          71h82JC0zaU+eOR9ervvrVdae4QAj2FAgE2pZVku/PNstpxfPgXf8Cb8+ixv21dKNJfncjT8Li00
+          SoaaPCGze9YHprJcoOVKbmGmkVoss7Z6Z83wLAx7oQMyFaMoaWlu/Y7yMy65HzSDjt/s+a3+jj1V
+          nKGBAfnlEULI2r1LnTLGJQxIs7GPZGgMTREGh02EgFaijAA1hhtLd5p3IFPSoiyly0KIGmCVEhGj
+          QlSFt8+6tq6aRYWIllej1vV9oL8MFxemKy+fb35MUPdkrd429Sp3gpJCskOTavghPjgpRghImjlu
+          ijZaILVT1Cd0QoDqtMhQ2lI6rMcgFKNlwjEMyBhucUEelJ6NYQNHzE3ta9N4l+Xk88PPeXuldKv7
+          wkfD6+Ti012he/x/WbY8w3/7LXe9KIlbv0PD6cd7NVupvzs+rB9rY6AxKQwVr+eDSqms66obkEfv
+          pG8gVJprNTEnVEi45GYaaaTG+a1PmrcX4iRAcTTMkGuV5TayaoauaNjZJoXqvFVgp78DrbJUVPFW
+          J2i8kS6K0VLuhv1wvhhlU4wranXOaBFzVQO8mvXXat7KvbXPZfqe9BXAGOYW4yjXGHN27LjaprG8
+          jv607dBkJxgM6jlnGFmOuvwdMSa0ELuLzayMxSxKuExR55q7mwKSPOoGNGjTfgsT8DbebwAAAP//
+          AwA/i1dUNwUAAA==
+      headers:
+        CF-RAY:
+          - 955e85fc49a8c598-EWR
+        Connection:
+          - keep-alive
+        Content-Encoding:
+          - gzip
+        Content-Type:
+          - application/json
+        Date:
+          - Thu, 26 Jun 2025 17:46:20 GMT
+        Server:
+          - cloudflare
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "1353"
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "1375"
+        x-ratelimit-limit-requests:
+          - "30000"
+        x-ratelimit-limit-tokens:
+          - "150000000"
+        x-ratelimit-remaining-requests:
+          - "29999"
+        x-ratelimit-remaining-tokens:
+          - "149999984"
+        x-ratelimit-reset-requests:
+          - 2ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_d7ad22f31a644826179f4d68275a2f4e
+      status:
+        code: 200
+        message: OK
+  - request:
+      body:
+        '{"messages":[{"role":"user","content":"What''s the weather in New York
+        and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":true,"stream_options":{"include_usage":true},"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
+        the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
+        location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
+        the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
+        timezone to get time for"}},"required":["timezone"]}}}]}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate
+        connection:
+          - keep-alive
+        content-length:
+          - "693"
+        content-type:
+          - application/json
+        cookie:
+          - __cf_bm=ImsddYvCWfxjvgCkc.PQteneAt1.05OrnpctX.H9.6Q-1750959978-1.0.1.1-nNSwp_XWJ00JfcdLpEJJIkWuFwKp_G8OsvkqQJ1Y.t3LIgdq_FjD6D6k6xGKWUB1YmzkYT5DEps7_NG5XU.HYhGXfOrQ_qYymycHaizxQ64;
+            _cfuvid=QM6hDu5SUhMw7byvxEvE9lxA0zi2uq0mxJsxgQgHJZQ-1750959978886-0.0.1.1-604800000
+        host:
+          - api.openai.com
+        user-agent:
+          - OpenAI/Python 1.92.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - "false"
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.92.0
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string:
+          'data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_WY2R9D3MQrwbUTvQFtua91zx","type":"function","function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"lo"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"catio"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"n\":
+          \"N"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ew
+          Y"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ork\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_ZwNK54BJyVcJ7sbNZzNOaHWW","type":"function","function":{"name":"get_time","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"ti"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"mezon"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"e\":
+          \"A"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"sia/"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"Tokyo"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"usage":null}
+
+
+          data: {"id":"chatcmpl-BmkxxakFMg9fugkFzAcDoNWSCaHLW","object":"chat.completion.chunk","created":1750959981,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_62a23a81ef","choices":[],"usage":{"prompt_tokens":94,"completion_tokens":48,"total_tokens":142,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}}}
+
+
+          data: [DONE]
+
+
+          '
+      headers:
+        CF-RAY:
+          - 955e860739ffc598-EWR
+        Connection:
+          - keep-alive
+        Content-Type:
+          - text/event-stream; charset=utf-8
+        Date:
+          - Thu, 26 Jun 2025 17:46:22 GMT
+        Server:
+          - cloudflare
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "1073"
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "1081"
+        x-ratelimit-limit-requests:
+          - "30000"
+        x-ratelimit-limit-tokens:
+          - "150000000"
+        x-ratelimit-remaining-requests:
+          - "29999"
+        x-ratelimit-remaining-tokens:
+          - "149999984"
+        x-ratelimit-reset-requests:
+          - 2ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_9b29e4d9569098cfbdd2d6afe87df7ba
+      status:
+        code: 200
+        message: OK
+  - request:
+      body:
+        '{"messages":[{"role":"user","content":"What''s the weather in New York
+        and the time in Tokyo?"}],"model":"gpt-4o-mini","stream":true,"stream_options":{"include_usage":true},"temperature":0,"tools":[{"type":"function","function":{"name":"get_weather","description":"Get
+        the weather for a location","parameters":{"type":"object","properties":{"location":{"type":"string","description":"The
+        location to get weather for"}},"required":["location"]}}},{"type":"function","function":{"name":"get_time","description":"Get
+        the current time for a timezone","parameters":{"type":"object","properties":{"timezone":{"type":"string","description":"The
+        timezone to get time for"}},"required":["timezone"]}}}]}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate
+        connection:
+          - keep-alive
+        content-length:
+          - "693"
+        content-type:
+          - application/json
+        cookie:
+          - __cf_bm=ImsddYvCWfxjvgCkc.PQteneAt1.05OrnpctX.H9.6Q-1750959978-1.0.1.1-nNSwp_XWJ00JfcdLpEJJIkWuFwKp_G8OsvkqQJ1Y.t3LIgdq_FjD6D6k6xGKWUB1YmzkYT5DEps7_NG5XU.HYhGXfOrQ_qYymycHaizxQ64;
+            _cfuvid=QM6hDu5SUhMw7byvxEvE9lxA0zi2uq0mxJsxgQgHJZQ-1750959978886-0.0.1.1-604800000
+        host:
+          - api.openai.com
+        user-agent:
+          - OpenAI/Python 1.92.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - "false"
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.92.0
+        x-stainless-raw-response:
+          - "true"
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string:
+          'data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_jTy9LzkVyn6cPzokhRZK3wac","type":"function","function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"lo"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"catio"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"n\":
+          \"N"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ew
+          Y"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ork\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_kHgzyiyayXAQ2OBYC1r5QSRg","type":"function","function":{"name":"get_time","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"ti"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"mezon"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"e\":
+          \"A"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"sia/"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"Tokyo"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","usage":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"usage":null}
+
+
+          data: {"id":"chatcmpl-BmkxyGlaywPrIMWVV0sU4x39kgJtA","object":"chat.completion.chunk","created":1750959982,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_34a54ae93c","choices":[],"usage":{"prompt_tokens":94,"completion_tokens":48,"total_tokens":142,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}}}
+
+
+          data: [DONE]
+
+
+          '
+      headers:
+        CF-RAY:
+          - 955e86124a90c598-EWR
+        Connection:
+          - keep-alive
+        Content-Type:
+          - text/event-stream; charset=utf-8
+        Date:
+          - Thu, 26 Jun 2025 17:46:23 GMT
+        Server:
+          - cloudflare
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "970"
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "981"
+        x-ratelimit-limit-requests:
+          - "30000"
+        x-ratelimit-limit-tokens:
+          - "150000000"
+        x-ratelimit-remaining-requests:
+          - "29999"
+        x-ratelimit-remaining-tokens:
+          - "149999984"
+        x-ratelimit-reset-requests:
+          - 2ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_62275476d620d1e6433d08dca31bbde0
+      status:
+        code: 200
+        message: OK
 version: 1
