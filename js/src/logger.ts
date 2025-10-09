@@ -71,7 +71,7 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { z, ZodError } from "zod";
+import { z, ZodError } from "zod/v3";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
