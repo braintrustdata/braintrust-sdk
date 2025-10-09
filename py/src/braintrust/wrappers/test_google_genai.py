@@ -11,7 +11,7 @@ from braintrust.wrappers.google_genai import setup_genai
 
 PROJECT_NAME = "test-genai-app"
 MODEL = "gemini-2.0-flash-001"
-FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "internal/golden/fixtures"
 
 
 @pytest.fixture(scope="module")
