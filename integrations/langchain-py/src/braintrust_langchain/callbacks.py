@@ -26,6 +26,8 @@ from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
 
+from braintrust_langchain import version
+
 _logger = logging.getLogger("braintrust_langchain")
 
 
@@ -104,6 +106,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 **({"tags": tags}),
                 **(event.get("metadata") or {}),
                 **({"runId": run_id, "parentRunId": parent_run_id} if self.debug else {}),
+                "integration": {"name": "langchain-py", "version": version},
             },
         }
 

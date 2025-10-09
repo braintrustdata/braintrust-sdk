@@ -235,7 +235,7 @@ async function testMixedContent() {
   return response;
 }
 
-// Test 14: Empty assistant message (prefill)
+// Test 12: Empty assistant message (prefill)
 async function testPrefill() {
   console.log("\n=== Test 14: Prefill ===");
   const response = await client.messages.create({
@@ -250,7 +250,7 @@ async function testPrefill() {
   return response;
 }
 
-// Test 15: Very short max_tokens
+// Test 13: Very short max_tokens
 async function testShortMaxTokens() {
   console.log("\n=== Test 15: Very Short Max Tokens ===");
   const response = await client.messages.create({
@@ -263,7 +263,7 @@ async function testShortMaxTokens() {
   return response;
 }
 
-// Test 16: Tool use (function calling)
+// Test 14: Tool use (function calling)
 async function testToolUse() {
   console.log("\n=== Test 16: Tool Use ===");
 
@@ -316,7 +316,7 @@ async function testToolUse() {
   return response;
 }
 
-// Test 17: Tool use with tool result (multi-turn)
+// Test 15: Tool use with tool result (multi-turn)
 async function testToolUseWithResult() {
   console.log("\n=== Test 17: Tool Use With Result ===");
 

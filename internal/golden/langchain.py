@@ -1,11 +1,12 @@
 import asyncio
 import base64
 from pathlib import Path
+from typing import Literal, Union
 
 from braintrust import flush, init_logger, start_span
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -75,7 +76,7 @@ def test_streaming():
     with start_span(name="test_streaming"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=200, streaming=True)),
-            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=200)),
+            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=200, streaming=True)),
         ):
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
@@ -83,11 +84,9 @@ def test_streaming():
                 prompt = ChatPromptTemplate.from_template(prompt_text)
                 chain = prompt | model
 
-                full_content = ""
                 for chunk in chain.stream({}):
                     if chunk.content:
                         print(chunk.content, end="", flush=True)
-                        full_content += chunk.content
                 print("\n")
 
 
@@ -150,8 +149,14 @@ def test_document_input():
                     messages = [
                         HumanMessage(
                             content=[
+                                {
+                                    "type": "file",
+                                    "file": {
+                                        "file_data": f"data:application/pdf;base64,{pdf_data}",
+                                        "filename": "test-document.pdf",
+                                    },
+                                },
                                 {"type": "text", "text": "What is in this document?"},
-                                {"type": "image_url", "image_url": {"url": f"data:application/pdf;base64,{pdf_data}"}},
                             ]
                         )
                     ]
@@ -176,26 +181,31 @@ def test_document_input():
 def test_temperature_variations():
     print("\n=== Test 7: Temperature Variations ===")
     with start_span(name="test_temperature_variations"):
-        temps = [0.0, 1.0, 0.7]
+        configs = [(0.0, 1.0), (1.0, 0.9), (0.7, 0.95)]
 
         for provider, models in (
             (
                 "openai",
-                [ChatOpenAI(model="gpt-4o", max_completion_tokens=50, temperature=t) for t in temps],
+                [
+                    ChatOpenAI(model="gpt-4o", max_completion_tokens=50, temperature=temp, top_p=top_p)
+                    for temp, top_p in configs
+                ],
             ),
             (
                 "anthropic",
-                [ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=50, temperature=t) for t in temps],
+                [
+                    ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=50, temperature=temp, top_p=top_p)
+                    for temp, top_p in configs
+                ],
             ),
         ):
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
-                topic = "creative"
-                for temp, model in zip(temps, models):
-                    print(f"Config: temp={temp}")
+                for (temp, top_p), model in zip(configs, models):
+                    print(f"Config: temp={temp}, top_p={top_p}")
                     prompt = ChatPromptTemplate.from_template("Say something {topic}.")
                     chain = prompt | model
-                    result = chain.invoke({"topic": topic})
+                    result = chain.invoke({"topic": "creative"})
                     print(result.content)
                     print()
 
@@ -207,7 +217,7 @@ def test_stop_sequences():
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500, stop_sequences=["END", "\n\n"])),
             (
                 "anthropic",
-                ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500, stop_sequences=["END", "\n\n"]),
+                ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500, stop_sequences=["END"]),
             ),
         ):
             with start_span(name=provider):
@@ -221,8 +231,26 @@ def test_stop_sequences():
                 print()
 
 
+def test_metadata():
+    print("\n=== Test 9: Metadata ===")
+    with start_span(name="test_metadata"):
+        for provider, model in (
+            ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=100, model_kwargs={"user": "test_user_123"})),
+            (
+                "anthropic",
+                ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=100),
+            ),
+        ):
+            with start_span(name=provider):
+                print(f"{provider.capitalize()}:")
+                messages = [HumanMessage(content="Hello!")]
+                result = model.invoke(messages)
+                print(result.content)
+                print()
+
+
 def test_long_context():
-    print("\n=== Test 9: Long Context ===")
+    print("\n=== Test 10: Long Context ===")
     with start_span(name="test_long_context"):
         long_text = "The quick brown fox jumps over the lazy dog. " * 100
 
@@ -242,7 +270,7 @@ def test_long_context():
 
 
 def test_mixed_content():
-    print("\n=== Test 10: Mixed Content Types ===")
+    print("\n=== Test 11: Mixed Content Types ===")
     with start_span(name="test_mixed_content"):
         image_path = FIXTURES_DIR / "test-image.png"
         with open(image_path, "rb") as f:
@@ -285,7 +313,7 @@ def test_mixed_content():
 
 
 def test_prefill():
-    print("\n=== Test 11: Prefill ===")
+    print("\n=== Test 12: Prefill ===")
     with start_span(name="test_prefill"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=200)),
@@ -304,7 +332,7 @@ def test_prefill():
 
 
 def test_short_max_tokens():
-    print("\n=== Test 12: Very Short Max Tokens ===")
+    print("\n=== Test 13: Very Short Max Tokens ===")
     with start_span(name="test_short_max_tokens"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=5)),
@@ -321,54 +349,30 @@ def test_short_max_tokens():
 
 
 def test_tool_use():
-    print("\n=== Test 13: Tool Use ===")
+    print("\n=== Test 14: Tool Use ===")
     with start_span(name="test_tool_use"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
             ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500)),
         ):
+
+            @tool
+            def get_weather(location: str, unit: str = "celsius") -> str:
+                """Get the current weather for a location.
+
+                Args:
+                    location: The city and state, e.g. San Francisco, CA
+                    unit: The unit of temperature (celsius or fahrenheit)
+                """
+                return f"22 degrees {unit} and sunny in {location}"
+
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
 
-                if provider == "openai":
-
-                    @tool
-                    def get_weather(location: str, unit: str = "celsius") -> str:
-                        """Get the current weather for a location.
-
-                        Args:
-                            location: The city and state, e.g. San Francisco, CA
-                            unit: The unit of temperature (celsius or fahrenheit)
-                        """
-                        return f"22 degrees {unit} and sunny in {location}"
-
-                    model_with_tools = model.bind_tools([get_weather])
-                    query = "What is the weather like in Paris, France?"
-                else:
-
-                    @tool
-                    def calculate(operation: str, a: float, b: float) -> float:
-                        """Perform a mathematical calculation.
-
-                        Args:
-                            operation: The mathematical operation (add, subtract, multiply, divide)
-                            a: First number
-                            b: Second number
-                        """
-                        if operation == "add":
-                            return a + b
-                        elif operation == "subtract":
-                            return a - b
-                        elif operation == "multiply":
-                            return a * b
-                        elif operation == "divide":
-                            return a / b if b != 0 else 0
-                        return 0
-
-                    model_with_tools = model.bind_tools([calculate])
-                    query = "What is 127 multiplied by 49?"
-
+                model_with_tools = model.bind_tools([get_weather])
+                query = "What is the weather like in Paris, France?"
                 result = model_with_tools.invoke(query)
+
                 print("Response content:")
                 if result.content:
                     print(f"Text: {result.content}")
@@ -381,28 +385,70 @@ def test_tool_use():
                 print()
 
 
-def test_batch():
-    print("\n=== Test 14: Batch Processing ===")
-    with start_span(name="test_batch"):
+def test_tool_use_with_result():
+    print("\n=== Test 15: Tool Use With Result ===")
+    with start_span(name="test_tool_use_with_result"):
         for provider, model in (
-            ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=50)),
-            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=50)),
+            ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
+            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=500)),
         ):
+
+            @tool
+            def calculate(
+                operation: Union[Literal["add"], Literal["subtract"], Literal["multiply"], Literal["divide"]],
+                a: float,
+                b: float,
+            ) -> float:
+                """Perform a mathematical calculation.
+
+                Args:
+                    operation: The mathematical operation (add, subtract, multiply, divide)
+                    a: First number
+                    b: Second number
+                """
+                if operation == "add":
+                    return a + b
+                elif operation == "subtract":
+                    return a - b
+                elif operation == "multiply":
+                    return a * b
+                elif operation == "divide":
+                    return a / b if b != 0 else 0
+                return 0
+
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
-                prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
-                chain = prompt | model
 
-                inputs = [{"number": "2"}, {"number": "5"}, {"number": "10"}]
-                results = chain.batch(inputs)
+                model_with_tools = model.bind_tools([calculate])
+                query = "What is 127 multiplied by 49?"
 
-                for i, result in enumerate(results):
-                    print(f"Input {inputs[i]['number']}: {result.content}")
+                # First request - model will use the tool
+                first_result = model_with_tools.invoke(query)
+
+                print("First response:")
+                if hasattr(first_result, "tool_calls") and first_result.tool_calls:
+                    tool_call = first_result.tool_calls[0]
+                    print(f"Tool called: {tool_call['name']}")
+                    print(f"Input: {tool_call['args']}")
+
+                    # Simulate tool execution
+                    result = 127 * 49
+
+                    # Second request - provide tool result
+                    messages = [
+                        HumanMessage(content=query),
+                        AIMessage(content="", tool_calls=[tool_call]),
+                        ToolMessage(content=str(result), tool_call_id=tool_call["id"]),
+                    ]
+
+                    second_result = model_with_tools.invoke(messages)
+                    print("\nSecond response (with tool result):")
+                    print(second_result.content)
                 print()
 
 
 async def test_async_generation():
-    print("\n=== Test 15: Async Generation ===")
+    print("\n=== Test 17: Async Generation ===")
     with start_span(name="test_async_generation"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=100)),
@@ -419,11 +465,11 @@ async def test_async_generation():
 
 
 async def test_async_streaming():
-    print("\n=== Test 16: Async Streaming ===")
+    print("\n=== Test 18: Async Streaming ===")
     with start_span(name="test_async_streaming"):
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=200, streaming=True)),
-            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=200)),
+            ("anthropic", ChatAnthropic(model="claude-sonnet-4-20250514", max_tokens=200, streaming=True)),
         ):
             with start_span(name=provider):
                 print(f"{provider.capitalize()}:")
@@ -449,12 +495,13 @@ def run_sync_tests():
         test_document_input,
         test_temperature_variations,
         test_stop_sequences,
+        test_metadata,
         test_long_context,
         test_mixed_content,
         test_prefill,
         test_short_max_tokens,
         test_tool_use,
-        test_batch,
+        test_tool_use_with_result,
     ]
 
     for test in tests:
