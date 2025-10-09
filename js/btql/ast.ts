@@ -354,5 +354,8 @@ export const parsedQuerySchema = z.strictObject({
   preview_length: z.number().int().nullish(),
   inference_budget: z.number().int().nullish(),
   sample: sampleSchema.nullish(),
+  spanFilter: exprSchema.nullish(),
+  traceFilter: exprSchema.nullish(),
+  finalFilter: exprSchema.nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;
