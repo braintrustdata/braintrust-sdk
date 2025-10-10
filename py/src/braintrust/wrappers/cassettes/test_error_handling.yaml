@@ -1,0 +1,59 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "Hello"}], "role": "user"}], "generationConfig":
+      {"maxOutputTokens": 100}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '108'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.41.0 gl-python/3.13.3
+      x-goog-api-client:
+      - google-genai-sdk/1.41.0 gl-python/3.13.3
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/there-is-no-such-model:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/02PMWvDUAyEd/+K481x2kKmbiWlUGiTDu1clFiJHzw/BUn2EvLfq8QZugjuu0Mn
+        nRsgsapoesY5RMi9dBxq9bhazGBgMzpeWRrCK/bgPSu32doqrY37vr1xZEMVx0HG2sVUvHy9Y2K1
+        LBXT046dFgh8z9l4Ook6z9kjV1ZyXkt1rr7EmkrBRzb/vJXCBcaM6EYJCjmAJsqFdoUxHwaK4ghk
+        /bd8YO+ls2W6v2NOPtr1m832+/dt+7N5TeFcmkvzB5MWqKEPAQAA
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Sun, 05 Oct 2025 17:04:14 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=42
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 404
+      message: Not Found
+version: 1

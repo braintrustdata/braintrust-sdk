@@ -19,8 +19,16 @@ import { configureNode } from "./node";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { SpanComponentsV3 } from "../util/span_identifier_v3";
+import { SpanComponentsV4 } from "../util/span_identifier_v4";
+import { base64ToUint8Array } from "../util/bytes";
 
 configureNode();
+
+function getExportVersion(exportedSpan: string): number {
+  const exportedBytes = base64ToUint8Array(exportedSpan);
+  return exportedBytes[0];
+}
 
 test("verify MemoryBackgroundLogger intercepts logs", async () => {
   // Log to memory for the tests.
@@ -1006,7 +1014,6 @@ describe("sensitive data redaction", () => {
     expect(exported.length).toBeGreaterThan(0);
 
     // The exported string should be parseable by SpanComponentsV3
-    const { SpanComponentsV3 } = await import("../util/span_identifier_v3");
     const components = SpanComponentsV3.fromStr(exported);
     expect(components.data.row_id).toBe(span.id);
     expect(components.data.span_id).toBe(span.spanId);
@@ -1035,6 +1042,202 @@ describe("sensitive data redaction", () => {
     // I'm not entirely sure why a span may be inside of a background event, but just in case
     const copy = deepCopyEvent({ input: span });
     expect(copy.input).toBe("<span>");
+  });
+
+  describe("export() format selection based on BRAINTRUST_OTEL_COMPAT", () => {
+    let originalEnv: string | undefined;
+
+    beforeEach(() => {
+      originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
+    });
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.BRAINTRUST_OTEL_COMPAT;
+      } else {
+        process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
+      }
+    });
+
+    test("uses SpanComponentsV3 when BRAINTRUST_OTEL_COMPAT is not set", async () => {
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+
+      const testLogger = initLogger({
+        projectName: "test-export-v3",
+        projectId: "test-project-id",
+      });
+      const span = testLogger.startSpan({ name: "test-span" });
+
+      const exported = await span.export();
+      expect(typeof exported).toBe("string");
+      expect(exported.length).toBeGreaterThan(0);
+
+      // Verify version byte is 3
+      expect(getExportVersion(exported)).toBe(3);
+
+      // The exported string should be parseable by both V3 and V4 (V4 can read V3)
+      const v3Components = SpanComponentsV3.fromStr(exported);
+      expect(v3Components.data.row_id).toBe(span.id);
+      expect(v3Components.data.span_id).toBe(span.spanId);
+      expect(v3Components.data.root_span_id).toBe(span.rootSpanId);
+
+      // V4 should also be able to read V3 format
+      const v4Components = SpanComponentsV4.fromStr(exported);
+      expect(v4Components.data.row_id).toBe(span.id);
+
+      span.end();
+    });
+
+    test("uses SpanComponentsV4 when BRAINTRUST_OTEL_COMPAT is true", async () => {
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+
+      const testLogger = initLogger({
+        projectName: "test-export-v4",
+        apiKey: "test-key",
+      });
+      const span = testLogger.startSpan({ name: "test-span-v4" });
+
+      const exported = await span.export();
+      expect(typeof exported).toBe("string");
+      expect(exported.length).toBeGreaterThan(0);
+
+      // Verify version byte is 4
+      expect(getExportVersion(exported)).toBe(4);
+
+      // The exported string should be parseable by V4
+      const v4Components = SpanComponentsV4.fromStr(exported);
+      expect(v4Components.data.row_id).toBe(span.id);
+      expect(v4Components.data.span_id).toBe(span.spanId);
+      expect(v4Components.data.root_span_id).toBe(span.rootSpanId);
+
+      span.end();
+    });
+
+    test("Logger.export() uses correct format based on env var", async () => {
+      // Test V3
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+      const loggerV3 = initLogger({
+        projectName: "test-logger-export-v3",
+        projectId: "test-project-id",
+      });
+      const exportedV3 = await loggerV3.export();
+      expect(typeof exportedV3).toBe("string");
+
+      const v3Parsed = SpanComponentsV3.fromStr(exportedV3);
+      expect(v3Parsed.data.object_type).toBeDefined();
+
+      // Test V4
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+      const loggerV4 = initLogger({
+        projectName: "test-logger-export-v4",
+        apiKey: "test-key",
+      });
+      const exportedV4 = await loggerV4.export();
+      expect(typeof exportedV4).toBe("string");
+
+      const v4Parsed = SpanComponentsV4.fromStr(exportedV4);
+      expect(v4Parsed.data.object_type).toBeDefined();
+    });
+
+    test("exported V4 span can be used as parent", async () => {
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+
+      const testLogger = initLogger({
+        projectName: "test-v4-parent",
+        apiKey: "test-key",
+      });
+
+      const parentSpan = testLogger.startSpan({ name: "parent-span-v4" });
+      const exported = await parentSpan.export();
+      parentSpan.end();
+
+      // Should be able to use V4 exported string as parent
+      const childSpan = testLogger.startSpan({
+        name: "child-span-v4",
+        parent: exported,
+      });
+
+      expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+      childSpan.end();
+    });
+
+    test("V4 format uses hex IDs (not UUIDs) when BRAINTRUST_OTEL_COMPAT is true", async () => {
+      process.env.BRAINTRUST_OTEL_COMPAT = "true";
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-hex-ids",
+        apiKey: "test-key",
+      });
+
+      const span = testLogger.startSpan({ name: "test-span-hex" });
+
+      // Verify the span has hex IDs (not UUIDs)
+      expect(span.spanId.length).toBe(16); // 16 hex chars = 8 bytes
+      expect(span.rootSpanId.length).toBe(32); // 32 hex chars = 16 bytes
+      expect(/^[0-9a-f]{16}$/.test(span.spanId)).toBe(true);
+      expect(/^[0-9a-f]{32}$/.test(span.rootSpanId)).toBe(true);
+
+      // Verify these are NOT UUIDs (no dashes)
+      expect(span.spanId).not.toContain("-");
+      expect(span.rootSpanId).not.toContain("-");
+
+      // Export the span
+      const exported = await span.export();
+
+      // Parse the exported data with V4
+      const parsed = SpanComponentsV4.fromStr(exported);
+
+      // Verify the parsed data has the same hex IDs
+      expect(parsed.data.span_id).toBe(span.spanId);
+      expect(parsed.data.root_span_id).toBe(span.rootSpanId);
+
+      // V4 should efficiently encode hex IDs in binary format
+      // The exported string should be shorter than V3 would produce with hex IDs
+      // (V4 uses 8 bytes for span_id, 16 bytes for root_span_id in binary)
+      const rawBytes = base64ToUint8Array(exported);
+
+      // Check that version byte is 4
+      expect(rawBytes[0]).toBe(4);
+
+      span.end();
+    });
+
+    test("V3 format uses UUIDs when BRAINTRUST_OTEL_COMPAT is false", async () => {
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+      _exportsForTestingOnly.resetIdGenStateForTests();
+
+      const testLogger = initLogger({
+        projectName: "test-uuid-ids",
+        projectId: "test-project-id",
+      });
+
+      const span = testLogger.startSpan({ name: "test-span-uuid" });
+
+      // Verify the span has UUID format (with dashes)
+      expect(span.spanId.length).toBe(36); // UUID format
+      expect(span.spanId).toContain("-");
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(span.spanId).toMatch(uuidRegex);
+
+      // Export the span
+      const exported = await span.export();
+
+      // Parse the exported data with V3
+      const parsed = SpanComponentsV3.fromStr(exported);
+
+      // Verify the parsed data has the same UUID
+      expect(parsed.data.span_id).toBe(span.spanId);
+
+      // V3 uses UUID compression in binary format
+      const rawBytes = base64ToUint8Array(exported);
+
+      // Check that version byte is 3
+      expect(rawBytes[0]).toBe(3);
+
+      span.end();
+    });
   });
 
   describe("ID Generation Integration", () => {
