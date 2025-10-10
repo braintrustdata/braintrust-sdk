@@ -1571,6 +1571,67 @@ export class ReadonlyAttachment {
   }
 }
 
+/**
+ * Represents a JSON object that should be stored as an attachment.
+ *
+ * `JSONAttachment` is a convenience function that creates an `Attachment`
+ * from JSON data. It's particularly useful for large JSON objects that
+ * would otherwise bloat the trace size.
+ *
+ * The JSON data is automatically serialized and stored as an attachment
+ * with content type "application/json".
+ */
+export class JSONAttachment extends Attachment {
+  /**
+   * Construct a JSONAttachment from a JSON-serializable object.
+   *
+   * @param data The JSON object to attach. Must be JSON-serializable.
+   * @param options Additional options:
+   * - `filename`: The filename for the attachment (defaults to "data.json")
+   * - `pretty`: Whether to pretty-print the JSON (defaults to false)
+   * - `state`: (Optional) For internal use.
+   *
+   * @example
+   * ```typescript
+   * const largeTranscript = [
+   *   { role: "user", content: "..." },
+   *   { role: "assistant", content: "..." },
+   *   // ... many more messages
+   * ];
+   *
+   * logger.log({
+   *   input: {
+   *     type: "chat",
+   *     transcript: new JSONAttachment(largeTranscript, { filename: "transcript.json" })
+   *   }
+   * });
+   * ```
+   */
+  constructor(
+    data: unknown,
+    options?: {
+      filename?: string;
+      pretty?: boolean;
+      state?: BraintrustState;
+    },
+  ) {
+    const { filename = "data.json", pretty = false, state } = options ?? {};
+
+    // Serialize the JSON data
+    const jsonString = pretty
+      ? JSON.stringify(data, null, 2)
+      : JSON.stringify(data);
+    const blob = new Blob([jsonString], { type: "application/json" });
+
+    super({
+      data: blob,
+      filename,
+      contentType: "application/json",
+      state,
+    });
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -1981,6 +2042,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   public get id(): Promise<string> {
     return (async () => (await this.project).id)();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   private parentObjectType() {
@@ -4845,6 +4910,10 @@ export class Experiment
     })();
   }
 
+  public get loggingState(): BraintrustState {
+    return this.state;
+  }
+
   /**
    * Wait for the experiment ID to be resolved. This is useful for ensuring the ID
    * is available synchronously in child spans (for OTEL parent attributes).
@@ -5157,6 +5226,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return (async () => {
       return (await this.lazyMetadata.get()).experiment.name;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -5818,6 +5891,10 @@ export class Dataset<
     return (async () => {
       return (await this.lazyMetadata.get()).project;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {
