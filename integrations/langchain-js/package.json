@@ -23,7 +23,7 @@
   "author": "Braintrust Data Inc.",
   "license": "MIT",
   "devDependencies": {
-    "braintrust": "^0.3.7",
+    "braintrust": "workspace:*",
     "@langchain/core": "^0.3.42",
     "@langchain/langgraph": "^0.2.25",
     "@langchain/openai": "^0.3.17",
@@ -38,7 +38,7 @@
   "dependencies": {},
   "peerDependencies": {
     "@langchain/core": ">=0.3.42 <0.4.0",
-    "braintrust": "^0.3.7"
+    "braintrust": "^0.4.1"
   },
   "peerDependenciesMeta": {
     "braintrust": {
