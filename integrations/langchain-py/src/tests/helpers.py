@@ -1,5 +1,4 @@
 from typing import Any, Dict, List, Sequence, Union, cast
-from unittest.mock import ANY
 
 from braintrust.logger import Span
 
@@ -39,9 +38,9 @@ def assert_matches_object(
     """
     if isinstance(expected, (list, tuple)):
         assert isinstance(actual, (list, tuple)), f"Expected sequence but got {type(actual)}"
-        assert len(actual) >= len(
-            expected
-        ), f"Expected sequence of length >= {len(expected)} but got length {len(actual)}"
+        assert len(actual) >= len(expected), (
+            f"Expected sequence of length >= {len(expected)} but got length {len(actual)}"
+        )
         if not ignore_order:
             for i, expected_item in enumerate(expected):
                 assert_matches_object(actual[i], expected_item)
@@ -61,8 +60,6 @@ def assert_matches_object(
         assert isinstance(actual, dict), f"Expected dict but got {type(actual)}"
         for k, v in expected.items():
             assert k in actual, f"Missing key {k}"
-            if v is ANY:
-                continue  # ANY matches anything
             if isinstance(v, (dict, list, tuple)):
                 assert_matches_object(cast(RecursiveValue, actual[k]), cast(RecursiveValue, v))
             else:

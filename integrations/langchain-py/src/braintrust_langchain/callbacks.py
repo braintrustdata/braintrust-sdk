@@ -13,21 +13,19 @@ from typing import (
     Set,
     TypedDict,
     Union,
+    cast,
 )
 from uuid import UUID
 
 import braintrust
 from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
-from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
-
-from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")
 
@@ -107,12 +105,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 **({"tags": tags}),
                 **(event.get("metadata") or {}),
                 **({"runId": run_id, "parentRunId": parent_run_id} if self.debug else {}),
-                "braintrust": {
-                    "integration_name": "langchain-py",
-                    "integration_version": version,
-                    "sdk_version": sdk_version,
-                    "language": "python",
-                },
             },
         }
 
@@ -145,7 +137,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self.spans[run_id] = span
         return span
 
-    # TODO: serialize input, output, metadata correctly
     def _end_span(
         self,
         run_id: UUID,
@@ -200,7 +191,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: response=
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error))
 
     def on_chain_error(
         self,
@@ -210,7 +201,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: some metadata
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error))
 
     def on_tool_error(
         self,
@@ -220,7 +211,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error))
 
     def on_retriever_error(
         self,
@@ -230,7 +221,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error))
 
     # Agent Methods
     def on_agent_action(
@@ -246,7 +237,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             run_id,
             type=SpanTypeAttribute.LLM,
             name=action.tool,
-            event={"input": action, "metadata": {"run_id": run_id, "parent_run_id": parent_run_id, **kwargs}},
+            event={
+                "input": action.tool_input,  # type: ignore[arg-type]
+            },
         )
 
     def on_agent_finish(
@@ -257,7 +250,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=finish, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=finish.return_values)  # type: ignore
 
     def on_chain_start(
         self,
@@ -271,13 +264,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
-        tags = tags or []
-
-        # avoids extra logs that seem not as useful esp. with langgraph
-        if "langsmith:hidden" in tags:
-            self.skipped_runs.add(run_id)
-            return
-
         metadata = metadata or {}
         resolved_name = (
             metadata.get("langgraph_node")
@@ -287,22 +273,18 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             or "Chain"
         )
 
+        tags = tags or []
+
+        # avoids extra logs that seem not as useful esp. with langgraph
+        if "langsmith:hidden" in tags:
+            self.skipped_runs.add(run_id)
+            return
+
         self._start_span(
             parent_run_id,
             run_id,
             name=resolved_name,
-            event={
-                "input": inputs,
-                "tags": tags,
-                "metadata": {
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
-                    "serialized": serialized,
-                    "name": name,
-                    "metadata": metadata,
-                    **kwargs,
-                },
-            },
+            event={"input": inputs, "metadata": {"tags": tags, **metadata, **kwargs}},
         )
 
     def on_chain_end(
@@ -314,9 +296,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(
-            run_id, output=outputs, tags=tags, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs}
-        )
+        self._end_span(run_id, output=output_from_chain_values(outputs), tags=tags)
 
     def on_llm_start(
         self,
@@ -341,12 +321,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "input": prompts,
                 "tags": tags,
                 "metadata": {
-                    "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
-                    "name": name,
-                    "metadata": metadata,
-                    **kwargs,
+                    **self.clean_metadata(metadata),
+                    **kwargs["invocation_params"],
                 },
             },
         )
@@ -372,16 +348,13 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Chat Model",
             type=SpanTypeAttribute.LLM,
             event={
-                "input": messages,
+                "input": input_from_messages(messages),
                 "tags": tags,
-                "metadata": (
+                "metadata": clean_object(
                     {
-                        "run_id": run_id,
-                        "parent_run_id": parent_run_id,
-                        "serialized": serialized,
-                        "invocation_params": invocation_params,
-                        "metadata": metadata or {},
-                        **kwargs,
+                        **self.clean_metadata(metadata),
+                        **extract_call_args(serialized, invocation_params, metadata),
+                        "tools": invocation_params.get("tools"),
                     }
                 ),
             },
@@ -399,20 +372,16 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         if run_id not in self.spans:
             return
 
+        metadata = {k: v for k, v in _to_dict(response).items() if k not in ("llm_output", "generations")}
         metrics = _get_metrics_from_response(response)
         model_name = _get_model_name_from_response(response)
 
         self._end_span(
             run_id,
-            output=response,
+            output=output_from_generations(response.generations),
             metrics=metrics,
             tags=tags,
-            metadata={
-                "model": model_name,
-                "run_id": run_id,
-                "parent_run_id": parent_run_id,
-                **kwargs,
-            },
+            metadata=self.clean_metadata({**metadata, "model": model_name}),
         )
 
     def on_tool_start(
@@ -436,14 +405,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "input": inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,
                 "metadata": {
-                    "metadata": metadata,
-                    "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
-                    "input_str": input_str,
-                    "input": safe_parse_serialized_json(input_str),
-                    "inputs": inputs,
-                    **kwargs,
+                    **self.clean_metadata(metadata),
+                    **extract_call_args(serialized, kwargs.get("invocation_params") or {}, metadata),
                 },
             },
         )
@@ -456,7 +419,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=output, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=output_from_tool_output(output))
 
     def on_retriever_start(
         self,
@@ -479,12 +442,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "input": query,
                 "tags": tags,
                 "metadata": {
-                    "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
-                    "metadata": metadata,
-                    "name": name,
-                    **kwargs,
+                    **self.clean_metadata(metadata),
+                    **extract_call_args(serialized, kwargs.get("invocation_params") or {}, metadata),
                 },
             },
         )
@@ -497,7 +456,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=documents, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=documents)
 
     def on_llm_new_token(
         self,
@@ -543,6 +502,83 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         pass
 
 
+def extract_call_args(
+    llm: Dict[str, Any],
+    invocation_params: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    metadata = metadata or {}
+
+    # NOTE: These vary by langchain model used. We try to normalize them here.
+    args = clean_object(
+        {
+            "model": pick(invocation_params.get("model"), metadata.get("ls_model_name"), llm.get("name")),
+            "temperature": pick(invocation_params.get("temperature"), metadata.get("ls_temperature")),
+            "top_p": pick(invocation_params.get("top_p"), invocation_params.get("top_k")),
+            "top_k": pick(invocation_params.get("top_k"), invocation_params.get("top_p")),
+            "max_tokens": pick(invocation_params.get("max_tokens"), invocation_params.get("max_output_tokens")),
+            "frequency_penalty": invocation_params.get("frequency_penalty"),
+            "presence_penalty": invocation_params.get("presence_penalty"),
+            "response_format": invocation_params.get("response_format"),
+            "tool_choice": invocation_params.get("tool_choice"),
+            "function_call": invocation_params.get("function_call"),
+            "n": invocation_params.get("n"),
+            "stop": pick(invocation_params.get("stop"), invocation_params.get("stop_sequence")),
+        }
+    )
+
+    # Failsafe let's provide the invocation params as is
+    return invocation_params if not args else args
+
+
+def pick(*values: Any) -> Any:
+    return next((value for value in values if value is not None), None)
+
+
+def output_from_generations(generations: Union[List[List[Any]], List[Any]]) -> List[Any]:
+    parsed: List[Any] = []
+    for batch in generations:
+        if isinstance(batch, list):
+            parsed.extend(map(parse_generation, batch))  # pyright: ignore
+        else:
+            parsed.append(parse_generation(batch))
+    return parsed
+
+
+def parse_generation(generation: Any) -> Any:
+    if hasattr(generation, "message"):
+        return get_message_content(generation.message)
+    if hasattr(generation, "text"):
+        return generation.text
+    # Give up!
+    return None
+
+
+def input_from_messages(messages: List[List[Any]]) -> List[Any]:
+    return [get_message_content(message) for batch in messages for message in batch]
+
+
+def get_message_content(message: Any) -> Dict[str, Any]:
+    role = getattr(message, "name", None) or message.type
+
+    if message.type == "human":
+        role = "user"
+    elif message.type == "ai":
+        role = "assistant"
+    elif message.type == "system":
+        role = "system"
+
+    return clean_object(
+        {
+            "content": message.content,
+            "role": role,
+            "tool_calls": getattr(message, "tool_calls", None),
+            "status": getattr(message, "status", None),
+            "artifact": getattr(message, "artifact", None),
+        }
+    )
+
+
 def clean_object(obj: Dict[str, Any]) -> Dict[str, Any]:
     return {
         k: v
@@ -556,6 +592,64 @@ def safe_parse_serialized_json(input_str: str) -> Any:
         return json.loads(input_str)
     except:
         return input_str
+
+
+def output_from_tool_output(output: Any) -> Optional[Dict[str, Any]]:
+    return get_message_content(output) if isinstance(output, ToolMessage) else None
+
+
+def flatten_list(items: List[Any]) -> List[Any]:
+    result: List[Any] = []
+    for item in items:
+        if isinstance(item, list):
+            result.extend(cast(List[Any], item))
+        else:
+            result.append(item)
+    return result
+
+
+def output_from_chain_values(output: Any) -> Any:
+    output_list: List[Any] = [output] if not isinstance(output, list) else output
+
+    processed = [parse_chain_value(x) for x in output_list]
+
+    parsed = flatten_list(processed)
+
+    return parsed[0] if len(parsed) == 1 else parsed
+
+
+def parse_chain_value(output: Any) -> Any:
+    if isinstance(output, str):
+        return output
+
+    if not output:
+        return output
+
+    if hasattr(output, "content"):
+        return output.content
+
+    if hasattr(output, "messages"):
+        return [parse_chain_value(m) for m in output.messages]
+
+    if hasattr(output, "value"):
+        return output.value
+
+    if hasattr(output, "kwargs"):
+        return parse_chain_value(output.kwargs)
+
+    # XXX: RunnableMap returns an object with keys for each sequence
+    if isinstance(output, dict):
+        output = cast(Dict[str, Any], output)
+        return {k: parse_chain_value(v) for k, v in cast(Dict[str, Any], output).items()}
+
+    # Give up! Let's assume the user will use the raw output.
+    return output
+
+
+def input_from_chain_values(inputs: Any) -> Any:
+    inputs_list = [inputs] if not isinstance(inputs, list) else inputs
+    parsed = [parse_chain_value(x) for x in inputs_list]
+    return parsed[0] if len(parsed) == 1 else parsed
 
 
 def last_item(items: List[Any]) -> Any:
@@ -615,3 +709,11 @@ def _get_metrics_from_response(response: LLMResult):
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
 
     return clean_object(metrics)
+
+
+def _to_dict(obj: Any) -> Dict[str, Any]:
+    """Convert a Pydantic object to dict, with backwards compatibility for v1/v2."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()  # Pydantic v2
+    else:
+        return obj.dict()  # Pydantic v1
