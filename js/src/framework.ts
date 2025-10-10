@@ -621,6 +621,17 @@ export async function Eval<
             dataset: Dataset.isDataset(data) ? data : undefined,
           });
 
+    // Ensure experiment ID is resolved before tasks start for OTEL parent attribute support
+    // The Experiment constructor starts resolution (fire-and-forget), but we await here to ensure completion
+    // Only needed when OTEL compat mode is enabled
+    if (
+      experiment &&
+      typeof process !== "undefined" &&
+      process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true"
+    ) {
+      await experiment._waitForId();
+    }
+
     if (experiment && options.onStart) {
       const summary = await experiment.summarize({ summarizeScores: false });
       options.onStart(summary);

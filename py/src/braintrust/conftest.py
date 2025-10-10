@@ -31,3 +31,8 @@ def override_app_url_for_tests():
 
         if original_app_public_url is not None:
             os.environ["BRAINTRUST_APP_PUBLIC_URL"] = original_app_public_url
+
+
+@pytest.fixture(autouse=True)
+def setup_braintrust():
+    os.environ.setdefault("GOOGLE_API_KEY", "your_google_api_key_here")
