@@ -1,12 +1,12 @@
 [project]
 name = "braintrust-langchain"
-version = "0.0.5"
+version = "0.1.0"
 description = "Integration for LangChain and Braintrust Tracing"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "braintrust>=0.2.1",
-    "langchain",
+    "langchain>=0.3.27",
 ]
 license = "MIT"
 authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]
