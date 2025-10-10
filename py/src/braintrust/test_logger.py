@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import time
@@ -8,7 +9,16 @@ from unittest import TestCase
 import pytest
 
 import braintrust
-from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
+from braintrust import (
+    Attachment,
+    BaseAttachment,
+    ExternalAttachment,
+    JSONAttachment,
+    LazyValue,
+    Prompt,
+    init_logger,
+    logger,
+)
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
 from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
@@ -2071,3 +2081,110 @@ def test_logger_export_respects_otel_compat_enabled():
         from braintrust.span_identifier_v4 import SpanComponentsV4
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
+
+
+class TestJSONAttachment(TestCase):
+    def test_create_attachment_from_json_data(self):
+        """Test creating an attachment from JSON data."""
+        test_data = {
+            "foo": "bar",
+            "nested": {
+                "array": [1, 2, 3],
+                "bool": True,
+            },
+        }
+
+        attachment = JSONAttachment(test_data)
+
+        self.assertEqual(attachment.reference["type"], "braintrust_attachment")
+        self.assertEqual(attachment.reference["filename"], "data.json")
+        self.assertEqual(attachment.reference["content_type"], "application/json")
+        self.assertIn("key", attachment.reference)
+
+        data = attachment.data
+        parsed = json.loads(data.decode("utf-8"))
+        self.assertEqual(parsed, test_data)
+
+    def test_custom_filename(self):
+        """Test that custom filename is respected."""
+        attachment = JSONAttachment({"test": "data"}, filename="custom.json")
+
+        self.assertEqual(attachment.reference["filename"], "custom.json")
+
+    def test_pretty_print(self):
+        """Test pretty printing JSON data."""
+        test_data = {"a": 1, "b": 2}
+        attachment = JSONAttachment(test_data, pretty=True)
+
+        data = attachment.data
+        text = data.decode("utf-8")
+        self.assertEqual(text, '{\n  "a": 1,\n  "b": 2\n}')
+
+    def test_large_transcript_scenario(self):
+        """Test handling large transcript data."""
+        large_transcript = [
+            {
+                "role": "user" if i % 2 == 0 else "assistant",
+                "content": f"Message {i}",
+                "timestamp": time.time() + i,
+            }
+            for i in range(1000)
+        ]
+
+        attachment = JSONAttachment(large_transcript, filename="transcript.json")
+
+        self.assertEqual(attachment.reference["filename"], "transcript.json")
+        self.assertEqual(attachment.reference["content_type"], "application/json")
+
+    def test_arrays_and_primitives(self):
+        """Test handling arrays and primitive values."""
+        array_data = [1, 2, 3, 4, 5]
+        attachment = JSONAttachment(array_data)
+
+        data = attachment.data
+        parsed = json.loads(data.decode("utf-8"))
+        self.assertEqual(parsed, array_data)
+
+    def test_integration_with_logger_patterns(self):
+        """Test the intended usage pattern with logger."""
+        log_data = {
+            "input": {
+                "type": "nameOfPrompt",
+                "transcript": JSONAttachment(
+                    [
+                        {"role": "user", "content": "Hello"},
+                        {"role": "assistant", "content": "Hi there!"},
+                    ]
+                ),
+                "configValue1": 123,
+                "configValue2": True,
+            },
+            "output": [{"type": "text", "value": "Generated response"}],
+            "metadata": {
+                "sessionId": "123",
+                "userId": "456",
+                "renderedPrompt": JSONAttachment(
+                    "This is a very long prompt template...",
+                    filename="prompt.json",
+                ),
+            },
+        }
+
+        self.assertIsInstance(log_data["input"]["transcript"], JSONAttachment)
+        self.assertIsInstance(log_data["metadata"]["renderedPrompt"], JSONAttachment)
+
+    def test_extract_attachments_with_json_attachment(self):
+        """Test that JSONAttachment works with _extract_attachments."""
+        json_attachment = JSONAttachment({"foo": "bar"}, filename="test.json")
+        event = {
+            "input": {
+                "data": json_attachment,
+            },
+        }
+
+        attachments: List[BaseAttachment] = []
+        _extract_attachments(event, attachments)
+
+        self.assertEqual(len(attachments), 1)
+        self.assertIs(attachments[0], json_attachment)
+        self.assertEqual(event["input"]["data"], json_attachment.reference)
