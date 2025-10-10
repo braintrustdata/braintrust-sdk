@@ -15,7 +15,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from .conftest import LoggerMemoryLogger
-from .helpers import assert_matches_object, find_spans_by_attributes
+from .helpers import ANY, assert_matches_object, find_spans_by_attributes
 from .types import Span
 
 
@@ -38,7 +38,7 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
     chain.invoke({"number": "2"}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
     spans = memory_logger.pop()
-    assert len(spans) > 0
+    assert len(spans) == 3
 
     root_span_id = spans[0]["span_id"]
 
@@ -51,6 +51,18 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
                     "type": "task",
                 },
                 "input": {"number": "2"},
+                "output": {
+                    "content": ANY,  # LLM response text
+                    "additional_kwargs": ANY,
+                    "response_metadata": ANY,
+                    "type": "ai",
+                    "name": ANY,
+                    "id": ANY,
+                    "example": ANY,
+                    "tool_calls": ANY,
+                    "invalid_tool_calls": ANY,
+                    "usage_metadata": ANY,
+                },
                 "metadata": {"tags": []},
                 "span_id": root_span_id,
                 "root_span_id": root_span_id,
@@ -58,7 +70,18 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatPromptTemplate"},
                 "input": {"number": "2"},
-                "output": "What is 1 + 2?",
+                "output": {
+                    "messages": [
+                        {
+                            "content": ANY,  # Formatted prompt text
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                        }
+                    ]
+                },
                 "metadata": {"tags": ["seq:step:1"]},
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
@@ -66,19 +89,57 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
                 "input": [
-                    {"content": "What is 1 + 2?", "role": "user"},
+                    [
+                        {
+                            "content": ANY,  # Prompt message content
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                            "example": ANY,
+                        }
+                    ]
                 ],
-                "output": [
-                    {"content": "1 + 2 equals 3.", "role": "assistant"},
-                ],
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "text": ANY,  # Generated text
+                                "generation_info": ANY,
+                                "type": "ChatGeneration",
+                                "message": {
+                                    "content": ANY,  # Message content
+                                    "additional_kwargs": ANY,
+                                    "response_metadata": ANY,
+                                    "type": "ai",
+                                    "name": None,
+                                    "id": ANY,
+                                },
+                            }
+                        ]
+                    ],
+                    "llm_output": {
+                        "token_usage": {
+                            "completion_tokens": ANY,
+                            "prompt_tokens": ANY,
+                            "total_tokens": ANY,
+                        },
+                        "model_name": "gpt-4o-mini-2024-07-18",
+                    },
+                    "run": None,
+                    "type": "LLMResult",
+                },
+                "metrics": {
+                    "start": ANY,
+                    "total_tokens": ANY,
+                    "prompt_tokens": ANY,
+                    "completion_tokens": ANY,
+                    "end": ANY,
+                },
                 "metadata": {
                     "tags": ["seq:step:2"],
                     "model": "gpt-4o-mini-2024-07-18",
-                    "temperature": 1,
-                    "top_p": 1,
-                    "frequency_penalty": 0,
-                    "presence_penalty": 0,
-                    "n": 1,
                 },
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
@@ -104,6 +165,8 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
     )
 
     spans = memory_logger.pop()
+    assert len(spans) == 3
+
     root_span_id = spans[0]["span_id"]
 
     assert_matches_object(
@@ -115,6 +178,12 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
                     "type": "task",
                 },
                 "input": {"input": "What's your name?", "history": "Assistant: Hello! How can I assist you today?"},
+                "output": {
+                    "content": ANY,  # LLM response
+                    "additional_kwargs": ANY,
+                    "response_metadata": ANY,
+                    "type": "ai",
+                },
                 "metadata": {"tags": ["test"]},
                 "span_id": root_span_id,
                 "root_span_id": root_span_id,
@@ -122,7 +191,18 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatPromptTemplate"},
                 "input": {"input": "What's your name?", "history": "Assistant: Hello! How can I assist you today?"},
-                "output": "Assistant: Hello! How can I assist you today? User: What's your name?",
+                "output": {
+                    "messages": [
+                        {
+                            "content": ANY,  # Formatted prompt with history
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                        }
+                    ]
+                },
                 "metadata": {"tags": ["seq:step:1", "test"]},
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
@@ -130,18 +210,58 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
                 "input": [
-                    {
-                        "content": "Assistant: Hello! How can I assist you today? User: What's your name?",
-                        "role": "user",
-                    },
+                    [
+                        {
+                            "content": ANY,  # Prompt with history
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                            "example": ANY,
+                        }
+                    ]
                 ],
-                "output": [
-                    {
-                        "content": "Assistant: I don't have a personal name, but you can call me Assistant. How can I help you today?",
-                        "role": "assistant",
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "text": ANY,  # Generated response
+                                "generation_info": ANY,
+                                "type": "ChatGeneration",
+                                "message": {
+                                    "content": ANY,
+                                    "additional_kwargs": ANY,
+                                    "response_metadata": ANY,
+                                    "type": "ai",
+                                    "name": None,
+                                    "id": ANY,
+                                },
+                            }
+                        ]
+                    ],
+                    "llm_output": {
+                        "token_usage": {
+                            "completion_tokens": ANY,
+                            "prompt_tokens": ANY,
+                            "total_tokens": ANY,
+                        },
+                        "model_name": "gpt-4o-mini-2024-07-18",
                     },
-                ],
-                "metadata": {"tags": ["seq:step:2", "test"], "model": "gpt-4o-mini-2024-07-18"},
+                    "run": None,
+                    "type": "LLMResult",
+                },
+                "metrics": {
+                    "start": ANY,
+                    "total_tokens": ANY,
+                    "prompt_tokens": ANY,
+                    "completion_tokens": ANY,
+                    "end": ANY,
+                },
+                "metadata": {
+                    "tags": ["seq:step:2", "test"],
+                    "model": "gpt-4o-mini-2024-07-18",
+                },
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
             },
@@ -203,67 +323,71 @@ def test_tool_usage(logger_memory_logger: LoggerMemoryLogger):
                     "type": "llm",
                 },
                 "input": [
-                    {
-                        "content": "What is 3 * 12",
-                        "role": "user",
-                    },
+                    [
+                        {
+                            "content": ANY,  # User query
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                            "example": ANY,
+                        }
+                    ]
                 ],
                 "metadata": {
                     "tags": [],
                     "model": "gpt-4o-mini-2024-07-18",
-                    "temperature": 1,
-                    "top_p": 1,
-                    "frequency_penalty": 0,
-                    "presence_penalty": 0,
-                    "n": 1,
-                    "tools": [
-                        {
-                            "type": "function",
-                            "function": {
-                                "description": "Can perform mathematical operations.",
-                                "name": "calculator",
-                                "parameters": {
-                                    "properties": {
-                                        "input": {
-                                            "properties": {
-                                                "number1": {
-                                                    "description": "The first number to operate on.",
-                                                    "type": "number",
-                                                },
-                                                "number2": {
-                                                    "description": "The second number to operate on.",
-                                                    "type": "number",
-                                                },
-                                                "operation": {
-                                                    "description": "The type of operation to execute.",
-                                                    "enum": ["add", "subtract", "multiply", "divide"],
-                                                    "type": "string",
-                                                },
-                                            },
-                                            "required": ["operation", "number1", "number2"],
-                                            "type": "object",
-                                        }
-                                    },
-                                    "required": ["input"],
-                                    "type": "object",
-                                },
-                            },
-                        }
-                    ],
-                },
-                "output": [
-                    {
-                        "content": "",
-                        "role": "assistant",
-                        "tool_calls": [
+                    "invocation_params": {
+                        "tools": [
                             {
-                                "name": "calculator",
-                                "args": {"input": {"operation": "multiply", "number1": 3, "number2": 12}},
-                                "type": "tool_call",
+                                "type": "function",
+                                "function": {
+                                    "name": "calculator",
+                                    "description": "Can perform mathematical operations.",
+                                    "parameters": ANY,  # Complex JSON schema
+                                },
                             }
                         ],
-                    }
-                ],
+                    },
+                },
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "generation_info": ANY,
+                                "type": "ChatGeneration",
+                                "message": {
+                                    "content": ANY,  # May be empty for tool calls
+                                    "type": "ai",
+                                    "additional_kwargs": {
+                                        "tool_calls": ANY,  # Tool call details
+                                    },
+                                    "response_metadata": ANY,
+                                    "name": None,
+                                    "id": ANY,
+                                },
+                            }
+                        ]
+                    ],
+                    "llm_output": {
+                        "token_usage": {
+                            "completion_tokens": ANY,
+                            "prompt_tokens": ANY,
+                            "total_tokens": ANY,
+                        },
+                        "model_name": "gpt-4o-mini-2024-07-18",
+                    },
+                    "run": None,
+                    "type": "LLMResult",
+                },
+                "metrics": {
+                    "start": ANY,
+                    "total_tokens": ANY,
+                    "prompt_tokens": ANY,
+                    "completion_tokens": ANY,
+                    "end": ANY,
+                },
             }
         ],
     )
@@ -304,31 +428,59 @@ def test_parallel_execution(logger_memory_logger: LoggerMemoryLogger):
     llm_spans = find_spans_by_attributes(spans, name="ChatOpenAI")
     assert len(llm_spans) == 2
 
-    # Find the specific spans for joke and poem by matching their input content
-    joke_llm_span = next((s for s in llm_spans if "Tell me a joke about bear" in s["input"][0]["content"]), None)
-    poem_llm_span = next((s for s in llm_spans if "write a 2-line poem about bear" in s["input"][0]["content"]), None)
-
-    # Check that we found both spans
-    assert joke_llm_span is not None, "Could not find joke LLM span"
-    assert poem_llm_span is not None, "Could not find poem LLM span"
-
-    # Verify common metadata for both spans
-    for span in [joke_llm_span, poem_llm_span]:
-        assert span["metadata"]["tags"] == ["seq:step:2"]
-        assert span["metadata"]["model"] == "gpt-4o-mini-2024-07-18"
-        assert span["metadata"]["temperature"] == 1
-        assert span["metadata"]["top_p"] == 1
-        assert span["metadata"]["frequency_penalty"] == 0
-        assert span["metadata"]["presence_penalty"] == 0
-        assert span["metadata"]["n"] == 1
-
-    # Just verify that both outputs exist and are non-empty strings
-    assert joke_llm_span["output"][0]["content"]
-    assert poem_llm_span["output"][0]["content"]
-
-    # Optionally check that outputs contain expected keywords
-    assert "bear" in joke_llm_span["output"][0]["content"].lower() or "joke" in joke_llm_span["output"][0]["role"]
-    assert "bear" in poem_llm_span["output"][0]["content"].lower() or "poem" in poem_llm_span["output"][0]["role"]
+    # Verify both LLM spans have expected structure
+    for span in llm_spans:
+        assert_matches_object(
+            span,
+            {
+                "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
+                "metadata": {
+                    "tags": ["seq:step:2"],
+                    "model": "gpt-4o-mini-2024-07-18",
+                },
+                "input": [
+                    [
+                        {
+                            "content": ANY,  # Prompt about bears
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                        }
+                    ]
+                ],
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "text": ANY,  # Generated joke or poem
+                                "generation_info": ANY,
+                                "type": "ChatGeneration",
+                                "message": {
+                                    "content": ANY,
+                                    "type": "ai",
+                                },
+                            }
+                        ]
+                    ],
+                    "llm_output": {
+                        "token_usage": {
+                            "completion_tokens": ANY,
+                            "prompt_tokens": ANY,
+                            "total_tokens": ANY,
+                        },
+                        "model_name": "gpt-4o-mini-2024-07-18",
+                    },
+                    "type": "LLMResult",
+                },
+                "metrics": {
+                    "start": ANY,
+                    "total_tokens": ANY,
+                    "prompt_tokens": ANY,
+                    "completion_tokens": ANY,
+                    "end": ANY,
+                },
+            },
+        )
 
 
 @pytest.mark.vcr
@@ -373,70 +525,126 @@ def test_langgraph_state_management(logger_memory_logger: LoggerMemoryLogger):
 
     spans = memory_logger.pop()
 
+    # Find spans by name - langgraph doesn't guarantee ordering
+    langgraph_spans = find_spans_by_attributes(spans, name="LangGraph")
+    say_hello_spans = find_spans_by_attributes(spans, name="sayHello")
+    say_bye_spans = find_spans_by_attributes(spans, name="sayBye")
+    llm_spans = find_spans_by_attributes(spans, name="ChatOpenAI")
+
+    # Verify we have the expected spans
+    assert len(langgraph_spans) == 1
+    assert len(say_hello_spans) == 1
+    assert len(say_bye_spans) == 1
+    assert len(llm_spans) == 1
+
+    # Verify LangGraph root span
     assert_matches_object(
-        spans,
-        [
-            {
-                "span_attributes": {
-                    "name": "LangGraph",
-                    "type": "task",
-                },
-                "input": {},
-                "metadata": {
-                    "tags": [],
-                },
-                "output": "Bye",
+        langgraph_spans[0],
+        {
+            "span_attributes": {
+                "name": "LangGraph",
+                "type": "task",
             },
-            {
-                "span_attributes": {
-                    "name": "sayHello",
-                },
-                "input": {},
-                "metadata": {
-                    "tags": ["graph:step:1"],
-                },
-                "output": "Hello! How can I assist you today?",
+            "input": {},
+            "metadata": {
+                "tags": [],
             },
-            {
-                "span_attributes": {
-                    "name": "ChatOpenAI",
-                    "type": "llm",
-                },
-                "input": [
+            "output": "Bye",
+        },
+    )
+
+    # Verify sayHello span
+    assert_matches_object(
+        say_hello_spans[0],
+        {
+            "span_attributes": {
+                "name": "sayHello",
+            },
+            "input": {},
+            "metadata": {
+                "tags": ["graph:step:1"],
+            },
+            "output": ANY,  # String greeting from LLM
+        },
+    )
+
+    # Verify ChatOpenAI span
+    assert_matches_object(
+        llm_spans[0],
+        {
+            "span_attributes": {
+                "name": "ChatOpenAI",
+                "type": "llm",
+            },
+            "input": [
+                [
                     {
-                        "content": "Say hello",
-                        "role": "user",
-                    },
-                ],
-                "metadata": {
-                    "model": "gpt-4o-mini-2024-07-18",
-                    "temperature": 1,
-                    "top_p": 1,
-                    "frequency_penalty": 0,
-                    "presence_penalty": 0,
-                    "n": 1,
-                    "tags": [],
-                },
-                "output": [
-                    {
-                        "content": "Hello! How can I assist you today?",
-                        "role": "assistant",
-                    },
-                ],
+                        "content": ANY,  # "Say hello" prompt
+                        "additional_kwargs": {},
+                        "response_metadata": {},
+                        "type": "human",
+                        "name": None,
+                        "id": None,
+                        "example": ANY,
+                    }
+                ]
+            ],
+            "metadata": {
+                "model": "gpt-4o-mini-2024-07-18",
+                "tags": [],
             },
-            {
-                "span_attributes": {
-                    "name": "sayBye",
+            "output": {
+                "generations": [
+                    [
+                        {
+                            "text": ANY,  # Greeting text
+                            "generation_info": ANY,
+                            "type": "ChatGeneration",
+                            "message": {
+                                "content": ANY,
+                                "additional_kwargs": ANY,
+                                "response_metadata": ANY,
+                                "type": "ai",
+                                "name": None,
+                                "id": ANY,
+                            },
+                        }
+                    ]
+                ],
+                "llm_output": {
+                    "token_usage": {
+                        "completion_tokens": ANY,
+                        "prompt_tokens": ANY,
+                        "total_tokens": ANY,
+                    },
+                    "model_name": "gpt-4o-mini-2024-07-18",
                 },
-                "input": "Hello! How can I assist you today?",
-                "metadata": {
-                    "tags": ["graph:step:2"],
-                },
-                "output": "Bye",
+                "run": None,
+                "type": "LLMResult",
             },
-        ],
-        # langgraph doesn't guarantee span ordering
-        ignore_order=True,
+            "metrics": {
+                "start": ANY,
+                "total_tokens": ANY,
+                "prompt_tokens": ANY,
+                "completion_tokens": ANY,
+                "end": ANY,
+            },
+        },
+    )
+
+    # Verify sayBye span
+    assert_matches_object(
+        say_bye_spans[0],
+        {
+            "span_attributes": {
+                "name": "sayBye",
+            },
+            "input": ANY,  # String from previous step
+            "metadata": {
+                "tags": ["graph:step:2"],
+            },
+            "output": "Bye",
+        },
     )
 
 
@@ -481,6 +689,7 @@ def test_chain_null_values(logger_memory_logger: LoggerMemoryLogger):
                 "input": {
                     "input1": "value1",
                     "input2": None,
+                    "input3": None,
                 },
                 "metadata": {
                     "tags": ["test"],
@@ -488,6 +697,7 @@ def test_chain_null_values(logger_memory_logger: LoggerMemoryLogger):
                 "output": {
                     "output1": "value1",
                     "output2": None,
+                    "output3": None,
                 },
             },
         ],
