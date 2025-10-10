@@ -6,7 +6,13 @@
  */
 
 import { beforeEach, afterEach, describe, expect, test, vi } from "vitest";
-import { initLogger, currentSpan, getContextManager } from "./logger";
+import {
+  initLogger,
+  currentSpan,
+  getContextManager,
+  _exportsForTestingOnly,
+} from "./logger";
+import { Eval } from "./framework";
 
 interface Tracer {
   startActiveSpan: (
@@ -396,5 +402,77 @@ describe("OTEL compatibility mode", () => {
     expect(trace1Id).not.toBe(trace2Id);
     expect(trace1Id).not.toBe(trace3Id);
     expect(trace2Id).not.toBe(trace3Id);
+  });
+
+  test("OTEL spans in experiment Eval() inherit experiment_id parent", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
+    const fixture = setupOtelFixture();
+    if (!fixture) return;
+
+    const { tracer, exporter } = fixture;
+
+    // Capture BT span info from inside the task
+    const btSpanInfo: Array<{ traceId: string; spanId: string }> = [];
+
+    // This is the key test: verify that OTEL spans created inside Eval() tasks
+    // have the correct braintrust.parent attribute with experiment_id
+    const result = await Eval("otel-eval-test", {
+      data: [{ input: 1 }, { input: 2 }],
+      task: async (input) => {
+        // Capture the current BT span info
+        const btSpan = currentSpan();
+        if (btSpan) {
+          btSpanInfo.push({
+            traceId: btSpan.rootSpanId,
+            spanId: btSpan.spanId,
+          });
+        }
+
+        // Create an OTEL span inside the eval task
+        await tracer.startActiveSpan("otel-compute", async (otelSpan) => {
+          otelSpan.setAttribute("computation", input * 2);
+          otelSpan.end();
+        });
+        return input * 2;
+      },
+      scores: [],
+      trialCount: 1,
+    });
+
+    // Get the experiment ID from the result
+    const experimentId = result.summary.experimentId;
+    expect(experimentId).toBeDefined();
+
+    // Verify we captured BT span info
+    expect(btSpanInfo.length).toBe(2);
+
+    // Verify OTEL spans were created and have the correct parent
+    const otelSpans = exporter.getFinishedSpans();
+    const computeSpans = otelSpans.filter((s) => s.name === "otel-compute");
+
+    expect(computeSpans.length).toBe(2); // One for each data point
+
+    // Verify each OTEL span has the correct parent relationships
+    for (let i = 0; i < computeSpans.length; i++) {
+      const otelSpan = computeSpans[i];
+      const otelContext = otelSpan.spanContext();
+      const otelTraceId = otelContext.traceId.toString().padStart(32, "0");
+      const otelParentId = otelContext.spanId.toString().padStart(16, "0");
+
+      // OTEL span should inherit the BT span's root trace ID
+      expect(btSpanInfo.some((bt) => bt.traceId === otelTraceId)).toBe(true);
+
+      // Verify OTEL span has experiment_id in braintrust.parent attribute
+      expect(otelSpan.attributes).toBeDefined();
+      if (otelSpan.attributes) {
+        expect(otelSpan.attributes["braintrust.parent"]).toContain(
+          `experiment_id:${experimentId}`,
+        );
+      }
+    }
   });
 });
