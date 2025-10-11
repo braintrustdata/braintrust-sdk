@@ -9,7 +9,7 @@ import {
 import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
 import { createTool } from "@mastra/core/tools";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { wrapMastraAgent } from "./mastra";
 import {

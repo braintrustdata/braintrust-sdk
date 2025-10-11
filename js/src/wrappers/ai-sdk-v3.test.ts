@@ -9,7 +9,7 @@ import {
 import * as ai from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { wrapAISDK } from "./ai-sdk-v3";
 import {
