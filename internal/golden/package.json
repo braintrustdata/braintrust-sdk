@@ -1,0 +1,18 @@
+{
+  "name": "golden",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@braintrust/langchain-js": "workspace:*",
+    "@langchain/anthropic": "^0.3.30",
+    "@langchain/core": "^0.3.78",
+    "@langchain/openai": "^0.3.17",
+    "braintrust": "workspace:*",
+    "openai": "^6.3.0"
+  }
+}

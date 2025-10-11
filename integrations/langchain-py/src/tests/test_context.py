@@ -1,5 +1,6 @@
 # pyright: reportTypedDictNotRequiredAccess=none
 from typing import Dict
+from unittest.mock import ANY
 
 import pytest
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
@@ -54,6 +55,18 @@ def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
                     "type": "task",
                 },
                 "input": {"number": "2"},
+                "output": {
+                    "content": ANY,  # LLM response text
+                    "additional_kwargs": ANY,
+                    "response_metadata": ANY,
+                    "type": "ai",
+                    "name": ANY,
+                    "id": ANY,
+                    "example": ANY,
+                    "tool_calls": ANY,
+                    "invalid_tool_calls": ANY,
+                    "usage_metadata": ANY,
+                },
                 "metadata": {"tags": []},
                 "span_id": root_span_id,
                 "root_span_id": root_span_id,
@@ -61,7 +74,18 @@ def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatPromptTemplate"},
                 "input": {"number": "2"},
-                "output": "What is 1 + 2?",
+                "output": {
+                    "messages": [
+                        {
+                            "content": ANY,  # Formatted prompt text
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                        }
+                    ]
+                },
                 "metadata": {"tags": ["seq:step:1"]},
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
@@ -69,19 +93,57 @@ def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
             {
                 "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
                 "input": [
-                    {"content": "What is 1 + 2?", "role": "user"},
+                    [
+                        {
+                            "content": ANY,  # Prompt message content
+                            "additional_kwargs": {},
+                            "response_metadata": {},
+                            "type": "human",
+                            "name": None,
+                            "id": None,
+                            "example": ANY,
+                        }
+                    ]
                 ],
-                "output": [
-                    {"content": "1 + 2 equals 3.", "role": "assistant"},
-                ],
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "text": ANY,  # Generated text
+                                "generation_info": ANY,
+                                "type": "ChatGeneration",
+                                "message": {
+                                    "content": ANY,  # Message content
+                                    "additional_kwargs": ANY,
+                                    "response_metadata": ANY,
+                                    "type": "ai",
+                                    "name": None,
+                                    "id": ANY,
+                                },
+                            }
+                        ]
+                    ],
+                    "llm_output": {
+                        "token_usage": {
+                            "completion_tokens": ANY,
+                            "prompt_tokens": ANY,
+                            "total_tokens": ANY,
+                        },
+                        "model_name": "gpt-4o-mini-2024-07-18",
+                    },
+                    "run": None,
+                    "type": "LLMResult",
+                },
+                "metrics": {
+                    "start": ANY,
+                    "total_tokens": ANY,
+                    "prompt_tokens": ANY,
+                    "completion_tokens": ANY,
+                    "end": ANY,
+                },
                 "metadata": {
                     "tags": ["seq:step:2"],
                     "model": "gpt-4o-mini-2024-07-18",
-                    "temperature": 1,
-                    "top_p": 1,
-                    "frequency_penalty": 0,
-                    "presence_penalty": 0,
-                    "n": 1,
                 },
                 "root_span_id": root_span_id,
                 "span_parents": [root_span_id],
