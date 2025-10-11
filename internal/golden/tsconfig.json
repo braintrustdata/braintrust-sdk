@@ -11,6 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
+      "openai": ["./node_modules/openai"],
+      "openai/*": ["./node_modules/openai/*"],
       "braintrust": ["../../js/src/index.ts"],
       "braintrust/*": ["../../js/src/*"],
       "@braintrust/langchain-js": [
