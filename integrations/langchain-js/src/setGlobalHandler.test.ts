@@ -78,25 +78,45 @@ describe("setGlobalHandler", () => {
       {
         span_attributes: { name: "ChatPromptTemplate", type: "task" },
         input: { number: "2" },
-        output: "What is 1 + 2?",
+        output: expect.objectContaining({
+          kwargs: expect.objectContaining({
+            messages: expect.arrayContaining([
+              expect.objectContaining({
+                kwargs: expect.objectContaining({
+                  content: "What is 1 + 2?",
+                }),
+              }),
+            ]),
+          }),
+        }),
         metadata: { tags: ["seq:step:1"] },
         root_span_id,
         span_parents: [root_span_id],
       },
       {
         span_attributes: { name: "ChatOpenAI", type: "llm" },
-        input: [
-          {
-            content: "What is 1 + 2?",
-            role: "user",
-          },
-        ],
-        output: [
-          {
-            content: "1 + 2 equals 3.",
-            role: "assistant",
-          },
-        ],
+        input: expect.arrayContaining([
+          expect.arrayContaining([
+            expect.objectContaining({
+              kwargs: expect.objectContaining({
+                content: "What is 1 + 2?",
+              }),
+            }),
+          ]),
+        ]),
+        output: expect.objectContaining({
+          generations: expect.arrayContaining([
+            expect.arrayContaining([
+              expect.objectContaining({
+                message: expect.objectContaining({
+                  kwargs: expect.objectContaining({
+                    content: "1 + 2 equals 3.",
+                  }),
+                }),
+              }),
+            ]),
+          ]),
+        }),
         metrics: {
           completion_tokens: 8,
           end: expect.any(Number),
@@ -107,11 +127,6 @@ describe("setGlobalHandler", () => {
         metadata: {
           tags: ["seq:step:2"],
           model: "gpt-4o-mini-2024-07-18",
-          temperature: 1,
-          top_p: 1,
-          frequency_penalty: 0,
-          presence_penalty: 0,
-          n: 1,
         },
         root_span_id,
         span_parents: [root_span_id],
