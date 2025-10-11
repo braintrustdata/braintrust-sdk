@@ -484,21 +484,21 @@ async function testToolUseWithResult() {
 // Run all tests
 async function runAllTests() {
   const tests = [
-    // testBasicCompletion,
-    // testMultiTurn,
-    // testSystemPrompt,
-    // testStreaming,
-    // testImageInput,
+    testBasicCompletion,
+    testMultiTurn,
+    testSystemPrompt,
+    testStreaming,
+    testImageInput,
     testDocumentInput,
-    // testTemperatureVariations,
-    // testStopSequences,
-    // testMetadata,
-    // testLongContext,
-    // testMixedContent,
-    // testPrefill,
-    // testShortMaxTokens,
-    // testToolUse,
-    // testToolUseWithResult,
+    testTemperatureVariations,
+    testStopSequences,
+    testMetadata,
+    testLongContext,
+    testMixedContent,
+    testPrefill,
+    testShortMaxTokens,
+    testToolUse,
+    testToolUseWithResult,
   ];
 
   for (const test of tests) {

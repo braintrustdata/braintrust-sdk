@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 from typing import (
     Any,
@@ -56,7 +55,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
     ):
         self.logger = logger
         self.spans: Dict[UUID, Span] = {}
-        self.debug = bool(os.environ.get("DEBUG")) or debug
+        self.debug = debug  # DEPRECATED
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
@@ -106,7 +105,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             "metadata": {
                 **({"tags": tags}),
                 **(event.get("metadata") or {}),
-                **({"runId": run_id, "parentRunId": parent_run_id} if self.debug else {}),
+                "run_id": run_id,
+                "parent_run_id": parent_run_id,
                 "braintrust": {
                     "integration_name": "langchain-py",
                     "integration_version": version,
@@ -189,9 +189,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         span.end()
 
-    def clean_metadata(self, metadata: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
-        return {k: v for k, v in (metadata or {}).items() if not self.exclude_metadata_props.search(k)}
-
     def on_llm_error(
         self,
         error: BaseException,
@@ -200,7 +197,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: response=
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error), metadata={**kwargs})
 
     def on_chain_error(
         self,
@@ -210,7 +207,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: some metadata
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error), metadata={**kwargs})
 
     def on_tool_error(
         self,
@@ -220,7 +217,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error), metadata={**kwargs})
 
     def on_retriever_error(
         self,
@@ -230,7 +227,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, error=str(error), metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, error=str(error), metadata={**kwargs})
 
     # Agent Methods
     def on_agent_action(
@@ -246,7 +243,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             run_id,
             type=SpanTypeAttribute.LLM,
             name=action.tool,
-            event={"input": action, "metadata": {"run_id": run_id, "parent_run_id": parent_run_id, **kwargs}},
+            event={"input": action, "metadata": {**kwargs}},
         )
 
     def on_agent_finish(
@@ -257,7 +254,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=finish, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=finish, metadata={**kwargs})
 
     def on_chain_start(
         self,
@@ -295,8 +292,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "input": inputs,
                 "tags": tags,
                 "metadata": {
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
                     "serialized": serialized,
                     "name": name,
                     "metadata": metadata,
@@ -314,9 +309,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(
-            run_id, output=outputs, tags=tags, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs}
-        )
+        self._end_span(run_id, output=outputs, tags=tags, metadata={**kwargs})
 
     def on_llm_start(
         self,
@@ -342,8 +335,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "tags": tags,
                 "metadata": {
                     "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
                     "name": name,
                     "metadata": metadata,
                     **kwargs,
@@ -409,8 +400,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             tags=tags,
             metadata={
                 "model": model_name,
-                "run_id": run_id,
-                "parent_run_id": parent_run_id,
                 **kwargs,
             },
         )
@@ -438,11 +427,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "metadata": {
                     "metadata": metadata,
                     "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
                     "input_str": input_str,
                     "input": safe_parse_serialized_json(input_str),
                     "inputs": inputs,
+                    "name": name,
                     **kwargs,
                 },
             },
@@ -456,7 +444,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=output, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=output, metadata={**kwargs})
 
     def on_retriever_start(
         self,
@@ -480,8 +468,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "tags": tags,
                 "metadata": {
                     "serialized": serialized,
-                    "run_id": run_id,
-                    "parent_run_id": parent_run_id,
                     "metadata": metadata,
                     "name": name,
                     **kwargs,
@@ -497,7 +483,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._end_span(run_id, output=documents, metadata={"run_id": run_id, "parent_run_id": parent_run_id, **kwargs})
+        self._end_span(run_id, output=documents, metadata={**kwargs})
 
     def on_llm_new_token(
         self,
