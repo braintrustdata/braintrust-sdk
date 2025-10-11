@@ -367,8 +367,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 "tags": tags,
                 "metadata": (
                     {
-                        "run_id": run_id,
-                        "parent_run_id": parent_run_id,
                         "serialized": serialized,
                         "invocation_params": invocation_params,
                         "metadata": metadata or {},
