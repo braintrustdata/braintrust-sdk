@@ -68,11 +68,15 @@ export function makeCheckAuthorized(allowedOrgName: string | undefined) {
     if (!req.ctx?.token) {
       return next(createError(401, "Unauthorized"));
     }
+    let orgNameHeader = req.headers["x-bt-org-name"];
+    if (Array.isArray(orgNameHeader)) {
+      orgNameHeader = orgNameHeader[0];
+    }
 
     try {
       const state = await cachedLogin({
         apiKey: req.ctx?.token,
-        orgName: allowedOrgName,
+        orgName: allowedOrgName ?? orgNameHeader,
       });
       req.ctx.state = state;
       next();

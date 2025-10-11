@@ -57,7 +57,7 @@ class CheckAuthorizedMiddleware(BaseHTTPMiddleware):
                 state = await cached_login(
                     api_key=ctx.token,
                     app_url=ctx.app_origin,
-                    org_name=self.allowed_org_name,
+                    org_name=self.allowed_org_name or request.headers.get("x-bt-org-name"),
                 )
                 ctx.state = state
             except Exception as e:
@@ -255,7 +255,9 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
 
 
-def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None):
+def run_dev_server(
+    evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None
+):
     global _all_evaluators
     _all_evaluators = {evaluator.eval_name: evaluator for evaluator in evaluators}
 
