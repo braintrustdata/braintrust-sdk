@@ -5,7 +5,6 @@ import {
   type ContextParentSpanIds,
   type Span,
 } from "../logger";
-import { SpanObjectTypeV3 } from "../../util/index";
 
 const OTEL_NOT_INSTALLED_MESSAGE =
   "OpenTelemetry packages are not installed. " +
@@ -147,6 +146,12 @@ export class OtelContextManager extends ContextManager {
         let newContext = otelTrace.setSpan(currentContext, wrappedContext);
         newContext = newContext.setValue("braintrust_span", span);
 
+        // Get parent value and store it in context (matching Python's behavior)
+        const parentValue = span._getOtelParent();
+        if (parentValue) {
+          newContext = newContext.setValue("braintrust.parent", parentValue);
+        }
+
         // Run the callback in the new context
         return otelContext.with(newContext, callback);
       }
@@ -170,44 +175,6 @@ export class OtelContextManager extends ContextManager {
     ) {
       return btSpan as Span;
     }
-    return undefined;
-  }
-
-  private _getOtelParent(span: {
-    parentObjectType?: number;
-    parentObjectId?: unknown;
-  }): string | undefined {
-    if (!span.parentObjectType || !span.parentObjectId) {
-      return undefined;
-    }
-
-    try {
-      const parentType = span.parentObjectType;
-      const parentId = span.parentObjectId;
-
-      if (parentType === SpanObjectTypeV3.PROJECT_LOGS) {
-        const id =
-          typeof parentId === "object" && parentId !== null && "get" in parentId
-            ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- Type guard ensures object has get method
-              (parentId as { get: () => unknown }).get()
-            : parentId;
-        if (typeof id === "string") {
-          return `project_id:${id}`;
-        }
-      } else if (parentType === SpanObjectTypeV3.EXPERIMENT) {
-        const id =
-          typeof parentId === "object" && parentId !== null && "get" in parentId
-            ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- Type guard ensures object has get method
-              (parentId as { get: () => unknown }).get()
-            : parentId;
-        if (typeof id === "string") {
-          return `experiment_id:${id}`;
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-
     return undefined;
   }
 }
