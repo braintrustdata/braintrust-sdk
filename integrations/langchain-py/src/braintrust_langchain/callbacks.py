@@ -370,6 +370,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                         "serialized": serialized,
                         "invocation_params": invocation_params,
                         "metadata": metadata or {},
+                        "name": name,
                         **kwargs,
                     }
                 ),
