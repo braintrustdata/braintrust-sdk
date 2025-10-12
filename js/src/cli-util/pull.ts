@@ -182,9 +182,9 @@ ${functionDefinitions.join("\n")}
           `Failed to format with prettier (${error instanceof Error ? error.message : error}). Using unformatted output.`,
         ),
       );
-      return fileDef;
     }
   }
+  return fileDef;
 }
 
 function makeFunctionDefinition({
