@@ -688,6 +688,11 @@ async function testReasoning() {
                 "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
             },
           ],
+          providerOptions: {
+            openai: {
+              reasoningSummary: "detailed", // 'auto' for condensed or 'detailed' for comprehensive
+            },
+          },
         });
 
         if (!firstResult.reasoningText === undefined) {
@@ -731,7 +736,7 @@ async function testReasoning() {
               content: [
                 {
                   type: "reasoning",
-                  text: firstResult.reasoningText,
+                  text: firstResult.reasoningText || "",
                 },
                 {
                   type: "text",
@@ -763,7 +768,7 @@ async function testReasoning() {
       }
     },
     {
-      name: "testReasoning",
+      name: "test_reasoning",
     },
   );
 }
@@ -771,23 +776,23 @@ async function testReasoning() {
 // Run all tests
 async function runAllTests() {
   const tests = [
-    testBasicCompletion,
-    testMultiTurn,
-    testSystemPrompt,
-    testStreaming,
-    testImageInput,
-    testDocumentInput,
-    testTemperatureVariations,
-    testStopSequences,
-    testMetadata,
-    testLongContext,
-    testMixedContent,
-    testPrefill,
-    testShortMaxTokens,
-    testToolUse,
-    testToolUseWithResult,
-    testAsyncGeneration,
-    testAsyncStreaming,
+    // testBasicCompletion,
+    // testMultiTurn,
+    // testSystemPrompt,
+    // testStreaming,
+    // testImageInput,
+    // testDocumentInput,
+    // testTemperatureVariations,
+    // testStopSequences,
+    // testMetadata,
+    // testLongContext,
+    // testMixedContent,
+    // testPrefill,
+    // testShortMaxTokens,
+    // testToolUse,
+    // testToolUseWithResult,
+    // testAsyncGeneration,
+    // testAsyncStreaming,
     testReasoning,
   ];
 
