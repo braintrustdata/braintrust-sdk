@@ -1,0 +1,2 @@
+server: temporal server start-dev
+worker: python run_worker.py
