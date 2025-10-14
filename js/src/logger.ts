@@ -72,7 +72,7 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { z, ZodError } from "zod";
+import { z, ZodError } from "zod/v3";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -337,6 +337,13 @@ export interface Span extends Exportable {
    */
   state(): BraintrustState;
 
+  /**
+   * Internal method to get the OTEL parent string for this span.
+   * This is used by OtelContextManager to set the braintrust.parent attribute.
+   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
+   */
+  _getOtelParent(): string | undefined;
+
   // For type identification.
   kind: "span";
 }
@@ -474,6 +481,10 @@ export class NoopSpan implements Span {
 
   public state() {
     return _internalGetGlobalState();
+  }
+
+  public _getOtelParent(): string | undefined {
+    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -1560,6 +1571,67 @@ export class ReadonlyAttachment {
   }
 }
 
+/**
+ * Represents a JSON object that should be stored as an attachment.
+ *
+ * `JSONAttachment` is a convenience function that creates an `Attachment`
+ * from JSON data. It's particularly useful for large JSON objects that
+ * would otherwise bloat the trace size.
+ *
+ * The JSON data is automatically serialized and stored as an attachment
+ * with content type "application/json".
+ */
+export class JSONAttachment extends Attachment {
+  /**
+   * Construct a JSONAttachment from a JSON-serializable object.
+   *
+   * @param data The JSON object to attach. Must be JSON-serializable.
+   * @param options Additional options:
+   * - `filename`: The filename for the attachment (defaults to "data.json")
+   * - `pretty`: Whether to pretty-print the JSON (defaults to false)
+   * - `state`: (Optional) For internal use.
+   *
+   * @example
+   * ```typescript
+   * const largeTranscript = [
+   *   { role: "user", content: "..." },
+   *   { role: "assistant", content: "..." },
+   *   // ... many more messages
+   * ];
+   *
+   * logger.log({
+   *   input: {
+   *     type: "chat",
+   *     transcript: new JSONAttachment(largeTranscript, { filename: "transcript.json" })
+   *   }
+   * });
+   * ```
+   */
+  constructor(
+    data: unknown,
+    options?: {
+      filename?: string;
+      pretty?: boolean;
+      state?: BraintrustState;
+    },
+  ) {
+    const { filename = "data.json", pretty = false, state } = options ?? {};
+
+    // Serialize the JSON data
+    const jsonString = pretty
+      ? JSON.stringify(data, null, 2)
+      : JSON.stringify(data);
+    const blob = new Blob([jsonString], { type: "application/json" });
+
+    super({
+      data: blob,
+      filename,
+      contentType: "application/json",
+      state,
+    });
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -1970,6 +2042,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   public get id(): Promise<string> {
     return (async () => (await this.project).id)();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   private parentObjectType() {
@@ -4834,6 +4910,21 @@ export class Experiment
     })();
   }
 
+  public get loggingState(): BraintrustState {
+    return this.state;
+  }
+
+  /**
+   * Wait for the experiment ID to be resolved. This is useful for ensuring the ID
+   * is available synchronously in child spans (for OTEL parent attributes).
+   * @internal
+   */
+  public async _waitForId(): Promise<void> {
+    await this.lazyId.get().catch(() => {
+      // Ignore errors
+    });
+  }
+
   public get name(): Promise<string> {
     return (async () => {
       return (await this.lazyMetadata.get()).experiment.name;
@@ -5135,6 +5226,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return (async () => {
       return (await this.lazyMetadata.get()).experiment.name;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -5620,6 +5715,54 @@ export class SpanImpl implements Span {
     return this._state;
   }
 
+  /**
+   * Internal method to get the OTEL parent string for this span.
+   * This is used by OtelContextManager to set the braintrust.parent attribute.
+   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
+   */
+  _getOtelParent(): string | undefined {
+    if (!this.parentObjectType) {
+      return undefined;
+    }
+
+    try {
+      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
+        const syncResult = this.parentObjectId.getSync();
+        const id = syncResult.value;
+        const args = this.parentComputeObjectMetadataArgs;
+
+        if (id) {
+          return `project_id:${id}`;
+        }
+
+        const projectName = args?.project_name;
+        if (projectName) {
+          return `project_name:${projectName}`;
+        }
+      } else if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+        const syncResult = this.parentObjectId.getSync();
+        const id = syncResult.value;
+
+        // If not resolved yet, trigger async resolution as a fallback
+        // This shouldn't typically happen since Eval() resolves experiment IDs early,
+        // but we keep this as a safety net for other use cases.
+        if (!syncResult.resolved) {
+          this.parentObjectId.get().catch(() => {
+            // Ignore errors, matching Python's except clause behavior
+          });
+        }
+
+        if (id) {
+          return `experiment_id:${id}`;
+        }
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+
+    return undefined;
+  }
+
   // Custom inspect for Node.js console.log
   [Symbol.for("nodejs.util.inspect.custom")](): string {
     return `SpanImpl {
@@ -5748,6 +5891,10 @@ export class Dataset<
     return (async () => {
       return (await this.lazyMetadata.get()).project;
     })();
+  }
+
+  public get loggingState(): BraintrustState {
+    return this.state;
   }
 
   protected async getState(): Promise<BraintrustState> {

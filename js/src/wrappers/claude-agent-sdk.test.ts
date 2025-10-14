@@ -9,7 +9,7 @@ import {
 import { wrapClaudeAgentSDK } from "./claude-agent-sdk";
 import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 // Try to import the Claude Agent SDK - skip tests if not available
 let claudeSDK: unknown;

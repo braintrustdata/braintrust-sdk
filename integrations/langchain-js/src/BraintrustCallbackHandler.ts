@@ -1,4 +1,3 @@
-import { isObject, SpanTypeAttribute } from "braintrust/util";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -14,7 +13,6 @@ import {
   LLMResult,
 } from "@langchain/core/dist/outputs";
 import { ChainValues } from "@langchain/core/dist/utils/types";
-import { ToolMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
 import {
   currentSpan,
@@ -46,6 +44,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 {
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
+  private skippedRuns: Set<string>;
   private parent?: Span | (() => Span);
   private rootRunId?: string;
   private options: BraintrustCallbackHandlerOptions<IsAsyncFlush>;
@@ -54,7 +53,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     options?: Partial<BraintrustCallbackHandlerOptions<IsAsyncFlush>>,
   ) {
     super();
-
+    this.skippedRuns = new Set();
     this.spans = new Map();
 
     this.parent = options?.parent;
@@ -91,21 +90,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     const tags = args.event?.tags;
 
     const spanAttributes = args.spanAttributes || {};
-    spanAttributes.type =
-      args.type || spanAttributes.type || SpanTypeAttribute.TASK;
+    spanAttributes.type = args.type || spanAttributes.type || "task";
 
     args.type = spanAttributes.type;
-
-    args.event = {
-      ...args.event,
-      // Tags are only allowed at the root span.
-      tags: undefined,
-      metadata: {
-        ...(tags ? { tags } : {}),
-        ...args.event?.metadata,
-        ...(this.options.debug ? { runId, parentRunId } : {}),
-      },
-    };
 
     const currentParent =
       (typeof this.parent === "function" ? this.parent() : this.parent) ??
@@ -124,6 +111,25 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       parentSpan = { startSpan } as unknown as Span;
     }
+
+    args.event = {
+      ...args.event,
+      // Tags are only allowed at the root span.
+      tags: undefined,
+      metadata: {
+        ...(tags ? { tags } : {}),
+        ...args.event?.metadata,
+        braintrust: {
+          integration_name: "langchain-js",
+          integration_version: "0.2.0", // TODO: grab from package.json?
+          // TODO: sdk_version,
+          sdk_language: "javascript",
+        },
+        run_id: runId,
+        parent_run_id: parentRunId,
+        ...(this.options.debug ? { runId, parentRunId } : {}),
+      },
+    };
 
     let span = parentSpan.startSpan(args);
 
@@ -149,9 +155,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     ...args
   }: ExperimentLogPartialArgs & { runId: string; parentRunId?: string }): void {
     if (!this.spans.has(runId)) {
-      throw new Error(
-        `No span exists for runId ${runId} (this is likely a bug)`,
-      );
+      return;
+    }
+
+    if (this.skippedRuns.has(runId)) {
+      this.skippedRuns.delete(runId);
+      return;
     }
 
     const span = this.spans.get(runId)!;
@@ -189,26 +198,13 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
         input: prompts,
         tags,
         metadata: {
-          ...this.cleanMetadata(metadata),
-          ...extractCallArgs(
-            llm,
-            extraParams?.invocation_params || {},
-            metadata,
-          ),
+          serialized: llm,
+          name: runName,
+          metadata,
+          ...extraParams,
         },
       },
     });
-  }
-
-  cleanMetadata(metadata?: Record<string, unknown>) {
-    return (
-      metadata &&
-      Object.fromEntries(
-        Object.entries(metadata).filter(
-          ([key, _]) => !this.options.excludeMetadataProps.test(key),
-        ),
-      )
-    );
   }
 
   async handleLLMError(
@@ -217,14 +213,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        parentRunId,
-        error: err.message,
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      parentRunId,
+      error: err,
+      tags,
+    });
   }
 
   async handleLLMEnd(
@@ -233,23 +227,18 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      const { generations, ...metadata } = output;
+    const metrics = getMetricsFromResponse(output);
+    const modelName = getModelNameFromResponse(output);
 
-      const metrics = getMetricsFromResponse(output);
-      const modelName = getModelNameFromResponse(output);
-
-      this.endSpan({
-        runId,
-        output: outputFromGenerations(generations),
-        metrics,
-        tags,
-        metadata: cleanObject({
-          ...this.cleanMetadata(metadata),
-          model: modelName,
-        }),
-      });
-    }
+    this.endSpan({
+      runId,
+      output,
+      metrics,
+      tags,
+      metadata: {
+        model: modelName,
+      },
+    });
   }
 
   async handleChatModelStart(
@@ -273,17 +262,14 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       name: runName ?? llm.name ?? llm.id.at(-1)?.toString() ?? "Chat Model",
       type: "llm",
       event: {
-        input: inputFromMessages(messages),
+        input: messages,
         tags,
-        metadata: cleanObject({
-          ...this.cleanMetadata(metadata),
-          ...extractCallArgs(
-            llm,
-            extraParams?.invocation_params || {},
-            metadata,
-          ),
-          tools: extraParams?.invocation_params?.tools,
-        }),
+        metadata: {
+          serialized: llm,
+          name: runName,
+          metadata,
+          ...extraParams,
+        },
       },
     });
   }
@@ -299,19 +285,25 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     runName?: string,
   ): Promise<void> {
     if (tags?.includes("langsmith:hidden")) {
+      this.skippedRuns.add(runId);
       return;
     }
+
+    const resolvedName =
+      runName ?? chain?.name ?? chain.id.at(-1)?.toString() ?? "Chain";
 
     this.startSpan({
       runId,
       parentRunId,
-      name: runName ?? chain?.name ?? chain.id.at(-1)?.toString() ?? "Chain",
+      name: resolvedName,
       event: {
-        input: inputFromChainValues(inputs),
+        input: inputs,
         tags,
         metadata: {
-          ...this.cleanMetadata(metadata),
-          ...extractCallArgs(chain, {}, metadata),
+          serialized: chain,
+          name: runName,
+          metadata,
+          run_type: runType,
         },
       },
     });
@@ -326,13 +318,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       inputs?: Record<string, unknown>;
     },
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        error: err.toString(),
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      error: err,
+      tags,
+      metadata: kwargs,
+    });
   }
 
   async handleChainEnd(
@@ -342,13 +333,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     tags?: string[],
     kwargs?: { inputs?: Record<string, unknown> },
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        tags,
-        output: outputFromChainValues(outputs),
-      });
-    }
+    this.endSpan({
+      runId,
+      tags,
+      output: outputs,
+      metadata: { ...kwargs },
+    });
   }
 
   async handleToolStart(
@@ -364,12 +354,16 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       runId,
       parentRunId,
       name: runName ?? tool.name ?? tool.id.at(-1)?.toString() ?? "Tool",
+      type: "llm",
       event: {
-        input: safeParseSerializedJson(input),
+        input: safeJsonParse(input),
         tags,
         metadata: {
-          ...this.cleanMetadata(metadata),
-          ...extractCallArgs(tool, {}, metadata),
+          metadata,
+          serialized: tool,
+          input_str: input,
+          input: safeJsonParse(input),
+          name: runName,
         },
       },
     });
@@ -381,13 +375,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        error: err.message,
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      error: err,
+      tags,
+    });
   }
 
   async handleToolEnd(
@@ -396,13 +388,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        output: outputFromToolOutput(output),
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      output,
+      tags,
+    });
   }
 
   async handleAgentAction(
@@ -429,13 +419,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        output: action,
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      output: action,
+      tags,
+    });
   }
 
   async handleRetrieverStart(
@@ -460,8 +448,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
         input: query,
         tags,
         metadata: {
-          ...this.cleanMetadata(metadata),
-          ...extractCallArgs(retriever, {}, metadata),
+          serialized: retriever,
+          metadata,
+          name,
         },
       },
     });
@@ -473,13 +462,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        output: documents,
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      output: documents,
+      tags,
+    });
   }
 
   async handleRetrieverError(
@@ -488,98 +475,13 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string,
     tags?: string[],
   ): Promise<void> {
-    if (this.spans.has(runId)) {
-      this.endSpan({
-        runId,
-        error: err.message,
-        tags,
-      });
-    }
+    this.endSpan({
+      runId,
+      error: err,
+      tags,
+    });
   }
 }
-
-const extractCallArgs = (
-  llm: Serialized,
-  invocationParams: Record<string, unknown>,
-  metadata?: Record<string, unknown>,
-): Record<string, unknown> => {
-  // NOTE: These vary by langchain model used. We try to normalize them here.
-  const args = cleanObject({
-    model: pick(invocationParams?.model, metadata?.ls_model_name, llm.name),
-    temperature: pick(invocationParams?.temperature, metadata?.ls_temperature),
-    top_p: pick(invocationParams?.top_p, invocationParams?.topP),
-    top_k: pick(invocationParams?.top_k, invocationParams?.topK),
-    max_tokens: pick(
-      invocationParams?.max_tokens,
-      invocationParams?.maxOutputTokens,
-    ),
-    frequency_penalty: invocationParams?.frequency_penalty,
-    presence_penalty: invocationParams?.presence_penalty,
-    response_format: invocationParams?.response_format,
-    tool_choice: invocationParams?.tool_choice,
-    function_call: invocationParams?.function_call,
-    n: invocationParams?.n,
-    stop: pick(invocationParams?.stop, invocationParams?.stop_sequence),
-  });
-
-  // Failsafe let's provide the invocation params as is
-  return !Object.keys(args).length ? invocationParams : args;
-};
-
-const pick = (...values: unknown[]) =>
-  values.find((value) => value !== undefined && value !== null);
-
-const outputFromGenerations = (
-  generations: Generation[][] | ChatGeneration[],
-) => {
-  const parsed = generations.flatMap((batch) => {
-    return Array.isArray(batch)
-      ? batch.map(parseGeneration)
-      : parseGeneration(batch);
-  });
-
-  return parsed;
-};
-
-const parseGeneration = (generation: Generation | ChatGeneration) => {
-  if ("message" in generation) {
-    return getMessageContent(generation.message);
-  }
-
-  if (generation.text) {
-    return generation.text;
-  }
-
-  // Give up!
-};
-
-const inputFromMessages = (messages: BaseMessage[][]) => {
-  const parsed = messages.flatMap((batch) => batch.map(getMessageContent));
-  return parsed;
-};
-
-const getMessageContent = (message: BaseMessage) => {
-  let role = message.name ?? message.getType();
-
-  if (message.getType() === "human") {
-    role = "user";
-  } else if (message.getType() === "ai") {
-    role = "assistant";
-  } else if (message.getType() === "system") {
-    role = "system";
-  }
-
-  return cleanObject({
-    content: message.content,
-    role,
-    // @ts-expect-error Message may be any BaseMessage concrete implementation
-    tool_calls: message.tool_calls,
-    // @ts-expect-error Message may be any ToolMessage
-    status: message.status,
-    // @ts-expect-error Message may be any ToolMessage
-    artifact: message.artifact,
-  });
-};
 
 const cleanObject = (obj: Record<string, unknown>) =>
   Object.fromEntries(
@@ -592,75 +494,6 @@ const cleanObject = (obj: Record<string, unknown>) =>
       return true;
     }),
   );
-
-const safeParseSerializedJson = (input: string) => {
-  try {
-    return JSON.parse(input);
-  } catch {
-    return input;
-  }
-};
-
-const outputFromToolOutput = (output: unknown | ToolMessage) =>
-  output instanceof ToolMessage ? getMessageContent(output) : undefined;
-
-const outputFromChainValues = (output: unknown) => {
-  const parsed = (Array.isArray(output) ? output : [output]).flatMap(
-    parseChainValue,
-  );
-  return parsed.length === 1 ? parsed[0] : parsed;
-};
-
-/**
- * Serialized output frsom Langchain may be multiple different types.
- * This attempts to normalize them. We'll likely miss some cases!
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const parseChainValue = (output: any): any => {
-  if (typeof output === "string") {
-    return output;
-  }
-
-  if (!output) {
-    return output;
-  }
-
-  if (output.content) {
-    return output.content;
-  }
-
-  if (output.messages) {
-    return output.messages.map(parseChainValue);
-  }
-
-  if (output.value) {
-    return output.value;
-  }
-
-  if (output.kwargs) {
-    return parseChainValue(output.kwargs);
-  }
-
-  // XXX: RunnableMap returns an object with keys for each sequence
-  if (typeof output === "object" && output) {
-    return Object.fromEntries(
-      Object.entries(output).map(([key, value]) => [
-        key,
-        parseChainValue(value),
-      ]),
-    );
-  }
-
-  // Give up! Let's assume the user will use the raw output.
-  return output;
-};
-
-const inputFromChainValues = (inputs: ChainValues) => {
-  const parsed = (Array.isArray(inputs) ? inputs : [inputs]).flatMap(
-    parseChainValue,
-  );
-  return parsed.length === 1 ? parsed[0] : parsed;
-};
 
 const walkGenerations = (
   response: LLMResult | ChatResult,
@@ -741,3 +574,15 @@ const getMetricsFromResponse = (response: LLMResult | ChatResult) => {
 
   return metrics;
 };
+
+const safeJsonParse = (input: string) => {
+  try {
+    return JSON.parse(input);
+  } catch {
+    return input;
+  }
+};
+
+function isObject(object: any) {
+  return object != null && typeof object === "object";
+}
