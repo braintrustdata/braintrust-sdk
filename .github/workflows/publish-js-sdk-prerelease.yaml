@@ -1,0 +1,69 @@
+#
+# This workflow is used to publish pre-release versions of the JavaScript SDK to npm.
+# It can only be triggered manually via workflow_dispatch.
+# Pre-release versions use dist-tags (beta, alpha, next) to avoid marking them as "latest".
+#
+# This workflow does NOT require updating package.json in the repository.
+# The version is created temporarily in CI and published, without committing back to the repo.
+#
+# Usage:
+#   - Go to Actions tab in GitHub
+#   - Select "Publish JavaScript SDK (Pre-release)"
+#   - Click "Run workflow"
+#   - Choose pre-release type (beta/alpha/rc) and version bump type
+#
+# Users can install pre-releases via:
+#   npm install braintrust@beta
+#   npm install braintrust@alpha
+#   npm install braintrust@next  (for rc)
+#
+
+name: Publish JavaScript SDK (Pre-release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease_type:
+        description: "Pre-release type (determines npm dist-tag)"
+        required: true
+        type: choice
+        options:
+          - beta
+          - alpha
+          - rc
+      version_bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        default: "prerelease"
+        options:
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+      - name: Publish pre-release
+        working-directory: sdk/js
+        run: |
+          ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "${{ github.event.inputs.version_bump }}"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-sdk-prerelease-dist
+          path: sdk/js/dist/
+          retention-days: 5

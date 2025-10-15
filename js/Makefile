@@ -17,9 +17,15 @@ help:
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
-	@echo "  make publish-beta       - Publish beta version to npm"
+	@echo ""
+	@echo "Pre-release publishing:"
+	@echo "  make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"
+	@echo "  Examples:"
+	@echo "    make publish-prerelease MODE=local TYPE=beta BUMP=prerelease   - Publish locally"
+	@echo "    make publish-prerelease MODE=gh TYPE=alpha BUMP=prepatch       - Trigger GitHub Actions"
+	@echo "    make publish-prerelease MODE=local TYPE=rc BUMP=preminor       - Publish locally"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # AI SDK testing
@@ -128,8 +134,59 @@ docs:
 build:
 	pnpm run build
 
-publish-beta: build
+publish-beta-local: build
 	pnpm publish --tag beta
+
+# -------------------------------------------------------------------------------------------------
+# Pre-release publishing
+# Can publish locally or trigger GitHub Actions workflow
+# Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
+# -------------------------------------------------------------------------------------------------
+.PHONY: publish-prerelease
+
+# Default values
+TYPE ?= beta
+BUMP ?= prerelease
+
+publish-prerelease:
+	@if [ -z "$(MODE)" ] || ! echo "$(MODE)" | grep -qE '^(local|gh)$$'; then \
+		echo ""; \
+		echo "ERROR: MODE must be either 'local' or 'gh'"; \
+		echo ""; \
+		echo "Got: MODE=$(MODE)"; \
+		echo ""; \
+		echo "Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make publish-prerelease MODE=local TYPE=beta BUMP=prerelease   - Publish locally"; \
+		echo "  make publish-prerelease MODE=gh TYPE=alpha BUMP=prepatch       - Trigger GitHub Actions"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@if [ -z "$(TYPE)" ]; then \
+		echo "ERROR: TYPE parameter is required"; \
+		echo "Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
+		exit 1; \
+	fi
+	@if ! echo "$(TYPE)" | grep -qE '^(beta|alpha|rc)$$'; then \
+		echo "ERROR: TYPE must be one of: beta, alpha, rc"; \
+		exit 1; \
+	fi
+	@if ! echo "$(BUMP)" | grep -qE '^(prerelease|prepatch|preminor|premajor)$$'; then \
+		echo "ERROR: BUMP must be one of: prerelease, prepatch, preminor, premajor"; \
+		exit 1; \
+	fi
+	@if [ "$(MODE)" = "local" ]; then \
+		echo "Publishing $(TYPE) pre-release locally ($(BUMP))..."; \
+		./scripts/publish-prerelease.sh $(TYPE) $(BUMP); \
+	else \
+		echo "Triggering GitHub Actions workflow to publish $(TYPE) pre-release ($(BUMP))..."; \
+		gh workflow run publish-js-sdk-prerelease.yaml \
+			-f prerelease_type=$(TYPE) \
+			-f version_bump=$(BUMP); \
+		echo "Workflow triggered! Check status at:"; \
+		echo "https://github.com/braintrustdata/braintrust-sdk/actions/workflows/publish-js-sdk-prerelease.yaml"; \
+	fi
 
 bench:
 	npx tsx src/queue.bench.ts
