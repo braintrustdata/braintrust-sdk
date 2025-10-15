@@ -56,9 +56,8 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
-      - uses: pnpm/action-setup@v4
       - name: Publish pre-release
-        working-directory: sdk/js
+        working-directory: sdk
         run: |
           ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "${{ github.event.inputs.version_bump }}"
       - name: Upload build artifacts

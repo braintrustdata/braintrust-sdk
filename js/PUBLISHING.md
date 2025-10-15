@@ -10,9 +10,9 @@ Stable releases are published from the `main` branch using git tags.
 
 1. Update the version in `package.json` manually (e.g., `0.4.3` → `0.4.4`)
 2. Commit the change to `main` branch
-3. Run the tag push script:
+3. Run the tag push script from the SDK root:
    ```bash
-   cd js
+   cd sdk
    ./scripts/push-release-tag.sh
    ```
 4. The script will validate everything and prompt for confirmation
@@ -38,21 +38,21 @@ You can publish pre-releases either **locally** or via **GitHub Actions**:
 **Via GitHub Actions (default):**
 
 ```bash
-cd js
-make publish-prerelease TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
+cd sdk
+make publish-prerelease MODE=gh TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
 ```
 
 **Locally:**
 
 ```bash
-cd js
-make publish-prerelease TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor> LOCAL=true
+cd sdk
+make publish-prerelease MODE=local TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
 ```
 
 You can also call the script directly:
 
 ```bash
-cd js
+cd sdk
 ./scripts/publish-prerelease.sh <beta|alpha|rc> <prerelease|prepatch|preminor|premajor>
 ```
 
@@ -78,22 +78,22 @@ cd js
 ```bash
 # Publish the next beta in sequence
 # 0.4.3 → 0.4.4-beta.0  or  0.4.4-beta.0 → 0.4.4-beta.1
-make publish-prerelease TYPE=beta BUMP=prerelease
+make publish-prerelease MODE=gh TYPE=beta BUMP=prerelease
 
 # Publish alpha with patch bump
 # 0.4.3 → 0.4.4-alpha.0
-make publish-prerelease TYPE=alpha BUMP=prepatch
+make publish-prerelease MODE=gh TYPE=alpha BUMP=prepatch
 
 # Publish release candidate with minor bump
 # 0.4.3 → 0.5.0-rc.0
-make publish-prerelease TYPE=rc BUMP=preminor
+make publish-prerelease MODE=gh TYPE=rc BUMP=preminor
 ```
 
 **Locally:**
 
 ```bash
-# Same commands with LOCAL=true flag
-make publish-prerelease TYPE=beta BUMP=prerelease LOCAL=true
+# Same commands with MODE=local flag
+make publish-prerelease MODE=local TYPE=beta BUMP=prerelease
 
 # Or call the script directly
 ./scripts/publish-prerelease.sh beta prerelease
@@ -149,7 +149,7 @@ Or visit: https://www.npmjs.com/package/braintrust?activeTab=versions
 
 - **npm credentials**: Must be logged in to npm
   - `npm login` or configure `~/.npmrc` with auth token
-- **pnpm**: Package manager used for building
+- **npm**: Package manager used for building
   - Will be used by the build script
 
 ## Files
@@ -161,9 +161,10 @@ Or visit: https://www.npmjs.com/package/braintrust?activeTab=versions
 
 ### Scripts
 
-- Pre-release publishing: `js/scripts/publish-prerelease.sh`
+- Pre-release publishing: `scripts/publish-prerelease.sh`
   - Contains all business logic for creating, building, and publishing pre-releases
   - Can be called directly or via Makefile/GitHub Actions
   - Automatically detects CI vs local environment
-- Stable release validation: `js/scripts/validate-release.sh`
-- Stable release tag management: `js/scripts/push-release-tag.sh`
+- Stable release validation: `js/scripts/validate-release.sh` (JS-specific)
+- Stable release tag management: `scripts/push-release-tag.sh`
+- Stable release tag validation: `scripts/validate-release-tag.sh`

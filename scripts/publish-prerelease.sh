@@ -8,9 +8,9 @@ set -euo pipefail
 #   type: beta, alpha, or rc
 #   bump: prerelease, prepatch, preminor, or premajor
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get directories
+ROOT_DIR=$(git rev-parse --show-toplevel)
+JS_DIR="$ROOT_DIR/js"
 
 # Parse arguments
 if [ $# -lt 2 ]; then
@@ -89,8 +89,8 @@ echo ""
 
 # Build the SDK
 echo "Building SDK..."
-pnpm install
-make build
+npm install
+npm run build
 echo "Build complete."
 echo ""
 
