@@ -42,7 +42,6 @@ jobs:
       id-token: write
 
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
     steps:
@@ -53,6 +52,8 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
+      - name: Update npm to latest version
+        run: npm install -g npm@latest
       - name: Build, Verify and Publish
         working-directory: js
         run: |
@@ -68,4 +69,4 @@ jobs:
       - name: Publish to npm
         working-directory: js
         run: |
-          npm publish --provenance
+          npm publish
