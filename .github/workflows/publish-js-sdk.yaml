@@ -1,0 +1,68 @@
+#
+# This workflow is used to publish the JavaScript SDK to npm.
+# It is triggered by a tag push, and will only publish if the tag is valid.
+# The tag must match the format js-sdk-v*.*.*
+#
+
+name: Publish JavaScript SDK
+
+on:
+  push:
+    tags:
+      - "js-sdk-v*.*.*" # Trigger on version tags like js-sdk-v0.1.0, js-sdk-v1.2.3, etc.
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for checking branch
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Set release tag
+        id: set_release_tag
+        # ensure the tag is valid (matches code, is on main, etc)
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          echo "Using tag: $RELEASE_TAG"
+          ./js/scripts/validate-release-tag.sh "$RELEASE_TAG"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+  build-and-publish:
+    needs: validate
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+      - name: Build, Verify and Publish
+        working-directory: js
+        run: |
+          pnpm install
+          npm run build
+          ./scripts/validate-release.sh
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-sdk-dist
+          path: js/dist/
+          retention-days: 5
+      - name: Publish to npm
+        working-directory: js
+        run: |
+          npm publish --provenance
