@@ -1,4 +1,6 @@
 # Mise will automatically read and use .tool-versions files as well as this file.
+[settings]
+experimental=true
 
 [env]
 # Automatically activate our virtual environment
@@ -11,6 +13,9 @@ _.file = ".env"
 uv = "latest"
 temporal = "latest"
 overmind = "latest"
+
+[hooks]
+postinstall = "mise run install"
 
 [tasks.install]
 description = "Install requirements"

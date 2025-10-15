@@ -1,15 +1,21 @@
 # @@@SNIPSTART python-project-template-run-workflow
 import asyncio
 import traceback
+import uuid
 
+import braintrust
 from shared import MONEY_TRANSFER_TASK_QUEUE_NAME, PaymentDetails
 from temporalio.client import Client, WorkflowFailureError
 from workflows import MoneyTransfer
 
 
 async def main() -> None:
+    braintrust.init(project="temporal-example")
+
     # Create client connected to server at the given address
-    client: Client = await Client.connect("localhost:7233")
+    client: Client = await Client.connect(
+        "localhost:7233",
+    )
 
     data: PaymentDetails = PaymentDetails(
         source_account="85-150",
@@ -22,7 +28,7 @@ async def main() -> None:
         result = await client.execute_workflow(
             MoneyTransfer.run,
             data,
-            id="pay-invoice-701",
+            id=f"pay-invoice-{uuid.uuid4().hex[:8]}",
             task_queue=MONEY_TRANSFER_TASK_QUEUE_NAME,
         )
 

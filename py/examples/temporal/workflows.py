@@ -28,6 +28,16 @@ class MoneyTransfer:
             retry_policy=retry_policy,
         )
 
+        # Analyze transaction for fraud
+        analysis_result = await workflow.execute_activity_method(
+            BankingActivities.analyze_transaction,
+            payment_details,
+            start_to_close_timeout=timedelta(seconds=10),
+            retry_policy=retry_policy,
+        )
+
+        workflow.logger.info(f"Transaction analysis result: {analysis_result}")
+
         # Deposit money
         try:
             deposit_output = await workflow.execute_activity_method(
