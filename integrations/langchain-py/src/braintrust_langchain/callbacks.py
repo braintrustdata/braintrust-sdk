@@ -145,7 +145,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self.spans[run_id] = span
         return span
 
-    # TODO: serialize input, output, metadata correctly
     def _end_span(
         self,
         run_id: UUID,
@@ -186,6 +185,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             metrics=metrics,
             dataset_record_id=dataset_record_id,
         )
+
+        span.unset_current()
 
         span.end()
 
