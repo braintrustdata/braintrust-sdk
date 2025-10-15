@@ -73,34 +73,48 @@ js-verify-ci: js-docs js-test
 
 
 # -------------------------------------------------------------------------------------------------
+# Stable release publishing
+# Publishes stable release from main branch using git tags
+# Usage: make publish-js-sdk
+# Note: Update version in js/package.json and commit to main before running
+# -------------------------------------------------------------------------------------------------
+.PHONY: publish-js-sdk
+
+publish-js-sdk:
+	@echo "Publishing stable JS SDK release..."
+	@echo "This will create and push a git tag, triggering GitHub Actions to publish to npm."
+	@echo ""
+	./scripts/push-release-tag.sh
+
+# -------------------------------------------------------------------------------------------------
 # Pre-release publishing
 # Can publish locally or trigger GitHub Actions workflow
-# Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
+# Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
 # -------------------------------------------------------------------------------------------------
-.PHONY: publish-prerelease
+.PHONY: publish-js-sdk-prerelease
 
 # Default values
 TYPE ?= alpha
 BUMP ?= prerelease
 
-publish-prerelease:
+publish-js-sdk-prerelease:
 	@if [ -z "$(MODE)" ] || ! echo "$(MODE)" | grep -qE '^(local|gh)$$'; then \
 		echo ""; \
 		echo "ERROR: MODE must be either 'local' or 'gh'"; \
 		echo ""; \
 		echo "Got: MODE=$(MODE)"; \
 		echo ""; \
-		echo "Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
+		echo "Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
 		echo ""; \
 		echo "Examples:"; \
-		echo "  make publish-prerelease MODE=local TYPE=beta BUMP=prerelease   - Publish locally"; \
-		echo "  make publish-prerelease MODE=gh TYPE=alpha BUMP=prepatch       - Trigger GitHub Actions"; \
+		echo "  make publish-js-sdk-prerelease MODE=local TYPE=beta BUMP=prerelease   - Publish locally"; \
+		echo "  make publish-js-sdk-prerelease MODE=gh TYPE=alpha BUMP=prepatch       - Trigger GitHub Actions"; \
 		echo ""; \
 		exit 1; \
 	fi
 	@if [ -z "$(TYPE)" ]; then \
 		echo "ERROR: TYPE parameter is required"; \
-		echo "Usage: make publish-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
+		echo "Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
 		exit 1; \
 	fi
 	@if ! echo "$(TYPE)" | grep -qE '^(beta|alpha|rc)$$'; then \
