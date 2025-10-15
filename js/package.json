@@ -33,6 +33,12 @@
       "module": "./dist/browser.mjs",
       "require": "./dist/browser.js"
     },
+    "./btql": {
+      "types": "./btql/dist/index.d.ts",
+      "import": "./btql/dist/index.mjs",
+      "module": "./btql/dist/index.mjs",
+      "require": "./btql/dist/index.js"
+    },
     "./dev": {
       "types": "./dev/dist/index.d.ts",
       "import": "./dev/dist/index.mjs",
@@ -49,13 +55,15 @@
   "files": [
     "dist/**/*",
     "dev/dist/**/*",
-    "util/dist/**/*"
+    "util/dist/**/*",
+    "btql/dist/**/*"
   ],
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
+    "export-query-schema": "npx tsx scripts/export-query-schema.ts",
     "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts  --exclude src/wrappers/ai-sdk-v1.test.ts --exclude src/wrappers/ai-sdk-v2.test.ts --exclude src/wrappers/ai-sdk-v3.test.ts --exclude src/wrappers/mastra.test.ts --exclude src/wrappers/claude-agent-sdk.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
@@ -116,6 +124,7 @@
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",
     "http-errors": "^2.0.0",
+    "json-schema-to-zod": "^2.6.1",
     "minimatch": "^9.0.3",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",

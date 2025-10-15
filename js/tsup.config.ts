@@ -65,4 +65,17 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
+  {
+    entry: ["src/btql/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "btql/dist",
+    external: ["zod"],
+    dts: {
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
+    splitting: true,
+    clean: true,
+  },
 ]);
