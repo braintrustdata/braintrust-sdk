@@ -27,10 +27,11 @@ jobs:
       - name: Set release tag
         id: set_release_tag
         # ensure the tag is valid (matches code, is on main, etc)
+        working-directory: sdk/js
         run: |
           RELEASE_TAG=${GITHUB_REF#refs/tags/}
           echo "Using tag: $RELEASE_TAG"
-          ./js/scripts/validate-release-tag.sh "$RELEASE_TAG"
+          ./scripts/validate-release-tag.sh "$RELEASE_TAG"
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
@@ -52,21 +53,21 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
-      - name: Update npm to latest version
-        run: npm install -g npm@latest
-      - name: Build, Verify and Publish
-        working-directory: js
+      - name: Install dependencies
+        working-directory: sdk/js
         run: |
           pnpm install
-          npm run build
-          ./scripts/validate-release.sh
+      - name: Build (Makefile)
+        working-directory: sdk/js
+        run: |
+          make build
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: javascript-sdk-dist
-          path: js/dist/
+          path: sdk/js/dist/
           retention-days: 5
       - name: Publish to npm
-        working-directory: js
+        working-directory: sdk/js
         run: |
-          npm publish
+          make publish-sdk-js

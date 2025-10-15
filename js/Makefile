@@ -139,7 +139,12 @@ bench:
 
 verify-ci: build docs test
 
+build-sdk-js:
+	npm run build
 
+publish-sdk-js: build-sdk-js
+	./scripts/validate-release.sh
+	npm publish
 
 
 # This is the only method I could find to install a package without explicitly
