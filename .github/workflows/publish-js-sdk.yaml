@@ -1,7 +1,17 @@
 #
 # This workflow is used to publish the JavaScript SDK to npm.
-# It is triggered by a tag push, and will only publish if the tag is valid.
-# The tag must match the format js-sdk-v*.*.*
+#
+# It supports two publishing modes:
+#
+# 1. REGULAR RELEASE (tag-based, automatic):
+#    - Triggered by pushing a tag matching js-sdk-v*.*.*
+#    - Validates the tag, builds, and publishes to npm with "latest" tag
+#
+# 2. PRE-RELEASE (manual, workflow_dispatch):
+#    - Manually triggered via GitHub Actions UI
+#    - Choose pre-release type (beta/alpha/rc) and version
+#    - Publishes with appropriate dist-tag (beta/alpha/next)
+#    - Does NOT require updating package.json in the repository
 #
 
 name: Publish JavaScript SDK
@@ -10,9 +20,25 @@ on:
   push:
     tags:
       - "js-sdk-v*.*.*" # Trigger on version tags like js-sdk-v0.1.0, js-sdk-v1.2.3, etc.
+  workflow_dispatch:
+    inputs:
+      prerelease_type:
+        description: "Pre-release type (determines npm dist-tag)"
+        required: true
+        type: choice
+        options:
+          - beta
+          - alpha
+          - rc
+      version:
+        description: "Version to publish (e.g., 1.2.3-beta.1)"
+        required: true
+        type: string
 
 jobs:
   validate:
+    # Only run validation for tag-based releases (not prereleases)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
@@ -36,7 +62,11 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
   build-and-publish:
+    # Run after validation (for tag releases) OR immediately (for prereleases)
     needs: validate
+    if: |
+      always() &&
+      (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,21 +82,34 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
-      - name: Install dependencies
+
+      # Regular release path (tag-based)
+      - name: Install dependencies (regular release)
+        if: github.event_name == 'push'
+        working-directory: js
+        run: npm install
+
+      - name: Build (regular release)
+        if: github.event_name == 'push'
+        working-directory: js
+        run: npm run build
+
+      - name: Publish to npm (regular release)
+        if: github.event_name == 'push'
+        working-directory: js
+        run: make publish-sdk-js
+
+      # Prerelease path (manual trigger)
+      - name: Publish pre-release
+        if: github.event_name == 'workflow_dispatch'
         working-directory: js
         run: |
-          npm install
-      - name: Build
-        working-directory: js
-        run: |
-          npm run build
+          ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "${{ github.event.inputs.version }}"
+
+      # Upload artifacts for both paths
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: javascript-sdk-dist
+          name: javascript-sdk-${{ github.event_name == 'workflow_dispatch' && 'prerelease' || 'release' }}-dist
           path: js/dist/
           retention-days: 5
-      - name: Publish to npm
-        working-directory: js
-        run: |
-          make publish-sdk-js
