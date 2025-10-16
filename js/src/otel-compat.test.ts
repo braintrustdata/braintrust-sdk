@@ -13,6 +13,10 @@ import {
   _exportsForTestingOnly,
 } from "./logger";
 import { Eval } from "./framework";
+import { base64ToUint8Array } from "../util/bytes";
+import { configureNode } from "./node";
+
+configureNode();
 
 interface Tracer {
   startActiveSpan: (
@@ -84,6 +88,11 @@ function setupOtelFixture(): OtelFixture | null {
     tracer,
     exporter,
   };
+}
+
+function getExportVersion(exportedSpan: string): number {
+  const exportedBytes = base64ToUint8Array(exportedSpan);
+  return exportedBytes[0];
 }
 
 describe("OTEL compatibility mode", () => {
@@ -474,5 +483,59 @@ describe("OTEL compatibility mode", () => {
         );
       }
     }
+  });
+
+  test("exported V4 span can be used as parent (issue #986)", async () => {
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const logger = initLogger({
+      projectName: "test-v4-parent-bug",
+    });
+
+    const parentSpan = logger.startSpan({ name: "parent-span-v4" });
+    const exported = await parentSpan.export();
+
+    expect(getExportVersion(exported)).toBe(4);
+
+    parentSpan.end();
+
+    const childSpan = logger.startSpan({
+      name: "child-span-v4",
+      parent: exported,
+    });
+
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+    expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+    childSpan.end();
+  });
+
+  test("exported V4 span can be used with withParent (issue #986)", async () => {
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const logger = initLogger({
+      projectName: "test-v4-with-parent-bug",
+    });
+
+    const parentSpan = logger.startSpan({ name: "parent-span-v4" });
+    const exported = await parentSpan.export();
+
+    expect(getExportVersion(exported)).toBe(4);
+
+    parentSpan.end();
+
+    // Use withParent helper - this uses getSpanParentObject which has the bug at line 3902
+    const { withParent, startSpan } = await import("./logger");
+    withParent(exported, () => {
+      // Use global startSpan without logger to trigger getSpanParentObject path
+      const childSpan = startSpan({
+        name: "child-span-v4-with-parent",
+      });
+
+      expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+      expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+      childSpan.end();
+    });
   });
 });
