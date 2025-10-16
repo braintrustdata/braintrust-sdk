@@ -75,64 +75,13 @@ js-verify-ci: js-docs js-test
 # -------------------------------------------------------------------------------------------------
 # Stable release publishing
 # Publishes stable release from main branch using git tags
-# Usage: make publish-js-sdk
+# Usage: make release-js-sdk
 # Note: Update version in js/package.json and commit to main before running
 # -------------------------------------------------------------------------------------------------
-.PHONY: publish-js-sdk
+.PHONY: release-js-sdk
 
-publish-js-sdk:
+release-js-sdk:
 	@echo "Publishing stable JS SDK release..."
 	@echo "This will create and push a git tag, triggering GitHub Actions to publish to npm."
 	@echo ""
 	./js/scripts/push-release-tag.sh
-
-# -------------------------------------------------------------------------------------------------
-# Pre-release publishing
-# Can publish locally or trigger GitHub Actions workflow
-# Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>
-# -------------------------------------------------------------------------------------------------
-.PHONY: publish-js-sdk-prerelease
-
-# Default values
-TYPE ?= alpha
-BUMP ?= prerelease
-
-publish-js-sdk-prerelease:
-	@if [ -z "$(MODE)" ] || ! echo "$(MODE)" | grep -qE '^(local|gh)$$'; then \
-		echo ""; \
-		echo "ERROR: MODE must be either 'local' or 'gh'"; \
-		echo ""; \
-		echo "Got: MODE=$(MODE)"; \
-		echo ""; \
-		echo "Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make publish-js-sdk-prerelease MODE=local TYPE=beta BUMP=prerelease   - Publish locally"; \
-		echo "  make publish-js-sdk-prerelease MODE=gh TYPE=alpha BUMP=prepatch       - Trigger GitHub Actions"; \
-		echo ""; \
-		exit 1; \
-	fi
-	@if [ -z "$(TYPE)" ]; then \
-		echo "ERROR: TYPE parameter is required"; \
-		echo "Usage: make publish-js-sdk-prerelease MODE=<local|gh> TYPE=<beta|alpha|rc> BUMP=<prerelease|prepatch|preminor|premajor>"; \
-		exit 1; \
-	fi
-	@if ! echo "$(TYPE)" | grep -qE '^(beta|alpha|rc)$$'; then \
-		echo "ERROR: TYPE must be one of: beta, alpha, rc"; \
-		exit 1; \
-	fi
-	@if ! echo "$(BUMP)" | grep -qE '^(prerelease|prepatch|preminor|premajor)$$'; then \
-		echo "ERROR: BUMP must be one of: prerelease, prepatch, preminor, premajor"; \
-		exit 1; \
-	fi
-	@if [ "$(MODE)" = "local" ]; then \
-		echo "Publishing $(TYPE) pre-release locally ($(BUMP))..."; \
-		./js/scripts/publish-prerelease.sh $(TYPE) $(BUMP); \
-	else \
-		echo "Triggering GitHub Actions workflow to publish $(TYPE) pre-release ($(BUMP))..."; \
-		gh workflow run publish-js-sdk-prerelease.yaml \
-			-f prerelease_type=$(TYPE) \
-			-f version_bump=$(BUMP); \
-		echo "Workflow triggered! Check status at:"; \
-		echo "https://github.com/braintrustdata/braintrust-sdk/actions/workflows/publish-js-sdk-prerelease.yaml"; \
-	fi

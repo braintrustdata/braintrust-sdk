@@ -18,6 +18,6 @@ For stable releases (published to `@latest`):
 2. Commit to `main` branch
 3. Run:
    ```bash
-   make publish-js-sdk
+   make release-js-sdk
    ```
 4. Confirm when prompted - this creates a git tag and triggers GitHub Actions
