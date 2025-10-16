@@ -8,7 +8,7 @@ The easiest way to publish is using pre-releases. This doesn't require updating 
 
 ### Quick Start
 
-Use Github Actions UI -> Publish JS SDK Pre-release.
+Use Github Actions UI -> Publish JS SDK.
 
 ## Stable Releases
 

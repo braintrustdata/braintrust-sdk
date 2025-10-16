@@ -89,11 +89,6 @@ jobs:
         working-directory: js
         run: npm install
 
-      - name: Build (regular release)
-        if: github.event_name == 'push'
-        working-directory: js
-        run: npm run build
-
       - name: Publish to npm (regular release)
         if: github.event_name == 'push'
         working-directory: js
