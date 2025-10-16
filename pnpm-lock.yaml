@@ -88,7 +88,7 @@ importers:
         version: 0.0.11
       ai:
         specifier: ^3.2.16
-        version: 3.4.33(openai@6.3.0)(react@19.2.0)(svelte@5.39.13)(vue@3.5.22)(zod@3.25.76)
+        version: 3.4.33(react@19.2.0)(svelte@5.39.13)(vue@3.5.22)(zod@3.25.76)
       braintrust:
         specifier: workspace:>=0.0.141
         version: link:../../js
@@ -145,8 +145,8 @@ importers:
         specifier: ^1.37.0
         version: 1.37.0
       ai:
-        specifier: ^3.2.16
-        version: 3.4.33(openai@6.3.0)(react@19.2.0)(svelte@5.39.13)(vue@3.5.22)(zod@3.25.76)
+        specifier: ^5.0.72
+        version: 5.0.72(zod@3.25.76)
       braintrust:
         specifier: workspace:*
         version: link:../../js
@@ -328,6 +328,18 @@ packages:
       '@ai-sdk/provider': 1.1.3
       '@ai-sdk/provider-utils': 2.2.8(zod@3.25.76)
       zod: 3.25.76
+
+  /@ai-sdk/gateway@1.0.40(zod@3.25.76):
+    resolution: {integrity: sha512-zlixM9jac0w0jjYl5gwNq+w9nydvraAmLaZQbbh+QpHU+OPkTIZmyBcKeTq5eGQKQxhi+oquHxzCSKyJx3egGw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
+      '@vercel/oidc': 3.0.2
+      zod: 3.25.76
+    dev: false
 
   /@ai-sdk/openai@2.0.52(zod@3.25.76):
     resolution: {integrity: sha512-n1arAo4+63e6/FFE6z/1ZsZbiOl4cfsoZ3F4i2X7LPIEea786Y2yd7Qdr7AdB4HTLVo3OSb1PHVIcQmvYIhmEA==}
@@ -3148,6 +3160,11 @@ packages:
         optional: true
     dev: false
 
+  /@vercel/oidc@3.0.2:
+    resolution: {integrity: sha512-JekxQ0RApo4gS4un/iMGsIL1/k4KUBe3HmnGcDvzHuFBdQdudEJgTqcsJC7y6Ul4Yw5CeykgvQbX2XeEJd0+DA==}
+    engines: {node: '>= 20'}
+    dev: false
+
   /@vitest/expect@2.1.9:
     resolution: {integrity: sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw==}
     dependencies:
@@ -3329,7 +3346,7 @@ packages:
     dependencies:
       humanize-ms: 1.2.1
 
-  /ai@3.4.33(openai@6.3.0)(react@19.2.0)(svelte@5.39.13)(vue@3.5.22)(zod@3.25.76):
+  /ai@3.4.33(react@19.2.0)(svelte@5.39.13)(vue@3.5.22)(zod@3.25.76):
     resolution: {integrity: sha512-plBlrVZKwPoRTmM8+D1sJac9Bq8eaa2jiZlHLZIWekKWI1yMWYZvCCEezY9ASPwRhULYDJB2VhKOBUUeg3S5JQ==}
     engines: {node: '>=18'}
     peerDependencies:
@@ -3361,7 +3378,6 @@ packages:
       eventsource-parser: 1.1.2
       json-schema: 0.4.0
       jsondiffpatch: 0.6.0
-      openai: 6.3.0(zod@3.25.76)
       react: 19.2.0
       secure-json-parse: 2.7.0
       svelte: 5.39.13
@@ -3391,6 +3407,19 @@ packages:
       react: 19.2.0
       zod: 3.25.76
     dev: true
+
+  /ai@5.0.72(zod@3.25.76):
+    resolution: {integrity: sha512-LB4APrlESLGHG/5x+VVdl0yYPpHPHpnGd5Gwl7AWVL+n7T0GYsNos/S/6dZ5CZzxLnPPEBkRgvJC4rupeZqyNg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/gateway': 1.0.40(zod@3.25.76)
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
+      '@opentelemetry/api': 1.9.0
+      zod: 3.25.76
+    dev: false
 
   /ajv-draft-04@1.0.0(ajv@8.17.1):
     resolution: {integrity: sha512-mv00Te6nmYbRp5DCwclxtt7yV/joXJPGS7nM+97GdxvuttCOfgI3K4U25zboyeX0O+myI8ERluxQe5wljMmVIw==}

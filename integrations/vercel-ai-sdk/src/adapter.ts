@@ -12,8 +12,14 @@ export function toAIStream(
   stream: BraintrustStreamOrReadable,
   callbacks?: AIStreamCallbacksAndOptions,
 ): ReadableStream<Uint8Array> {
-  const btStream =
-    stream instanceof BraintrustStream ? stream : new BraintrustStream(stream);
+  let btStream: BraintrustStream;
+
+  if (stream instanceof BraintrustStream) {
+    btStream = stream;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    btStream = new BraintrustStream(stream as any);
+  }
 
   return btStream
     .toReadableStream()
