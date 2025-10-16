@@ -84,7 +84,7 @@ publish-js-sdk:
 	@echo "Publishing stable JS SDK release..."
 	@echo "This will create and push a git tag, triggering GitHub Actions to publish to npm."
 	@echo ""
-	./scripts/push-release-tag.sh
+	./js/scripts/push-release-tag.sh
 
 # -------------------------------------------------------------------------------------------------
 # Pre-release publishing
@@ -127,7 +127,7 @@ publish-js-sdk-prerelease:
 	fi
 	@if [ "$(MODE)" = "local" ]; then \
 		echo "Publishing $(TYPE) pre-release locally ($(BUMP))..."; \
-		./scripts/publish-prerelease.sh $(TYPE) $(BUMP); \
+		./js/scripts/publish-prerelease.sh $(TYPE) $(BUMP); \
 	else \
 		echo "Triggering GitHub Actions workflow to publish $(TYPE) pre-release ($(BUMP))..."; \
 		gh workflow run publish-js-sdk-prerelease.yaml \

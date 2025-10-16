@@ -27,7 +27,7 @@ jobs:
       - name: Set release tag
         id: set_release_tag
         # ensure the tag is valid (matches code, is on main, etc)
-        working-directory: sdk
+        working-directory: js
         run: |
           RELEASE_TAG=${GITHUB_REF#refs/tags/}
           echo "Using tag: $RELEASE_TAG"
@@ -53,20 +53,20 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
       - name: Install dependencies
-        working-directory: sdk/js
+        working-directory: js
         run: |
           npm install
       - name: Build
-        working-directory: sdk/js
+        working-directory: js
         run: |
           npm run build
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: javascript-sdk-dist
-          path: sdk/js/dist/
+          path: js/dist/
           retention-days: 5
       - name: Publish to npm
-        working-directory: sdk/js
+        working-directory: js
         run: |
           make publish-sdk-js
