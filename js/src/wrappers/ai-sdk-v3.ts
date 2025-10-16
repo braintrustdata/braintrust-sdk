@@ -35,6 +35,10 @@ const V3_EXCLUDE_KEYS = new Set([
   "tools", // Already captured in metadata.tools
 ]);
 
+interface WrapAISDKOptions {
+  additionalMetadata?: Record<string, any>;
+}
+
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
  * of generateText, streamText, generateObject, and streamObject that automatically
@@ -58,6 +62,7 @@ const V3_EXCLUDE_KEYS = new Set([
  */
 export function wrapAISDK<T extends AISDKMethods>(
   ai: T,
+  { additionalMetadata = {} }: WrapAISDKOptions = {}
 ): {
   generateText: T["generateText"];
   streamText: T["streamText"];
@@ -97,6 +102,7 @@ export function wrapAISDK<T extends AISDKMethods>(
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
+            ...additionalMetadata,
           },
         });
 
@@ -133,6 +139,7 @@ export function wrapAISDK<T extends AISDKMethods>(
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
+            ...additionalMetadata,
           },
         });
 
@@ -149,7 +156,10 @@ export function wrapAISDK<T extends AISDKMethods>(
       name: "ai-sdk.streamText",
       event: {
         input: extractInput(params),
-        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
+        metadata: {
+          ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          ...additionalMetadata,
+        },
       },
     });
 
@@ -198,6 +208,7 @@ export function wrapAISDK<T extends AISDKMethods>(
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
+                ...additionalMetadata,
               },
             });
             span.end();
@@ -229,7 +240,10 @@ export function wrapAISDK<T extends AISDKMethods>(
       name: "ai-sdk.streamObject",
       event: {
         input: extractInput(params),
-        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
+        metadata: {
+          ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          ...additionalMetadata,
+        },
       },
     });
 
@@ -261,6 +275,7 @@ export function wrapAISDK<T extends AISDKMethods>(
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
+                ...additionalMetadata,
               },
             });
             span.end();

@@ -55,6 +55,8 @@ export interface MiddlewareConfig {
   debug?: boolean;
   /** Name identifier for the middleware instance */
   name?: string;
+  /** Additional metadata to add to the span */
+  additionalMetadata?: Record<string, any>;
 }
 
 // V2-specific exclude keys for extractModelParameters
@@ -104,6 +106,7 @@ export function BraintrustMiddleware(
           input: params.prompt,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.additionalMetadata || {}),
           },
         },
       };
@@ -113,7 +116,7 @@ export function BraintrustMiddleware(
       try {
         const result = await doGenerate();
 
-        const metadata: Record<string, unknown> = {};
+        const metadata: Record<string, unknown> = config.additionalMetadata || {};
 
         const provider = detectProviderFromResult(result);
         if (provider !== undefined) {
@@ -175,6 +178,7 @@ export function BraintrustMiddleware(
           input: params.prompt,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.additionalMetadata || {}),
           },
         },
       };
@@ -238,7 +242,7 @@ export function BraintrustMiddleware(
                 finishReason: finalFinishReason,
               };
 
-              const metadata: Record<string, unknown> = {};
+              const metadata: Record<string, unknown> = config.additionalMetadata || {};
 
               const provider = detectProviderFromResult(resultForDetection);
               if (provider !== undefined) {
