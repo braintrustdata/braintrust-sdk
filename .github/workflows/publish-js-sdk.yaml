@@ -82,6 +82,8 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
+      - name: Install npm 11.6.2
+        run: npm install -g npm@11.6.2
 
       # Regular release path (tag-based)
       - name: Publish to npm (regular release)
