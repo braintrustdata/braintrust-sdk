@@ -17,9 +17,8 @@ help:
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
-	@echo "  make publish-beta       - Publish beta version to npm"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # AI SDK testing
@@ -126,9 +125,9 @@ docs:
 	pnpm run docs
 
 build:
-	pnpm run build
+	npm run build
 
-publish-beta: build
+publish-beta-local: build
 	pnpm publish --tag beta
 
 bench:
@@ -139,8 +138,11 @@ bench:
 
 verify-ci: build docs test
 
-
-
+publish-sdk-js:
+	./scripts/validate-release.sh
+	npm install
+	npm run build
+	npm publish
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.
