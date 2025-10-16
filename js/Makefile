@@ -138,13 +138,11 @@ bench:
 
 verify-ci: build docs test
 
-build-sdk-js:
-	npm run build
-
-publish-sdk-js: build-sdk-js
+publish-sdk-js:
 	./scripts/validate-release.sh
+	npm install
+	npm run build
 	npm publish
-
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.
