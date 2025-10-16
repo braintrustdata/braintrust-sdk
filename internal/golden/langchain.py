@@ -2,6 +2,7 @@ import asyncio
 import base64
 from pathlib import Path
 
+import braintrust
 from braintrust import flush, init_logger, start_span
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from langchain_anthropic import ChatAnthropic
@@ -442,6 +443,12 @@ def test_tool_use_with_result():
                 print()
 
 
+# Test 18: Reasoning with o1 model
+def test_reasoning():
+    with start_span(name="test_reasoning"):
+        braintrust.log(output="Responses API not supported and chat completions do not include (reasoning) summaries")
+
+
 async def test_async_generation():
     print("\n=== Test 17: Async Generation ===")
     with start_span(name="test_async_generation"):
@@ -497,6 +504,7 @@ def run_sync_tests():
         test_short_max_tokens,
         test_tool_use,
         test_tool_use_with_result,
+        test_reasoning,
     ]
 
     for test in tests:

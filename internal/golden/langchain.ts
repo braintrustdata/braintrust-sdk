@@ -933,6 +933,19 @@ async function testAsyncStreaming() {
   );
 }
 
+// Test 18: Reasoning with o1 model
+async function testReasoning() {
+  return traced(
+    async () => {
+      braintrust.log({
+        output:
+          "Responses API not supported and chat completions do not include (reasoning) summaries",
+      });
+    },
+    { name: "test_reasoning" },
+  );
+}
+
 async function runAllTests() {
   console.log("=".repeat(60));
   console.log("LangChain Golden Tests with Braintrust");
@@ -956,6 +969,7 @@ async function runAllTests() {
     testToolUseWithResult,
     testAsyncGeneration,
     testAsyncStreaming,
+    testReasoning,
   ];
 
   for (const test of tests) {
