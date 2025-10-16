@@ -2,4 +2,3 @@ packages:
   - "js"
   - "core/js"
   - "integrations/*"
-  - "internal/golden"
