@@ -10,6 +10,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.5",
     "@ai-sdk/openai": "^2.0.52",
+    "ai": "^3.2.16",
     "@braintrust/langchain-js": "workspace:*",
     "@langchain/anthropic": "^0.3.30",
     "@langchain/core": "^0.3.78",
@@ -20,7 +21,6 @@
     "@opentelemetry/sdk-trace-base": "^2.1.0",
     "@opentelemetry/sdk-trace-node": "^2.1.0",
     "@opentelemetry/semantic-conventions": "^1.37.0",
-    "ai": "^5.0.68",
     "braintrust": "workspace:*",
     "openai": "^6.3.0"
   }
