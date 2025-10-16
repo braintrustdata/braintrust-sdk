@@ -2583,6 +2583,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,
+                        **({"version": self._pinned_version} if self._pinned_version is not None else {}),
                     },
                     headers={
                         "Accept-Encoding": "gzip",

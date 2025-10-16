@@ -4816,6 +4816,11 @@ class ObjectFetcher<RecordType>
             },
             use_columnstore: false,
             brainstore_realtime: true,
+            ...(this.pinnedVersion !== undefined
+              ? {
+                  version: this.pinnedVersion,
+                }
+              : {}),
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
