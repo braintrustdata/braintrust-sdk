@@ -10,7 +10,7 @@
 #   - Go to Actions tab in GitHub
 #   - Select "Publish JavaScript SDK (Pre-release)"
 #   - Click "Run workflow"
-#   - Choose pre-release type (beta/alpha/rc) and version bump type
+#   - Choose pre-release type (beta/alpha/rc) and enter the version to publish
 #
 # Users can install pre-releases via:
 #   npm install braintrust@beta
@@ -31,16 +31,10 @@ on:
           - beta
           - alpha
           - rc
-      version_bump:
-        description: "Version bump type"
+      version:
+        description: "Version to publish (e.g., 1.2.3-beta.1)"
         required: true
-        type: choice
-        default: "prerelease"
-        options:
-          - prerelease
-          - prepatch
-          - preminor
-          - premajor
+        type: string
 
 jobs:
   publish:
@@ -59,7 +53,7 @@ jobs:
       - name: Publish pre-release
         working-directory: js
         run: |
-          ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "${{ github.event.inputs.version_bump }}"
+          ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "${{ github.event.inputs.version }}"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

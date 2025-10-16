@@ -4,9 +4,9 @@ set -euo pipefail
 # Script to publish a pre-release version to npm
 # Can be used both locally and in CI/CD
 #
-# Usage: ./publish-prerelease.sh <type> <bump>
+# Usage: ./publish-prerelease.sh <type> <version>
 #   type: beta, alpha, or rc
-#   bump: prerelease, prepatch, preminor, or premajor
+#   version: explicit version to publish, e.g., 1.2.3-beta.1
 
 # Get directories
 ROOT_DIR=$(git rev-parse --show-toplevel)
@@ -14,21 +14,21 @@ JS_DIR="$ROOT_DIR/js"
 
 # Parse arguments
 if [ $# -lt 2 ]; then
-  echo "Usage: $0 <type> <bump>"
+  echo "Usage: $0 <type> <version>"
   echo ""
   echo "Arguments:"
   echo "  type: beta, alpha, or rc"
-  echo "  bump: prerelease, prepatch, preminor, or premajor"
+  echo "  version: explicit version to publish"
   echo ""
   echo "Examples:"
-  echo "  $0 beta prerelease   # Publish next beta version"
-  echo "  $0 alpha prepatch    # Publish alpha with patch bump"
-  echo "  $0 rc preminor       # Publish RC with minor bump"
+  echo "  $0 beta 1.2.3-beta.1"
+  echo "  $0 alpha 1.2.3-alpha.5"
+  echo "  $0 rc 1.2.3-rc.1"
   exit 1
 fi
 
 PRERELEASE_TYPE="$1"
-VERSION_BUMP="$2"
+VERSION="$2"
 
 # Validate prerelease type
 case "$PRERELEASE_TYPE" in
@@ -41,16 +41,11 @@ case "$PRERELEASE_TYPE" in
     ;;
 esac
 
-# Validate version bump
-case "$VERSION_BUMP" in
-  prerelease|prepatch|preminor|premajor)
-    ;;
-  *)
-    echo "ERROR: Invalid version bump: $VERSION_BUMP"
-    echo "Must be one of: prerelease, prepatch, preminor, premajor"
-    exit 1
-    ;;
-esac
+# Validate version format
+if [ -z "$VERSION" ]; then
+  echo "ERROR: Version cannot be empty"
+  exit 1
+fi
 
 # Map prerelease type to npm dist-tag
 case "$PRERELEASE_TYPE" in
@@ -69,7 +64,7 @@ echo "================================================"
 echo " Publishing Pre-release"
 echo "================================================"
 echo "Type:         $PRERELEASE_TYPE"
-echo "Bump:         $VERSION_BUMP"
+echo "Version:      $VERSION"
 echo "Dist-tag:     $DIST_TAG"
 echo ""
 
@@ -78,10 +73,10 @@ cd "$JS_DIR"
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "Current version: $CURRENT_VERSION"
 
-# Create pre-release version (updates package.json temporarily)
+# Set the explicit version (updates package.json temporarily)
 echo ""
-echo "Creating pre-release version..."
-npm version "$VERSION_BUMP" --preid="$PRERELEASE_TYPE" --no-git-tag-version
+echo "Setting version to $VERSION..."
+npm version "$VERSION" --no-git-tag-version --allow-same-version
 
 NEW_VERSION=$(node -p "require('./package.json').version")
 echo "New version: $NEW_VERSION"
