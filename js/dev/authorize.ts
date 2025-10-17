@@ -70,9 +70,20 @@ export function makeCheckAuthorized(allowedOrgName: string | undefined) {
     }
 
     try {
+      const orgName = parseHeader(req.headers, "x-bt-org-name");
+
+      if (!orgName) {
+        return next(createError(400, "Missing x-bt-org-name header"));
+      }
+
+      if (allowedOrgName && allowedOrgName !== orgName) {
+        const errorMessage = `Org '${orgName}' is not allowed. Only org '${allowedOrgName}' is allowed.`;
+        return next(createError(403, errorMessage));
+      }
+
       const state = await cachedLogin({
         apiKey: req.ctx?.token,
-        orgName: allowedOrgName,
+        orgName: orgName,
       });
       req.ctx.state = state;
       next();

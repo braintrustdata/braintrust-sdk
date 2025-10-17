@@ -54,10 +54,19 @@ class CheckAuthorizedMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
             try:
+                org_name = ctx.org_name
+
+                if not org_name:
+                    return JSONResponse({"error": "Missing x-bt-org-name header"}, status_code=400)
+
+                if self.allowed_org_name and self.allowed_org_name != org_name:
+                    error_message = f"Org '{org_name}' is not allowed. Only org '{self.allowed_org_name}' is allowed."
+                    return JSONResponse({"error": error_message}, status_code=403)
+
                 state = await cached_login(
                     api_key=ctx.token,
                     app_url=ctx.app_origin,
-                    org_name=self.allowed_org_name,
+                    org_name=org_name,
                 )
                 ctx.state = state
             except Exception as e:
