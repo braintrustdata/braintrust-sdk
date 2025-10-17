@@ -15,10 +15,11 @@ help:
 	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
+	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # AI SDK testing
@@ -54,6 +55,17 @@ test-anthropic-%:
 	pnpm prune
 	$(call pnpm_install_no_save,@anthropic-ai/sdk@$*)
 	pnpm test:anthropic
+
+# ----
+# Google GenAI
+# ----
+test-google-genai: test-google-genai-latest
+
+test-google-genai-latest:
+	pnpm prune
+	$(call pnpm_install_no_save,@google/genai)
+	pnpm test:google-genai
+
 
 # -------------------------------------------------------------------------------------------------
 # OpenTelemetry testing
@@ -112,10 +124,10 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-ai-sdk
+test: test-core test-otel test-openai test-anthropic test-ai-sdk test-google-genai
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-otel test-anthropic-latest test-openai-latest
+test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
 
 
 prune:
