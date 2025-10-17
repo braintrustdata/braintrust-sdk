@@ -1,5 +1,6 @@
 import { BraintrustMiddleware } from "./ai-sdk-v2";
 import { startSpan, traced, withCurrent, Attachment } from "../logger";
+import type { CompiledPrompt } from "../logger";
 import {
   extractModelParameters,
   detectProviderFromResult,
@@ -38,7 +39,23 @@ const V3_EXCLUDE_KEYS = new Set([
   "model", // Already captured in metadata.model
   "providerOptions", // Internal AI SDK configuration
   "tools", // Already captured in metadata.tools
+  "span_info", // Extracted separately for prompt linking
 ]);
+
+type SpanInfo = {
+  span_info?: CompiledPrompt<"chat">["span_info"];
+};
+
+/**
+ * Helper function to extract span_info from params.
+ * Returns the full span_info to pass through to the middleware.
+ */
+function extractSpanInfo(params: Record<string, unknown> & SpanInfo): {
+  spanInfo?: CompiledPrompt<"chat">["span_info"];
+} {
+  const { span_info } = params;
+  return { spanInfo: span_info };
+}
 
 /**
  * Converts AI SDK GeneratedFile objects to Braintrust Attachments
@@ -109,11 +126,13 @@ export function wrapAISDK<T extends AISDKMethods>(
     streamObject,
   } = ai;
   const wrappedGenerateText = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ spanInfo }),
         });
 
         const result = await generateText({
@@ -155,11 +174,13 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedGenerateObject = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ spanInfo }),
         });
         const result = await generateObject({
           ...params,
@@ -200,6 +221,7 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamText = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
     // Process input attachments for parent span
     const input = processInputAttachments(extractInput(params));
 
@@ -218,7 +240,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ spanInfo }),
       });
 
       const startTime = Date.now();
@@ -293,6 +315,7 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamObject = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
     // Process input attachments for parent span
     const input = processInputAttachments(extractInput(params));
 
@@ -310,7 +333,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ spanInfo }),
       });
 
       const result = withCurrent(span, () =>
