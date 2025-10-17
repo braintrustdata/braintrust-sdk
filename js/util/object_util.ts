@@ -49,7 +49,9 @@ function mergeDictsWithPathsHelper({
         mergePaths,
       });
     } else {
-      mergeInto[k] = mergeFromV;
+      if (mergeFromV !== undefined) {
+        mergeInto[k] = mergeFromV;
+      }
     }
   });
 
