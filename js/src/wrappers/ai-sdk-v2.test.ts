@@ -96,7 +96,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -158,7 +158,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.streamText",
+          name: "ai-sdk.doStream",
           type: "llm",
         },
         input: [
@@ -223,7 +223,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     expect(span).toMatchObject({
       span_attributes: {
-        name: "ai-sdk.generateText",
+        name: "ai-sdk.doGenerate",
         type: "llm",
       },
       input: [
@@ -269,7 +269,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -324,7 +324,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -386,7 +386,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
