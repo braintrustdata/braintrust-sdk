@@ -28,7 +28,7 @@ export function getExtensionFromMediaType(mediaType: string): string {
 /**
  * Converts data (base64 string, URL, ArrayBuffer, Uint8Array, etc.) to a Blob
  */
-function convertDataToBlob(data: any, mediaType: string): Blob | null {
+export function convertDataToBlob(data: any, mediaType: string): Blob | null {
   try {
     if (typeof data === "string") {
       // Could be base64, data URL, or regular URL

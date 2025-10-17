@@ -11,6 +11,7 @@ import {
 import {
   processInputAttachments,
   getExtensionFromMediaType,
+  convertDataToBlob,
 } from "./attachment-utils";
 
 // Define a neutral interface for the AI SDK methods we use.
@@ -49,34 +50,26 @@ function processFilesAsAttachments(
     return undefined;
   }
 
-  return files.map((file, index) => {
-    const mediaType = file.mediaType || "application/octet-stream";
-    const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
+  return files
+    .map((file, index) => {
+      const mediaType = file.mediaType || "application/octet-stream";
+      const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
 
-    // Convert data to Blob - handle both base64 string and Uint8Array
-    let blob: Blob;
-    if (typeof file.data === "string") {
-      // Base64 string
-      const binaryString = atob(file.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      // Convert data to Blob using shared utility
+      const blob = convertDataToBlob(file.data, mediaType);
+
+      // Skip if conversion failed (e.g., for URLs we can't fetch)
+      if (!blob) {
+        return null;
       }
-      blob = new Blob([bytes], { type: mediaType });
-    } else if (file.data instanceof Uint8Array) {
-      // Already binary data
-      blob = new Blob([file.data], { type: mediaType });
-    } else {
-      // Fallback for unexpected data formats
-      blob = new Blob([String(file.data)], { type: mediaType });
-    }
 
-    return new Attachment({
-      data: blob,
-      filename: filename,
-      contentType: mediaType,
-    });
-  });
+      return new Attachment({
+        data: blob,
+        filename: filename,
+        contentType: mediaType,
+      });
+    })
+    .filter((attachment): attachment is Attachment => attachment !== null);
 }
 
 /**
