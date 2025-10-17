@@ -101,7 +101,7 @@ export function wrapAISDK<T extends AISDKMethods>(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ metadata: spanInfoMetadata }),
         });
 
         const result = await generateText({
@@ -130,7 +130,6 @@ export function wrapAISDK<T extends AISDKMethods>(
       {
         name: "ai-sdk.generateText",
         ...spanInfoRest,
-        ...(spanInfoMetadata ? { event: { metadata: spanInfoMetadata } } : {}),
       },
     );
   };
@@ -142,7 +141,7 @@ export function wrapAISDK<T extends AISDKMethods>(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ metadata: spanInfoMetadata }),
         });
         const result = await generateObject({
           ...params,
@@ -170,7 +169,6 @@ export function wrapAISDK<T extends AISDKMethods>(
       {
         name: "ai-sdk.generateObject",
         ...spanInfoRest,
-        ...(spanInfoMetadata ? { event: { metadata: spanInfoMetadata } } : {}),
       },
     );
   };
@@ -185,7 +183,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         input: extractInput(params),
         metadata: {
           ...extractModelParameters(params, V3_EXCLUDE_KEYS),
-          ...spanInfoMetadata,
         },
       },
     });
@@ -197,7 +194,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ metadata: spanInfoMetadata }),
       });
 
       const startTime = Date.now();
@@ -271,7 +268,6 @@ export function wrapAISDK<T extends AISDKMethods>(
         input: extractInput(params),
         metadata: {
           ...extractModelParameters(params, V3_EXCLUDE_KEYS),
-          ...spanInfoMetadata,
         },
       },
     });
@@ -282,7 +278,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ metadata: spanInfoMetadata }),
       });
 
       const result = withCurrent(span, () =>

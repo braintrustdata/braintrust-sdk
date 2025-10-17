@@ -55,6 +55,8 @@ export interface MiddlewareConfig {
   debug?: boolean;
   /** Name identifier for the middleware instance */
   name?: string;
+  /** Additional metadata to attach to spans (e.g., prompt metadata) */
+  metadata?: Record<string, unknown>;
 }
 
 // V2-specific exclude keys for extractModelParameters
@@ -104,6 +106,7 @@ export function BraintrustMiddleware(
           input: params.prompt,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.metadata || {}),
           },
         },
       };
@@ -175,6 +178,7 @@ export function BraintrustMiddleware(
           input: params.prompt,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.metadata || {}),
           },
         },
       };
