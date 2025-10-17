@@ -278,18 +278,29 @@ function serializePart(part: any): any {
   if (part.inlineData && part.inlineData.data) {
     const { data, mimeType } = part.inlineData;
 
-    if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
+    // Handle binary data (Uint8Array/Buffer) or base64 strings
+    if (
+      data instanceof Uint8Array ||
+      Buffer.isBuffer(data) ||
+      typeof data === "string"
+    ) {
       const extension = mimeType ? mimeType.split("/")[1] : "bin";
       const filename = `file.${extension}`;
 
+      // Convert to Buffer - handles Uint8Array, Buffer, and base64 strings
+      const buffer =
+        typeof data === "string"
+          ? Buffer.from(data, "base64")
+          : Buffer.from(data);
+
       const attachment = new Attachment({
-        data: Buffer.from(data),
+        data: buffer,
         filename,
         contentType: mimeType || "application/octet-stream",
       });
 
       return {
-        imageUrl: { url: attachment },
+        image_url: { url: attachment },
       };
     }
   }
