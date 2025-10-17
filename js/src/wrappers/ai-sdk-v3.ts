@@ -47,8 +47,13 @@ type SpanInfo = {
  * This matches the pattern used in the OpenAI wrapper.
  */
 function extractSpanInfo(params: Record<string, unknown> & SpanInfo): {
-  spanInfoMetadata?: Record<string, unknown>;
-  spanInfoRest: Record<string, unknown>;
+  spanInfoMetadata?: NonNullable<
+    CompiledPrompt<"chat">["span_info"]
+  >["metadata"];
+  spanInfoRest: Omit<
+    NonNullable<CompiledPrompt<"chat">["span_info"]>,
+    "metadata"
+  >;
 } {
   const { span_info } = params;
   if (!span_info) {
