@@ -89,7 +89,20 @@ export function processInputAttachments(input: any): any {
 
     // Handle image content parts
     if (part.type === "image" && part.image) {
-      const mediaType = "image/png"; // Default, could be inferred
+      // Try to infer media type from data URL or use provided mediaType
+      let mediaType = "image/png"; // Default fallback
+
+      if (typeof part.image === "string" && part.image.startsWith("data:")) {
+        // Extract media type from data URL (e.g., "data:image/jpeg;base64,...")
+        const mediaTypeMatch = part.image.match(/^data:([^;]+);/);
+        if (mediaTypeMatch) {
+          mediaType = mediaTypeMatch[1];
+        }
+      } else if (part.mediaType) {
+        // Use explicit mediaType if provided
+        mediaType = part.mediaType;
+      }
+
       const blob = convertDataToBlob(part.image, mediaType);
 
       if (blob) {
