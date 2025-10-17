@@ -1,0 +1,975 @@
+{
+  "type": "object",
+  "properties": {
+    "dimensions": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/aliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pivot": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/aliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unpivot": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/unpivotAliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "measures": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/aliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "select": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/aliasExpr"
+              },
+              {
+                "$ref": "#/definitions/star"
+              }
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "infer": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ident"
+              },
+              {
+                "$ref": "#/definitions/star"
+              }
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "filter": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/expr"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "from": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ident"
+            },
+            {
+              "$ref": "#/definitions/fromFunction"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sort": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sortExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limit": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "comparison_key": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/expr"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "weighted_scores": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/aliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "custom_columns": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/aliasExpr"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "preview_length": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "inference_budget": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sample": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/sample"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "aliasExpr": {
+      "type": "object",
+      "properties": {
+        "expr": {
+          "$ref": "#/definitions/expr"
+        },
+        "alias": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "alias"
+      ],
+      "additionalProperties": false
+    },
+    "arithmeticExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "mod"
+          ]
+        },
+        "left": {
+          "$ref": "#/definitions/expr"
+        },
+        "right": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/loc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "op",
+        "left",
+        "right"
+      ],
+      "additionalProperties": false
+    },
+    "arithmeticOp": {
+      "type": "string",
+      "enum": [
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "mod"
+      ]
+    },
+    "arrayLiteral": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/literalValue"
+      }
+    },
+    "booleanExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "and",
+            "or"
+          ]
+        },
+        "left": {
+          "$ref": "#/definitions/expr"
+        },
+        "right": {
+          "$ref": "#/definitions/expr"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/expr"
+          }
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "additionalProperties": false
+    },
+    "booleanLiteral": {
+      "type": "boolean"
+    },
+    "booleanOp": {
+      "type": "string",
+      "enum": [
+        "and",
+        "or"
+      ]
+    },
+    "btqlSnippet": {
+      "type": "object",
+      "properties": {
+        "btql": {
+          "type": "string"
+        },
+        "op": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "btql"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "loc": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/loc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "btql"
+      ],
+      "additionalProperties": false
+    },
+    "comparisonExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "is",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "ilike",
+            "like",
+            "match",
+            "in"
+          ]
+        },
+        "left": {
+          "$ref": "#/definitions/expr"
+        },
+        "right": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "left",
+        "right"
+      ],
+      "additionalProperties": false
+    },
+    "comparisonOp": {
+      "type": "string",
+      "enum": [
+        "eq",
+        "is",
+        "ne",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+        "ilike",
+        "like",
+        "match",
+        "in"
+      ]
+    },
+    "countSample": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "count"
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "datetimeLiteral": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expr": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/literal"
+        },
+        {
+          "$ref": "#/definitions/intervalLiteral"
+        },
+        {
+          "$ref": "#/definitions/ident"
+        },
+        {
+          "$ref": "#/definitions/star"
+        },
+        {
+          "$ref": "#/definitions/function"
+        },
+        {
+          "$ref": "#/definitions/comparisonExpr"
+        },
+        {
+          "$ref": "#/definitions/includesExpr"
+        },
+        {
+          "$ref": "#/definitions/booleanExpr"
+        },
+        {
+          "$ref": "#/definitions/ternaryExpr"
+        },
+        {
+          "$ref": "#/definitions/unaryArithmeticExpr"
+        },
+        {
+          "$ref": "#/definitions/unaryExpr"
+        },
+        {
+          "$ref": "#/definitions/arithmeticExpr"
+        },
+        {
+          "$ref": "#/definitions/btqlSnippet"
+        }
+      ]
+    },
+    "fromFunction": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/function"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "shape": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/shape"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "function": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "function"
+        },
+        "name": {
+          "$ref": "#/definitions/ident"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/expr"
+          }
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "name",
+        "args"
+      ],
+      "additionalProperties": false
+    },
+    "identPiece": {
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "ident": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "ident"
+        },
+        "name": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/identPiece"
+          }
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "includesExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "includes"
+        },
+        "haystack": {
+          "$ref": "#/definitions/expr"
+        },
+        "needle": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "haystack",
+        "needle"
+      ],
+      "additionalProperties": false
+    },
+    "integerLiteral": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        }
+      ]
+    },
+    "intervalLiteral": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "interval"
+        },
+        "value": {
+          "type": "integer"
+        },
+        "unit": {
+          "$ref": "#/definitions/intervalUnit"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "intervalUnit": {
+      "type": "string",
+      "enum": [
+        "year",
+        "month",
+        "day",
+        "hour",
+        "minute",
+        "second",
+        "millisecond",
+        "microsecond"
+      ]
+    },
+    "literal": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "literal"
+        },
+        "value": {
+          "$ref": "#/definitions/literalValue"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "literalValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/nullLiteral"
+        },
+        {
+          "$ref": "#/definitions/booleanLiteral"
+        },
+        {
+          "$ref": "#/definitions/integerLiteral"
+        },
+        {
+          "$ref": "#/definitions/numberLiteral"
+        },
+        {
+          "$ref": "#/definitions/stringLiteral"
+        },
+        {
+          "$ref": "#/definitions/datetimeLiteral"
+        },
+        {
+          "$ref": "#/definitions/arrayLiteral"
+        },
+        {
+          "$ref": "#/definitions/objectLiteral"
+        }
+      ]
+    },
+    "loc": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/definitions/pos"
+        },
+        "end": {
+          "$ref": "#/definitions/pos"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "nullLiteral": {
+      "type": "null"
+    },
+    "numberLiteral": {
+      "type": "number"
+    },
+    "objectLiteral": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/literalValue"
+      }
+    },
+    "pos": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "number"
+        },
+        "col": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "line",
+        "col"
+      ],
+      "additionalProperties": false
+    },
+    "rateSample": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rate"
+        },
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "sample": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/rateSample"
+            },
+            {
+              "$ref": "#/definitions/countSample"
+            }
+          ]
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "shape": {
+      "type": "string",
+      "enum": [
+        "spans",
+        "traces",
+        "summary"
+      ]
+    },
+    "sortDirection": {
+      "type": "string",
+      "enum": [
+        "asc",
+        "desc"
+      ]
+    },
+    "sortExpr": {
+      "type": "object",
+      "properties": {
+        "expr": {
+          "$ref": "#/definitions/expr"
+        },
+        "dir": {
+          "$ref": "#/definitions/sortDirection"
+        },
+        "loc": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/loc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "expr",
+        "dir"
+      ],
+      "additionalProperties": false
+    },
+    "star": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "star"
+        },
+        "replace": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/expr"
+          }
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "additionalProperties": false
+    },
+    "stringLiteral": {
+      "type": "string"
+    },
+    "ternaryCond": {
+      "type": "object",
+      "properties": {
+        "cond": {
+          "$ref": "#/definitions/expr"
+        },
+        "then": {
+          "$ref": "#/definitions/expr"
+        }
+      },
+      "required": [
+        "cond",
+        "then"
+      ],
+      "additionalProperties": false
+    },
+    "ternaryExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "const": "if"
+        },
+        "conds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ternaryCond"
+          }
+        },
+        "else": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "conds",
+        "else"
+      ],
+      "additionalProperties": false
+    },
+    "unaryArithmeticExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "neg"
+          ]
+        },
+        "expr": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "expr"
+      ],
+      "additionalProperties": false
+    },
+    "unaryArithmeticOp": {
+      "type": "string",
+      "enum": [
+        "neg"
+      ]
+    },
+    "unaryExpr": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "not",
+            "isnull",
+            "isnotnull"
+          ]
+        },
+        "expr": {
+          "$ref": "#/definitions/expr"
+        },
+        "loc": {
+          "$ref": "#/definitions/arithmeticExpr/properties/loc"
+        }
+      },
+      "required": [
+        "op",
+        "expr"
+      ],
+      "additionalProperties": false
+    },
+    "unaryOp": {
+      "type": "string",
+      "enum": [
+        "not",
+        "isnull",
+        "isnotnull"
+      ]
+    },
+    "unpivotAliasExpr": {
+      "type": "object",
+      "properties": {
+        "expr": {
+          "$ref": "#/definitions/expr"
+        },
+        "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "expr",
+        "alias"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

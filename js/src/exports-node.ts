@@ -42,3 +42,9 @@ export {
   BraintrustSpanProcessor,
   BraintrustExporter,
 } from "./otel";
+export {
+  Query,
+  type ParsedQuery,
+  type BTQLQueryOptions,
+  BTQLQueryResult,
+} from "./btql/query";
