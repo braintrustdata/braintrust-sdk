@@ -468,7 +468,7 @@ async function testToolUseWithResult() {
             role: "user",
             parts: [{ text: "What is 127 multiplied by 49?" }],
           },
-          ...firstResponse.candidates,
+          firstResponse.candidates[0].content,
           {
             role: "user",
             parts: [
@@ -610,20 +610,20 @@ async function testReasoning() {
 
 async function runSyncTests() {
   const tests = [
-    // testBasicCompletion,
-    // testMultiTurn,
-    // testSystemPrompt,
-    // testStreaming,
-    // testImageInput,
-    // testDocumentInput,
-    // testTemperatureVariations,
-    // testStopSequences,
-    // testLongContext,
-    // testMixedContent,
-    // testPrefill,
-    // testShortMaxTokens,
-    // testToolUse,
-    // testToolUseWithResult,
+    testBasicCompletion,
+    testMultiTurn,
+    testSystemPrompt,
+    testStreaming,
+    testImageInput,
+    testDocumentInput,
+    testTemperatureVariations,
+    testStopSequences,
+    testLongContext,
+    testMixedContent,
+    testPrefill,
+    testShortMaxTokens,
+    testToolUse,
+    testToolUseWithResult,
     testReasoning,
   ];
 
