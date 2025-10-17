@@ -147,16 +147,13 @@ function convertDataToBlob(data: any, mediaType: string): Blob | null {
 
 /**
  * Process input to extract and convert image/file content parts to Attachments
+ * Similar to processImagesInOutput in oai_responses.ts - replaces data in-place
  */
-function processInputAttachments(input: any): {
-  processedInput: any;
-  attachments?: Attachment[];
-} {
+function processInputAttachments(input: any): any {
   if (!input) {
-    return { processedInput: input };
+    return input;
   }
 
-  const attachments: Attachment[] = [];
   let attachmentIndex = 0;
 
   // Helper to process a single content part
@@ -180,12 +177,10 @@ function processInputAttachments(input: any): {
           contentType: mediaType,
         });
 
-        attachments.push(attachment);
-
-        // Return a reference instead of the raw data
+        // Replace image data with Attachment object in-place
         return {
-          type: "image",
-          image: `[Attachment: ${filename}]`,
+          ...part,
+          image: attachment,
         };
       }
     }
@@ -207,14 +202,10 @@ function processInputAttachments(input: any): {
           contentType: mediaType,
         });
 
-        attachments.push(attachment);
-
-        // Return a reference instead of the raw data
+        // Replace data with Attachment object in-place
         return {
-          type: "file",
-          mediaType: mediaType,
-          filename: filename,
-          data: `[Attachment: ${filename}]`,
+          ...part,
+          data: attachment,
         };
       }
     }
@@ -242,20 +233,14 @@ function processInputAttachments(input: any): {
   // Process different input types
   if (Array.isArray(input)) {
     // Array of messages
-    const processedInput = input.map(processMessage);
-    return attachments.length > 0
-      ? { processedInput, attachments }
-      : { processedInput };
+    return input.map(processMessage);
   } else if (typeof input === "object" && input.content) {
     // Single message with content
-    const processedInput = processMessage(input);
-    return attachments.length > 0
-      ? { processedInput, attachments }
-      : { processedInput };
+    return processMessage(input);
   }
 
   // Simple string or other input - no processing needed
-  return { processedInput: input };
+  return input;
 }
 
 /**
@@ -312,13 +297,8 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result?.finishReason);
 
-        // Process input attachments
-        const rawInput = extractInput(params);
-        const { processedInput, attachments: inputAttachments } =
-          processInputAttachments(rawInput);
-        const input = inputAttachments
-          ? { messages: processedInput, attachments: inputAttachments }
-          : processedInput;
+        // Process input attachments (replaces large data with Attachment objects in-place)
+        const input = processInputAttachments(extractInput(params));
 
         // Process generated files as attachments
         const outputAttachments = processFilesAsAttachments(result.files);
@@ -362,13 +342,8 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result.finishReason);
 
-        // Process input attachments
-        const rawInput = extractInput(params);
-        const { processedInput, attachments: inputAttachments } =
-          processInputAttachments(rawInput);
-        const input = inputAttachments
-          ? { messages: processedInput, attachments: inputAttachments }
-          : processedInput;
+        // Process input attachments (replaces large data with Attachment objects in-place)
+        const input = processInputAttachments(extractInput(params));
 
         // Process generated files as attachments
         const outputAttachments = processFilesAsAttachments(result.files);
@@ -396,13 +371,8 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamText = (params: any) => {
-    // Process input attachments
-    const rawInput = extractInput(params);
-    const { processedInput, attachments: inputAttachments } =
-      processInputAttachments(rawInput);
-    const input = inputAttachments
-      ? { messages: processedInput, attachments: inputAttachments }
-      : processedInput;
+    // Process input attachments (replaces large data with Attachment objects in-place)
+    const input = processInputAttachments(extractInput(params));
 
     const span = startSpan({
       name: "ai-sdk.streamText",
@@ -491,13 +461,8 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamObject = (params: any) => {
-    // Process input attachments
-    const rawInput = extractInput(params);
-    const { processedInput, attachments: inputAttachments } =
-      processInputAttachments(rawInput);
-    const input = inputAttachments
-      ? { messages: processedInput, attachments: inputAttachments }
-      : processedInput;
+    // Process input attachments (replaces large data with Attachment objects in-place)
+    const input = processInputAttachments(extractInput(params));
 
     const span = startSpan({
       name: "ai-sdk.streamObject",
