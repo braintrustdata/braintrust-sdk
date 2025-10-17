@@ -70,3 +70,18 @@ js-docs: js-build
 	cd js && make docs
 
 js-verify-ci: js-docs js-test
+
+
+# -------------------------------------------------------------------------------------------------
+# Stable release publishing
+# Publishes stable release from main branch using git tags
+# Usage: make release-js-sdk
+# Note: Update version in js/package.json and commit to main before running
+# -------------------------------------------------------------------------------------------------
+.PHONY: release-js-sdk
+
+release-js-sdk:
+	@echo "Publishing stable JS SDK release..."
+	@echo "This will create and push a git tag, triggering GitHub Actions to publish to npm."
+	@echo ""
+	./js/scripts/push-release-tag.sh

@@ -116,7 +116,7 @@ importers:
         version: 0.3.30(@langchain/core@0.3.78)(zod@3.25.76)
       '@langchain/core':
         specifier: ^0.3.78
-        version: 0.3.78(openai@6.3.0)
+        version: 0.3.78(openai@6.4.0)
       '@langchain/openai':
         specifier: ^0.3.17
         version: 0.3.17(@langchain/core@0.3.78)
@@ -125,7 +125,7 @@ importers:
         version: link:../../js
       openai:
         specifier: ^6.3.0
-        version: 6.3.0(zod@3.25.76)
+        version: 6.4.0(zod@3.25.76)
 
   js:
     dependencies:
@@ -2489,7 +2489,7 @@ packages:
       '@langchain/core': '>=0.3.58 <0.4.0'
     dependencies:
       '@anthropic-ai/sdk': 0.65.0(zod@3.25.76)
-      '@langchain/core': 0.3.78(openai@6.3.0)
+      '@langchain/core': 0.3.78(openai@6.4.0)
       fast-xml-parser: 4.5.3
     transitivePeerDependencies:
       - zod
@@ -2504,7 +2504,7 @@ packages:
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.21
-      langsmith: 0.3.67(openai@6.3.0)
+      langsmith: 0.3.67(openai@6.4.0)
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
@@ -2518,7 +2518,7 @@ packages:
       - openai
     dev: true
 
-  /@langchain/core@0.3.78(openai@6.3.0):
+  /@langchain/core@0.3.78(openai@6.4.0):
     resolution: {integrity: sha512-Nn0x9erQlK3zgtRU1Z8NUjLuyW0gzdclMsvLQ6wwLeDqV91pE+YKl6uQb+L2NUDs4F0N7c2Zncgz46HxrvPzuA==}
     engines: {node: '>=18'}
     dependencies:
@@ -2527,7 +2527,7 @@ packages:
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.21
-      langsmith: 0.3.67(openai@6.3.0)
+      langsmith: 0.3.67(openai@6.4.0)
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
@@ -2595,7 +2595,7 @@ packages:
     peerDependencies:
       '@langchain/core': '>=0.3.29 <0.4.0'
     dependencies:
-      '@langchain/core': 0.3.78(openai@6.3.0)
+      '@langchain/core': 0.3.78(openai@6.4.0)
       js-tiktoken: 1.0.21
       openai: 4.104.0(zod@3.25.76)
       zod: 3.25.76
@@ -6107,7 +6107,7 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
-  /langsmith@0.3.67(openai@6.3.0):
+  /langsmith@0.3.67(openai@6.4.0):
     resolution: {integrity: sha512-l4y3RmJ9yWF5a29fLg3eWZQxn6Q6dxTOgLGgQHzPGZHF3NUynn+A+airYIe/Yt4rwjGbuVrABAPsXBkVu/Hi7g==}
     peerDependencies:
       '@opentelemetry/api': '*'
@@ -6127,7 +6127,7 @@ packages:
       '@types/uuid': 10.0.0
       chalk: 4.1.2
       console-table-printer: 2.14.6
-      openai: 6.3.0(zod@3.25.76)
+      openai: 6.4.0(zod@3.25.76)
       p-queue: 6.6.2
       p-retry: 4.6.2
       semver: 7.7.2
@@ -6712,8 +6712,8 @@ packages:
       zod: 3.25.76
     dev: true
 
-  /openai@6.3.0(zod@3.25.76):
-    resolution: {integrity: sha512-E6vOGtZvdcb4yXQ5jXvDlUG599OhIkb/GjBLZXS+qk0HF+PJReIldEc9hM8Ft81vn+N6dRdFRb7BZNK8bbvXrw==}
+  /openai@6.4.0(zod@3.25.76):
+    resolution: {integrity: sha512-vSoVBRTPMgg3oSaoHIGfbYM2zwGN0D4F2aiNHMeu1lZHFOwfJMAF0X110HDdedYvcsIo578ujQ11WL5kP687Cw==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0

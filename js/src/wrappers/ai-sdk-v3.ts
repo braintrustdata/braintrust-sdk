@@ -91,7 +91,7 @@ export function wrapAISDK<T extends AISDKMethods>(
 
         span.log({
           input: extractInput(params),
-          output: result.text,
+          output: result.text || result.content,
           metadata: {
             ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
@@ -192,7 +192,7 @@ export function wrapAISDK<T extends AISDKMethods>(
             const model = extractModelFromResult(event);
             const finishReason = normalizeFinishReason(event?.finishReason);
             span.log({
-              output: event?.text,
+              output: event?.text || event?.content,
               metadata: {
                 ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
