@@ -385,4 +385,72 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
       expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
     },
   );
+
+  test("span_info from compiled prompts is properly linked", async () => {
+    expect(await testLogger.drain()).toHaveLength(0);
+
+    const mockSpanInfo = {
+      metadata: {
+        prompt: {
+          id: "test-prompt-id",
+          version: "test-version-123",
+          project_id: "test-project-id",
+          variables: { query: "hello" },
+        },
+      },
+    };
+
+    await generateText({
+      model: openai(OPENAI_MODEL),
+      prompt: "Say hello",
+      span_info: mockSpanInfo,
+    });
+
+    const spans = (await testLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "ai-sdk.generateText" &&
+        typeof s?.output === "string",
+    );
+
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.metadata?.prompt).toEqual(mockSpanInfo.metadata.prompt);
+  });
+
+  test("span_info in streamObject is properly linked", async () => {
+    expect(await testLogger.drain()).toHaveLength(0);
+
+    const mockSpanInfo = {
+      metadata: {
+        prompt: {
+          id: "stream-prompt-id",
+          version: "stream-version-456",
+          project_id: "stream-project-id",
+          variables: { action: "stream" },
+        },
+      },
+    };
+
+    const streamRes = await streamObject({
+      model: openai(OPENAI_MODEL),
+      schema: simpleSchema,
+      prompt: "Stream a JSON object with key 'answer' set to 'ok'.",
+      span_info: mockSpanInfo,
+    });
+
+    for await (const _chunk of streamRes.partialObjectStream) {
+      // Drain stream
+    }
+
+    const spans = (await testLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "ai-sdk.streamObject" &&
+        s?.output &&
+        typeof s.output === "object",
+    );
+
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.metadata?.prompt).toEqual(mockSpanInfo.metadata.prompt);
+  });
 });

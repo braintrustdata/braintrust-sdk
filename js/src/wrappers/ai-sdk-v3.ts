@@ -1,5 +1,6 @@
 import { BraintrustMiddleware } from "./ai-sdk-v2";
 import { startSpan, traced, withCurrent } from "../logger";
+import type { CompiledPrompt } from "../logger";
 import {
   extractModelParameters,
   detectProviderFromResult,
@@ -33,7 +34,29 @@ const V3_EXCLUDE_KEYS = new Set([
   "model", // Already captured in metadata.model
   "providerOptions", // Internal AI SDK configuration
   "tools", // Already captured in metadata.tools
+  "span_info", // Extracted separately for prompt linking
 ]);
+
+type SpanInfo = {
+  span_info?: CompiledPrompt<"chat">["span_info"];
+};
+
+/**
+ * Helper function to extract span_info from params and prepare it for merging.
+ * Splits span_info into metadata and other properties (like name, spanAttributes).
+ * This matches the pattern used in the OpenAI wrapper.
+ */
+function extractSpanInfo(params: Record<string, unknown> & SpanInfo): {
+  spanInfoMetadata?: Record<string, unknown>;
+  spanInfoRest: Record<string, unknown>;
+} {
+  const { span_info } = params;
+  if (!span_info) {
+    return { spanInfoRest: {} };
+  }
+  const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info;
+  return { spanInfoMetadata, spanInfoRest };
+}
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
@@ -72,6 +95,8 @@ export function wrapAISDK<T extends AISDKMethods>(
     streamObject,
   } = ai;
   const wrappedGenerateText = (params: any) => {
+    const { spanInfoMetadata, spanInfoRest } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
@@ -104,11 +129,15 @@ export function wrapAISDK<T extends AISDKMethods>(
       },
       {
         name: "ai-sdk.generateText",
+        ...spanInfoRest,
+        ...(spanInfoMetadata ? { event: { metadata: spanInfoMetadata } } : {}),
       },
     );
   };
 
   const wrappedGenerateObject = (params: any) => {
+    const { spanInfoMetadata, spanInfoRest } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
@@ -140,16 +169,24 @@ export function wrapAISDK<T extends AISDKMethods>(
       },
       {
         name: "ai-sdk.generateObject",
+        ...spanInfoRest,
+        ...(spanInfoMetadata ? { event: { metadata: spanInfoMetadata } } : {}),
       },
     );
   };
 
   const wrappedStreamText = (params: any) => {
+    const { spanInfoMetadata, spanInfoRest } = extractSpanInfo(params);
+
     const span = startSpan({
       name: "ai-sdk.streamText",
+      ...spanInfoRest,
       event: {
         input: extractInput(params),
-        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
+        metadata: {
+          ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          ...spanInfoMetadata,
+        },
       },
     });
 
@@ -225,11 +262,17 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamObject = (params: any) => {
+    const { spanInfoMetadata, spanInfoRest } = extractSpanInfo(params);
+
     const span = startSpan({
       name: "ai-sdk.streamObject",
+      ...spanInfoRest,
       event: {
         input: extractInput(params),
-        metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
+        metadata: {
+          ...extractModelParameters(params, V3_EXCLUDE_KEYS),
+          ...spanInfoMetadata,
+        },
       },
     });
 
