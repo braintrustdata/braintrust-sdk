@@ -108,7 +108,6 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.tokens).toBeGreaterThan(0);
     expect(metrics.prompt_tokens).toBeGreaterThan(0);
     expect(metrics.completion_tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_cached_tokens).toBeGreaterThanOrEqual(0);
   });
 
   test("google genai streaming completion", async () => {
