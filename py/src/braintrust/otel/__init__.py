@@ -278,15 +278,19 @@ class BraintrustSpanProcessor:
             parent_value = None
 
             # Priority 1: Check if braintrust.parent is in current OTEL context
-            from opentelemetry import context
+            from opentelemetry import baggage, context
             current_context = context.get_current()
             parent_value = context.get_value('braintrust.parent', current_context)
 
-            # Priority 2: Check if parent_context has braintrust.parent (backup)
+            # Priority 2: Check OTEL baggage (propagates automatically across contexts)
+            if not parent_value:
+                parent_value = baggage.get_baggage('braintrust.parent', context=current_context)
+
+            # Priority 3: Check if parent_context has braintrust.parent (backup)
             if not parent_value and parent_context:
                 parent_value = context.get_value('braintrust.parent', parent_context)
 
-            # Priority 3: Check if parent OTEL span has braintrust.parent attribute
+            # Priority 4: Check if parent OTEL span has braintrust.parent attribute
             if not parent_value and parent_context:
                 parent_value = self._get_parent_otel_braintrust_parent(parent_context)
 
@@ -340,3 +344,100 @@ class BraintrustSpanProcessor:
     def processor(self):
         """Access to the underlying span processor."""
         return self._processor
+
+
+def _get_braintrust_parent(
+    object_type,
+    object_id: Optional[str] = None,
+    compute_args: Optional[Dict] = None
+) -> Optional[str]:
+    """
+    Construct a braintrust.parent identifier string from span components.
+
+    Args:
+        object_type: Type of parent object (PROJECT_LOGS or EXPERIMENT)
+        object_id: Resolved object ID (project_id or experiment_id)
+        compute_args: Optional dict with project_name/project_id for unresolved cases
+
+    Returns:
+        String like "project_id:abc", "project_name:my-proj", "experiment_id:exp-123", or None
+    """
+    from braintrust.span_identifier_v3 import SpanObjectTypeV3
+
+    if not object_type:
+        return None
+
+    if object_type == SpanObjectTypeV3.PROJECT_LOGS:
+        if object_id:
+            return f"project_id:{object_id}"
+        elif compute_args:
+            # Check compute args for project_id or project_name
+            _id = compute_args.get("project_id")
+            _name = compute_args.get("project_name")
+            if _id:
+                return f"project_id:{_id}"
+            elif _name:
+                return f"project_name:{_name}"
+    elif object_type == SpanObjectTypeV3.EXPERIMENT:
+        if object_id:
+            return f"experiment_id:{object_id}"
+        elif compute_args:
+            _id = compute_args.get("experiment_id")
+            if _id:
+                return f"experiment_id:{_id}"
+
+    return None
+
+
+def context_from_span_export(export_str: str):
+    """
+    Create an OTEL context from a Braintrust span export string.
+
+    Used for distributed tracing scenarios where a Braintrust span in one service
+    needs to be the parent of an OTEL span in another service.
+
+    Args:
+        export_str: The string returned from span.export()
+
+    Returns:
+        OTEL context that can be used when creating child spans
+    """
+    if not OTEL_AVAILABLE:
+        raise ImportError(INSTALL_ERR_MSG)
+
+    from opentelemetry import baggage, trace
+    from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
+
+    from braintrust.span_identifier_v4 import SpanComponentsV4
+
+    # Parse the export string (handles V3/V4 automatically)
+    components = SpanComponentsV4.from_str(export_str)
+
+    # Construct braintrust.parent from object_type and object_id
+    braintrust_parent = _get_braintrust_parent(
+        object_type=components.object_type,
+        object_id=components.object_id,
+        compute_args=components.compute_object_metadata_args
+    )
+
+    # Convert hex strings to OTEL integers
+    trace_id_int = int(components.root_span_id, 16)
+    span_id_int = int(components.span_id, 16)
+
+    # Create OTEL SpanContext marked as remote
+    span_context = SpanContext(
+        trace_id=trace_id_int,
+        span_id=span_id_int,
+        is_remote=True,  # Critical: mark as remote for distributed tracing
+        trace_flags=TraceFlags(TraceFlags.SAMPLED)
+    )
+
+    # Create NonRecordingSpan and set in context
+    non_recording_span = NonRecordingSpan(span_context)
+    ctx = trace.set_span_in_context(non_recording_span)
+
+    # Set braintrust.parent in OTEL baggage so it propagates automatically
+    if braintrust_parent:
+        ctx = baggage.set_baggage('braintrust.parent', braintrust_parent, context=ctx)
+
+    return ctx
