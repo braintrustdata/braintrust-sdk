@@ -3,7 +3,7 @@ import { Attachment } from "../logger";
 /**
  * Get file extension from IANA media type
  */
-function getExtensionFromMediaType(mediaType: string): string {
+export function getExtensionFromMediaType(mediaType: string): string {
   const extensionMap: Record<string, string> = {
     "image/png": "png",
     "image/jpeg": "jpg",

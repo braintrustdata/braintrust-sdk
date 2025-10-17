@@ -8,7 +8,10 @@ import {
   normalizeFinishReason,
   extractInput,
 } from "./ai-sdk-shared";
-import { processInputAttachments } from "./attachment-utils";
+import {
+  processInputAttachments,
+  getExtensionFromMediaType,
+} from "./attachment-utils";
 
 // Define a neutral interface for the AI SDK methods we use.
 // This avoids importing `typeof import("ai")`, which can cause type-identity
@@ -74,31 +77,6 @@ function processFilesAsAttachments(
       contentType: mediaType,
     });
   });
-}
-
-/**
- * Get file extension from IANA media type
- */
-function getExtensionFromMediaType(mediaType: string): string {
-  const extensionMap: Record<string, string> = {
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/gif": "gif",
-    "image/webp": "webp",
-    "image/svg+xml": "svg",
-    "audio/mpeg": "mp3",
-    "audio/wav": "wav",
-    "audio/ogg": "ogg",
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "application/pdf": "pdf",
-    "application/json": "json",
-    "text/plain": "txt",
-    "text/html": "html",
-    "text/csv": "csv",
-  };
-
-  return extensionMap[mediaType] || "bin";
 }
 
 /**
