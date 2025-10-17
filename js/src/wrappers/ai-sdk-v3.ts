@@ -132,8 +132,8 @@ export function wrapAISDK<T extends AISDKMethods>(
         // Process generated files as attachments
         const outputAttachments = processFilesAsAttachments(result.files);
         const output = outputAttachments
-          ? { text: result.text, files: outputAttachments }
-          : result.text;
+          ? { text: result.text || result.content, files: outputAttachments }
+          : result.text || result.content;
 
         span.log({
           input: input,
@@ -253,8 +253,11 @@ export function wrapAISDK<T extends AISDKMethods>(
             // Process generated files as attachments
             const outputAttachments = processFilesAsAttachments(event.files);
             const output = outputAttachments
-              ? { text: event?.text, files: outputAttachments }
-              : event?.text;
+              ? {
+                  text: event?.text || event?.content,
+                  files: outputAttachments,
+                }
+              : event?.text || event?.content;
 
             span.log({
               output: output,
