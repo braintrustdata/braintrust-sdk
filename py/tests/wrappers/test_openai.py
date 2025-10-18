@@ -5,10 +5,10 @@ import openai
 import pytest
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
 from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
 from pydantic import BaseModel
+from test_utils import assert_metrics_are_valid
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
 PROJECT_NAME = "test-project-openai-py-tracing"

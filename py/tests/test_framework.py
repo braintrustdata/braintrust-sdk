@@ -73,7 +73,7 @@ async def test_run_evaluator_with_many_scorers():
     try:
         from braintrust_core.score import Score as BraintrustCoreScore
     except ImportError:
-        from .score import Score as BraintrustCoreScore
+        from braintrust.score import Score as BraintrustCoreScore
 
     # Define test data
     data = [

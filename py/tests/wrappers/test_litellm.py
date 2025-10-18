@@ -6,7 +6,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.litellm import wrap_litellm
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from test_utils import assert_metrics_are_valid
 
 TEST_ORG_ID = "test-org-litellm-py-tracing"
 PROJECT_NAME = "test-project-litellm-py-tracing"
