@@ -12,7 +12,7 @@ const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 // Initialize Braintrust logger
 initLogger({
-  projectName: "golden-ts-ai-sdk-otel",
+  projectName: "golden-ts-otel-ai-sdk",
 });
 
 // Wrap AI SDK with Braintrust
