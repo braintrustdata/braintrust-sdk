@@ -3178,6 +3178,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   description?: string;
   version?: string;
   projectId?: string;
+  datasetId?: string;
   metadata?: Record<string, unknown>;
   state?: BraintrustState;
   _internal_btql?: Record<string, unknown>;
@@ -3198,6 +3199,7 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.datasetId The id of the dataset to use. If specified, the dataset must already exist.
  * @param options.metadata A dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.useOutput (Deprecated) If true, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
  * @returns The newly created Dataset.
@@ -3256,6 +3258,7 @@ export function initDataset<
     fetch,
     forceLogin,
     projectId,
+    datasetId,
     metadata,
     useOutput: legacy,
     state: stateArg,
@@ -3274,30 +3277,58 @@ export function initDataset<
         forceLogin,
       });
 
-      const args: Record<string, unknown> = {
-        org_id: state.orgId,
-        project_name: project,
-        project_id: projectId,
-        dataset_name: dataset,
-        description,
-        metadata,
-      };
-      const response = await state
-        .appConn()
-        .post_json("api/dataset/register", args);
+      if (datasetId) {
+        const args: Record<string, unknown> = {
+          object_type: "dataset",
+          object_ids: [datasetId],
+        };
+        const fullResponse = await state
+          .appConn()
+          .post_json("api/self/get_object_info", args);
+        const datasetEntry = fullResponse[0];
+        return {
+          project: {
+            id: datasetEntry.parent_cols.project.id,
+            name: datasetEntry.parent_cols.project.name,
+            fullInfo: datasetEntry.parent_cols.project,
+          },
+          dataset: {
+            id: datasetEntry.object_id,
+            name: datasetEntry.object_name,
+            fullInfo: {},
+          },
+        };
+      } else {
+        if (!isEmpty(datasetId)) {
+          throw new Error(
+            "Cannot specify datasetId and project or dataset name",
+          );
+        }
+        const args: Record<string, unknown> = {
+          org_id: state.orgId,
+          project_name: project,
+          project_id: projectId,
+          dataset_name: dataset,
+          description,
+          metadata,
+        };
+        const response = await state
+          .appConn()
+          .post_json("api/dataset/register", args);
 
-      return {
-        project: {
-          id: response.project.id,
-          name: response.project.name,
-          fullInfo: response.project,
-        },
-        dataset: {
-          id: response.dataset.id,
-          name: response.dataset.name,
-          fullInfo: response.dataset,
-        },
-      };
+        return {
+          project: {
+            id: response.project.id,
+            name: response.project.name,
+            fullInfo: response.project,
+          },
+          dataset: {
+            id: response.dataset.id,
+            name: response.dataset.name,
+            fullInfo: response.dataset,
+          },
+        };
+      }
     },
   );
 
