@@ -2,16 +2,15 @@ import time
 from pathlib import Path
 
 import pytest
-from google.genai import types
-from google.genai.client import Client
-
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.google_genai import setup_genai
+from google.genai import types
+from google.genai.client import Client
 
 PROJECT_NAME = "test-genai-app"
 MODEL = "gemini-2.0-flash-001"
-FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "internal/golden/fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 @pytest.fixture(scope="module")

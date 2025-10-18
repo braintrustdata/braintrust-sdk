@@ -8,7 +8,6 @@ when created in mixed contexts.
 import os
 
 import pytest
-
 from braintrust import current_span
 from braintrust.logger import _internal_with_memory_background_logger
 from braintrust.otel import BraintrustSpanProcessor

@@ -6,9 +6,8 @@ import time
 from typing import AsyncGenerator, List
 from unittest import TestCase
 
-import pytest
-
 import braintrust
+import pytest
 from braintrust import (
     Attachment,
     BaseAttachment,

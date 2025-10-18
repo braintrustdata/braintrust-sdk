@@ -6,7 +6,6 @@ import time
 
 import anthropic
 import pytest
-
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.anthropic import wrap_anthropic

@@ -20,9 +20,6 @@ import nox
 # much faster than pip
 nox.options.default_venv_backend = "uv"
 
-SRC_DIR = "braintrust"
-WRAPPER_DIR = "braintrust/wrappers"
-
 
 SILENT_INSTALLS = True
 LATEST = "latest"
@@ -78,7 +75,7 @@ def test_core(session):
 def test_pydantic_ai(session, version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
+    _run_tests(session, "tests/wrappers/test_pydantic_ai.py")
     _run_core_tests(session)
 
 
@@ -91,7 +88,7 @@ def test_claude_agent_sdk(session, version):
         npm_bin = _install_npm_in_session(session)
         session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
         _install(session, "claude_agent_sdk", version)
-        _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
+        _run_tests(session, "tests/wrappers/claude_agent_sdk/test_wrapper.py")
         _run_core_tests(session)
 
 
@@ -100,7 +97,7 @@ def test_claude_agent_sdk(session, version):
 def test_agno(session, version):
     _install_test_deps(session)
     _install(session, "agno", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_agno.py")
+    _run_tests(session, "tests/wrappers/test_agno.py")
     _run_core_tests(session)
 
 
@@ -109,7 +106,7 @@ def test_agno(session, version):
 def test_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
+    _run_tests(session, "tests/wrappers/test_anthropic.py")
     _run_core_tests(session)
 
 
@@ -118,7 +115,7 @@ def test_anthropic(session, version):
 def test_google_genai(session, version):
     _install_test_deps(session)
     _install(session, "google-genai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_google_genai.py")
+    _run_tests(session, "tests/wrappers/test_google_genai.py")
     _run_core_tests(session)
 
 
@@ -127,7 +124,7 @@ def test_google_genai(session, version):
 def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_tests(session, "tests/wrappers/test_openai.py")
     _run_core_tests(session)
 
 
@@ -139,7 +136,7 @@ def test_litellm(session, version):
     # https://github.com/BerriAI/litellm/issues/13711
     session.install("openai<=1.99.9", "--force-reinstall")
     _install(session, "litellm", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
+    _run_tests(session, "tests/wrappers/test_litellm.py")
     _run_core_tests(session)
 
 
@@ -169,7 +166,7 @@ def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
-    _run_tests(session, "braintrust/test_otel.py")
+    _run_tests(session, "tests/test_otel.py")
 
 
 @nox.session()
@@ -178,7 +175,7 @@ def test_otel_not_installed(session):
     otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
     for pkg in otel_packages:
         session.run("python", "-c", f"import {pkg}", success_codes=ERROR_CODES, silent=True)
-    _run_tests(session, "braintrust/test_otel.py")
+    _run_tests(session, "tests/test_otel.py")
 
 
 @nox.session()
@@ -256,46 +253,39 @@ def _get_braintrust_wheel():
 
 def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+    _run_tests(session, "tests", ignore_path="tests/wrappers")
 
 
 def _run_tests(session, test_path, ignore_path="", env=None):
-    """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
+    """Run tests from the tests directory."""
     env = env.copy() if env else {}
     wheel_flag = "--wheel" in session.posargs
     common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     if not wheel_flag:
-        # Run the tests in the src directory
+        # Run the tests in the tests directory
         test_args = [
             "pytest",
-            f"src/{test_path}",
+            test_path,
         ]
         if ignore_path:
-            test_args.append(f"--ignore=src/{ignore_path}")
+            test_args.append(f"--ignore={ignore_path}")
         session.run(*test_args, *common_args, env=env)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
     # local modules from the source directory.
-    # First, we need to absolute paths to all the binaries and libs in our venv that we'll see.
-    py = os.path.join(session.bin, "python")
-    site_packages = session.run(py, "-c", "import site; print(site.getsitepackages()[0])", silent=True).strip()
-    abs_test_path = os.path.abspath(os.path.join(site_packages, test_path))
-    ignore_path = os.path.abspath(os.path.join(site_packages, ignore_path))
+    # Tests are now in tests/ directory, not bundled with the wheel
     pytest_path = os.path.join(session.bin, "pytest")
-    ignore = f"--ignore={ignore_path}" if ignore_path else ""
+    abs_test_path = os.path.abspath(test_path)
+    abs_ignore_path = os.path.abspath(ignore_path) if ignore_path else ""
+    ignore = f"--ignore={abs_ignore_path}" if ignore_path else ""
 
-    # Lastly, change to a different directory to ensure we don't install local stuff.
+    # Change to a different directory to ensure we don't install local stuff.
     with tempfile.TemporaryDirectory() as tmp:
         os.chdir(tmp)
         # This env var is used to detect if we're running from the wheel.
-        # It proved very helpful because it's very easy
-        # to accidentally import local modules from the source directory.
         env["BRAINTRUST_TESTING_WHEEL"] = "1"
         session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
-
-    # And a final note ... if it's not clear from above, we include test files in our wheel, which
-    # is perhaps not ideal?
 
 
 def _install(session, package, version=LATEST):

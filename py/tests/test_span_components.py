@@ -6,7 +6,6 @@ Tests serialization, deserialization, OTEL compatibility, and backward compatibi
 from uuid import uuid4
 
 import pytest
-
 from braintrust.id_gen import OTELIDGenerator
 from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from braintrust.span_identifier_v4 import SpanComponentsV4

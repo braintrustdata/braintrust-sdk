@@ -274,11 +274,10 @@ class TestSpanFiltering:
         except ImportError:
             pytest.skip("OpenTelemetry SDK not fully installed, skipping AISpanProcessor tests")
 
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         self.memory_exporter = InMemorySpanExporter()
         self.provider = TracerProvider()
@@ -403,11 +402,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -435,11 +433,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -465,11 +462,10 @@ class TestSpanFiltering:
             return None  # Always defer to default logic
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -492,11 +488,10 @@ class TestSpanFiltering:
 
     def test_filtering_vs_unfiltered_comparison(self):
         # Set up two separate exporters and processors
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         all_spans_exporter = InMemorySpanExporter()
         filtered_spans_exporter = InMemorySpanExporter()

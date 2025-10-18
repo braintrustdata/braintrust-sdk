@@ -3,7 +3,6 @@ import os
 import uuid
 
 import pytest
-
 from braintrust import id_gen
 
 

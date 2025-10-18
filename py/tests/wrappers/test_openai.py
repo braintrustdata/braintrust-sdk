@@ -3,13 +3,12 @@ import time
 
 import openai
 import pytest
-from openai import AsyncOpenAI
-from openai._types import NOT_GIVEN
-from pydantic import BaseModel
-
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from openai import AsyncOpenAI
+from openai._types import NOT_GIVEN
+from pydantic import BaseModel
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
 PROJECT_NAME = "test-project-openai-py-tracing"
@@ -1283,10 +1282,9 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
     pytest.importorskip("agents", reason="agents package not available")
 
     import agents
+    import braintrust
     from agents import Agent
     from agents.run import AgentRunner
-
-    import braintrust
     from braintrust.wrappers.openai import BraintrustTracingProcessor
 
     assert not memory_logger.pop()
@@ -1397,7 +1395,6 @@ async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
     import agents
     from agents import Agent
     from agents.run import AgentRunner
-
     from braintrust.wrappers.openai import BraintrustTracingProcessor
 
     assert not memory_logger.pop()
@@ -1500,7 +1497,6 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
     pytest.importorskip("agents", reason="agents package not available")
 
     from agents import Agent, Runner, function_tool, set_trace_processors
-
     from braintrust import current_span, wrap_openai
     from braintrust.wrappers.openai import BraintrustTracingProcessor
 
