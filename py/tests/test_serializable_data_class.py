@@ -2,7 +2,7 @@ import unittest
 from dataclasses import dataclass
 from typing import List, Optional
 
-from .serializable_data_class import SerializableDataClass
+from braintrust.serializable_data_class import SerializableDataClass
 
 
 @dataclass

@@ -1,8 +1,7 @@
 from typing import List
 
 import pytest
-
-from .framework import (
+from braintrust.framework import (
     Eval,
     EvalCase,
     EvalHooks,
@@ -10,8 +9,8 @@ from .framework import (
     Evaluator,
     run_evaluator,
 )
-from .score import Score, Scorer
-from .test_helpers import init_test_exp, with_memory_logger, with_simulate_login  # noqa: F401
+from braintrust.score import Score, Scorer
+from braintrust.test_helpers import init_test_exp, with_memory_logger, with_simulate_login  # noqa: F401
 
 
 @pytest.mark.asyncio

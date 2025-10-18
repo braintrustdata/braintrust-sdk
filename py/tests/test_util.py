@@ -2,8 +2,7 @@ import unittest
 from typing import List
 
 import pytest
-
-from .util import LazyValue, mask_api_key
+from braintrust.util import LazyValue, mask_api_key
 
 
 class TestLazyValue(unittest.TestCase):
