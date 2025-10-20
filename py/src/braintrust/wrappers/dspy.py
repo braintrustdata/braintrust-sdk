@@ -50,6 +50,7 @@ Advanced Usage with LiteLLM Patching:
 from typing import Any, Dict, Optional
 
 from braintrust.logger import current_span, start_span
+from braintrust.span_types import SpanTypeAttribute
 
 # Note: For detailed token and cost metrics, use patch_litellm() before importing DSPy.
 # The DSPy callback focuses on execution flow and span hierarchy.
@@ -296,9 +297,9 @@ class BraintrustDSpyCallback(BaseCallback):
         parent_export = parent.export() if parent else None
 
         span = start_span(
-            name=f"dspy.tool.{tool_name}",
+            name=tool_name,
+            span_attributes={"type": SpanTypeAttribute.TOOL},
             input=inputs,
-            metadata={"tool_name": tool_name},
             parent=parent_export,
         )
         # Manually set as current span so children can find it
