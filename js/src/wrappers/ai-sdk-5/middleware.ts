@@ -1,5 +1,5 @@
-import { SpanTypeAttribute } from "../../util/index";
-import { startSpan, type CompiledPrompt } from "../logger";
+import { SpanTypeAttribute } from "../../../util/index";
+import { startSpan, type CompiledPrompt } from "../../logger";
 import {
   detectProviderFromResult,
   extractModelFromResult,
@@ -10,8 +10,8 @@ import {
   extractToolCallsFromBlocks,
   buildAssistantOutputWithToolCalls,
   extractInput,
-} from "./ai-sdk-shared";
-import { processInputAttachments } from "./attachment-utils";
+} from "../ai-sdk-shared/utils";
+import { processInputAttachments } from "../attachment-utils";
 
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types

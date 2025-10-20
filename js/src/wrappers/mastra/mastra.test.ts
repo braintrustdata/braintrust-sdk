@@ -17,7 +17,7 @@ import {
   Logger,
   TestBackgroundLogger,
   initLogger,
-} from "../logger";
+} from "../../logger";
 
 // Initialize test state for logger utilities
 _exportsForTestingOnly.setInitialTestState();
