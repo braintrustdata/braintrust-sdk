@@ -37,6 +37,7 @@ export { wrapAISDK } from "./wrappers/ai-sdk-v3";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk";
+export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export {
   AISpanProcessor,
   BraintrustSpanProcessor,

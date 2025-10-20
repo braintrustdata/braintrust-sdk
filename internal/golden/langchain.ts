@@ -1,4 +1,4 @@
-import { traced, initLogger } from "braintrust";
+import { traced, initLogger, log } from "braintrust";
 import { BraintrustCallbackHandler } from "@braintrust/langchain-js";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
@@ -937,7 +937,7 @@ async function testAsyncStreaming() {
 async function testReasoning() {
   return traced(
     async () => {
-      braintrust.log({
+      log({
         output:
           "Responses API not supported and chat completions do not include (reasoning) summaries",
       });

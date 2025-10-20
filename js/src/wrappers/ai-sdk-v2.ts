@@ -1,5 +1,5 @@
 import { SpanTypeAttribute } from "../../util/index";
-import { startSpan } from "../logger";
+import { startSpan, type CompiledPrompt } from "../logger";
 import {
   detectProviderFromResult,
   extractModelFromResult,
@@ -9,7 +9,9 @@ import {
   extractToolCallsFromSteps,
   extractToolCallsFromBlocks,
   buildAssistantOutputWithToolCalls,
+  extractInput,
 } from "./ai-sdk-shared";
+import { processInputAttachments } from "./attachment-utils";
 
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types
@@ -55,6 +57,8 @@ export interface MiddlewareConfig {
   debug?: boolean;
   /** Name identifier for the middleware instance */
   name?: string;
+  /** Span info from loadPrompt for prompt version tracking */
+  spanInfo?: CompiledPrompt<"chat">["span_info"];
 }
 
 // V2-specific exclude keys for extractModelParameters
@@ -95,15 +99,21 @@ export function BraintrustMiddleware(
       params,
       model: modelFromWrapGenerate,
     }) => {
+      // Extract and process input attachments
+      const rawInput = extractInput(params);
+      const processedInput = processInputAttachments(rawInput);
+
       const spanArgs = {
-        name: "ai-sdk.doGenerate",
+        name: config.spanInfo?.name || "ai-sdk.doGenerate",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...(config.spanInfo?.spanAttributes || {}),
         },
         event: {
-          input: params.prompt,
+          input: processedInput,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.spanInfo?.metadata || {}),
           },
         },
       };
@@ -166,15 +176,21 @@ export function BraintrustMiddleware(
       }
     },
     wrapStream: async ({ doStream, params }) => {
+      // Extract and process input attachments
+      const rawInput = extractInput(params);
+      const processedInput = processInputAttachments(rawInput);
+
       const spanArgs = {
-        name: "ai-sdk.doStream",
+        name: config.spanInfo?.name || "ai-sdk.doStream",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...(config.spanInfo?.spanAttributes || {}),
         },
         event: {
-          input: params.prompt,
+          input: processedInput,
           metadata: {
             ...extractModelParameters(params, V2_EXCLUDE_KEYS),
+            ...(config.spanInfo?.metadata || {}),
           },
         },
       };

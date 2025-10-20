@@ -136,6 +136,45 @@ test("mergeDictsWithPaths", () => {
   expect(a).toEqual(fullMerge);
 });
 
+test("mergeDictsWithPaths ignore undefined", () => {
+  function ab() {
+    return [
+      {
+        x: 10,
+        y: "hello",
+        z: {
+          a: "yes",
+          b: "no",
+        },
+        n: { a: 12 },
+      },
+      {
+        y: "goodbye",
+        q: "new",
+        z: {
+          a: undefined,
+          b: "maybe",
+        },
+        n: undefined,
+      },
+    ];
+  }
+
+  let a: Record<string, unknown>, b: Record<string, unknown>;
+  [a, b] = ab();
+  mergeDicts(a, b);
+  expect(a).toEqual({
+    x: 10,
+    y: "goodbye",
+    q: "new",
+    z: {
+      a: "yes",
+      b: "maybe",
+    },
+    n: { a: 12 },
+  });
+});
+
 test("mapAt basic", () => {
   const m = new Map<number, string>([
     [4, "hello"],

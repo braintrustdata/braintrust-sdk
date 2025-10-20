@@ -206,7 +206,7 @@ async function testStopSequences() {
       const response = await client.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 500,
-        stop_sequences: ["END", "\n\n"],
+        stop_sequences: ["END"],
         messages: [
           { role: "user", content: "Write a short story about a robot." },
         ],
