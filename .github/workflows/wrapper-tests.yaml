@@ -1,0 +1,46 @@
+name: SDK Wrapper Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test-wrappers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wrapper:
+          - ai-sdk-4
+          - ai-sdk-5
+          - mastra
+          - claude-agent-sdk
+
+    name: Test ${{ matrix.wrapper }}
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install wrapper dependencies
+        run: |
+          cd js/src/wrappers/${{ matrix.wrapper }}
+          pnpm install
+
+      - name: Run wrapper tests
+        run: |
+          cd js/src/wrappers/${{ matrix.wrapper }}
+          pnpm test

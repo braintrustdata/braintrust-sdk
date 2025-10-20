@@ -9,36 +9,20 @@ help:
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-ai-sdk        - Run AI SDK tests (v1 + v2)"
 	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
 	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
 	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
+	@echo "  make test-ai-sdk-4      - Run AI SDK v4 wrapper tests"
+	@echo "  make test-ai-sdk-5      - Run AI SDK v5 wrapper tests"
+	@echo "  make test-mastra        - Run Mastra wrapper tests"
+	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-latest install-optional-deps publish-beta-local
-
-# -------------------------------------------------------------------------------------------------	#
-# AI SDK testing
-# -------------------------------------------------------------------------------------------------
-.PHONY: test-ai-sdk test-ai-sdk-v1 test-ai-sdk-v2
-
-test-ai-sdk: test-ai-sdk-v1 test-ai-sdk-v2
-
-test-ai-sdk-v1:
-	pnpm prune
-	$(call pnpm_install_no_save,ai@^3.0.0)
-	pnpm test:ai-sdk-v1
-
-test-ai-sdk-v2:
-	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add ai@beta @ai-sdk/openai@beta @ai-sdk/anthropic@beta @ai-sdk/provider@beta
-	pnpm test:ai-sdk-v2
-# this should still work
-	pnpm test:ai-sdk-v1
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -65,6 +49,34 @@ test-google-genai-latest:
 	pnpm prune
 	$(call pnpm_install_no_save,@google/genai)
 	pnpm test:google-genai
+
+# -------------------------------------------------------------------------------------------------
+# AI SDK v4 testing
+# -------------------------------------------------------------------------------------------------
+
+test-ai-sdk-4:
+	cd src/wrappers/ai-sdk-4 && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# AI SDK v5 testing
+# -------------------------------------------------------------------------------------------------
+
+test-ai-sdk-5:
+	cd src/wrappers/ai-sdk-5 && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# Mastra testing
+# -------------------------------------------------------------------------------------------------
+
+test-mastra:
+	cd src/wrappers/mastra && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# Claude Agent SDK testing
+# -------------------------------------------------------------------------------------------------
+
+test-claude-agent-sdk:
+	cd src/wrappers/claude-agent-sdk && pnpm install && pnpm test
 
 
 # -------------------------------------------------------------------------------------------------
@@ -124,7 +136,7 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-ai-sdk test-google-genai
+test: test-core test-otel test-openai test-anthropic test-google-genai
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
