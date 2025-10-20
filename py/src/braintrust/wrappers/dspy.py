@@ -47,14 +47,12 @@ Advanced Usage with LiteLLM Patching:
     ```
 """
 
-import time
 from typing import Any, Dict, Optional
 
 from braintrust.logger import current_span, start_span
 
-# Note: We don't wrap LiteLLM because DSPy's caching layer captures references
-# to litellm functions at import time, bypassing our wrapping. Instead, we extract
-# metrics (tokens, cost, latency) directly from DSPy's LM history in on_lm_end.
+# Note: For detailed token and cost metrics, use patch_litellm() before importing DSPy.
+# The DSPy callback focuses on execution flow and span hierarchy.
 
 try:
     from dspy.utils.callback import BaseCallback
@@ -72,7 +70,6 @@ class BraintrustDSpyCallback(BaseCallback):
 
     Logged information includes:
     - Input parameters and output results
-    - Token usage and costs (extracted from DSPy LM history)
     - Execution latency
     - Error information when exceptions occur
     - Hierarchical span relationships for nested operations
@@ -118,14 +115,12 @@ class BraintrustDSpyCallback(BaseCallback):
 
     The callback creates Braintrust spans for:
     - DSPy module executions (Predict, ChainOfThought, ReAct, etc.)
-    - LLM calls with token usage, costs, and timing metrics (extracted from DSPy history)
+    - LLM calls with latency metrics
     - Tool calls
     - Evaluation runs
 
-    Metrics captured from LLM calls:
-    - latency: Time taken for the LLM call
-    - estimated_cost: Cost of the API call
-    - prompt_tokens, completion_tokens, tokens: Token usage (when available)
+    For detailed token usage and cost metrics, use LiteLLM patching (see Advanced Example above).
+    The patched LiteLLM wrapper will create additional "Completion" spans with comprehensive metrics.
 
     Spans are automatically nested based on the execution hierarchy.
     """
@@ -135,10 +130,6 @@ class BraintrustDSpyCallback(BaseCallback):
         super().__init__()
         # Map call_id to span objects for proper nesting
         self._spans: Dict[str, Any] = {}
-        # Track start times for latency calculation
-        self._start_times: Dict[str, float] = {}
-        # Track LM instances to extract history/usage data in on_lm_end
-        self._lm_instances: Dict[str, Any] = {}
 
     def on_lm_start(
         self,
@@ -153,10 +144,6 @@ class BraintrustDSpyCallback(BaseCallback):
             instance: The LM instance being called
             inputs: Input parameters to the LM
         """
-        self._start_times[call_id] = time.time()
-        # Store LM instance to extract history/usage in on_lm_end
-        self._lm_instances[call_id] = instance
-
         # Extract metadata from the LM instance and inputs
         metadata = {}
         if hasattr(instance, "model"):
@@ -197,42 +184,18 @@ class BraintrustDSpyCallback(BaseCallback):
             exception: Exception raised during execution, if any
         """
         span = self._spans.pop(call_id, None)
-        instance = self._lm_instances.pop(call_id, None)
         if not span:
             return
 
         try:
-            # Extract metrics from LM history
-            metrics = {}
-
-            # Calculate latency
-            if call_id in self._start_times:
-                start_time = self._start_times.pop(call_id)
-                latency = time.time() - start_time
-                metrics["latency"] = latency
-
-            # Extract token usage and cost from LM history
-            if instance and hasattr(instance, "history") and instance.history:
-                last_entry = instance.history[-1]
-
-                # Extract usage/token metrics
-                if "response" in last_entry and hasattr(last_entry["response"], "usage"):
-                    usage = last_entry["response"].usage
-                    if hasattr(usage, "prompt_tokens"):
-                        metrics["prompt_tokens"] = float(usage.prompt_tokens)
-                    if hasattr(usage, "completion_tokens"):
-                        metrics["completion_tokens"] = float(usage.completion_tokens)
-                    if hasattr(usage, "total_tokens"):
-                        metrics["tokens"] = float(usage.total_tokens)
-
-                # Extract cost if available
-                if "cost" in last_entry:
-                    metrics["estimated_cost"] = float(last_entry["cost"])
-
+            log_data = {}
             if exception:
-                span.log(error=exception, metrics=metrics if metrics else None)
-            elif outputs:
-                span.log(output=outputs, metrics=metrics if metrics else None)
+                log_data["error"] = exception
+            if outputs:
+                log_data["output"] = outputs
+
+            if log_data:
+                span.log(**log_data)
         finally:
             span.unset_current()
             span.end()
@@ -250,8 +213,6 @@ class BraintrustDSpyCallback(BaseCallback):
             instance: The Module instance being called
             inputs: Input parameters to the module's forward() method
         """
-        self._start_times[call_id] = time.time()
-
         # Get module name
         module_name = instance.__class__.__name__
         if hasattr(instance, "__class__") and hasattr(instance.__class__, "__module__"):
@@ -289,15 +250,10 @@ class BraintrustDSpyCallback(BaseCallback):
             return
 
         try:
-            # Calculate latency
-            if call_id in self._start_times:
-                start_time = self._start_times.pop(call_id)
-                latency = time.time() - start_time
-                span.log(metrics={"latency": latency})
-
+            log_data = {}
             if exception:
-                span.log(error=exception)
-            elif outputs is not None:
+                log_data["error"] = exception
+            if outputs is not None:
                 # Convert DSPy Prediction objects to dict for logging
                 if hasattr(outputs, "toDict"):
                     output_dict = outputs.toDict()
@@ -305,7 +261,10 @@ class BraintrustDSpyCallback(BaseCallback):
                     output_dict = outputs.__dict__
                 else:
                     output_dict = outputs
-                span.log(output=output_dict)
+                log_data["output"] = output_dict
+
+            if log_data:
+                span.log(**log_data)
         finally:
             span.unset_current()
             span.end()
@@ -323,8 +282,6 @@ class BraintrustDSpyCallback(BaseCallback):
             instance: The Tool instance being called
             inputs: Input parameters to the tool
         """
-        self._start_times[call_id] = time.time()
-
         # Get tool name
         tool_name = "unknown"
         if hasattr(instance, "name"):
@@ -366,16 +323,14 @@ class BraintrustDSpyCallback(BaseCallback):
             return
 
         try:
-            # Calculate latency
-            if call_id in self._start_times:
-                start_time = self._start_times.pop(call_id)
-                latency = time.time() - start_time
-                span.log(metrics={"latency": latency})
-
+            log_data = {}
             if exception:
-                span.log(error=exception)
-            elif outputs is not None:
-                span.log(output=outputs)
+                log_data["error"] = exception
+            if outputs is not None:
+                log_data["output"] = outputs
+
+            if log_data:
+                span.log(**log_data)
         finally:
             span.unset_current()
             span.end()
@@ -393,8 +348,6 @@ class BraintrustDSpyCallback(BaseCallback):
             instance: The Evaluate instance
             inputs: Input parameters to the evaluation
         """
-        self._start_times[call_id] = time.time()
-
         metadata = {}
         # Extract evaluation metadata
         if hasattr(instance, "metric") and instance.metric:
@@ -435,18 +388,14 @@ class BraintrustDSpyCallback(BaseCallback):
             return
 
         try:
-            # Calculate latency
-            if call_id in self._start_times:
-                start_time = self._start_times.pop(call_id)
-                latency = time.time() - start_time
-                span.log(metrics={"latency": latency})
-
+            log_data = {}
             if exception:
-                span.log(error=exception)
-            elif outputs is not None:
+                log_data["error"] = exception
+            if outputs is not None:
+                log_data["output"] = outputs
                 # Extract metrics from evaluation results
-                metrics = {}
                 if isinstance(outputs, dict):
+                    metrics = {}
                     # Common evaluation metrics
                     for key in ["accuracy", "score", "total", "correct"]:
                         if key in outputs:
@@ -454,9 +403,11 @@ class BraintrustDSpyCallback(BaseCallback):
                                 metrics[key] = float(outputs[key])
                             except (ValueError, TypeError):
                                 pass
-                    span.log(output=outputs, metrics=metrics if metrics else None)
-                else:
-                    span.log(output=outputs)
+                    if metrics:
+                        log_data["metrics"] = metrics
+
+            if log_data:
+                span.log(**log_data)
         finally:
             span.unset_current()
             span.end()

@@ -64,11 +64,6 @@ def test_dspy_callback(memory_logger):
     assert "input" in lm_span
     assert "output" in lm_span
 
-    # Verify metrics (latency should be present)
-    assert "metrics" in lm_span
-    assert "latency" in lm_span["metrics"]
-    assert lm_span["metrics"]["latency"] > 0
-
     # Find module span
     module_spans = [s for s in spans if "module" in s.get("span_attributes", {}).get("name", "")]
     assert len(module_spans) >= 1
