@@ -35,6 +35,16 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Install parent dependencies
+        run: |
+          cd js
+          pnpm install
+
+      - name: Build parent package
+        run: |
+          cd js
+          pnpm run build
+
       - name: Install wrapper dependencies
         run: |
           cd js/src/wrappers/${{ matrix.wrapper }}
