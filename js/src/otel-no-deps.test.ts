@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 
-// This test file specifically tests the behavior when OpenTelemetry is not installed
-// It should be run in an environment where OpenTelemetry packages are not available
+// This test file specifically tests the behavior when OpenTelemetry is not installed.
+// It should run as part of our core / default test suite.
 
 describe("OpenTelemetry not installed", () => {
   let otelInstalled = false;
@@ -71,5 +71,17 @@ describe("OpenTelemetry not installed", () => {
         apiKey: "test-api-key",
       });
     }).toThrow("OpenTelemetry packages are not installed");
+  });
+
+  it("should return undefined when calling otelContextFromSpanExport without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      // Skip this test if OpenTelemetry is installed
+      return;
+    }
+
+    const { otelContextFromSpanExport } = await import(".");
+
+    const result = otelContextFromSpanExport("some-export-string");
+    expect(result).toBeUndefined();
   });
 });

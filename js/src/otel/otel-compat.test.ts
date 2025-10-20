@@ -11,10 +11,10 @@ import {
   currentSpan,
   getContextManager,
   _exportsForTestingOnly,
-} from "./logger";
-import { Eval } from "./framework";
-import { base64ToUint8Array } from "../util/bytes";
-import { configureNode } from "./node";
+} from "../logger";
+import { Eval } from "../framework";
+import { base64ToUint8Array } from "../../util/bytes";
+import { configureNode } from "../node";
 
 configureNode();
 
@@ -302,7 +302,7 @@ describe("OTEL compatibility mode", () => {
 
     try {
       // Clear module cache and re-import to get fresh context manager
-      const loggerModule = await import("./logger?t=" + Date.now());
+      const loggerModule = await import("../logger?t=" + Date.now());
       const cm = loggerModule.getContextManager();
 
       // If OTEL is truly available, we should get OtelContextManager
@@ -525,7 +525,7 @@ describe("OTEL compatibility mode", () => {
     parentSpan.end();
 
     // Use withParent helper - this uses getSpanParentObject which has the bug at line 3902
-    const { withParent, startSpan } = await import("./logger");
+    const { withParent, startSpan } = await import("../logger");
     withParent(exported, () => {
       // Use global startSpan without logger to trigger getSpanParentObject path
       const childSpan = startSpan({
@@ -537,5 +537,155 @@ describe("OTEL compatibility mode", () => {
 
       childSpan.end();
     });
+  });
+});
+
+describe("Distributed Tracing (BT → OTEL)", () => {
+  let originalEnv: string | undefined;
+  let trace: any;
+  let context: any;
+
+  beforeEach(async () => {
+    originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
+    process.env.BRAINTRUST_OTEL_COMPAT = "true";
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    if (OTEL_AVAILABLE) {
+      const otelApi = await import("@opentelemetry/api");
+      trace = otelApi.trace;
+      context = otelApi.context;
+    }
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.BRAINTRUST_OTEL_COMPAT;
+    } else {
+      process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
+    }
+  });
+
+  test("otelContextFromSpanExport parses BT span and creates OTEL context", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
+    const { otelContextFromSpanExport } = await import("../otel");
+    const { SpanComponentsV4 } = await import("../../util/span_identifier_v4");
+    const { SpanObjectTypeV3 } = await import("../../util/span_identifier_v3");
+
+    // Create a sample span export string
+    const rootSpanId = "a1b2c3d4e5f6789012345678abcdef01"; // 32 hex chars (16 bytes)
+    const spanId = "a1b2c3d4e5f67890"; // 16 hex chars (8 bytes)
+    const objectId = "proj-123";
+
+    const components = new SpanComponentsV4({
+      object_type: SpanObjectTypeV3.PROJECT_LOGS,
+      object_id: objectId,
+      row_id: "row-123",
+      span_id: spanId,
+      root_span_id: rootSpanId,
+      propagated_event: undefined,
+    });
+
+    const exportStr = components.toStr();
+
+    const ctx = otelContextFromSpanExport(exportStr);
+
+    // Verify that a valid context was created
+    expect(ctx).toBeDefined();
+
+    // Extract the span from the context
+    const span = trace.getSpan(ctx);
+    expect(span).toBeDefined();
+
+    const spanContext = span.spanContext();
+    expect(spanContext).toBeDefined();
+
+    // Verify trace ID matches (OTEL trace IDs are already hex strings)
+    expect(spanContext.traceId).toBe(rootSpanId);
+
+    // Verify span ID matches
+    expect(spanContext.spanId).toBe(spanId);
+
+    // Verify it's marked as remote
+    expect(spanContext.isRemote).toBe(true);
+  });
+
+  test("BT span in Service A can be parent of OTEL span in Service B", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
+    const fixture = setupOtelFixture();
+    if (!fixture) return;
+
+    const { tracer, exporter } = fixture;
+    const { otelContextFromSpanExport } = await import("../otel");
+
+    const projectName = "service-a-project";
+    const logger = initLogger({ projectName });
+
+    // ===== Service A: Create BT span and export =====
+    let serviceATraceId: string | undefined;
+    let serviceASpanId: string | undefined;
+    let exportedContext: string | undefined;
+
+    await logger.traced(
+      async (serviceASpan) => {
+        serviceATraceId = serviceASpan.rootSpanId;
+        serviceASpanId = serviceASpan.spanId;
+
+        // Export context for sending to Service B (e.g., via HTTP header)
+        exportedContext = await serviceASpan.export();
+      },
+      { name: "service_a_span" },
+    );
+
+    expect(exportedContext).toBeDefined();
+    expect(serviceATraceId).toBeDefined();
+    expect(serviceASpanId).toBeDefined();
+
+    // ===== Service B: Import context and create OTEL child span =====
+    const ctx = otelContextFromSpanExport(exportedContext!);
+
+    // Use context.with() to run code in the imported context
+    await context.with(ctx, async () => {
+      await tracer.startActiveSpan("service_b_span", async (serviceBSpan) => {
+        serviceBSpan.setAttribute("service", "service_b");
+        serviceBSpan.end();
+      });
+    });
+
+    // ===== Verify exported spans =====
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBe(1);
+
+    const serviceBSpan = otelSpans[0];
+    expect(serviceBSpan.name).toBe("service_b_span");
+
+    // Get OTEL span context
+    const serviceBContext = serviceBSpan.spanContext();
+    const serviceBTraceId = serviceBContext.traceId;
+
+    // Assert unified trace ID
+    expect(serviceBTraceId).toBe(serviceATraceId);
+
+    // Service B span should have Service A span as parent
+    // Note: In OTEL JS, parent info is in the span's parent property
+    if (serviceBSpan.parent) {
+      const parentSpanId = serviceBSpan.parent.spanId;
+      expect(parentSpanId).toBe(serviceASpanId);
+    }
+
+    // Assert braintrust.parent attribute is set on OTEL span
+    expect(serviceBSpan.attributes).toBeDefined();
+    if (serviceBSpan.attributes) {
+      expect(serviceBSpan.attributes["braintrust.parent"]).toBe(
+        `project_name:${projectName}`,
+      );
+    }
   });
 });

@@ -1,4 +1,7 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
+import { SpanComponentsV4 } from "../util/span_identifier_v4";
+import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
+
 interface OtelContext {
   getValue?: (key: string) => unknown;
 }
@@ -483,6 +486,138 @@ export class BraintrustSpanProcessor {
   forceFlush(): Promise<void> {
     return this.aiSpanProcessor.forceFlush();
   }
+}
+
+/**
+ * Create an OTEL context from a Braintrust span export string.
+ *
+ * Used for distributed tracing scenarios where a Braintrust span in one service
+ * needs to be the parent of an OTEL span in another service.
+ *
+ * @param exportStr - The string returned from span.export()
+ * @returns OTEL context that can be used when creating child spans
+ *
+ * @example
+ * ```typescript
+ * // Service A: Create BT span and export
+ * const span = logger.startSpan({ name: "service-a" });
+ * const exportStr = await span.export();
+ * // Send exportStr to Service B (e.g., via HTTP header)
+ *
+ * // Service B: Import context and create OTEL child
+ * import * as api from '@opentelemetry/api';
+ * const ctx = otelContextFromSpanExport(exportStr);
+ * await api.context.with(ctx, async () => {
+ *   await tracer.startActiveSpan("service-b", async (span) => {
+ *     // This span is now a child of the Service A span
+ *     span.end();
+ *   });
+ * });
+ * ```
+ */
+export function otelContextFromSpanExport(exportStr: string): unknown {
+  if (!OTEL_AVAILABLE || !otelApi) {
+    // Gracefully return undefined when OTEL is not installed
+    // This allows code to work without OTEL dependencies
+    return undefined;
+  }
+
+  // Parse the export string
+  const components = SpanComponentsV4.fromStr(exportStr);
+
+  // Get trace and span IDs (already in hex format)
+  const traceIdHex = components.data.root_span_id; // 32 hex chars
+  const spanIdHex = components.data.span_id; // 16 hex chars
+
+  if (!traceIdHex || !spanIdHex) {
+    throw new Error(
+      "Export string must contain root_span_id and span_id for distributed tracing",
+    );
+  }
+
+  // Import OTEL classes dynamically
+  const otelTrace = otelApi.trace;
+
+  // Create SpanContext marked as remote (critical for distributed tracing)
+  const TraceFlags = require("@opentelemetry/api").TraceFlags;
+  const spanContext = {
+    traceId: traceIdHex,
+    spanId: spanIdHex,
+    isRemote: true,
+    traceFlags: TraceFlags.SAMPLED,
+  };
+
+  // Create NonRecordingSpan using wrapSpanContext and set in context
+  const nonRecordingSpan = otelTrace.wrapSpanContext(spanContext);
+  let ctx = otelTrace.setSpan(otelApi.context.active(), nonRecordingSpan);
+
+  // Construct braintrust.parent identifier
+  const braintrustParent = getBraintrustParent(
+    components.data.object_type,
+    components.data.object_id,
+    components.data.compute_object_metadata_args,
+  );
+
+  // Set braintrust.parent in baggage so it propagates automatically
+  if (braintrustParent) {
+    const { propagation } = require("@opentelemetry/api");
+    ctx = propagation.setBaggage(
+      ctx,
+      propagation.getBaggage(ctx)?.setEntry("braintrust.parent", {
+        value: braintrustParent,
+      }) ||
+        propagation
+          .createBaggage({
+            "braintrust.parent": { value: braintrustParent },
+          })
+          .setEntry("braintrust.parent", { value: braintrustParent }),
+    );
+  }
+
+  return ctx;
+}
+
+/**
+ * Construct a braintrust.parent identifier string from span components.
+ *
+ * @param objectType - Type of parent object (PROJECT_LOGS or EXPERIMENT)
+ * @param objectId - Resolved object ID (project_id or experiment_id)
+ * @param computeArgs - Optional dict with project_name/project_id for unresolved cases
+ * @returns String like "project_id:abc", "project_name:my-proj", "experiment_id:exp-123", or undefined
+ */
+export function getBraintrustParent(
+  objectType: number,
+  objectId?: string | null,
+  computeArgs?: Record<string, unknown> | null,
+): string | undefined {
+  if (!objectType) {
+    return undefined;
+  }
+
+  if (objectType === SpanObjectTypeV3.PROJECT_LOGS) {
+    if (objectId) {
+      return `project_id:${objectId}`;
+    } else if (computeArgs) {
+      const projectId = computeArgs["project_id"];
+      const projectName = computeArgs["project_name"];
+      if (typeof projectId === "string") {
+        return `project_id:${projectId}`;
+      } else if (typeof projectName === "string") {
+        return `project_name:${projectName}`;
+      }
+    }
+  } else if (objectType === SpanObjectTypeV3.EXPERIMENT) {
+    if (objectId) {
+      return `experiment_id:${objectId}`;
+    } else if (computeArgs) {
+      const experimentId = computeArgs["experiment_id"];
+      if (typeof experimentId === "string") {
+        return `experiment_id:${experimentId}`;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /**

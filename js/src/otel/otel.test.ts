@@ -10,7 +10,7 @@ import {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
-} from ".";
+} from "..";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
