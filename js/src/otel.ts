@@ -12,6 +12,11 @@ interface OtelApi {
   };
   trace: {
     getSpan: (ctx: OtelContext) => unknown;
+    setSpan: (ctx: OtelContext, span: unknown) => OtelContext;
+    wrapSpanContext: (spanContext: unknown) => unknown;
+  };
+  TraceFlags?: {
+    SAMPLED: number;
   };
 }
 
@@ -539,12 +544,12 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
   const otelTrace = otelApi.trace;
 
   // Create SpanContext marked as remote (critical for distributed tracing)
-  const TraceFlags = require("@opentelemetry/api").TraceFlags;
+  // TraceFlags.SAMPLED = 1
   const spanContext = {
     traceId: traceIdHex,
     spanId: spanIdHex,
     isRemote: true,
-    traceFlags: TraceFlags.SAMPLED,
+    traceFlags: 1, // SAMPLED flag
   };
 
   // Create NonRecordingSpan using wrapSpanContext and set in context
@@ -560,18 +565,20 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
 
   // Set braintrust.parent in baggage so it propagates automatically
   if (braintrustParent) {
-    const { propagation } = require("@opentelemetry/api");
-    ctx = propagation.setBaggage(
-      ctx,
-      propagation.getBaggage(ctx)?.setEntry("braintrust.parent", {
-        value: braintrustParent,
-      }) ||
-        propagation
-          .createBaggage({
-            "braintrust.parent": { value: braintrustParent },
-          })
-          .setEntry("braintrust.parent", { value: braintrustParent }),
-    );
+    try {
+      // Try to set baggage if available
+      const propagation = (otelApi as any).propagation;
+      if (propagation) {
+        const baggage =
+          propagation.getBaggage(ctx) || propagation.createBaggage();
+        ctx = propagation.setBaggage(
+          ctx,
+          baggage.setEntry("braintrust.parent", { value: braintrustParent }),
+        );
+      }
+    } catch {
+      // If baggage isn't available, that's okay - continue without it
+    }
   }
 
   return ctx;
