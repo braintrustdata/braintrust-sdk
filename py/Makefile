@@ -15,7 +15,12 @@ test:
 	nox -x
 
 test-wheel: build
-	nox -x -- --wheel
+	# This target runs a small set of sanity checks before we release our
+	# build artifact to pypi. We skip running the full test suite because
+	# (a) theoretically it should have been run before (b) it has
+	# integration tests and we don't want to block the release because
+	# some service is down, etc. This decision could be revisited anytime.
+	nox -s test_core -- --wheel
 
 test-core:
 	nox -s test_core
