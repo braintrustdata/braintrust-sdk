@@ -552,12 +552,11 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
   const otelTrace = otelApi.trace;
 
   // Create SpanContext marked as remote (critical for distributed tracing)
-  // TraceFlags.SAMPLED = 1
   const spanContext = {
     traceId: traceIdHex,
     spanId: spanIdHex,
     isRemote: true,
-    traceFlags: 1, // SAMPLED flag
+    traceFlags: otelApi.TraceFlags?.SAMPLED ?? 1, // SAMPLED flag
   };
 
   // Create NonRecordingSpan using wrapSpanContext and set in context
