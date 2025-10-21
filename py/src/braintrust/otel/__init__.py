@@ -441,3 +441,205 @@ def context_from_span_export(export_str: str):
         ctx = baggage.set_baggage('braintrust.parent', braintrust_parent, context=ctx)
 
     return ctx
+
+
+def add_parent_to_baggage(parent: str, ctx=None):
+    """
+    Add braintrust.parent to OTEL baggage.
+
+    This ensures that when using inject() for distributed tracing, the braintrust.parent
+    will be propagated via baggage to downstream services.
+
+    Args:
+        parent: Braintrust parent identifier (e.g., "project_name:my-project",
+                "project_id:abc123", "experiment_id:exp-456")
+        ctx: Optional OTEL context to use. If None, uses current context.
+
+    Returns:
+        Context token that can be used to detach later (optional)
+
+    Example:
+        >>> from braintrust.otel import add_parent_to_baggage
+        >>> from opentelemetry.propagate import inject
+        >>>
+        >>> # Set braintrust.parent in baggage
+        >>> add_parent_to_baggage("project_name:my-project")
+        >>>
+        >>> # Export headers (will include braintrust.parent in baggage)
+        >>> headers = {}
+        >>> inject(headers)
+    """
+    if not OTEL_AVAILABLE:
+        raise ImportError(INSTALL_ERR_MSG)
+
+    from opentelemetry import baggage, context
+
+    # Set in baggage so it propagates via inject()
+    new_ctx = baggage.set_baggage('braintrust.parent', parent, context=ctx)
+    token = context.attach(new_ctx)
+    return token
+
+
+def add_span_parent_to_baggage(span, ctx=None):
+    """
+    Copy braintrust.parent from span attribute to OTEL baggage.
+
+    BraintrustSpanProcessor automatically sets braintrust.parent as a span attribute
+    when OTEL spans are created within Braintrust contexts. This function copies that
+    attribute to OTEL baggage so it propagates when using inject() for distributed tracing.
+
+    Args:
+        span: OTEL span that has braintrust.parent attribute set
+        ctx: Optional OTEL context to use. If None, uses current context.
+
+    Returns:
+        Context token that can be used to detach later (optional)
+
+    Example:
+        >>> from braintrust.otel import add_span_parent_to_baggage
+        >>> from opentelemetry.propagate import inject
+        >>>
+        >>> with tracer.start_as_current_span("service_b") as span:
+        >>>     # Copy braintrust.parent from span attribute to baggage
+        >>>     add_span_parent_to_baggage(span)
+        >>>
+        >>>     # Export headers (will include braintrust.parent in baggage)
+        >>>     headers = {}
+        >>>     inject(headers)
+    """
+    if not OTEL_AVAILABLE:
+        raise ImportError(INSTALL_ERR_MSG)
+
+    # Get braintrust.parent from span attributes
+    if not span or not hasattr(span, 'attributes') or not span.attributes:
+        logging.warning("add_span_parent_to_baggage: span has no attributes")
+        return None
+
+    parent_value = span.attributes.get('braintrust.parent')
+    if not parent_value:
+        logging.warning(
+            "add_span_parent_to_baggage: braintrust.parent attribute not found. "
+            "Ensure BraintrustSpanProcessor is configured or span is created within Braintrust context."
+        )
+        return None
+
+    # Use add_parent_to_baggage to set in baggage
+    return add_parent_to_baggage(parent_value, ctx=ctx)
+
+
+def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
+    """
+    Extract a Braintrust-compatible parent string from W3C Trace Context headers.
+
+    This converts OTEL trace context headers (traceparent/baggage) into a format
+    that can be passed as the 'parent' parameter to Braintrust's start_span() method.
+
+    Args:
+        headers: Dictionary with 'traceparent' and optionally 'baggage' keys
+
+    Returns:
+        Braintrust V4 export string that can be used as parent parameter,
+        or None if no valid span context is found or braintrust.parent is missing.
+
+        When None is returned due to missing braintrust.parent, a warning is logged.
+        The OTEL span should set braintrust.parent in baggage to specify the target project.
+
+    Example:
+        >>> # Service C receives headers from Service B
+        >>> headers = {'traceparent': '00-trace_id-span_id-01', 'baggage': '...'}
+        >>> parent = parent_from_headers(headers)
+        >>> with project.start_span(name="service_c", parent=parent) as span:
+        >>>     span.log(input="BT span as child of OTEL parent")
+    """
+    if not OTEL_AVAILABLE:
+        raise ImportError(INSTALL_ERR_MSG)
+
+    from opentelemetry import baggage, trace
+    from opentelemetry.propagate import extract
+
+    from braintrust.span_identifier_v4 import SpanComponentsV4
+
+    # Extract context from headers using W3C Trace Context propagator
+    ctx = extract(headers)
+
+    # Get span from context
+    span = trace.get_current_span(ctx)
+    if not span or not hasattr(span, 'get_span_context'):
+        logging.error("parent_from_headers: No valid span found in headers")
+        return None
+
+    span_context = span.get_span_context()
+    if not span_context or span_context.span_id == 0:
+        logging.error("parent_from_headers: Invalid span context (span_id is 0)")
+        return None
+
+    # Convert OTEL IDs to hex strings
+    trace_id_hex = format(span_context.trace_id, '032x')
+    span_id_hex = format(span_context.span_id, '016x')
+
+    # Validate trace_id and span_id are not all zeros
+    if trace_id_hex == '00000000000000000000000000000000':
+        logging.error("parent_from_headers: Invalid trace_id (all zeros)")
+        return None
+    if span_id_hex == '0000000000000000':
+        logging.error("parent_from_headers: Invalid span_id (all zeros)")
+        return None
+
+    # Get braintrust.parent from baggage if present
+    braintrust_parent = baggage.get_baggage('braintrust.parent', context=ctx)
+
+    # Parse braintrust.parent to extract object_type and object_id
+    object_type = None
+    object_id = None
+    compute_args = None
+
+    if not braintrust_parent:
+        logging.warning(
+            "braintrust.parent not found in OTEL baggage. "
+            "Cannot create Braintrust parent without project information. "
+            "Ensure the OTEL span sets braintrust.parent in baggage before exporting headers."
+        )
+        return None
+
+    if braintrust_parent:
+        from braintrust.span_identifier_v3 import SpanObjectTypeV3
+
+        # Parse braintrust.parent format: "project_id:abc", "project_name:xyz", or "experiment_id:123"
+        if braintrust_parent.startswith("project_id:"):
+            object_type = SpanObjectTypeV3.PROJECT_LOGS
+            object_id = braintrust_parent[len("project_id:"):]
+            if not object_id:
+                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty project_id): {braintrust_parent}")
+                return None
+        elif braintrust_parent.startswith("project_name:"):
+            object_type = SpanObjectTypeV3.PROJECT_LOGS
+            project_name = braintrust_parent[len("project_name:"):]
+            if not project_name:
+                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty project_name): {braintrust_parent}")
+                return None
+            compute_args = {"project_name": project_name}
+        elif braintrust_parent.startswith("experiment_id:"):
+            object_type = SpanObjectTypeV3.EXPERIMENT
+            object_id = braintrust_parent[len("experiment_id:"):]
+            if not object_id:
+                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty experiment_id): {braintrust_parent}")
+                return None
+        else:
+            logging.error(
+                f"parent_from_headers: Invalid braintrust.parent format: {braintrust_parent}. "
+                "Expected format: 'project_id:ID', 'project_name:NAME', or 'experiment_id:ID'"
+            )
+            return None
+
+    # Create SpanComponentsV4 and export as string
+    # Set row_id to enable span_id/root_span_id (required for parent linking)
+    components = SpanComponentsV4(
+        object_type=object_type,
+        object_id=object_id,
+        compute_object_metadata_args=compute_args,
+        row_id="otel",  # Dummy row_id to enable span_id/root_span_id fields
+        span_id=span_id_hex,
+        root_span_id=trace_id_hex,
+    )
+
+    return components.to_str()

@@ -555,3 +555,156 @@ class TestSpanFiltering:
         assert "user_request" in filtered_span_names  # root span
         assert "gen_ai.completion" in filtered_span_names  # LLM name
         assert "response_formatting" in filtered_span_names  # LLM attribute
+
+
+def test_parent_from_headers_invalid_inputs():
+    """Test parent_from_headers with various invalid inputs."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from braintrust.otel import parent_from_headers
+
+    # Test 1: Empty headers
+    result = parent_from_headers({})
+    assert result is None
+
+    # Test 2: Invalid traceparent (malformed)
+    result = parent_from_headers({'traceparent': 'invalid'})
+    assert result is None
+
+    # Test 3: Valid traceparent but invalid braintrust.parent format
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=invalid_format'
+    })
+    assert result is None
+
+    # Test 4: Empty project_id
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=project_id:'
+    })
+    assert result is None
+
+    # Test 5: Empty project_name
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=project_name:'
+    })
+    assert result is None
+
+    # Test 6: Empty experiment_id
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=experiment_id:'
+    })
+    assert result is None
+
+    # Test 7: Invalid trace_id length (too short)
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=project_name:test'
+    })
+    assert result is None
+
+    # Test 8: Invalid span_id length (too short)
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-01',
+        'baggage': 'braintrust.parent=project_name:test'
+    })
+    assert result is None
+
+
+def test_parent_from_headers_valid_input():
+    """Test parent_from_headers with valid inputs."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from braintrust.otel import parent_from_headers
+
+    # Test with valid project_name
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=project_name:test-project'
+    })
+    assert result is not None
+    # Result is base64 encoded, so just check it's a non-empty string
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+    # Test with valid project_id
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=project_id:abc123'
+    })
+    assert result is not None
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+    # Test with valid experiment_id
+    result = parent_from_headers({
+        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'baggage': 'braintrust.parent=experiment_id:exp-456'
+    })
+    assert result is not None
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_add_parent_to_baggage():
+    """Test add_parent_to_baggage function."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from opentelemetry import baggage, context
+
+    from braintrust.otel import add_parent_to_baggage
+
+    # Test adding parent to baggage
+    token = add_parent_to_baggage("project_name:test-project")
+    assert token is not None
+
+    # Verify it's in baggage
+    parent_value = baggage.get_baggage('braintrust.parent')
+    assert parent_value == "project_name:test-project"
+
+    # Clean up
+    context.detach(token)
+
+
+def test_add_span_parent_to_baggage():
+    """Test add_span_parent_to_baggage function."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from opentelemetry import baggage, context, trace
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from braintrust.otel import add_span_parent_to_baggage
+
+    # Setup tracer
+    provider = TracerProvider()
+    trace.set_tracer_provider(provider)
+    tracer = trace.get_tracer(__name__)
+
+    # Test with span that has braintrust.parent attribute
+    with tracer.start_as_current_span("test_span") as span:
+        span.set_attribute("braintrust.parent", "project_name:test")
+
+        token = add_span_parent_to_baggage(span)
+        assert token is not None
+
+        # Verify it's in baggage
+        parent_value = baggage.get_baggage('braintrust.parent')
+        assert parent_value == "project_name:test"
+
+        context.detach(token)
+
+    # Test with span that doesn't have braintrust.parent attribute (should return None and warn)
+    with tracer.start_as_current_span("test_span_no_attr") as span:
+        token = add_span_parent_to_baggage(span)
+        assert token is None
+
+    # Test with None span (should return None and warn)
+    token = add_span_parent_to_baggage(None)
+    assert token is None
