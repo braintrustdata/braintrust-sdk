@@ -47,6 +47,10 @@ class TracedAsyncAnthropic(Wrapper):
     def messages(self):
         return AsyncMessages(self.__client.messages)
 
+    @property
+    def beta(self):
+        return AsyncBeta(self.__client.beta)
+
 
 class AsyncMessages(Wrapper):
     def __init__(self, messages):
@@ -108,6 +112,16 @@ class AsyncMessages(Wrapper):
         return TracedMessageStreamManager(stream, span)
 
 
+class AsyncBeta(Wrapper):
+    def __init__(self, beta):
+        super().__init__(beta)
+        self.__beta = beta
+
+    @property
+    def messages(self):
+        return AsyncMessages(self.__beta.messages)
+
+
 class TracedAnthropic(Wrapper):
     def __init__(self, client):
         super().__init__(client)
@@ -116,6 +130,10 @@ class TracedAnthropic(Wrapper):
     @property
     def messages(self):
         return Messages(self.__client.messages)
+
+    @property
+    def beta(self):
+        return Beta(self.__client.beta)
 
 
 class Messages(Wrapper):
@@ -146,6 +164,16 @@ class Messages(Wrapper):
         span = _start_span("anthropic.messages.stream", kwargs)
         s = stream_func(*args, **kwargs)
         return TracedMessageStreamManager(s, span)
+
+
+class Beta(Wrapper):
+    def __init__(self, beta):
+        super().__init__(beta)
+        self.__beta = beta
+
+    @property
+    def messages(self):
+        return Messages(self.__beta.messages)
 
 
 class TracedMessageStreamManager(Wrapper):
