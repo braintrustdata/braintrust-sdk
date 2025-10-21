@@ -5,8 +5,8 @@ set -euo pipefail
 # Can be used both locally and in CI/CD
 #
 # Usage: ./publish-prerelease.sh <type> <version>
-#   type: beta, alpha, or rc
-#   version: explicit version to publish, e.g., 1.2.3-beta.1
+#   type: rc
+#   version: explicit version to publish, e.g., 1.2.3-rc.1
 
 # Get directories
 ROOT_DIR=$(git rev-parse --show-toplevel)
@@ -17,12 +17,10 @@ if [ $# -lt 2 ]; then
   echo "Usage: $0 <type> <version>"
   echo ""
   echo "Arguments:"
-  echo "  type: beta, alpha, or rc"
+  echo "  type: rc"
   echo "  version: explicit version to publish"
   echo ""
-  echo "Examples:"
-  echo "  $0 beta 1.2.3-beta.1"
-  echo "  $0 alpha 1.2.3-alpha.5"
+  echo "Example:"
   echo "  $0 rc 1.2.3-rc.1"
   exit 1
 fi
@@ -31,15 +29,11 @@ PRERELEASE_TYPE="$1"
 VERSION="$2"
 
 # Validate prerelease type
-case "$PRERELEASE_TYPE" in
-  beta|alpha|rc)
-    ;;
-  *)
-    echo "ERROR: Invalid prerelease type: $PRERELEASE_TYPE"
-    echo "Must be one of: beta, alpha, rc"
-    exit 1
-    ;;
-esac
+if [ "$PRERELEASE_TYPE" != "rc" ]; then
+  echo "ERROR: Invalid prerelease type: $PRERELEASE_TYPE"
+  echo "Must be: rc"
+  exit 1
+fi
 
 # Validate version format
 if [ -z "$VERSION" ]; then
@@ -47,18 +41,14 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# Map prerelease type to npm dist-tag
-case "$PRERELEASE_TYPE" in
-  beta)
-    DIST_TAG="beta"
-    ;;
-  alpha)
-    DIST_TAG="alpha"
-    ;;
-  rc)
-    DIST_TAG="next"
-    ;;
-esac
+# Validate that version contains the correct prerelease suffix
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc(\.[0-9]+)?$ ]]; then
+  echo "ERROR: Version '$VERSION' must include the prerelease type 'rc'"
+  echo "Expected format: X.Y.Z-rc.N (e.g., 1.2.3-rc.1)"
+  exit 1
+fi
+
+DIST_TAG="rc"
 
 echo "================================================"
 echo " Publishing Pre-release"
