@@ -47,6 +47,13 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
+# Validate that version contains the correct prerelease suffix
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-($PRERELEASE_TYPE)(\.[0-9]+)?$ ]]; then
+  echo "ERROR: Version '$VERSION' must include the prerelease type '$PRERELEASE_TYPE'"
+  echo "Expected format: X.Y.Z-$PRERELEASE_TYPE.N (e.g., 1.2.3-$PRERELEASE_TYPE.1)"
+  exit 1
+fi
+
 # Map prerelease type to npm dist-tag
 case "$PRERELEASE_TYPE" in
   beta)
