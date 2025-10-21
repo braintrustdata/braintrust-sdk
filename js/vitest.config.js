@@ -8,11 +8,15 @@ const config = {
   },
   test: {
     exclude: [
+      // Default vitest exclusions
       "**/node_modules/**",
       "**/dist/**",
       "**/cypress/**",
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
+      // Our custom exclusions - these tests require optional dependencies
+      "src/wrappers/**/*.test.ts",
+      "src/otel/**/*.test.ts",
       "src/wrappers/ai-sdk-4/**",
       "src/wrappers/ai-sdk-5/**",
       "src/wrappers/mastra/**",
