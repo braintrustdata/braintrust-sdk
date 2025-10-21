@@ -584,8 +584,11 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
           baggage.setEntry("braintrust.parent", { value: braintrustParent }),
         );
       }
-    } catch {
-      // If baggage isn't available, that's okay - continue without it
+    } catch (error) {
+      console.error(
+        "Failed to set braintrust.parent in baggage during context import:",
+        error,
+      );
     }
   }
 
