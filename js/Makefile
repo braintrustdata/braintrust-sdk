@@ -3,9 +3,9 @@ help:
 	@echo "Braintrust JS SDK Makefile"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  make help                - Show this help message"
-	@echo "  make build              - Build the SDK"
-	@echo "  make clean              - Clean build artifacts"
+	@echo "  make help                  - Show this help message"
+	@echo "  make build                 - Build the SDK"
+	@echo "  make clean                 - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
@@ -83,24 +83,16 @@ test-claude-agent-sdk:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed test-otel-missing
+.PHONY: test-otel test-otel-installed
 
 test-otel-installed:
 	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http"
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
-test-otel-missing:
-	pnpm prune
-	# Verify OpenTelemetry packages are not installed
-	@echo "Verifying OpenTelemetry packages are not installed..."
-	@if pnpm list @opentelemetry/api 2>/dev/null | grep -q "@opentelemetry/api"; then \
-		echo "ERROR: @opentelemetry/api is installed, but test requires it to be missing"; \
-		exit 1; \
-	fi
-	pnpm test:otel-no-deps
-
-test-otel: test-otel-installed test-otel-missing
+# test-otel only runs with dependencies installed
+# otel-no-deps.test.ts is part of core tests and handles both cases automatically
+test-otel: test-otel-installed
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
@@ -127,7 +119,14 @@ test-openai-%:
 .PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
-	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
+	npm_config_save=false npm_config_lockfile=false pnpm add \
+		"openai" \
+		"@anthropic-ai/sdk" \
+		"@opentelemetry/api" \
+		"@opentelemetry/sdk-trace-base" \
+		"@opentelemetry/exporter-trace-otlp-http" \
+		"@opentelemetry/core" \
+		"@opentelemetry/context-async-hooks"
 
 
 # Test everything but the wrappers.

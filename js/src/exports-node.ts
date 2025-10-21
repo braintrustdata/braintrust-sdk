@@ -42,4 +42,5 @@ export {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
+  otel,
 } from "./otel";
