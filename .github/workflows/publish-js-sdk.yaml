@@ -97,7 +97,7 @@ jobs:
         run: |
           # Read current version from package.json and append run number
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          NEW_VERSION="${CURRENT_VERSION}rc${GITHUB_RUN_NUMBER}"
+          NEW_VERSION="${CURRENT_VERSION}-${{ github.event.inputs.prerelease_type }}.${GITHUB_RUN_NUMBER}"
           ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "$NEW_VERSION"
 
       # Upload artifacts for both paths
