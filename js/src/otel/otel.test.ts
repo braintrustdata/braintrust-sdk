@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { trace, context, Tracer } from "@opentelemetry/api";
+import { trace, context, Tracer, propagation } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
@@ -7,10 +7,16 @@ import {
   ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
 import {
+  W3CTraceContextPropagator,
+  W3CBaggagePropagator,
+  CompositePropagator,
+} from "@opentelemetry/core";
+import {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
-} from ".";
+  otel,
+} from "..";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -984,5 +990,266 @@ describe("BraintrustExporter", () => {
       instrumentationScope: v1Span.instrumentationLibrary,
     } as any;
     expect(transformedSpan).toEqual(expectedV2Span);
+  });
+});
+
+describe("otel namespace helpers", () => {
+  let provider: BasicTracerProvider;
+  let tracer: Tracer;
+
+  beforeEach(() => {
+    provider = new BasicTracerProvider();
+    trace.setGlobalTracerProvider(provider);
+    tracer = trace.getTracer("test-tracer");
+
+    // Set up W3C propagators for header parsing tests
+    const compositePropagator = new CompositePropagator({
+      propagators: [
+        new W3CTraceContextPropagator(),
+        new W3CBaggagePropagator(),
+      ],
+    });
+    propagation.setGlobalPropagator(compositePropagator);
+  });
+
+  afterEach(async () => {
+    await provider.shutdown();
+  });
+
+  describe("addParentToBaggage", () => {
+    it("should add braintrust.parent to baggage", () => {
+      const parent = "project_name:test:span_id:abc123:row_id:xyz789";
+      const ctx = otel.addParentToBaggage(parent);
+
+      const baggage = propagation.getBaggage(ctx);
+      expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
+    });
+
+    it("should use provided context", () => {
+      const parent = "project_name:test:span_id:abc123:row_id:xyz789";
+      const initialCtx = context.active();
+      const resultCtx = otel.addParentToBaggage(parent, initialCtx);
+
+      const baggage = propagation.getBaggage(resultCtx);
+      expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
+    });
+  });
+
+  describe("addSpanParentToBaggage", () => {
+    it("should extract braintrust.parent from span attribute and add to baggage", () => {
+      const span = tracer.startSpan("test-span");
+      const parent = "project_name:test:span_id:abc123:row_id:xyz789";
+      span.setAttribute("braintrust.parent", parent);
+
+      const ctx = otel.addSpanParentToBaggage(span);
+      expect(ctx).toBeDefined();
+
+      const baggage = propagation.getBaggage(ctx!);
+      expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
+
+      span.end();
+    });
+
+    it("should return undefined when span has no braintrust.parent attribute", () => {
+      const span = tracer.startSpan("test-span");
+
+      const ctx = otel.addSpanParentToBaggage(span);
+      expect(ctx).toBeUndefined();
+
+      span.end();
+    });
+
+    it("should use provided context", () => {
+      const span = tracer.startSpan("test-span");
+      const parent = "project_name:test:span_id:abc123:row_id:xyz789";
+      span.setAttribute("braintrust.parent", parent);
+
+      const initialCtx = context.active();
+      const ctx = otel.addSpanParentToBaggage(span, initialCtx);
+      expect(ctx).toBeDefined();
+
+      const baggage = propagation.getBaggage(ctx!);
+      expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
+
+      span.end();
+    });
+  });
+
+  describe("parentFromHeaders", () => {
+    describe("valid inputs", () => {
+      it("should extract parent from headers with valid traceparent and braintrust.parent baggage", () => {
+        const headers = {
+          traceparent:
+            "00-12345678901234567890123456789012-1234567890123456-01",
+          baggage: "braintrust.parent=project_name:test",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeDefined();
+        // Parent string is base64-encoded SpanComponentsV4
+        expect(typeof parent).toBe("string");
+        expect(parent!.length).toBeGreaterThan(0);
+      });
+
+      it("should extract parent with project_id", () => {
+        const headers = {
+          traceparent:
+            "00-abcdef12345678901234567890123456-fedcba9876543210-01",
+          baggage: "braintrust.parent=project_id:my-project-id",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeDefined();
+        expect(typeof parent).toBe("string");
+        expect(parent!.length).toBeGreaterThan(0);
+      });
+
+      it("should extract parent with experiment_id", () => {
+        const headers = {
+          traceparent:
+            "00-11111111111111111111111111111111-2222222222222222-01",
+          baggage: "braintrust.parent=experiment_id:my-experiment-id",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeDefined();
+        expect(typeof parent).toBe("string");
+        expect(parent!.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe("invalid inputs", () => {
+      it("should return undefined when traceparent is missing", () => {
+        const consoleSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+        const headers = {
+          baggage: "braintrust.parent=project_name:test",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "parentFromHeaders: No valid span context in headers",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when baggage is missing", () => {
+        const consoleSpy = vi
+          .spyOn(console, "warn")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent:
+            "00-12345678901234567890123456789012-1234567890123456-01",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy.mock.calls[0][0]).toContain(
+          "braintrust.parent not found",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when braintrust.parent is missing from baggage", () => {
+        const consoleSpy = vi
+          .spyOn(console, "warn")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent:
+            "00-12345678901234567890123456789012-1234567890123456-01",
+          baggage: "foo=bar,baz=qux",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy.mock.calls[0][0]).toContain(
+          "braintrust.parent not found",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when traceparent format is invalid", () => {
+        const consoleSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent: "invalid-traceparent",
+          baggage: "braintrust.parent=project_name:test",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "parentFromHeaders: No valid span context in headers",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when trace_id is all zeros", () => {
+        const consoleSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent:
+            "00-00000000000000000000000000000000-1234567890123456-01",
+          baggage: "braintrust.parent=project_name:test",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        // OTEL's extract() validates and rejects invalid trace_id
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "parentFromHeaders: No valid span context in headers",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when span_id is all zeros", () => {
+        const consoleSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent:
+            "00-12345678901234567890123456789012-0000000000000000-01",
+          baggage: "braintrust.parent=project_name:test",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        // OTEL's extract() validates and rejects invalid span_id
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "parentFromHeaders: No valid span context in headers",
+        );
+
+        consoleSpy.mockRestore();
+      });
+
+      it("should return undefined when braintrust.parent format is invalid", () => {
+        const consoleSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+        const headers = {
+          traceparent:
+            "00-12345678901234567890123456789012-1234567890123456-01",
+          baggage: "braintrust.parent=invalid",
+        };
+
+        const parent = otel.parentFromHeaders(headers);
+        expect(parent).toBeUndefined();
+        // Should reach our validation if span context is valid, otherwise OTEL rejects it
+        expect(consoleSpy).toHaveBeenCalled();
+
+        consoleSpy.mockRestore();
+      });
+    });
   });
 });

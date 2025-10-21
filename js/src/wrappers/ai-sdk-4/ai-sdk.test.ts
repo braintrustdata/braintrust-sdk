@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  wrapAISDKModel,
-  postProcessOutput,
-  postProcessPrompt,
-} from "./ai-sdk-v1";
-import { BraintrustMiddleware } from "../exports-node";
+import { wrapAISDKModel, postProcessOutput, postProcessPrompt } from "./ai-sdk";
+import { BraintrustMiddleware } from "../../exports-node";
 import {
   LanguageModelV1Prompt,
   LanguageModelV1FunctionToolCall,

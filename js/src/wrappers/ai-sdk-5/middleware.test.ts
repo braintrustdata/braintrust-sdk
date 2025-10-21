@@ -10,20 +10,20 @@ import { generateText, streamText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
-import { BraintrustMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "../../exports-node";
 import {
   _exportsForTestingOnly,
   Logger,
   TestBackgroundLogger,
   initLogger,
   _internalSetInitialState,
-} from "../logger";
-import { wrapAnthropic } from "./anthropic";
+} from "../../logger";
+import { wrapAnthropic } from "../anthropic";
 import {
   LONG_SYSTEM_PROMPT,
   TEST_USER_PROMPT,
   CACHEABLE_SYSTEM_MESSAGE,
-} from "./ai-sdk-v2.fixtures";
+} from "./middleware.fixtures";
 
 const testModelName = "gpt-4.1";
 const testAnthropicModelName = "claude-3-haiku-20240307";

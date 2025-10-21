@@ -1,8 +1,8 @@
 import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
-} from "./anthropic-tokens-util";
-import { wrapTraced } from "../logger";
+} from "../anthropic-tokens-util";
+import { wrapTraced } from "../../logger";
 
 /**
  * Shared utility functions for AI SDK wrappers

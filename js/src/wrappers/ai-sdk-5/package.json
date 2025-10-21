@@ -1,0 +1,18 @@
+{
+  "name": "@braintrust/ai-sdk-5-tests",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Test infrastructure for AI SDK v5.x compatibility",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "ai": "5.0.76",
+    "@ai-sdk/openai": "2.0.53",
+    "@ai-sdk/anthropic": "2.0.34",
+    "@types/node": "^20.10.5",
+    "typescript": "5.4.4",
+    "vitest": "^2.1.9",
+    "vite-tsconfig-paths": "^4.3.2"
+  }
+}
