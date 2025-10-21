@@ -1,11 +1,11 @@
-import { startSpan, traced, withCurrent } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
-import { SpanTypeAttribute } from "../../util/index";
+import { startSpan, traced, withCurrent } from "../../logger";
+import { getCurrentUnixTimestamp } from "../../util";
+import { SpanTypeAttribute } from "../../../util/index";
 import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
-} from "./anthropic-tokens-util";
-import { getNumberProperty } from "./ai-sdk-shared";
+} from "../anthropic-tokens-util";
+import { getNumberProperty } from "../ai-sdk-shared/utils";
 
 /**
  * Types from @anthropic-ai/claude-agent-sdk

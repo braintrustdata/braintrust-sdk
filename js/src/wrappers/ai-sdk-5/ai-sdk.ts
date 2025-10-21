@@ -1,6 +1,6 @@
-import { BraintrustMiddleware } from "./ai-sdk-v2";
-import { startSpan, traced, withCurrent, Attachment } from "../logger";
-import type { CompiledPrompt } from "../logger";
+import { BraintrustMiddleware } from "./middleware";
+import { startSpan, traced, withCurrent, Attachment } from "../../logger";
+import type { CompiledPrompt } from "../../logger";
 import {
   extractModelParameters,
   detectProviderFromResult,
@@ -8,12 +8,12 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
-} from "./ai-sdk-shared";
+} from "../ai-sdk-shared/utils";
 import {
   processInputAttachments,
   getExtensionFromMediaType,
   convertDataToBlob,
-} from "./attachment-utils";
+} from "../attachment-utils";
 
 // Define a neutral interface for the AI SDK methods we use.
 // This avoids importing `typeof import("ai")`, which can cause type-identity

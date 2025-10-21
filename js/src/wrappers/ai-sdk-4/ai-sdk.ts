@@ -2,9 +2,9 @@ import {
   type ChatCompletionContentPartType as ContentPart,
   type ChatCompletionMessageParamType as Message,
   type ChatCompletionToolType as ChatCompletionTool,
-} from "../generated_types";
-import { startSpan } from "../logger";
-import { getCurrentUnixTimestamp, isEmpty } from "../util";
+} from "../../generated_types";
+import { startSpan } from "../../logger";
+import { getCurrentUnixTimestamp, isEmpty } from "../../util";
 import {
   LanguageModelV1,
   LanguageModelV1CallOptions,
@@ -22,7 +22,7 @@ import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
   X_CACHED_HEADER,
-} from "./oai";
+} from "../oai";
 
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is

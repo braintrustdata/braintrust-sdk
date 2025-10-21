@@ -13,7 +13,7 @@ import {
   buildAssistantOutputWithToolCalls,
   extractToolCallsFromBlocks,
   extractInput,
-} from "./ai-sdk-shared";
+} from "./utils";
 
 describe("ai-sdk-shared utilities", () => {
   describe("detectProviderFromResult", () => {
