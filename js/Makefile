@@ -87,7 +87,7 @@ test-claude-agent-sdk:
 
 test-otel-installed:
 	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http"
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
 # test-otel only runs with dependencies installed
@@ -125,6 +125,7 @@ install-optional-deps:
 		"@opentelemetry/api" \
 		"@opentelemetry/sdk-trace-base" \
 		"@opentelemetry/exporter-trace-otlp-http" \
+		"@opentelemetry/core" \
 		"@opentelemetry/context-async-hooks"
 
 

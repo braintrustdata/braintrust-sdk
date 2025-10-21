@@ -84,4 +84,49 @@ describe("OpenTelemetry not installed", () => {
     const result = otelContextFromSpanExport("some-export-string");
     expect(result).toBeUndefined();
   });
+
+  it("should not error when calling otel.addParentToBaggage without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    // Should not throw, just return a context (or undefined)
+    expect(() => {
+      const result = otel.addParentToBaggage("project_name:test");
+      expect(result).toBeDefined();
+    }).not.toThrow();
+  });
+
+  it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    const mockSpan = {
+      attributes: { "braintrust.parent": "project_name:test" },
+    } as any;
+
+    const result = otel.addSpanParentToBaggage(mockSpan);
+    expect(result).toBeUndefined();
+  });
+
+  it("should return undefined when calling otel.parentFromHeaders without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    const headers = {
+      traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+      baggage: "braintrust.parent=project_name:test",
+    };
+
+    const result = otel.parentFromHeaders(headers);
+    expect(result).toBeUndefined();
+  });
 });
