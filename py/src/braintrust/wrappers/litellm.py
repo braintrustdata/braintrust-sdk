@@ -629,3 +629,36 @@ def serialize_response_format(response_format: Any) -> Any:
         )
     else:
         return response_format
+
+
+def patch_litellm():
+    """
+    Patch LiteLLM to add Braintrust tracing.
+
+    This wraps litellm.completion and litellm.acompletion to automatically
+    create Braintrust spans with detailed token metrics, timing, and costs.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_litellm()
+
+        import litellm
+        from braintrust import init_logger
+
+        logger = init_logger(project="my-project")
+        response = litellm.completion(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Hello"}]
+        )
+        ```
+    """
+    try:
+        import litellm
+        if not hasattr(litellm, '_braintrust_wrapped'):
+            wrapped = wrap_litellm(litellm)
+            litellm.completion = wrapped.completion
+            litellm.acompletion = wrapped.acompletion
+            litellm._braintrust_wrapped = True
+    except ImportError:
+        pass  # litellm not available

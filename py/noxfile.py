@@ -37,6 +37,7 @@ BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 VENDOR_PACKAGES = (
     "agno",
     "anthropic",
+    "dspy",
     "openai",
     "pydantic_ai",
     "autoevals",
@@ -62,6 +63,7 @@ else:
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
+DSPY_VERSIONS = (LATEST,)
 
 
 @nox.session()
@@ -141,6 +143,14 @@ def test_litellm(session, version):
     _install(session, "litellm", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
+def test_dspy(session, version):
+    _install_test_deps(session)
+    _install(session, "dspy", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_dspy.py")
 
 
 @nox.session()
