@@ -9,9 +9,8 @@
 #
 # 2. PRE-RELEASE (manual, workflow_dispatch):
 #    - Manually triggered via GitHub Actions UI
-#    - Choose pre-release type (beta/alpha/rc)
-#    - Automatically appends "rc{run_number}" to current package.json version
-#    - Publishes with appropriate dist-tag (beta/alpha/next)
+#    - Automatically appends "rc.{run_number}" to current package.json version
+#    - Publishes with "rc" dist-tag
 #    - Does NOT require updating package.json in the repository
 #
 
@@ -21,16 +20,7 @@ on:
   push:
     tags:
       - "js-sdk-v*.*.*" # Trigger on version tags like js-sdk-v0.1.0, js-sdk-v1.2.3, etc.
-  workflow_dispatch:
-    inputs:
-      prerelease_type:
-        description: "Pre-release type (determines npm dist-tag)"
-        required: true
-        type: choice
-        options:
-          - beta
-          - alpha
-          - rc
+  workflow_dispatch: # Trigger pre-release manually
 
 jobs:
   validate:
@@ -97,8 +87,8 @@ jobs:
         run: |
           # Read current version from package.json and append run number
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          NEW_VERSION="${CURRENT_VERSION}-${{ github.event.inputs.prerelease_type }}.${GITHUB_RUN_NUMBER}"
-          ./scripts/publish-prerelease.sh "${{ github.event.inputs.prerelease_type }}" "$NEW_VERSION"
+          NEW_VERSION="${CURRENT_VERSION}-rc.${GITHUB_RUN_NUMBER}"
+          ./scripts/publish-prerelease.sh "rc" "$NEW_VERSION"
 
       # Upload artifacts for both paths
       - name: Upload build artifacts
