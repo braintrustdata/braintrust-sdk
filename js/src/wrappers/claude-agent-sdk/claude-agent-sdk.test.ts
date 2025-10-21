@@ -7,8 +7,8 @@ import {
   afterEach,
 } from "vitest";
 import { wrapClaudeAgentSDK } from "./claude-agent-sdk";
-import { initLogger, _exportsForTestingOnly } from "../logger";
-import { configureNode } from "../node";
+import { initLogger, _exportsForTestingOnly } from "../../logger";
+import { configureNode } from "../../node";
 import { z } from "zod/v3";
 
 // Try to import the Claude Agent SDK - skip tests if not available
@@ -126,36 +126,19 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     expect(taskSpan!.input).toContain("15 multiplied by 7");
     expect(taskSpan!.output).toBeDefined();
 
-    // Verify task span metrics match the result message usage
+    // Verify result message has usage data
     expect(resultMessage).toBeDefined();
     expect(resultMessage.type).toBe("result");
     expect(resultMessage.usage).toBeDefined();
+    expect(resultMessage.usage.input_tokens).toBeGreaterThan(0);
+    expect(resultMessage.usage.output_tokens).toBeGreaterThan(0);
 
+    // Task span should only have timing metrics, not token counts
+    // Token counts are computed during UI rendering from child LLM spans
     const taskMetrics = taskSpan!.metrics as Record<string, number>;
     expect(taskMetrics).toBeDefined();
-
-    // Apply the same transformations that the wrapper does to result message usage
-    const expectedMetrics: Record<string, number> = {};
-    const usage = resultMessage.usage;
-
-    console.log("usage", usage);
-    console.log("taskMetrics", taskMetrics);
-    // Standard token counts (mapped from Anthropic format)
-    if (usage.input_tokens !== undefined) {
-      const cacheReadTokens = usage.cache_read_input_tokens || 0;
-      const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
-      expectedMetrics.prompt_tokens =
-        usage.input_tokens + cacheReadTokens + cacheCreationTokens;
-    }
-    if (usage.output_tokens !== undefined) {
-      expectedMetrics.completion_tokens = usage.output_tokens;
-    }
-
-    // Verify task metrics match expected transformed metrics
-    expect(taskMetrics.prompt_tokens).toBe(expectedMetrics.prompt_tokens);
-    expect(taskMetrics.completion_tokens).toBe(
-      expectedMetrics.completion_tokens,
-    );
+    expect(taskMetrics.start).toBeGreaterThan(0);
+    expect(taskMetrics.end).toBeGreaterThan(taskMetrics.start);
 
     // Verify LLM spans (multiple anthropic.messages.create calls)
     const llmSpans = spans.filter(

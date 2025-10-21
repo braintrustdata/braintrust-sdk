@@ -1,0 +1,18 @@
+{
+  "name": "@braintrust/mastra-tests",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Test infrastructure for Mastra wrapper (AI SDK v5)",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@mastra/core": "^0.21.1",
+    "ai": "5.0.76",
+    "@ai-sdk/openai": "2.0.53",
+    "@types/node": "^20.10.5",
+    "typescript": "5.4.4",
+    "vitest": "^2.1.9",
+    "vite-tsconfig-paths": "^4.3.2"
+  }
+}
