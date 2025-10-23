@@ -1,4 +1,4 @@
-import { wrapAISDK, initLogger, traced } from "braintrust";
+import { wrapAISDK, initLogger, traced, type Logger } from "braintrust";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as ai from "ai";
@@ -10,10 +10,13 @@ import type { LanguageModel } from "ai";
 // Path from sdk/internal/golden/otel to sdk/fixtures
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
-// Initialize Braintrust logger
-initLogger({
-  projectName: "golden-ts-otel-ai-sdk",
-});
+export const setup = (testLogger?: Logger<true>) => {
+  if (!testLogger) {
+    initLogger({
+      projectName: "golden-ts-otel-ai-sdk",
+    });
+  }
+};
 
 // Wrap AI SDK with Braintrust
 const {
@@ -24,7 +27,7 @@ const {
 } = wrapAISDK(ai);
 
 // Test 1: Basic completion
-async function testBasicCompletion() {
+export async function testBasicCompletion() {
   return traced(
     async () => {
       console.log("\n=== Test 1: Basic Completion ===");
@@ -48,7 +51,7 @@ async function testBasicCompletion() {
 }
 
 // Test 2: Multi-turn conversation
-async function testMultiTurn() {
+export async function testMultiTurn() {
   return traced(
     async () => {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
@@ -79,7 +82,7 @@ async function testMultiTurn() {
 }
 
 // Test 3: System prompt
-async function testSystemPrompt() {
+export async function testSystemPrompt() {
   return traced(
     async () => {
       console.log("\n=== Test 3: System Prompt ===");
@@ -104,7 +107,7 @@ async function testSystemPrompt() {
 }
 
 // Test 4: Streaming
-async function testStreaming() {
+export async function testStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 4: Streaming ===");
@@ -131,7 +134,7 @@ async function testStreaming() {
 }
 
 // Test 5: Image input
-async function testImageInput() {
+export async function testImageInput() {
   return traced(
     async () => {
       console.log("\n=== Test 5: Image Input ===");
@@ -170,7 +173,7 @@ async function testImageInput() {
 }
 
 // Test 6: Document input
-async function testDocumentInput() {
+export async function testDocumentInput() {
   return traced(
     async () => {
       console.log("\n=== Test 6: Document Input ===");
@@ -243,7 +246,7 @@ async function testDocumentInput() {
 }
 
 // Test 7: Temperature variations
-async function testTemperatureVariations() {
+export async function testTemperatureVariations() {
   return traced(
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
@@ -281,7 +284,7 @@ async function testTemperatureVariations() {
 }
 
 // Test 8: Stop sequences
-async function testStopSequences() {
+export async function testStopSequences() {
   return traced(
     async () => {
       console.log("\n=== Test 8: Stop Sequences ===");
@@ -310,7 +313,7 @@ async function testStopSequences() {
 }
 
 // Test 9: Metadata
-async function testMetadata() {
+export async function testMetadata() {
   return traced(
     async () => {
       console.log("\n=== Test 9: Metadata ===");
@@ -334,7 +337,7 @@ async function testMetadata() {
 }
 
 // Test 10: Long context
-async function testLongContext() {
+export async function testLongContext() {
   return traced(
     async () => {
       console.log("\n=== Test 10: Long Context ===");
@@ -366,7 +369,7 @@ async function testLongContext() {
 }
 
 // Test 11: Mixed content types
-async function testMixedContent() {
+export async function testMixedContent() {
   return traced(
     async () => {
       console.log("\n=== Test 11: Mixed Content Types ===");
@@ -410,7 +413,7 @@ async function testMixedContent() {
 }
 
 // Test 12: Prefill
-async function testPrefill() {
+export async function testPrefill() {
   return traced(
     async () => {
       console.log("\n=== Test 12: Prefill ===");
@@ -437,7 +440,7 @@ async function testPrefill() {
 }
 
 // Test 13: Very short max_tokens
-async function testShortMaxTokens() {
+export async function testShortMaxTokens() {
   return traced(
     async () => {
       console.log("\n=== Test 13: Very Short Max Tokens ===");
@@ -475,7 +478,7 @@ interface CalculateToolArgs {
 }
 
 // Test 14: Tool use
-async function testToolUse() {
+export async function testToolUse() {
   return traced(
     async () => {
       console.log("\n=== Test 14: Tool Use ===");
@@ -532,7 +535,7 @@ async function testToolUse() {
 }
 
 // Test 15: Tool use with result
-async function testToolUseWithResult() {
+export async function testToolUseWithResult() {
   return traced(
     async () => {
       console.log("\n=== Test 15: Tool Use With Result ===");
@@ -600,7 +603,7 @@ async function testToolUseWithResult() {
 }
 
 // Test 16: Async generation
-async function testAsyncGeneration() {
+export async function testAsyncGeneration() {
   return traced(
     async () => {
       console.log("\n=== Test 16: Async Generation ===");
@@ -624,7 +627,7 @@ async function testAsyncGeneration() {
 }
 
 // Test 17: Async streaming
-async function testAsyncStreaming() {
+export async function testAsyncStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 17: Async Streaming ===");
@@ -659,7 +662,7 @@ interface UsageWithReasoning {
 }
 
 // Test 18: Reasoning tokens generation and follow-up - ADDITIONAL TEST
-async function testReasoning() {
+export async function testReasoning() {
   return traced(
     async () => {
       console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
@@ -808,4 +811,19 @@ async function runAllTests() {
   console.log("\n=== All tests completed ===");
 }
 
-runAllTests().catch(console.error);
+async function main() {
+  console.log("=".repeat(60));
+  console.log("AI SDK OTEL Golden Tests with Braintrust");
+  console.log("=".repeat(60));
+
+  await runAllTests();
+
+  console.log("\n" + "=".repeat(60));
+  console.log("All tests completed!");
+  console.log("=".repeat(60));
+}
+
+if (require.main === module) {
+  setup();
+  main().catch(console.error);
+}

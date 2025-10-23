@@ -1,4 +1,4 @@
-import { wrapOpenAI, initLogger, traced } from "braintrust";
+import { wrapOpenAI, initLogger, traced, type Logger } from "braintrust";
 import OpenAI from "openai";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -6,14 +6,18 @@ import { join } from "path";
 // Path from sdk/js/examples/openai to sdk/fixtures
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
-initLogger({
-  projectName: "golden-ts-openai",
-});
+export const setup = (testLogger?: Logger<true>) => {
+  if (!testLogger) {
+    initLogger({
+      projectName: "golden-ts-openai",
+    });
+  }
+};
 
 const client = wrapOpenAI(new OpenAI());
 
 // Test 1: Basic text completion
-async function testBasicCompletion() {
+export async function testBasicCompletion() {
   return traced(
     async () => {
       console.log("\n=== Test 1: Basic Completion ===");
@@ -30,7 +34,7 @@ async function testBasicCompletion() {
 }
 
 // Test 2: Multi-turn conversation
-async function testMultiTurn() {
+export async function testMultiTurn() {
   return traced(
     async () => {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
@@ -51,7 +55,7 @@ async function testMultiTurn() {
 }
 
 // Test 3: System prompt
-async function testSystemPrompt() {
+export async function testSystemPrompt() {
   return traced(
     async () => {
       console.log("\n=== Test 3: System Prompt ===");
@@ -74,7 +78,7 @@ async function testSystemPrompt() {
 }
 
 // Test 4: Streaming response
-async function testStreaming() {
+export async function testStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 4: Streaming ===");
@@ -98,7 +102,7 @@ async function testStreaming() {
 }
 
 // Test 5: Image input (base64)
-async function testImageInput() {
+export async function testImageInput() {
   return traced(
     async () => {
       console.log("\n=== Test 5: Image Input ===");
@@ -133,7 +137,7 @@ async function testImageInput() {
 }
 
 // Test 6: Document input (PDF)
-async function testDocumentInput() {
+export async function testDocumentInput() {
   return traced(
     async () => {
       console.log("\n=== Test 6: Document Input ===");
@@ -169,7 +173,7 @@ async function testDocumentInput() {
 }
 
 // Test 7: Temperature and top_p variations
-async function testTemperatureVariations() {
+export async function testTemperatureVariations() {
   return traced(
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
@@ -199,7 +203,7 @@ async function testTemperatureVariations() {
 }
 
 // Test 8: Stop sequences
-async function testStopSequences() {
+export async function testStopSequences() {
   return traced(
     async () => {
       console.log("\n=== Test 8: Stop Sequences ===");
@@ -220,7 +224,7 @@ async function testStopSequences() {
 }
 
 // Test 9: Metadata
-async function testMetadata() {
+export async function testMetadata() {
   return traced(
     async () => {
       console.log("\n=== Test 9: Metadata ===");
@@ -238,7 +242,7 @@ async function testMetadata() {
 }
 
 // Test 10: Long context
-async function testLongContext() {
+export async function testLongContext() {
   return traced(
     async () => {
       console.log("\n=== Test 10: Long Context ===");
@@ -263,7 +267,7 @@ async function testLongContext() {
 }
 
 // Test 11: Mixed content types
-async function testMixedContent() {
+export async function testMixedContent() {
   return traced(
     async () => {
       console.log("\n=== Test 13: Mixed Content Types ===");
@@ -302,7 +306,7 @@ async function testMixedContent() {
 }
 
 // Test 12: Empty assistant message (prefill)
-async function testPrefill() {
+export async function testPrefill() {
   return traced(
     async () => {
       console.log("\n=== Test 14: Prefill ===");
@@ -322,7 +326,7 @@ async function testPrefill() {
 }
 
 // Test 13: Very short max_tokens
-async function testShortMaxTokens() {
+export async function testShortMaxTokens() {
   return traced(
     async () => {
       console.log("\n=== Test 15: Very Short Max Tokens ===");
@@ -340,7 +344,7 @@ async function testShortMaxTokens() {
 }
 
 // Test 14: Tool use (function calling)
-async function testToolUse() {
+export async function testToolUse() {
   return traced(
     async () => {
       console.log("\n=== Test 16: Tool Use ===");
@@ -400,7 +404,7 @@ async function testToolUse() {
 }
 
 // Test 15: Tool use with tool result (multi-turn)
-async function testToolUseWithResult() {
+export async function testToolUseWithResult() {
   return traced(
     async () => {
       console.log("\n=== Test 17: Tool Use With Result ===");
@@ -482,7 +486,7 @@ async function testToolUseWithResult() {
 }
 
 // Test 16: Reasoning tokens generation and follow-up
-async function testReasoning() {
+export async function testReasoning() {
   return traced(
     async () => {
       console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
@@ -570,4 +574,19 @@ async function runAllTests() {
   }
 }
 
-runAllTests().catch(console.error);
+async function main() {
+  console.log("=".repeat(60));
+  console.log("OpenAI Golden Tests with Braintrust");
+  console.log("=".repeat(60));
+
+  await runAllTests();
+
+  console.log("\n" + "=".repeat(60));
+  console.log("All tests completed!");
+  console.log("=".repeat(60));
+}
+
+if (require.main === module) {
+  setup();
+  main().catch(console.error);
+}

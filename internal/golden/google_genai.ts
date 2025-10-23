@@ -1,4 +1,4 @@
-import { initLogger, traced } from "braintrust";
+import { traced, initLogger, type Logger } from "braintrust";
 import * as googleGenAI from "@google/genai";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -8,16 +8,20 @@ const { GoogleGenAI } = wrapGoogleGenAI(googleGenAI);
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
-initLogger({
-  projectName: "golden-ts-genai",
-});
+export const setup = (testLogger?: Logger<true>) => {
+  if (!testLogger) {
+    initLogger({
+      projectName: "golden-ts-genai",
+    });
+  }
+};
 
 const client = new GoogleGenAI({
   apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
 });
 
 // Test 1: Basic text completion
-async function testBasicCompletion() {
+export async function testBasicCompletion() {
   return traced(
     async () => {
       console.log("\n=== Test 1: Basic Completion ===");
@@ -36,7 +40,7 @@ async function testBasicCompletion() {
 }
 
 // Test 2: Multi-turn conversation
-async function testMultiTurn() {
+export async function testMultiTurn() {
   return traced(
     async () => {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
@@ -68,7 +72,7 @@ async function testMultiTurn() {
 }
 
 // Test 3: System prompt
-async function testSystemPrompt() {
+export async function testSystemPrompt() {
   return traced(
     async () => {
       console.log("\n=== Test 3: System Prompt ===");
@@ -89,7 +93,7 @@ async function testSystemPrompt() {
 }
 
 // Test 4: Streaming response
-async function testStreaming() {
+export async function testStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 4: Streaming ===");
@@ -117,7 +121,7 @@ async function testStreaming() {
 }
 
 // Test 5: Image input (base64)
-async function testImageInput() {
+export async function testImageInput() {
   return traced(
     async () => {
       console.log("\n=== Test 5: Image Input ===");
@@ -151,7 +155,7 @@ async function testImageInput() {
 }
 
 // Test 6: Document input (PDF)
-async function testDocumentInput() {
+export async function testDocumentInput() {
   return traced(
     async () => {
       console.log("\n=== Test 6: Document Input ===");
@@ -185,7 +189,7 @@ async function testDocumentInput() {
 }
 
 // Test 7: Temperature and top_p variations
-async function testTemperatureVariations() {
+export async function testTemperatureVariations() {
   return traced(
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
@@ -220,7 +224,7 @@ async function testTemperatureVariations() {
 }
 
 // Test 8: Stop sequences
-async function testStopSequences() {
+export async function testStopSequences() {
   return traced(
     async () => {
       console.log("\n=== Test 8: Stop Sequences ===");
@@ -242,7 +246,7 @@ async function testStopSequences() {
 }
 
 // Test 10: Long context
-async function testLongContext() {
+export async function testLongContext() {
   return traced(
     async () => {
       console.log("\n=== Test 10: Long Context ===");
@@ -264,7 +268,7 @@ async function testLongContext() {
 }
 
 // Test 13: Mixed content types
-async function testMixedContent() {
+export async function testMixedContent() {
   return traced(
     async () => {
       console.log("\n=== Test 13: Mixed Content Types ===");
@@ -301,7 +305,7 @@ async function testMixedContent() {
 }
 
 // Test 14: Empty assistant message (prefill)
-async function testPrefill() {
+export async function testPrefill() {
   return traced(
     async () => {
       console.log("\n=== Test 14: Prefill ===");
@@ -329,7 +333,7 @@ async function testPrefill() {
 }
 
 // Test 15: Very short max_tokens
-async function testShortMaxTokens() {
+export async function testShortMaxTokens() {
   return traced(
     async () => {
       console.log("\n=== Test 15: Very Short Max Tokens ===");
@@ -350,7 +354,7 @@ async function testShortMaxTokens() {
 }
 
 // Test 16: Tool use
-async function testToolUse() {
+export async function testToolUse() {
   return traced(
     async () => {
       console.log("\n=== Test 16: Tool Use ===");
@@ -404,7 +408,7 @@ async function testToolUse() {
 }
 
 // Test 17: Tool use with result (multi-turn)
-async function testToolUseWithResult() {
+export async function testToolUseWithResult() {
   return traced(
     async () => {
       console.log("\n=== Test 17: Tool Use With Result ===");
@@ -496,7 +500,7 @@ async function testToolUseWithResult() {
 }
 
 // Test 18: Async generation
-async function testAsyncGeneration() {
+export async function testAsyncGeneration() {
   return traced(
     async () => {
       console.log("\n=== Test 18: Async Generation ===");
@@ -515,7 +519,7 @@ async function testAsyncGeneration() {
 }
 
 // Test 19: Async streaming
-async function testAsyncStreaming() {
+export async function testAsyncStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 19: Async Streaming ===");
@@ -543,7 +547,7 @@ async function testAsyncStreaming() {
 }
 
 // Test 20: Reasoning tokens generation and follow-up
-async function testReasoning() {
+export async function testReasoning() {
   return traced(
     async () => {
       console.log("\n=== Test 20: Reasoning Tokens & Follow-up ===");
@@ -666,4 +670,7 @@ async function main() {
   console.log("=".repeat(60));
 }
 
-main().catch(console.error);
+if (require.main === module) {
+  setup();
+  main().catch(console.error);
+}
