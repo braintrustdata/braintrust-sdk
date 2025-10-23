@@ -1347,8 +1347,13 @@ async def _run_evaluator_internal(
 
         # metadata can be a dict, ReadonlyAttachment, or None
         # If it's a dict, make a shallow copy to avoid mutating the original
-        # If it's a ReadonlyAttachment, pass it through as-is (it will be handled by _deep_copy_event)
-        metadata = {**datum.metadata} if isinstance(datum.metadata, dict) else (datum.metadata if datum.metadata is not None else {})
+        # If it's a ReadonlyAttachment, convert it back to its reference dict
+        if isinstance(datum.metadata, ReadonlyAttachment):
+            metadata = datum.metadata.reference
+        elif isinstance(datum.metadata, dict):
+            metadata = {**datum.metadata}
+        else:
+            metadata = {}
         output = None
         error = None
         exc_info = None
