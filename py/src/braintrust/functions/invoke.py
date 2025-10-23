@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Literal, Optional, TypeVar, Union, overload
 
 from sseclient import SSEClient
 
-from ..logger import Exportable, get_span_parent_object, login, proxy_conn
+from ..logger import Exportable, _deep_copy_event, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
 from .constants import INVOKE_API_VERSION
 from .stream import BraintrustInvokeError, BraintrustStream
@@ -168,7 +168,10 @@ def invoke(
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
-    resp = proxy_conn().post("function/invoke", json=request, headers=headers, stream=stream)
+    # Serialize the request to convert ReadonlyAttachment objects to AttachmentReference dicts
+    serialized_request = _deep_copy_event(request)
+
+    resp = proxy_conn().post("function/invoke", json=serialized_request, headers=headers, stream=stream)
     if resp.status_code == 500:
         raise BraintrustInvokeError(resp.text)
 

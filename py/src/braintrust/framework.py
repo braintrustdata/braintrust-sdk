@@ -1345,7 +1345,10 @@ async def _run_evaluator_internal(
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
 
-        metadata = {**(datum.metadata or {})}
+        # metadata can be a dict, ReadonlyAttachment, or None
+        # If it's a dict, make a shallow copy to avoid mutating the original
+        # If it's a ReadonlyAttachment, pass it through as-is (it will be handled by _deep_copy_event)
+        metadata = {**datum.metadata} if isinstance(datum.metadata, dict) else (datum.metadata if datum.metadata is not None else {})
         output = None
         error = None
         exc_info = None
