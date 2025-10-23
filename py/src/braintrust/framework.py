@@ -42,6 +42,7 @@ from .logger import (
     Experiment,
     ExperimentSummary,
     Metadata,
+    ReadonlyAttachment,
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
