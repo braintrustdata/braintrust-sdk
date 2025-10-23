@@ -1,4 +1,4 @@
-import { traced, initLogger, log } from "braintrust";
+import { traced, initLogger, log, Logger } from "braintrust";
 import { BraintrustCallbackHandler } from "@braintrust/langchain-js";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
@@ -16,14 +16,20 @@ import { join } from "path";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
-const logger = initLogger({
-  projectName: "golden-ts-langchain",
-});
+let handler: BraintrustCallbackHandler<true>;
 
-const handler = new BraintrustCallbackHandler({ logger });
+export const setup = async (testLogger?: Logger<true>) => {
+  handler = new BraintrustCallbackHandler({
+    logger:
+      testLogger ||
+      initLogger({
+        projectName: "golden-ts-langchain",
+      }),
+  });
+};
 
 // Test 1: Basic completion
-async function testBasicCompletion() {
+export async function testBasicCompletion() {
   return traced(
     async () => {
       console.log("\n=== Test 1: Basic Completion ===");
@@ -64,7 +70,7 @@ async function testBasicCompletion() {
 }
 
 // Test 2: Multi-turn conversation
-async function testMultiTurn() {
+export async function testMultiTurn() {
   return traced(
     async () => {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
@@ -104,7 +110,7 @@ async function testMultiTurn() {
 }
 
 // Test 3: System prompt
-async function testSystemPrompt() {
+export async function testSystemPrompt() {
   return traced(
     async () => {
       console.log("\n=== Test 3: System Prompt ===");
@@ -147,7 +153,7 @@ async function testSystemPrompt() {
 }
 
 // Test 4: Streaming
-async function testStreaming() {
+export async function testStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 4: Streaming ===");
@@ -193,7 +199,7 @@ async function testStreaming() {
 }
 
 // Test 5: Image input
-async function testImageInput() {
+export async function testImageInput() {
   return traced(
     async () => {
       console.log("\n=== Test 5: Image Input ===");
@@ -264,7 +270,7 @@ async function testImageInput() {
 }
 
 // Test 6: Document input (PDF)
-async function testDocumentInput() {
+export async function testDocumentInput() {
   return traced(
     async () => {
       console.log("\n=== Test 6: Document Input ===");
@@ -338,7 +344,7 @@ async function testDocumentInput() {
 }
 
 // Test 7: Temperature and top_p variations
-async function testTemperatureVariations() {
+export async function testTemperatureVariations() {
   return traced(
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
@@ -403,7 +409,7 @@ async function testTemperatureVariations() {
 }
 
 // Test 8: Stop sequences
-async function testStopSequences() {
+export async function testStopSequences() {
   return traced(
     async () => {
       console.log("\n=== Test 8: Stop Sequences ===");
@@ -449,7 +455,7 @@ async function testStopSequences() {
 }
 
 // Test 9: Metadata
-async function testMetadata() {
+export async function testMetadata() {
   return traced(
     async () => {
       console.log("\n=== Test 9: Metadata ===");
@@ -486,7 +492,7 @@ async function testMetadata() {
 }
 
 // Test 10: Long context
-async function testLongContext() {
+export async function testLongContext() {
   return traced(
     async () => {
       console.log("\n=== Test 10: Long Context ===");
@@ -529,7 +535,7 @@ async function testLongContext() {
 }
 
 // Test 11: Mixed content types
-async function testMixedContent() {
+export async function testMixedContent() {
   return traced(
     async () => {
       console.log("\n=== Test 11: Mixed Content Types ===");
@@ -608,7 +614,7 @@ async function testMixedContent() {
 }
 
 // Test 12: Prefill
-async function testPrefill() {
+export async function testPrefill() {
   return traced(
     async () => {
       console.log("\n=== Test 12: Prefill ===");
@@ -648,7 +654,7 @@ async function testPrefill() {
 }
 
 // Test 13: Very short max_tokens
-async function testShortMaxTokens() {
+export async function testShortMaxTokens() {
   return traced(
     async () => {
       console.log("\n=== Test 13: Very Short Max Tokens ===");
@@ -688,7 +694,7 @@ async function testShortMaxTokens() {
 }
 
 // Test 14: Tool use
-async function testToolUse() {
+export async function testToolUse() {
   return traced(
     async () => {
       console.log("\n=== Test 14: Tool Use ===");
@@ -756,7 +762,7 @@ async function testToolUse() {
 }
 
 // Test 15: Tool use with result
-async function testToolUseWithResult() {
+export async function testToolUseWithResult() {
   return traced(
     async () => {
       console.log("\n=== Test 15: Tool Use With Result ===");
@@ -848,7 +854,7 @@ async function testToolUseWithResult() {
 }
 
 // Test 16: Async generation
-async function testAsyncGeneration() {
+export async function testAsyncGeneration() {
   return traced(
     async () => {
       console.log("\n=== Test 16: Async Generation ===");
@@ -888,7 +894,7 @@ async function testAsyncGeneration() {
 }
 
 // Test 17: Async streaming
-async function testAsyncStreaming() {
+export async function testAsyncStreaming() {
   return traced(
     async () => {
       console.log("\n=== Test 17: Async Streaming ===");
@@ -934,7 +940,7 @@ async function testAsyncStreaming() {
 }
 
 // Test 18: Reasoning with o1 model
-async function testReasoning() {
+export async function testReasoning() {
   return traced(
     async () => {
       log({
@@ -952,24 +958,24 @@ async function runAllTests() {
   console.log("=".repeat(60));
 
   const tests = [
-    testBasicCompletion,
-    testMultiTurn,
-    testSystemPrompt,
-    testStreaming,
-    testImageInput,
-    testDocumentInput,
-    testTemperatureVariations,
-    testStopSequences,
-    testMetadata,
-    testLongContext,
-    testMixedContent,
-    testPrefill,
-    testShortMaxTokens,
-    testToolUse,
-    testToolUseWithResult,
+    // testBasicCompletion,
+    // testMultiTurn,
+    // testSystemPrompt,
+    // testStreaming,
+    // testImageInput,
+    // testDocumentInput,
+    // testTemperatureVariations,
+    // testStopSequences,
+    // testMetadata,
+    // testLongContext,
+    // testMixedContent,
+    // testPrefill,
+    // testShortMaxTokens,
+    // testToolUse,
+    // testToolUseWithResult,
     testAsyncGeneration,
-    testAsyncStreaming,
-    testReasoning,
+    // testAsyncStreaming,
+    // testReasoning,
   ];
 
   for (const test of tests) {
@@ -993,4 +999,9 @@ async function runAllTests() {
   console.log("=".repeat(60));
 }
 
-runAllTests().catch(console.error);
+if (require.main === module) {
+  (async () => {
+    await setup();
+    await runAllTests();
+  })().catch(console.error);
+}

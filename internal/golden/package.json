@@ -4,6 +4,12 @@
   "description": "",
   "private": true,
   "main": "index.js",
+  "bin": {
+    "golden-runner": "./runner/cli.ts"
+  },
+  "scripts": {
+    "test": "pnpm dlx tsx runner/cli.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -15,7 +21,10 @@
     "@langchain/anthropic": "^0.3.30",
     "@langchain/core": "^0.3.78",
     "@langchain/openai": "^0.3.17",
+    "@types/node": "^20.10.5",
     "braintrust": "workspace:*",
-    "openai": "^6.3.0"
+    "glob": "^11.0.3",
+    "openai": "^6.3.0",
+    "zod": "^3.25.34"
   }
 }
