@@ -21,24 +21,18 @@ SDK_PREFIX=$(echo "$CURRENT_TAG" | sed -E 's/^([^-]+-[^-]+)-.*/\1/')
 PREVIOUS_TAG=$(git tag --list "${SDK_PREFIX}-v*" --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -1)
 
 if [ -z "$PREVIOUS_TAG" ]; then
-  echo "No previous tag found for ${SDK_PREFIX}, generating notes from all history"
   PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
 fi
-
-echo "Generating release notes for ${CURRENT_TAG}"
-echo "Previous version: ${PREVIOUS_TAG}"
-echo "Path filter: ${PATH_FILTER}"
-echo ""
 
 # Generate the changelog
 CHANGELOG=$(git log ${PREVIOUS_TAG}..${CURRENT_TAG} --oneline --no-merges -- ${PATH_FILTER})
 
 if [ -z "$CHANGELOG" ]; then
-  echo "## What's Changed"
+  echo "## Changelog"
   echo ""
   echo "No changes found in ${PATH_FILTER} since ${PREVIOUS_TAG}"
 else
-  echo "## What's Changed"
+  echo "## Changelog"
   echo ""
 
   # Format each commit as a markdown list item with PR link
@@ -58,6 +52,3 @@ else
     fi
   done <<< "$CHANGELOG"
 fi
-
-echo ""
-echo "**Full Changelog**: https://github.com/\${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${CURRENT_TAG}"
