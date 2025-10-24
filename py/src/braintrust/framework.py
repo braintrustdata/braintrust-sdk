@@ -42,6 +42,7 @@ from .logger import (
     Experiment,
     ExperimentSummary,
     Metadata,
+    ReadonlyAttachment,
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
@@ -1345,7 +1346,15 @@ async def _run_evaluator_internal(
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
 
-        metadata = {**(datum.metadata or {})}
+        # metadata can be a dict, ReadonlyAttachment, or None
+        # If it's a dict, make a shallow copy to avoid mutating the original
+        # If it's a ReadonlyAttachment, convert it back to its reference dict
+        if isinstance(datum.metadata, ReadonlyAttachment):
+            metadata = datum.metadata.reference
+        elif isinstance(datum.metadata, dict):
+            metadata = {**datum.metadata}
+        else:
+            metadata = {}
         output = None
         error = None
         exc_info = None
