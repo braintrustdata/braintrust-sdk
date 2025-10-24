@@ -93,11 +93,21 @@ export interface FileHandle {
 function evaluateBuildResults(
   inFile: string,
   buildResult: esbuild.BuildResult,
+  outFile?: string,
 ): EvaluatorFile | null {
   if (!buildResult.outputFiles) {
     return null;
   }
   const moduleText = buildResult.outputFiles[0].text;
+
+  // Check if this is an ESM module
+  const moduleFormat = detectModuleFormat(inFile);
+  if (moduleFormat === "esm" && outFile) {
+    // For ESM modules, we need to write to file and use dynamic import
+    // This is handled elsewhere, return null here
+    return null;
+  }
+
   return loadModule({ inFile, moduleText });
 }
 
@@ -327,7 +337,48 @@ async function initFile({
             sourceFile: inFile,
           };
         }
-        const evaluator = evaluateBuildResults(inFile, result) || {
+
+        // Check if this is an ESM module
+        const moduleFormat = detectModuleFormat(inFile);
+        let evaluator: EvaluatorFile | null = null;
+
+        if (moduleFormat === "esm") {
+          // For ESM, write the output to file and use dynamic import
+          if (result.outputFiles && result.outputFiles[0]) {
+            fs.writeFileSync(outFile, result.outputFiles[0].text);
+          }
+
+          try {
+            // Use dynamic import for ESM modules
+            const fileUrl = `file://${outFile}`;
+
+            // Set up globals before importing
+            globalThis._evals = {
+              functions: [],
+              prompts: [],
+              evaluators: {},
+              reporters: {},
+            };
+            globalThis._lazy_load = true;
+            const loggerModule = await import("./logger");
+            globalThis.__inherited_braintrust_state =
+              loggerModule._internalGetGlobalState();
+
+            await import(fileUrl);
+            evaluator = { ...globalThis._evals };
+          } catch (importError) {
+            return {
+              type: "failure",
+              error: importError as Error,
+              sourceFile: inFile,
+            };
+          }
+        } else {
+          // For CJS, use the existing loadModule approach
+          evaluator = evaluateBuildResults(inFile, result, outFile);
+        }
+
+        evaluator = evaluator || {
           functions: [],
           prompts: [],
           evaluators: {},
@@ -776,6 +827,42 @@ const nativeNodeModulesPlugin = {
 
 export type PluginMaker = (fileName: string) => esbuild.Plugin;
 
+function detectModuleFormat(fileName: string): "esm" | "cjs" {
+  // Check if file extension indicates ESM
+  if (fileName.endsWith(".mjs")) {
+    return "esm";
+  }
+  if (fileName.endsWith(".cjs")) {
+    return "cjs";
+  }
+
+  // Walk up directory tree looking for package.json
+  let dir = path.dirname(path.resolve(fileName));
+  while (dir !== path.dirname(dir)) {
+    const pkgPath = path.join(dir, "package.json");
+    try {
+      const pkgContent = fs.readFileSync(pkgPath, "utf-8");
+      const pkg = JSON.parse(pkgContent);
+
+      // Check if package.json has "type": "module"
+      if (pkg.type === "module") {
+        return "esm";
+      } else if (pkg.type === "commonjs") {
+        return "cjs";
+      }
+
+      // Found package.json but no type field, default to cjs
+      return "cjs";
+    } catch {
+      // Continue searching up the directory tree
+    }
+    dir = path.dirname(dir);
+  }
+
+  // No package.json found, default to cjs
+  return "cjs";
+}
+
 function buildOpts({
   fileName,
   outFile,
@@ -789,22 +876,59 @@ function buildOpts({
   plugins?: PluginMaker[];
   externalPackages?: string[];
 }): esbuild.BuildOptions {
+  // Detect module format based on project configuration
+  const moduleFormat = detectModuleFormat(fileName);
+
+  // For ESM modules that will be dynamically imported from temp directory,
+  // we don't want to mark braintrust/autoevals as external since they need
+  // to be bundled. For CJS, keep the original external behavior.
   const plugins = [
     nativeNodeModulesPlugin,
-    createMarkKnownPackagesExternalPlugin(externalPackages),
+    ...(moduleFormat === "cjs"
+      ? [createMarkKnownPackagesExternalPlugin(externalPackages)]
+      : []),
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
+
+  // For ESM modules, use a different strategy: bundle everything except Node built-ins
+  // and use banner to set up proper CJS compatibility
+  const external =
+    moduleFormat === "esm"
+      ? [
+          // Only exclude Node.js built-in modules and native bindings
+          "node:*",
+          "fsevents",
+        ]
+      : ["node_modules/*", "fsevents"];
+
+  // Add banner for ESM to provide CommonJS compatibility shims
+  const banner =
+    moduleFormat === "esm"
+      ? {
+          js: `
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+`,
+        }
+      : undefined;
+
   return {
     entryPoints: [fileName],
     bundle: true,
     treeShaking: true,
     outfile: outFile,
     platform: "node",
-    write: false,
+    write: false, // Keep in-memory for both formats
+    format: moduleFormat,
+    banner,
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
     tsconfig,
-    external: ["node_modules/*", "fsevents"],
+    external,
     plugins: plugins,
   };
 }
@@ -846,7 +970,18 @@ export async function initializeHandles({
   }
 
   const tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
-  // fs.mkdirSync(tmpDir, { recursive: true });
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  // Check if any of the input files require ESM format
+  const needsEsm = Object.keys(files).some(
+    (file) => detectModuleFormat(file) === "esm",
+  );
+
+  if (needsEsm) {
+    // Create a package.json in the temp directory to mark it as ESM
+    const pkgJsonPath = path.join(tmpDir, "package.json");
+    fs.writeFileSync(pkgJsonPath, JSON.stringify({ type: "module" }, null, 2));
+  }
 
   const initPromises = [];
   for (const file of Object.keys(files)) {
