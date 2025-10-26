@@ -5,14 +5,52 @@ import {
   extractModelFromResult,
   extractModelFromWrapGenerateCallback,
   extractModelParameters,
-  normalizeUsageMetrics,
   extractToolCallsFromSteps,
   extractToolCallsFromBlocks,
   buildAssistantOutputWithToolCalls,
   extractInput,
 } from "../ai-sdk-shared/utils";
 import { processInputAttachments } from "../attachment-utils";
+import { extractTokenMetrics } from "./ai-sdk";
 
+/**
+ * Serializes a response object to extract only serializable data.
+ * Handles the message array with text and reasoning parts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function serializeResponse(response: any): any {
+  if (!response) {
+    return response;
+  }
+
+  // If it's a messages array, serialize each message
+  if (Array.isArray(response.messages)) {
+    return {
+      messages: response.messages.map((msg: any) => ({
+        role: msg.role,
+        content: Array.isArray(msg.content)
+          ? msg.content.map((part: any) => {
+              const serializedPart: any = { type: part.type };
+              if (part.text) {
+                serializedPart.text = part.text;
+              }
+              if (part.providerOptions) {
+                serializedPart.providerOptions = part.providerOptions;
+              }
+              if (part.encryptedContent) {
+                serializedPart.encryptedContent = part.encryptedContent;
+              }
+              return serializedPart;
+            })
+          : msg.content,
+      })),
+    };
+  }
+
+  // For non-message responses, return the response as-is
+  // This preserves the structure that the caller expects
+  return response;
+}
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types
 
@@ -152,17 +190,84 @@ export function BraintrustMiddleware(
           toolCalls = extractToolCallsFromBlocks((result as any)?.content);
         }
 
+        // Build output object from provider response
+        const output: any = {};
+
+        if (toolCalls.length > 0) {
+          // Tool calls - use existing handler
+          Object.assign(
+            output,
+            buildAssistantOutputWithToolCalls(result, toolCalls),
+          );
+        } else if ((result as any)?.content) {
+          // Extract text and reasoning from content blocks (Anthropic format)
+          const content = (result as any).content;
+          if (Array.isArray(content)) {
+            const textParts: string[] = [];
+            const reasoningParts: Array<{ text: string }> = [];
+            for (const block of content) {
+              if (block.type === "text" && block.text) {
+                textParts.push(block.text);
+              } else if (block.type === "thinking" && block.thinking) {
+                reasoningParts.push({ text: block.thinking });
+              }
+            }
+            if (textParts.length > 0) {
+              output.text = textParts.join("\n");
+            }
+            if (reasoningParts.length > 0) {
+              output.reasoning = reasoningParts;
+            }
+          } else {
+            output.content = content;
+          }
+        } else if ((result as any)?.text) {
+          output.text = (result as any).text;
+        } else if ((result as any)?.response?.messages) {
+          // Extract text and reasoning from AI SDK v5 normalized messages
+          const messages = (result as any).response.messages;
+          const textParts: string[] = [];
+          const reasoningParts: Array<{
+            text: string;
+            providerOptions?: any;
+            encryptedContent?: string;
+          }> = [];
+
+          for (const msg of messages) {
+            if (msg.role === "assistant" && Array.isArray(msg.content)) {
+              for (const part of msg.content) {
+                if (part.type === "text" && part.text) {
+                  textParts.push(part.text);
+                } else if (part.type === "reasoning" && part.text) {
+                  reasoningParts.push({
+                    text: part.text,
+                    ...(part.providerOptions && {
+                      providerOptions: part.providerOptions,
+                    }),
+                    ...(part.encryptedContent && {
+                      encryptedContent: part.encryptedContent,
+                    }),
+                  });
+                }
+              }
+            }
+          }
+
+          if (textParts.length > 0) {
+            output.text = textParts.join("\n");
+          }
+          if (reasoningParts.length > 0) {
+            output.reasoning = reasoningParts;
+          }
+        } else if ((result as any)?.response) {
+          // Fallback: capture response object
+          output.response = (result as any).response;
+        }
+
         span.log({
-          output:
-            toolCalls.length > 0
-              ? buildAssistantOutputWithToolCalls(result, toolCalls)
-              : (result as any)?.content,
+          output,
           metadata,
-          metrics: normalizeUsageMetrics(
-            result.usage,
-            provider,
-            result.providerMetadata,
-          ),
+          metrics: extractTokenMetrics(result),
         });
 
         return result;
@@ -286,11 +391,7 @@ export function BraintrustMiddleware(
               span.log({
                 output,
                 metadata,
-                metrics: normalizeUsageMetrics(
-                  finalUsage,
-                  provider,
-                  providerMetadata,
-                ),
+                metrics: extractTokenMetrics({ usage: finalUsage }),
               });
 
               span.end();

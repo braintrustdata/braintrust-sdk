@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import {
   describe,
   test,
@@ -73,8 +77,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
     expect(await testLogger.drain()).toHaveLength(0);
 
     const start = Date.now();
-    let res: any;
-    res = await generateText({
+    const res = await generateText({
       model,
       prompt: "What is 2+2?",
       system: "Reply with just the number.",
@@ -83,11 +86,9 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
 
     const spans = (await testLogger.drain()) as any[];
     expect(spans.length).toBeGreaterThanOrEqual(2);
-    // Choose the wrapper span (logs output as a string), not the middleware span
+    // Choose the wrapper span (logs output as an object), not the middleware span
     const wrapperSpan = spans.find(
-      (s) =>
-        s?.span_attributes?.name === "ai-sdk.generateText" &&
-        typeof s?.output === "string",
+      (s) => s?.span_attributes?.name === "ai-sdk.generateText",
     );
     expect(wrapperSpan).toBeTruthy();
     expect(wrapperSpan.metadata?.provider).toBe(name);
@@ -98,7 +99,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
 
     expect(typeof res.text).toBe("string");
     expect(res.text).toMatch(/4/);
-    expect(wrapperSpan.output).toBe(res.text);
+    expect(wrapperSpan.output).toEqual({ text: res.text });
     assertTimingValid(
       start,
       end,
@@ -116,7 +117,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
           model: expect.any(String),
           finish_reason: expect.any(String),
         }),
-        output: res.text,
+        output: { text: res.text },
       }),
     );
   });
@@ -139,9 +140,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
     const spans = (await testLogger.drain()) as any[];
     expect(spans.length).toBeGreaterThanOrEqual(2);
     const wrapperSpan = spans.find(
-      (s) =>
-        s?.span_attributes?.name === "ai-sdk.streamText" &&
-        typeof s?.output === "string",
+      (s) => s?.span_attributes?.name === "ai-sdk.streamText",
     );
     expect(wrapperSpan).toBeTruthy();
 
@@ -152,7 +151,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
 
     expect(typeof full).toBe("string");
     expect(full.length).toBeGreaterThan(10);
-    expect(wrapperSpan.output).toBe(full);
+    expect(wrapperSpan.output).toEqual({ text: full });
     expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
     assertTimingValid(
       start,
@@ -168,7 +167,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
           model: expect.any(String),
           finish_reason: expect.any(String),
         }),
-        output: full,
+        output: { text: full },
       }),
     );
   });
@@ -180,9 +179,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
     expect(await testLogger.drain()).toHaveLength(0);
 
     const start = Date.now();
-    let result: any;
-
-    result = await generateObject({
+    const result = await generateObject({
       model,
       schema: simpleSchema,
       prompt: "Return only a JSON object with key 'answer' set to 'ok'.",
@@ -236,8 +233,7 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
     expect(await testLogger.drain()).toHaveLength(0);
 
     const start = Date.now();
-    let streamRes: any;
-    streamRes = await streamObject({
+    const streamRes = await streamObject({
       model,
       schema: simpleSchema,
       prompt: "Stream a JSON object with key 'answer' set to 'ok'.",
@@ -385,4 +381,120 @@ describe("ai-sdk v3 wrapper", TEST_SUITE_OPTIONS, () => {
       expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
     },
   );
+
+  test("reasoning tokens and multi-turn (anthropic)", async () => {
+    expect(await testLogger.drain()).toHaveLength(0);
+
+    // Use Anthropic's extended thinking model
+    const model = anthropic("claude-3-7-sonnet-20250219");
+
+    // First request with reasoning
+    const firstResult = await generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content:
+            "Think carefully. Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+        },
+      ],
+      providerOptions: {
+        anthropic: {
+          thinking: {
+            type: "enabled",
+            budgetTokens: 10000,
+          },
+        },
+      },
+    });
+
+    const firstSpans = (await testLogger.drain()) as any[];
+    const firstWrapperSpan = firstSpans.find(
+      (s) => s?.span_attributes?.name === "ai-sdk.generateText",
+    );
+
+    expect(firstWrapperSpan).toBeTruthy();
+    expect(firstWrapperSpan.metadata?.provider).toBe("anthropic");
+
+    expect(firstResult.reasoning?.length).toBeTruthy();
+    expect(
+      firstResult.response.messages.find(
+        (m: ai.CoreMessage) =>
+          m.role === "assistant" &&
+          Array.isArray(m.content) &&
+          m.content.some((c) => c.type === "reasoning"),
+      ),
+    ).toBeTruthy();
+
+    // Wrapper span output should include reasoning structured data
+    expect(firstWrapperSpan.output).toBeTruthy();
+    expect(typeof firstWrapperSpan.output).toBe("object");
+    expect(firstWrapperSpan.output.text).toBeTruthy();
+    expect(firstWrapperSpan.output.reasoning).toBeTruthy();
+    expect(Array.isArray(firstWrapperSpan.output.reasoning)).toBe(true);
+    expect(firstWrapperSpan.output.reasoning.length).toBeGreaterThan(0);
+    firstWrapperSpan.output.reasoning.forEach((r: any) => {
+      expect(r.text).toBeTruthy();
+      expect(typeof r.text).toBe("string");
+    });
+
+    // Anthropic extended thinking should return reasoning_tokens in metrics
+    expect(firstWrapperSpan.metrics).toBeTruthy();
+    expect(firstWrapperSpan.metrics.reasoning_tokens).toBeTruthy();
+    expect(typeof firstWrapperSpan.metrics.reasoning_tokens).toBe("number");
+    expect(firstWrapperSpan.metrics.reasoning_tokens).toBeGreaterThan(0);
+
+    // Second request using response.messages from first request
+    const secondResult = await generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content:
+            "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+        },
+        ...firstResult.response.messages,
+        {
+          role: "user",
+          content:
+            "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
+        },
+      ],
+      providerOptions: {
+        anthropic: {
+          thinking: {
+            type: "enabled",
+            budgetTokens: 10000,
+          },
+        },
+      },
+    });
+
+    const secondSpans = (await testLogger.drain()) as any[];
+    const secondWrapperSpan = secondSpans.find(
+      (s) => s?.span_attributes?.name === "ai-sdk.generateText",
+    );
+
+    expect(secondWrapperSpan).toBeTruthy();
+    expect(secondWrapperSpan.metadata?.provider).toBe("anthropic");
+
+    // Verify the follow-up response is valid
+    expect(typeof secondResult.text).toBe("string");
+    expect(secondResult.text.length).toBeGreaterThan(0);
+
+    // Verify reasoning is captured in follow-up too
+    expect(secondResult.reasoning).toBeTruthy();
+    expect(
+      secondResult.response.messages.find(
+        (m: ai.CoreMessage) =>
+          m.role === "assistant" &&
+          Array.isArray(m.content) &&
+          m.content.some((c) => c.type === "reasoning"),
+      ),
+    ).toBeTruthy();
+
+    if (typeof secondWrapperSpan.output === "object") {
+      expect(secondWrapperSpan.output.reasoning).toBeTruthy();
+    }
+  }, 30000);
 });

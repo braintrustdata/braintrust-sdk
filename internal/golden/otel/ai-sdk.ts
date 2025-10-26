@@ -1,5 +1,5 @@
 import { wrapAISDK, initLogger, traced } from "braintrust";
-import { openai } from "@ai-sdk/openai";
+import { openai, OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as ai from "ai";
 import { z } from "zod";
@@ -650,34 +650,46 @@ async function testAsyncStreaming() {
   );
 }
 
-// Interface for usage with reasoning tokens
-interface UsageWithReasoning {
-  promptTokens?: number;
-  completionTokens?: number;
-  reasoningTokens?: number;
-  totalTokens?: number;
-}
-
 // Test 18: Reasoning tokens generation and follow-up - ADDITIONAL TEST
 async function testReasoning() {
   return traced(
     async () => {
       console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
 
-      for (const [provider, model, modelName] of [
-        ["openai", openai("gpt-5-mini"), "gpt-5-mini"],
+      for (const [provider, model, modelName, options] of [
+        [
+          "openai",
+          openai("gpt-5-mini"),
+          "gpt-5-mini",
+          {
+            providerOptions: {
+              openai: {
+                reasoningEffort: "high",
+                reasoningSummary: "detailed",
+              } satisfies OpenAIResponsesProviderOptions,
+            },
+          },
+        ],
         [
           "anthropic",
-          anthropic("claude-3-5-sonnet-20241022"),
-          "claude-3-5-sonnet",
+          anthropic("claude-3-7-sonnet-latest"),
+          "claude-3-7-sonnet",
+          {
+            providerOptions: {
+              anthropic: {
+                thinking: {
+                  type: "enabled",
+                  budgetTokens: 10000,
+                },
+              },
+            },
+          },
         ],
       ] as const) {
         console.log(
           `${provider.charAt(0).toUpperCase() + provider.slice(1)} (${modelName}):`,
         );
 
-        // FIRST REQUEST: Analyze pattern and derive formula
-        console.log("\n--- First request (generate reasoning) ---");
         const firstResult = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
@@ -688,41 +700,10 @@ async function testReasoning() {
                 "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
             },
           ],
-          providerOptions: {
-            openai: {
-              reasoningSummary: "detailed", // 'auto' for condensed or 'detailed' for comprehensive
-            },
-          },
+          ...options,
         });
 
-        if (!firstResult.reasoningText === undefined) {
-          throw new Error("No reasoning text found.");
-        }
-
-        console.log("First response with reasoning:");
-        console.log(firstResult.text);
-        if (firstResult.reasoning && firstResult.reasoning.length > 0) {
-          console.log(
-            `Reasoning parts included: ${firstResult.reasoning.length}`,
-          );
-        }
-
-        // Check if reasoning tokens are tracked
-        if (firstResult.usage) {
-          console.log("\nFirst request token usage:");
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const usage = firstResult.usage as UsageWithReasoning;
-          console.log(`Prompt tokens: ${usage.promptTokens || "N/A"}`);
-          console.log(`Completion tokens: ${usage.completionTokens || "N/A"}`);
-          if (usage.reasoningTokens !== undefined) {
-            console.log(`Reasoning tokens generated: ${usage.reasoningTokens}`);
-          }
-        }
-
-        // SECOND REQUEST: Apply the discovered pattern to solve a new problem
-        console.log("\n--- Follow-up request (using reasoning context) ---");
-
-        const followUpResult = await generateText({
+        await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           messages: [
@@ -731,40 +712,15 @@ async function testReasoning() {
               content:
                 "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
             },
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "reasoning",
-                  text: firstResult.reasoningText || "",
-                },
-                {
-                  type: "text",
-                  text: firstResult.text,
-                },
-              ],
-            },
+            ...firstResult.response.messages,
             {
               role: "user",
               content:
                 "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
             },
           ],
+          ...options,
         });
-
-        console.log("Follow-up response:");
-        console.log(followUpResult.text);
-
-        if (followUpResult.usage) {
-          console.log("\nFollow-up request token usage:");
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const usage = followUpResult.usage as UsageWithReasoning;
-          console.log(`Prompt tokens: ${usage.promptTokens || "N/A"}`);
-          console.log(`Completion tokens: ${usage.completionTokens || "N/A"}`);
-          if (usage.reasoningTokens !== undefined) {
-            console.log(`Reasoning tokens: ${usage.reasoningTokens}`);
-          }
-        }
       }
     },
     {

@@ -90,6 +90,165 @@ function processFilesAsAttachments(
 }
 
 /**
+ * Extracts reasoning content from response messages.
+ * Returns reasoning parts with their text and provider options preserved.
+ */
+function extractReasoningFromMessages(messages: any[]): {
+  reasoning?: Array<{
+    text: string;
+    providerOptions?: any;
+    encryptedContent?: string;
+  }>;
+} {
+  if (!Array.isArray(messages)) {
+    return {};
+  }
+
+  const reasoning: Array<{
+    text: string;
+    providerOptions?: any;
+    encryptedContent?: string;
+  }> = [];
+
+  for (const msg of messages) {
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "reasoning" && part.text) {
+          reasoning.push({
+            text: part.text,
+            ...(part.providerOptions && {
+              providerOptions: part.providerOptions,
+            }),
+            ...(part.encryptedContent && {
+              encryptedContent: part.encryptedContent,
+            }),
+          });
+        }
+      }
+    }
+  }
+
+  return reasoning.length > 0 ? { reasoning } : {};
+}
+
+/**
+ * Extracts provider options from input parameters.
+ * Passes through all providerOptions to capture any provider-specific configuration.
+ */
+function extractProviderOptions(params: any): {
+  provider_options?: Record<string, any>;
+} {
+  if (params.providerOptions) {
+    return { provider_options: params.providerOptions };
+  }
+  return {};
+}
+
+/**
+ * Extracts all token metrics from usage data.
+ * Handles various provider formats and naming conventions for token counts.
+ */
+export function extractTokenMetrics(result: any): Record<string, number> {
+  const metrics: Record<string, number> = {};
+  const usage = result?.usage;
+
+  if (!usage) {
+    return metrics;
+  }
+
+  // Prompt tokens
+  if (usage.promptTokens !== undefined) {
+    metrics.prompt_tokens = usage.promptTokens;
+  } else if (usage.prompt_tokens !== undefined) {
+    metrics.prompt_tokens = usage.prompt_tokens;
+  }
+
+  // Completion tokens
+  if (usage.completionTokens !== undefined) {
+    metrics.completion_tokens = usage.completionTokens;
+  } else if (usage.completion_tokens !== undefined) {
+    metrics.completion_tokens = usage.completion_tokens;
+  }
+
+  // Total tokens
+  if (usage.totalTokens !== undefined) {
+    metrics.tokens = usage.totalTokens;
+  } else if (usage.tokens !== undefined) {
+    metrics.tokens = usage.tokens;
+  } else if (usage.total_tokens !== undefined) {
+    metrics.tokens = usage.total_tokens;
+  }
+
+  // Prompt cached tokens
+  if (
+    usage.promptCachedTokens !== undefined ||
+    usage.prompt_cached_tokens !== undefined
+  ) {
+    metrics.prompt_cached_tokens =
+      usage.promptCachedTokens || usage.prompt_cached_tokens;
+  }
+
+  // Prompt cache creation tokens
+  if (
+    usage.promptCacheCreationTokens !== undefined ||
+    usage.prompt_cache_creation_tokens !== undefined
+  ) {
+    metrics.prompt_cache_creation_tokens =
+      usage.promptCacheCreationTokens || usage.prompt_cache_creation_tokens;
+  }
+
+  // Prompt reasoning tokens
+  if (
+    usage.promptReasoningTokens !== undefined ||
+    usage.prompt_reasoning_tokens !== undefined
+  ) {
+    metrics.prompt_reasoning_tokens =
+      usage.promptReasoningTokens || usage.prompt_reasoning_tokens;
+  }
+
+  // Completion cached tokens
+  if (
+    usage.completionCachedTokens !== undefined ||
+    usage.completion_cached_tokens !== undefined
+  ) {
+    metrics.completion_cached_tokens =
+      usage.completionCachedTokens || usage.completion_cached_tokens;
+  }
+
+  // Completion reasoning tokens
+  if (
+    usage.completionReasoningTokens !== undefined ||
+    usage.completion_reasoning_tokens !== undefined ||
+    usage.reasoningTokens !== undefined ||
+    usage.reasoning_tokens !== undefined ||
+    usage.thinkingTokens !== undefined ||
+    usage.thinking_tokens !== undefined
+  ) {
+    const reasoningTokenCount =
+      usage.completionReasoningTokens ||
+      usage.completion_reasoning_tokens ||
+      usage.reasoningTokens ||
+      usage.reasoning_tokens ||
+      usage.thinkingTokens ||
+      usage.thinking_tokens;
+
+    metrics.completion_reasoning_tokens = reasoningTokenCount;
+    metrics.reasoning_tokens = reasoningTokenCount;
+  }
+
+  // Completion audio tokens
+  if (
+    usage.completionAudioTokens !== undefined ||
+    usage.completion_audio_tokens !== undefined
+  ) {
+    metrics.completion_audio_tokens =
+      usage.completionAudioTokens || usage.completion_audio_tokens;
+  }
+
+  return metrics;
+}
+
+/**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
  * of generateText, streamText, generateObject, and streamObject that automatically
  * create spans and log inputs, outputs, and metrics.
@@ -145,24 +304,46 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result?.finishReason);
 
-        // Process input attachments for parent span
-        const input = processInputAttachments(extractInput(params));
+        // Build input: include reasoning parts if present in messages
+        const baseInput = processInputAttachments(extractInput(params));
+        const providerOpts = extractProviderOptions(params);
+        const input =
+          Object.keys(providerOpts).length > 0
+            ? { ...baseInput, ...providerOpts }
+            : baseInput;
 
-        // Process generated files as attachments
+        // Extract reasoning and files from output
+        const reasoning = extractReasoningFromMessages(
+          result.response?.messages || [],
+        );
         const outputAttachments = processFilesAsAttachments(result.files);
-        const output = outputAttachments
-          ? { text: result.text || result.content, files: outputAttachments }
-          : result.text || result.content;
+
+        // Build output object (always an object structure)
+        const output: any = {
+          text: result.text || result.content,
+        };
+        if (reasoning.reasoning && reasoning.reasoning.length > 0) {
+          output.reasoning = reasoning.reasoning;
+        }
+        if (outputAttachments && outputAttachments.length > 0) {
+          output.files = outputAttachments;
+        }
+
+        // Extract token metrics
+        const tokenMetrics = extractTokenMetrics(result);
 
         span.log({
-          input: input,
-          output: output,
+          input,
+          output,
           metadata: {
             ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
           },
+          ...(Object.keys(tokenMetrics).length > 0 && {
+            metrics: tokenMetrics,
+          }),
         });
 
         return result;
@@ -192,24 +373,46 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result.finishReason);
 
-        // Process input attachments for parent span
-        const input = processInputAttachments(extractInput(params));
+        // Build input: include reasoning parts if present in messages
+        const baseInput = processInputAttachments(extractInput(params));
+        const providerOpts = extractProviderOptions(params);
+        const input =
+          Object.keys(providerOpts).length > 0
+            ? { ...baseInput, ...providerOpts }
+            : baseInput;
 
-        // Process generated files as attachments
+        // Extract reasoning and files from output
+        const reasoning = extractReasoningFromMessages(
+          result.response?.messages || [],
+        );
         const outputAttachments = processFilesAsAttachments(result.files);
-        const output = outputAttachments
-          ? { object: result.object, files: outputAttachments }
-          : result.object;
+
+        // Build output object (always an object structure)
+        const output: any = {
+          object: result.object,
+        };
+        if (reasoning.reasoning && reasoning.reasoning.length > 0) {
+          output.reasoning = reasoning.reasoning;
+        }
+        if (outputAttachments && outputAttachments.length > 0) {
+          output.files = outputAttachments;
+        }
+
+        // Extract token metrics
+        const tokenMetrics = extractTokenMetrics(result);
 
         span.log({
-          input: input,
-          output: output,
+          input,
+          output,
           metadata: {
             ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
             ...(model ? { model } : {}),
             ...(finishReason ? { finish_reason: finishReason } : {}),
           },
+          ...(Object.keys(tokenMetrics).length > 0 && {
+            metrics: tokenMetrics,
+          }),
         });
 
         return result;
@@ -222,8 +425,13 @@ export function wrapAISDK<T extends AISDKMethods>(
 
   const wrappedStreamText = (params: any) => {
     const { spanInfo } = extractSpanInfo(params);
-    // Process input attachments for parent span
-    const input = processInputAttachments(extractInput(params));
+    // Process input attachments and provider options
+    const baseInput = processInputAttachments(extractInput(params));
+    const providerOpts = extractProviderOptions(params);
+    const input =
+      Object.keys(providerOpts).length > 0
+        ? { ...baseInput, ...providerOpts }
+        : baseInput;
 
     const span = startSpan({
       name: "ai-sdk.streamText",
@@ -272,23 +480,37 @@ export function wrapAISDK<T extends AISDKMethods>(
             const model = extractModelFromResult(event);
             const finishReason = normalizeFinishReason(event?.finishReason);
 
-            // Process generated files as attachments
+            // Extract reasoning and files from output
+            const reasoning = extractReasoningFromMessages(
+              event.response?.messages || [],
+            );
             const outputAttachments = processFilesAsAttachments(event.files);
-            const output = outputAttachments
-              ? {
-                  text: event?.text || event?.content,
-                  files: outputAttachments,
-                }
-              : event?.text || event?.content;
+
+            // Build output object (always an object structure)
+            const output: any = {
+              text: event?.text || event?.content,
+            };
+            if (reasoning.reasoning && reasoning.reasoning.length > 0) {
+              output.reasoning = reasoning.reasoning;
+            }
+            if (outputAttachments && outputAttachments.length > 0) {
+              output.files = outputAttachments;
+            }
+
+            // Extract token metrics
+            const tokenMetrics = extractTokenMetrics(event);
 
             span.log({
-              output: output,
+              output,
               metadata: {
                 ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
               },
+              ...(Object.keys(tokenMetrics).length > 0 && {
+                metrics: tokenMetrics,
+              }),
             });
             span.end();
           },
@@ -316,8 +538,13 @@ export function wrapAISDK<T extends AISDKMethods>(
 
   const wrappedStreamObject = (params: any) => {
     const { spanInfo } = extractSpanInfo(params);
-    // Process input attachments for parent span
-    const input = processInputAttachments(extractInput(params));
+    // Process input attachments and provider options
+    const baseInput = processInputAttachments(extractInput(params));
+    const providerOpts = extractProviderOptions(params);
+    const input =
+      Object.keys(providerOpts).length > 0
+        ? { ...baseInput, ...providerOpts }
+        : baseInput;
 
     const span = startSpan({
       name: "ai-sdk.streamObject",
@@ -349,20 +576,37 @@ export function wrapAISDK<T extends AISDKMethods>(
             const model = extractModelFromResult(event);
             const finishReason = normalizeFinishReason(event?.finishReason);
 
-            // Process generated files as attachments
+            // Extract reasoning and files from output
+            const reasoning = extractReasoningFromMessages(
+              event.response?.messages || [],
+            );
             const outputAttachments = processFilesAsAttachments(event.files);
-            const output = outputAttachments
-              ? { object: event?.object, files: outputAttachments }
-              : event?.object;
+
+            // Build output object (always an object structure)
+            const output: any = {
+              object: event?.object,
+            };
+            if (reasoning.reasoning && reasoning.reasoning.length > 0) {
+              output.reasoning = reasoning.reasoning;
+            }
+            if (outputAttachments && outputAttachments.length > 0) {
+              output.files = outputAttachments;
+            }
+
+            // Extract token metrics
+            const tokenMetrics = extractTokenMetrics(event);
 
             span.log({
-              output: output,
+              output,
               metadata: {
                 ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
                 ...(model ? { model } : {}),
                 ...(finishReason ? { finish_reason: finishReason } : {}),
               },
+              ...(Object.keys(tokenMetrics).length > 0 && {
+                metrics: tokenMetrics,
+              }),
             });
             span.end();
           },

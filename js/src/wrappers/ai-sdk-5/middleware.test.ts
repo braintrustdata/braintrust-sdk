@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import {
   expect,
   test,
@@ -11,6 +13,7 @@ import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
 import { BraintrustMiddleware } from "../../exports-node";
+import { serializeResponse } from "./middleware";
 import {
   _exportsForTestingOnly,
   Logger,
@@ -549,4 +552,184 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       expect(directSpan.metadata.provider).toBe("anthropic");
     },
   );
+});
+
+describe("serializeResponse", () => {
+  test("serializes response with text content only", () => {
+    const response = {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Hello, this is a response",
+            },
+          ],
+        },
+      ],
+    };
+
+    const serialized = serializeResponse(response);
+
+    expect(serialized.messages).toHaveLength(1);
+    expect(serialized.messages[0].role).toBe("assistant");
+    expect(serialized.messages[0].content).toHaveLength(1);
+    expect(serialized.messages[0].content[0].type).toBe("text");
+    expect(serialized.messages[0].content[0].text).toBe(
+      "Hello, this is a response",
+    );
+  });
+
+  test("serializes response with reasoning and text content", () => {
+    const response = {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "reasoning",
+              text: "Let me think about this...",
+            },
+            {
+              type: "text",
+              text: "Based on my analysis, the answer is...",
+            },
+          ],
+        },
+      ],
+    };
+
+    const serialized = serializeResponse(response);
+
+    expect(serialized.messages).toHaveLength(1);
+    expect(serialized.messages[0].content).toHaveLength(2);
+
+    // First part is reasoning
+    expect(serialized.messages[0].content[0].type).toBe("reasoning");
+    expect(serialized.messages[0].content[0].text).toBe(
+      "Let me think about this...",
+    );
+
+    // Second part is text
+    expect(serialized.messages[0].content[1].type).toBe("text");
+    expect(serialized.messages[0].content[1].text).toBe(
+      "Based on my analysis, the answer is...",
+    );
+  });
+
+  test("serializes response with providerOptions", () => {
+    const response = {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "reasoning",
+              text: "Thinking...",
+              providerOptions: {
+                anthropic: {
+                  thinking: {
+                    type: "enabled",
+                    budgetTokens: 10000,
+                  },
+                },
+              },
+            },
+            {
+              type: "text",
+              text: "Result",
+            },
+          ],
+        },
+      ],
+    };
+
+    const serialized = serializeResponse(response);
+
+    expect(serialized.messages[0].content[0].providerOptions).toEqual({
+      anthropic: {
+        thinking: {
+          type: "enabled",
+          budgetTokens: 10000,
+        },
+      },
+    });
+    expect(serialized.messages[0].content[1].providerOptions).toBeUndefined();
+  });
+
+  test("serializes null response", () => {
+    const response = null;
+    const serialized = serializeResponse(response);
+    expect(serialized).toBeNull();
+  });
+
+  test("serializes undefined response", () => {
+    const response = undefined;
+    const serialized = serializeResponse(response);
+    expect(serialized).toBeUndefined();
+  });
+
+  test("removes non-serializable properties", () => {
+    const response = {
+      id: "msg_123",
+      modelId: "claude-3-sonnet",
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Response text",
+              // Non-serializable properties that should be removed
+              _internalCache: new Map(),
+              _handler: () => {},
+            },
+          ],
+        },
+      ],
+      // Non-serializable top-level properties
+      _internalState: Symbol("state"),
+      toJSON: () => ({}),
+    };
+
+    const serialized = serializeResponse(response);
+
+    // Verify only serializable data is present
+    expect(serialized.id).toBeUndefined();
+    expect(serialized.modelId).toBeUndefined();
+    expect(serialized._internalState).toBeUndefined();
+    expect(serialized.toJSON).toBeUndefined();
+
+    // Verify content part doesn't have non-serializable properties
+    expect(serialized.messages[0].content[0]._internalCache).toBeUndefined();
+    expect(serialized.messages[0].content[0]._handler).toBeUndefined();
+
+    // Verify serializable data is preserved
+    expect(serialized.messages[0].content[0].type).toBe("text");
+    expect(serialized.messages[0].content[0].text).toBe("Response text");
+  });
+
+  test("preserves encryptedContent when present", () => {
+    const response = {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "reasoning",
+              text: "Thinking content",
+              encryptedContent: "encrypted_base64_string",
+            },
+          ],
+        },
+      ],
+    };
+
+    const serialized = serializeResponse(response);
+
+    expect(serialized.messages[0].content[0].encryptedContent).toBe(
+      "encrypted_base64_string",
+    );
+  });
 });

@@ -71,7 +71,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@ai-sdk/anthropic": "^1.0.5",
+    "@ai-sdk/anthropic": "2.0.37",
     "@anthropic-ai/sdk": "^0.60.0",
     "@google/genai": "^1.25.0",
     "@jest/globals": "^29.7.0",
