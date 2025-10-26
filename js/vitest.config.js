@@ -15,8 +15,7 @@ const config = {
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
       // Exclude subdirectories with their own test configs
-      "src/wrappers/ai-sdk-4/**",
-      "src/wrappers/ai-sdk-5/**",
+      "src/wrappers/ai-sdk/**",
       "src/wrappers/mastra/**",
       "src/wrappers/claude-agent-sdk/**",
     ],

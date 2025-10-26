@@ -5,7 +5,6 @@ import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
 } from "../anthropic-tokens-util";
-import { getNumberProperty } from "../ai-sdk-shared/utils";
 
 /**
  * Types from @anthropic-ai/claude-agent-sdk
@@ -497,4 +496,12 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
       return value;
     },
   }) as T;
+}
+
+function getNumberProperty(obj: unknown, key: string): number | undefined {
+  if (!obj || typeof obj !== "object" || !(key in obj)) {
+    return undefined;
+  }
+  const value = Reflect.get(obj, key);
+  return typeof value === "number" ? value : undefined;
 }

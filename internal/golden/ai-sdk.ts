@@ -7,15 +7,12 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import type { LanguageModel } from "ai";
 
-// Path from sdk/internal/golden/otel to sdk/fixtures
-const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+const FIXTURES_DIR = join(__dirname, "fixtures");
 
-// Initialize Braintrust logger
 initLogger({
-  projectName: "golden-ts-otel-ai-sdk",
+  projectName: "golden-ts-ai-sdk",
 });
 
-// Wrap AI SDK with Braintrust
 const {
   generateText,
   streamText,
