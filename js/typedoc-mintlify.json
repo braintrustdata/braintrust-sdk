@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+      "skipLibCheck": true
+    },
+    "tsconfig": "./tsconfig.json",
+    "excludeExternals": true,
+    "externalPattern": [
+        "**/node_modules/**"
+    ],
+    "exclude": ["**/examples/**"],
+    "plugin": ["typedoc-plugin-markdown"],
+    "out": "../../docs/reference/libs/nodejs",
+    "publicPath": "/reference/libs/nodejs/",
+    "githubPages": false,
+    "disableSources": true,
+    "excludePrivate": true,
+    "hideBreadcrumbs": true,
+    "excludeInternal": true,
+    "theme": "markdown",
+    "groupOrder": ["Functions", "*"]
+}
