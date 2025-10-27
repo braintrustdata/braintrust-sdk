@@ -16,7 +16,7 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../../logger";
-import { wrapAISDK } from "./ai-sdk";
+import { wrapAISDK, omit } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -421,5 +421,83 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
     expect(wrapperSpan).toBeTruthy();
     expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+  });
+
+  test("omit function respects path specificity", () => {
+    // Test that paths only omit specific nested properties
+    const testObj = {
+      body: "This should NOT be omitted",
+      response: {
+        body: "This SHOULD be omitted",
+        headers: {
+          "content-type": "application/json",
+        },
+        status: 200,
+      },
+      request: {
+        body: "This SHOULD be omitted",
+        method: "POST",
+        url: "https://api.example.com",
+      },
+      text: "Some text content",
+      metadata: {
+        model: "gpt-4",
+      },
+    };
+
+    const paths = ["request.body", "response.body"];
+    const result = omit(testObj, paths);
+
+    // Root-level body should NOT be omitted
+    expect(result.body).toBe("This should NOT be omitted");
+
+    // response.body SHOULD be omitted
+    expect(result.response.body).toBe("<omitted>");
+
+    // request.body SHOULD be omitted
+    expect(result.request.body).toBe("<omitted>");
+
+    // Other properties should remain unchanged
+    expect(result.response.headers).toEqual({
+      "content-type": "application/json",
+    });
+    expect(result.response.status).toBe(200);
+    expect(result.request.method).toBe("POST");
+    expect(result.request.url).toBe("https://api.example.com");
+    expect(result.text).toBe("Some text content");
+    expect(result.metadata.model).toBe("gpt-4");
+  });
+
+  test("omit function handles non-existent paths", () => {
+    const testObj = {
+      a: {
+        b: "value",
+      },
+      c: "another value",
+    };
+
+    const paths = ["a.b.c.d", "x.y.z", "a.nonexistent"];
+    const result = omit(testObj, paths);
+
+    // The omit function sets the last key on whatever object it reaches
+    // even if the full path doesn't exist
+    expect(result).toEqual({
+      a: {
+        b: "value",
+        nonexistent: "<omitted>", // a.nonexistent - "a" exists so "nonexistent" is added
+      },
+      c: "another value",
+      z: "<omitted>", // x.y.z - "x" doesn't exist, so "z" is added to root
+    });
+
+    // Test with a fully non-existent deep path
+    const testObj2 = {
+      a: "value",
+    };
+    const result2 = omit(testObj2, ["b.c.d"]);
+    expect(result2).toEqual({
+      a: "value",
+      d: "<omitted>", // b.c.d - "b" doesn't exist, so "d" is added to root
+    });
   });
 });

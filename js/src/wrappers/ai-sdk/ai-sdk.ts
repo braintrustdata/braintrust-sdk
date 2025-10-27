@@ -805,7 +805,7 @@ const deepCopy = (obj: Record<string, unknown>) => {
   return JSON.parse(JSON.stringify(obj));
 };
 
-const omit = (obj: Record<string, unknown>, paths: string[]) => {
+export const omit = (obj: Record<string, unknown>, paths: string[]) => {
   const result = deepCopy(obj);
 
   for (const path of paths) {
