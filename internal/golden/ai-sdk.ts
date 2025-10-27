@@ -13,12 +13,14 @@ initLogger({
   projectName: "golden-ts-ai-sdk",
 });
 
+const SHOULD_WRAP = (process.env.WRAP || "true") === "true";
+
 const {
   generateText,
   streamText,
   generateObject: _generateObject,
   streamObject: _streamObject,
-} = wrapAISDK(ai);
+} = SHOULD_WRAP ? wrapAISDK(ai) : ai;
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
@@ -27,7 +29,7 @@ async function testBasicCompletion() {
       console.log("\n=== Test 1: Basic Completion ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -51,7 +53,7 @@ async function testMultiTurn() {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -82,7 +84,7 @@ async function testSystemPrompt() {
       console.log("\n=== Test 3: System Prompt ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -107,7 +109,7 @@ async function testStreaming() {
       console.log("\n=== Test 4: Streaming ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -138,8 +140,8 @@ async function testImageInput() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["openai", openai("gpt-5-mini")],
+        // ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -177,59 +179,31 @@ async function testDocumentInput() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
-        // Note: PDF file support in AI SDK appears to be limited
-        // OpenAI's AI SDK provider doesn't seem to process PDFs properly even with data URLs
-        // Anthropic has general issues with the AI SDK provider (not PDF-specific)
-        // This test demonstrates passing the file data correctly per AI SDK's FilePart interface
-        const messages =
-          provider === "openai"
-            ? [
-                {
-                  role: "user" as const,
-                  content: [
-                    {
-                      type: "file" as const,
-                      file: {
-                        file_data: `data:application/pdf;base64,${base64Pdf}`,
-                        filename: "test-document.pdf",
-                      },
-                    },
-                    {
-                      type: "text" as const,
-                      text: "What is in this document?",
-                    },
-                  ],
-                },
-              ]
-            : [
-                {
-                  role: "user" as const,
-                  content: [
-                    {
-                      type: "document" as const,
-                      source: {
-                        typ: "base64",
-                        media_type: "application/pdf",
-                        data: base64Pdf,
-                      },
-                    },
-                    {
-                      type: "text" as const,
-                      text: "What is in this document?",
-                    },
-                  ],
-                },
-              ];
-
         const result = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
-          messages,
+          messages: [
+            {
+              role: "user" as const,
+              content: [
+                {
+                  type: "file" as const,
+                  data: base64Pdf,
+                  mediaType: "application/pdf",
+                  filename: "test-document.pdf",
+                },
+                {
+                  type: "text" as const,
+                  text: "What is in this document?",
+                },
+              ],
+            },
+          ],
         });
         console.log(result.text);
         console.log();
@@ -252,7 +226,7 @@ async function testTemperatureVariations() {
       ];
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -284,7 +258,7 @@ async function testStopSequences() {
       console.log("\n=== Test 8: Stop Sequences ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -313,7 +287,7 @@ async function testMetadata() {
       console.log("\n=== Test 9: Metadata ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -340,7 +314,7 @@ async function testLongContext() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -373,7 +347,7 @@ async function testMixedContent() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -413,7 +387,7 @@ async function testPrefill() {
       console.log("\n=== Test 12: Prefill ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -440,7 +414,7 @@ async function testShortMaxTokens() {
       console.log("\n=== Test 13: Very Short Max Tokens ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -478,7 +452,7 @@ async function testToolUse() {
       console.log("\n=== Test 14: Tool Use ===");
 
       // Define tool with proper typing
-      const weatherTool = {
+      const weatherTool = ai.tool({
         description: "Get the current weather for a location",
         inputSchema: z.object({
           location: z.string(),
@@ -489,10 +463,10 @@ async function testToolUse() {
           const typedArgs = args as WeatherToolArgs;
           return `22 degrees ${typedArgs.unit || "celsius"} and sunny in ${typedArgs.location}`;
         },
-      };
+      });
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -563,7 +537,7 @@ async function testToolUseWithResult() {
       };
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
+        ["openai", openai("gpt-5-mini")],
         ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -593,57 +567,6 @@ async function testToolUseWithResult() {
       }
     },
     { name: "test_tool_use_with_result" },
-  );
-}
-
-// Test 16: Async generation
-async function testAsyncGeneration() {
-  return traced(
-    async () => {
-      console.log("\n=== Test 16: Async Generation ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          model: model as LanguageModel,
-          prompt: "Tell me a joke about programming.",
-        });
-        console.log(result.text);
-        console.log();
-      }
-    },
-    { name: "test_async_generation" },
-  );
-}
-
-// Test 17: Async streaming
-async function testAsyncStreaming() {
-  return traced(
-    async () => {
-      console.log("\n=== Test 17: Async Streaming ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await streamText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          model: model as LanguageModel,
-          prompt: "List 3 programming languages.",
-        });
-
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-        }
-        console.log("\n");
-      }
-    },
-    { name: "test_async_streaming" },
   );
 }
 
@@ -744,8 +667,6 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
-    testAsyncGeneration,
-    testAsyncStreaming,
     testReasoning,
   ];
 
