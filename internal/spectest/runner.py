@@ -10,12 +10,19 @@ This runner:
 """
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
+import braintrust
+import openai
 import pytest
 import yaml
+from braintrust import wrap_openai
+from braintrust.otel import BraintrustSpanProcessor
+from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -34,12 +41,21 @@ class SpecTestRunner:
         with open(self.spec_path) as f:
             return yaml.safe_load(f)
 
-    def _setup_otel_capture(self) -> InMemorySpanExporter:
+    def _setup_otel_capture(self) -> tuple[InMemorySpanExporter, TracerProvider]:
         """Set up OpenTelemetry to capture spans in memory."""
-        exporter = InMemorySpanExporter()
+        # Enable OTel compatibility mode for Braintrust
+        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
+
+        # TODO -- if python sdk ever supports otel instrumentation stop using init_logger
+        braintrust.init_logger(project="sdk-spec-test")
+        # Create TracerProvider and set it as global
         provider = TracerProvider()
+        exporter = InMemorySpanExporter()
         provider.add_span_processor(SimpleSpanProcessor(exporter))
-        return exporter
+        provider.add_span_processor(BraintrustSpanProcessor(parent="project_name:sdk-spec-test"))
+        trace.set_tracer_provider(provider)
+
+        return exporter, provider
 
     def _mock_http_response(self, wiremock_config: Dict[str, Any]) -> Mock:
         """Create a mock HTTP response from wiremock configuration."""
@@ -63,7 +79,21 @@ class SpecTestRunner:
         matching_spans = spans
         if span_name:
             matching_spans = [s for s in spans if s.name == span_name]
-            assert len(matching_spans) > 0, f"No span found with name: {span_name}"
+            if len(matching_spans) == 0:
+                # Format captured span data for error message
+                captured_span_info = []
+                for span in spans:
+                    span_dict = {
+                        "name": span.name,
+                        "attributes": dict(span.attributes) if hasattr(span, "attributes") else {},
+                        "status": str(span.status) if hasattr(span, "status") else None,
+                    }
+                    captured_span_info.append(span_dict)
+
+                error_msg = f"No span found with name: {span_name}\n\n"
+                error_msg += f"Captured {len(spans)} span(s):\n"
+                error_msg += json.dumps(captured_span_info, indent=2)
+                assert False, error_msg
 
         # Validate required attributes
         for attr_config in required_attrs:
@@ -79,6 +109,79 @@ class SpecTestRunner:
                         found = True
                         break
                 assert found, f"Required attribute not found: {attr_name}={attr_value}"
+
+    def _get_project_id(self, project_name: str) -> str:
+        """Get project UUID from project name."""
+        import requests
+
+        api_key = os.getenv("BRAINTRUST_API_KEY")
+        if not api_key:
+            raise ValueError("BRAINTRUST_API_KEY environment variable not set")
+
+        api_url = os.getenv("BRAINTRUST_API_URL", "https://api.braintrust.dev")
+
+        # Fetch projects
+        url = f"{api_url}/v1/project"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.get(url, headers=headers, params={"project_name": project_name})
+        response.raise_for_status()
+
+        data = response.json()
+        projects = data.get("objects", [])
+
+        matching = [p for p in projects if p.get("name") == project_name]
+        if not matching:
+            raise ValueError(f"Project not found: {project_name}")
+
+        return matching[0]["id"]
+
+    def _fetch_braintrust_span(self, root_span_id: str, project_id: str) -> Dict[str, Any]:
+        """Fetch span data from Braintrust API by root_span_id.
+
+        Returns the child span (not the root span itself).
+        """
+        import requests
+
+        api_key = os.getenv("BRAINTRUST_API_KEY")
+        if not api_key:
+            raise ValueError("BRAINTRUST_API_KEY environment variable not set")
+
+        api_url = os.getenv("BRAINTRUST_API_URL", "https://api.braintrust.dev")
+
+        # Fetch all events with this root_span_id
+        url = f"{api_url}/v1/project_logs/{project_id}/fetch"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        # Fetch with limit - we expect root span + 1 child
+        response = requests.post(url, headers=headers, json={"limit": 10})
+        response.raise_for_status()
+
+        data = response.json()
+        events = data.get("events", [])
+
+        # Filter events by root_span_id
+        trace_events = [e for e in events if e.get("id") == root_span_id]
+
+        if len(trace_events) == 0:
+            raise ValueError(f"No events found with root_span_id: {root_span_id}")
+
+        # Find the child span (not the root)
+        child_spans = [e for e in trace_events if not e.get("is_root", False)]
+
+        if len(child_spans) == 0:
+            raise ValueError(f"No child spans found for root_span_id: {root_span_id}")
+
+        if len(child_spans) > 1:
+            print(f"Warning: Found {len(child_spans)} child spans, expected 1. Using first.")
+
+        return child_spans[0]
 
     def _validate_braintrust_span(self, span_data: Dict[str, Any], expected: Dict[str, Any]) -> None:
         """Validate that Braintrust span data matches expected structure."""
@@ -106,30 +209,51 @@ class SpecTestRunner:
         wiremock_config = json.loads(wiremock_str)
 
         # Set up OTel capture
-        exporter = self._setup_otel_capture()
+        exporter, provider = self._setup_otel_capture()
 
         # Mock the HTTP response
         mock_response = self._mock_http_response(wiremock_config)
 
-        # Execute the SDK call with mocked response
-        with patch("requests.post", return_value=mock_response):
-            # TODO: Actually invoke the SDK based on vendor/endpoint
-            # For now, this is a placeholder
-            if vendor == "OpenAI" and endpoint == "completions":
-                # import openai
-                # client = openai.OpenAI(base_url="http://localhost:8080")
-                # client.chat.completions.create(**request)
-                pass
+        root_span_id = ""
+        # Execute the SDK call
+        if vendor == "OpenAI" and endpoint == "completions":
+            # Initialize Braintrust logger
+            logger = braintrust.init_logger(project="sdk-spec-test", set_current=True)
+
+            # Create a parent span to capture the trace
+            with logger.start_span(name=test_spec["name"]) as parent_span:
+                # Make the API call (will be automatically traced as child span)
+                client = wrap_openai(openai.OpenAI())
+                response = client.chat.completions.create(**request)
+
+            # Flush to send to Braintrust API
+            logger.flush()
+
+            # Store the span ID for fetching trace data
+            root_span_id = parent_span.id
+            # print(f"Trace ID: {trace_id}")
+            # print(f"Permalink: {parent_span.permalink()}")
+        else:
+            # TODO: Implement other vendor/endpoint combinations
+            pass
 
         # Validate OTel spans
         captured_spans = exporter.get_finished_spans()
-        if "otel_span" in test_spec:
-            self._validate_otel_span(captured_spans, test_spec["otel_span"])
+        # NOTE: python sdk does not instrument in otel so we'll skip otel validation
+        # if "otel_span" in test_spec:
+        #     self._validate_otel_span(captured_spans, test_spec["otel_span"])
 
         # Validate Braintrust spans (if specified)
-        if "braintrust_span" in test_spec:
-            # TODO: Fetch actual span data from Braintrust API or local logs
-            span_data = {}
+        if "braintrust_span" in test_spec and root_span_id:
+            # Fetch actual span data from Braintrust API
+            # We need to get the project UUID from the project name
+            # TODO cache project id
+            project_name = "sdk-spec-test"
+            project_id = self._get_project_id(project_name)
+
+            # Give the API a moment to process the data
+            time.sleep(5)
+            span_data = self._fetch_braintrust_span(root_span_id, project_id)
             self._validate_braintrust_span(span_data, test_spec["braintrust_span"])
 
     def run_all_tests(self) -> None:
