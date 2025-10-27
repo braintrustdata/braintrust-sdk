@@ -1,0 +1,58 @@
+name: OpenAISpans
+
+tests:
+  - name: Basic Completions
+    description: whatever
+    vendor: OpenAI
+    endpoint: completions
+    request:
+      model: gpt-4o-mini
+      messages:
+        - role: user
+          content: "What is the capital of France?"
+    wiremock: |
+      {
+        "request": {
+          "method": "POST",
+          "url": "/chat/completions"
+        },
+        "response": {
+          "status": 200,
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "id": "chatcmpl-test123",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "gpt-4o-mini",
+            "choices": [
+              {
+                "index": 0,
+                "message": {
+                  "role": "assistant",
+                  "content": "The capital of France is Paris."
+                },
+                "finish_reason": "stop"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 20,
+              "completion_tokens": 8,
+              "total_tokens": 28
+            }
+          }
+        }
+      }
+    otel_span:
+      span_name: OAI_40_MINI
+      required_attributes:
+        - attribute:
+            - name: genai.request.model
+            - value: chat gpt-4o-mini
+    braintrust_span:
+      metadata:
+        - gen_ai.request.model: gpt-4o-mini
+      span_attributes:
+        name: chat gpt-4o-mini
+        type: llm
