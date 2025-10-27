@@ -10,5 +10,12 @@
     "skipLibCheck": true
   },
   "include": ["."],
-  "exclude": ["node_modules/**", "**/dist/**", "examples/**", "scripts/**", "**/*.test.ts"]
+  "exclude": [
+    "node_modules/**",
+    "**/dist/**",
+    "examples/**",
+    "scripts/**",
+    "**/*.test.ts",
+    "vendor/**"
+  ]
 }
