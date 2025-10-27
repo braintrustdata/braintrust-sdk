@@ -7,9 +7,8 @@ This directory contains the Python test runner for cross-language SDK specificat
 The spec test system enables cross-language testing of SDK behavior by:
 
 1. **Defining tests in YAML** - Test specifications live in `sdkspec/test/` (eventually a separate repo)
-2. **Mocking AI vendor responses** - Uses wiremock-style configuration to mock HTTP responses
-3. **Capturing OpenTelemetry spans** - Validates that SDKs generate correct OTel instrumentation
-4. **Validating Braintrust spans** - Optionally checks that spans appear correctly in the Braintrust API
+2. **Making real AI API calls** - Executes actual API calls to AI providers (OpenAI, Anthropic, etc.)
+3. **Validating Braintrust spans** - Validates that spans are captured correctly in the Braintrust API with expected attributes
 
 ## Test Specification Format
 
@@ -17,10 +16,8 @@ Each YAML spec defines:
 
 - **vendor** - AI provider (OpenAI, Anthropic, etc.)
 - **endpoint** - API endpoint to call (completions, embeddings, etc.)
-- **request** - Request parameters to send
-- **wiremock** - Mock HTTP response configuration
-- **otel_span** - Expected OpenTelemetry span attributes
-- **braintrust_span** - Expected Braintrust span structure (optional)
+- **request** - Request parameters to send to the AI provider
+- **braintrust_span** - Expected Braintrust span structure to validate
 
 ## Usage
 
@@ -47,8 +44,8 @@ python runner.py ../../sdkspec/test/test-openai.yaml
 The runner currently supports:
 
 - ✅ Loading YAML specs
-- ✅ Mocking HTTP responses
-- ✅ Capturing OTel spans
-- ✅ Basic span validation
-- 🚧 SDK invocation (needs implementation per vendor)
-- 🚧 Braintrust API span validation
+- ✅ Making real OpenAI API calls
+- ✅ Capturing Braintrust spans
+- ✅ Validating span attributes with regex support
+- ✅ Exponential backoff retry for span fetching
+- 🚧 Additional vendor support (Anthropic, etc.)

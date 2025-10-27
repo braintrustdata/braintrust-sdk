@@ -3,29 +3,21 @@ Test runner for cross-language SDK spec tests.
 
 This runner:
 1. Loads YAML test specifications from sdkspec/test/
-2. Mocks HTTP responses using the wiremock configuration
-3. Executes SDK calls against the mocked endpoints
-4. Captures and validates OpenTelemetry spans
-5. Optionally validates Braintrust API spans
+2. Executes SDK calls against the vendor endpoints
+3. validates Braintrust API spans
 """
 
 import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import Mock
+from typing import Any, Dict
 
 import braintrust
 import openai
 import pytest
 import yaml
 from braintrust import wrap_openai
-from braintrust.otel import BraintrustSpanProcessor
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 
 class SpecTestRunner:
@@ -40,75 +32,6 @@ class SpecTestRunner:
         """Load the YAML test specification."""
         with open(self.spec_path) as f:
             return yaml.safe_load(f)
-
-    def _setup_otel_capture(self) -> tuple[InMemorySpanExporter, TracerProvider]:
-        """Set up OpenTelemetry to capture spans in memory."""
-        # Enable OTel compatibility mode for Braintrust
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
-
-        # TODO -- if python sdk ever supports otel instrumentation stop using init_logger
-        braintrust.init_logger(project="sdk-spec-test")
-        # Create TracerProvider and set it as global
-        provider = TracerProvider()
-        exporter = InMemorySpanExporter()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        provider.add_span_processor(BraintrustSpanProcessor(parent="project_name:sdk-spec-test"))
-        trace.set_tracer_provider(provider)
-
-        return exporter, provider
-
-    def _mock_http_response(self, wiremock_config: Dict[str, Any]) -> Mock:
-        """Create a mock HTTP response from wiremock configuration."""
-        response_config = wiremock_config["response"]
-        mock_response = Mock()
-        mock_response.status_code = response_config["status"]
-        mock_response.headers = response_config.get("headers", {})
-        mock_response.json.return_value = response_config["body"]
-        mock_response.text = json.dumps(response_config["body"])
-        return mock_response
-
-    def _validate_otel_span(self, spans: List[Any], expected: Dict[str, Any]) -> None:
-        """Validate that captured OTel spans match expected attributes."""
-        if not expected:
-            return
-
-        span_name = expected.get("span_name")
-        required_attrs = expected.get("required_attributes", [])
-
-        # Find span by name if specified
-        matching_spans = spans
-        if span_name:
-            matching_spans = [s for s in spans if s.name == span_name]
-            if len(matching_spans) == 0:
-                # Format captured span data for error message
-                captured_span_info = []
-                for span in spans:
-                    span_dict = {
-                        "name": span.name,
-                        "attributes": dict(span.attributes) if hasattr(span, "attributes") else {},
-                        "status": str(span.status) if hasattr(span, "status") else None,
-                    }
-                    captured_span_info.append(span_dict)
-
-                error_msg = f"No span found with name: {span_name}\n\n"
-                error_msg += f"Captured {len(spans)} span(s):\n"
-                error_msg += json.dumps(captured_span_info, indent=2)
-                assert False, error_msg
-
-        # Validate required attributes
-        for attr_config in required_attrs:
-            attr_list = attr_config.get("attribute", [])
-            # Parse attribute name and value
-            attr_name = next((item["name"] for item in attr_list if "name" in item), None)
-            attr_value = next((item["value"] for item in attr_list if "value" in item), None)
-
-            if attr_name and attr_value:
-                found = False
-                for span in matching_spans:
-                    if hasattr(span, "attributes") and span.attributes.get(attr_name) == attr_value:
-                        found = True
-                        break
-                assert found, f"Required attribute not found: {attr_name}={attr_value}"
 
     def _get_project_id(self, project_name: str) -> str:
         """Get project UUID from project name."""
@@ -197,14 +120,14 @@ class SpecTestRunner:
             "fmt": "json"
         }
 
-        print(f"DEBUG: BTQL query for root_span_id={root_span_id}, project_id={project_id}")
+        # print(f"DEBUG: BTQL query for root_span_id={root_span_id}, project_id={project_id}")
         response = requests.post(url, headers=headers, json=btql_query)
         response.raise_for_status()
-        print(f"DEBUG: response: {response.json()}")
+        # print(f"DEBUG: response: {response.json()}")
 
         data = response.json()
         child_spans = data.get("data", [])
-        print(f"DEBUG: Found {len(child_spans)} child spans")
+        # print(f"DEBUG: Found {len(child_spans)} child spans")
 
         # We expect exactly 1 child span (the LLM span)
         if len(child_spans) == 0:
@@ -272,57 +195,27 @@ class SpecTestRunner:
                 f"Top-level key '{key}' not found in span data"
             validate_value(span_data[key], expected_val, key)
 
-    def run_test(self, test_spec: Dict[str, Any]) -> None:
+    def run_test(self, test_spec: Dict[str, Any], test_suite_name:str="Unknown") -> None:
         """Run a single test from the specification."""
         vendor = test_spec["vendor"]
         endpoint = test_spec["endpoint"]
         request = test_spec["request"]
-        wiremock_str = test_spec.get("wiremock", "{}")
-        wiremock_config = json.loads(wiremock_str)
 
-        if False: # TODO -- rm this block once span fetching is solid
-            project_id = self._get_project_id("sdk-spec-test")
-            root_span_id = "faa42644-3308-48b5-b481-076c6b90eecf"
-            print(f"fetching: {root_span_id} -- {project_id}")
-            span_data = self._fetch_braintrust_span(root_span_id, project_id)
-            print(f"got span: {json.dumps(span_data, indent=2)}")
-            self._validate_braintrust_span(span_data, test_spec["braintrust_span"])
-            return
-
-        # Set up OTel capture
-        # exporter, provider = self._setup_otel_capture()
-
-        # Mock the HTTP response
-        # mock_response = self._mock_http_response(wiremock_config)
-
-        root_span_id = ""
         # Initialize Braintrust logger
         logger = braintrust.init_logger(project="sdk-spec-test", set_current=True)
         # Execute the SDK call
-        if vendor == "OpenAI" and endpoint == "completions":
-
-            # Create a parent span to capture the trace
-            with logger.start_span(name=test_spec["name"]) as root_span:
-                # Make the API call (will be automatically traced as child span)
+        with logger.start_span(name=f"{test_suite_name}.{test_spec["name"]}") as root_span:
+            if vendor == "OpenAI" and endpoint == "completions":
+                # Create a parent span so we can find the llm span
                 client = wrap_openai(openai.OpenAI())
                 response = client.chat.completions.create(**request)
-                # Store the span ID for fetching trace data
-                root_span_id = root_span.root_span_id
-                print(f"DEBUG: Created root span with root_span_id={root_span_id}, span.id={root_span.id}, span.span_id={root_span.span_id}")
-
-            # Flush to send to Braintrust API
-            logger.flush()
-
-            # print(f"Permalink: {parent_span.permalink()}")
-        else:
-            # TODO: Implement other vendor/endpoint combinations
-            pass
-
-        # Validate OTel spans
-        # captured_spans = exporter.get_finished_spans()
-        # NOTE: python sdk does not instrument in otel so we'll skip otel validation
-        # if "otel_span" in test_spec:
-        #     self._validate_otel_span(captured_spans, test_spec["otel_span"])
+                # print(f"DEBUG: Created root span with root_span_id={root_span_id}, span.id={root_span.id}, span.span_id={root_span.span_id}")
+            else:
+                # TODO: Implement other vendor/endpoint combinations
+                pass
+            root_span_id = root_span.root_span_id
+        # Flush to send to Braintrust API
+        logger.flush()
 
         # Validate Braintrust spans (if specified)
         if "braintrust_span" in test_spec and root_span_id:
@@ -332,7 +225,7 @@ class SpecTestRunner:
             project_id = self._get_project_id("sdk-spec-test")
 
             # Give the API a moment to process the data
-            print(f"fetching: {root_span_id} -- {project_id}")
+            # print(f"fetching: {root_span_id} -- {project_id}")
             time.sleep(30) # give the backend time to process
             span_data = self._fetch_braintrust_span(root_span_id, project_id)
             print(f"got span: {json.dumps(span_data, indent=2)}")
@@ -340,17 +233,18 @@ class SpecTestRunner:
 
     def run_all_tests(self) -> None:
         """Run all tests in the specification."""
-        test_name = self.spec.get("name", "Unknown")
+        test_suite_name = self.spec.get("name", "Unknown")
         tests = self.spec.get("tests", [])
 
-        print(f"Running test suite: {test_name}")
+        print(f"Running test suite: {test_suite_name}")
         print(f"Found {len(tests)} test(s)")
 
+        print(f"---- {test_suite_name} ----")
         for test in tests:
             test_name = test.get("name", "Unnamed test")
             print(f"  Running: {test_name}")
             try:
-                self.run_test(test)
+                self.run_test(test, test_suite_name=test_suite_name)
                 print(f"    ✓ {test_name} passed")
             except AssertionError as e:
                 print(f"    ✗ {test_name} failed: {e}")
