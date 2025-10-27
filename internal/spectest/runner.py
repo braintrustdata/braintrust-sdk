@@ -159,37 +159,10 @@ class SpecTestRunner:
             "Content-Type": "application/json"
         }
 
-        # Query for all spans with this root_span_id, filter for children in Python
+        # Query for child spans with this root_span_id using BTQL string syntax
+        # Filter for spans where root_span_id matches AND span_parents is not null (i.e., not the root)
         btql_query = {
-            "query": {
-                "filter": {
-                    "op": "eq",
-                    "left": {"btql": "root_span_id"},
-                    "right": {"op": "literal", "value": root_span_id}
-                },
-                "from": {
-                    "op": "function",
-                    "name": {"op": "ident", "name": ["project_logs"]},
-                    "args": [{"op": "literal", "value": project_id}],
-                    "shape": "traces"
-                },
-                "select": [
-                    {"alias": "id", "expr": {"op": "ident", "name": ["id"]}},
-                    {"alias": "span_id", "expr": {"op": "ident", "name": ["span_id"]}},
-                    {"alias": "root_span_id", "expr": {"op": "ident", "name": ["root_span_id"]}},
-                    {"alias": "span_parents", "expr": {"op": "ident", "name": ["span_parents"]}},
-                    {"alias": "span_attributes", "expr": {"op": "ident", "name": ["span_attributes"]}},
-                    {"alias": "metadata", "expr": {"op": "ident", "name": ["metadata"]}},
-                    {"alias": "metrics", "expr": {"op": "ident", "name": ["metrics"]}},
-                    {"alias": "input", "expr": {"op": "ident", "name": ["input"]}},
-                    {"alias": "output", "expr": {"op": "ident", "name": ["output"]}},
-                    {"alias": "error", "expr": {"op": "ident", "name": ["error"]}},
-                    {"alias": "scores", "expr": {"op": "ident", "name": ["scores"]}},
-                    {"alias": "tags", "expr": {"op": "ident", "name": ["tags"]}},
-                    {"alias": "model", "expr": {"btql": "metadata.model"}},
-                ],
-                "limit": 1000
-            },
+            "query": f"select: *\nfrom: project_logs('{project_id}')\nfilter: root_span_id = '{root_span_id}' and span_parents != null\nlimit: 1000",
             "use_columnstore": True,
             "use_brainstore": True,
             "brainstore_realtime": True,
