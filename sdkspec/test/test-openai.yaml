@@ -52,7 +52,7 @@ tests:
             - value: chat gpt-4o-mini
     braintrust_span:
       metadata:
-        - gen_ai.request.model: gpt-4o-mini
+        - model: gpt-4o-mini
       span_attributes:
         name: chat gpt-4o-mini
         type: llm

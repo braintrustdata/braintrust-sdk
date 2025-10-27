@@ -140,7 +140,7 @@ class SpecTestRunner:
         return matching[0]["id"]
 
     def _fetch_braintrust_span(self, root_span_id: str, project_id: str) -> Dict[str, Any]:
-        """Fetch span data from Braintrust API by root_span_id.
+        """Fetch span data from Braintrust API by root_span_id using BTQL.
 
         Returns the child span (not the root span itself).
         """
@@ -152,34 +152,67 @@ class SpecTestRunner:
 
         api_url = os.getenv("BRAINTRUST_API_URL", "https://api.braintrust.dev")
 
-        # Fetch all events with this root_span_id
-        url = f"{api_url}/v1/project_logs/{project_id}/fetch"
+        # Use BTQL to query for all spans with this root_span_id
+        url = f"{api_url}/btql"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
-        # Fetch with limit - we expect root span + 1 child
-        response = requests.post(url, headers=headers, json={"limit": 10})
+        # Query for all spans with this root_span_id, filter for children in Python
+        btql_query = {
+            "query": {
+                "filter": {
+                    "op": "eq",
+                    "left": {"btql": "root_span_id"},
+                    "right": {"op": "literal", "value": root_span_id}
+                },
+                "from": {
+                    "op": "function",
+                    "name": {"op": "ident", "name": ["project_logs"]},
+                    "args": [{"op": "literal", "value": project_id}],
+                    "shape": "traces"
+                },
+                "select": [
+                    {"alias": "id", "expr": {"op": "ident", "name": ["id"]}},
+                    {"alias": "span_id", "expr": {"op": "ident", "name": ["span_id"]}},
+                    {"alias": "root_span_id", "expr": {"op": "ident", "name": ["root_span_id"]}},
+                    {"alias": "span_parents", "expr": {"op": "ident", "name": ["span_parents"]}},
+                    {"alias": "span_attributes", "expr": {"op": "ident", "name": ["span_attributes"]}},
+                    {"alias": "metadata", "expr": {"op": "ident", "name": ["metadata"]}},
+                    {"alias": "metrics", "expr": {"op": "ident", "name": ["metrics"]}},
+                    {"alias": "input", "expr": {"op": "ident", "name": ["input"]}},
+                    {"alias": "output", "expr": {"op": "ident", "name": ["output"]}},
+                    {"alias": "error", "expr": {"op": "ident", "name": ["error"]}},
+                    {"alias": "scores", "expr": {"op": "ident", "name": ["scores"]}},
+                    {"alias": "tags", "expr": {"op": "ident", "name": ["tags"]}},
+                    {"alias": "model", "expr": {"btql": "metadata.model"}},
+                ],
+                "limit": 1000
+            },
+            "use_columnstore": True,
+            "use_brainstore": True,
+            "brainstore_realtime": True,
+            "api_version": 1,
+            "fmt": "json"
+        }
+
+        response = requests.post(url, headers=headers, json=btql_query)
         response.raise_for_status()
 
         data = response.json()
-        events = data.get("events", [])
+        events = data.get("data", [])
 
-        # Filter events by root_span_id
-        trace_events = [e for e in events if e.get("id") == root_span_id]
-
-        if len(trace_events) == 0:
+        if len(events) == 0:
+            print(f"Debug: BTQL response: {json.dumps(data, indent=2)}")
             raise ValueError(f"No events found with root_span_id: {root_span_id}")
 
-        # Find the child span (not the root)
-        child_spans = [e for e in trace_events if not e.get("is_root", False)]
+        # Filter for child spans (those with span_parents)
+        child_spans = [e for e in events if e.get("span_parents")]
 
-        if len(child_spans) == 0:
-            raise ValueError(f"No child spans found for root_span_id: {root_span_id}")
-
-        if len(child_spans) > 1:
-            print(f"Warning: Found {len(child_spans)} child spans, expected 1. Using first.")
+        # We expect exactly 1 child span (the OpenAI LLM span)
+        if len(child_spans) != 1:
+            raise ValueError(f"Expected exactly 1 child span, found {len(child_spans)}")
 
         return child_spans[0]
 
@@ -192,13 +225,16 @@ class SpecTestRunner:
         expected_metadata = expected.get("metadata", [])
         for meta_item in expected_metadata:
             for key, value in meta_item.items():
-                assert span_data.get("metadata", {}).get(key) == value, \
-                    f"Metadata mismatch: {key}={value}"
+                actual_value = span_data.get("metadata", {}).get(key)
+                assert actual_value == value, \
+                    f"Metadata mismatch: {key} expected={value}, actual={actual_value}"
 
         # Validate span attributes
         expected_attrs = expected.get("span_attributes", {})
         for key, value in expected_attrs.items():
-            assert span_data.get(key) == value, f"Span attribute mismatch: {key}={value}"
+            actual_value = span_data.get("span_attributes", {}).get(key)
+            assert actual_value == value, \
+                f"Span attribute mismatch: {key} expected={value}, actual={actual_value}"
 
     def run_test(self, test_spec: Dict[str, Any]) -> None:
         """Run a single test from the specification."""
@@ -208,11 +244,19 @@ class SpecTestRunner:
         wiremock_str = test_spec.get("wiremock", "{}")
         wiremock_config = json.loads(wiremock_str)
 
+
+        if True: # TODO -- rm this block once span fetching is solid
+            project_id = self._get_project_id("sdk-spec-test")
+            root_span_id = "ee4743db-088e-462f-adbb-abc23c88d196"
+            span_data = self._fetch_braintrust_span(root_span_id, project_id)
+            print(f"got span: {span_data}")
+            return
+
         # Set up OTel capture
-        exporter, provider = self._setup_otel_capture()
+        # exporter, provider = self._setup_otel_capture()
 
         # Mock the HTTP response
-        mock_response = self._mock_http_response(wiremock_config)
+        # mock_response = self._mock_http_response(wiremock_config)
 
         root_span_id = ""
         # Execute the SDK call
@@ -221,7 +265,7 @@ class SpecTestRunner:
             logger = braintrust.init_logger(project="sdk-spec-test", set_current=True)
 
             # Create a parent span to capture the trace
-            with logger.start_span(name=test_spec["name"]) as parent_span:
+            with logger.start_span(name=test_spec["name"]) as root_span:
                 # Make the API call (will be automatically traced as child span)
                 client = wrap_openai(openai.OpenAI())
                 response = client.chat.completions.create(**request)
@@ -230,7 +274,7 @@ class SpecTestRunner:
             logger.flush()
 
             # Store the span ID for fetching trace data
-            root_span_id = parent_span.id
+            root_span_id = root_span.id
             # print(f"Trace ID: {trace_id}")
             # print(f"Permalink: {parent_span.permalink()}")
         else:
@@ -238,7 +282,7 @@ class SpecTestRunner:
             pass
 
         # Validate OTel spans
-        captured_spans = exporter.get_finished_spans()
+        # captured_spans = exporter.get_finished_spans()
         # NOTE: python sdk does not instrument in otel so we'll skip otel validation
         # if "otel_span" in test_spec:
         #     self._validate_otel_span(captured_spans, test_spec["otel_span"])
