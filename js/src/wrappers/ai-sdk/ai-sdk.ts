@@ -2,6 +2,10 @@
 
 import { startSpan, traced, withCurrent, Attachment } from "../../logger";
 import { SpanTypeAttribute } from "../../../util";
+import {
+  convertDataToBlob,
+  getExtensionFromMediaType,
+} from "../attachment-utils";
 
 // list of json paths to remove from output
 const DENY_OUTPUT_PATHS = ["request.body", "response.body"];
@@ -56,14 +60,14 @@ const wrapGenerateText = (generateText: any) => {
         });
 
         span.log({
-          output: processOutput(result),
+          output: await processOutput(result),
           metrics: extractTokenMetrics(result),
         });
 
         return result;
       },
       {
-        name: "ai-sdk.generateText",
+        name: "generateText",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -71,7 +75,10 @@ const wrapGenerateText = (generateText: any) => {
           input: processInputAttachments(params),
           metadata: {
             model: serializeModel(params.model),
-            // TODO: provider
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
           },
         },
       },
@@ -96,15 +103,18 @@ const wrapGenerateObject = (generateObject: any) => {
         return result;
       },
       {
-        name: "ai-sdk.generateObject",
+        name: "generateObject",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: params.model,
-            // TODO: provider
+            model: serializeModel(params.model),
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
           },
         },
       },
@@ -115,12 +125,15 @@ const wrapGenerateObject = (generateObject: any) => {
 const wrapStreamText = (streamText: any) => {
   return async function wrappedStreamText(params: any) {
     const span = startSpan({
-      name: "ai-sdk.streamText",
+      name: "streamText",
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: params.model,
-          // TODO: provider
+          model: serializeModel(params.model),
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
         },
       },
     });
@@ -180,12 +193,15 @@ const wrapStreamText = (streamText: any) => {
 const wrapStreamObject = (streamObject: any) => {
   return async function wrappedStreamObject(params: any) {
     const span = startSpan({
-      name: "ai-sdk.streamObject",
+      name: "streamObject",
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: params.model,
-          // TODO: provider
+          model: serializeModel(params.model),
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
         },
       },
     });
@@ -242,56 +258,44 @@ const wrapStreamObject = (streamObject: any) => {
 };
 
 const wrapTools = (tools: any) => {
-  // if (!tools) return tools;
-  // // Helper to infer a useful tool name
-  // const inferName = (tool: any, fallback: string) =>
-  //   (tool && (tool.name || tool.toolName || tool.id)) || fallback;
-  // // Array form: return a shallow-cloned array with wrapped executes
-  // if (Array.isArray(tools)) {
-  //   const arr = tools;
-  //   const out = arr.map((tool, idx) => {
-  //     if (
-  //       tool != null &&
-  //       typeof tool === "object" &&
-  //       "execute" in tool &&
-  //       typeof tool.execute === "function"
-  //     ) {
-  //       const name = inferName(tool, `tool[${idx}]`);
-  //       return {
-  //         ...tool,
-  //         execute: wrapTraced((tool as any).execute.bind(tool), {
-  //           name,
-  //           type: "tool",
-  //         }),
-  //       };
-  //     }
-  //     return tool;
-  //   });
-  //   return out as unknown as TTools;
-  // }
-  // // Object form: avoid mutating the original tool objects
-  // // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // const wrappedTools: Record<string, any> = {};
-  // for (const [key, tool] of Object.entries(tools as Record<string, unknown>)) {
-  //   if (
-  //     tool != null &&
-  //     typeof tool === "object" &&
-  //     "execute" in tool &&
-  //     typeof (tool as any).execute === "function"
-  //   ) {
-  //     wrappedTools[key] = {
-  //       ...(tool as object),
-  //       execute: wrapTraced((tool as any).execute.bind(tool), {
-  //         name: key,
-  //         type: "tool",
-  //       }),
-  //     };
-  //   } else {
-  //     wrappedTools[key] = tool;
-  //   }
-  // }
-  // return wrappedTools as unknown as TTools;
-  return tools;
+  if (!tools) return tools;
+
+  const inferName = (tool: any, fallback: string) =>
+    (tool && (tool.name || tool.toolName || tool.id)) || fallback;
+
+  if (Array.isArray(tools)) {
+    return tools.map((tool, idx) => {
+      const name = inferName(tool, `tool[${idx}]`);
+      return wrapToolExecute(tool, name);
+    });
+  }
+
+  const wrappedTools: Record<string, any> = {};
+  for (const [key, tool] of Object.entries(tools)) {
+    wrappedTools[key] = wrapToolExecute(tool, key);
+  }
+  return wrappedTools;
+};
+
+const wrapToolExecute = (tool: any, name: string) => {
+  if (
+    tool != null &&
+    typeof tool === "object" &&
+    "execute" in tool &&
+    typeof tool.execute === "function"
+  ) {
+    return {
+      ...tool,
+      execute: (...args: any[]) =>
+        traced(() => tool.execute(...args), {
+          name: `tool.${name}`,
+          spanAttributes: {
+            type: SpanTypeAttribute.TOOL,
+          },
+        }),
+    };
+  }
+  return tool;
 };
 
 const serializeModel = (model: any) => {
@@ -299,35 +303,310 @@ const serializeModel = (model: any) => {
 };
 
 const processInputAttachments = (input: any) => {
+  if (!input) return input;
+
+  // Process messages array if present
+  if (input.messages && Array.isArray(input.messages)) {
+    return {
+      ...input,
+      messages: input.messages.map(processMessage),
+    };
+  }
+
+  // Process prompt if it's an object with potential attachments
+  if (
+    input.prompt &&
+    typeof input.prompt === "object" &&
+    !Array.isArray(input.prompt)
+  ) {
+    return {
+      ...input,
+      prompt: processPromptContent(input.prompt),
+    };
+  }
+
   return input;
 };
 
-const processOutput = (output: any) => {
-  return omit(processOutputAttachments(output), DENY_OUTPUT_PATHS);
+const processMessage = (message: any): any => {
+  if (!message || typeof message !== "object") return message;
+
+  // If content is an array, process each content part
+  if (Array.isArray(message.content)) {
+    return {
+      ...message,
+      content: message.content.map(processContentPart),
+    };
+  }
+
+  // If content is an object (single content part), process it
+  if (typeof message.content === "object" && message.content !== null) {
+    return {
+      ...message,
+      content: processContentPart(message.content),
+    };
+  }
+
+  return message;
 };
 
-const processOutputAttachments = (output: any) => {
-  // if (!files || !Array.isArray(files) || files.length === 0) {
-  //   return undefined;
-  // }
-  // return files
-  //   .map((file, index) => {
-  //     const mediaType = file.mediaType || "application/octet-stream";
-  //     const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
-  //     // Convert data to Blob using shared utility
-  //     const blob = convertDataToBlob(file.data, mediaType);
-  //     // Skip if conversion failed (e.g., for URLs we can't fetch)
-  //     if (!blob) {
-  //       return null;
-  //     }
-  //     return new Attachment({
-  //       data: blob,
-  //       filename: filename,
-  //       contentType: mediaType,
-  //     });
-  //   })
-  //   .filter((attachment): attachment is Attachment => attachment !== null);
+const processPromptContent = (prompt: any): any => {
+  // Handle prompt objects that might contain content arrays
+  if (Array.isArray(prompt)) {
+    return prompt.map(processContentPart);
+  }
+
+  if (prompt.content) {
+    if (Array.isArray(prompt.content)) {
+      return {
+        ...prompt,
+        content: prompt.content.map(processContentPart),
+      };
+    } else if (typeof prompt.content === "object") {
+      return {
+        ...prompt,
+        content: processContentPart(prompt.content),
+      };
+    }
+  }
+
+  return prompt;
+};
+
+const processContentPart = (part: any): any => {
+  if (!part || typeof part !== "object") return part;
+
+  try {
+    // Process image content with data URLs (these have explicit mime types)
+    if (part.type === "image" && part.image) {
+      const imageAttachment = convertImageToAttachment(
+        part.image,
+        part.mimeType || part.mediaType,
+      );
+      if (imageAttachment) {
+        return {
+          ...part,
+          image: imageAttachment,
+        };
+      }
+    }
+
+    // Process file content with explicit mime type
+    if (
+      part.type === "file" &&
+      part.data &&
+      (part.mimeType || part.mediaType)
+    ) {
+      const fileAttachment = convertDataToAttachment(
+        part.data,
+        part.mimeType || part.mediaType,
+        part.name || part.filename,
+      );
+      if (fileAttachment) {
+        return {
+          ...part,
+          data: fileAttachment,
+        };
+      }
+    }
+
+    // Process image_url format (OpenAI style)
+    if (part.type === "image_url" && part.image_url) {
+      if (typeof part.image_url === "object" && part.image_url.url) {
+        const imageAttachment = convertImageToAttachment(part.image_url.url);
+        if (imageAttachment) {
+          return {
+            ...part,
+            image_url: {
+              ...part.image_url,
+              url: imageAttachment,
+            },
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Error processing content part:", error);
+  }
+
+  return part;
+};
+
+const convertImageToAttachment = (
+  image: any,
+  explicitMimeType?: string,
+): Attachment | null => {
+  try {
+    // Handle data URLs (they contain their own mime type)
+    if (typeof image === "string" && image.startsWith("data:")) {
+      const [mimeTypeSection, base64Data] = image.split(",");
+      const mimeType = mimeTypeSection.match(/data:(.*?);/)?.[1];
+      if (mimeType && base64Data) {
+        const blob = convertDataToBlob(base64Data, mimeType);
+        if (blob) {
+          return new Attachment({
+            data: blob,
+            filename: `image.${getExtensionFromMediaType(mimeType)}`,
+            contentType: mimeType,
+          });
+        }
+      }
+    }
+
+    // Only convert binary data if we have an explicit mime type
+    if (explicitMimeType) {
+      // Handle Uint8Array
+      if (image instanceof Uint8Array) {
+        return new Attachment({
+          data: new Blob([image], { type: explicitMimeType }),
+          filename: `image.${getExtensionFromMediaType(explicitMimeType)}`,
+          contentType: explicitMimeType,
+        });
+      }
+
+      // Handle Buffer (Node.js)
+      if (typeof Buffer !== "undefined" && Buffer.isBuffer(image)) {
+        return new Attachment({
+          data: new Blob([image], { type: explicitMimeType }),
+          filename: `image.${getExtensionFromMediaType(explicitMimeType)}`,
+          contentType: explicitMimeType,
+        });
+      }
+    }
+
+    // Handle Blob (has its own type)
+    if (image instanceof Blob && image.type) {
+      return new Attachment({
+        data: image,
+        filename: `image.${getExtensionFromMediaType(image.type)}`,
+        contentType: image.type,
+      });
+    }
+
+    // If already an Attachment, return as-is
+    if (image instanceof Attachment) {
+      return image;
+    }
+  } catch (error) {
+    console.warn("Error converting image to attachment:", error);
+  }
+
+  return null;
+};
+
+const convertDataToAttachment = (
+  data: any,
+  mimeType: string,
+  filename?: string,
+): Attachment | null => {
+  if (!mimeType) return null; // Don't convert without explicit mime type
+
+  try {
+    let blob: Blob | null = null;
+
+    // Handle data URLs
+    if (typeof data === "string" && data.startsWith("data:")) {
+      const [, base64Data] = data.split(",");
+      if (base64Data) {
+        blob = convertDataToBlob(base64Data, mimeType);
+      }
+    }
+    // Handle Uint8Array
+    else if (data instanceof Uint8Array) {
+      blob = new Blob([data], { type: mimeType });
+    }
+    // Handle Buffer (Node.js)
+    else if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
+      blob = new Blob([data], { type: mimeType });
+    }
+    // Handle Blob
+    else if (data instanceof Blob) {
+      blob = data;
+    }
+
+    if (blob) {
+      return new Attachment({
+        data: blob,
+        filename: filename || `file.${getExtensionFromMediaType(mimeType)}`,
+        contentType: mimeType,
+      });
+    }
+  } catch (error) {
+    console.warn("Error converting data to attachment:", error);
+  }
+
+  return null;
+};
+
+const processOutput = async (output: any) => {
+  return omit(await processOutputAttachments(output), DENY_OUTPUT_PATHS);
+};
+
+const processOutputAttachments = async (output: any) => {
+  try {
+    return await doProcessOutputAttachments(output);
+  } catch (error) {
+    console.error("Error processing output attachments:", error);
+    return output;
+  }
+};
+
+const doProcessOutputAttachments = async (output: any) => {
+  if (!output || !("files" in output)) {
+    return output;
+  }
+
+  if (output.files && typeof output.files.then === "function") {
+    return {
+      ...output,
+      files: output.files.then(async (files: any[]) => {
+        if (!files || !Array.isArray(files) || files.length === 0) {
+          return files;
+        }
+        return files.map(convertFileToAttachment);
+      }),
+    };
+  } else if (
+    output.files &&
+    Array.isArray(output.files) &&
+    output.files.length > 0
+  ) {
+    return {
+      ...output,
+      files: output.files.map(convertFileToAttachment),
+    };
+  }
+
   return output;
+};
+
+const convertFileToAttachment = (file: any, index: number): any => {
+  try {
+    const mediaType = file.mediaType || "application/octet-stream";
+    const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
+
+    let blob: Blob | null = null;
+
+    if (file.base64) {
+      blob = convertDataToBlob(file.base64, mediaType);
+    } else if (file.uint8Array) {
+      blob = new Blob([file.uint8Array], { type: mediaType });
+    }
+
+    if (!blob) {
+      console.warn(`Failed to convert file at index ${index} to Blob`);
+      return file; // Return original if conversion fails
+    }
+
+    return new Attachment({
+      data: blob,
+      filename: filename,
+      contentType: mediaType,
+    });
+  } catch (error) {
+    console.warn(`Error processing file at index ${index}:`, error);
+    return file; // Return original on error
+  }
 };
 
 /**
@@ -434,9 +713,12 @@ export function extractTokenMetrics(result: any): Record<string, number> {
   return metrics;
 }
 
+const deepCopy = (obj: Record<string, unknown>) => {
+  return JSON.parse(JSON.stringify(obj));
+};
+
 const omit = (obj: Record<string, unknown>, paths: string[]) => {
-  // Create a deep copy of the object
-  const result = JSON.parse(JSON.stringify(obj));
+  const result = deepCopy(obj);
 
   for (const path of paths) {
     const keys = path.split(".");
