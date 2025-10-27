@@ -200,6 +200,7 @@ class SpecTestRunner:
         print(f"DEBUG: BTQL query for root_span_id={root_span_id}, project_id={project_id}")
         response = requests.post(url, headers=headers, json=btql_query)
         response.raise_for_status()
+        print(f"DEBUG: response: {response.json()}")
 
         data = response.json()
         child_spans = data.get("data", [])
@@ -279,10 +280,9 @@ class SpecTestRunner:
         wiremock_str = test_spec.get("wiremock", "{}")
         wiremock_config = json.loads(wiremock_str)
 
-
         if False: # TODO -- rm this block once span fetching is solid
             project_id = self._get_project_id("sdk-spec-test")
-            root_span_id = "64b501a2-bd3d-452e-af1d-777ae988b2d7"
+            root_span_id = "faa42644-3308-48b5-b481-076c6b90eecf"
             print(f"fetching: {root_span_id} -- {project_id}")
             span_data = self._fetch_braintrust_span(root_span_id, project_id)
             print(f"got span: {json.dumps(span_data, indent=2)}")
@@ -335,7 +335,7 @@ class SpecTestRunner:
             print(f"fetching: {root_span_id} -- {project_id}")
             time.sleep(30) # give the backend time to process
             span_data = self._fetch_braintrust_span(root_span_id, project_id)
-            # print(f"got span: {json.dumps(span_data, indent=2)}")
+            print(f"got span: {json.dumps(span_data, indent=2)}")
             self._validate_braintrust_span(span_data, test_spec["braintrust_span"])
 
     def run_all_tests(self) -> None:

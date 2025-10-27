@@ -8,6 +8,8 @@ tests:
     request:
       model: gpt-4o-mini
       messages:
+        - role: system
+          content: "you are a helpful assistant"
         - role: user
           content: "What is the capital of France?"
     wiremock: |
@@ -52,8 +54,10 @@ tests:
             - value: chat gpt-4o-mini
     braintrust_span:
       metrics:
-        prompt_tokens: "regex:[0-9]+"
         time_to_first_token: "regex:[0-9]+.[0-9]+"
+        tokens: "regex:[0-9]+"
+        prompt_tokens: "regex:[0-9]+"
+        completion_tokens: "regex:[0-9]+"
       metadata:
         model: gpt-4o-mini
         provider: openai
@@ -61,6 +65,8 @@ tests:
         name: "Chat Completion"
         type: "llm"
       input:
+        - content: "you are a helpful assistant"
+          role: system
         - content: "What is the capital of France?"
           role: user
       output:
