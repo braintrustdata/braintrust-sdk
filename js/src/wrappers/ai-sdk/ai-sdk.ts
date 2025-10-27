@@ -126,6 +126,9 @@ const wrapStreamText = (streamText: any) => {
   return async function wrappedStreamText(params: any) {
     const span = startSpan({
       name: "streamText",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
       event: {
         input: processInputAttachments(params),
         metadata: {
@@ -141,7 +144,7 @@ const wrapStreamText = (streamText: any) => {
     try {
       const startTime = Date.now();
       let receivedFirst = false;
-      const result = withCurrent(span, () =>
+      const result = await withCurrent(span, () =>
         streamText({
           ...params,
           tools: wrapTools(params.tools),
@@ -179,6 +182,43 @@ const wrapStreamText = (streamText: any) => {
         }),
       );
 
+      // Use stream tee to track first token regardless of consumption method
+      const trackFirstToken = () => {
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+      };
+
+      if (result && result.baseStream) {
+        const [stream1, stream2] = result.baseStream.tee();
+        result.baseStream = stream2;
+
+        stream1
+          .pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                trackFirstToken();
+                controller.enqueue(chunk);
+              },
+            }),
+          )
+          .pipeTo(
+            new WritableStream({
+              write() {
+                // Discard chunks - we only care about the side effect
+              },
+            }),
+          )
+          .catch(() => {
+            // Silently ignore errors from the tracking stream
+          });
+      }
+
       return result;
     } catch (error) {
       span.log({
@@ -194,6 +234,9 @@ const wrapStreamObject = (streamObject: any) => {
   return async function wrappedStreamObject(params: any) {
     const span = startSpan({
       name: "streamObject",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
       event: {
         input: processInputAttachments(params),
         metadata: {
@@ -209,7 +252,8 @@ const wrapStreamObject = (streamObject: any) => {
     try {
       const startTime = Date.now();
       let receivedFirst = false;
-      const result = withCurrent(span, () =>
+
+      const result = await withCurrent(span, () =>
         streamObject({
           ...params,
           tools: wrapTools(params.tools),
@@ -222,7 +266,6 @@ const wrapStreamObject = (streamObject: any) => {
                 },
               });
             }
-
             params.onChunk?.(chunk);
           },
           onFinish: async (event: any) => {
@@ -246,6 +289,44 @@ const wrapStreamObject = (streamObject: any) => {
           },
         }),
       );
+
+      // Use stream tee to track first token regardless of consumption method
+      const trackFirstToken = () => {
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+      };
+
+      if (result && result.baseStream) {
+        const [stream1, stream2] = result.baseStream.tee();
+        result.baseStream = stream2;
+
+        stream1
+          .pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                trackFirstToken();
+                controller.enqueue(chunk);
+              },
+            }),
+          )
+          .pipeTo(
+            new WritableStream({
+              write() {
+                // Discard chunks - we only care about the side effect
+              },
+            }),
+          )
+          .catch(() => {
+            // Silently ignore errors from the tracking stream
+          });
+      }
+
       return result;
     } catch (error) {
       span.log({
@@ -621,15 +702,19 @@ export function extractTokenMetrics(result: any): Record<string, number> {
     return metrics;
   }
 
-  // Prompt tokens
-  if (usage.promptTokens !== undefined) {
+  // Prompt tokens (AI SDK v5 uses inputTokens)
+  if (usage.inputTokens !== undefined) {
+    metrics.prompt_tokens = usage.inputTokens;
+  } else if (usage.promptTokens !== undefined) {
     metrics.prompt_tokens = usage.promptTokens;
   } else if (usage.prompt_tokens !== undefined) {
     metrics.prompt_tokens = usage.prompt_tokens;
   }
 
-  // Completion tokens
-  if (usage.completionTokens !== undefined) {
+  // Completion tokens (AI SDK v5 uses outputTokens)
+  if (usage.outputTokens !== undefined) {
+    metrics.completion_tokens = usage.outputTokens;
+  } else if (usage.completionTokens !== undefined) {
     metrics.completion_tokens = usage.completionTokens;
   } else if (usage.completion_tokens !== undefined) {
     metrics.completion_tokens = usage.completion_tokens;
@@ -644,13 +729,16 @@ export function extractTokenMetrics(result: any): Record<string, number> {
     metrics.tokens = usage.total_tokens;
   }
 
-  // Prompt cached tokens
+  // Prompt cached tokens (AI SDK v5 uses cachedInputTokens)
   if (
+    usage.cachedInputTokens !== undefined ||
     usage.promptCachedTokens !== undefined ||
     usage.prompt_cached_tokens !== undefined
   ) {
     metrics.prompt_cached_tokens =
-      usage.promptCachedTokens || usage.prompt_cached_tokens;
+      usage.cachedInputTokens ||
+      usage.promptCachedTokens ||
+      usage.prompt_cached_tokens;
   }
 
   // Prompt cache creation tokens
@@ -682,17 +770,17 @@ export function extractTokenMetrics(result: any): Record<string, number> {
 
   // Completion reasoning tokens
   if (
+    usage.reasoningTokens !== undefined ||
     usage.completionReasoningTokens !== undefined ||
     usage.completion_reasoning_tokens !== undefined ||
-    usage.reasoningTokens !== undefined ||
     usage.reasoning_tokens !== undefined ||
     usage.thinkingTokens !== undefined ||
     usage.thinking_tokens !== undefined
   ) {
     const reasoningTokenCount =
+      usage.reasoningTokens ||
       usage.completionReasoningTokens ||
       usage.completion_reasoning_tokens ||
-      usage.reasoningTokens ||
       usage.reasoning_tokens ||
       usage.thinkingTokens ||
       usage.thinking_tokens;
