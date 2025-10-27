@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "js",
-    "core/js"
+    "core/js",
+    "internal/spectest"
   ],
   "scripts": {
     "build": "turbo run build",

@@ -1,0 +1,21 @@
+{
+  "name": "@braintrust/spectest",
+  "version": "0.0.1",
+  "description": "SDK specification test runner for cross-language testing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc runner.ts --esModuleInterop --resolveJsonModule --module nodenext --moduleResolution nodenext --target es2022",
+    "runner": "node runner.js"
+  },
+  "dependencies": {
+    "braintrust": "workspace:*",
+    "openai": "^4.77.3",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.4.4"
+  }
+}
