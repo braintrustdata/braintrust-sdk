@@ -51,8 +51,21 @@ tests:
             - name: genai.request.model
             - value: chat gpt-4o-mini
     braintrust_span:
+      metrics:
+        prompt_tokens: "regex:[0-9]+"
+        time_to_first_token: "regex:[0-9]+.[0-9]+"
       metadata:
-        - model: gpt-4o-mini
+        model: gpt-4o-mini
+        provider: openai
       span_attributes:
-        name: chat gpt-4o-mini
-        type: llm
+        name: "Chat Completion"
+        type: "llm"
+      input:
+        - content: "What is the capital of France?"
+          role: user
+      output:
+        - finish_reason: stop
+          index: 0
+          message:
+            role: assistant
+            content: "The capital of France is Paris."

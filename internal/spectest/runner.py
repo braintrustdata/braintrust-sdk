@@ -140,6 +140,33 @@ class SpecTestRunner:
         return matching[0]["id"]
 
     def _fetch_braintrust_span(self, root_span_id: str, project_id: str) -> Dict[str, Any]:
+        """Fetch span with exponential backoff retry logic.
+
+        Retries on LookupError with backoff: 10s, 20s, 40s, 80s, etc.
+        Stops when total wait time exceeds 120 seconds.
+        """
+        import time
+
+        backoff_seconds = 30
+        total_wait = 0
+        max_total_wait = 150
+        last_error = None
+
+        while True:
+            try:
+                return self._fetch_braintrust_span_impl(root_span_id, project_id)
+            except LookupError as e:
+                last_error = e
+                if total_wait > max_total_wait:
+                    break
+                print(f"Span not found yet, waiting {backoff_seconds}s before retry (total wait: {total_wait}s)...")
+                time.sleep(backoff_seconds)
+                total_wait += backoff_seconds
+
+        # Exceeded max wait time, re-raise the last error
+        raise last_error
+
+    def _fetch_braintrust_span_impl(self, root_span_id: str, project_id: str) -> Dict[str, Any]:
         """Fetch span data from Braintrust API by root_span_id using BTQL.
 
         Returns the child span (not the root span itself).
@@ -170,44 +197,79 @@ class SpecTestRunner:
             "fmt": "json"
         }
 
+        print(f"DEBUG: BTQL query for root_span_id={root_span_id}, project_id={project_id}")
         response = requests.post(url, headers=headers, json=btql_query)
         response.raise_for_status()
 
         data = response.json()
-        events = data.get("data", [])
+        child_spans = data.get("data", [])
+        print(f"DEBUG: Found {len(child_spans)} child spans")
 
-        if len(events) == 0:
-            print(f"Debug: BTQL response: {json.dumps(data, indent=2)}")
-            raise ValueError(f"No events found with root_span_id: {root_span_id}")
-
-        # Filter for child spans (those with span_parents)
-        child_spans = [e for e in events if e.get("span_parents")]
-
-        # We expect exactly 1 child span (the OpenAI LLM span)
+        # We expect exactly 1 child span (the LLM span)
+        if len(child_spans) == 0:
+            raise LookupError(f"No child spans found with root_span_id: {root_span_id}")
         if len(child_spans) != 1:
             raise ValueError(f"Expected exactly 1 child span, found {len(child_spans)}")
 
         return child_spans[0]
 
     def _validate_braintrust_span(self, span_data: Dict[str, Any], expected: Dict[str, Any]) -> None:
-        """Validate that Braintrust span data matches expected structure."""
+        """Validate that Braintrust span data matches expected structure.
+
+        Recursively walks through the expected structure and validates each value
+        exists in the actual span data.
+        """
         if not expected:
             return
 
-        # Validate metadata
-        expected_metadata = expected.get("metadata", [])
-        for meta_item in expected_metadata:
-            for key, value in meta_item.items():
-                actual_value = span_data.get("metadata", {}).get(key)
-                assert actual_value == value, \
-                    f"Metadata mismatch: {key} expected={value}, actual={actual_value}"
+        def validate_value(actual: Any, expected_val: Any, path: str) -> None:
+            """Recursively validate expected value matches actual."""
+            if isinstance(expected_val, dict):
+                # For dicts, recursively validate each key
+                assert isinstance(actual, dict), \
+                    f"Path {path}: expected dict, got {type(actual).__name__}"
+                for key, val in expected_val.items():
+                    assert key in actual, \
+                        f"Path {path}.{key}: key not found in actual data"
+                    validate_value(actual[key], val, f"{path}.{key}")
+            elif isinstance(expected_val, list):
+                if isinstance(actual, list):
+                    # Both are lists - validate each element
+                    assert len(expected_val) == len(actual), \
+                        f"Path {path}: list length mismatch, expected={len(expected_val)}, actual={len(actual)}"
+                    for i, expected_item in enumerate(expected_val):
+                        validate_value(actual[i], expected_item, f"{path}[{i}]")
+                elif isinstance(actual, dict):
+                    # Expected is list of dicts (YAML format for dict key-values like metadata)
+                    # Actual is a dict - validate each item in the list as a key-value pair
+                    for item in expected_val:
+                        if isinstance(item, dict):
+                            for key, val in item.items():
+                                assert key in actual, \
+                                    f"Path {path}.{key}: key not found in actual data"
+                                validate_value(actual[key], val, f"{path}.{key}")
+                else:
+                    assert False, \
+                        f"Path {path}: expected list but actual is {type(actual).__name__}"
+            else:
+                # For scalar values, check equality or regex match
+                if isinstance(expected_val, str) and expected_val.startswith("regex:"):
+                    # Treat as regex pattern - convert actual to string for matching
+                    import re
+                    pattern = expected_val[6:]  # Remove "regex:" prefix
+                    actual_str = str(actual)
+                    assert re.fullmatch(pattern, actual_str), \
+                        f"Path {path}: regex pattern '{pattern}' did not match actual='{actual_str}' (type={type(actual).__name__})"
+                else:
+                    # Exact equality check
+                    assert actual == expected_val, \
+                        f"Path {path}: expected={expected_val}, actual={actual}"
 
-        # Validate span attributes
-        expected_attrs = expected.get("span_attributes", {})
-        for key, value in expected_attrs.items():
-            actual_value = span_data.get("span_attributes", {}).get(key)
-            assert actual_value == value, \
-                f"Span attribute mismatch: {key} expected={value}, actual={actual_value}"
+        # Walk through each top-level key in expected
+        for key, expected_val in expected.items():
+            assert key in span_data, \
+                f"Top-level key '{key}' not found in span data"
+            validate_value(span_data[key], expected_val, key)
 
     def run_test(self, test_spec: Dict[str, Any]) -> None:
         """Run a single test from the specification."""
@@ -218,11 +280,13 @@ class SpecTestRunner:
         wiremock_config = json.loads(wiremock_str)
 
 
-        if True: # TODO -- rm this block once span fetching is solid
+        if False: # TODO -- rm this block once span fetching is solid
             project_id = self._get_project_id("sdk-spec-test")
-            root_span_id = "ee4743db-088e-462f-adbb-abc23c88d196"
+            root_span_id = "64b501a2-bd3d-452e-af1d-777ae988b2d7"
+            print(f"fetching: {root_span_id} -- {project_id}")
             span_data = self._fetch_braintrust_span(root_span_id, project_id)
-            print(f"got span: {span_data}")
+            print(f"got span: {json.dumps(span_data, indent=2)}")
+            self._validate_braintrust_span(span_data, test_spec["braintrust_span"])
             return
 
         # Set up OTel capture
@@ -232,23 +296,23 @@ class SpecTestRunner:
         # mock_response = self._mock_http_response(wiremock_config)
 
         root_span_id = ""
+        # Initialize Braintrust logger
+        logger = braintrust.init_logger(project="sdk-spec-test", set_current=True)
         # Execute the SDK call
         if vendor == "OpenAI" and endpoint == "completions":
-            # Initialize Braintrust logger
-            logger = braintrust.init_logger(project="sdk-spec-test", set_current=True)
 
             # Create a parent span to capture the trace
             with logger.start_span(name=test_spec["name"]) as root_span:
                 # Make the API call (will be automatically traced as child span)
                 client = wrap_openai(openai.OpenAI())
                 response = client.chat.completions.create(**request)
+                # Store the span ID for fetching trace data
+                root_span_id = root_span.root_span_id
+                print(f"DEBUG: Created root span with root_span_id={root_span_id}, span.id={root_span.id}, span.span_id={root_span.span_id}")
 
             # Flush to send to Braintrust API
             logger.flush()
 
-            # Store the span ID for fetching trace data
-            root_span_id = root_span.id
-            # print(f"Trace ID: {trace_id}")
             # print(f"Permalink: {parent_span.permalink()}")
         else:
             # TODO: Implement other vendor/endpoint combinations
@@ -265,12 +329,13 @@ class SpecTestRunner:
             # Fetch actual span data from Braintrust API
             # We need to get the project UUID from the project name
             # TODO cache project id
-            project_name = "sdk-spec-test"
-            project_id = self._get_project_id(project_name)
+            project_id = self._get_project_id("sdk-spec-test")
 
             # Give the API a moment to process the data
-            time.sleep(5)
+            print(f"fetching: {root_span_id} -- {project_id}")
+            time.sleep(30) # give the backend time to process
             span_data = self._fetch_braintrust_span(root_span_id, project_id)
+            # print(f"got span: {json.dumps(span_data, indent=2)}")
             self._validate_braintrust_span(span_data, test_spec["braintrust_span"])
 
     def run_all_tests(self) -> None:
