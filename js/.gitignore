@@ -8,3 +8,6 @@ coverage
 *.log
 yarn.lock
 braintrust-*.tgz
+
+# Vendor libraries (local-only for development)
+vendor/
