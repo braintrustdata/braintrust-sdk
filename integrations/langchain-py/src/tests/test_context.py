@@ -3,12 +3,13 @@ from typing import Dict
 from unittest.mock import ANY
 
 import pytest
-from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.callbacks import CallbackManager
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableSerializable
 from langchain_openai import ChatOpenAI
+
+from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 
 from .conftest import LoggerMemoryLogger
 from .helpers import assert_matches_object
