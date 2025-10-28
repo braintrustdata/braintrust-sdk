@@ -479,15 +479,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     const paths = ["a.b.c.d", "x.y.z", "a.nonexistent"];
     const result = omit(testObj, paths);
 
-    // The omit function sets the last key on whatever object it reaches
-    // even if the full path doesn't exist
+    // Non-existent paths should not affect the output
     expect(result).toEqual({
       a: {
         b: "value",
-        nonexistent: "<omitted>", // a.nonexistent - "a" exists so "nonexistent" is added
       },
       c: "another value",
-      z: "<omitted>", // x.y.z - "x" doesn't exist, so "z" is added to root
     });
 
     // Test with a fully non-existent deep path
@@ -497,7 +494,44 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     const result2 = omit(testObj2, ["b.c.d"]);
     expect(result2).toEqual({
       a: "value",
-      d: "<omitted>", // b.c.d - "b" doesn't exist, so "d" is added to root
+    });
+  });
+
+  test("omit function handles partial paths correctly", () => {
+    // Test that paths are only omitted when they fully exist
+    const testObj = {
+      request: {
+        method: "POST",
+        url: "https://api.example.com",
+        // Note: no 'body' property
+      },
+      response: {
+        status: 200,
+        body: {
+          data: "some data",
+        },
+      },
+      metadata: {
+        model: "gpt-4",
+      },
+    };
+
+    const paths = ["request.body", "response.body"];
+    const result = omit(testObj, paths);
+
+    // request.body doesn't exist, so request should be unchanged
+    expect(result.request).toEqual({
+      method: "POST",
+      url: "https://api.example.com",
+    });
+
+    // response.body exists and should be omitted
+    expect(result.response.body).toBe("<omitted>");
+    expect(result.response.status).toBe(200);
+
+    // Other properties should remain unchanged
+    expect(result.metadata).toEqual({
+      model: "gpt-4",
     });
   });
 });

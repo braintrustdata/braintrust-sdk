@@ -164,7 +164,7 @@ const wrapStreamText = (streamText: any) => {
             params.onFinish?.(event);
 
             span.log({
-              output: processOutput(event),
+              output: await processOutput(event),
               metrics: extractTokenMetrics(event),
             });
 
@@ -174,7 +174,7 @@ const wrapStreamText = (streamText: any) => {
             params.onError?.(err);
 
             span.log({
-              error: err instanceof Error ? err.message : String(err),
+              error: serializeError(err),
             });
 
             span.end();
@@ -222,7 +222,7 @@ const wrapStreamText = (streamText: any) => {
       return result;
     } catch (error) {
       span.log({
-        error: error instanceof Error ? error.message : String(error),
+        error: serializeError(error),
       });
       span.end();
       throw error;
@@ -272,7 +272,7 @@ const wrapStreamObject = (streamObject: any) => {
             params.onFinish?.(event);
 
             span.log({
-              output: processOutput(event),
+              output: await processOutput(event),
               metrics: extractTokenMetrics(event),
             });
 
@@ -282,7 +282,7 @@ const wrapStreamObject = (streamObject: any) => {
             params.onError?.(err);
 
             span.log({
-              error: err instanceof Error ? err.message : String(err),
+              error: serializeError(err),
             });
 
             span.end();
@@ -330,7 +330,7 @@ const wrapStreamObject = (streamObject: any) => {
       return result;
     } catch (error) {
       span.log({
-        error: error instanceof Error ? error.message : String(error),
+        error: serializeError(error),
       });
       span.end();
       throw error;
@@ -377,6 +377,20 @@ const wrapToolExecute = (tool: any, name: string) => {
     };
   }
   return tool;
+};
+
+const serializeError = (error: unknown) => {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {}
+  }
+
+  return String(error);
 };
 
 const serializeModel = (model: any) => {
@@ -619,8 +633,49 @@ const convertDataToAttachment = (
   return null;
 };
 
+const extractGetterValues = (obj: any): any => {
+  // Extract common getter values from AI SDK result objects
+  // These are typically on the prototype and not enumerable
+  const getterValues: Record<string, any> = {};
+
+  // List of known getters from AI SDK result objects
+  const getterNames = [
+    "text",
+    "finishReason",
+    "usage",
+    "toolCalls",
+    "toolResults",
+    "warnings",
+    "experimental_providerMetadata",
+    "rawResponse",
+    "response",
+  ];
+
+  for (const name of getterNames) {
+    try {
+      if (obj && name in obj && typeof obj[name] !== "function") {
+        getterValues[name] = obj[name];
+      }
+    } catch {
+      // Ignore errors accessing getters
+    }
+  }
+
+  return getterValues;
+};
+
 const processOutput = async (output: any) => {
-  return omit(await processOutputAttachments(output), DENY_OUTPUT_PATHS);
+  // Extract getter values before processing
+  const getterValues = extractGetterValues(output);
+
+  // Process attachments
+  const processed = await processOutputAttachments(output);
+
+  // Merge getter values into the processed output
+  const merged = { ...processed, ...getterValues };
+
+  // Apply omit to the merged result to ensure paths are omitted
+  return omit(merged, DENY_OUTPUT_PATHS);
 };
 
 const processOutputAttachments = async (output: any) => {
@@ -811,6 +866,7 @@ export const omit = (obj: Record<string, unknown>, paths: string[]) => {
   for (const path of paths) {
     const keys = path.split(".");
     let current = result;
+    let pathExists = true;
 
     // Navigate to the parent of the property to remove
     for (let i = 0; i < keys.length - 1; i++) {
@@ -819,14 +875,22 @@ export const omit = (obj: Record<string, unknown>, paths: string[]) => {
         current = current[key];
       } else {
         // Path doesn't exist, skip to next path
+        pathExists = false;
         break;
       }
     }
 
-    // Remove the final property
-    if (current && typeof current === "object" && keys.length > 0) {
+    // Remove the final property only if the full path exists
+    if (
+      pathExists &&
+      current &&
+      typeof current === "object" &&
+      keys.length > 0
+    ) {
       const lastKey = keys[keys.length - 1];
-      current[lastKey] = "<omitted>";
+      if (lastKey in current) {
+        current[lastKey] = "<omitted>";
+      }
     }
   }
 
