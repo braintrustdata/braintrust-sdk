@@ -9,7 +9,7 @@
     ],
     "exclude": ["**/examples/**"],
     "plugin": ["typedoc-plugin-markdown"],
-    "out": "../../app/content/docs/reference/libs/nodejs",
+    "out": "../../docs/reference/sdks/ts-api",
     "publicPath": "/docs/libs/nodejs/",
     "githubPages": false,
     "disableSources": true,
