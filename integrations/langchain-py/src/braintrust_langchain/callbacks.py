@@ -15,9 +15,6 @@ from typing import (
 )
 from uuid import UUID
 
-import braintrust
-from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
-from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
@@ -26,6 +23,9 @@ from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
 
+import braintrust
+from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
+from braintrust.version import VERSION as sdk_version
 from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")
@@ -186,7 +186,17 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             dataset_record_id=dataset_record_id,
         )
 
-        span.unset_current()
+        # In async workflows, callbacks may execute in different async contexts.
+        # The span's context variable token may have been created in a different
+        # context, causing ValueError when trying to reset it. We catch and ignore
+        # this specific error since the span hierarchy is maintained via self.spans.
+        try:
+            span.unset_current()
+        except ValueError as e:
+            if "was created in a different Context" in str(e):
+                pass
+            else:
+                raise
 
         span.end()
 
