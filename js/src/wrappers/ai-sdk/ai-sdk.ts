@@ -368,12 +368,20 @@ const wrapToolExecute = (tool: any, name: string) => {
     return {
       ...tool,
       execute: (...args: any[]) =>
-        traced(() => tool.execute(...args), {
-          name: `tool.${name}`,
-          spanAttributes: {
-            type: SpanTypeAttribute.TOOL,
+        traced(
+          async (span) => {
+            span.log({ input: args.length === 1 ? args[0] : args });
+            const result = await tool.execute(...args);
+            span.log({ output: result });
+            return result;
           },
-        }),
+          {
+            name: `tool.${name}`,
+            spanAttributes: {
+              type: SpanTypeAttribute.TOOL,
+            },
+          },
+        ),
     };
   }
   return tool;

@@ -550,6 +550,7 @@ async function testToolUseWithResult() {
             calculate: calculateTool,
           },
           prompt: "What is 127 multiplied by 49?",
+          maxToolRoundtrips: 2,
         });
 
         console.log("First response:");

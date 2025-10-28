@@ -639,4 +639,91 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       model: "gpt-4",
     });
   });
+
+  test("ai sdk tool execution with input/output", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const calculateTool = ai.tool({
+      description: "Perform a mathematical calculation",
+      inputSchema: z.object({
+        operation: z.enum(["add", "subtract", "multiply", "divide"]),
+        a: z.number(),
+        b: z.number(),
+      }),
+      execute: async (args: {
+        operation: "add" | "subtract" | "multiply" | "divide";
+        a: number;
+        b: number;
+      }) => {
+        switch (args.operation) {
+          case "add":
+            return String(args.a + args.b);
+          case "subtract":
+            return String(args.a - args.b);
+          case "multiply":
+            return String(args.a * args.b);
+          case "divide":
+            return args.b !== 0 ? String(args.a / args.b) : "0";
+          default:
+            return "0";
+        }
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      tools: {
+        calculate: calculateTool,
+      },
+      prompt: "What is 25 plus 17? Use the calculate tool.",
+      maxToolRoundtrips: 2,
+    });
+
+    assert.ok(result);
+    // Note: result.text may be empty if only tool calls were made without follow-up
+
+    const spans = await backgroundLogger.drain();
+
+    // Should have at least 2 spans: the main generateText span and the tool execution span
+    expect(spans.length).toBeGreaterThanOrEqual(2);
+
+    // Find the tool execution span
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const toolSpan = spans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (span: any) =>
+        span.span_attributes?.type === "tool" &&
+        span.span_attributes?.name === "tool.calculate",
+    );
+
+    expect(toolSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const toolSpanTyped = toolSpan as any;
+
+    // Verify the tool span has the correct structure
+    expect(toolSpanTyped).toMatchObject({
+      span_attributes: {
+        type: "tool",
+        name: "tool.calculate",
+      },
+    });
+
+    // Verify input is captured
+    expect(toolSpanTyped.input).toBeDefined();
+    // Input can be an array if multiple args are passed, check the first element
+    const inputData = Array.isArray(toolSpanTyped.input)
+      ? toolSpanTyped.input[0]
+      : toolSpanTyped.input;
+    expect(inputData).toMatchObject({
+      operation: "add",
+      a: 25,
+      b: 17,
+    });
+
+    // Verify output is captured
+    expect(toolSpanTyped.output).toBeDefined();
+    expect(toolSpanTyped.output).toBe("42");
+  });
 });
