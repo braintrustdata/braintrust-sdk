@@ -31,7 +31,7 @@ async function testBasicCompletion() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -55,7 +55,7 @@ async function testMultiTurn() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -86,7 +86,7 @@ async function testSystemPrompt() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -111,7 +111,7 @@ async function testStreaming() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await streamText({
@@ -142,7 +142,7 @@ async function testImageInput() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -181,7 +181,7 @@ async function testDocumentInput() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -256,7 +256,7 @@ async function testTemperatureVariations() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -288,7 +288,7 @@ async function testStopSequences() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -317,7 +317,7 @@ async function testMetadata() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -344,7 +344,7 @@ async function testLongContext() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -377,7 +377,7 @@ async function testMixedContent() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -417,7 +417,7 @@ async function testPrefill() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -444,7 +444,7 @@ async function testShortMaxTokens() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -496,7 +496,7 @@ async function testToolUse() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -567,7 +567,7 @@ async function testToolUseWithResult() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -607,7 +607,7 @@ async function testAsyncGeneration() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -631,7 +631,7 @@ async function testAsyncStreaming() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-3-5-sonnet-20241022")],
+        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await streamText({
@@ -668,7 +668,7 @@ async function testReasoning() {
         ["openai", openai("gpt-5-mini"), "gpt-5-mini"],
         [
           "anthropic",
-          anthropic("claude-3-5-sonnet-20241022"),
+          anthropic("claude-haiku-4-5-20251001"),
           "claude-3-5-sonnet",
         ],
       ] as const) {
