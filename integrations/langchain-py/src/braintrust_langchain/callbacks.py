@@ -15,6 +15,9 @@ from typing import (
 )
 from uuid import UUID
 
+import braintrust
+from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
+from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
@@ -23,9 +26,6 @@ from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
 
-import braintrust
-from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
-from braintrust.version import VERSION as sdk_version
 from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")

@@ -3,7 +3,7 @@ import uuid
 from typing import Dict, List, Union, cast
 
 import pytest
-from braintrust_langchain import BraintrustCallbackHandler
+from braintrust.logger import flush
 from langchain.prompts import ChatPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
@@ -13,7 +13,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from braintrust.logger import flush
+from braintrust_langchain import BraintrustCallbackHandler
 
 from .conftest import LoggerMemoryLogger
 from .helpers import ANY, assert_matches_object, find_spans_by_attributes
