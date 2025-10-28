@@ -427,7 +427,7 @@ async function _createLLMSpanForMessages(
  * // Use normally - tracing is automatic
  * for await (const message of query({
  *   prompt: "Hello, Claude!",
- *   options: { model: "claude-3-5-sonnet-20241022" }
+ *   options: { model: "claude-haiku-4-5-20251001" }
  * })) {
  *   console.log(message);
  * }
