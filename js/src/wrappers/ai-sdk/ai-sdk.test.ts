@@ -240,6 +240,111 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     }
   });
 
+  test("ai sdk document input", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const base64Pdf = readFileSync(
+      join(FIXTURES_DIR, "test-document.pdf"),
+      "base64",
+    );
+
+    const model = openai(TEST_MODEL);
+    const start = getCurrentUnixTimestamp();
+
+    const result = await wrappedAI.generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              data: base64Pdf,
+              mediaType: "application/pdf",
+              filename: "test-document.pdf",
+            },
+            { type: "text", text: "What is in this document?" },
+          ],
+        },
+      ],
+      maxTokens: 150,
+    });
+
+    const end = getCurrentUnixTimestamp();
+    assert.ok(result);
+    assert.ok(result.text);
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+
+    expect(span).toMatchObject({
+      project_id: expect.any(String),
+      log_id: expect.any(String),
+      created: expect.any(String),
+      span_id: expect.any(String),
+      root_span_id: expect.any(String),
+      span_attributes: {
+        type: "llm",
+        name: "generateText",
+      },
+      metadata: expect.objectContaining({
+        model: TEST_MODEL,
+      }),
+      input: expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: "user",
+            content: expect.arrayContaining([
+              expect.objectContaining({
+                type: "file",
+              }),
+              expect.objectContaining({
+                type: "text",
+                text: "What is in this document?",
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      metrics: expect.objectContaining({
+        start: expect.any(Number),
+        end: expect.any(Number),
+      }),
+    });
+
+    const { metrics } = span;
+    expect(start).toBeLessThanOrEqual(metrics.start);
+    expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+    expect(metrics.end).toBeLessThanOrEqual(end);
+
+    expect(metrics.tokens).toBeGreaterThan(0);
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+
+    // Verify file content is properly handled as attachment
+    const messageContent = span.input.messages[0].content;
+    expect(messageContent).toBeInstanceOf(Array);
+    const fileContent = messageContent.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any) => c.type === "file",
+    );
+    expect(fileContent).toBeDefined();
+
+    // Check that the file was converted to an attachment reference
+    if (fileContent && fileContent.data) {
+      expect(fileContent.data.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "application/pdf",
+      });
+      // Ensure the raw base64 data is NOT in the input
+      expect(typeof fileContent.data).toBe("object");
+      expect(fileContent.data).not.toBe(base64Pdf);
+    }
+  });
+
   test("ai sdk streaming completion", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 

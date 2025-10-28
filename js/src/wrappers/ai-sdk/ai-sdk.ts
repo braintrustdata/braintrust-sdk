@@ -606,6 +606,10 @@ const convertDataToAttachment = (
         blob = convertDataToBlob(base64Data, mimeType);
       }
     }
+    // Handle plain base64 strings
+    else if (typeof data === "string" && data.length > 0) {
+      blob = convertDataToBlob(data, mimeType);
+    }
     // Handle Uint8Array
     else if (data instanceof Uint8Array) {
       blob = new Blob([data], { type: mimeType });
