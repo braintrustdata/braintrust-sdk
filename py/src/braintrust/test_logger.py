@@ -5,6 +5,7 @@ import os
 import time
 from typing import AsyncGenerator, List
 from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -2188,3 +2189,110 @@ class TestJSONAttachment(TestCase):
         self.assertEqual(len(attachments), 1)
         self.assertIs(attachments[0], json_attachment)
         self.assertEqual(event["input"]["data"], json_attachment.reference)
+
+
+class TestDatasetInternalBtql(TestCase):
+    """Test that _internal_btql parameters (especially limit) are properly passed through to BTQL queries."""
+
+    @patch("braintrust.logger.BraintrustState")
+    def test_dataset_internal_btql_limit_not_overwritten(self, mock_state_class):
+        """Test that custom limit in _internal_btql is not overwritten by INTERNAL_BTQL_LIMIT."""
+        # Set up mock state
+        mock_state = MagicMock()
+        mock_state_class.return_value = mock_state
+
+        # Mock the API connection and response
+        mock_api_conn = MagicMock()
+        mock_state.api_conn.return_value = mock_api_conn
+
+        # Mock response object
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {"id": "1", "input": "test1", "expected": "output1"},
+                {"id": "2", "input": "test2", "expected": "output2"},
+            ],
+            "cursor": None,
+        }
+        mock_api_conn.post.return_value = mock_response
+
+        # Create dataset with custom limit in _internal_btql
+        from braintrust.logger import Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+
+        project_metadata = ObjectMetadata(id="test-project", name="test-project", full_info={})
+        dataset_metadata = ObjectMetadata(id="test-dataset", name="test-dataset", full_info={})
+        lazy_metadata = LazyValue(
+            lambda: ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata),
+            use_mutex=False,
+        )
+
+        custom_limit = 50
+        dataset = Dataset(
+            lazy_metadata=lazy_metadata,
+            _internal_btql={"limit": custom_limit, "where": {"op": "eq", "left": "foo", "right": "bar"}},
+            state=mock_state,
+        )
+
+        # Trigger a fetch which will make the BTQL query
+        list(dataset.fetch())
+
+        # Verify the API was called
+        mock_api_conn.post.assert_called_once()
+
+        # Get the actual call arguments
+        call_args = mock_api_conn.post.call_args
+        query_json = call_args[1]["json"]["query"]
+
+        # Verify that the custom limit is present (not overwritten by INTERNAL_BTQL_LIMIT)
+        self.assertEqual(query_json["limit"], custom_limit)
+
+        # Verify that other _internal_btql fields are also present
+        self.assertEqual(query_json["where"], {"op": "eq", "left": "foo", "right": "bar"})
+
+    @patch("braintrust.logger.BraintrustState")
+    def test_dataset_default_limit_when_not_specified(self, mock_state_class):
+        """Test that INTERNAL_BTQL_LIMIT is used when no custom limit is specified."""
+        from braintrust.logger import INTERNAL_BTQL_LIMIT, Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+
+        # Set up mock state
+        mock_state = MagicMock()
+        mock_state_class.return_value = mock_state
+
+        # Mock the API connection and response
+        mock_api_conn = MagicMock()
+        mock_state.api_conn.return_value = mock_api_conn
+
+        # Mock response object
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [],
+            "cursor": None,
+        }
+        mock_api_conn.post.return_value = mock_response
+
+        # Create dataset without custom limit
+        project_metadata = ObjectMetadata(id="test-project", name="test-project", full_info={})
+        dataset_metadata = ObjectMetadata(id="test-dataset", name="test-dataset", full_info={})
+        lazy_metadata = LazyValue(
+            lambda: ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata),
+            use_mutex=False,
+        )
+
+        dataset = Dataset(
+            lazy_metadata=lazy_metadata,
+            _internal_btql=None,
+            state=mock_state,
+        )
+
+        # Trigger a fetch which will make the BTQL query
+        list(dataset.fetch())
+
+        # Verify the API was called
+        mock_api_conn.post.assert_called_once()
+
+        # Get the actual call arguments
+        call_args = mock_api_conn.post.call_args
+        query_json = call_args[1]["json"]["query"]
+
+        # Verify that the default limit is used
+        self.assertEqual(query_json["limit"], INTERNAL_BTQL_LIMIT)
