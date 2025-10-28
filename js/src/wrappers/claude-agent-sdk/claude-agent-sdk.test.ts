@@ -11,6 +11,8 @@ import { initLogger, _exportsForTestingOnly } from "../../logger";
 import { configureNode } from "../../node";
 import { z } from "zod/v3";
 
+debugger;
+
 // Try to import the Claude Agent SDK - skip tests if not available
 let claudeSDK: unknown;
 try {
@@ -27,7 +29,7 @@ try {
   // Initialize Braintrust state once per process
 }
 
-const TEST_MODEL = "claude-3-5-sonnet-20241022";
+const TEST_MODEL = "claude-haiku-4-5-20251001";
 
 describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

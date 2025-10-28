@@ -10,6 +10,7 @@ import pytest
 # Try to import the Claude Agent SDK - skip tests if not available
 try:
     import claude_agent_sdk
+
     CLAUDE_SDK_AVAILABLE = True
 except ImportError:
     CLAUDE_SDK_AVAILABLE = False
@@ -24,7 +25,7 @@ from braintrust.wrappers.claude_agent_sdk._wrapper import (
 )
 
 PROJECT_NAME = "test-claude-agent-sdk"
-TEST_MODEL = "claude-3-5-sonnet-20241022"
+TEST_MODEL = "claude-haiku-4-5-20251001"
 
 
 @pytest.fixture
