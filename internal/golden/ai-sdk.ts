@@ -422,9 +422,9 @@ async function testShortMaxTokens() {
     async () => {
       console.log("\n=== Test 13: Very Short Max Tokens ===");
 
-      for (const [provider, model, options] of [
-        ["openai", openai("gpt-4o"), {}],
-        ["anthropic", anthropic("claude-sonnet-4-5"), {}],
+      for (const [provider, model] of [
+        ["openai", openai("gpt-4o")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({

@@ -2563,7 +2563,6 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                     f"btql",
                     json={
                         "query": {
-                            **(self._internal_btql or {}),
                             "select": [{"op": "star"}],
                             "from": {
                                 "op": "function",
@@ -2580,6 +2579,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                             },
                             "cursor": cursor,
                             "limit": INTERNAL_BTQL_LIMIT,
+                            **(self._internal_btql or {}),
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,

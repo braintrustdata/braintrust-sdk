@@ -2,11 +2,11 @@ from unittest.mock import ANY
 
 import pytest
 from braintrust import flush
-from braintrust_langchain import BraintrustCallbackHandler
-from braintrust_langchain.context import set_global_handler
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 
+from braintrust_langchain import BraintrustCallbackHandler
+from braintrust_langchain.context import set_global_handler
 from tests.conftest import LoggerMemoryLogger
 from tests.helpers import assert_matches_object
 

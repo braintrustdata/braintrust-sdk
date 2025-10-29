@@ -186,7 +186,17 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             dataset_record_id=dataset_record_id,
         )
 
-        span.unset_current()
+        # In async workflows, callbacks may execute in different async contexts.
+        # The span's context variable token may have been created in a different
+        # context, causing ValueError when trying to reset it. We catch and ignore
+        # this specific error since the span hierarchy is maintained via self.spans.
+        try:
+            span.unset_current()
+        except ValueError as e:
+            if "was created in a different Context" in str(e):
+                pass
+            else:
+                raise
 
         span.end()
 

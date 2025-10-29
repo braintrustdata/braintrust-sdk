@@ -3289,7 +3289,7 @@ packages:
         optional: true
     dependencies:
       '@openai/zod': /zod@3.25.67
-      debug: 4.4.1
+      debug: 4.4.3
       openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
       zod: 3.25.67
     optionalDependencies:
@@ -3317,7 +3317,7 @@ packages:
     dependencies:
       '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
       '@openai/zod': /zod@3.25.67
-      debug: 4.4.1
+      debug: 4.4.3
       openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
     transitivePeerDependencies:
       - supports-color
@@ -3346,7 +3346,7 @@ packages:
       '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
       '@openai/zod': /zod@3.25.67
       '@types/ws': 8.18.1
-      debug: 4.4.1
+      debug: 4.4.3
       ws: 8.18.3
     transitivePeerDependencies:
       - bufferutil
@@ -3377,7 +3377,7 @@ packages:
       '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
       '@openai/agents-openai': 0.0.15(zod@3.25.67)
       '@openai/agents-realtime': 0.0.15(zod@3.25.67)
-      debug: 4.4.1
+      debug: 4.4.3
       openai: 5.11.0(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
