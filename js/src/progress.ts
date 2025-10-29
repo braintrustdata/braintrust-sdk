@@ -1,12 +1,4 @@
-// Conditional import for cli-progress (Node.js-only)
-let cliProgress: any;
-try {
-  cliProgress = require("cli-progress");
-} catch {
-  // In edge/browser environments, cli-progress is not available
-  // BarProgressReporter should not be used in these environments
-  cliProgress = null;
-}
+import * as cliProgress from "cli-progress";
 
 const MAX_NAME_LENGTH = 40;
 
@@ -33,16 +25,10 @@ export class SimpleProgressReporter implements ProgressReporter {
 }
 
 export class BarProgressReporter implements ProgressReporter {
-  private multiBar: any; // cliProgress.MultiBar (typed as any for conditional import)
-  private bars: Record<string, any> = {}; // Record<string, cliProgress.SingleBar>
+  private multiBar: cliProgress.MultiBar;
+  private bars: Record<string, cliProgress.SingleBar> = {};
 
   constructor() {
-    if (!cliProgress) {
-      throw new Error(
-        "BarProgressReporter requires cli-progress which is only available in Node.js environments. " +
-          "Use SimpleProgressReporter in edge/browser environments instead.",
-      );
-    }
     this.multiBar = new cliProgress.MultiBar(
       {
         clearOnComplete: false,

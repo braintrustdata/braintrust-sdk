@@ -4,11 +4,13 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as fsSync from "node:fs";
 import * as crypto from "node:crypto";
+import chalk from "chalk";
 
 import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
+import { BarProgressReporter } from "./progress";
 import { promisify } from "util";
 import * as zlib from "zlib";
 
@@ -35,6 +37,8 @@ export function configureNode() {
   iso.gzip = promisify(zlib.gzip);
   iso.gunzip = promisify(zlib.gunzip);
   iso.hash = (data) => crypto.createHash("sha256").update(data).digest("hex");
+  iso.chalk = chalk;
+  iso.newProgressReporter = () => new BarProgressReporter();
 
   _internalSetInitialState();
 }

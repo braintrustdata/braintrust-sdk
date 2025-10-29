@@ -10,19 +10,7 @@ import {
   type SSEProgressEventDataType as SSEProgressEventData,
 } from "./generated_types";
 import { queue } from "async";
-
-// Conditional import for chalk (Node.js-only for terminal colors)
-let chalk: any;
-try {
-  chalk = require("chalk");
-} catch {
-  // Fallback for edge/browser environments
-  chalk = {
-    bold: { red: (s: string) => s },
-    hex: () => (s: string) => s,
-  };
-}
-
+import iso, { type ProgressReporter } from "./isomorph";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
@@ -49,8 +37,6 @@ import {
   withCurrent,
   withParent,
 } from "./logger";
-import { SimpleProgressReporter, ProgressReporter } from "./progress";
-// BarProgressReporter is imported dynamically in Node.js only to avoid cli-progress dependency in edge
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
@@ -598,21 +584,8 @@ export async function Eval<
     );
   }
 
-  // Use simple reporter in edge environments, fancy progress bars in Node.js
-  let progressReporter: ProgressReporter;
-  if (options.progress) {
-    progressReporter = options.progress;
-  } else {
-    // Try to use BarProgressReporter if cli-progress is available
-    // This will work in true Node.js environments but gracefully fall back in edge
-    try {
-      const { BarProgressReporter } = require("./progress");
-      progressReporter = new BarProgressReporter();
-    } catch (error) {
-      // Fall back to SimpleProgressReporter if cli-progress is not available
-      progressReporter = new SimpleProgressReporter();
-    }
-  }
+  const progressReporter: ProgressReporter =
+    options.progress ?? iso.newProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -1218,8 +1191,8 @@ async function runEvaluatorInternal(
   return new EvalResultWithSummary(summary, results);
 }
 
-export const error = chalk.bold.red;
-export const warning = chalk.hex("#FFA500"); // Orange color
+export const error = iso.chalk.bold.red;
+export const warning = iso.chalk.hex("#FFA500");
 
 export function logError(e: unknown, verbose: boolean) {
   if (!verbose) {
