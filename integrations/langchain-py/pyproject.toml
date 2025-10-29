@@ -1,6 +1,6 @@
 [project]
 name = "braintrust-langchain"
-version = "0.1.1"
+version = "0.1.2"
 description = "Integration for LangChain and Braintrust Tracing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -70,6 +70,18 @@ profile = "black"
 line_length = 120
 known_first_party = ["braintrust_langchain"]
 known_third_party = ["braintrust", "langchain"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "I",    # isort
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["braintrust_langchain"]
+known-third-party = ["braintrust", "langchain"]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
