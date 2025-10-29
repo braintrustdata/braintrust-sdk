@@ -7,8 +7,19 @@ import {
   getExtensionFromMediaType,
 } from "../attachment-utils";
 
-// list of json paths to remove from output
-const DENY_OUTPUT_PATHS = ["request.body", "response.body"];
+// list of json paths to remove from output field
+const DENY_OUTPUT_PATHS: string[] = [
+  "request.body",
+  "response.body",
+  "response.headers",
+  "steps[].request.body",
+  "steps[].response.body",
+  "steps[].response.headers",
+];
+
+interface WrapAISDKOptions {
+  denyOutputPaths?: string[];
+}
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
@@ -31,26 +42,29 @@ const DENY_OUTPUT_PATHS = ["request.body", "response.body"];
  * });
  * ```
  */
-export function wrapAISDK(aiSDK: any) {
+export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
   return new Proxy(aiSDK, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
-          return wrapGenerateText(original);
+          return wrapGenerateText(original, options);
         case "streamText":
-          return wrapStreamText(original);
+          return wrapStreamText(original, options);
         case "generateObject":
-          return wrapGenerateObject(original);
+          return wrapGenerateObject(original, options);
         case "streamObject":
-          return wrapStreamObject(original);
+          return wrapStreamObject(original, options);
       }
       return original;
     },
   });
 }
 
-const wrapGenerateText = (generateText: any) => {
+const wrapGenerateText = (
+  generateText: any,
+  options: WrapAISDKOptions = {},
+) => {
   return async function wrappedGenerateText(params: any) {
     return traced(
       async (span) => {
@@ -60,7 +74,7 @@ const wrapGenerateText = (generateText: any) => {
         });
 
         span.log({
-          output: await processOutput(result),
+          output: await processOutput(result, options.denyOutputPaths),
           metrics: extractTokenMetrics(result),
         });
 
@@ -86,7 +100,10 @@ const wrapGenerateText = (generateText: any) => {
   };
 };
 
-const wrapGenerateObject = (generateObject: any) => {
+const wrapGenerateObject = (
+  generateObject: any,
+  options: WrapAISDKOptions = {},
+) => {
   return async function wrappedGenerateObject(params: any) {
     return traced(
       async (span) => {
@@ -96,7 +113,7 @@ const wrapGenerateObject = (generateObject: any) => {
         });
 
         span.log({
-          output: processOutput(result),
+          output: processOutput(result, options.denyOutputPaths),
           metrics: extractTokenMetrics(result),
         });
 
@@ -122,7 +139,7 @@ const wrapGenerateObject = (generateObject: any) => {
   };
 };
 
-const wrapStreamText = (streamText: any) => {
+const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
   return async function wrappedStreamText(params: any) {
     const span = startSpan({
       name: "streamText",
@@ -164,7 +181,7 @@ const wrapStreamText = (streamText: any) => {
             params.onFinish?.(event);
 
             span.log({
-              output: await processOutput(event),
+              output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
             });
 
@@ -230,7 +247,10 @@ const wrapStreamText = (streamText: any) => {
   };
 };
 
-const wrapStreamObject = (streamObject: any) => {
+const wrapStreamObject = (
+  streamObject: any,
+  options: WrapAISDKOptions = {},
+) => {
   return async function wrappedStreamObject(params: any) {
     const span = startSpan({
       name: "streamObject",
@@ -272,7 +292,7 @@ const wrapStreamObject = (streamObject: any) => {
             params.onFinish?.(event);
 
             span.log({
-              output: await processOutput(event),
+              output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
             });
 
@@ -376,7 +396,7 @@ const wrapToolExecute = (tool: any, name: string) => {
             return result;
           },
           {
-            name: `tool.${name}`,
+            name,
             spanAttributes: {
               type: SpanTypeAttribute.TOOL,
             },
@@ -676,7 +696,7 @@ const extractGetterValues = (obj: any): any => {
   return getterValues;
 };
 
-const processOutput = async (output: any) => {
+const processOutput = async (output: any, denyOutputPaths?: string[]) => {
   // Extract getter values before processing
   const getterValues = extractGetterValues(output);
 
@@ -687,7 +707,7 @@ const processOutput = async (output: any) => {
   const merged = { ...processed, ...getterValues };
 
   // Apply omit to the merged result to ensure paths are omitted
-  return omit(merged, DENY_OUTPUT_PATHS);
+  return omit(merged, denyOutputPaths ?? DENY_OUTPUT_PATHS);
 };
 
 const processOutputAttachments = async (output: any) => {
@@ -872,38 +892,78 @@ const deepCopy = (obj: Record<string, unknown>) => {
   return JSON.parse(JSON.stringify(obj));
 };
 
+const parsePath = (path: string): (string | number)[] => {
+  const keys: (string | number)[] = [];
+  let current = "";
+
+  for (let i = 0; i < path.length; i++) {
+    const char = path[i];
+
+    if (char === ".") {
+      if (current) {
+        keys.push(current);
+        current = "";
+      }
+    } else if (char === "[") {
+      if (current) {
+        keys.push(current);
+        current = "";
+      }
+      let bracketContent = "";
+      i++;
+      while (i < path.length && path[i] !== "]") {
+        bracketContent += path[i];
+        i++;
+      }
+      if (bracketContent === "") {
+        keys.push("[]");
+      } else {
+        const index = parseInt(bracketContent, 10);
+        keys.push(isNaN(index) ? bracketContent : index);
+      }
+    } else {
+      current += char;
+    }
+  }
+
+  if (current) {
+    keys.push(current);
+  }
+
+  return keys;
+};
+
+const omitAtPath = (obj: any, keys: (string | number)[]): void => {
+  if (keys.length === 0) return;
+
+  const firstKey = keys[0];
+  const remainingKeys = keys.slice(1);
+
+  if (firstKey === "[]") {
+    if (Array.isArray(obj)) {
+      obj.forEach((item) => {
+        if (remainingKeys.length > 0) {
+          omitAtPath(item, remainingKeys);
+        }
+      });
+    }
+  } else if (remainingKeys.length === 0) {
+    if (obj && typeof obj === "object" && firstKey in obj) {
+      obj[firstKey] = "<omitted>";
+    }
+  } else {
+    if (obj && typeof obj === "object" && firstKey in obj) {
+      omitAtPath(obj[firstKey], remainingKeys);
+    }
+  }
+};
+
 export const omit = (obj: Record<string, unknown>, paths: string[]) => {
   const result = deepCopy(obj);
 
   for (const path of paths) {
-    const keys = path.split(".");
-    let current = result;
-    let pathExists = true;
-
-    // Navigate to the parent of the property to remove
-    for (let i = 0; i < keys.length - 1; i++) {
-      const key = keys[i];
-      if (current && typeof current === "object" && key in current) {
-        current = current[key];
-      } else {
-        // Path doesn't exist, skip to next path
-        pathExists = false;
-        break;
-      }
-    }
-
-    // Remove the final property only if the full path exists
-    if (
-      pathExists &&
-      current &&
-      typeof current === "object" &&
-      keys.length > 0
-    ) {
-      const lastKey = keys[keys.length - 1];
-      if (lastKey in current) {
-        current[lastKey] = "<omitted>";
-      }
-    }
+    const keys = parsePath(path);
+    omitAtPath(result, keys);
   }
 
   return result;

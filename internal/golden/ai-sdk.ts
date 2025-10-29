@@ -219,27 +219,36 @@ async function testTemperatureVariations() {
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
 
-      const configs = [
+      // OpenAI supports both temperature and topP together
+      const openaiConfigs = [
         { temperature: 0.0, topP: 1.0 },
         { temperature: 1.0, topP: 0.9 },
         { temperature: 0.7, topP: 0.95 },
       ];
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
+      // Anthropic only allows one at a time
+      const anthropicConfigs = [
+        { temperature: 0.0 },
+        { temperature: 1.0 },
+        { topP: 0.9 },
+      ];
+
+      for (const [provider, model, configs] of [
+        ["openai", openai("gpt-5-mini"), openaiConfigs],
+        ["anthropic", anthropic("claude-sonnet-4-5"), anthropicConfigs],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
         for (const config of configs) {
-          console.log(
-            `Config: temp=${config.temperature}, top_p=${config.topP}`,
-          );
+          const configStr = `temp=${config.temperature ?? "default"}, top_p=${
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            (config as { topP?: number }).topP ?? "default"
+          }`;
+          console.log(`Config: ${configStr}`);
           const result = await generateText({
             // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             model: model as LanguageModel,
-            temperature: config.temperature,
-            topP: config.topP,
+            ...config,
             prompt: "Say something creative.",
           });
           console.log(result.text);
@@ -413,15 +422,16 @@ async function testShortMaxTokens() {
     async () => {
       console.log("\n=== Test 13: Very Short Max Tokens ===");
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
+      for (const [provider, model, options] of [
+        ["openai", openai("gpt-4o"), {}],
+        ["anthropic", anthropic("claude-sonnet-4-5"), {}],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           prompt: "What is AI?",
+          maxOutputTokens: 16, // ai-sdk requirement for 16 or more
         });
         console.log(result.text?.slice(0, 20) + "...");
         console.log(`Stop reason: ${result.finishReason}`);

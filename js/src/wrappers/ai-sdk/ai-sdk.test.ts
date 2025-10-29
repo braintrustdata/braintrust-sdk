@@ -640,6 +640,138 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     });
   });
 
+  test("omit function handles root-level primitives", () => {
+    const obj = { a: { b: 2 }, c: 3, d: 4 };
+    const result = omit(obj, ["a.b", "c"]);
+
+    expect(result).toEqual({
+      a: { b: "<omitted>" },
+      c: "<omitted>",
+      d: 4,
+    });
+  });
+
+  test("omit function handles arrays", () => {
+    const testObj = {
+      items: [1, 2, 3],
+      nested: {
+        arr: ["a", "b", "c"],
+      },
+    };
+
+    const result = omit(testObj, ["items", "nested.arr"]);
+
+    expect(result.items).toBe("<omitted>");
+    expect(result.nested.arr).toBe("<omitted>");
+  });
+
+  test("omit function handles empty paths array", () => {
+    const testObj = { a: 1, b: 2 };
+    const result = omit(testObj, []);
+
+    expect(result).toEqual({ a: 1, b: 2 });
+  });
+
+  test("omit function handles single-key paths", () => {
+    const testObj = {
+      key1: "value1",
+      key2: { nested: "value2" },
+      key3: "value3",
+    };
+
+    const result = omit(testObj, ["key1", "key3"]);
+
+    expect(result.key1).toBe("<omitted>");
+    expect(result.key2).toEqual({ nested: "value2" });
+    expect(result.key3).toBe("<omitted>");
+  });
+
+  test("omit function handles mixed primitives and objects", () => {
+    const testObj = {
+      string: "text",
+      number: 42,
+      boolean: true,
+      nullValue: null,
+      obj: { nested: "value" },
+      arr: [1, 2, 3],
+    };
+
+    const result = omit(testObj, [
+      "string",
+      "number",
+      "boolean",
+      "nullValue",
+      "obj.nested",
+    ]);
+
+    expect(result.string).toBe("<omitted>");
+    expect(result.number).toBe("<omitted>");
+    expect(result.boolean).toBe("<omitted>");
+    expect(result.nullValue).toBe("<omitted>");
+    expect(result.obj.nested).toBe("<omitted>");
+    expect(result.arr).toEqual([1, 2, 3]);
+  });
+
+  test("omit function handles array wildcards", () => {
+    const testObj = {
+      a: [{ b: 1 }, { b: 2 }, { b: 3 }],
+    };
+
+    const result = omit(testObj, ["a[].b"]);
+
+    expect(result.a).toEqual([
+      { b: "<omitted>" },
+      { b: "<omitted>" },
+      { b: "<omitted>" },
+    ]);
+  });
+
+  test("omit function handles array indices", () => {
+    const testObj = {
+      a: [{ b: 1 }, { b: 2 }, { b: 3 }],
+    };
+
+    const result = omit(testObj, ["a[0].b", "a[2].b"]);
+
+    expect(result.a).toEqual([
+      { b: "<omitted>" },
+      { b: 2 },
+      { b: "<omitted>" },
+    ]);
+  });
+
+  test("omit function handles mixed bracket and dot notation", () => {
+    const testObj = {
+      users: [
+        { name: "Alice", settings: { theme: "dark" } },
+        { name: "Bob", settings: { theme: "light" } },
+      ],
+    };
+
+    const result = omit(testObj, ["users[].settings.theme"]);
+
+    expect(result.users).toEqual([
+      { name: "Alice", settings: { theme: "<omitted>" } },
+      { name: "Bob", settings: { theme: "<omitted>" } },
+    ]);
+  });
+
+  test("omit function handles nested array wildcards", () => {
+    const testObj = {
+      data: [
+        { items: [{ value: 1 }, { value: 2 }] },
+        { items: [{ value: 3 }, { value: 4 }] },
+      ],
+    };
+
+    const result = omit(testObj, ["data[].items[].value"]);
+
+    expect(result.data).toEqual([
+      { items: [{ value: "<omitted>" }, { value: "<omitted>" }] },
+      { items: [{ value: "<omitted>" }, { value: "<omitted>" }] },
+    ]);
+  });
+
   test("ai sdk tool execution with input/output", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -695,7 +827,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (span: any) =>
         span.span_attributes?.type === "tool" &&
-        span.span_attributes?.name === "tool.calculate",
+        span.span_attributes?.name === "calculate",
     );
 
     expect(toolSpan).toBeDefined();
@@ -706,7 +838,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(toolSpanTyped).toMatchObject({
       span_attributes: {
         type: "tool",
-        name: "tool.calculate",
+        name: "calculate",
       },
     });
 
