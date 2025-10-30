@@ -5,7 +5,7 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: ["zod", "@opentelemetry/api", "@opentelemetry/sdk-trace-base"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -19,6 +19,7 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
+    external: ["@opentelemetry/api", "@opentelemetry/sdk-trace-base"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -32,7 +33,13 @@ export default defineConfig([
     entry: ["src/cli.ts"],
     format: ["cjs"],
     outDir: "dist",
-    external: ["esbuild", "prettier", "typescript"],
+    external: [
+      "esbuild",
+      "prettier",
+      "typescript",
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-trace-base",
+    ],
     // CLI doesn't need DTS
     dts: false,
     clean: false,
@@ -41,7 +48,13 @@ export default defineConfig([
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",
-    external: ["esbuild", "prettier", "typescript"],
+    external: [
+      "esbuild",
+      "prettier",
+      "typescript",
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-trace-base",
+    ],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -55,7 +68,13 @@ export default defineConfig([
     entry: ["util/index.ts"],
     format: ["cjs", "esm"],
     outDir: "util/dist",
-    external: ["esbuild", "prettier", "typescript"],
+    external: [
+      "esbuild",
+      "prettier",
+      "typescript",
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-trace-base",
+    ],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {

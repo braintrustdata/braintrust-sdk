@@ -5,11 +5,16 @@ import {
   type ContextParentSpanIds,
   type Span,
 } from "../context-manager";
-import { tryRequireThenImport } from "../import-utils";
+import { importWithTimeout } from "../import-utils";
 
 const OTEL_NOT_INSTALLED_MESSAGE =
   "OpenTelemetry packages are not installed. " +
   "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base";
+
+const OTEL_STILL_LOADING_MESSAGE =
+  "OpenTelemetry packages are still loading (pure ESM environment detected). " +
+  "Please ensure @opentelemetry packages are installed, or add a small delay after import. " +
+  "This only affects pure ESM environments; CommonJS/Node.js loads instantly.";
 
 interface OtelTrace {
   getActiveSpan: () => unknown;
@@ -30,22 +35,75 @@ interface Context {
 
 let otelTrace: OtelTrace | null = null;
 let otelContext: OtelContext | null = null;
-let OTEL_AVAILABLE = false;
+let OTEL_AVAILABLE: boolean | null = null; // null = not checked yet, true = available, false = not available
+let otelInitPromise: Promise<void> | null = null;
 
-(async () => {
-  try {
-    const otelApi = await tryRequireThenImport<{
-      trace: unknown;
-      context: unknown;
-    }>("@opentelemetry/api", 3000, "OpenTelemetry API import timeout");
-    otelTrace = otelApi.trace as unknown as OtelTrace;
-    otelContext = otelApi.context as unknown as OtelContext;
-    OTEL_AVAILABLE = true;
-  } catch {
-    console.warn(OTEL_NOT_INSTALLED_MESSAGE);
-    OTEL_AVAILABLE = false;
+function setOtelContextModules(otelApi: {
+  trace: unknown;
+  context: unknown;
+}): void {
+  otelTrace = otelApi.trace as unknown as OtelTrace;
+  otelContext = otelApi.context as unknown as OtelContext;
+  OTEL_AVAILABLE = true;
+}
+
+function handleOtelContextImportFailure(): void {
+  console.warn(OTEL_NOT_INSTALLED_MESSAGE);
+  OTEL_AVAILABLE = false;
+}
+
+function ensureOtelContextLoadedSync(): void {
+  if (OTEL_AVAILABLE !== null) {
+    return;
   }
-})();
+
+  if (otelInitPromise) {
+    return;
+  }
+
+  // CommonJS/Node.js: Load via synchronous require()
+  if (typeof require !== "undefined") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
+      const otelApi = require("@opentelemetry/api");
+
+      setOtelContextModules(otelApi);
+      return;
+    } catch {
+      handleOtelContextImportFailure();
+      return;
+    }
+  }
+
+  // ESM: async import() for this module
+  otelInitPromise = (async () => {
+    try {
+      const otelApi = await importWithTimeout<{
+        trace: unknown;
+        context: unknown;
+      }>(
+        // @ts-expect-error - Optional dependency
+        () => import("@opentelemetry/api"),
+        3000,
+        "OpenTelemetry API import timeout",
+      );
+
+      setOtelContextModules(otelApi);
+    } catch {
+      handleOtelContextImportFailure();
+    }
+  })();
+}
+
+function checkOtelContextAvailableOrThrow(): void {
+  if (OTEL_AVAILABLE === null) {
+    throw new Error(OTEL_STILL_LOADING_MESSAGE);
+  }
+
+  if (!OTEL_AVAILABLE) {
+    throw new Error(OTEL_NOT_INSTALLED_MESSAGE);
+  }
+}
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -78,13 +136,12 @@ function isValidSpanContext(spanContext: unknown): boolean {
 export class OtelContextManager extends ContextManager {
   constructor() {
     super();
-    if (!OTEL_AVAILABLE) {
-      throw new Error(OTEL_NOT_INSTALLED_MESSAGE);
-    }
+    ensureOtelContextLoadedSync();
+    checkOtelContextAvailableOrThrow();
   }
 
   getParentSpanIds(): ContextParentSpanIds | undefined {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) return undefined;
+    if (!otelTrace || !otelContext || OTEL_AVAILABLE !== true) return undefined;
 
     const currentSpan = otelTrace.getActiveSpan();
     if (!currentSpan || !isOtelSpan(currentSpan)) {
@@ -97,7 +154,7 @@ export class OtelContextManager extends ContextManager {
     }
 
     // Check if this is a wrapped BT span
-    const btSpan = otelContext?.active().getValue?.("braintrust_span");
+    const btSpan = otelContext.active().getValue?.("braintrust_span");
     if (
       btSpan &&
       currentSpan.constructor.name === "NonRecordingSpan" &&
@@ -123,7 +180,7 @@ export class OtelContextManager extends ContextManager {
   }
 
   runInContext<R>(span: Span, callback: () => R): R {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) {
+    if (!otelTrace || !otelContext || OTEL_AVAILABLE !== true) {
       return callback();
     }
 
@@ -169,7 +226,7 @@ export class OtelContextManager extends ContextManager {
   }
 
   getCurrentSpan(): Span | undefined {
-    if (!OTEL_AVAILABLE || !otelContext) return undefined;
+    if (!otelContext || OTEL_AVAILABLE !== true) return undefined;
 
     const btSpan = otelContext.active().getValue?.("braintrust_span");
     if (
