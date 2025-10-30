@@ -5,3 +5,4 @@ packages:
   - "internal/golden"
   - "js/src/wrappers/*"
   - "!js/vendor/**"
+  - "!internal/golden/*"
