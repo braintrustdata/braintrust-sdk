@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import { IDGenerator, getIdGenerator } from "./id-gen";
+import { ContextManager, type ContextParentSpanIds } from "./context-manager";
+import { OtelContextManager } from "./otel/context";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -93,12 +95,6 @@ import {
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "../util/index";
-
-// Context management interfaces
-export interface ContextParentSpanIds {
-  rootSpanId: string;
-  spanParents: string[];
-}
 
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed
@@ -348,12 +344,6 @@ export interface Span extends Exportable {
   kind: "span";
 }
 
-export abstract class ContextManager {
-  abstract getParentSpanIds(): ContextParentSpanIds | undefined;
-  abstract runInContext<R>(span: Span, callback: () => R): R;
-  abstract getCurrentSpan(): Span | undefined;
-}
-
 class BraintrustContextManager extends ContextManager {
   private _currentSpan: IsoAsyncLocalStorage<Span>;
 
@@ -399,9 +389,6 @@ export function getContextManager(): ContextManager {
 
   if (useOtel) {
     try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
       return new OtelContextManager();
     } catch {
       console.warn(

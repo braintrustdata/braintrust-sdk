@@ -7,12 +7,12 @@ describe("OpenTelemetry not installed", () => {
   let otelInstalled = false;
   let originalConsoleWarn: any;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Check if OpenTelemetry is actually installed - do this once for the whole suite
     try {
-      require("@opentelemetry/api");
+      await import("@opentelemetry/api");
       otelInstalled = true;
-    } catch (error) {
+    } catch {
       otelInstalled = false;
     }
 

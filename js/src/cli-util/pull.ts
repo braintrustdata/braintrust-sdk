@@ -19,6 +19,7 @@ import { currentRepo } from "../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "../../util/index";
 import { ProjectNameIdMap, toolFunctionDefinitionSchema } from "../framework2";
 import pluralize from "pluralize";
+import { importWithTimeout } from "../import-utils";
 
 export async function pullCommand(args: PullArgs) {
   await loadCLIEnv(args);
@@ -315,37 +316,11 @@ async function getPrettierModule() {
     } catch {
       try {
         // Fallback to dynamic import with error boundary
-        const importWithTimeout = () => {
-          return new Promise<typeof import("prettier")>((resolve, reject) => {
-            let resolved = false;
-
-            // Set a timeout to prevent infinite hanging
-            const timeoutId = setTimeout(() => {
-              if (!resolved) {
-                resolved = true;
-                reject(new Error("Prettier import timeout"));
-              }
-            }, 3000);
-
-            import("prettier")
-              .then((module) => {
-                if (!resolved) {
-                  resolved = true;
-                  clearTimeout(timeoutId);
-                  resolve(module);
-                }
-              })
-              .catch((error) => {
-                if (!resolved) {
-                  resolved = true;
-                  clearTimeout(timeoutId);
-                  reject(error);
-                }
-              });
-          });
-        };
-
-        prettierModule = await importWithTimeout();
+        prettierModule = await importWithTimeout(
+          () => import("prettier"),
+          3000,
+          "Prettier import timeout",
+        );
       } catch {
         console.warn(
           warning(
