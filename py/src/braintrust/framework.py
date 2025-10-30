@@ -1580,7 +1580,7 @@ def build_local_summary(
     }
     return ExperimentSummary(
         experiment_id=None,
-        experiment_name=evaluator.experiment_name,
+        experiment_name=evaluator.eval_name,
         project_name=evaluator.project_name,
         project_id=None,
         project_url=None,
