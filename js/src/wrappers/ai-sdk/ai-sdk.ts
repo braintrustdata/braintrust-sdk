@@ -6,9 +6,16 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
+  // v3
+  "roundtrips[].request.body",
+  "roundtrips[].response.headers",
+  "rawResponse.headers",
+  "responseMessages",
+  // v5
   "request.body",
   "response.body",
   "response.headers",
@@ -358,6 +365,16 @@ const wrapStreamObject = (
   };
 };
 
+/**
+ * Wraps AI SDK tools with tracing support
+ *
+ * Supports all AI SDK versions (v3-v6):
+ * - Tools created with ai.tool() or tool() helper (have execute function)
+ * - Raw tool definitions with parameters only (v3-v4)
+ * - RSC tools with render function (v3-v4)
+ *
+ * Tools with execute are wrapped with tracing; others are passed through as-is.
+ */
 const wrapTools = (tools: any) => {
   if (!tools) return tools;
 
@@ -379,31 +396,77 @@ const wrapTools = (tools: any) => {
 };
 
 const wrapToolExecute = (tool: any, name: string) => {
+  // Only wrap tools that have an execute function (created with tool() helper)
+  // AI SDK v3-v6: tool({ description, inputSchema/parameters, execute })
   if (
     tool != null &&
     typeof tool === "object" &&
     "execute" in tool &&
     typeof tool.execute === "function"
   ) {
-    return {
-      ...tool,
-      execute: (...args: any[]) =>
-        traced(
-          async (span) => {
-            span.log({ input: args.length === 1 ? args[0] : args });
-            const result = await tool.execute(...args);
-            span.log({ output: result });
-            return result;
-          },
-          {
-            name,
-            spanAttributes: {
-              type: SpanTypeAttribute.TOOL,
-            },
-          },
-        ),
-    };
+    // Use Proxy with full transparency to wrap execute without breaking Zod schemas
+    // The Proxy must implement all traps to be fully transparent for object iteration
+    const originalExecute = tool.execute;
+    return new Proxy(tool, {
+      get(target, prop) {
+        if (prop === "execute") {
+          return (...args: any[]) =>
+            traced(
+              async (span) => {
+                span.log({ input: args.length === 1 ? args[0] : args });
+                const result = await originalExecute.apply(target, args);
+                span.log({ output: result });
+                return result;
+              },
+              {
+                name,
+                spanAttributes: {
+                  type: SpanTypeAttribute.TOOL,
+                },
+              },
+            );
+        }
+        return target[prop];
+      },
+      // Implement additional traps for full transparency
+      has(target, prop) {
+        return prop in target;
+      },
+      ownKeys(target) {
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, prop) {
+        return Object.getOwnPropertyDescriptor(target, prop);
+      },
+      set(target, prop, value) {
+        target[prop] = value;
+        return true;
+      },
+      deleteProperty(target, prop) {
+        delete target[prop];
+        return true;
+      },
+      defineProperty(target, prop, descriptor) {
+        Object.defineProperty(target, prop, descriptor);
+        return true;
+      },
+      getPrototypeOf(target) {
+        return Object.getPrototypeOf(target);
+      },
+      setPrototypeOf(target, proto) {
+        Object.setPrototypeOf(target, proto);
+        return true;
+      },
+      isExtensible(target) {
+        return Object.isExtensible(target);
+      },
+      preventExtensions(target) {
+        Object.preventExtensions(target);
+        return true;
+      },
+    });
   }
+  // Pass through tools without execute (e.g., RSC tools with only render, raw definitions)
   return tool;
 };
 
@@ -425,15 +488,89 @@ const serializeModel = (model: any) => {
   return typeof model === "string" ? model : model?.modelId;
 };
 
+/**
+ * Detects if an object is a Zod schema
+ * Zod schemas have a _def property and are objects
+ */
+const isZodSchema = (value: any): boolean => {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "_def" in value &&
+    typeof value._def === "object"
+  );
+};
+
+/**
+ * Converts a Zod schema to JSON Schema for serialization
+ * This prevents errors when logging tools with Zod schemas
+ */
+const serializeZodSchema = (schema: any): any => {
+  try {
+    return zodToJsonSchema(schema);
+  } catch {
+    // If conversion fails, return a placeholder
+    return {
+      type: "object",
+      description: "Zod schema (conversion failed)",
+    };
+  }
+};
+
+/**
+ * Processes tools to convert Zod schemas to JSON Schema
+ * AI SDK v3-v6 tools can have inputSchema or parameters fields with Zod schemas
+ */
+const processTools = (tools: any): any => {
+  if (!tools || typeof tools !== "object") return tools;
+
+  if (Array.isArray(tools)) {
+    return tools.map(processTool);
+  }
+
+  const processed: Record<string, any> = {};
+  for (const [key, tool] of Object.entries(tools)) {
+    processed[key] = processTool(tool);
+  }
+  return processed;
+};
+
+const processTool = (tool: any): any => {
+  if (!tool || typeof tool !== "object") return tool;
+
+  const processed = { ...tool };
+
+  // Convert inputSchema if it's a Zod schema (v3-v4 with ai.tool())
+  if (isZodSchema(processed.inputSchema)) {
+    processed.inputSchema = serializeZodSchema(processed.inputSchema);
+  }
+
+  // Convert parameters if it's a Zod schema (v3-v4 raw definitions)
+  if (isZodSchema(processed.parameters)) {
+    processed.parameters = serializeZodSchema(processed.parameters);
+  }
+
+  // Remove execute function from logs (not serializable and not useful)
+  if ("execute" in processed) {
+    processed.execute = "[Function]";
+  }
+
+  // Remove render function from logs (not serializable and not useful)
+  if ("render" in processed) {
+    processed.render = "[Function]";
+  }
+
+  return processed;
+};
+
 const processInputAttachments = (input: any) => {
   if (!input) return input;
 
+  const processed: any = { ...input };
+
   // Process messages array if present
   if (input.messages && Array.isArray(input.messages)) {
-    return {
-      ...input,
-      messages: input.messages.map(processMessage),
-    };
+    processed.messages = input.messages.map(processMessage);
   }
 
   // Process prompt if it's an object with potential attachments
@@ -442,13 +579,15 @@ const processInputAttachments = (input: any) => {
     typeof input.prompt === "object" &&
     !Array.isArray(input.prompt)
   ) {
-    return {
-      ...input,
-      prompt: processPromptContent(input.prompt),
-    };
+    processed.prompt = processPromptContent(input.prompt);
   }
 
-  return input;
+  // Process tools to convert Zod schemas to JSON Schema
+  if (input.tools) {
+    processed.tools = processTools(input.tools);
+  }
+
+  return processed;
 };
 
 const processMessage = (message: any): any => {

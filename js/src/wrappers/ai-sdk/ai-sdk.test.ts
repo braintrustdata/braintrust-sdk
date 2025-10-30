@@ -132,6 +132,50 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     }
   });
 
+  test("braintrust fingerprint metadata", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const model = openai(TEST_MODEL);
+
+    await wrappedAI.generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxTokens: 10,
+    });
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+
+    // Verify braintrust fingerprint metadata
+    expect(span.metadata.braintrust).toBeDefined();
+    expect(span.metadata.braintrust).toMatchObject({
+      integration_name: "ai-sdk",
+      sdk_language: "typescript",
+      sdk_version: expect.any(String),
+      dependencies: expect.any(Object),
+    });
+
+    // Verify dependencies is an object (may be empty if packages not installed)
+    expect(typeof span.metadata.braintrust.dependencies).toBe("object");
+
+    // If ai package is installed, it should be in dependencies
+    if (Object.keys(span.metadata.braintrust.dependencies).length > 0) {
+      // At least one AI SDK package should be detected
+      const depKeys = Object.keys(span.metadata.braintrust.dependencies);
+      const hasAiSdkPackage = depKeys.some(
+        (key) => key === "ai" || key.startsWith("@ai-sdk/"),
+      );
+      expect(hasAiSdkPackage).toBe(true);
+    }
+  });
+
   test("ai sdk image input", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
