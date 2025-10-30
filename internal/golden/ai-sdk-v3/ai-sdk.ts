@@ -1,4 +1,4 @@
-import { wrapAISDK, initLogger, traced, currentLogger } from "braintrust";
+import { wrapAISDK, initLogger, traced } from "braintrust";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as ai from "ai";
@@ -249,22 +249,13 @@ async function testTemperatureVariations() {
 
       for (const [provider, model, configs] of [
         ["openai", openai("gpt-4o-mini"), openaiConfigs],
-        ["anthropic", anthropic("claude-sonnet-4-5"), anthropicConfigs],
+        [
+          "anthropic",
+          anthropic("claude-3-7-sonnet-20250219"),
+          anthropicConfigs,
+        ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        if (provider === "anthropic") {
-          traced((span) => {
-            span.log({
-              span_attributes: {
-                name: "anthropic",
-              },
-              output:
-                "claude-sonnet-4-5 is not supported by v3 and sonnet-3-5 is past EOL",
-            });
-          });
-          continue;
-        }
 
         for (const config of configs) {
           const configStr = `temp=${config.temperature ?? "default"}, top_p=${

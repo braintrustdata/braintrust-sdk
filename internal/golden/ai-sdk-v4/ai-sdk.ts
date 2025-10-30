@@ -196,7 +196,7 @@ async function testDocumentInput() {
                 {
                   type: "file" as const,
                   data: base64Pdf,
-                  mediaType: "application/pdf",
+                  mimeType: "application/pdf",
                   filename: "test-document.pdf",
                 },
                 {
@@ -222,22 +222,31 @@ async function testTemperatureVariations() {
       console.log("\n=== Test 7: Temperature Variations ===");
 
       // OpenAI supports both temperature and topP together
-      const openaiConfigs = [
+      type Config = {
+        temperature?: number;
+        topP?: number;
+      };
+
+      const openaiConfigs: Config[] = [
         { temperature: 0.0, topP: 1.0 },
         { temperature: 1.0, topP: 0.9 },
         { temperature: 0.7, topP: 0.95 },
       ];
 
       // Anthropic only allows one at a time
-      const anthropicConfigs = [
-        { temperature: 0.0 },
-        { temperature: 1.0 },
+      const anthropicConfigs: Config[] = [
+        { topP: 1.0 },
         { topP: 0.9 },
+        { topP: 0.95 },
       ];
 
       for (const [provider, model, configs] of [
         ["openai", openai("gpt-5-mini"), openaiConfigs],
-        ["anthropic", anthropic("claude-sonnet-4-5"), anthropicConfigs],
+        [
+          "anthropic",
+          anthropic("claude-3-7-sonnet-20250219"),
+          anthropicConfigs,
+        ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -269,7 +278,7 @@ async function testStopSequences() {
       console.log("\n=== Test 8: Stop Sequences ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
+        ["openai", openai("gpt-4o-mini")],
         ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -433,7 +442,7 @@ async function testShortMaxTokens() {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           prompt: "What is AI?",
-          maxOutputTokens: 16, // ai-sdk requirement for 16 or more
+          maxTokens: 16, // ai-sdk requirement for 16 or more
         });
         console.log(result.text?.slice(0, 20) + "...");
         console.log(`Stop reason: ${result.finishReason}`);
@@ -466,7 +475,7 @@ async function testToolUse() {
       // Define tool with proper typing
       const weatherTool = ai.tool({
         description: "Get the current weather for a location",
-        inputSchema: z.object({
+        parameters: z.object({
           location: z.string(),
           unit: z.enum(["celsius", "fahrenheit"]).optional(),
         }),
@@ -478,7 +487,7 @@ async function testToolUse() {
       });
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
+        ["openai", openai("gpt-4o-mini")],
         ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -521,9 +530,9 @@ async function testToolUseWithResult() {
       console.log("\n=== Test 15: Tool Use With Result ===");
 
       // Define tool with proper typing
-      const calculateTool = {
+      const calculateTool = ai.tool({
         description: "Perform a mathematical calculation",
-        inputSchema: z.object({
+        parameters: z.object({
           operation: z.enum(["add", "subtract", "multiply", "divide"]),
           a: z.number(),
           b: z.number(),
@@ -546,10 +555,10 @@ async function testToolUseWithResult() {
               return "0";
           }
         },
-      };
+      });
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
+        ["openai", openai("gpt-4o-mini")],
         ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
