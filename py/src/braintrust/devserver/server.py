@@ -2,7 +2,6 @@ import asyncio
 import json
 import sys
 import textwrap
-import traceback
 from typing import Any, Optional, Union
 
 try:
@@ -34,7 +33,7 @@ from .auth import AuthorizationMiddleware
 from .cache import cached_login
 from .cors import create_cors_middleware
 from .dataset import get_dataset
-from .eval_hooks import SSEQueue, serialize_sse_event
+from .eval_hooks import SSEQueue
 from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
@@ -135,6 +134,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     try:
         dataset = await get_dataset(state, eval_data["data"])
     except Exception as e:
+        print(f"Error loading dataset: {e}", file=sys.stderr)
         return JSONResponse({"error": f"Failed to load dataset: {str(e)}"}, status_code=400)
 
     # Validate parameters if provided
@@ -190,7 +190,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     try:
         eval_task = asyncio.create_task(
             EvalAsync(
-                name="worker thread",
+                name=eval_data["name"],
                 **{
                     **eval_kwargs,
                     "state": state,
@@ -214,22 +214,13 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
 
             async def event_generator():
                 """Generate SSE events from the queue."""
-                # Start event
-                yield serialize_sse_event(
-                    "start",
-                    {
-                        "experiment_name": evaluator.experiment_name,
-                        "project_id": getattr(evaluator, "project_id", None),
-                    },
-                )
-
                 # Create a task to run the eval and signal completion
                 async def run_and_complete():
                     try:
                         result = await eval_task
-                        # Send summary event
-                        await sse_queue.put_event("summary", result.summary)
+                        await sse_queue.put_event("summary", format_summary(result.summary))
                     except Exception as e:
+                        print(f"Error running eval: {e}", file=sys.stderr)
                         await sse_queue.put_event("error", str(e))
                     finally:
                         # Send done event and close the queue
@@ -260,16 +251,22 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
             # Return the summary as JSON
             return JSONResponse(format_summary(result.summary))
     except Exception as e:
-        print(traceback.format_exc())
+        print(f"Failed to run evaluation: {e}", file=sys.stderr)
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
 
 
-def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None):
+def create_app(evaluators: list[Evaluator[Any, Any]], org_name: Optional[str] = None):
+    """Create and configure the Starlette app for the dev server.
+
+    Args:
+        evaluators: List of evaluators to make available
+        org_name: Optional organization name to restrict access to
+
+    Returns:
+        Configured Starlette app
+    """
     global _all_evaluators
     _all_evaluators = {evaluator.eval_name: evaluator for evaluator in evaluators}
-
-    print(f"Starting dev server on http://{host}:{port}")
-    print(f"Loaded {len(_all_evaluators)} evaluator(s): {list(_all_evaluators.keys())}")
 
     routes = [
         Route("/", endpoint=index),
@@ -283,6 +280,22 @@ def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost
     app.add_middleware(AuthorizationMiddleware)
     app.add_middleware(create_cors_middleware())
 
+    return app
+
+
+def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None):
+    """Start the dev server.
+
+    Args:
+        evaluators: List of evaluators to make available
+        host: Host to bind to
+        port: Port to bind to
+        org_name: Optional organization name to restrict access to
+    """
+    print(f"Starting dev server on http://{host}:{port}")
+    print(f"Loaded {len(evaluators)} evaluator(s): {[e.eval_name for e in evaluators]}")
+
+    app = create_app(evaluators, org_name=org_name)
     uvicorn.run(app, host=host, port=port)
 
 
@@ -312,5 +325,5 @@ def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalSco
 
 
 def format_summary(summary: ExperimentSummary) -> dict:
-    """Format the summary for JSON serialization."""
+    """Format the summary for JSON serialization with camelCase keys."""
     return {snake_to_camel(k): v for (k, v) in summary.as_dict().items()}
