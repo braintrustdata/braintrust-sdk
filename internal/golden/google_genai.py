@@ -266,15 +266,15 @@ def test_tool_use():
         print("\n=== Test 16: Tool Use ===")
 
         # Define a function for getting weather
-        def get_weather(location: str, unit: str = "celsius") -> str:
+        def get_weather(city_and_state: str, unit: str = "celsius") -> str:
             """Get the current weather for a location.
 
             Args:
-                location: The city and state, e.g. San Francisco, CA
+                city_and_state: The city and state, e.g. San Francisco, CA
                 unit: The unit of temperature (celsius or fahrenheit)
             """
             # Simulate weather API response
-            return f"22 degrees {unit} and sunny in {location}"
+            return f"22 degrees {unit} and sunny in {city_and_state}"
 
         response = client.models.generate_content(
             model="gemini-2.0-flash-001",
