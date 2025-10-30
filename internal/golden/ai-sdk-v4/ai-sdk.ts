@@ -1,5 +1,5 @@
 import { wrapAISDK, initLogger, traced } from "braintrust";
-import { openai, OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
+import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as ai from "ai";
 import { z } from "zod";
@@ -7,7 +7,9 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import type { LanguageModel } from "ai";
 
-const FIXTURES_DIR = join(__dirname, "fixtures");
+const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+
+console.log("Running ai sdk version:", require("ai/package.json").version);
 
 initLogger({
   projectName: "golden-ts-ai-sdk",
@@ -597,7 +599,7 @@ async function testReasoning() {
               openai: {
                 reasoningEffort: "high",
                 reasoningSummary: "detailed",
-              } satisfies OpenAIResponsesProviderOptions,
+              },
             },
           },
         ],
