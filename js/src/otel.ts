@@ -1,6 +1,7 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
 import { SpanComponentsV4 } from "../util/span_identifier_v4";
 import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
+import { importWithTimeout } from "./import-utils";
 
 interface OtelContext {
   getValue?: (key: string) => unknown;
@@ -32,19 +33,68 @@ let otelApi: OtelApi | null = null;
 let otelSdk: {
   BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
 } | null = null;
+let otelExporter: {
+  OTLPTraceExporter: new (config: unknown) => SpanExporter;
+} | null = null;
 let OTEL_AVAILABLE = false;
 
-try {
-  otelApi = require("@opentelemetry/api");
-  otelSdk = require("@opentelemetry/sdk-trace-base");
-  OTEL_AVAILABLE = true;
-} catch {
-  console.warn(
-    "OpenTelemetry packages are not installed. " +
-      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-  );
-  OTEL_AVAILABLE = false;
+async function loadOtelExporter() {
+  if (otelExporter) {
+    return;
+  }
+
+  try {
+    const exporterModule = await importWithTimeout(
+      () => import("@opentelemetry/exporter-trace-otlp-http"),
+      3000,
+      "OpenTelemetry OTLP exporter import timeout",
+    );
+    otelExporter = {
+      OTLPTraceExporter: exporterModule.OTLPTraceExporter as {
+        new (config: unknown): SpanExporter;
+      },
+    };
+  } catch {
+    // Exporter failed to load
+  }
 }
+
+(async () => {
+  try {
+    const apiModule = await importWithTimeout(
+      () => import("@opentelemetry/api"),
+      3000,
+      "OpenTelemetry API import timeout",
+    );
+    const sdkModule = await importWithTimeout(
+      () => import("@opentelemetry/sdk-trace-base"),
+      3000,
+      "OpenTelemetry SDK import timeout",
+    );
+
+    otelApi = {
+      context: apiModule.context as unknown as OtelApi["context"],
+      trace: apiModule.trace as unknown as OtelApi["trace"],
+      TraceFlags: apiModule.TraceFlags,
+    };
+    otelSdk = {
+      BatchSpanProcessor: sdkModule.BatchSpanProcessor as unknown as {
+        new (exporter: unknown): SpanProcessor;
+      },
+    };
+
+    OTEL_AVAILABLE = true;
+
+    // Load OTLP exporter if available
+    await loadOtelExporter();
+  } catch {
+    console.warn(
+      "OpenTelemetry packages are not installed. " +
+        "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+    );
+    OTEL_AVAILABLE = false;
+  }
+})();
 
 // Type definitions that don't depend on OpenTelemetry being installed
 interface Context {
@@ -70,6 +120,15 @@ interface Span extends ReadableSpan {
   end(): void;
   setAttributes(attributes: Record<string, any>): void;
   setStatus(status: { code: number; message?: string }): void;
+}
+
+interface SpanExporter {
+  export(
+    spans: ReadableSpan[],
+    resultCallback: (result: unknown) => void,
+  ): void;
+  shutdown(): Promise<void>;
+  forceFlush?(): Promise<void>;
 }
 
 const FILTER_PREFIXES = [
@@ -324,11 +383,13 @@ export class BraintrustSpanProcessor {
     }
 
     // Create OTLP exporter
-    let exporter: unknown;
+    let exporter: SpanExporter;
     try {
-      const {
-        OTLPTraceExporter,
-      } = require("@opentelemetry/exporter-trace-otlp-http");
+      if (!otelExporter) {
+        throw new Error("OTLP exporter not loaded.");
+      }
+
+      const { OTLPTraceExporter } = otelExporter;
 
       const headers = {
         Authorization: `Bearer ${apiKey}`,
@@ -337,7 +398,7 @@ export class BraintrustSpanProcessor {
         ...options.headers,
       };
 
-      const baseExporter = new OTLPTraceExporter({
+      const baseExporter: SpanExporter = new OTLPTraceExporter({
         url: new URL("otel/v1/traces", apiUrl).href,
         headers,
       });

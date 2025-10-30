@@ -4,7 +4,8 @@ import {
   ContextManager,
   type ContextParentSpanIds,
   type Span,
-} from "../logger";
+} from "../context-manager";
+import { importWithTimeout } from "../import-utils";
 
 const OTEL_NOT_INSTALLED_MESSAGE =
   "OpenTelemetry packages are not installed. " +
@@ -31,15 +32,21 @@ let otelTrace: OtelTrace | null = null;
 let otelContext: OtelContext | null = null;
 let OTEL_AVAILABLE = false;
 
-try {
-  const otelApi = require("@opentelemetry/api");
-  otelTrace = otelApi.trace;
-  otelContext = otelApi.context;
-  OTEL_AVAILABLE = true;
-} catch {
-  console.warn(OTEL_NOT_INSTALLED_MESSAGE);
-  OTEL_AVAILABLE = false;
-}
+(async () => {
+  try {
+    const otelApi = await importWithTimeout(
+      () => import("@opentelemetry/api"),
+      3000,
+      "OpenTelemetry API import timeout",
+    );
+    otelTrace = otelApi.trace as unknown as OtelTrace;
+    otelContext = otelApi.context as unknown as OtelContext;
+    OTEL_AVAILABLE = true;
+  } catch {
+    console.warn(OTEL_NOT_INSTALLED_MESSAGE);
+    OTEL_AVAILABLE = false;
+  }
+})();
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
