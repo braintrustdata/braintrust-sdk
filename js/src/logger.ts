@@ -3866,7 +3866,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
-  return state.contextManager.getCurrentSpan() ?? NOOP_SPAN;
+  return (state.contextManager.getCurrentSpan() ?? NOOP_SPAN) as Span;
 }
 
 /**

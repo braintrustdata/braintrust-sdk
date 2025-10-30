@@ -1,7 +1,7 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
 import { SpanComponentsV4 } from "../util/span_identifier_v4";
 import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
-import { importWithTimeout } from "./import-utils";
+import { tryRequireThenImport } from "./import-utils";
 
 interface OtelContext {
   getValue?: (key: string) => unknown;
@@ -44,8 +44,10 @@ async function loadOtelExporter() {
   }
 
   try {
-    const exporterModule = await importWithTimeout(
-      () => import("@opentelemetry/exporter-trace-otlp-http"),
+    const exporterModule = await tryRequireThenImport<{
+      OTLPTraceExporter: new (config: unknown) => SpanExporter;
+    }>(
+      "@opentelemetry/exporter-trace-otlp-http",
       3000,
       "OpenTelemetry OTLP exporter import timeout",
     );
@@ -61,13 +63,15 @@ async function loadOtelExporter() {
 
 (async () => {
   try {
-    const apiModule = await importWithTimeout(
-      () => import("@opentelemetry/api"),
-      3000,
-      "OpenTelemetry API import timeout",
-    );
-    const sdkModule = await importWithTimeout(
-      () => import("@opentelemetry/sdk-trace-base"),
+    const apiModule = await tryRequireThenImport<{
+      context: unknown;
+      trace: unknown;
+      TraceFlags?: { SAMPLED: number };
+    }>("@opentelemetry/api", 3000, "OpenTelemetry API import timeout");
+    const sdkModule = await tryRequireThenImport<{
+      BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
+    }>(
+      "@opentelemetry/sdk-trace-base",
       3000,
       "OpenTelemetry SDK import timeout",
     );

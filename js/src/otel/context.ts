@@ -5,7 +5,7 @@ import {
   type ContextParentSpanIds,
   type Span,
 } from "../context-manager";
-import { importWithTimeout } from "../import-utils";
+import { tryRequireThenImport } from "../import-utils";
 
 const OTEL_NOT_INSTALLED_MESSAGE =
   "OpenTelemetry packages are not installed. " +
@@ -34,11 +34,10 @@ let OTEL_AVAILABLE = false;
 
 (async () => {
   try {
-    const otelApi = await importWithTimeout(
-      () => import("@opentelemetry/api"),
-      3000,
-      "OpenTelemetry API import timeout",
-    );
+    const otelApi = await tryRequireThenImport<{
+      trace: unknown;
+      context: unknown;
+    }>("@opentelemetry/api", 3000, "OpenTelemetry API import timeout");
     otelTrace = otelApi.trace as unknown as OtelTrace;
     otelContext = otelApi.context as unknown as OtelContext;
     OTEL_AVAILABLE = true;
