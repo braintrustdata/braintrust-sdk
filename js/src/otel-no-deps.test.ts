@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
+import { tryRequireThenImport } from "./import-utils";
 
 // This test file specifically tests the behavior when OpenTelemetry is not installed.
 // It should run as part of our core / default test suite.
@@ -7,10 +8,10 @@ describe("OpenTelemetry not installed", () => {
   let otelInstalled = false;
   let originalConsoleWarn: any;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     // Check if OpenTelemetry is actually installed - do this once for the whole suite
     try {
-      await import("@opentelemetry/api");
+      tryRequireThenImport("@opentelemetry/api");
       otelInstalled = true;
     } catch {
       otelInstalled = false;
