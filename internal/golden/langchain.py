@@ -353,14 +353,14 @@ def test_tool_use():
     with start_span(name="test_tool_use"):
 
         @tool
-        def get_weather(location: str, unit: str = "celsius") -> str:
+        def get_weather(city_and_state: str, unit: str = "celsius") -> str:
             """Get the current weather for a location.
 
             Args:
-                location: The city and state, e.g. San Francisco, CA
+                city_and_state: The city and state, e.g. San Francisco, CA
                 unit: The unit of temperature (celsius or fahrenheit)
             """
-            return f"22 degrees {unit} and sunny in {location}"
+            return f"22 degrees {unit} and sunny in {city_and_state}"
 
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
