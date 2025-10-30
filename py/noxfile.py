@@ -175,6 +175,15 @@ def test_braintrust_core(session):
 
 
 @nox.session()
+def test_cli(session):
+    """Test CLI/devserver with starlette installed."""
+    _install_test_deps(session)
+    session.install(".[cli]")
+    session.install("httpx")  # Required for starlette.testclient
+    _run_tests(session, "braintrust/devserver/test_server_integration.py")
+
+
+@nox.session()
 def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)

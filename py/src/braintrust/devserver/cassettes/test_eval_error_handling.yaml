@@ -1,0 +1,34 @@
+interactions:
+- request:
+    body: '{"name":"non-existent-eval","stream":false}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '43'
+      content-type:
+      - application/json
+      host:
+      - testserver
+      user-agent:
+      - testclient
+      x-bt-org-name:
+      - matt-test-org
+    method: POST
+    uri: http://testserver/eval
+  response:
+    body:
+      string: '{"error":"Evaluator ''non-existent-eval'' not found"}'
+    headers:
+      content-length:
+      - '51'
+      content-type:
+      - application/json
+    status:
+      code: 404
+      message: Not Found
+version: 1
