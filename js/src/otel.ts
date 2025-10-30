@@ -1,7 +1,7 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
 import { SpanComponentsV4 } from "../util/span_identifier_v4";
 import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
-import { tryRequireThenImport } from "./import-utils";
+import { importWithTimeout } from "./import-utils";
 
 interface OtelContext {
   getValue?: (key: string) => unknown;
@@ -36,69 +36,200 @@ let otelSdk: {
 let otelExporter: {
   OTLPTraceExporter: new (config: unknown) => SpanExporter;
 } | null = null;
-let OTEL_AVAILABLE = false;
+let OTEL_AVAILABLE: boolean | null = null; // null = not checked yet, true = available, false = not available
+let otelInitPromise: Promise<void> | null = null;
+let otelExporterInitPromise: Promise<void> | null = null;
 
-async function loadOtelExporter() {
-  if (otelExporter) {
-    return;
+const OTEL_NOT_INSTALLED_MESSAGE =
+  "OpenTelemetry packages are not installed. " +
+  "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions";
+
+const OTEL_STILL_LOADING_MESSAGE =
+  "OpenTelemetry packages are still loading (pure ESM environment detected). " +
+  "Either await otel.waitForInitialization() before constructing, " +
+  "or add a small delay after import to allow async loading to complete. " +
+  "This only affects pure ESM environments; CommonJS/Node.js loads instantly.";
+
+function setOtelModules(
+  apiModule: {
+    context: unknown;
+    trace: unknown;
+    TraceFlags?: { SAMPLED: number };
+  },
+  sdkModule: { BatchSpanProcessor: new (exporter: unknown) => SpanProcessor },
+): void {
+  otelApi = {
+    context: apiModule.context as unknown as OtelApi["context"],
+    trace: apiModule.trace as unknown as OtelApi["trace"],
+    TraceFlags: apiModule.TraceFlags,
+  };
+  otelSdk = {
+    BatchSpanProcessor: sdkModule.BatchSpanProcessor as unknown as {
+      new (exporter: unknown): SpanProcessor;
+    },
+  };
+  OTEL_AVAILABLE = true;
+}
+
+function handleOtelImportFailure(): void {
+  console.warn(OTEL_NOT_INSTALLED_MESSAGE);
+  OTEL_AVAILABLE = false;
+}
+
+function checkOtelAvailableOrThrow(): void {
+  if (OTEL_AVAILABLE === null) {
+    throw new Error(OTEL_STILL_LOADING_MESSAGE);
   }
 
-  try {
-    const exporterModule = await tryRequireThenImport<{
-      OTLPTraceExporter: new (config: unknown) => SpanExporter;
-    }>(
-      "@opentelemetry/exporter-trace-otlp-http",
-      3000,
-      "OpenTelemetry OTLP exporter import timeout",
-    );
-    otelExporter = {
-      OTLPTraceExporter: exporterModule.OTLPTraceExporter as {
-        new (config: unknown): SpanExporter;
-      },
-    };
-  } catch {
-    // Exporter failed to load
+  if (!OTEL_AVAILABLE) {
+    throw new Error(OTEL_NOT_INSTALLED_MESSAGE);
   }
 }
 
-(async () => {
-  try {
-    const apiModule = await tryRequireThenImport<{
-      context: unknown;
-      trace: unknown;
-      TraceFlags?: { SAMPLED: number };
-    }>("@opentelemetry/api", 3000, "OpenTelemetry API import timeout");
-    const sdkModule = await tryRequireThenImport<{
-      BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
-    }>(
-      "@opentelemetry/sdk-trace-base",
-      3000,
-      "OpenTelemetry SDK import timeout",
-    );
-
-    otelApi = {
-      context: apiModule.context as unknown as OtelApi["context"],
-      trace: apiModule.trace as unknown as OtelApi["trace"],
-      TraceFlags: apiModule.TraceFlags,
-    };
-    otelSdk = {
-      BatchSpanProcessor: sdkModule.BatchSpanProcessor as unknown as {
-        new (exporter: unknown): SpanProcessor;
-      },
-    };
-
-    OTEL_AVAILABLE = true;
-
-    // Load OTLP exporter if available
-    await loadOtelExporter();
-  } catch {
-    console.warn(
-      "OpenTelemetry packages are not installed. " +
-        "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-    );
-    OTEL_AVAILABLE = false;
+export function ensureOtelLoadedSync(): void {
+  if (OTEL_AVAILABLE !== null) {
+    return;
   }
-})();
+
+  if (otelInitPromise) {
+    return;
+  }
+  // CommonJS/Node.js: Load via synchronous require()
+  if (typeof require !== "undefined") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
+      const apiModule = require("@opentelemetry/api");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
+      const sdkModule = require("@opentelemetry/sdk-trace-base");
+
+      setOtelModules(apiModule, sdkModule);
+      return;
+    } catch {
+      handleOtelImportFailure();
+      return;
+    }
+  }
+
+  //ESM: async import() for this module
+  otelInitPromise = (async () => {
+    try {
+      const apiModule = await importWithTimeout<{
+        context: unknown;
+        trace: unknown;
+        TraceFlags?: { SAMPLED: number };
+      }>(
+        () => import("@opentelemetry/api"),
+        3000,
+        "OpenTelemetry API import timeout",
+      );
+      const sdkModule = await importWithTimeout<{
+        BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
+      }>(
+        () => import("@opentelemetry/sdk-trace-base"),
+        3000,
+        "OpenTelemetry SDK import timeout",
+      );
+
+      setOtelModules(apiModule, sdkModule);
+    } catch {
+      handleOtelImportFailure();
+    }
+  })();
+}
+
+function ensureOtelExporterLoadedSync(): void {
+  ensureOtelLoadedSync();
+  checkOtelAvailableOrThrow();
+
+  if (otelExporter || otelExporterInitPromise) {
+    return;
+  }
+
+  // CommonJS/Node.js
+  if (typeof require !== "undefined") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
+      const exporterModule = require("@opentelemetry/exporter-trace-otlp-http");
+      otelExporter = {
+        OTLPTraceExporter: exporterModule.OTLPTraceExporter as {
+          new (config: unknown): SpanExporter;
+        },
+      };
+      return;
+    } catch {
+      // optional exporter not installed
+    }
+  }
+
+  // ESM environment
+  otelExporterInitPromise = (async () => {
+    try {
+      const exporterModule = await importWithTimeout<{
+        OTLPTraceExporter: new (config: unknown) => SpanExporter;
+      }>(
+        () => import("@opentelemetry/exporter-trace-otlp-http"),
+        3000,
+        "OpenTelemetry OTLP exporter import timeout",
+      );
+      otelExporter = {
+        OTLPTraceExporter: exporterModule.OTLPTraceExporter as {
+          new (config: unknown): SpanExporter;
+        },
+      };
+    } catch {
+      // optional exporter not installed
+    }
+  })();
+
+  // Return immediately - async loading will complete in background
+}
+
+/**
+ * Async lazy initialization of OpenTelemetry packages.
+ * This is used by the async helper functions and factory methods.
+ */
+async function ensureOtelLoadedAsync(): Promise<void> {
+  // If already loaded (success or failure), return immediately
+  if (OTEL_AVAILABLE !== null) {
+    return;
+  }
+
+  // If currently loading, wait for that to finish
+  if (otelInitPromise) {
+    await otelInitPromise;
+    return;
+  }
+
+  // Start loading
+  otelInitPromise = (async () => {
+    try {
+      const apiModule = await importWithTimeout<{
+        context: unknown;
+        trace: unknown;
+        TraceFlags?: { SAMPLED: number };
+      }>(
+        // @ts-expect-error - Optional dependency
+        () => import("@opentelemetry/api"),
+        3000,
+        "OpenTelemetry API import timeout",
+      );
+      const sdkModule = await importWithTimeout<{
+        BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
+      }>(
+        // @ts-expect-error - Optional dependency
+        () => import("@opentelemetry/sdk-trace-base"),
+        3000,
+        "OpenTelemetry SDK import timeout",
+      );
+
+      setOtelModules(apiModule, sdkModule);
+    } catch (error) {
+      handleOtelImportFailure();
+    }
+  })();
+
+  await otelInitPromise;
+}
 
 // Type definitions that don't depend on OpenTelemetry being installed
 interface Context {
@@ -167,12 +298,8 @@ export type CustomSpanFilter = (
  */
 export class AISpanProcessor {
   private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
+    ensureOtelLoadedSync();
+    checkOtelAvailableOrThrow();
   }
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
@@ -341,19 +468,11 @@ interface BraintrustSpanProcessorOptions {
  * ```
  */
 export class BraintrustSpanProcessor {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustSpanProcessor.checkOtelAvailable();
+    ensureOtelExporterLoadedSync();
 
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
@@ -594,9 +713,9 @@ export class BraintrustSpanProcessor {
  * ```
  */
 export function otelContextFromSpanExport(exportStr: string): unknown {
-  if (!OTEL_AVAILABLE || !otelApi) {
-    // Gracefully return undefined when OTEL is not installed
-    // This allows code to work without OTEL dependencies
+  ensureOtelLoadedSync();
+
+  if (!otelApi || OTEL_AVAILABLE !== true) {
     return undefined;
   }
 
@@ -747,21 +866,12 @@ export function getBraintrustParent(
  * ```
  */
 export class BraintrustExporter {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
-
   private readonly processor: BraintrustSpanProcessor;
   private readonly spans: ReadableSpan[] = [];
   private readonly callbacks: Array<(result: any) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustExporter.checkOtelAvailable();
+    ensureOtelExporterLoadedSync();
 
     // Use BraintrustSpanProcessor under the hood
     this.processor = new BraintrustSpanProcessor(options);
@@ -834,9 +944,11 @@ export class BraintrustExporter {
  * ```
  */
 function addParentToBaggage(parent: string, ctx?: Context): Context {
-  if (!OTEL_AVAILABLE || !otelApi) {
+  ensureOtelLoadedSync();
+
+  if (!otelApi || OTEL_AVAILABLE !== true) {
     console.error("OpenTelemetry not available");
-    return (ctx || otelApi?.context.active()) as Context;
+    return ctx as Context;
   }
 
   try {
@@ -934,7 +1046,9 @@ function addSpanParentToBaggage(
 function parentFromHeaders(
   headers: Record<string, string>,
 ): string | undefined {
-  if (!OTEL_AVAILABLE || !otelApi) {
+  ensureOtelLoadedSync();
+
+  if (!otelApi || OTEL_AVAILABLE !== true) {
     console.error("OpenTelemetry not available");
     return undefined;
   }
@@ -1091,4 +1205,8 @@ export const otel = {
   addParentToBaggage,
   addSpanParentToBaggage,
   parentFromHeaders,
+};
+
+export const _exportsForTestingOnly = {
+  ensureOtelLoadedSync,
 };
