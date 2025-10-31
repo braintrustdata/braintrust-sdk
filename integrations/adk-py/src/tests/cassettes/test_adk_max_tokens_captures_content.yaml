@@ -1,0 +1,66 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "Tell me a long story about a lighthouse."}],
+      "role": "user"}], "systemInstruction": {"parts": [{"text": "You are a creative
+      storyteller.\n\nYou are an agent. Your internal name is \"creative_agent\"."}],
+      "role": "user"}, "generationConfig": {"temperature": 0.7, "maxOutputTokens":
+      50}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '320'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+      x-goog-api-client:
+      - google-genai-sdk/1.31.0 gl-python/3.9.21 google-adk/1.14.1 gl-python/3.9.21
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61STU/bQBC9+1eM9sIliUJCPuiN8qGiQkHgtkgFoUl2bC9sdt3dSVMT5b93bePg
+        5FzLsnZmnufNvLfrCEDM0UglkcmLT/ArZADW1besWcNkOBSaVEjm6PgDWz/r1jlAmP6WP4mbVyw6
+        4IlZEyjTgRnNcekJOFMewssZgWfrCrBJFfxU0q4OPFypNOMOhNlAcYjxHcYZluGMyMAqNMnJkQRr
+        6k6ouYCVMtJDYh2kZMghK2t879E8mnifAFbozQHDy9Jz4CpAl9nMhhF7cEtunpEUrdU22/NT50MQ
+        ZzWV2y6sJN3ANw1AJMoon90RemtK2PXJw3N88/X8273YYvBPemXT3NlZqWy33xtOR4PR8eRoMBmO
+        p4fjo6ihr4jF0mNK18QYjMOtPSI0WOQc21cyp3ZZGTfs1yQtn3fqo6bOllHvlKZNqdXWnwVSpdv+
+        t65GUAC14qJcMz5/iEVLJd6dqpEpaqm5P+N/IhvtkUXv7tSG/SDnVe1MSovgVXfQ63cTjT6rOgpH
+        Pg83iC5liXk5m15gMj78Ip+/v00ub9mefv590hfRJvoHTxCJAU8DAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Fri, 31 Oct 2025 23:00:29 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=868
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1

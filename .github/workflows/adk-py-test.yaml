@@ -14,6 +14,9 @@ jobs:
   test:
     runs-on: ${{ inputs.os }}
 
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
     defaults:
       run:
         working-directory: integrations/adk-py
