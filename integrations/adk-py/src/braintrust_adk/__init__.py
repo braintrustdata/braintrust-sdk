@@ -54,9 +54,9 @@ def setup_adk(
 
         # Try to patch McpTool if available (MCP is optional)
         try:
-            from google.adk.tools.mcp_tool.mcp_tool import McpTool
+            from google.adk.tools.mcp_tool import mcp_tool
 
-            wrap_mcp_tool(McpTool)
+            mcp_tool.McpTool = wrap_mcp_tool(mcp_tool.McpTool)
             logger.debug("McpTool patching successful")
         except ImportError:
             # MCP is optional - gracefully skip if not installed
