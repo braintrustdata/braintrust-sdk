@@ -5,7 +5,12 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod", "@opentelemetry/api", "@opentelemetry/sdk-trace-base"],
+    external: [
+      "zod",
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/exporter-trace-otlp-http",
+    ],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -19,7 +24,11 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["@opentelemetry/api", "@opentelemetry/sdk-trace-base"],
+    external: [
+      "@opentelemetry/api",
+      "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/exporter-trace-otlp-http",
+    ],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -39,6 +48,7 @@ export default defineConfig([
       "typescript",
       "@opentelemetry/api",
       "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/exporter-trace-otlp-http",
     ],
     // CLI doesn't need DTS
     dts: false,
@@ -54,6 +64,7 @@ export default defineConfig([
       "typescript",
       "@opentelemetry/api",
       "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/exporter-trace-otlp-http",
     ],
     dts: {
       // Split DTS generation to reduce memory usage
@@ -74,6 +85,7 @@ export default defineConfig([
       "typescript",
       "@opentelemetry/api",
       "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/exporter-trace-otlp-http",
     ],
     dts: {
       // Split DTS generation to reduce memory usage

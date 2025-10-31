@@ -1,5 +1,5 @@
 export async function importWithTimeout<T>(
-  importFn: () => Promise<T>,
+  importFn: () => Promise<unknown>,
   timeoutMs = 3000,
   errorMessage = "Import timeout",
 ): Promise<T> {
@@ -12,7 +12,7 @@ export async function importWithTimeout<T>(
   });
 
   try {
-    return await Promise.race([importFn(), timeoutPromise]);
+    return (await Promise.race([importFn(), timeoutPromise])) as T;
   } finally {
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);

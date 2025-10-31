@@ -208,7 +208,6 @@ async function ensureOtelLoadedAsync(): Promise<void> {
         trace: unknown;
         TraceFlags?: { SAMPLED: number };
       }>(
-        // @ts-expect-error - Optional dependency
         () => import("@opentelemetry/api"),
         3000,
         "OpenTelemetry API import timeout",
@@ -216,7 +215,6 @@ async function ensureOtelLoadedAsync(): Promise<void> {
       const sdkModule = await importWithTimeout<{
         BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
       }>(
-        // @ts-expect-error - Optional dependency
         () => import("@opentelemetry/sdk-trace-base"),
         3000,
         "OpenTelemetry SDK import timeout",
