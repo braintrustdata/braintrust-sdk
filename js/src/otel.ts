@@ -3,8 +3,11 @@ import { SpanComponentsV4 } from "../util/span_identifier_v4";
 import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
 import { importWithTimeout } from "./import-utils";
 
+// Type definitions that don't depend on OpenTelemetry being installed
 interface OtelContext {
-  getValue?: (key: string) => unknown;
+  getValue: (key: symbol) => unknown;
+  setValue: (key: symbol, value: unknown) => OtelContext;
+  deleteValue: (key: symbol) => OtelContext;
 }
 
 interface OtelSpanContext {
@@ -239,13 +242,14 @@ async function ensureOtelLoadedAsync(): Promise<void> {
   await otelInitPromise;
 }
 
-// Type definitions that don't depend on OpenTelemetry being installed
 interface Context {
-  getValue?: (key: string) => unknown;
+  getValue: (key: symbol) => unknown;
+  setValue: (key: symbol, value: unknown) => Context;
+  deleteValue: (key: symbol) => Context;
 }
 
 interface SpanProcessor {
-  onStart(span: Span, parentContext?: Context): void;
+  onStart(span: Span, parentContext: Context): void;
   onEnd(span: ReadableSpan): void;
   shutdown(): Promise<void>;
   forceFlush(): Promise<void>;
@@ -265,10 +269,15 @@ interface Span extends ReadableSpan {
   setStatus(status: { code: number; message?: string }): void;
 }
 
+type ExportResult = { code: number; error?: Error };
+type SpanWithAttributes = { attributes?: Record<string, unknown> };
+
+export const BRAINTRUST_PARENT_KEY: symbol = Symbol.for("braintrust.parent");
+
 interface SpanExporter {
   export(
     spans: ReadableSpan[],
-    resultCallback: (result: unknown) => void,
+    resultCallback: (result: ExportResult) => void,
   ): void;
   shutdown(): Promise<void>;
   forceFlush?(): Promise<void>;
@@ -617,7 +626,7 @@ export class BraintrustSpanProcessor {
       // Priority 1: Check if braintrust.parent is in current OTEL context
       if (otelApi && otelApi.context) {
         const currentContext = otelApi.context.active();
-        const contextValue = currentContext.getValue?.("braintrust.parent");
+        const contextValue = currentContext.getValue(BRAINTRUST_PARENT_KEY);
         if (typeof contextValue === "string") {
           parentValue = contextValue;
         }
@@ -626,7 +635,7 @@ export class BraintrustSpanProcessor {
         if (!parentValue && parentContext) {
           const parentContextValue =
             typeof parentContext.getValue === "function"
-              ? parentContext.getValue("braintrust.parent")
+              ? parentContext.getValue(BRAINTRUST_PARENT_KEY)
               : undefined;
           if (typeof parentContextValue === "string") {
             parentValue = parentContextValue;
@@ -876,7 +885,7 @@ export function getBraintrustParent(
 export class BraintrustExporter {
   private readonly processor: BraintrustSpanProcessor;
   private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: any) => void> = [];
+  private readonly callbacks: Array<(result: ExportResult) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
     ensureOtelExporterLoadedSync();
@@ -890,7 +899,7 @@ export class BraintrustExporter {
    */
   export(
     spans: ReadableSpan[],
-    resultCallback: (result: { code: number; error?: unknown }) => void,
+    resultCallback: (result: ExportResult) => void,
   ): void {
     try {
       // Process each span through the processor
@@ -905,10 +914,12 @@ export class BraintrustExporter {
           resultCallback({ code: 0 }); // SUCCESS
         })
         .catch((error) => {
-          resultCallback({ code: 1, error }); // FAILURE
+          const err = error instanceof Error ? error : new Error(String(error));
+          resultCallback({ code: 1, error: err }); // FAILURE
         });
     } catch (error) {
-      resultCallback({ code: 1, error }); // FAILURE
+      const err = error instanceof Error ? error : new Error(String(error));
+      resultCallback({ code: 1, error: err }); // FAILURE
     }
   }
 
@@ -1007,15 +1018,16 @@ function addParentToBaggage(parent: string, ctx?: Context): Context {
  * ```
  */
 function addSpanParentToBaggage(
-  span: Span,
+  span: unknown,
   ctx?: Context,
 ): Context | undefined {
-  if (!span || !span.attributes) {
+  const spanObj = (span as SpanWithAttributes) || {};
+  if (!spanObj || !spanObj.attributes) {
     console.warn("addSpanParentToBaggage: span has no attributes");
     return undefined;
   }
 
-  const parentValue = span.attributes["braintrust.parent"];
+  const parentValue = spanObj.attributes["braintrust.parent"] as unknown;
   if (!parentValue || typeof parentValue !== "string") {
     console.warn(
       "addSpanParentToBaggage: braintrust.parent attribute not found. " +
