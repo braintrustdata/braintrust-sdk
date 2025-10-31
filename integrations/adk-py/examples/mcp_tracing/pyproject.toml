@@ -1,0 +1,12 @@
+[project]
+name = "mcp-tracing-example"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "braintrust-adk>=0.2.1",
+    "fastapi>=0.116.0",
+    "uvicorn>=0.35.0",
+]
+
+[tool.uv.sources]
+braintrust-adk = { workspace = true }
