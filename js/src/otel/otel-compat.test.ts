@@ -15,6 +15,8 @@ import {
 import { Eval } from "../framework";
 import { base64ToUint8Array } from "../../util/bytes";
 import { configureNode } from "../node";
+import { importWithTimeout } from "../import-utils";
+import { _exportsForTestingOnly as _otelExportsForTestingOnly } from "../otel";
 
 configureNode();
 
@@ -48,6 +50,9 @@ try {
   SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
   InMemorySpanExporter = otelSdk.InMemorySpanExporter;
   OTEL_AVAILABLE = true;
+
+  // Wait for the main otel module to finish loading OTEL internally (async)
+  await _otelExportsForTestingOnly.ensureOtelLoadedSync();
 } catch {
   OTEL_AVAILABLE = false;
 }
@@ -551,7 +556,13 @@ describe("Distributed Tracing (BT → OTEL)", () => {
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     if (OTEL_AVAILABLE) {
-      const otelApi = await import("@opentelemetry/api");
+      const otelApi = await importWithTimeout<
+        typeof import("@opentelemetry/api")
+      >(
+        () => import("@opentelemetry/api"),
+        3000,
+        "OpenTelemetry API import timeout",
+      );
       trace = otelApi.trace;
       context = otelApi.context;
     }

@@ -82,7 +82,6 @@ function ensureOtelContextLoadedSync(): void {
         trace: unknown;
         context: unknown;
       }>(
-        // @ts-expect-error - Optional dependency
         () => import("@opentelemetry/api"),
         3000,
         "OpenTelemetry API import timeout",
