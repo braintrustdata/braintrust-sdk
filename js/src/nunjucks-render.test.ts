@@ -1,10 +1,9 @@
 import { describe, test, expect } from "vitest";
+import { lintTemplate } from "./nunjucks-utils";
+import * as nunjucks from "nunjucks";
 
-// Use runtime require consistent with sdk runtime
 function getEnv() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const nunjucks = require("nunjucks");
-  const N = nunjucks.default ?? nunjucks;
+  const N = nunjucks.default || nunjucks;
   return new N.Environment(null, {
     autoescape: false,
     throwOnUndefined: false,
@@ -12,9 +11,7 @@ function getEnv() {
 }
 
 function getStrictEnv() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const nunjucks = require("nunjucks");
-  const N = nunjucks.default ?? nunjucks;
+  const N = nunjucks.default || nunjucks;
   return new N.Environment(null, { autoescape: false, throwOnUndefined: true });
 }
 

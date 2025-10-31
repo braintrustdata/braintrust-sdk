@@ -72,31 +72,12 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
+import * as nunjucks from "nunjucks";
 import type { Environment as NunjucksEnvironment } from "nunjucks";
 
-const NUNJUCKS_ERROR =
-  "The 'nunjucks' template engine is not available in this runtime. Use template_format 'mustache' or run in a Node/browser environment with 'nunjucks' bundled.";
-
-let _nunjucksModule: any | undefined;
-function tryLoadNunjucks() {
-  if (_nunjucksModule) return _nunjucksModule;
-  try {
-    // CommonJS require
-    if (typeof require === "function") {
-      _nunjucksModule = require("nunjucks");
-      return _nunjucksModule;
-    }
-  } catch {}
-  return undefined;
-}
-
 const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
-  const nunjucksMod = tryLoadNunjucks();
-  if (!nunjucksMod) {
-    throw new Error(NUNJUCKS_ERROR);
-  }
-  const Nunjucks = (nunjucksMod as any).default ?? nunjucksMod;
-  return new Nunjucks.Environment(null, {
+  const N = nunjucks.default || nunjucks;
+  return new N.Environment(null, {
     autoescape: false,
     throwOnUndefined,
   });
@@ -133,7 +114,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate } from "./mustache-utils";
+import { lintTemplate as lintMustacheTemplate } from "./mustache-utils";
 import { prettifyXact } from "../util/index";
 
 // Context management interfaces
@@ -6352,7 +6333,7 @@ function renderTemplatedObject(
 ): unknown {
   if (typeof obj === "string") {
     if (options.strict) {
-      lintTemplate(obj, args);
+      lintMustacheTemplate(obj, args);
     }
     return Mustache.render(obj, args, undefined, {
       escape: (value) => {
@@ -6422,14 +6403,18 @@ export function renderTemplateContent(
   escape: (v: unknown) => string,
   options: { strict?: boolean },
 ): string {
-  if (options.strict && templateFormat === "mustache") {
-    lintTemplate(template, variables);
-  }
-
+  const strict = !!options.strict;
   if (templateFormat === "nunjucks") {
-    return getNunjucksEnv(!!options.strict).renderString(template, variables);
+    const rendered = getNunjucksEnv(strict).renderString(template, variables);
+    return rendered;
   } else if (templateFormat === "mustache") {
-    return Mustache.render(template, variables, undefined, { escape });
+    if (strict) {
+      lintMustacheTemplate(template, variables);
+    }
+    const rendered = Mustache.render(template, variables, undefined, {
+      escape,
+    });
+    return rendered;
   } else {
     return template;
   }
@@ -6609,23 +6594,7 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
-    const templateFormatFromMeta = (() => {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const raw: unknown = (
-        this as unknown as {
-          metadata?: { prompt_data?: unknown };
-        }
-      ).metadata?.prompt_data;
-      if (raw && typeof raw === "object") {
-        const maybe = (raw as Record<string, unknown>)["template_format"];
-        return isTemplateFormat(maybe) ? maybe : undefined;
-      }
-      return undefined;
-    })();
-
-    const resolvedTemplateFormat = parseTemplateFormat(
-      options.templateFormat ?? templateFormatFromMeta,
-    );
+    const resolvedTemplateFormat = parseTemplateFormat(options.templateFormat);
 
     const renderedPrompt = Prompt.renderPrompt({
       prompt,
