@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from google.adk import Agent
 from google.adk.runners import Runner
@@ -5,6 +7,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from braintrust import logger
+from braintrust.logger import Attachment
 from braintrust.test_helpers import init_test_logger
 from braintrust_adk import setup_adk
 
@@ -16,7 +19,7 @@ setup_adk(project_name=PROJECT_NAME)
 @pytest.fixture(scope="module")
 def vcr_config():
     return {
-        "record_mode": "none",
+        "record_mode": "once",
         "filter_headers": [
             "authorization",
             "x-goog-api-key",
@@ -328,21 +331,17 @@ async def test_adk_binary_data_attachment_conversion(memory_logger):
 
     runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
 
-    # Create a minimal PNG image (1x1 red pixel)
-    # PNG header + IHDR chunk + IDAT chunk + IEND chunk
-    minimal_png = (
-        b"\x89PNG\r\n\x1a\n"  # PNG signature
-        b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-        b"\x08\x02\x00\x00\x00\x90wS\xde"  # IHDR
-        b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03\x00\x01\x00\x18\xdd\x8d\xb4"  # IDAT
-        b"\x00\x00\x00\x00IEND\xaeB`\x82"  # IEND
-    )
+    # Load test image from fixtures
+    fixtures_dir = Path(__file__).parent.parent.parent.parent.parent / "internal" / "golden" / "fixtures"
+    image_path = fixtures_dir / "test-image.png"
+    with open(image_path, "rb") as f:
+        image_data = f.read()
 
     # Create message with inline binary data
     user_msg = types.Content(
         role="user",
         parts=[
-            types.Part(inline_data=types.Blob(mime_type="image/png", data=minimal_png)),
+            types.Part(inline_data=types.Blob(mime_type="image/png", data=image_data)),
             types.Part(text="What color is this image?"),
         ],
     )
@@ -375,14 +374,14 @@ async def test_adk_binary_data_attachment_conversion(memory_logger):
     assert "url" in image_part["image_url"], "image_url should have url field"
 
     attachment_ref = image_part["image_url"]["url"]
-    # Verify it's an AttachmentReference, not raw binary data
-    assert isinstance(attachment_ref, dict), "Attachment should be a dict"
-    assert attachment_ref.get("type") == "braintrust_attachment", "Should be a braintrust_attachment"
-    assert "key" in attachment_ref, "Attachment should have a key"
-    assert "filename" in attachment_ref, "Attachment should have a filename"
-    assert "content_type" in attachment_ref, "Attachment should have a content_type"
-    assert attachment_ref["content_type"] == "image/png", "Content type should be image/png"
-    assert attachment_ref["filename"] == "file.png", "Filename should be file.png"
+    # Verify it's an Attachment object, not raw binary data
+    assert isinstance(attachment_ref, Attachment), "Attachment should be an Attachment object"
+    ref = attachment_ref.reference
+    assert "key" in ref, "Attachment reference should have a key"
+    assert "filename" in ref, "Attachment reference should have a filename"
+    assert "content_type" in ref, "Attachment reference should have a content_type"
+    assert ref["content_type"] == "image/png", "Content type should be image/png"
+    assert ref["filename"] == "file.png", "Filename should be file.png"
 
     # Second part should be the text
     text_part = new_message["parts"][1]
@@ -390,12 +389,10 @@ async def test_adk_binary_data_attachment_conversion(memory_logger):
     assert text_part["text"] == "What color is this image?", "Text content should match"
 
     # Verify no raw binary data is present in the logged span
-    import json
-
-    span_json = json.dumps(invocation_span)
+    span_str = str(invocation_span)
     # Check that the binary PNG signature is NOT in the logged data
-    assert b"\x89PNG".hex() not in span_json, "Raw binary data should not be in logged span"
-    assert "89504e47" not in span_json.lower(), "Raw binary data (hex) should not be in logged span"
+    assert b"\x89PNG".hex() not in span_str, "Raw binary data should not be in logged span"
+    assert "89504e47" not in span_str.lower(), "Raw binary data (hex) should not be in logged span"
 
     # Find LLM spans and verify they also don't contain raw binary
     llm_spans = [row for row in spans if row["span_attributes"]["type"] == "llm"]
@@ -403,6 +400,6 @@ async def test_adk_binary_data_attachment_conversion(memory_logger):
 
     for llm_span in llm_spans:
         if "input" in llm_span and "contents" in llm_span["input"]:
-            llm_json = json.dumps(llm_span["input"])
-            assert b"\x89PNG".hex() not in llm_json, "Raw binary data should not be in LLM span input"
-            assert "89504e47" not in llm_json.lower(), "Raw binary data (hex) should not be in LLM span input"
+            llm_str = str(llm_span["input"])
+            assert b"\x89PNG".hex() not in llm_str, "Raw binary data should not be in LLM span input"
+            assert "89504e47" not in llm_str.lower(), "Raw binary data (hex) should not be in LLM span input"
