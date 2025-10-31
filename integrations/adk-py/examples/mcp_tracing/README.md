@@ -8,7 +8,7 @@ With `setup_adk()`, you automatically get traces for:
 
 1. **Agent execution** - The full agent run
 2. **LLM calls** - Tool selection and response generation
-3. **MCP tool invocations** - Tool name, parameters, results (NEW!)
+3. **MCP tool invocations** - Tool name, parameters, and results
 
 ## Setup
 
@@ -26,22 +26,16 @@ With `setup_adk()`, you automatically get traces for:
    export GOOGLE_API_KEY=your_key_here
    ```
 
-3. Run the server:
+3. Run the example:
    ```bash
-   uvicorn fastapi_mcp_example:app --reload
+   python agent.py
    ```
-
-## Test It
-
-```bash
-curl -X POST "http://localhost:8000/ask" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "List files in /tmp"}'
-```
 
 ## View Traces
 
-Visit [https://www.braintrust.dev/app](https://www.braintrust.dev/app) and look for:
+Visit [https://www.braintrust.dev/app](https://www.braintrust.dev/app) and look for project **"adk-mcp-example"**.
+
+You'll see a complete trace hierarchy:
 
 ```
 invocation [filesystem_app]
@@ -49,7 +43,7 @@ invocation [filesystem_app]
 │  ├─ call_llm
 │  │  └─ llm_call [tool_selection]
 │  │     output: {function_call: {name: "list_directory", args: {...}}}
-│  ├─ mcp_tool [list_directory]        ← NEW!
+│  ├─ mcp_tool [list_directory]
 │  │  input: {tool_name: "list_directory", arguments: {path: "/tmp"}}
 │  │  output: {content: [...]}
 │  │  duration: 45ms
@@ -66,21 +60,6 @@ invocation [filesystem_app]
 
 ## Comparing with Regular Tools
 
-The customer's original example (`fastapi_adk.py`) uses regular Python functions as tools:
+Regular Python function tools (like in `multi_tool_agent/`) are traced automatically.
 
-```python
-def get_weather(city: str) -> dict:
-    """Get weather for a city."""
-    return {"temperature": 72, "condition": "sunny"}
-```
-
-This example uses **MCP tools** which connect to external servers:
-
-```python
-MCPToolset(
-    connection_params=StdioConnectionParams(...),
-    tool_filter=["list_directory", "read_file"],
-)
-```
-
-Both are automatically traced by `setup_adk()`, but MCP tools required the new `wrap_mcp_tool()` functionality to capture their execution details.
+MCP tools connect to external servers and required the new `wrap_mcp_tool()` functionality to capture their execution details. This example demonstrates that MCP tools are now traced just as seamlessly.
