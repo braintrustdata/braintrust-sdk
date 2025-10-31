@@ -365,3 +365,128 @@ def _assert_metrics_are_valid(metrics, start, end):
         assert start <= metrics["start"] <= metrics["end"] <= end
     else:
         assert metrics["start"] <= metrics["end"]
+
+
+@pytest.mark.vcr
+def test_anthropic_beta_messages_sync(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(_get_client())
+    msg_in = {"role": "user", "content": "what's 3+3?"}
+
+    start = time.time()
+    msg = client.beta.messages.create(model=MODEL, max_tokens=300, messages=[msg_in])
+    end = time.time()
+
+    text = msg.content[0].text
+    assert text
+    assert "6" in text
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert "3+3" in str(log["input"])
+    assert "6" in str(log["output"])
+    assert log["project_id"] == PROJECT_NAME
+    assert log["span_id"]
+    assert log["root_span_id"]
+    attrs = log["span_attributes"]
+    assert attrs["type"] == "llm"
+    assert "anthropic" in attrs["name"]
+    metrics = log["metrics"]
+    _assert_metrics_are_valid(metrics, start, end)
+    assert log["metadata"]["model"] == MODEL
+
+
+@pytest.mark.vcr
+def test_anthropic_beta_messages_stream_sync(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(_get_client())
+    msg_in = {"role": "user", "content": "what is 5+5? (just the number)"}
+
+    start = time.time()
+    with client.beta.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+        msgs_out = [m for m in stream]
+    end = time.time()
+    msg_out = stream.get_final_message()
+    usage = msg_out.usage
+
+    assert len(msgs_out) > 3
+    assert msgs_out[0].type == "message_start"
+    assert msgs_out[-1].type == "message_stop"
+    assert "10" in msg_out.content[0].text
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert "user" in str(log["input"])
+    assert "5+5" in str(log["input"])
+    assert "10" in str(log["output"])
+    assert log["project_id"] == PROJECT_NAME
+    assert log["span_attributes"]["type"] == "llm"
+    _assert_metrics_are_valid(log["metrics"], start, end)
+    assert log["metrics"]["prompt_tokens"] == usage.input_tokens
+    assert log["metrics"]["completion_tokens"] == usage.output_tokens
+    assert log["metrics"]["tokens"] == usage.input_tokens + usage.output_tokens
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_anthropic_beta_messages_create_async(memory_logger):
+    assert not memory_logger.pop()
+
+    params = {
+        "model": MODEL,
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "what is 8+2?, just return the number"}],
+    }
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    msg = await client.beta.messages.create(**params)
+    assert "10" in msg.content[0].text
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["max_tokens"] == 100
+    assert span["input"] == params["messages"]
+    assert span["output"]["role"] == "assistant"
+    assert "10" in span["output"]["content"][0]["text"]
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_anthropic_beta_messages_streaming_async(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(_get_async_client())
+    msgs_in = [{"role": "user", "content": "what is 9+1?, just return the number"}]
+
+    start = time.time()
+    msg_out = None
+
+    async with client.beta.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
+        async for event in stream:
+            pass
+        msg_out = await stream.get_final_message()
+        assert "10" in msg_out.content[0].text
+        usage = msg_out.usage
+    end = time.time()
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert "user" in str(log["input"])
+    assert "9+1" in str(log["input"])
+    assert "10" in str(log["output"])
+    assert log["project_id"] == PROJECT_NAME
+    assert log["span_attributes"]["type"] == "llm"
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 1024
+    _assert_metrics_are_valid(log["metrics"], start, end)
+    metrics = log["metrics"]
+    assert metrics["prompt_tokens"] == usage.input_tokens
+    assert metrics["completion_tokens"] == usage.output_tokens
+    assert metrics["tokens"] == usage.input_tokens + usage.output_tokens

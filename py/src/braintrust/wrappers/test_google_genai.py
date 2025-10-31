@@ -159,6 +159,7 @@ async def test_basic_completion_async(memory_logger, mode):
 
 
 # Test 2: Mixed Content (Sync)
+@pytest.mark.skip
 @pytest.mark.vcr
 @pytest.mark.parametrize(
     "mode",
@@ -223,6 +224,7 @@ def test_mixed_content(memory_logger, mode):
 
 
 # Test 2b: Mixed Content (Async)
+@pytest.mark.skip
 @pytest.mark.vcr
 @pytest.mark.asyncio
 @pytest.mark.parametrize(

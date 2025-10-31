@@ -206,7 +206,7 @@ async function testStopSequences() {
       const response = await client.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 500,
-        stop_sequences: ["END", "\n\n"],
+        stop_sequences: ["END"],
         messages: [
           { role: "user", content: "Write a short story about a robot." },
         ],
@@ -356,7 +356,7 @@ async function testToolUse() {
           input_schema: {
             type: "object",
             properties: {
-              location: {
+              city_and_state: {
                 type: "string",
                 description: "The city and state, e.g. San Francisco, CA",
               },
@@ -366,7 +366,7 @@ async function testToolUse() {
                 description: "The unit of temperature",
               },
             },
-            required: ["location"],
+            required: ["city_and_state"],
           },
         },
       ];
@@ -487,6 +487,78 @@ async function testToolUseWithResult() {
   );
 }
 
+// Test 18: Reasoning tokens generation and follow-up
+async function testReasoning() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
+
+      // First request: Analyze pattern and derive formula
+      console.log("\n--- First request (generate reasoning) ---");
+      const firstResponse = await client.messages.create({
+        model: "claude-3-7-sonnet-latest",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+        ],
+        thinking: {
+          type: "enabled",
+          budget_tokens: 1024,
+        },
+      });
+
+      console.log("First response:");
+      console.log(firstResponse.content[0]);
+
+      // Check if usage info is available
+      if (firstResponse.usage) {
+        console.log("\nFirst request token usage:");
+        console.log(`Input tokens: ${firstResponse.usage.input_tokens}`);
+        console.log(`Output tokens: ${firstResponse.usage.output_tokens}`);
+      }
+
+      // Second request: Apply the discovered pattern to solve a new problem
+      console.log("\n--- Follow-up request (using reasoning context) ---");
+      const followUpResponse = await client.messages.create({
+        model: "claude-3-7-sonnet-latest",
+        max_tokens: 1000,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+          {
+            role: "assistant",
+            content: firstResponse.content,
+          },
+          {
+            role: "user",
+            content:
+              "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
+          },
+        ],
+      });
+
+      console.log("Follow-up response:");
+      console.log(followUpResponse.content[0]);
+
+      if (followUpResponse.usage) {
+        console.log("\nFollow-up request token usage:");
+        console.log(`Input tokens: ${followUpResponse.usage.input_tokens}`);
+        console.log(`Output tokens: ${followUpResponse.usage.output_tokens}`);
+      }
+
+      return { firstResponse, followUpResponse };
+    },
+    { name: "test_reasoning" },
+  );
+}
+
 // Run all tests
 async function runAllTests() {
   const tests = [
@@ -505,6 +577,7 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
+    testReasoning,
   ];
 
   for (const test of tests) {

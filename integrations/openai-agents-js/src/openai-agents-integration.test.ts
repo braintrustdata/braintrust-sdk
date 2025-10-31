@@ -741,5 +741,140 @@ describe(
         "Should log trace metadata",
       );
     });
+
+    test("response span with image generation converts base64 to attachments", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-images",
+        name: "image-test",
+        metadata: {},
+      };
+
+      // Create a small base64-encoded PNG (1x1 red pixel)
+      const smallBase64Image =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
+      // Simulate response span with image input and output
+      const span = {
+        spanId: "test-span-images",
+        traceId: trace.traceId,
+        spanData: {
+          type: "response",
+          name: "test-response-images",
+          _input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: "Change the background to Japanese style",
+                },
+                {
+                  type: "input_image",
+                  image: `data:image/png;base64,${smallBase64Image}`,
+                },
+              ],
+            },
+          ],
+          _response: {
+            output: [
+              {
+                id: "ig_test123",
+                type: "image_generation_call",
+                status: "completed",
+                output_format: "png",
+                result: smallBase64Image,
+                revised_prompt: "A Japanese style background",
+              },
+              {
+                id: "msg_test456",
+                type: "message",
+                status: "completed",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "Here is the image with a Japanese style background",
+                  },
+                ],
+                role: "assistant",
+              },
+            ],
+            usage: {
+              input_tokens: 1555,
+              output_tokens: 113,
+              total_tokens: 1668,
+            },
+          },
+        },
+        error: null,
+      } as any;
+
+      // Execute trace lifecycle
+      await processor.onTraceStart(trace);
+      await processor.onSpanStart(span);
+      await processor.onSpanEnd(span);
+      await processor.onTraceEnd(trace);
+
+      // Verify spans were created
+      const spans = await backgroundLogger.drain();
+      const responseSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "test-response-images",
+      );
+
+      assert.ok(responseSpan, "Should find response span");
+
+      // Verify input image was converted to attachment
+      const input = (responseSpan as any).input;
+      assert.ok(input, "Response span should have input");
+      assert.ok(Array.isArray(input), "Input should be an array");
+
+      const userMessage = input[0];
+      assert.ok(userMessage.content, "User message should have content");
+
+      const imageContent = userMessage.content.find(
+        (c: any) => c.type === "input_image",
+      );
+      assert.ok(imageContent, "Should find input_image in content");
+      assert.ok(imageContent.image, "Image content should have image field");
+
+      // Check if it's an Attachment (has the Braintrust attachment structure)
+      const imageAttachment = imageContent.image;
+      assert.ok(
+        imageAttachment.filename || imageAttachment._data,
+        "Image should be converted to Attachment object",
+      );
+
+      // Verify output image was converted to attachment
+      const output = (responseSpan as any).output;
+      assert.ok(output, "Response span should have output");
+      assert.ok(Array.isArray(output), "Output should be an array");
+
+      const imageGenCall = output.find(
+        (o: any) => o.type === "image_generation_call",
+      );
+      assert.ok(imageGenCall, "Should find image_generation_call in output");
+      assert.ok(imageGenCall.result, "Image generation should have result");
+
+      // Check if result is an Attachment
+      const resultAttachment = imageGenCall.result;
+      assert.ok(
+        resultAttachment.filename || resultAttachment._data,
+        "Result should be converted to Attachment object",
+      );
+
+      // Verify metrics were extracted
+      const metrics = (responseSpan as any).metrics;
+      assert.ok(metrics, "Response span should have metrics");
+      assert.equal(metrics.prompt_tokens, 1555, "Should have prompt_tokens");
+      assert.equal(
+        metrics.completion_tokens,
+        113,
+        "Should have completion_tokens",
+      );
+      assert.equal(metrics.tokens, 1668, "Should have total tokens");
+    });
   },
 );

@@ -6,6 +6,7 @@ import {
   Logger,
   currentSpan,
   NOOP_SPAN,
+  Attachment,
 } from "braintrust";
 import {
   SpanType,
@@ -113,6 +114,129 @@ export class OpenAIAgentsTraceProcessor {
       options.maxTraces ?? OpenAIAgentsTraceProcessor.DEFAULT_MAX_TRACES;
   }
 
+  private processInputImages(input: any): any {
+    if (Array.isArray(input)) {
+      return input.map((item) => this.processInputImages(item));
+    }
+
+    if (input && typeof input === "object") {
+      // Handle input_image type with base64 image data
+      if (input.type === "input_image" && typeof input.image === "string") {
+        let imageData = input.image;
+
+        // Strip data URI prefix if present (e.g., "data:image/png;base64,")
+        const dataUriMatch = imageData.match(/^data:image\/(\w+);base64,(.*)$/);
+        let contentType = "image/png";
+        let fileExtension = "png";
+
+        if (dataUriMatch) {
+          fileExtension = dataUriMatch[1];
+          contentType = `image/${fileExtension}`;
+          imageData = dataUriMatch[2]; // Extract just the base64 part
+        }
+
+        const filename = `input_image.${fileExtension}`;
+
+        try {
+          // Convert base64 string to Blob
+          const binaryString = atob(imageData);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: contentType });
+
+          const attachment = new Attachment({
+            data: blob,
+            filename: filename,
+            contentType: contentType,
+          });
+
+          return {
+            ...input,
+            image: attachment,
+          };
+        } catch (e) {
+          console.error("Failed to process input image:", e);
+          console.error("Image data sample:", input.image.substring(0, 200));
+          return input;
+        }
+      }
+
+      // Recursively process nested objects
+      const result: any = {};
+      for (const [key, value] of Object.entries(input)) {
+        result[key] = this.processInputImages(value);
+      }
+      return result;
+    }
+
+    return input;
+  }
+
+  private processOutputImages(output: any): any {
+    if (Array.isArray(output)) {
+      return output.map((item) => this.processOutputImages(item));
+    }
+
+    if (output && typeof output === "object") {
+      // Handle image_generation_call type - convert result to attachment
+      if (output.type === "image_generation_call" && output.result) {
+        let resultData = output.result;
+
+        // Use output_format from the response
+        const fileExtension = output.output_format || "png";
+        const contentType = `image/${fileExtension}`;
+
+        // Strip data URI prefix if present (e.g., "data:image/png;base64,")
+        const dataUriMatch = resultData.match(/^data:image\/\w+;base64,(.*)$/);
+        if (dataUriMatch) {
+          resultData = dataUriMatch[1]; // Extract just the base64 part
+        }
+
+        const baseFilename =
+          output.revised_prompt && typeof output.revised_prompt === "string"
+            ? output.revised_prompt.slice(0, 50).replace(/[^a-zA-Z0-9]/g, "_")
+            : "generated_image";
+        const filename = `${baseFilename}.${fileExtension}`;
+
+        try {
+          // Convert base64 string to Blob
+          const binaryString = atob(resultData);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: contentType });
+
+          const attachment = new Attachment({
+            data: blob,
+            filename: filename,
+            contentType: contentType,
+          });
+
+          return {
+            ...output,
+            result: attachment,
+          };
+        } catch (e) {
+          console.error("Failed to process output image:", e);
+          console.error("Result data sample:", output.result.substring(0, 200));
+          return output;
+        }
+      }
+
+      // Recursively process nested objects
+      const result: any = {};
+      for (const [key, value] of Object.entries(output)) {
+        result[key] = this.processOutputImages(value);
+      }
+      return result;
+    }
+
+    return output;
+  }
+
   private evictOldestTrace(): void {
     if (this.traceOrder.length === 0) return;
 
@@ -214,11 +338,11 @@ export class OpenAIAgentsTraceProcessor {
     }
 
     if (spanData._input !== undefined) {
-      data.input = spanData._input;
+      data.input = this.processInputImages(spanData._input);
     }
 
     if (spanData._response !== undefined) {
-      data.output = spanData._response.output;
+      data.output = this.processOutputImages(spanData._response.output);
     }
 
     if (spanData._response) {
@@ -267,6 +391,7 @@ export class OpenAIAgentsTraceProcessor {
     if (!isFunctionSpanData(spanData)) {
       return {};
     }
+
     return {
       input: spanData.input,
       output: spanData.output,

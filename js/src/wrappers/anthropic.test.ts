@@ -508,7 +508,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
     const response = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-haiku-4-5-20251001",
       messages: [
         {
           role: "user",

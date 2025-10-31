@@ -1,11 +1,11 @@
-import { startSpan, traced, withCurrent, logError } from "../logger";
+import { startSpan, traced, withCurrent, logError } from "../../logger";
 import {
   detectProviderFromResult,
   extractModelFromResult,
   normalizeFinishReason,
   normalizeUsageMetrics,
   wrapTools,
-} from "./ai-sdk-shared";
+} from "../ai-sdk-shared/utils";
 
 let aiSDKFormatWarning = false;
 

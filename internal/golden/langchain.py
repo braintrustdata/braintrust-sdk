@@ -2,6 +2,7 @@ import asyncio
 import base64
 from pathlib import Path
 
+import braintrust
 from braintrust import flush, init_logger, start_span
 from braintrust_langchain import BraintrustCallbackHandler, set_global_handler
 from langchain_anthropic import ChatAnthropic
@@ -352,14 +353,14 @@ def test_tool_use():
     with start_span(name="test_tool_use"):
 
         @tool
-        def get_weather(location: str, unit: str = "celsius") -> str:
+        def get_weather(city_and_state: str, unit: str = "celsius") -> str:
             """Get the current weather for a location.
 
             Args:
-                location: The city and state, e.g. San Francisco, CA
+                city_and_state: The city and state, e.g. San Francisco, CA
                 unit: The unit of temperature (celsius or fahrenheit)
             """
-            return f"22 degrees {unit} and sunny in {location}"
+            return f"22 degrees {unit} and sunny in {city_and_state}"
 
         for provider, model in (
             ("openai", ChatOpenAI(model="gpt-4o", max_completion_tokens=500)),
@@ -442,6 +443,12 @@ def test_tool_use_with_result():
                 print()
 
 
+# Test 18: Reasoning with o1 model
+def test_reasoning():
+    with start_span(name="test_reasoning"):
+        braintrust.log(output="Responses API not supported and chat completions do not include (reasoning) summaries")
+
+
 async def test_async_generation():
     print("\n=== Test 17: Async Generation ===")
     with start_span(name="test_async_generation"):
@@ -497,6 +504,7 @@ def run_sync_tests():
         test_short_max_tokens,
         test_tool_use,
         test_tool_use_with_result,
+        test_reasoning,
     ]
 
     for test in tests:

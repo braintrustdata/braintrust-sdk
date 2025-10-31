@@ -4,7 +4,6 @@ from typing import Dict, List, Union, cast
 
 import pytest
 from braintrust.logger import flush
-from braintrust_langchain import BraintrustCallbackHandler
 from langchain.prompts import ChatPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
@@ -13,6 +12,8 @@ from langchain_core.runnables import RunnableMap, RunnableSerializable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+
+from braintrust_langchain import BraintrustCallbackHandler
 
 from .conftest import LoggerMemoryLogger
 from .helpers import ANY, assert_matches_object, find_spans_by_attributes
@@ -702,3 +703,165 @@ def test_chain_null_values(logger_memory_logger: LoggerMemoryLogger):
             },
         ],
     )
+
+
+def test_consecutive_eval_calls(logger_memory_logger: LoggerMemoryLogger):
+    from braintrust import Eval
+
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    def task_fn(input, hooks):
+        # Create handler that will log LangChain spans
+        handler = BraintrustCallbackHandler(logger=logger)
+
+        # Simulate LangChain chain execution by manually triggering callbacks
+        run_id = uuid.uuid4()
+
+        handler.on_chain_start(
+            {"id": ["RunnableSequence"], "lc": 1, "type": "not_implemented"},
+            {"number": str(input)},
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        # Simulate output
+        output = f"Result for {input}"
+
+        handler.on_chain_end(
+            {"content": output},
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        return output
+
+    # Create a parent span to hold the eval
+    with logger.start_span(name="test-consecutive-eval", span_attributes={"type": "eval"}) as parent_span:
+        # Run Eval with consecutive calls using parent parameter
+        Eval(
+            "test-consecutive-eval",
+            data=[{"input": 1, "expected": "Result for 1"}, {"input": 2, "expected": "Result for 2"}],
+            task=task_fn,
+            scores=[],
+            parent=parent_span.id,
+        )
+
+    flush()
+
+    spans = memory_logger.pop()
+
+    # Verify we have the expected number of spans:
+    # 1 root eval span + 2 eval dataset record spans + 2 task spans = 5 total
+    assert len(spans) == 5, f"Expected 5 spans, got {len(spans)}"
+
+    # Find the root eval span
+    root_eval_span = [s for s in spans if s.get("span_attributes", {}).get("name") == "test-consecutive-eval"][0]
+    root_eval_span_id = root_eval_span["span_id"]
+
+    # Find the eval dataset record spans (direct children of root eval span)
+    eval_record_spans = [
+        s
+        for s in spans
+        if s.get("span_attributes", {}).get("name") == "eval" and root_eval_span_id in (s.get("span_parents") or [])
+    ]
+    assert len(eval_record_spans) == 2, f"Expected 2 eval record spans, got {len(eval_record_spans)}"
+
+    # Sort by input
+    eval_record_spans_sorted = sorted(eval_record_spans, key=lambda s: s.get("input", 0))
+    eval_record_1 = eval_record_spans_sorted[0]
+    eval_record_2 = eval_record_spans_sorted[1]
+
+    # Find the task spans (children of eval record spans)
+    task_spans = [s for s in spans if s.get("span_attributes", {}).get("name") == "task"]
+    assert len(task_spans) == 2, f"Expected 2 task spans, got {len(task_spans)}"
+
+    # Sort by input
+    task_spans_sorted = sorted(task_spans, key=lambda s: s.get("input", 0))
+    task_1_span = task_spans_sorted[0]
+    task_2_span = task_spans_sorted[1]
+
+    # Verify root eval span structure
+    assert_matches_object(
+        [root_eval_span],
+        [
+            {
+                "span_id": root_eval_span_id,
+                "root_span_id": root_eval_span_id,
+                "span_attributes": {
+                    "name": "test-consecutive-eval",
+                    "type": "eval",
+                },
+            }
+        ],
+    )
+
+    # Verify eval record 1 structure
+    assert_matches_object(
+        [eval_record_1],
+        [
+            {
+                "root_span_id": root_eval_span_id,
+                "span_parents": [root_eval_span_id],
+                "span_attributes": {
+                    "name": "eval",
+                },
+                "input": 1,
+                "output": "Result for 1",
+            }
+        ],
+    )
+
+    # Verify eval record 2 structure
+    assert_matches_object(
+        [eval_record_2],
+        [
+            {
+                "root_span_id": root_eval_span_id,
+                "span_parents": [root_eval_span_id],
+                "span_attributes": {
+                    "name": "eval",
+                },
+                "input": 2,
+                "output": "Result for 2",
+            }
+        ],
+    )
+
+    # Verify task 1 is child of eval record 1
+    assert_matches_object(
+        [task_1_span],
+        [
+            {
+                "root_span_id": root_eval_span_id,
+                "span_parents": [eval_record_1["span_id"]],
+                "span_attributes": {
+                    "name": "task",
+                },
+                "input": 1,
+                "output": "Result for 1",
+            }
+        ],
+    )
+
+    # Verify task 2 is child of eval record 2
+    assert_matches_object(
+        [task_2_span],
+        [
+            {
+                "root_span_id": root_eval_span_id,
+                "span_parents": [eval_record_2["span_id"]],
+                "span_attributes": {
+                    "name": "task",
+                },
+                "input": 2,
+                "output": "Result for 2",
+            }
+        ],
+    )
+
+    # Note: In this simplified test, we manually trigger LangChain callbacks but they don't
+    # create actual RunnableSequence spans in the logger. The key verification is that Eval()
+    # creates the proper hierarchy: root eval -> eval records -> tasks, and that consecutive
+    # calls work correctly with proper parent-child relationships.
+    # Real LangChain span integration is tested in other tests (test_llm_calls, etc.)

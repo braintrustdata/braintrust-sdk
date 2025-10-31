@@ -256,6 +256,18 @@ export const btqlSnippetSchema = z.strictObject({
 });
 export type BtqlSnippet = z.infer<typeof btqlSnippetSchema>;
 
+export type SingleSpanFilter = {
+  op: "singlespanfilter";
+  expr: Expr;
+  loc?: NullableLoc;
+};
+export const singleSpanFilterSchema: z.ZodType<SingleSpanFilter> =
+  z.strictObject({
+    op: z.literal("singlespanfilter"),
+    expr: z.lazy(() => exprSchema),
+    loc,
+  });
+
 export type Expr =
   | Literal
   | Interval
@@ -269,7 +281,8 @@ export type Expr =
   | UnaryArithmeticExpr
   | UnaryExpr
   | ArithmeticExpr
-  | BtqlSnippet;
+  | BtqlSnippet
+  | SingleSpanFilter;
 
 export const exprSchema: z.ZodType<Expr> = z.union([
   literalSchema,
@@ -285,6 +298,7 @@ export const exprSchema: z.ZodType<Expr> = z.union([
   unaryExprSchema,
   arithmeticExprSchema,
   btqlSnippetSchema,
+  singleSpanFilterSchema,
 ]);
 
 export const aliasExpr = z.strictObject({
@@ -354,5 +368,8 @@ export const parsedQuerySchema = z.strictObject({
   preview_length: z.number().int().nullish(),
   inference_budget: z.number().int().nullish(),
   sample: sampleSchema.nullish(),
+  span_filter: exprSchema.nullish(),
+  trace_filter: exprSchema.nullish(),
+  final_filter: exprSchema.nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;

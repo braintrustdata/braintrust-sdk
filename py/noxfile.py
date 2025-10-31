@@ -37,6 +37,7 @@ BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 VENDOR_PACKAGES = (
     "agno",
     "anthropic",
+    "dspy",
     "openai",
     "pydantic_ai",
     "autoevals",
@@ -62,6 +63,7 @@ else:
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
+DSPY_VERSIONS = (LATEST,)
 
 
 @nox.session()
@@ -115,7 +117,7 @@ def test_anthropic(session, version):
 
 @nox.session()
 @nox.parametrize("version", GENAI_VERSIONS, ids=GENAI_VERSIONS)
-def test_genai(session, version):
+def test_google_genai(session, version):
     _install_test_deps(session)
     _install(session, "google-genai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_google_genai.py")
@@ -144,6 +146,14 @@ def test_litellm(session, version):
 
 
 @nox.session()
+@nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
+def test_dspy(session, version):
+    _install_test_deps(session)
+    _install(session, "dspy", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_dspy.py")
+
+
+@nox.session()
 @nox.parametrize("version", AUTOEVALS_VERSIONS, ids=AUTOEVALS_VERSIONS)
 def test_autoevals(session, version):
     # Run all of our core tests with autoevals installed. Some tests
@@ -162,6 +172,15 @@ def test_braintrust_core(session):
     _install_test_deps(session)
     _install(session, "braintrust_core")
     _run_core_tests(session)
+
+
+@nox.session()
+def test_cli(session):
+    """Test CLI/devserver with starlette installed."""
+    _install_test_deps(session)
+    session.install(".[cli]")
+    session.install("httpx")  # Required for starlette.testclient
+    _run_tests(session, "braintrust/devserver/test_server_integration.py")
 
 
 @nox.session()

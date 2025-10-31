@@ -11,13 +11,13 @@ import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod/v3";
 
-import { wrapAISDK } from "./ai-sdk-v3";
+import { wrapAISDK } from "./ai-sdk";
 import {
   _exportsForTestingOnly,
   Logger,
   TestBackgroundLogger,
   initLogger,
-} from "../logger";
+} from "../../logger";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const ANTHROPIC_MODEL = "claude-3-haiku-20240307";

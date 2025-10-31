@@ -12,6 +12,15 @@ TEST_ORG_ID = "test-org-id"
 TEST_ORG_NAME = "test-org-name"
 
 
+def has_devserver_installed() -> bool:
+    """Check if devserver dependencies (starlette, uvicorn) are installed."""
+    import importlib.util
+    return (
+        importlib.util.find_spec("starlette") is not None
+        and importlib.util.find_spec("uvicorn") is not None
+    )
+
+
 def simulate_login() -> None:
     """
     Simulate a successful login for testing purposes.

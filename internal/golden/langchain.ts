@@ -1,4 +1,4 @@
-import { traced, initLogger } from "braintrust";
+import { traced, initLogger, log } from "braintrust";
 import { BraintrustCallbackHandler } from "@braintrust/langchain-js";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
@@ -697,7 +697,7 @@ async function testToolUse() {
         name: "get_weather",
         description: "Get the current weather for a location",
         schema: z.object({
-          location: z
+          city_and_state: z
             .string()
             .describe("The city and state, e.g. San Francisco, CA"),
           unit: z
@@ -706,8 +706,8 @@ async function testToolUse() {
             .default("celsius")
             .describe("The unit of temperature"),
         }),
-        func: async ({ location, unit }) => {
-          return `22 degrees ${unit} and sunny in ${location}`;
+        func: async ({ city_and_state, unit }) => {
+          return `22 degrees ${unit} and sunny in ${city_and_state}`;
         },
       });
 
@@ -933,6 +933,19 @@ async function testAsyncStreaming() {
   );
 }
 
+// Test 18: Reasoning with o1 model
+async function testReasoning() {
+  return traced(
+    async () => {
+      log({
+        output:
+          "Responses API not supported and chat completions do not include (reasoning) summaries",
+      });
+    },
+    { name: "test_reasoning" },
+  );
+}
+
 async function runAllTests() {
   console.log("=".repeat(60));
   console.log("LangChain Golden Tests with Braintrust");
@@ -956,6 +969,7 @@ async function runAllTests() {
     testToolUseWithResult,
     testAsyncGeneration,
     testAsyncStreaming,
+    testReasoning,
   ];
 
   for (const test of tests) {

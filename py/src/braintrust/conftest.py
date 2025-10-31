@@ -35,4 +35,4 @@ def override_app_url_for_tests():
 
 @pytest.fixture(autouse=True)
 def setup_braintrust():
-    os.environ.setdefault("GOOGLE_API_KEY", "your_google_api_key_here")
+    os.environ.setdefault("GOOGLE_API_KEY", os.getenv("GEMINI_API_KEY", "your_google_api_key_here"))

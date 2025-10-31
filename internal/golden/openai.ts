@@ -354,7 +354,7 @@ async function testToolUse() {
             parameters: {
               type: "object",
               properties: {
-                location: {
+                city_and_state: {
                   type: "string",
                   description: "The city and state, e.g. San Francisco, CA",
                 },
@@ -364,7 +364,7 @@ async function testToolUse() {
                   description: "The unit of temperature",
                 },
               },
-              required: ["location"],
+              required: ["city_and_state"],
             },
           },
         },
@@ -481,6 +481,64 @@ async function testToolUseWithResult() {
   );
 }
 
+// Test 16: Reasoning tokens generation and follow-up
+async function testReasoning() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
+
+      // First request: Analyze pattern and derive formula
+      console.log("\n--- First request (generate reasoning) ---");
+      const firstResponse = await client.responses.create({
+        model: "gpt-5-codex",
+        reasoning: {
+          effort: "high",
+          summary: "detailed",
+        },
+        input: [
+          {
+            role: "user",
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+        ],
+      });
+
+      console.log("First response:");
+      console.log(firstResponse.output);
+
+      // Second request: Apply the discovered pattern to solve a new problem
+      console.log("\n--- Follow-up request (using reasoning context) ---");
+      const followUpResponse = await client.responses.create({
+        model: "gpt-5-codex",
+        reasoning: {
+          effort: "high",
+          summary: "detailed",
+        },
+        input: [
+          {
+            role: "user",
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+          ...firstResponse.output,
+          {
+            role: "user",
+            content:
+              "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
+          },
+        ],
+      });
+
+      console.log("Follow-up response:");
+      console.log(followUpResponse.output);
+
+      return { firstResponse, followUpResponse };
+    },
+    { name: "test_reasoning" },
+  );
+}
+
 // Run all tests
 async function runAllTests() {
   const tests = [
@@ -499,6 +557,7 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
+    testReasoning,
   ];
 
   for (const test of tests) {

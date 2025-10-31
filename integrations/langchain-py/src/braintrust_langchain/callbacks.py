@@ -145,7 +145,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self.spans[run_id] = span
         return span
 
-    # TODO: serialize input, output, metadata correctly
     def _end_span(
         self,
         run_id: UUID,
@@ -186,6 +185,18 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             metrics=metrics,
             dataset_record_id=dataset_record_id,
         )
+
+        # In async workflows, callbacks may execute in different async contexts.
+        # The span's context variable token may have been created in a different
+        # context, causing ValueError when trying to reset it. We catch and ignore
+        # this specific error since the span hierarchy is maintained via self.spans.
+        try:
+            span.unset_current()
+        except ValueError as e:
+            if "was created in a different Context" in str(e):
+                pass
+            else:
+                raise
 
         span.end()
 

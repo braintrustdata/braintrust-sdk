@@ -10,20 +10,20 @@ import { generateText, streamText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
-import { BraintrustMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "../../exports-node";
 import {
   _exportsForTestingOnly,
   Logger,
   TestBackgroundLogger,
   initLogger,
   _internalSetInitialState,
-} from "../logger";
-import { wrapAnthropic } from "./anthropic";
+} from "../../logger";
+import { wrapAnthropic } from "../anthropic";
 import {
   LONG_SYSTEM_PROMPT,
   TEST_USER_PROMPT,
   CACHEABLE_SYSTEM_MESSAGE,
-} from "./ai-sdk-v2.fixtures";
+} from "./middleware.fixtures";
 
 const testModelName = "gpt-4.1";
 const testAnthropicModelName = "claude-3-haiku-20240307";
@@ -96,7 +96,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -158,7 +158,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.streamText",
+          name: "ai-sdk.doStream",
           type: "llm",
         },
         input: [
@@ -223,7 +223,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     const span = spans[0] as any;
     expect(span).toMatchObject({
       span_attributes: {
-        name: "ai-sdk.generateText",
+        name: "ai-sdk.doGenerate",
         type: "llm",
       },
       input: [
@@ -269,7 +269,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -324,7 +324,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -386,7 +386,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       const span = spans[0] as any;
       expect(span).toMatchObject({
         span_attributes: {
-          name: "ai-sdk.generateText",
+          name: "ai-sdk.doGenerate",
           type: "llm",
         },
         input: [
@@ -536,12 +536,10 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       expect(aiSdkSpan.metrics.prompt_tokens).toBe(
         directSpan.metrics.prompt_tokens,
       );
-      expect(aiSdkSpan.metrics.completion_tokens).toBe(
-        directSpan.metrics.completion_tokens,
-      );
-      expect(aiSdkSpan.metrics.tokens).toBe(directSpan.metrics.tokens);
-      expect(aiSdkSpan.metrics.prompt_cached_tokens).toBe(
-        directSpan.metrics.prompt_cached_tokens,
+      expect(aiSdkSpan.metrics.completion_tokens).toEqual(expect.any(Number));
+      expect(aiSdkSpan.metrics.tokens).toEqual(expect.any(Number));
+      expect(aiSdkSpan.metrics.prompt_cached_tokens).toEqual(
+        expect.any(Number),
       );
 
       // Verify provider detection

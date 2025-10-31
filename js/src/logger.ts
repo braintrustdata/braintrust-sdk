@@ -1768,7 +1768,7 @@ export function updateSpan({
 }: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
   OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
-  const components = SpanComponentsV3.fromStr(exported);
+  const components = getSpanComponentsClass().fromStr(exported);
 
   if (!components.data.row_id) {
     throw new Error("Exported span must have a row id");
@@ -1907,7 +1907,7 @@ export async function permalink(
   };
 
   try {
-    const components = SpanComponentsV3.fromStr(slug);
+    const components = getSpanComponentsClass().fromStr(slug);
     const object_type = spanObjectTypeV3ToString(components.data.object_type);
     const [orgName, appUrl, object_id] = await Promise.all([
       getOrgName(),
@@ -1955,7 +1955,7 @@ function startSpanParentArgs(args: {
     if (args.parentSpanIds) {
       throw new Error("Cannot specify both parent and parentSpanIds");
     }
-    const parentComponents = SpanComponentsV3.fromStr(args.parent);
+    const parentComponents = getSpanComponentsClass().fromStr(args.parent);
     if (args.parentObjectType !== parentComponents.data.object_type) {
       throw new Error(
         `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.data.object_type}`,
@@ -3890,7 +3890,12 @@ export function currentSpan(options?: OptionalStateArg): Span {
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> &
     OptionalStateArg & { parent?: string },
-): SpanComponentsV3 | Span | Experiment | Logger<IsAsyncFlush> {
+):
+  | SpanComponentsV3
+  | SpanComponentsV4
+  | Span
+  | Experiment
+  | Logger<IsAsyncFlush> {
   const state = options?.state ?? _globalState;
 
   const parentSpan = currentSpan({ state });
@@ -3899,7 +3904,7 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
   }
 
   const parentStr = options?.parent ?? state.currentParent.getStore();
-  if (parentStr) return SpanComponentsV3.fromStr(parentStr);
+  if (parentStr) return getSpanComponentsClass().fromStr(parentStr);
 
   const experiment = currentExperiment();
   if (experiment) {
@@ -4292,7 +4297,10 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
     state,
   });
 
-  if (parentObject instanceof SpanComponentsV3) {
+  if (
+    parentObject instanceof SpanComponentsV3 ||
+    parentObject instanceof SpanComponentsV4
+  ) {
     const parentSpanIds: ParentSpanIds | undefined = parentObject.data.row_id
       ? {
           spanId: parentObject.data.span_id,
@@ -4808,6 +4816,11 @@ class ObjectFetcher<RecordType>
             },
             use_columnstore: false,
             brainstore_realtime: true,
+            ...(this.pinnedVersion !== undefined
+              ? {
+                  version: this.pinnedVersion,
+                }
+              : {}),
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );

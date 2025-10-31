@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 
-// This test file specifically tests the behavior when OpenTelemetry is not installed
-// It should be run in an environment where OpenTelemetry packages are not available
+// This test file specifically tests the behavior when OpenTelemetry is not installed.
+// It should run as part of our core / default test suite.
 
 describe("OpenTelemetry not installed", () => {
   let otelInstalled = false;
@@ -71,5 +71,62 @@ describe("OpenTelemetry not installed", () => {
         apiKey: "test-api-key",
       });
     }).toThrow("OpenTelemetry packages are not installed");
+  });
+
+  it("should return undefined when calling otelContextFromSpanExport without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      // Skip this test if OpenTelemetry is installed
+      return;
+    }
+
+    const { otelContextFromSpanExport } = await import(".");
+
+    const result = otelContextFromSpanExport("some-export-string");
+    expect(result).toBeUndefined();
+  });
+
+  it("should not error when calling otel.addParentToBaggage without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    // Should not throw, just return a context (or undefined)
+    expect(() => {
+      const result = otel.addParentToBaggage("project_name:test");
+      expect(result).toBeDefined();
+    }).not.toThrow();
+  });
+
+  it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    const mockSpan = {
+      attributes: { "braintrust.parent": "project_name:test" },
+    } as any;
+
+    const result = otel.addSpanParentToBaggage(mockSpan);
+    expect(result).toBeUndefined();
+  });
+
+  it("should return undefined when calling otel.parentFromHeaders without OpenTelemetry", async () => {
+    if (otelInstalled) {
+      return;
+    }
+
+    const { otel } = await import(".");
+
+    const headers = {
+      traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+      baggage: "braintrust.parent=project_name:test",
+    };
+
+    const result = otel.parentFromHeaders(headers);
+    expect(result).toBeUndefined();
   });
 });

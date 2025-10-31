@@ -3,42 +3,26 @@ help:
 	@echo "Braintrust JS SDK Makefile"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  make help                - Show this help message"
-	@echo "  make build              - Build the SDK"
-	@echo "  make clean              - Clean build artifacts"
+	@echo "  make help                  - Show this help message"
+	@echo "  make build                 - Build the SDK"
+	@echo "  make clean                 - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-ai-sdk        - Run AI SDK tests (v1 + v2)"
 	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
 	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
 	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
+	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
+	@echo "  make test-ai-sdk-4      - Run AI SDK v4 wrapper tests"
+	@echo "  make test-ai-sdk-5      - Run AI SDK v5 wrapper tests"
+	@echo "  make test-mastra        - Run Mastra wrapper tests"
+	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
-	@echo "  make publish-beta       - Publish beta version to npm"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta
-
-# -------------------------------------------------------------------------------------------------	#
-# AI SDK testing
-# -------------------------------------------------------------------------------------------------
-.PHONY: test-ai-sdk test-ai-sdk-v1 test-ai-sdk-v2
-
-test-ai-sdk: test-ai-sdk-v1 test-ai-sdk-v2
-
-test-ai-sdk-v1:
-	pnpm prune
-	$(call pnpm_install_no_save,ai@^3.0.0)
-	pnpm test:ai-sdk-v1
-
-test-ai-sdk-v2:
-	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add ai@beta @ai-sdk/openai@beta @ai-sdk/anthropic@beta @ai-sdk/provider@beta
-	pnpm test:ai-sdk-v2
-# this should still work
-	pnpm test:ai-sdk-v1
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -56,28 +40,59 @@ test-anthropic-%:
 	$(call pnpm_install_no_save,@anthropic-ai/sdk@$*)
 	pnpm test:anthropic
 
+# ----
+# Google GenAI
+# ----
+test-google-genai: test-google-genai-latest
+
+test-google-genai-latest:
+	pnpm prune
+	$(call pnpm_install_no_save,@google/genai)
+	pnpm test:google-genai
+
+# -------------------------------------------------------------------------------------------------
+# AI SDK v4 testing
+# -------------------------------------------------------------------------------------------------
+
+test-ai-sdk-4:
+	cd src/wrappers/ai-sdk-4 && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# AI SDK v5 testing
+# -------------------------------------------------------------------------------------------------
+
+test-ai-sdk-5:
+	cd src/wrappers/ai-sdk-5 && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# Mastra testing
+# -------------------------------------------------------------------------------------------------
+
+test-mastra:
+	cd src/wrappers/mastra && pnpm install && pnpm test
+
+# -------------------------------------------------------------------------------------------------
+# Claude Agent SDK testing
+# -------------------------------------------------------------------------------------------------
+
+test-claude-agent-sdk:
+	cd src/wrappers/claude-agent-sdk && pnpm install && pnpm test
+
+
 # -------------------------------------------------------------------------------------------------
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed test-otel-missing
+.PHONY: test-otel test-otel-installed
 
 test-otel-installed:
 	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http"
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
-test-otel-missing:
-	pnpm prune
-	# Verify OpenTelemetry packages are not installed
-	@echo "Verifying OpenTelemetry packages are not installed..."
-	@if pnpm list @opentelemetry/api 2>/dev/null | grep -q "@opentelemetry/api"; then \
-		echo "ERROR: @opentelemetry/api is installed, but test requires it to be missing"; \
-		exit 1; \
-	fi
-	pnpm test:otel-no-deps
-
-test-otel: test-otel-installed test-otel-missing
+# test-otel only runs with dependencies installed
+# otel-no-deps.test.ts is part of core tests and handles both cases automatically
+test-otel: test-otel-installed
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
@@ -104,7 +119,14 @@ test-openai-%:
 .PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
-	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
+	npm_config_save=false npm_config_lockfile=false pnpm add \
+		"openai" \
+		"@anthropic-ai/sdk" \
+		"@opentelemetry/api" \
+		"@opentelemetry/sdk-trace-base" \
+		"@opentelemetry/exporter-trace-otlp-http" \
+		"@opentelemetry/core" \
+		"@opentelemetry/context-async-hooks"
 
 
 # Test everything but the wrappers.
@@ -113,10 +135,10 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-ai-sdk
+test: test-core test-otel test-openai test-anthropic test-google-genai
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-otel test-anthropic-latest test-openai-latest
+test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
 
 
 prune:
@@ -126,9 +148,9 @@ docs:
 	pnpm run docs
 
 build:
-	pnpm run build
+	npm run build
 
-publish-beta: build
+publish-beta-local: build
 	pnpm publish --tag beta
 
 bench:
@@ -139,8 +161,11 @@ bench:
 
 verify-ci: build docs test
 
-
-
+publish-sdk-js:
+	./scripts/validate-release.sh
+	npm install
+	npm run build
+	npm publish
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.

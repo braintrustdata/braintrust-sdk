@@ -1,5 +1,6 @@
-import { BraintrustMiddleware } from "./ai-sdk-v2";
-import { startSpan, traced, withCurrent } from "../logger";
+import { BraintrustMiddleware } from "./middleware";
+import { startSpan, traced, withCurrent, Attachment } from "../../logger";
+import type { CompiledPrompt } from "../../logger";
 import {
   extractModelParameters,
   detectProviderFromResult,
@@ -7,7 +8,12 @@ import {
   extractModelFromResult,
   normalizeFinishReason,
   extractInput,
-} from "./ai-sdk-shared";
+} from "../ai-sdk-shared/utils";
+import {
+  processInputAttachments,
+  getExtensionFromMediaType,
+  convertDataToBlob,
+} from "../attachment-utils";
 
 // Define a neutral interface for the AI SDK methods we use.
 // This avoids importing `typeof import("ai")`, which can cause type-identity
@@ -33,7 +39,55 @@ const V3_EXCLUDE_KEYS = new Set([
   "model", // Already captured in metadata.model
   "providerOptions", // Internal AI SDK configuration
   "tools", // Already captured in metadata.tools
+  "span_info", // Extracted separately for prompt linking
 ]);
+
+type SpanInfo = {
+  span_info?: CompiledPrompt<"chat">["span_info"];
+};
+
+/**
+ * Helper function to extract span_info from params.
+ * Returns the full span_info to pass through to the middleware.
+ */
+function extractSpanInfo(params: Record<string, unknown> & SpanInfo): {
+  spanInfo?: CompiledPrompt<"chat">["span_info"];
+} {
+  const { span_info } = params;
+  return { spanInfo: span_info };
+}
+
+/**
+ * Converts AI SDK GeneratedFile objects to Braintrust Attachments
+ */
+function processFilesAsAttachments(
+  files: any[] | undefined,
+): Attachment[] | undefined {
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    return undefined;
+  }
+
+  return files
+    .map((file, index) => {
+      const mediaType = file.mediaType || "application/octet-stream";
+      const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
+
+      // Convert data to Blob using shared utility
+      const blob = convertDataToBlob(file.data, mediaType);
+
+      // Skip if conversion failed (e.g., for URLs we can't fetch)
+      if (!blob) {
+        return null;
+      }
+
+      return new Attachment({
+        data: blob,
+        filename: filename,
+        contentType: mediaType,
+      });
+    })
+    .filter((attachment): attachment is Attachment => attachment !== null);
+}
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
@@ -72,11 +126,13 @@ export function wrapAISDK<T extends AISDKMethods>(
     streamObject,
   } = ai;
   const wrappedGenerateText = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ spanInfo }),
         });
 
         const result = await generateText({
@@ -89,9 +145,18 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result?.finishReason);
 
+        // Process input attachments for parent span
+        const input = processInputAttachments(extractInput(params));
+
+        // Process generated files as attachments
+        const outputAttachments = processFilesAsAttachments(result.files);
+        const output = outputAttachments
+          ? { text: result.text || result.content, files: outputAttachments }
+          : result.text || result.content;
+
         span.log({
-          input: extractInput(params),
-          output: result.text,
+          input: input,
+          output: output,
           metadata: {
             ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
@@ -109,11 +174,13 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedGenerateObject = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+
     return traced(
       async (span) => {
         const wrappedModel = wrapLanguageModel({
           model: params.model,
-          middleware: BraintrustMiddleware(),
+          middleware: BraintrustMiddleware({ spanInfo }),
         });
         const result = await generateObject({
           ...params,
@@ -125,9 +192,18 @@ export function wrapAISDK<T extends AISDKMethods>(
         const model = extractModelFromResult(result);
         const finishReason = normalizeFinishReason(result.finishReason);
 
+        // Process input attachments for parent span
+        const input = processInputAttachments(extractInput(params));
+
+        // Process generated files as attachments
+        const outputAttachments = processFilesAsAttachments(result.files);
+        const output = outputAttachments
+          ? { object: result.object, files: outputAttachments }
+          : result.object;
+
         span.log({
-          input: extractInput(params),
-          output: result.object,
+          input: input,
+          output: output,
           metadata: {
             ...extractModelParameters(params, V3_EXCLUDE_KEYS),
             ...(provider ? { provider } : {}),
@@ -145,10 +221,14 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamText = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+    // Process input attachments for parent span
+    const input = processInputAttachments(extractInput(params));
+
     const span = startSpan({
       name: "ai-sdk.streamText",
       event: {
-        input: extractInput(params),
+        input: input,
         metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
       },
     });
@@ -160,7 +240,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ spanInfo }),
       });
 
       const startTime = Date.now();
@@ -191,8 +271,18 @@ export function wrapAISDK<T extends AISDKMethods>(
             const provider = detectProviderFromResult(event);
             const model = extractModelFromResult(event);
             const finishReason = normalizeFinishReason(event?.finishReason);
+
+            // Process generated files as attachments
+            const outputAttachments = processFilesAsAttachments(event.files);
+            const output = outputAttachments
+              ? {
+                  text: event?.text || event?.content,
+                  files: outputAttachments,
+                }
+              : event?.text || event?.content;
+
             span.log({
-              output: event?.text,
+              output: output,
               metadata: {
                 ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),
@@ -225,10 +315,14 @@ export function wrapAISDK<T extends AISDKMethods>(
   };
 
   const wrappedStreamObject = (params: any) => {
+    const { spanInfo } = extractSpanInfo(params);
+    // Process input attachments for parent span
+    const input = processInputAttachments(extractInput(params));
+
     const span = startSpan({
       name: "ai-sdk.streamObject",
       event: {
-        input: extractInput(params),
+        input: input,
         metadata: extractModelParameters(params, V3_EXCLUDE_KEYS),
       },
     });
@@ -239,7 +333,7 @@ export function wrapAISDK<T extends AISDKMethods>(
     try {
       const wrappedModel = wrapLanguageModel({
         model: params.model,
-        middleware: BraintrustMiddleware(),
+        middleware: BraintrustMiddleware({ spanInfo }),
       });
 
       const result = withCurrent(span, () =>
@@ -254,8 +348,15 @@ export function wrapAISDK<T extends AISDKMethods>(
             const provider = detectProviderFromResult(event);
             const model = extractModelFromResult(event);
             const finishReason = normalizeFinishReason(event?.finishReason);
+
+            // Process generated files as attachments
+            const outputAttachments = processFilesAsAttachments(event.files);
+            const output = outputAttachments
+              ? { object: event?.object, files: outputAttachments }
+              : event?.object;
+
             span.log({
-              output: event?.object,
+              output: output,
               metadata: {
                 ...extractModelParameters(params, V3_EXCLUDE_KEYS),
                 ...(provider ? { provider } : {}),

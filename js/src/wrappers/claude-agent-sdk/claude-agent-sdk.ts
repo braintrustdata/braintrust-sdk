@@ -1,11 +1,11 @@
-import { startSpan, traced, withCurrent } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
-import { SpanTypeAttribute } from "../../util/index";
+import { startSpan, traced, withCurrent } from "../../logger";
+import { getCurrentUnixTimestamp } from "../../util";
+import { SpanTypeAttribute } from "../../../util/index";
 import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
-} from "./anthropic-tokens-util";
-import { getNumberProperty } from "./ai-sdk-shared";
+} from "../anthropic-tokens-util";
+import { getNumberProperty } from "../ai-sdk-shared/utils";
 
 /**
  * Types from @anthropic-ai/claude-agent-sdk
@@ -427,7 +427,7 @@ async function _createLLMSpanForMessages(
  * // Use normally - tracing is automatic
  * for await (const message of query({
  *   prompt: "Hello, Claude!",
- *   options: { model: "claude-3-5-sonnet-20241022" }
+ *   options: { model: "claude-haiku-4-5-20251001" }
  * })) {
  *   console.log(message);
  * }

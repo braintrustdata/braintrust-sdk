@@ -6,170 +6,179 @@ import asyncio
 import time
 from pathlib import Path
 
+import braintrust
 from braintrust.wrappers.google_genai import setup_genai
 from google.genai import types
 from google.genai.client import Client
 
 setup_genai(project_name="golden-py-genai")
 
-FIXTURES_DIR = Path(__file__) / "fixtures"
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 client = Client()
 
 
 # Test 1: Basic text completion
 def test_basic_completion():
-    print("\n=== Test 1: Basic Completion ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="What is the capital of France?",
-        config=types.GenerateContentConfig(
-            max_output_tokens=100,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_basic_completion"):
+        print("\n=== Test 1: Basic Completion ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="What is the capital of France?",
+            config=types.GenerateContentConfig(
+                max_output_tokens=100,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 2: Multi-turn conversation
 def test_multi_turn():
-    print("\n=== Test 2: Multi-turn Conversation ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Content(role="user", parts=[types.Part.from_text(text="Hi, my name is Alice.")]),
-            types.Content(role="model", parts=[types.Part.from_text(text="Hello Alice! Nice to meet you.")]),
-            types.Content(role="user", parts=[types.Part.from_text(text="What did I just tell you my name was?")]),
-        ],
-        config=types.GenerateContentConfig(
-            max_output_tokens=200,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_multi_turn"):
+        print("\n=== Test 2: Multi-turn Conversation ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Content(role="user", parts=[types.Part.from_text(text="Hi, my name is Alice.")]),
+                types.Content(role="model", parts=[types.Part.from_text(text="Hello Alice! Nice to meet you.")]),
+                types.Content(role="user", parts=[types.Part.from_text(text="What did I just tell you my name was?")]),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=200,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 3: System prompt
 def test_system_prompt():
-    print("\n=== Test 3: System Prompt ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="Tell me about the weather.",
-        config=types.GenerateContentConfig(
-            system_instruction="You are a pirate. Always respond in pirate speak.",
-            max_output_tokens=150,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_system_prompt"):
+        print("\n=== Test 3: System Prompt ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="Tell me about the weather.",
+            config=types.GenerateContentConfig(
+                system_instruction="You are a pirate. Always respond in pirate speak.",
+                max_output_tokens=150,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 4: Streaming response
 def test_streaming():
-    print("\n=== Test 4: Streaming ===")
-    stream = client.models.generate_content_stream(
-        model="gemini-2.0-flash-001",
-        contents="Count from 1 to 10 slowly.",
-        config=types.GenerateContentConfig(
-            max_output_tokens=200,
-        ),
-    )
+    with braintrust.start_span(name="test_streaming"):
+        print("\n=== Test 4: Streaming ===")
+        stream = client.models.generate_content_stream(
+            model="gemini-2.0-flash-001",
+            contents="Count from 1 to 10 slowly.",
+            config=types.GenerateContentConfig(
+                max_output_tokens=200,
+            ),
+        )
 
-    full_text = ""
-    for chunk in stream:
-        if chunk.text:
-            print(chunk.text, end="")
-            full_text += chunk.text
+        full_text = ""
+        for chunk in stream:
+            if chunk.text:
+                print(chunk.text, end="")
+                full_text += chunk.text
 
-    print("\n")
-    return full_text
+        print("\n")
+        return full_text
 
 
 # Test 5: Image input (base64)
 def test_image_input():
-    print("\n=== Test 5: Image Input ===")
-    image_path = FIXTURES_DIR / "test-image.png"
+    with braintrust.start_span(name="test_image_input"):
+        print("\n=== Test 5: Image Input ===")
+        image_path = FIXTURES_DIR / "test-image.png"
 
-    with open(image_path, "rb") as f:
-        image_data = f.read()
+        with open(image_path, "rb") as f:
+            image_data = f.read()
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Part.from_bytes(data=image_data, mime_type="image/png"),
-            types.Part.from_text(text="What color is this image?"),
-        ],
-        config=types.GenerateContentConfig(
-            max_output_tokens=150,
-        ),
-    )
-    print(response.text)
-    return response
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Part.from_bytes(data=image_data, mime_type="image/png"),
+                types.Part.from_text(text="What color is this image?"),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=150,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 6: Document input (PDF)
 def test_document_input():
-    print("\n=== Test 6: Document Input ===")
-    pdf_path = FIXTURES_DIR / "test-document.pdf"
+    with braintrust.start_span(name="test_document_input"):
+        print("\n=== Test 6: Document Input ===")
+        pdf_path = FIXTURES_DIR / "test-document.pdf"
 
-    with open(pdf_path, "rb") as f:
-        pdf_data = f.read()
+        with open(pdf_path, "rb") as f:
+            pdf_data = f.read()
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
-            types.Part.from_text(text="What is in this document?"),
-        ],
-        config=types.GenerateContentConfig(
-            max_output_tokens=150,
-        ),
-    )
-    print(response.text)
-    return response
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
+                types.Part.from_text(text="What is in this document?"),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=150,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 7: Temperature and top_p variations
 def test_temperature_variations():
-    print("\n=== Test 7: Temperature Variations ===")
-    configs = [
-        {"temperature": 0.0, "top_p": 1.0},
-        {"temperature": 1.0, "top_p": 0.9},
-        {"temperature": 0.7, "top_p": 0.95},
-    ]
+    with braintrust.start_span(name="test_temperature_variations"):
+        print("\n=== Test 7: Temperature Variations ===")
+        configs = [
+            {"temperature": 0.0, "top_p": 1.0},
+            {"temperature": 1.0, "top_p": 0.9},
+            {"temperature": 0.7, "top_p": 0.95},
+        ]
 
-    responses = []
-    for config in configs:
-        print(f"\nConfig: temp={config['temperature']}, top_p={config['top_p']}")
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-001",
-            contents="Say something creative.",
-            config=types.GenerateContentConfig(
-                temperature=config["temperature"],
-                top_p=config["top_p"],
-                max_output_tokens=50,
-            ),
-        )
-        print(response.text)
-        responses.append(response)
+        responses = []
+        for config in configs:
+            print(f"\nConfig: temp={config['temperature']}, top_p={config['top_p']}")
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents="Say something creative.",
+                config=types.GenerateContentConfig(
+                    temperature=config["temperature"],
+                    top_p=config["top_p"],
+                    max_output_tokens=50,
+                ),
+            )
+            print(response.text)
+            responses.append(response)
 
-    return responses
+        return responses
 
 
 # Test 8: Stop sequences
 def test_stop_sequences():
-    print("\n=== Test 8: Stop Sequences ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="Write a short story about a robot.",
-        config=types.GenerateContentConfig(
-            max_output_tokens=500,
-            stop_sequences=["END", "\n\n"],
-        ),
-    )
-    print(response.text)
-    print(f"Stop reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'}")
-    return response
+    with braintrust.start_span(name="test_stop_sequences"):
+        print("\n=== Test 8: Stop Sequences ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="Write a short story about a robot.",
+            config=types.GenerateContentConfig(
+                max_output_tokens=500,
+                stop_sequences=["END", "\n\n"],
+            ),
+        )
+        print(response.text)
+        print(f"Stop reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'}")
+        return response
 
 
 # Test 9: Metadata
@@ -178,225 +187,287 @@ def test_stop_sequences():
 
 # Test 10: Long context
 def test_long_context():
-    print("\n=== Test 10: Long Context ===")
-    long_text = "The quick brown fox jumps over the lazy dog. " * 100
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=f"Here is a long text:\n\n{long_text}\n\nHow many times does the word 'fox' appear?",
-        config=types.GenerateContentConfig(
-            max_output_tokens=100,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_long_context"):
+        print("\n=== Test 10: Long Context ===")
+        long_text = "The quick brown fox jumps over the lazy dog. " * 100
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=f"Here is a long text:\n\n{long_text}\n\nHow many times does the word 'fox' appear?",
+            config=types.GenerateContentConfig(
+                max_output_tokens=100,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 13: Mixed content types
 def test_mixed_content():
-    print("\n=== Test 13: Mixed Content Types ===")
-    # Skip if image doesn't exist
-    image_path = FIXTURES_DIR / "test-image.png"
+    with braintrust.start_span(name="test_mixed_content"):
+        print("\n=== Test 13: Mixed Content Types ===")
+        # Skip if image doesn't exist
+        image_path = FIXTURES_DIR / "test-image.png"
 
-    with open(image_path, "rb") as f:
-        image_data = f.read()
+        with open(image_path, "rb") as f:
+            image_data = f.read()
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Part.from_text(text="First, look at this image:"),
-            types.Part.from_bytes(data=image_data, mime_type="image/png"),
-            types.Part.from_text(text="Now describe what you see and explain why it matters."),
-        ],
-        config=types.GenerateContentConfig(
-            max_output_tokens=200,
-        ),
-    )
-    print(response.text)
-    return response
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Part.from_text(text="First, look at this image:"),
+                types.Part.from_bytes(data=image_data, mime_type="image/png"),
+                types.Part.from_text(text="Now describe what you see and explain why it matters."),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=200,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 14: Empty assistant message (prefill)
 def test_prefill():
-    print("\n=== Test 14: Prefill ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Content(role="user", parts=[types.Part.from_text(text="Write a haiku about coding.")]),
-            types.Content(role="model", parts=[types.Part.from_text(text="Here is a haiku:")]),
-        ],
-        config=types.GenerateContentConfig(
-            max_output_tokens=200,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_prefill"):
+        print("\n=== Test 14: Prefill ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Content(role="user", parts=[types.Part.from_text(text="Write a haiku about coding.")]),
+                types.Content(role="model", parts=[types.Part.from_text(text="Here is a haiku:")]),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=200,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Test 15: Very short max_tokens
 def test_short_max_tokens():
-    print("\n=== Test 15: Very Short Max Tokens ===")
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="What is AI?",
-        config=types.GenerateContentConfig(
-            max_output_tokens=5,
-        ),
-    )
-    print(response.text)
-    print(f"Stop reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'}")
-    return response
+    with braintrust.start_span(name="test_short_max_tokens"):
+        print("\n=== Test 15: Very Short Max Tokens ===")
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="What is AI?",
+            config=types.GenerateContentConfig(
+                max_output_tokens=5,
+            ),
+        )
+        print(response.text)
+        print(f"Stop reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'}")
+        return response
 
 
 # Test 16: Tool use
 def test_tool_use():
-    print("\n=== Test 16: Tool Use ===")
+    with braintrust.start_span(name="test_tool_use"):
+        print("\n=== Test 16: Tool Use ===")
 
-    # Define a function for getting weather
-    def get_weather(location: str, unit: str = "celsius") -> str:
-        """Get the current weather for a location.
+        # Define a function for getting weather
+        def get_weather(city_and_state: str, unit: str = "celsius") -> str:
+            """Get the current weather for a location.
 
-        Args:
-            location: The city and state, e.g. San Francisco, CA
-            unit: The unit of temperature (celsius or fahrenheit)
-        """
-        # Simulate weather API response
-        return f"22 degrees {unit} and sunny in {location}"
+            Args:
+                city_and_state: The city and state, e.g. San Francisco, CA
+                unit: The unit of temperature (celsius or fahrenheit)
+            """
+            # Simulate weather API response
+            return f"22 degrees {unit} and sunny in {city_and_state}"
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="What is the weather like in Paris, France?",
-        config=types.GenerateContentConfig(
-            tools=[get_weather],
-            max_output_tokens=500,
-        ),
-    )
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="What is the weather like in Paris, France?",
+            config=types.GenerateContentConfig(
+                tools=[get_weather],
+                max_output_tokens=500,
+            ),
+        )
 
-    print("Response content:")
-    if response.text:
-        print(f"Text: {response.text}")
+        print("Response content:")
+        if response.text:
+            print(f"Text: {response.text}")
 
-    if hasattr(response, "function_calls") and response.function_calls:
-        for i, call in enumerate(response.function_calls):
-            print(f"Tool use block {i}:")
-            print(f"  Tool: {call.name}")
-            print(f"  Input: {call.args}")
+        if hasattr(response, "function_calls") and response.function_calls:
+            for i, call in enumerate(response.function_calls):
+                print(f"Tool use block {i}:")
+                print(f"  Tool: {call.name}")
+                print(f"  Input: {call.args}")
 
-    return response
+        return response
 
 
 # Test 17: Tool use with result (multi-turn)
 def test_tool_use_with_result():
-    print("\n=== Test 17: Tool Use With Result ===")
-    # Manually declare function
-    function = types.FunctionDeclaration(
-        name="calculate",
-        description="Perform a mathematical calculation",
-        parameters_json_schema={
-            "type": "object",
-            "properties": {
-                "operation": {
-                    "type": "string",
-                    "enum": ["add", "subtract", "multiply", "divide"],
-                    "description": "The mathematical operation",
+    with braintrust.start_span(name="test_tool_use_with_result"):
+        print("\n=== Test 17: Tool Use With Result ===")
+        # Manually declare function
+        function = types.FunctionDeclaration(
+            name="calculate",
+            description="Perform a mathematical calculation",
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["add", "subtract", "multiply", "divide"],
+                        "description": "The mathematical operation",
+                    },
+                    "a": {
+                        "type": "number",
+                        "description": "First number",
+                    },
+                    "b": {
+                        "type": "number",
+                        "description": "Second number",
+                    },
                 },
-                "a": {
-                    "type": "number",
-                    "description": "First number",
-                },
-                "b": {
-                    "type": "number",
-                    "description": "Second number",
-                },
+                "required": ["operation", "a", "b"],
             },
-            "required": ["operation", "a", "b"],
-        },
-    )
+        )
 
-    tool = types.Tool(function_declarations=[function])
+        tool = types.Tool(function_declarations=[function])
 
-    # First request - model will use the tool
-    first_response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="What is 127 multiplied by 49?",
-        config=types.GenerateContentConfig(
-            tools=[tool],
-            max_output_tokens=500,
-        ),
-    )
-
-    print("First response:")
-    tool_call = None
-    if hasattr(first_response, "function_calls") and first_response.function_calls:
-        tool_call = first_response.function_calls[0]
-        print(f"Tool called: {tool_call.name}")
-        print(f"Input: {tool_call.args}")
-
-    # Simulate tool execution
-    result = 127 * 49
-
-    assert first_response.candidates
-    assert tool_call and tool_call.name
-
-    # Second request - provide tool result
-    second_response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            types.Content(role="user", parts=[types.Part.from_text(text="What is 127 multiplied by 49?")]),
-            first_response.candidates[0].content,
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_function_response(
-                        name=tool_call.name,
-                        response={"result": result},
-                    )
-                ],
+        # First request - model will use the tool
+        first_response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="What is 127 multiplied by 49?",
+            config=types.GenerateContentConfig(
+                tools=[tool],
+                max_output_tokens=500,
             ),
-        ],
-        config=types.GenerateContentConfig(
-            tools=[tool],
-            max_output_tokens=500,
-        ),
-    )
+        )
 
-    print("\nSecond response (with tool result):")
-    print(second_response.text)
-    return second_response
+        print("First response:")
+        tool_call = None
+        if hasattr(first_response, "function_calls") and first_response.function_calls:
+            tool_call = first_response.function_calls[0]
+            print(f"Tool called: {tool_call.name}")
+            print(f"Input: {tool_call.args}")
+
+        # Simulate tool execution
+        result = 127 * 49
+
+        assert first_response.candidates
+        assert tool_call and tool_call.name
+
+        # Second request - provide tool result
+        second_response = client.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents=[
+                types.Content(role="user", parts=[types.Part.from_text(text="What is 127 multiplied by 49?")]),
+                first_response.candidates[0].content,
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_function_response(
+                            name=tool_call.name,
+                            response={"result": result},
+                        )
+                    ],
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                tools=[tool],
+                max_output_tokens=500,
+            ),
+        )
+
+        print("\nSecond response (with tool result):")
+        print(second_response.text)
+        return second_response
 
 
 # Async test example
 async def test_async_generation():
-    print("\n=== Test 18: Async Generation ===")
-    response = await client.aio.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents="Tell me a joke about programming.",
-        config=types.GenerateContentConfig(
-            max_output_tokens=100,
-        ),
-    )
-    print(response.text)
-    return response
+    with braintrust.start_span(name="test_async_generation"):
+        print("\n=== Test 18: Async Generation ===")
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash-001",
+            contents="Tell me a joke about programming.",
+            config=types.GenerateContentConfig(
+                max_output_tokens=100,
+            ),
+        )
+        print(response.text)
+        return response
 
 
 # Async streaming test
 async def test_async_streaming():
-    print("\n=== Test 19: Async Streaming ===")
-    stream = await client.aio.models.generate_content_stream(
-        model="gemini-2.0-flash-001",
-        contents="List 5 programming languages and their main uses.",
-        config=types.GenerateContentConfig(
-            max_output_tokens=200,
-        ),
-    )
+    with braintrust.start_span(name="test_async_streaming"):
+        print("\n=== Test 19: Async Streaming ===")
+        stream = await client.aio.models.generate_content_stream(
+            model="gemini-2.0-flash-001",
+            contents="List 5 programming languages and their main uses.",
+            config=types.GenerateContentConfig(
+                max_output_tokens=200,
+            ),
+        )
 
-    full_text = ""
-    async for chunk in stream:
-        if chunk.text:
-            print(chunk.text, end="")
-            full_text += chunk.text
+        full_text = ""
+        async for chunk in stream:
+            if chunk.text:
+                print(chunk.text, end="")
+                full_text += chunk.text
 
-    print("\n")
-    return full_text
+        print("\n")
+        return full_text
+
+
+# Test 18: Reasoning tokens generation and follow-up
+def test_reasoning():
+    with braintrust.start_span(name="test_reasoning"):
+        print("\n=== Test 18: Reasoning Tokens & Follow-up ===")
+
+        # First request: Analyze pattern and derive formula
+        print("\n--- First request (generate reasoning) ---")
+        first_response = client.models.generate_content(
+            model="gemini-2.0-flash-thinking-exp-1219",
+            contents="Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+            config=types.GenerateContentConfig(
+                max_output_tokens=2048,
+                thinking_config=types.ThinkingConfig(include_thoughts=True, thinking_budget=1024),
+            ),
+        )
+
+        print("First response:")
+        print(first_response.candidates)
+
+        # Second request: Apply the discovered pattern to solve a new problem
+        print("\n--- Follow-up request (using reasoning context) ---")
+        follow_up_response = client.models.generate_content(
+            model="gemini-2.0-flash-thinking-exp-1219",
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text="Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?"
+                        )
+                    ],
+                ),
+                first_response.candidates[0].content if first_response.candidates else "",
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text="Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?"
+                        )
+                    ],
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                max_output_tokens=2048,
+                thinking_config=types.ThinkingConfig(include_thoughts=True, thinking_budget=1024),
+            ),
+        )
+
+        print("Follow-up response:")
+        print(follow_up_response.candidates)
+
+        return first_response, follow_up_response
 
 
 def run_sync_tests():
@@ -416,6 +487,7 @@ def run_sync_tests():
         test_short_max_tokens,
         test_tool_use,
         test_tool_use_with_result,
+        test_reasoning,
     ]
 
     for test in tests:

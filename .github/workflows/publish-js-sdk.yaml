@@ -1,0 +1,126 @@
+#
+# This workflow is used to publish the JavaScript SDK to npm.
+#
+# It supports two publishing modes:
+#
+# 1. REGULAR RELEASE (tag-based, automatic):
+#    - Triggered by pushing a tag matching js-sdk-v*.*.*
+#    - Validates the tag, builds, and publishes to npm with "latest" tag
+#
+# 2. PRE-RELEASE (manual, workflow_dispatch):
+#    - Manually triggered via GitHub Actions UI
+#    - Automatically appends "rc.{run_number}" to current package.json version
+#    - Publishes with "rc" dist-tag
+#    - Does NOT require updating package.json in the repository
+#
+
+name: Publish JavaScript SDK
+
+on:
+  push:
+    tags:
+      - "js-sdk-v*.*.*" # Trigger on version tags like js-sdk-v0.1.0, js-sdk-v1.2.3, etc.
+  workflow_dispatch: # Trigger pre-release manually
+
+jobs:
+  validate:
+    # Only run validation for tag-based releases (not prereleases)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for checking branch
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Set release tag
+        id: set_release_tag
+        # ensure the tag is valid (matches code, is on main, etc)
+        working-directory: js
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          echo "Using tag: $RELEASE_TAG"
+          ./scripts/validate-release-tag.sh "$RELEASE_TAG"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+  build-and-publish:
+    # Run after validation (for tag releases) OR immediately (for prereleases)
+    needs: validate
+    if: |
+      always() &&
+      (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install npm 11.6.2
+        run: npm install -g npm@11.6.2
+
+      # Regular release path (tag-based)
+      - name: Publish to npm (regular release)
+        if: github.event_name == 'push'
+        working-directory: js
+        run: make publish-sdk-js
+
+      # Prerelease path (manual trigger)
+      - name: Publish pre-release
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: js
+        run: |
+          # Read current version from package.json and append run number
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION="${CURRENT_VERSION}-rc.${GITHUB_RUN_NUMBER}"
+          ./scripts/publish-prerelease.sh "rc" "$NEW_VERSION"
+
+      # Upload artifacts for both paths
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-sdk-${{ github.event_name == 'workflow_dispatch' && 'prerelease' || 'release' }}-dist
+          path: js/dist/
+          retention-days: 5
+
+      # Create GitHub Release (only for regular releases)
+      - name: Generate release notes
+        if: github.event_name == 'push'
+        id: release_notes
+        run: |
+          RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh "${{ env.RELEASE_TAG }}" "js/")
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: process.env.RELEASE_TAG,
+              name: process.env.RELEASE_TAG,
+              body: process.env.RELEASE_NOTES,
+              draft: false,
+              prerelease: false
+            });

@@ -33,16 +33,21 @@ jobs:
   build-and-publish:
     needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       TWINE_USERNAME: __token__
       TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -62,3 +67,28 @@ jobs:
         working-directory: py
         run: |
           make publish-to-pypi
+
+      # Create GitHub Release
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh "${{ env.RELEASE_TAG }}" "py/")
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: process.env.RELEASE_TAG,
+              name: process.env.RELEASE_TAG,
+              body: process.env.RELEASE_NOTES,
+              draft: false,
+              prerelease: false
+            });
