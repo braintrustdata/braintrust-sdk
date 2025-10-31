@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import AbstractAsyncContextManager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
@@ -150,6 +151,9 @@ def wrap_flow(Flow: Any):
                 serialized_request = dict(serialized_request)
                 serialized_request["contents"] = serialized_contents
 
+            # Extract model name from request or instance
+            model_name = _extract_model_name(None, llm_request, instance)
+
             with start_span(
                 name=f"llm_call [{call_type}]",
                 type=SpanTypeAttribute.LLM,
@@ -160,15 +164,22 @@ def wrap_flow(Flow: Any):
                         "model_response_event": model_response_event,
                         "flow_class": instance.__class__.__name__,
                         "llm_call_type": call_type,
+                        "model": model_name,
                         **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
                     }
                 ),
             ) as llm_span:
                 last_event = None
                 event_with_content = None
+                start_time = time.time()
+                first_token_time = None
 
                 async with aclosing(wrapped(*args, **kwargs)) as agen:
                     async for event in agen:
+                        # Record time to first token
+                        if first_token_time is None:
+                            first_token_time = time.time()
+
                         last_event = event
                         if hasattr(event, "content") and event.content is not None:
                             event_with_content = event
@@ -186,7 +197,17 @@ def wrap_flow(Flow: Any):
                             )
                             if content:
                                 output["content"] = content
-                    llm_span.log(output=output)
+
+                    # Extract metrics from response
+                    metrics = _extract_metrics(last_event)
+
+                    # Add time to first token if we captured it
+                    if first_token_time is not None:
+                        if metrics is None:
+                            metrics = {}
+                        metrics["time_to_first_token"] = first_token_time - start_time
+
+                    llm_span.log(output=output, metrics=metrics)
 
         async with aclosing(_trace()) as agen:
             async for event in agen:
@@ -410,6 +431,65 @@ def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
 
 def _omit(obj: Any, keys: Iterable[str]):
     return {k: v for k, v in obj.items() if k not in keys}
+
+
+def _extract_metrics(response: Any) -> Optional[Dict[str, float]]:
+    """Extract token usage metrics from Google GenAI response."""
+    if not response:
+        return None
+
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if not usage_metadata:
+        return None
+
+    metrics: Dict[str, float] = {}
+
+    # Core token counts
+    if hasattr(usage_metadata, "prompt_token_count") and usage_metadata.prompt_token_count is not None:
+        metrics["prompt_tokens"] = float(usage_metadata.prompt_token_count)
+
+    if hasattr(usage_metadata, "candidates_token_count") and usage_metadata.candidates_token_count is not None:
+        metrics["completion_tokens"] = float(usage_metadata.candidates_token_count)
+
+    if hasattr(usage_metadata, "total_token_count") and usage_metadata.total_token_count is not None:
+        metrics["tokens"] = float(usage_metadata.total_token_count)
+
+    # Cached token metrics
+    if hasattr(usage_metadata, "cached_content_token_count") and usage_metadata.cached_content_token_count is not None:
+        metrics["prompt_cached_tokens"] = float(usage_metadata.cached_content_token_count)
+
+    # Reasoning token metrics (thoughts_token_count)
+    if hasattr(usage_metadata, "thoughts_token_count") and usage_metadata.thoughts_token_count is not None:
+        metrics["completion_reasoning_tokens"] = float(usage_metadata.thoughts_token_count)
+
+    return metrics if metrics else None
+
+
+def _extract_model_name(response: Any, llm_request: Any, instance: Any) -> Optional[str]:
+    """Extract model name from Google GenAI response, request, or flow instance."""
+    # Try to get from response first
+    if response:
+        model_version = getattr(response, "model_version", None)
+        if model_version:
+            return model_version
+
+    # Try to get from llm_request
+    if llm_request:
+        if hasattr(llm_request, "model") and llm_request.model:
+            return str(llm_request.model)
+
+    # Try to get from instance (flow's llm)
+    if instance:
+        if hasattr(instance, "llm"):
+            llm = instance.llm
+            if hasattr(llm, "model") and llm.model:
+                return str(llm.model)
+
+        # Try to get model from instance directly
+        if hasattr(instance, "model") and instance.model:
+            return str(instance.model)
+
+    return None
 
 
 G = TypeVar("G", bound=AsyncGenerator[Any, None])

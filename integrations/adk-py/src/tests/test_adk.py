@@ -403,3 +403,74 @@ async def test_adk_binary_data_attachment_conversion(memory_logger):
             llm_str = str(llm_span["input"])
             assert b"\x89PNG".hex() not in llm_str, "Raw binary data should not be in LLM span input"
             assert "89504e47" not in llm_str.lower(), "Raw binary data (hex) should not be in LLM span input"
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_adk_captures_metrics(memory_logger):
+    """Test that token usage metrics are captured from LLM responses."""
+    assert not memory_logger.pop()
+
+    agent = Agent(
+        name="metrics_agent",
+        model="gemini-2.0-flash",
+        instruction="You are a helpful assistant.",
+    )
+
+    APP_NAME = "metrics_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-metrics"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
+
+    user_msg = types.Content(role="user", parts=[types.Part(text="Say hello in 3 words")])
+
+    responses = []
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+        if event.is_final_response():
+            responses.append(event)
+
+    assert len(responses) > 0
+
+    spans = memory_logger.pop()
+
+    # Find LLM spans
+    llm_spans = [row for row in spans if row["span_attributes"].get("type") == "llm"]
+    assert len(llm_spans) > 0, "Should have LLM spans"
+
+    # Verify metrics are present in at least one LLM span
+    llm_span_with_metrics = None
+    for llm_span in llm_spans:
+        if "metrics" in llm_span and llm_span["metrics"]:
+            llm_span_with_metrics = llm_span
+            break
+
+    assert llm_span_with_metrics is not None, "At least one LLM span should have metrics"
+
+    metrics = llm_span_with_metrics["metrics"]
+
+    # Verify core token metrics are present
+    assert "prompt_tokens" in metrics, "Metrics should include prompt_tokens"
+    assert "completion_tokens" in metrics, "Metrics should include completion_tokens"
+    assert "tokens" in metrics, "Metrics should include total tokens"
+
+    # Verify token counts are reasonable
+    assert metrics["prompt_tokens"] > 0, "prompt_tokens should be greater than 0"
+    assert metrics["completion_tokens"] > 0, "completion_tokens should be greater than 0"
+    assert metrics["tokens"] > 0, "total tokens should be greater than 0"
+    assert metrics["tokens"] == metrics["prompt_tokens"] + metrics["completion_tokens"], (
+        "total tokens should equal prompt + completion tokens"
+    )
+
+    # Verify time to first token is captured for streaming responses
+    assert "time_to_first_token" in metrics, "Metrics should include time_to_first_token"
+    assert metrics["time_to_first_token"] > 0, "time_to_first_token should be greater than 0"
+    assert metrics["time_to_first_token"] < 10, "time_to_first_token should be reasonable (< 10 seconds)"
+
+    # Verify model name is captured in metadata
+    metadata = llm_span_with_metrics.get("metadata", {})
+    assert "model" in metadata, "Metadata should include model name"
+    assert metadata["model"] == "gemini-2.0-flash", "Model name should match the agent's model"
