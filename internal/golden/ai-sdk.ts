@@ -1,5 +1,5 @@
 import { wrapAISDK, initLogger, traced } from "braintrust";
-import { openai } from "@ai-sdk/openai";
+import { openai, OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as ai from "ai";
 import { z } from "zod";
@@ -7,21 +7,20 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import type { LanguageModel } from "ai";
 
-// Path from sdk/internal/golden/otel to sdk/fixtures
-const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+const FIXTURES_DIR = join(__dirname, "fixtures");
 
-// Initialize Braintrust logger
 initLogger({
-  projectName: "golden-ts-otel-ai-sdk",
+  projectName: "golden-ts-ai-sdk",
 });
 
-// Wrap AI SDK with Braintrust
+const SHOULD_WRAP = (process.env.WRAP || "true") === "true";
+
 const {
   generateText,
   streamText,
   generateObject: _generateObject,
   streamObject: _streamObject,
-} = wrapAISDK(ai);
+} = SHOULD_WRAP ? wrapAISDK(ai) : ai;
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
@@ -30,8 +29,8 @@ async function testBasicCompletion() {
       console.log("\n=== Test 1: Basic Completion ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -54,8 +53,8 @@ async function testMultiTurn() {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -85,8 +84,8 @@ async function testSystemPrompt() {
       console.log("\n=== Test 3: System Prompt ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -110,8 +109,8 @@ async function testStreaming() {
       console.log("\n=== Test 4: Streaming ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await streamText({
@@ -141,8 +140,8 @@ async function testImageInput() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -180,59 +179,31 @@ async function testDocumentInput() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        // Note: PDF file support in AI SDK appears to be limited
-        // OpenAI's AI SDK provider doesn't seem to process PDFs properly even with data URLs
-        // Anthropic has general issues with the AI SDK provider (not PDF-specific)
-        // This test demonstrates passing the file data correctly per AI SDK's FilePart interface
-        const messages =
-          provider === "openai"
-            ? [
-                {
-                  role: "user" as const,
-                  content: [
-                    {
-                      type: "file" as const,
-                      file: {
-                        file_data: `data:application/pdf;base64,${base64Pdf}`,
-                        filename: "test-document.pdf",
-                      },
-                    },
-                    {
-                      type: "text" as const,
-                      text: "What is in this document?",
-                    },
-                  ],
-                },
-              ]
-            : [
-                {
-                  role: "user" as const,
-                  content: [
-                    {
-                      type: "document" as const,
-                      source: {
-                        typ: "base64",
-                        media_type: "application/pdf",
-                        data: base64Pdf,
-                      },
-                    },
-                    {
-                      type: "text" as const,
-                      text: "What is in this document?",
-                    },
-                  ],
-                },
-              ];
 
         const result = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
-          messages,
+          messages: [
+            {
+              role: "user" as const,
+              content: [
+                {
+                  type: "file" as const,
+                  data: base64Pdf,
+                  mediaType: "application/pdf",
+                  filename: "test-document.pdf",
+                },
+                {
+                  type: "text" as const,
+                  text: "What is in this document?",
+                },
+              ],
+            },
+          ],
         });
         console.log(result.text);
         console.log();
@@ -248,27 +219,36 @@ async function testTemperatureVariations() {
     async () => {
       console.log("\n=== Test 7: Temperature Variations ===");
 
-      const configs = [
+      // OpenAI supports both temperature and topP together
+      const openaiConfigs = [
         { temperature: 0.0, topP: 1.0 },
         { temperature: 1.0, topP: 0.9 },
         { temperature: 0.7, topP: 0.95 },
       ];
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+      // Anthropic only allows one at a time
+      const anthropicConfigs = [
+        { temperature: 0.0 },
+        { temperature: 1.0 },
+        { topP: 0.9 },
+      ];
+
+      for (const [provider, model, configs] of [
+        ["openai", openai("gpt-5-mini"), openaiConfigs],
+        ["anthropic", anthropic("claude-sonnet-4-5"), anthropicConfigs],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
         for (const config of configs) {
-          console.log(
-            `Config: temp=${config.temperature}, top_p=${config.topP}`,
-          );
+          const configStr = `temp=${config.temperature ?? "default"}, top_p=${
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            (config as { topP?: number }).topP ?? "default"
+          }`;
+          console.log(`Config: ${configStr}`);
           const result = await generateText({
             // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             model: model as LanguageModel,
-            temperature: config.temperature,
-            topP: config.topP,
+            ...config,
             prompt: "Say something creative.",
           });
           console.log(result.text);
@@ -287,8 +267,8 @@ async function testStopSequences() {
       console.log("\n=== Test 8: Stop Sequences ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -316,8 +296,8 @@ async function testMetadata() {
       console.log("\n=== Test 9: Metadata ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -343,8 +323,8 @@ async function testLongContext() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -376,8 +356,8 @@ async function testMixedContent() {
       );
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -416,8 +396,8 @@ async function testPrefill() {
       console.log("\n=== Test 12: Prefill ===");
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
@@ -444,13 +424,14 @@ async function testShortMaxTokens() {
 
       for (const [provider, model] of [
         ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const result = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           prompt: "What is AI?",
+          maxOutputTokens: 16, // ai-sdk requirement for 16 or more
         });
         console.log(result.text?.slice(0, 20) + "...");
         console.log(`Stop reason: ${result.finishReason}`);
@@ -481,7 +462,7 @@ async function testToolUse() {
       console.log("\n=== Test 14: Tool Use ===");
 
       // Define tool with proper typing
-      const weatherTool = {
+      const weatherTool = ai.tool({
         description: "Get the current weather for a location",
         inputSchema: z.object({
           location: z.string(),
@@ -492,11 +473,11 @@ async function testToolUse() {
           const typedArgs = args as WeatherToolArgs;
           return `22 degrees ${typedArgs.unit || "celsius"} and sunny in ${typedArgs.location}`;
         },
-      };
+      });
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -566,8 +547,8 @@ async function testToolUseWithResult() {
       };
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -579,6 +560,7 @@ async function testToolUseWithResult() {
             calculate: calculateTool,
           },
           prompt: "What is 127 multiplied by 49?",
+          maxToolRoundtrips: 2,
         });
 
         console.log("First response:");
@@ -599,85 +581,46 @@ async function testToolUseWithResult() {
   );
 }
 
-// Test 16: Async generation
-async function testAsyncGeneration() {
-  return traced(
-    async () => {
-      console.log("\n=== Test 16: Async Generation ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          model: model as LanguageModel,
-          prompt: "Tell me a joke about programming.",
-        });
-        console.log(result.text);
-        console.log();
-      }
-    },
-    { name: "test_async_generation" },
-  );
-}
-
-// Test 17: Async streaming
-async function testAsyncStreaming() {
-  return traced(
-    async () => {
-      console.log("\n=== Test 17: Async Streaming ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-haiku-4-5-20251001")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await streamText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          model: model as LanguageModel,
-          prompt: "List 3 programming languages.",
-        });
-
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-        }
-        console.log("\n");
-      }
-    },
-    { name: "test_async_streaming" },
-  );
-}
-
-// Interface for usage with reasoning tokens
-interface UsageWithReasoning {
-  promptTokens?: number;
-  completionTokens?: number;
-  reasoningTokens?: number;
-  totalTokens?: number;
-}
-
 // Test 18: Reasoning tokens generation and follow-up - ADDITIONAL TEST
 async function testReasoning() {
   return traced(
     async () => {
       console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
 
-      for (const [provider, model, modelName] of [
-        ["openai", openai("gpt-5-mini"), "gpt-5-mini"],
+      for (const [provider, model, modelName, options] of [
+        [
+          "openai",
+          openai("gpt-5-mini"),
+          "gpt-5-mini",
+          {
+            providerOptions: {
+              openai: {
+                reasoningEffort: "high",
+                reasoningSummary: "detailed",
+              } satisfies OpenAIResponsesProviderOptions,
+            },
+          },
+        ],
         [
           "anthropic",
-          anthropic("claude-haiku-4-5-20251001"),
-          "claude-3-5-sonnet",
+          anthropic("claude-3-7-sonnet-latest"),
+          "claude-3-7-sonnet",
+          {
+            providerOptions: {
+              anthropic: {
+                thinking: {
+                  type: "enabled",
+                  budgetTokens: 10000,
+                },
+              },
+            },
+          },
         ],
       ] as const) {
         console.log(
           `${provider.charAt(0).toUpperCase() + provider.slice(1)} (${modelName}):`,
         );
 
-        // FIRST REQUEST: Analyze pattern and derive formula
-        console.log("\n--- First request (generate reasoning) ---");
         const firstResult = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
@@ -688,41 +631,10 @@ async function testReasoning() {
                 "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
             },
           ],
-          providerOptions: {
-            openai: {
-              reasoningSummary: "detailed", // 'auto' for condensed or 'detailed' for comprehensive
-            },
-          },
+          ...options,
         });
 
-        if (!firstResult.reasoningText === undefined) {
-          throw new Error("No reasoning text found.");
-        }
-
-        console.log("First response with reasoning:");
-        console.log(firstResult.text);
-        if (firstResult.reasoning && firstResult.reasoning.length > 0) {
-          console.log(
-            `Reasoning parts included: ${firstResult.reasoning.length}`,
-          );
-        }
-
-        // Check if reasoning tokens are tracked
-        if (firstResult.usage) {
-          console.log("\nFirst request token usage:");
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const usage = firstResult.usage as UsageWithReasoning;
-          console.log(`Prompt tokens: ${usage.promptTokens || "N/A"}`);
-          console.log(`Completion tokens: ${usage.completionTokens || "N/A"}`);
-          if (usage.reasoningTokens !== undefined) {
-            console.log(`Reasoning tokens generated: ${usage.reasoningTokens}`);
-          }
-        }
-
-        // SECOND REQUEST: Apply the discovered pattern to solve a new problem
-        console.log("\n--- Follow-up request (using reasoning context) ---");
-
-        const followUpResult = await generateText({
+        await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           messages: [
@@ -731,40 +643,15 @@ async function testReasoning() {
               content:
                 "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
             },
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "reasoning",
-                  text: firstResult.reasoningText || "",
-                },
-                {
-                  type: "text",
-                  text: firstResult.text,
-                },
-              ],
-            },
+            ...firstResult.response.messages,
             {
               role: "user",
               content:
                 "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
             },
           ],
+          ...options,
         });
-
-        console.log("Follow-up response:");
-        console.log(followUpResult.text);
-
-        if (followUpResult.usage) {
-          console.log("\nFollow-up request token usage:");
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const usage = followUpResult.usage as UsageWithReasoning;
-          console.log(`Prompt tokens: ${usage.promptTokens || "N/A"}`);
-          console.log(`Completion tokens: ${usage.completionTokens || "N/A"}`);
-          if (usage.reasoningTokens !== undefined) {
-            console.log(`Reasoning tokens: ${usage.reasoningTokens}`);
-          }
-        }
       }
     },
     {
@@ -791,8 +678,6 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
-    testAsyncGeneration,
-    testAsyncStreaming,
     testReasoning,
   ];
 

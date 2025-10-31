@@ -17,8 +17,7 @@ Most wrappers are single files that live directly in this directory:
 
 Some wrappers have their own subdirectories with `package.json` files:
 
-- `ai-sdk-4/` - AI SDK v4.x wrapper
-- `ai-sdk-5/` - AI SDK v5.x wrapper (middleware + utilities)
+- `ai-sdk` - AI SDK wrapper
 - `mastra/` - Mastra agent wrapper
 - `claude-agent-sdk/` - Claude Agent SDK wrapper
 
@@ -60,26 +59,10 @@ pnpm test  # Excludes subdirectory tests
 **Subdirectory tests** (with isolated dependencies):
 
 ```bash
-cd js/src/wrappers/ai-sdk-4 && pnpm test
-cd js/src/wrappers/ai-sdk-5 && pnpm test
+cd js/src/wrappers/ai-sdk && pnpm test
 cd js/src/wrappers/mastra && pnpm test
 cd js/src/wrappers/claude-agent-sdk && pnpm test
 ```
-
-## Shared Utilities
-
-### `ai-sdk-shared/`
-
-Contains shared utility functions used by AI SDK wrappers and other integrations:
-
-- `utils.ts` - Common utilities for AI SDK integrations (token counting, provider detection, etc.)
-- `utils.test.ts` - Tests for shared utilities
-
-These utilities are imported by:
-
-- `ai-sdk-4/` and `ai-sdk-5/` wrappers
-- `mastra/` wrapper (uses AI SDK v5)
-- `claude-agent-sdk/` wrapper (for token utilities)
 
 ## Adding a New Wrapper
 
@@ -101,7 +84,7 @@ Only needed if you require specific SDK versions for testing:
 2. Move files: `your-wrapper.ts`, `your-wrapper.test.ts`
 3. Create `package.json` (marked `"private": true`) with specific dependencies
 4. Create `vitest.config.js` and `tsconfig.json` (copy from `ai-sdk-4/`)
-5. Fix imports to use relative paths (`../../logger`, `../ai-sdk-shared/utils`, etc.)
+5. Fix imports to use relative paths (`../../logger`, etc.)
 6. Update `src/exports-node.ts`:
    ```typescript
    export { wrapYourSDK } from "./wrappers/your-wrapper/your-wrapper";
@@ -121,8 +104,7 @@ strategy:
   fail-fast: false
   matrix:
     wrapper:
-      - ai-sdk-4
-      - ai-sdk-5
+      - ai-sdk
       - mastra
       - claude-agent-sdk
 ```
@@ -143,8 +125,7 @@ When adding a new isolated test wrapper:
    ```yaml
    matrix:
      wrapper:
-       - ai-sdk-4
-       - ai-sdk-5
+       - ai-sdk
        - mastra
        - claude-agent-sdk
        - your-new-wrapper # Add here
