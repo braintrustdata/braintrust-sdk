@@ -72,18 +72,48 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import nunjucks from "nunjucks";
 import type { Environment as NunjucksEnvironment } from "nunjucks";
-const nunjucksEnvLazy = new SyncLazyValue<NunjucksEnvironment>(
-  () =>
-    new nunjucks.Environment(null, {
-      autoescape: false,
-      throwOnUndefined: false,
-    }),
-);
-function getNunjucksEnv(): NunjucksEnvironment {
-  return nunjucksEnvLazy.get();
+
+const NUNJUCKS_ERROR =
+  "The 'nunjucks' template engine is not available in this runtime. Use template_format 'mustache' or run in a Node/browser environment with 'nunjucks' bundled.";
+
+let _nunjucksModule: any | undefined;
+function tryLoadNunjucks() {
+  if (_nunjucksModule) return _nunjucksModule;
+  try {
+    // CommonJS require
+    if (typeof require === "function") {
+      _nunjucksModule = require("nunjucks");
+      return _nunjucksModule;
+    }
+  } catch {}
+  return undefined;
 }
+
+const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
+  const nunjucksMod = tryLoadNunjucks();
+  if (!nunjucksMod) {
+    throw new Error(NUNJUCKS_ERROR);
+  }
+  const Nunjucks = (nunjucksMod as any).default ?? nunjucksMod;
+  return new Nunjucks.Environment(null, {
+    autoescape: false,
+    throwOnUndefined,
+  });
+};
+
+const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(false),
+);
+
+const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(true),
+);
+
+function getNunjucksEnv(strict = false): NunjucksEnvironment {
+  return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
+}
+
 import { z, ZodError } from "zod/v3";
 import {
   BraintrustStream,
@@ -6397,7 +6427,7 @@ export function renderTemplateContent(
   }
 
   if (templateFormat === "nunjucks") {
-    return getNunjucksEnv().renderString(template, variables);
+    return getNunjucksEnv(!!options.strict).renderString(template, variables);
   } else if (templateFormat === "mustache") {
     return Mustache.render(template, variables, undefined, { escape });
   } else {
