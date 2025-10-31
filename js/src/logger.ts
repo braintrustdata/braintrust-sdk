@@ -4792,7 +4792,6 @@ class ObjectFetcher<RecordType>
           `btql`,
           {
             query: {
-              ...this._internal_btql,
               select: [
                 {
                   op: "star",
@@ -4813,6 +4812,7 @@ class ObjectFetcher<RecordType>
               },
               cursor,
               limit: INTERNAL_BTQL_LIMIT,
+              ...this._internal_btql,
             },
             use_columnstore: false,
             brainstore_realtime: true,
