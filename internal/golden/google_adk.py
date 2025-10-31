@@ -8,6 +8,7 @@ from pathlib import Path
 import braintrust
 from braintrust_adk import setup_adk
 from google.adk import Agent
+from google.adk.planners import BuiltInPlanner
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -577,12 +578,12 @@ async def test_reasoning():
         print("\n--- First request (generate reasoning) ---")
         agent = Agent(
             name="reasoning_agent",
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             instruction="You are a mathematical reasoning assistant.",
             generate_content_config=types.GenerateContentConfig(
                 max_output_tokens=2048,
-                thinking_generate_content_config=types.ThinkingConfig(include_thoughts=True, thinking_budget=1024),
             ),
+            planner=BuiltInPlanner(thinking_config=types.ThinkingConfig(include_thoughts=True, thinking_budget=1024)),
         )
 
         runner = await get_session_runner(agent, "session-reasoning")
@@ -629,29 +630,29 @@ async def test_reasoning():
 async def run_async_tests():
     """Run all asynchronous tests."""
     tests = [
-        # test_basic_completion,
-        # test_multi_turn,
-        # test_system_prompt,
-        # test_streaming,
-        # test_image_input,
+        test_basic_completion,
+        test_multi_turn,
+        test_system_prompt,
+        test_streaming,
+        test_image_input,
         test_document_input,
-        # test_temperature_variations,
-        # test_stop_sequences,
-        # test_metadata,
-        # test_long_context,
+        test_temperature_variations,
+        test_stop_sequences,
+        test_metadata,
+        test_long_context,
         test_mixed_content,
-        # test_prefill,
-        # test_short_max_tokens,
+        test_prefill,
+        test_short_max_tokens,
         test_tool_use,
         test_tool_use_with_result,
-        # test_reasoning,
+        test_reasoning,
     ]
 
     for test in tests:
         try:
             await test()
             # Rate limiting
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
         except Exception as e:
             print(f"Test {test.__name__} failed: {e}")
             import traceback

@@ -16,10 +16,11 @@ setup_adk(project_name=PROJECT_NAME)
 @pytest.fixture(scope="module")
 def vcr_config():
     return {
+        "record_mode": "none",
         "filter_headers": [
             "authorization",
             "x-goog-api-key",
-        ]
+        ],
     }
 
 
