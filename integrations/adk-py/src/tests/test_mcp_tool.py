@@ -9,13 +9,16 @@ from braintrust_adk import setup_adk, wrap_mcp_tool
 @pytest.mark.asyncio
 async def test_wrap_mcp_tool_marks_as_patched():
     """Test that wrap_mcp_tool marks the class as patched."""
-    # Mock McpTool class
-    MockMcpTool = MagicMock()
+    # Create a real class to wrap
+    class MockMcpTool:
+        async def run_async(self, *, args, tool_context):
+            return {"result": "success"}
 
     # Wrap the class
     wrapped_class = wrap_mcp_tool(MockMcpTool)
 
     # Verify it's marked as patched
+    assert hasattr(wrapped_class, "_braintrust_patched")
     assert wrapped_class._braintrust_patched is True
 
 
