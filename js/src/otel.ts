@@ -24,6 +24,12 @@ interface OtelApi {
     setSpan: (ctx: OtelContext, span: unknown) => OtelContext;
     wrapSpanContext: (spanContext: unknown) => unknown;
   };
+  propagation: {
+    getBaggage: (ctx: OtelContext) => any;
+    createBaggage: () => any;
+    setBaggage: (ctx: OtelContext, baggage: any) => OtelContext;
+    extract: (ctx: OtelContext, headers: Record<string, string>) => OtelContext;
+  };
   TraceFlags?: {
     SAMPLED: number;
   };
@@ -54,6 +60,7 @@ function setOtelModules(
   apiModule: {
     context: unknown;
     trace: unknown;
+    propagation: unknown;
     TraceFlags?: { SAMPLED: number };
   },
   sdkModule: { BatchSpanProcessor: new (exporter: unknown) => SpanProcessor },
@@ -61,6 +68,7 @@ function setOtelModules(
   otelApi = {
     context: apiModule.context as unknown as OtelApi["context"],
     trace: apiModule.trace as unknown as OtelApi["trace"],
+    propagation: apiModule.propagation as unknown as OtelApi["propagation"],
     TraceFlags: apiModule.TraceFlags,
   };
   otelSdk = {
@@ -116,6 +124,7 @@ export function ensureOtelLoadedSync(): void {
       const apiModule = await importWithTimeout<{
         context: unknown;
         trace: unknown;
+        propagation: unknown;
         TraceFlags?: { SAMPLED: number };
       }>(
         () => import("@opentelemetry/api"),
@@ -206,9 +215,9 @@ async function ensureOtelLoadedAsync(): Promise<void> {
       const apiModule = await importWithTimeout<{
         context: unknown;
         trace: unknown;
+        propagation: unknown;
         TraceFlags?: { SAMPLED: number };
       }>(
-        // @ts-expect-error - Optional dependency
         () => import("@opentelemetry/api"),
         3000,
         "OpenTelemetry API import timeout",
@@ -216,7 +225,6 @@ async function ensureOtelLoadedAsync(): Promise<void> {
       const sdkModule = await importWithTimeout<{
         BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
       }>(
-        // @ts-expect-error - Optional dependency
         () => import("@opentelemetry/sdk-trace-base"),
         3000,
         "OpenTelemetry SDK import timeout",
@@ -758,7 +766,7 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
   if (braintrustParent) {
     try {
       // Try to set baggage if available
-      const propagation = (otelApi as any).propagation;
+      const propagation = otelApi.propagation;
       if (propagation) {
         const baggage =
           propagation.getBaggage(ctx) || propagation.createBaggage();
@@ -952,7 +960,7 @@ function addParentToBaggage(parent: string, ctx?: Context): Context {
   }
 
   try {
-    const propagation = (otelApi as any).propagation;
+    const propagation = otelApi.propagation;
     if (!propagation) {
       console.error("OTEL propagation API not available");
       return (ctx || otelApi.context.active()) as Context;
@@ -1054,7 +1062,7 @@ function parentFromHeaders(
   }
 
   try {
-    const propagation = (otelApi as any).propagation;
+    const propagation = otelApi.propagation;
     if (!propagation) {
       console.error("OTEL propagation API not available");
       return undefined;
