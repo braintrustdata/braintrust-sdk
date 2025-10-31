@@ -1,7 +1,8 @@
 """Tests for MCP tool tracing integration."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from braintrust_adk import setup_adk, wrap_mcp_tool
 
