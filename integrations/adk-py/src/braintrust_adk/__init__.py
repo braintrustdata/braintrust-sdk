@@ -24,9 +24,9 @@ def setup_adk(
     SpanProcessor: Optional[type] = None,
 ) -> bool:
     """
-    Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, and flows for automatic tracing.
+    Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, flows, and MCP tools for automatic tracing.
 
-    If you prefer manual patching take a look at `wrap_agent`, `wrap_runner`, and `wrap_flow`.
+    If you prefer manual patching take a look at `wrap_agent`, `wrap_runner`, `wrap_flow`, and `wrap_mcp_tool`.
 
     Args:
         api_key (Optional[str]): Braintrust API key.
@@ -51,6 +51,19 @@ def setup_adk(
         agents.BaseAgent = wrap_agent(agents.BaseAgent)
         runners.Runner = wrap_runner(runners.Runner)
         base_llm_flow.BaseLlmFlow = wrap_flow(base_llm_flow.BaseLlmFlow)
+
+        # Try to patch McpTool if available (MCP is optional)
+        try:
+            from google.adk.tools.mcp_tool.mcp_tool import McpTool
+
+            wrap_mcp_tool(McpTool)
+            logger.debug("McpTool patching successful")
+        except ImportError:
+            # MCP is optional - gracefully skip if not installed
+            logger.debug("McpTool not available, skipping MCP instrumentation")
+        except Exception as e:
+            # Log but don't fail - MCP patching is optional
+            logger.warning(f"Failed to patch McpTool: {e}")
 
         return True
     except ImportError as e:
