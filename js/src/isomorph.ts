@@ -11,6 +11,19 @@ export interface CallerLocation {
   caller_lineno: number;
 }
 
+export interface ProgressReporter {
+  start: (name: string, total: number) => void;
+  stop: () => void;
+  increment: (name: string) => void;
+}
+
+export interface ChalkInstance {
+  bold: {
+    red: (s: string) => string;
+  };
+  hex: (color: string) => (s: string) => string;
+}
+
 export interface IsoAsyncLocalStorage<T> {
   enterWith(store: T): void;
   run<R>(store: T | undefined, callback: () => R): R;
@@ -61,6 +74,17 @@ export interface Common {
   // zlib (promisified and type-erased).
   gunzip?: (data: any) => Promise<any>;
   gzip?: (data: any) => Promise<any>;
+
+  chalk: ChalkInstance;
+  newProgressReporter: () => ProgressReporter;
+}
+
+class SimpleProgressReporter implements ProgressReporter {
+  public start(name: string, _total: number) {
+    console.log(`Running evaluator ${name}`);
+  }
+  public stop() {}
+  public increment(_name: string) {}
 }
 
 const iso: Common = {
@@ -70,5 +94,12 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
+  chalk: {
+    bold: {
+      red: (s: string) => s,
+    },
+    hex: () => (s: string) => s,
+  },
+  newProgressReporter: () => new SimpleProgressReporter(),
 };
 export default iso;

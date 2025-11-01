@@ -10,8 +10,7 @@ import {
   type SSEProgressEventDataType as SSEProgressEventData,
 } from "./generated_types";
 import { queue } from "async";
-
-import chalk from "chalk";
+import iso, { type ProgressReporter } from "./isomorph";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
@@ -38,7 +37,6 @@ import {
   withCurrent,
   withParent,
 } from "./logger";
-import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
@@ -586,7 +584,8 @@ export async function Eval<
     );
   }
 
-  const progressReporter = options.progress ?? new BarProgressReporter();
+  const progressReporter: ProgressReporter =
+    options.progress ?? iso.newProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -1192,8 +1191,8 @@ async function runEvaluatorInternal(
   return new EvalResultWithSummary(summary, results);
 }
 
-export const error = chalk.bold.red;
-export const warning = chalk.hex("#FFA500"); // Orange color
+export const error = iso.chalk.bold.red;
+export const warning = iso.chalk.hex("#FFA500");
 
 export function logError(e: unknown, verbose: boolean) {
   if (!verbose) {
