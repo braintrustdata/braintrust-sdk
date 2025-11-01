@@ -16,7 +16,10 @@ import {
   BraintrustSpanProcessor,
   BraintrustExporter,
   otel,
-} from "..";
+  _exportsForTestingOnly,
+} from "../otel";
+
+await _exportsForTestingOnly.ensureOtelLoadedSync();
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
