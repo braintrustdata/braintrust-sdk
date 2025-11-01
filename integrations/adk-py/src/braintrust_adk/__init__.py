@@ -10,7 +10,7 @@ from braintrust.span_types import SpanTypeAttribute
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["setup_braintrust", "setup_adk", "wrap_agent", "wrap_runner", "wrap_flow"]
+__all__ = ["setup_braintrust", "setup_adk", "wrap_agent", "wrap_runner", "wrap_flow", "wrap_mcp_tool"]
 
 
 def setup_braintrust(*args, **kwargs):
@@ -25,9 +25,9 @@ def setup_adk(
     SpanProcessor: Optional[type] = None,
 ) -> bool:
     """
-    Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, and flows for automatic tracing.
+    Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, flows, and MCP tools for automatic tracing.
 
-    If you prefer manual patching take a look at `wrap_agent`, `wrap_runner`, and `wrap_flow`.
+    If you prefer manual patching take a look at `wrap_agent`, `wrap_runner`, `wrap_flow`, and `wrap_mcp_tool`.
 
     Args:
         api_key (Optional[str]): Braintrust API key.
@@ -52,6 +52,19 @@ def setup_adk(
         agents.BaseAgent = wrap_agent(agents.BaseAgent)
         runners.Runner = wrap_runner(runners.Runner)
         base_llm_flow.BaseLlmFlow = wrap_flow(base_llm_flow.BaseLlmFlow)
+
+        # Try to patch McpTool if available (MCP is optional)
+        try:
+            from google.adk.tools.mcp_tool import mcp_tool
+
+            mcp_tool.McpTool = wrap_mcp_tool(mcp_tool.McpTool)
+            logger.debug("McpTool patching successful")
+        except ImportError:
+            # MCP is optional - gracefully skip if not installed
+            logger.debug("McpTool not available, skipping MCP instrumentation")
+        except Exception as e:
+            # Log but don't fail - MCP patching is optional
+            logger.warning(f"Failed to patch McpTool: {e}")
 
         return True
     except ImportError as e:
@@ -295,6 +308,51 @@ def wrap_runner(Runner: Any):
     wrap_function_wrapper(Runner, "run_async", trace_run_async_wrapper)
     Runner._braintrust_patched = True
     return Runner
+
+
+def wrap_mcp_tool(McpTool: Any) -> Any:
+    """
+    Wrap McpTool to trace MCP tool invocations.
+
+    Creates Braintrust spans for each MCP tool call, capturing:
+    - Tool name
+    - Input arguments
+    - Output results
+    - Execution time
+    - Errors if they occur
+
+    Args:
+        McpTool: The McpTool class to wrap
+
+    Returns:
+        The wrapped McpTool class
+    """
+    if _is_patched(McpTool):
+        return McpTool
+
+    async def tool_run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        # Extract tool information
+        tool_name = instance.name
+        tool_args = kwargs.get("args", {})
+
+        with start_span(
+            name=f"mcp_tool [{tool_name}]",
+            type=SpanTypeAttribute.TOOL,
+            input={"tool_name": tool_name, "arguments": _try_dict(tool_args)},
+            metadata=_try_dict(_omit(kwargs, ["args"])),
+        ) as tool_span:
+            try:
+                result = await wrapped(*args, **kwargs)
+                tool_span.log(output=_try_dict(result))
+                return result
+            except Exception as e:
+                # Log error to span but re-raise for ADK to handle
+                tool_span.log(error=str(e))
+                raise
+
+    wrap_function_wrapper(McpTool, "run_async", tool_run_wrapper)
+    McpTool._braintrust_patched = True
+    return McpTool
 
 
 def _determine_llm_call_type(llm_request: Any) -> str:
