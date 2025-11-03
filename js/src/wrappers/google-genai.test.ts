@@ -348,7 +348,7 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
 
     expect(span.input).toMatchObject({
       model: TEST_MODEL,
-      contents: "Tell me about the weather.",
+      contents: { text: "Tell me about the weather." },
       config: expect.objectContaining({
         systemInstruction: "You are a pirate. Always respond in pirate speak.",
       }),
