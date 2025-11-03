@@ -399,7 +399,6 @@ export function getContextManager(): ContextManager {
 
   if (useOtel) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { OtelContextManager } = require("./otel/context") as {
         OtelContextManager: new () => ContextManager;
       };
@@ -3173,17 +3172,18 @@ type UseOutputOption<IsLegacyDataset extends boolean> = {
   useOutput?: IsLegacyDataset;
 };
 
-type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
-  dataset?: string;
-  description?: string;
-  version?: string;
-  projectId?: string;
-  metadata?: Record<string, unknown>;
-  state?: BraintrustState;
-  _internal_btql?: Record<string, unknown>;
-} & UseOutputOption<IsLegacyDataset>;
+export type InitDatasetOptions<IsLegacyDataset extends boolean> =
+  FullLoginOptions & {
+    dataset?: string;
+    description?: string;
+    version?: string;
+    projectId?: string;
+    metadata?: Record<string, unknown>;
+    state?: BraintrustState;
+    _internal_btql?: Record<string, unknown>;
+  } & UseOutputOption<IsLegacyDataset>;
 
-type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
+export type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
   project?: string;
 } & InitDatasetOptions<IsLegacyDataset>;
 
@@ -3380,7 +3380,7 @@ type AsyncFlushArg<IsAsyncFlush> = {
   asyncFlush?: IsAsyncFlush;
 };
 
-type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
+export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectName?: string;
   projectId?: string;
   setCurrent?: boolean;
@@ -3455,7 +3455,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   return ret;
 }
 
-type LoadPromptOptions = FullLoginOptions & {
+export type LoadPromptOptions = FullLoginOptions & {
   projectName?: string;
   projectId?: string;
   slug?: string;
