@@ -46,7 +46,7 @@ async def test_mcp_tool_execution_creates_span():
 
         # Simulate tool execution
         tool_args = {"path": "/tmp/test.txt"}
-        tool_context = MagicMock()
+        tool_context = None
 
         # Call the wrapped method directly on the mock instance
         # We need to manually trigger the wrapper
@@ -93,7 +93,7 @@ async def test_mcp_tool_span_captures_tool_info():
         # Create instance and call
         tool = MockMcpTool()
         tool_args = {"path": "/tmp"}
-        tool_context = MagicMock()
+        tool_context = None
 
         result = await tool.run_async(args=tool_args, tool_context=tool_context)
 
@@ -142,7 +142,7 @@ async def test_mcp_tool_error_handling():
         tool = MockMcpTool()
 
         with pytest.raises(ValueError, match="Tool execution failed"):
-            await tool.run_async(args={}, tool_context=MagicMock())
+            await tool.run_async(args={}, tool_context=None)
 
         # Verify error was logged to span
         assert mock_span.log.called
@@ -227,7 +227,7 @@ async def test_mcp_tool_async_context_preservation():
     async def context_switching_generator():
         # Call the tool (creates span)
         context_var.set("during_call")
-        result = await tool.run_async(args={"test": "value"}, tool_context=MagicMock())
+        result = await tool.run_async(args={"test": "value"}, tool_context=None)
         yield result
 
         # Switch context after yield
@@ -280,7 +280,7 @@ async def test_mcp_tool_nested_async_generators():
     async def middle_generator():
         """Simulates Agent.run_async"""
         # Execute tool in the middle of generator execution
-        result = await tool.run_async(args={"nested": "test"}, tool_context=MagicMock())
+        result = await tool.run_async(args={"nested": "test"}, tool_context=None)
         yield {"type": "tool_result", "data": result}
 
         # Yield more events after tool execution
