@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "braintrust",
+    "braintrust-adk",
     "braintrust-langchain",
+    "google-adk>=1.14.1",
     "google-genai>=1.45.0",
     "langchain-anthropic>=0.3.22",
     "langchain-openai>=0.3.35",
@@ -15,3 +17,4 @@ dependencies = [
 [tool.uv.sources]
 braintrust = { path = "../../py", editable = true }
 braintrust-langchain = { path = "../../integrations/langchain-py", editable = true }
+braintrust-adk = { path = "../../integrations/adk-py", editable = true }
