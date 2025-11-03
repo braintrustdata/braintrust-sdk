@@ -1,6 +1,6 @@
 [project]
 name = "braintrust-adk"
-version = "0.2.2rc2"
+version = "0.2.2rc3"
 description = "Braintrust Google ADK integration"
 readme = "README.md"
 requires-python = ">=3.9"
