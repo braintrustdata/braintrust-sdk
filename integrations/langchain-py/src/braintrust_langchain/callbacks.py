@@ -288,8 +288,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         metadata = metadata or {}
         resolved_name = (
-            metadata.get("langgraph_node")
-            or name
+            name
+            or metadata.get("langgraph_node")
             or serialized.get("name")
             or last_item(serialized.get("id") or [])
             or "Chain"
