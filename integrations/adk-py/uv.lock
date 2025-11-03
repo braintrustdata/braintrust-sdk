@@ -159,7 +159,7 @@ wheels = [
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.2rc3"
+version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "braintrust" },
