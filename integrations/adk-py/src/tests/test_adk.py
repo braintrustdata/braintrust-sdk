@@ -640,6 +640,11 @@ async def test_llm_call_span_wraps_child_spans(memory_logger):
             self.llm = MagicMock()
             self.llm.model = "test-model"
 
+        async def run_async(self, invocation_context, llm_request=None, model_response_event=None):
+            """Method that wrap_flow will wrap."""
+            async for event in self._call_llm_async(invocation_context, llm_request, model_response_event):
+                yield event
+
         async def _call_llm_async(self, invocation_context, llm_request, model_response_event):
             """Simulates the flow making LLM calls and potentially calling tools."""
             # Simulate an event stream
@@ -663,7 +668,7 @@ async def test_llm_call_span_wraps_child_spans(memory_logger):
 
     async def wrapped_execution():
         """Wrapper that tracks parent span during execution."""
-        async for event in flow._call_llm_async(
+        async for event in flow.run_async(
             invocation_context={"test": "context"},
             llm_request={"contents": [{"parts": [{"text": "test"}], "role": "user"}]},
             model_response_event=None,
