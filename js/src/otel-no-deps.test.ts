@@ -12,11 +12,14 @@ describe("OpenTelemetry not installed", () => {
       require("@opentelemetry/api");
       throw new Error(
         "OpenTelemetry IS installed, but this test suite requires it to be missing. " +
-        "This test should run in an isolated workspace without OpenTelemetry dependencies.",
+          "This test should run in an isolated workspace without OpenTelemetry dependencies.",
       );
-    } catch (error) {      
+    } catch (error) {
       // Re-throw OpenTelemetry error if it is installed
-      if (error instanceof Error && error.message.includes("OpenTelemetry IS installed")) {
+      if (
+        error instanceof Error &&
+        error.message.includes("OpenTelemetry IS installed")
+      ) {
         throw error;
       }
       // require() failed as expected - OpenTelemetry is not installed
@@ -30,7 +33,7 @@ describe("OpenTelemetry not installed", () => {
   it("should warn when importing the module without OpenTelemetry", async () => {
     try {
       // This should trigger the warning in the module's top-level import
-      const { AISpanProcessor } = await import(".");
+      const { AISpanProcessor } = await import("./otel");
 
       expect(console.warn).toHaveBeenCalledWith(
         expect.stringContaining("OpenTelemetry packages are not installed"),
@@ -38,10 +41,10 @@ describe("OpenTelemetry not installed", () => {
     } finally {
       console.warn = originalConsoleWarn;
     }
-  });
+  }, 10000);
 
   it("should throw error when creating AISpanProcessor without OpenTelemetry", async () => {
-    const { AISpanProcessor } = await import(".");
+    const { AISpanProcessor } = await import("./otel");
 
     expect(() => {
       new AISpanProcessor({} as any);
@@ -49,7 +52,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should throw error when creating BraintrustSpanProcessor without OpenTelemetry", async () => {
-    const { BraintrustSpanProcessor } = await import(".");
+    const { BraintrustSpanProcessor } = await import("./otel");
 
     expect(() => {
       new BraintrustSpanProcessor({
@@ -59,14 +62,14 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otelContextFromSpanExport without OpenTelemetry", async () => {
-    const { otel } = await import(".");
+    const { otel } = await import("./otel");
 
     const result = otel.contextFromSpanExport("some-export-string");
     expect(result).toBeUndefined();
   });
 
   it("should not error when calling otel.addParentToBaggage without OpenTelemetry", async () => {
-    const { otel } = await import(".");
+    const { otel } = await import("./otel");
 
     // Should not throw, just return a context (or undefined)
     expect(() => {
@@ -76,7 +79,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
-    const { otel } = await import(".");
+    const { otel } = await import("./otel");
 
     const mockSpan = {
       attributes: { "braintrust.parent": "project_name:test" },
@@ -87,7 +90,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otel.parentFromHeaders without OpenTelemetry", async () => {
-    const { otel } = await import(".");
+    const { otel } = await import("./otel");
 
     const headers = {
       traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",

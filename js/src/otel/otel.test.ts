@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi, beforeAll } from "vitest";
+import { 
+  describe, 
+  it, 
+  expect, 
+  beforeEach, 
+  afterEach, 
+  vi, 
+  beforeAll 
+} from "vitest";
 import { trace, context, Tracer, propagation } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
@@ -27,8 +35,8 @@ beforeAll(() => {
   } catch (error) {
     throw new Error(
       "OpenTelemetry packages are not installed. " +
-      "These tests require OpenTelemetry to be installed. " +
-      "Install them with: pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/core",
+        "These tests require OpenTelemetry to be installed. " +
+        "Install them with: pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/core",
     );
   }
 });

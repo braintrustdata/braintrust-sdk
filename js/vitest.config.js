@@ -19,6 +19,9 @@ const config = {
       "src/wrappers/ai-sdk-5/**",
       "src/wrappers/mastra/**",
       "src/wrappers/claude-agent-sdk/**",
+      // Exclude otel tests (run separately with test:otel and test:otel-no-deps)
+      "src/otel/**",
+      "src/otel-no-deps.test.ts",
     ],
   },
 };

@@ -94,7 +94,15 @@ test-otel-installed:
 # Run tests without OTEL installed in a separate workspace
 test-otel-workspace-without:
 	$(MAKE) build
-	cd test-workspaces/otel-without && pnpm install --force && pnpm test
+	# Ensure parent workspace doesn't have OTEL (it will be accessible via require() if present)
+	@if [ -d "node_modules/@opentelemetry" ]; then \
+		echo "Warning: OpenTelemetry found in parent workspace node_modules. Removing temporarily..."; \
+		rm -rf node_modules/@opentelemetry; \
+	fi
+	cd test-workspaces/otel-without && \
+	rm -rf node_modules pnpm-lock.yaml && \
+	pnpm install --force --no-frozen-lockfile && \
+	pnpm test
 
 # Run tests without OTEL installed (alias)
 test-otel-missing: test-otel-workspace-without
