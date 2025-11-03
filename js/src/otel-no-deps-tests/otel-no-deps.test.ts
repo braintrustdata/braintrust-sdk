@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 
 // This test file specifically tests the behavior when OpenTelemetry is not installed.
-// It should run as part of our core / default test suite.
+// IMPORTANT: This test is run in an isolated workspace (otel-no-deps-tests) with a setup file
+// that mocks require() to prevent OpenTelemetry packages from being resolved from parent workspaces.
 
 describe("OpenTelemetry not installed", () => {
   let otelInstalled = false;
@@ -17,8 +18,10 @@ describe("OpenTelemetry not installed", () => {
     }
 
     if (otelInstalled) {
-      console.warn(
-        "OpenTelemetry IS installed, skipping tests that require it to be missing",
+      throw new Error(
+        "OpenTelemetry IS installed in isolated workspace. " +
+        "The otel-no-deps-tests workspace must not have OpenTelemetry packages installed. " +
+        "This workspace is designed to test behavior when OTEL packages are missing."
       );
     }
 
@@ -28,14 +31,10 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should warn when importing the module without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
     try {
       // This should trigger the warning in the module's top-level import
-      const { AISpanProcessor } = await import(".");
+      // Import from the parent directory
+      const { AISpanProcessor } = await import("../otel");
 
       expect(console.warn).toHaveBeenCalledWith(
         expect.stringContaining("OpenTelemetry packages are not installed"),
@@ -46,12 +45,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should throw error when creating AISpanProcessor without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
-    const { AISpanProcessor } = await import(".");
+    const { AISpanProcessor } = await import("../otel");
 
     expect(() => {
       new AISpanProcessor({} as any);
@@ -59,12 +53,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should throw error when creating BraintrustSpanProcessor without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
-    const { BraintrustSpanProcessor } = await import(".");
+    const { BraintrustSpanProcessor } = await import("../otel");
 
     expect(() => {
       new BraintrustSpanProcessor({
@@ -74,37 +63,25 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otelContextFromSpanExport without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
-    const { otelContextFromSpanExport } = await import(".");
+    const { otelContextFromSpanExport } = await import("../otel");
 
     const result = otelContextFromSpanExport("some-export-string");
     expect(result).toBeUndefined();
   });
 
   it("should not error when calling otel.addParentToBaggage without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
+    const { otel } = await import("../otel");
 
-    const { otel } = await import(".");
-
-    // Should not throw, just return a context (or undefined)
+    // Should not throw - may return undefined when OTEL is not available
+    let result: any;
     expect(() => {
-      const result = otel.addParentToBaggage("project_name:test");
-      expect(result).toBeDefined();
+      result = otel.addParentToBaggage("project_name:test");
+      expect(result).toBeUndefined();
     }).not.toThrow();
   });
 
   it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
-
-    const { otel } = await import(".");
+    const { otel } = await import("../otel");
 
     const mockSpan = {
       attributes: { "braintrust.parent": "project_name:test" },
@@ -115,11 +92,7 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otel.parentFromHeaders without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
-
-    const { otel } = await import(".");
+    const { otel } = await import("../otel");
 
     const headers = {
       traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",

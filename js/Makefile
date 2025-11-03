@@ -11,7 +11,7 @@ help:
 	@echo "  make test-core          - Run core tests only"
 	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
 	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
-	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
+	@echo "  make test-otel-no-deps  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
@@ -22,7 +22,7 @@ help:
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-no-deps test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -83,16 +83,19 @@ test-claude-agent-sdk:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed
+.PHONY: test-otel test-otel-installed test-otel-no-deps
 
 test-otel-installed:
 	pnpm prune
 	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
-	pnpm test:otel
+	vitest run --dir src/otel
 
 # test-otel only runs with dependencies installed
-# otel-no-deps.test.ts is part of core tests and handles both cases automatically
 test-otel: test-otel-installed
+
+# test-otel-no-deps runs in isolated workspace without OpenTelemetry packages
+test-otel-no-deps:
+	cd src/otel-no-deps-tests && pnpm install && pnpm test
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing

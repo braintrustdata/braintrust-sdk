@@ -4,3 +4,4 @@ packages:
   - "integrations/*"
   - "internal/golden"
   - "js/src/wrappers/*"
+  - "js/src/otel-no-deps-tests"
