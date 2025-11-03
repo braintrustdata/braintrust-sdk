@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, beforeAll } from "vitest";
 import { trace, context, Tracer, propagation } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
@@ -17,6 +17,21 @@ import {
   BraintrustExporter,
   otel,
 } from "..";
+
+// Verify OpenTelemetry is installed before running tests
+beforeAll(() => {
+  try {
+    require("@opentelemetry/api");
+    require("@opentelemetry/sdk-trace-base");
+    require("@opentelemetry/core");
+  } catch (error) {
+    throw new Error(
+      "OpenTelemetry packages are not installed. " +
+      "These tests require OpenTelemetry to be installed. " +
+      "Install them with: pnpm add @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/core",
+    );
+  }
+});
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;

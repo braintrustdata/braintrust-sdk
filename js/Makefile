@@ -22,7 +22,7 @@ help:
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-otel-workspace-without test-openai test-anthropic test-google-genai test-ai-sdk-4 test-ai-sdk-5 test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -83,16 +83,25 @@ test-claude-agent-sdk:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed
+.PHONY: test-otel test-otel-installed test-otel-missing test-otel-workspace-without
 
+# Run tests with OTEL installed
 test-otel-installed:
 	pnpm prune
 	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
-# test-otel only runs with dependencies installed
-# otel-no-deps.test.ts is part of core tests and handles both cases automatically
-test-otel: test-otel-installed
+# Run tests without OTEL installed in a separate workspace
+test-otel-workspace-without:
+	$(MAKE) build
+	cd test-workspaces/otel-without && pnpm install --force && pnpm test
+
+# Run tests without OTEL installed (alias)
+test-otel-missing: test-otel-workspace-without
+
+# Run both OTEL test suites
+test-otel: test-otel-installed test-otel-missing
+
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing

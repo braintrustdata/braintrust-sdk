@@ -4,22 +4,22 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 // It should run as part of our core / default test suite.
 
 describe("OpenTelemetry not installed", () => {
-  let otelInstalled = false;
   let originalConsoleWarn: any;
 
   beforeAll(() => {
     // Check if OpenTelemetry is actually installed - do this once for the whole suite
     try {
       require("@opentelemetry/api");
-      otelInstalled = true;
-    } catch (error) {
-      otelInstalled = false;
-    }
-
-    if (otelInstalled) {
-      console.warn(
-        "OpenTelemetry IS installed, skipping tests that require it to be missing",
+      throw new Error(
+        "OpenTelemetry IS installed, but this test suite requires it to be missing. " +
+        "This test should run in an isolated workspace without OpenTelemetry dependencies.",
       );
+    } catch (error) {      
+      // Re-throw OpenTelemetry error if it is installed
+      if (error instanceof Error && error.message.includes("OpenTelemetry IS installed")) {
+        throw error;
+      }
+      // require() failed as expected - OpenTelemetry is not installed
     }
 
     // Set up console.warn mock for all tests
@@ -28,11 +28,6 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should warn when importing the module without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
     try {
       // This should trigger the warning in the module's top-level import
       const { AISpanProcessor } = await import(".");
@@ -46,11 +41,6 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should throw error when creating AISpanProcessor without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
     const { AISpanProcessor } = await import(".");
 
     expect(() => {
@@ -59,11 +49,6 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should throw error when creating BraintrustSpanProcessor without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
-
     const { BraintrustSpanProcessor } = await import(".");
 
     expect(() => {
@@ -74,36 +59,23 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otelContextFromSpanExport without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      // Skip this test if OpenTelemetry is installed
-      return;
-    }
+    const { otel } = await import(".");
 
-    const { otelContextFromSpanExport } = await import(".");
-
-    const result = otelContextFromSpanExport("some-export-string");
+    const result = otel.contextFromSpanExport("some-export-string");
     expect(result).toBeUndefined();
   });
 
   it("should not error when calling otel.addParentToBaggage without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
-
     const { otel } = await import(".");
 
     // Should not throw, just return a context (or undefined)
     expect(() => {
       const result = otel.addParentToBaggage("project_name:test");
-      expect(result).toBeDefined();
+      expect(result).toBeUndefined();
     }).not.toThrow();
   });
 
   it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
-
     const { otel } = await import(".");
 
     const mockSpan = {
@@ -115,10 +87,6 @@ describe("OpenTelemetry not installed", () => {
   });
 
   it("should return undefined when calling otel.parentFromHeaders without OpenTelemetry", async () => {
-    if (otelInstalled) {
-      return;
-    }
-
     const { otel } = await import(".");
 
     const headers = {
