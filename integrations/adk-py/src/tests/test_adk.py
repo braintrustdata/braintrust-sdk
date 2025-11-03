@@ -474,3 +474,142 @@ async def test_adk_captures_metrics(memory_logger):
     metadata = llm_span_with_metrics.get("metadata", {})
     assert "model" in metadata, "Metadata should include model name"
     assert metadata["model"] == "gemini-2.0-flash", "Model name should match the agent's model"
+
+
+def test_determine_llm_call_type_direct_response():
+    """Test that _determine_llm_call_type returns 'direct_response' when tools are available but not used."""
+    from braintrust_adk import _determine_llm_call_type
+
+    # Request with tools available
+    llm_request = {
+        "config": {
+            "tools": [
+                {
+                    "function_declarations": [
+                        {"name": "read_file", "description": "Read a file"},
+                        {"name": "list_directory", "description": "List directory"},
+                    ]
+                }
+            ]
+        },
+        "contents": [{"parts": [{"text": "What is 2+2?"}], "role": "user"}],
+    }
+
+    # Response without function calls
+    model_response = {
+        "content": {"parts": [{"text": "4\n"}], "role": "model"},
+        "finish_reason": "STOP",
+    }
+
+    call_type = _determine_llm_call_type(llm_request, model_response)
+    assert call_type == "direct_response", "Should be direct_response when tools available but not used"
+
+
+def test_determine_llm_call_type_tool_selection():
+    """Test that _determine_llm_call_type returns 'tool_selection' when LLM calls a tool."""
+    from braintrust_adk import _determine_llm_call_type
+
+    # Request with tools available
+    llm_request = {
+        "config": {
+            "tools": [
+                {
+                    "function_declarations": [
+                        {"name": "get_weather", "description": "Get weather"},
+                    ]
+                }
+            ]
+        },
+        "contents": [{"parts": [{"text": "What's the weather?"}], "role": "user"}],
+    }
+
+    # Response with function call (camelCase)
+    model_response = {
+        "content": {
+            "parts": [{"functionCall": {"name": "get_weather", "args": {"location": "SF"}}}],
+            "role": "model",
+        },
+    }
+
+    call_type = _determine_llm_call_type(llm_request, model_response)
+    assert call_type == "tool_selection", "Should be tool_selection when LLM calls a tool"
+
+
+def test_determine_llm_call_type_tool_selection_snake_case():
+    """Test that _determine_llm_call_type handles snake_case function_call."""
+    from braintrust_adk import _determine_llm_call_type
+
+    llm_request = {
+        "config": {"tools": [{"function_declarations": [{"name": "search"}]}]},
+        "contents": [{"parts": [{"text": "Search for pizza"}], "role": "user"}],
+    }
+
+    # Response with function call (snake_case)
+    model_response = {
+        "content": {
+            "parts": [{"function_call": {"name": "search", "args": {"query": "pizza"}}}],
+            "role": "model",
+        },
+    }
+
+    call_type = _determine_llm_call_type(llm_request, model_response)
+    assert call_type == "tool_selection", "Should be tool_selection for snake_case function_call"
+
+
+def test_determine_llm_call_type_response_generation():
+    """Test that _determine_llm_call_type returns 'response_generation' after tool execution."""
+    from braintrust_adk import _determine_llm_call_type
+
+    # Request with function_response in history
+    llm_request = {
+        "config": {"tools": [{"function_declarations": [{"name": "get_weather"}]}]},
+        "contents": [
+            {"parts": [{"text": "What's the weather?"}], "role": "user"},
+            {"parts": [{"functionCall": {"name": "get_weather", "args": {}}}], "role": "model"},
+            {
+                "parts": [{"function_response": {"name": "get_weather", "response": {"temp": "72F"}}}],
+                "role": "user",
+            },
+        ],
+    }
+
+    # Response after tool execution
+    model_response = {
+        "content": {"parts": [{"text": "It's 72 degrees"}], "role": "model"},
+    }
+
+    call_type = _determine_llm_call_type(llm_request, model_response)
+    assert call_type == "response_generation", "Should be response_generation after tool execution"
+
+
+def test_determine_llm_call_type_no_tools():
+    """Test that _determine_llm_call_type returns 'direct_response' when no tools configured."""
+    from braintrust_adk import _determine_llm_call_type
+
+    llm_request = {
+        "config": {},
+        "contents": [{"parts": [{"text": "Hello"}], "role": "user"}],
+    }
+
+    model_response = {
+        "content": {"parts": [{"text": "Hi there"}], "role": "model"},
+    }
+
+    call_type = _determine_llm_call_type(llm_request, model_response)
+    assert call_type == "direct_response", "Should be direct_response when no tools configured"
+
+
+def test_determine_llm_call_type_no_response():
+    """Test that _determine_llm_call_type handles missing model_response gracefully."""
+    from braintrust_adk import _determine_llm_call_type
+
+    llm_request = {
+        "config": {
+            "tools": [{"function_declarations": [{"name": "tool1"}]}]
+        },
+        "contents": [{"parts": [{"text": "Test"}], "role": "user"}],
+    }
+
+    # No model_response provided
+    call_type = _determine_llm_call_type(llm_request, None)
+    assert call_type == "direct_response", "Should default to direct_response when no response available"

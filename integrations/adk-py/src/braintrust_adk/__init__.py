@@ -141,8 +141,6 @@ def wrap_flow(Flow: Any):
         llm_request = args[1] if len(args) > 1 else kwargs.get("llm_request")
         model_response_event = args[2] if len(args) > 2 else kwargs.get("model_response_event")
 
-        call_type = _determine_llm_call_type(llm_request)
-
         async def _trace():
             # Extract and serialize contents BEFORE converting to dict
             # This is critical because _try_dict converts bytes to string representations
@@ -167,59 +165,65 @@ def wrap_flow(Flow: Any):
             # Extract model name from request or instance
             model_name = _extract_model_name(None, llm_request, instance)
 
-            with start_span(
-                name=f"llm_call [{call_type}]",
-                type=SpanTypeAttribute.LLM,
-                input=serialized_request,
-                metadata=_try_dict(
-                    {
-                        "invocation_context": invocation_context,
-                        "model_response_event": model_response_event,
-                        "flow_class": instance.__class__.__name__,
-                        "llm_call_type": call_type,
-                        "model": model_name,
-                        **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
-                    }
-                ),
-            ) as llm_span:
-                last_event = None
-                event_with_content = None
-                start_time = time.time()
-                first_token_time = None
+            # Execute the LLM call first to get the response
+            last_event = None
+            event_with_content = None
+            start_time = time.time()
+            first_token_time = None
 
-                async with aclosing(wrapped(*args, **kwargs)) as agen:
-                    async for event in agen:
-                        # Record time to first token
-                        if first_token_time is None:
-                            first_token_time = time.time()
+            async with aclosing(wrapped(*args, **kwargs)) as agen:
+                async for event in agen:
+                    # Record time to first token
+                    if first_token_time is None:
+                        first_token_time = time.time()
 
-                        last_event = event
-                        if hasattr(event, "content") and event.content is not None:
-                            event_with_content = event
-                        yield event
+                    last_event = event
+                    if hasattr(event, "content") and event.content is not None:
+                        event_with_content = event
+                    yield event
 
-                if last_event:
-                    output = _try_dict(last_event)
-                    # If last event is missing content but we have an earlier event with content, merge them
-                    if event_with_content and isinstance(output, dict):
-                        if "content" not in output or output.get("content") is None:
-                            content = (
-                                _try_dict(event_with_content.content)
-                                if hasattr(event_with_content, "content")
-                                else None
-                            )
-                            if content:
-                                output["content"] = content
+            # Now create the span with the correct call type based on the actual response
+            if last_event:
+                output = _try_dict(last_event)
+                # If last event is missing content but we have an earlier event with content, merge them
+                if event_with_content and isinstance(output, dict):
+                    if "content" not in output or output.get("content") is None:
+                        content = (
+                            _try_dict(event_with_content.content)
+                            if hasattr(event_with_content, "content")
+                            else None
+                        )
+                        if content:
+                            output["content"] = content
 
-                    # Extract metrics from response
-                    metrics = _extract_metrics(last_event)
+                # Extract metrics from response
+                metrics = _extract_metrics(last_event)
 
-                    # Add time to first token if we captured it
-                    if first_token_time is not None:
-                        if metrics is None:
-                            metrics = {}
-                        metrics["time_to_first_token"] = first_token_time - start_time
+                # Add time to first token if we captured it
+                if first_token_time is not None:
+                    if metrics is None:
+                        metrics = {}
+                    metrics["time_to_first_token"] = first_token_time - start_time
 
+                # Determine the actual call type based on the response
+                call_type = _determine_llm_call_type(llm_request, last_event)
+
+                # Create span with correct call type
+                with start_span(
+                    name=f"llm_call [{call_type}]",
+                    type=SpanTypeAttribute.LLM,
+                    input=serialized_request,
+                    metadata=_try_dict(
+                        {
+                            "invocation_context": invocation_context,
+                            "model_response_event": model_response_event,
+                            "flow_class": instance.__class__.__name__,
+                            "llm_call_type": call_type,
+                            "model": model_name,
+                            **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
+                        }
+                    ),
+                ) as llm_span:
                     llm_span.log(output=output, metrics=metrics)
 
         async with aclosing(_trace()) as agen:
@@ -355,14 +359,14 @@ def wrap_mcp_tool(McpTool: Any) -> Any:
     return McpTool
 
 
-def _determine_llm_call_type(llm_request: Any) -> str:
+def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> str:
     """
-    Determine the type of LLM call based on the request content.
+    Determine the type of LLM call based on the request and response content.
 
     Returns:
-        - "tool_selection" if the LLM is selecting which tool to call
+        - "tool_selection" if the LLM selected a tool to call in its response
         - "response_generation" if the LLM is generating a response after tool execution
-        - "direct_response" if there are no tools involved
+        - "direct_response" if there are no tools involved or tools available but not used
     """
     try:
         # Convert to dict if it's a model object
@@ -374,7 +378,6 @@ def _determine_llm_call_type(llm_request: Any) -> str:
         # Check the conversation history for function responses
         contents = request_dict.get("contents", [])
         has_function_response = False
-        has_function_call = False
 
         for content in contents:
             if isinstance(content, dict):
@@ -383,13 +386,49 @@ def _determine_llm_call_type(llm_request: Any) -> str:
                     if isinstance(part, dict):
                         if "function_response" in part:
                             has_function_response = True
-                        if "function_call" in part:
-                            has_function_call = True
+
+        # Check if the response contains function calls
+        response_has_function_call = False
+        if model_response:
+            # Check if it's an Event object with get_function_calls method (ADK Event)
+            if hasattr(model_response, 'get_function_calls'):
+                try:
+                    function_calls = model_response.get_function_calls()
+                    if function_calls and len(function_calls) > 0:
+                        response_has_function_call = True
+                except Exception:
+                    pass
+
+            # Fallback: Check the response dict structure
+            if not response_has_function_call:
+                response_dict = _try_dict(model_response)
+                if isinstance(response_dict, dict):
+                    # Try multiple possible response structures
+                    # 1. Standard: response.content.parts
+                    content = response_dict.get("content", {})
+                    if isinstance(content, dict):
+                        parts = content.get("parts", [])
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if isinstance(part, dict):
+                                    if "function_call" in part or "functionCall" in part:
+                                        response_has_function_call = True
+                                        break
+
+                    # 2. Alternative: response has parts directly (for some event types)
+                    if not response_has_function_call and "parts" in response_dict:
+                        parts = response_dict.get("parts", [])
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if isinstance(part, dict):
+                                    if "function_call" in part or "functionCall" in part:
+                                        response_has_function_call = True
+                                        break
 
         # Determine the call type
         if has_function_response:
             return "response_generation"
-        elif has_tools and not has_function_call:
+        elif response_has_function_call:
             return "tool_selection"
         else:
             return "direct_response"
