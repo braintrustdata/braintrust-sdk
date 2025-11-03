@@ -5,14 +5,13 @@
 import asyncio
 from pathlib import Path
 
+import braintrust
 from braintrust_adk import setup_adk
 from google.adk import Agent
 from google.adk.planners import BuiltInPlanner
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
-
-import braintrust
 
 setup_adk(project_name="golden-py-adk")
 
