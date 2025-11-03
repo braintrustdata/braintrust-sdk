@@ -5,13 +5,14 @@
 import asyncio
 from pathlib import Path
 
-import braintrust
 from braintrust_adk import setup_adk
 from google.adk import Agent
 from google.adk.planners import BuiltInPlanner
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+
+import braintrust
 
 setup_adk(project_name="golden-py-adk")
 
@@ -484,7 +485,7 @@ async def test_tool_use():
 
             Args:
                 city_and_state: The city and state, e.g. San Francisco, CA
-                unit: The unit of temperature (celsius or fahrenheit)
+                unit: The unit of temperature (celsius or fahrenheit). Default to fahrenheit.
             """
             return f"22 degrees {unit} and sunny in {city_and_state}"
 
