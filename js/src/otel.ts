@@ -124,6 +124,7 @@ export function ensureOtelLoadedSync(): void {
   //ESM: async import() for this module
   otelInitPromise = (async () => {
     try {
+      // @ts-ignore - Optional dependency, may not be installed at compile time
       const apiModule = await importWithTimeout<{
         context: unknown;
         trace: unknown;
@@ -134,6 +135,7 @@ export function ensureOtelLoadedSync(): void {
         3000,
         "OpenTelemetry API import timeout",
       );
+      // @ts-ignore - Optional dependency, may not be installed at compile time
       const sdkModule = await importWithTimeout<{
         BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
       }>(
@@ -176,6 +178,7 @@ function ensureOtelExporterLoadedSync(): void {
   // ESM environment
   otelExporterInitPromise = (async () => {
     try {
+      // @ts-ignore - Optional dependency, may not be installed at compile time
       const exporterModule = await importWithTimeout<{
         OTLPTraceExporter: new (config: unknown) => SpanExporter;
       }>(
@@ -211,6 +214,7 @@ async function ensureOtelLoadedAsync(): Promise<void> {
   // Start loading
   otelInitPromise = (async () => {
     try {
+      // @ts-ignore - Optional dependency, may not be installed at compile time
       const apiModule = await importWithTimeout<{
         context: unknown;
         trace: unknown;
@@ -221,6 +225,7 @@ async function ensureOtelLoadedAsync(): Promise<void> {
         3000,
         "OpenTelemetry API import timeout",
       );
+      // @ts-ignore - Optional dependency, may not be installed at compile time
       const sdkModule = await importWithTimeout<{
         BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
       }>(

@@ -16,8 +16,8 @@ import {
   BraintrustSpanProcessor,
   BraintrustExporter,
   otel,
-  _exportsForTestingOnly,
-} from "../otel";
+} from "../exports-node";
+import { _exportsForTestingOnly } from "../otel";
 
 await _exportsForTestingOnly.ensureOtelLoadedSync();
 
