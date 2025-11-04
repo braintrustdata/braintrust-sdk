@@ -1,6 +1,7 @@
 type SpanAttributes = {
   name: string;
   exec_counter: number;
+  type?: string;
 };
 
 type Metadata = {
