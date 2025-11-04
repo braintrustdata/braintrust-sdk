@@ -484,7 +484,7 @@ async def test_tool_use():
 
             Args:
                 city_and_state: The city and state, e.g. San Francisco, CA
-                unit: The unit of temperature (celsius or fahrenheit)
+                unit: The unit of temperature (celsius or fahrenheit). Default to fahrenheit.
             """
             return f"22 degrees {unit} and sunny in {city_and_state}"
 

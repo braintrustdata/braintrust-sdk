@@ -604,12 +604,154 @@ def test_determine_llm_call_type_no_response():
     from braintrust_adk import _determine_llm_call_type
 
     llm_request = {
-        "config": {
-            "tools": [{"function_declarations": [{"name": "tool1"}]}]
-        },
+        "config": {"tools": [{"function_declarations": [{"name": "tool1"}]}]},
         "contents": [{"parts": [{"text": "Test"}], "role": "user"}],
     }
 
     # No model_response provided
     call_type = _determine_llm_call_type(llm_request, None)
     assert call_type == "direct_response", "Should default to direct_response when no response available"
+
+
+@pytest.mark.asyncio
+async def test_llm_call_span_wraps_child_spans(memory_logger):
+    """Test that llm_call span is created BEFORE yielding events, so child spans have proper parent.
+
+    This test validates the fix for the issue where mcp_tool and other child spans
+    were losing their parent context because the llm_call span was created AFTER
+    all events were yielded.
+
+    The fix ensures:
+    1. llm_call span is created BEFORE wrapped() is called
+    2. Child spans (like mcp_tool) created during execution have proper parent
+    3. Span is updated with correct call_type after response is received
+    """
+    from unittest.mock import MagicMock
+
+    from braintrust import current_span, start_span
+    from braintrust_adk import wrap_flow
+
+    # Clear any existing logs
+    memory_logger.pop()
+
+    # Mock Flow class
+    class MockFlow:
+        def __init__(self):
+            self.llm = MagicMock()
+            self.llm.model = "test-model"
+
+        async def run_async(self, invocation_context, llm_request=None, model_response_event=None):
+            """Method that wrap_flow will wrap."""
+            async for event in self._call_llm_async(invocation_context, llm_request, model_response_event):
+                yield event
+
+        async def _call_llm_async(self, invocation_context, llm_request, model_response_event):
+            """Simulates the flow making LLM calls and potentially calling tools."""
+            # Simulate an event stream
+            yield {"type": "start"}
+
+            # During execution, child spans might be created (like mcp_tool calls)
+            # This simulates an MCP tool being called during LLM execution
+            with start_span(name="mcp_tool [test_tool]", type="tool") as tool_span:
+                tool_span.log(output={"result": "success"})
+
+            yield {"type": "complete", "content": {"parts": [{"text": "Done"}], "role": "model"}}
+
+    # Wrap the flow
+    wrap_flow(MockFlow)
+
+    # Create flow instance
+    flow = MockFlow()
+
+    # Track parent span during execution
+    parent_spans_during_execution = []
+
+    async def wrapped_execution():
+        """Wrapper that tracks parent span during execution."""
+        async for event in flow.run_async(
+            invocation_context={"test": "context"},
+            llm_request={"contents": [{"parts": [{"text": "test"}], "role": "user"}]},
+            model_response_event=None,
+        ):
+            # Check what the current parent span is during execution
+            parent = current_span()
+            if parent and hasattr(parent, "id"):
+                parent_spans_during_execution.append(parent.id)
+
+    # Execute
+    await wrapped_execution()
+
+    # Give background logger time to flush
+    memory_logger.flush()
+
+    # Get all logged spans
+    logs = memory_logger.pop()
+
+    # Find the spans by name
+    llm_call_spans = [log for log in logs if "llm_call" in log.get("span_attributes", {}).get("name", "")]
+    mcp_tool_spans = [log for log in logs if "mcp_tool" in log.get("span_attributes", {}).get("name", "")]
+
+    # Verify llm_call span exists
+    assert len(llm_call_spans) > 0, "Should have created llm_call span"
+
+    # Verify mcp_tool span exists
+    assert len(mcp_tool_spans) > 0, "Should have created mcp_tool span"
+
+    # Verify mcp_tool span has the llm_call span as parent
+    llm_call_span_id = llm_call_spans[0]["span_id"]
+    mcp_tool_span = mcp_tool_spans[0]
+
+    # The mcp_tool span should have the llm_call span in its parent chain
+    assert "span_parents" in mcp_tool_span, "mcp_tool span should have span_parents"
+    assert llm_call_span_id in mcp_tool_span["span_parents"], (
+        f"mcp_tool span should have llm_call span as parent. "
+        f"Expected {llm_call_span_id} in {mcp_tool_span['span_parents']}"
+    )
+
+    # Verify llm_call span name was updated with call_type
+    llm_call_name = llm_call_spans[0]["span_attributes"]["name"]
+    assert "[" in llm_call_name, f"llm_call span name should include call_type in brackets: {llm_call_name}"
+
+
+@pytest.mark.asyncio
+async def test_async_context_preservation_across_yields():
+    """Test that async context is preserved across generator yields.
+
+    This validates that the aclosing wrapper properly handles ContextVar errors
+    that occur when async generators yield control and resume in different contexts.
+    """
+    import asyncio
+
+    from braintrust import start_span
+    from braintrust_adk import aclosing
+
+    # Initialize logger
+    init_test_logger("test-context")
+
+    async def context_switching_generator():
+        """Generator that creates spans and yields, potentially switching contexts."""
+        with start_span(name="outer_span", type="task") as outer:
+            yield {"event": 1}
+            await asyncio.sleep(0.001)  # Force context switch
+
+            with start_span(name="inner_span", type="task") as inner:
+                inner.log(output={"data": "test"})
+                yield {"event": 2}
+                await asyncio.sleep(0.001)  # Another context switch
+
+            yield {"event": 3}
+
+    # Collect events using aclosing
+    events = []
+    async with aclosing(context_switching_generator()) as gen:
+        async for event in gen:
+            events.append(event)
+            await asyncio.sleep(0.001)  # Force context switches during iteration
+
+    # Verify all events were collected successfully
+    assert len(events) == 3
+    assert events[0]["event"] == 1
+    assert events[1]["event"] == 2
+    assert events[2]["event"] == 3
+
+    # If we get here, the context error suppression in aclosing.__aexit__ worked correctly

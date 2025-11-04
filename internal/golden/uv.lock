@@ -104,7 +104,7 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.3.6"
+version = "0.3.2"
 source = { editable = "../../py" }
 dependencies = [
     { name = "chevron" },
@@ -156,7 +156,7 @@ provides-extras = ["cli", "doc", "openai-agents", "otel", "all"]
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.2rc3"
+version = "0.2.2"
 source = { editable = "../../integrations/adk-py" }
 dependencies = [
     { name = "braintrust" },
