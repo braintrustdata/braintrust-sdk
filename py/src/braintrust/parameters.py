@@ -31,7 +31,9 @@ def _pydantic_to_json_schema(model: Any) -> dict[str, Any]:
         # pydantic 1
         return model.schema()
     else:
-        raise ValueError(f"Cannot convert {model} to JSON schema - not a pydantic model")
+        raise ValueError(
+            f"Cannot convert {model} to JSON schema - not a pydantic model"
+        )
 
 
 def validate_parameters(
@@ -67,7 +69,9 @@ def validate_parameters(
                     prompt_data = schema["default"]
                 else:
                     raise ValueError(f"Parameter '{name}' is required")
-                result[name] = Prompt.from_prompt_data(schema.get("name"), PromptData.from_dict_deep(prompt_data))
+                result[name] = Prompt.from_prompt_data(
+                    schema.get("name"), PromptData.from_dict_deep(prompt_data)
+                )
             elif schema is None:
                 # No schema defined, pass through the value
                 result[name] = value
@@ -76,7 +80,9 @@ def validate_parameters(
                 if hasattr(schema, "parse_obj") or hasattr(schema, "model_validate"):
                     # Check if this is a single-field validator model
                     # Support both Pydantic v1 (__fields__) and v2 (model_fields)
-                    fields = getattr(schema, "__fields__", None) or getattr(schema, "model_fields", {})
+                    fields = getattr(schema, "__fields__", None) or getattr(
+                        schema, "model_fields", {}
+                    )
                     if len(fields) == 1 and "value" in fields:
                         # This is a single-field validator, validate the value directly
                         if value is None:
@@ -143,11 +149,36 @@ def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
         else:
             # Pydantic model
             try:
-                result[name] = {
-                    "type": "data",
-                    "schema": _pydantic_to_json_schema(schema),
-                    # TODO: Extract default and description from pydantic model
-                }
+                json_schema = _pydantic_to_json_schema(schema)
+
+                # Check if this is a single-field model
+                # These models are automatically unwrapped by validate_parameters()
+                # (when the field is named 'value'), so we should flatten the schema
+                # for the UI to match this behavior and be consistent with TypeScript's
+                # bare Zod types (e.g., z.string())
+                properties = json_schema.get("properties", {})
+                if json_schema.get("type") == "object" and len(properties) == 1:
+                    # Flatten the schema - use the inner field's schema directly
+                    field_name = list(properties.keys())[0]
+                    inner_schema = properties[field_name].copy()
+
+                    # Preserve model-level description if field doesn't have one
+                    if "description" not in inner_schema and "description" in json_schema:
+                        inner_schema["description"] = json_schema["description"]
+
+                    result[name] = {
+                        "type": "data",
+                        "schema": inner_schema,
+                        "default": inner_schema.get("default"),
+                        "description": inner_schema.get("description"),
+                    }
+                else:
+                    # Regular pydantic model (not single-field)
+                    result[name] = {
+                        "type": "data",
+                        "schema": json_schema,
+                        "description": json_schema.get("description"),
+                    }
             except ValueError:
                 # Not a pydantic model, skip
                 pass
