@@ -16,7 +16,7 @@ import { Eval } from "../framework";
 import { base64ToUint8Array } from "../../util/bytes";
 import { configureNode } from "../node";
 import { importWithTimeout } from "../import-utils";
-import { _exportsForTestingOnly as _otelExportsForTestingOnly } from "../otel";
+import { preInitializeOtel } from "../otel";
 
 configureNode();
 
@@ -45,14 +45,18 @@ let InMemorySpanExporter: unknown;
 let SimpleSpanProcessor: unknown;
 
 try {
+  // Import OTEL packages - these exact module instances will be used when initializing OTEL
+  const otelApi = await import("@opentelemetry/api");
   const otelSdk = await import("@opentelemetry/sdk-trace-base");
+  const otelExporter = await import("@opentelemetry/exporter-trace-otlp-http");
+
   TracerProvider = otelSdk.TracerProvider;
   SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
   InMemorySpanExporter = otelSdk.InMemorySpanExporter;
   OTEL_AVAILABLE = true;
 
-  // Wait for the main otel module to finish loading OTEL internally (async)
-  await _otelExportsForTestingOnly.ensureOtelLoadedSync();
+  // Initialize OTEL with the exact same module instances
+  await preInitializeOtel(otelApi, otelSdk, otelExporter);
 } catch {
   OTEL_AVAILABLE = false;
 }
@@ -67,7 +71,8 @@ function setupOtelFixture(): OtelFixture | null {
     !OTEL_AVAILABLE ||
     !TracerProvider ||
     !SimpleSpanProcessor ||
-    !InMemorySpanExporter
+    !InMemorySpanExporter ||
+    !otelApiModule
   ) {
     return null;
   }
@@ -556,13 +561,7 @@ describe("Distributed Tracing (BT → OTEL)", () => {
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     if (OTEL_AVAILABLE) {
-      const otelApi = await importWithTimeout<
-        typeof import("@opentelemetry/api")
-      >(
-        () => import("@opentelemetry/api"),
-        3000,
-        "OpenTelemetry API import timeout",
-      );
+      const otelApi = await import("@opentelemetry/api");
       trace = otelApi.trace;
       context = otelApi.context;
     }

@@ -19,7 +19,8 @@ import {
 } from "../exports-node";
 import { _exportsForTestingOnly } from "../otel";
 
-await _exportsForTestingOnly.ensureOtelLoadedSync();
+// Use sync loader for tests (CommonJS/Node.js environment)
+await _exportsForTestingOnly.syncOtelLoader.ensureLoaded();
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
