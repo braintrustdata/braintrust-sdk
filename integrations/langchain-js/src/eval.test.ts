@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import { CHAT_MATH } from "./BraintrustCallbackHandler.fixtures";
+
 import { server } from "./test/setup";
 
 interface ProgressReporter {
@@ -441,7 +442,7 @@ describe("Eval with BraintrustCallbackHandler", () => {
     }
   });
 
-  it("should work without explicit logger or parent using captured context", async () => {
+  it("should work without explicit logger or parent in concurrent eval", async () => {
     await _exportsForTestingOnly.simulateLoginForTests();
     const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     const experiment = _exportsForTestingOnly.initTestExperiment(
@@ -465,8 +466,7 @@ describe("Eval with BraintrustCallbackHandler", () => {
             model: "gpt-4o-mini-2024-07-18",
           });
 
-          // Use callback handler WITHOUT passing logger or parent
-          // It should capture the current span context automatically
+          // No explicit logger or parent - should use currentSpan() at operation time
           const message = await model.invoke([input], {
             callbacks: [new BraintrustCallbackHandler()],
           });
@@ -507,21 +507,14 @@ describe("Eval with BraintrustCallbackHandler", () => {
     );
     expect(llmSpans.length).toBeGreaterThanOrEqual(3);
 
-    // Critical test: Even without explicit logger/parent, spans should be properly attached
-    // This verifies the rootSpanContext capture mechanism works
-    for (const llmSpan of llmSpans) {
-      expect(llmSpan.span_parents).toBeDefined();
-      expect(llmSpan.span_parents.length).toBeGreaterThan(0);
+    // Critical test: Even without explicit logger/parent, each LLM span should be
+    // attached to its corresponding task span (not all to the same one)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const llmParentIds = llmSpans.map((s: any) => s.span_parents[0]);
+    const uniqueParents = new Set(llmParentIds);
 
-      // Verify the parent exists
-      const parentSpanId = llmSpan.span_parents[0];
-      const parentSpan = allSpans.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (s: any) => s.span_id === parentSpanId,
-      );
-
-      expect(parentSpan).toBeDefined();
-    }
+    // Each LLM should have a different parent (one per task)
+    expect(uniqueParents.size).toBeGreaterThanOrEqual(3);
 
     // Verify each task has children
     for (const taskSpan of taskSpans) {

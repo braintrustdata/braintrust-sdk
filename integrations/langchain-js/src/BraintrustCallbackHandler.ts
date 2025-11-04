@@ -70,9 +70,15 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     };
 
     // Capture the current span context at construction time if no explicit
-    // logger or parent is provided. This ensures correct context in concurrent scenarios.
+    // logger or parent is provided. This ensures correct context in concurrent scenarios
+    // when handlers are created inside eval tasks.
+    // Only capture if there's an actual active span (not NOOP_SPAN) to support
+    // handlers created at module level (e.g., with setGlobalHandler).
     if (!this.parent && !this.options.logger) {
-      this.capturedContext = currentSpan();
+      const current = currentSpan();
+      if (!Object.is(current, NOOP_SPAN)) {
+        this.capturedContext = current;
+      }
     }
   }
 
