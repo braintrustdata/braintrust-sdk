@@ -352,8 +352,16 @@ export function proxyCreate(
         if (params.stream) {
           return proxyIterable(result, timedSpan, hooks.traceStreamFunc);
         } else {
-          const event = hooks.resultToEventFunc(result);
+          const event: any = hooks.resultToEventFunc(result);
           const span = timedSpan.span;
+
+          // Calculate time to first token for non-streaming responses
+          const ttft = getCurrentUnixTimestamp() - timedSpan.start;
+          if (!event.metrics) {
+            event.metrics = {};
+          }
+          event.metrics.time_to_first_token = ttft;
+
           span.log(event);
           span.end();
           return result;
