@@ -34,8 +34,8 @@ export * from "./wrappers/oai";
 
 export {
   wrapAISDK,
-  deprecated_BraintrustMiddleware as BraintrustMiddleware,
-  deprecated_wrapAISDKModel as wrapAISDKModel,
+  wrapAISDKModel,
+  BraintrustMiddleware,
 } from "./wrappers/ai-sdk";
 export { wrapMastraAgent } from "./wrappers/mastra/mastra";
 export { wrapAnthropic } from "./wrappers/anthropic";
