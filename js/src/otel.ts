@@ -196,10 +196,6 @@ function ensureOtelExporterLoadedSync(): void {
   // Return immediately - async loading will complete in background
 }
 
-/**
- * Async lazy initialization of OpenTelemetry packages.
- * This is used by the async helper functions and factory methods.
- */
 async function ensureOtelLoadedAsync(): Promise<void> {
   // If already loaded (success or failure), return immediately
   if (OTEL_AVAILABLE !== null) {
