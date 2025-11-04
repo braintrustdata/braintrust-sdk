@@ -11,11 +11,11 @@
   },
   "include": ["."],
   "exclude": [
-    "node_modules/**",
+    "**/*.test.ts",
     "**/dist/**",
     "examples/**",
+    "node_modules/**",
     "scripts/**",
-    "**/*.test.ts",
     "vendor/**"
   ]
 }

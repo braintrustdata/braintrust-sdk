@@ -101,7 +101,7 @@ export class BraintrustStream {
   /**
    * Get the underlying ReadableStream.
    *
-   * @returns The underlying ReadableStream<BraintrustStreamChunk>.
+   * @returns The underlying `ReadableStream<BraintrustStreamChunk>`.
    */
   public toReadableStream(): ReadableStream<BraintrustStreamChunk> {
     return this.stream;

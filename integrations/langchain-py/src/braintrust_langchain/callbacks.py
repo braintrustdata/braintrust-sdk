@@ -288,8 +288,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         metadata = metadata or {}
         resolved_name = (
-            metadata.get("langgraph_node")
-            or name
+            name
+            or metadata.get("langgraph_node")
             or serialized.get("name")
             or last_item(serialized.get("id") or [])
             or "Chain"
@@ -431,6 +431,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             parent_run_id,
             run_id,
             name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool",
+            type=SpanTypeAttribute.TOOL,
             event={
                 "input": inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,

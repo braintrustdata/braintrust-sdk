@@ -345,6 +345,14 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
       model: TEST_MODEL,
       systemInstruction: "You are a pirate. Always respond in pirate speak.",
     });
+
+    expect(span.input).toMatchObject({
+      model: TEST_MODEL,
+      contents: { text: "Tell me about the weather." },
+      config: expect.objectContaining({
+        systemInstruction: "You are a pirate. Always respond in pirate speak.",
+      }),
+    });
   });
 
   test("google genai multi-turn conversation", async () => {

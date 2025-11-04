@@ -29,6 +29,21 @@ Demonstrates how to build multi-tool agents with the ADK and automatic tracing i
 
 Shows how tracing works with concurrent Google ADK operations and proper trace correlation across async/threaded code.
 
+### `mcp_tracing/`
+
+Demonstrates automatic tracing of MCP (Model Context Protocol) tool invocations. This example shows how `setup_adk()` automatically captures MCP tool calls, including tool name, parameters, results, and duration.
+
+**Requirements:** Python 3.10+ (MCP requirement), Node.js with npx
+
+**Run directly:**
+
+```bash
+cd mcp_tracing
+export BRAINTRUST_API_KEY=your_key
+export GOOGLE_API_KEY=your_key
+uv run python agent.py
+```
+
 ## Setup
 
 Install dependencies:

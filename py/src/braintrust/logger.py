@@ -1938,15 +1938,18 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
+def get_span_parent_object(parent: Optional[str] = None, state: Optional[BraintrustState] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
+
+    if state is None:
+        state = _state
 
     span = current_span()
     if span != NOOP_SPAN:
         return span
 
-    parent = parent or _state.current_parent.get()
+    parent = parent or state.current_parent.get()
     if parent:
         return SpanComponentsV4.from_str(parent)
 
@@ -2169,7 +2172,7 @@ def start_span(
     if not state:
         state = _state
 
-    parent_obj = get_span_parent_object(parent)
+    parent_obj = get_span_parent_object(parent, state)
 
     if isinstance(parent_obj, SpanComponentsV4):
         if parent_obj.row_id and parent_obj.span_id and parent_obj.root_span_id:
