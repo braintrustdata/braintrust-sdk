@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from typing import (
     Any,
     Dict,
@@ -63,6 +64,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         # Set run_inline=True to avoid thread executor in async contexts
         # This ensures memory logger context is preserved
         self.run_inline = True
+
+        self._start_llm_time = None
+        self._start_chat_model_time = None
+        self._first_token_time = None
+        self.ttft_ms = None
 
     def _start_span(
         self,
@@ -334,8 +340,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
+        self._start_llm_time = time.perf_counter()
         name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
-
         self._start_span(
             parent_run_id,
             run_id,
@@ -367,7 +373,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> Any:
         invocation_params = invocation_params or {}
-
+        self._start_chat_model_time = time.perf_counter()
         self._start_span(
             parent_run_id,
             run_id,
@@ -401,6 +407,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             return
 
         metrics = _get_metrics_from_response(response)
+        if self.ttft_ms:
+            metrics["time_to_first_token"] = self.ttft_ms
         model_name = _get_model_name_from_response(response)
 
         self._end_span(
@@ -505,7 +513,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        pass
+        if self._first_token_time is None:
+            self._first_token_time = time.perf_counter()
+            if self._start_llm_time is not None or self._start_chat_model_time is not None:
+                _start_time = self._start_llm_time or self._start_chat_model_time
+                self.ttft_ms = self._first_token_time - _start_time
 
     def on_text(
         self,
