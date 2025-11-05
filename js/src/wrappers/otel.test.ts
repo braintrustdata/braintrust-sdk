@@ -29,9 +29,14 @@ function clearOtelContext() {
       // Create an empty context by removing braintrust_span if it exists
       const currentContext = context.active();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+      if (
+        currentContext.getValue &&
+        (currentContext.getValue as any)("braintrust_span")
+      ) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+        const emptyContext = (currentContext.deleteValue as any)(
+          "braintrust_span",
+        );
         // Run a no-op in the empty context to clear the active context
         context.with(emptyContext, () => {
           // No-op - just switching to empty context

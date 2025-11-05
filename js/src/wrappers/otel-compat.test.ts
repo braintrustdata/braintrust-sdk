@@ -48,7 +48,7 @@ try {
   const otelApi = await import("@opentelemetry/api");
   const otelSdk = await import("@opentelemetry/sdk-trace-base");
   const otelExporter = await import("@opentelemetry/exporter-trace-otlp-http");
-  
+
   TracerProvider = otelSdk.TracerProvider;
   SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
   InMemorySpanExporter = otelSdk.InMemorySpanExporter;
@@ -119,7 +119,7 @@ describe("OTEL compatibility mode", () => {
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
     }
-    
+
     // Clear OTEL context between tests to prevent span leakage
     try {
       const otelApi = require("@opentelemetry/api");
@@ -127,9 +127,14 @@ describe("OTEL compatibility mode", () => {
         // Create an empty context by removing braintrust_span if it exists
         const currentContext = otelApi.context.active();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+        if (
+          currentContext.getValue &&
+          (currentContext.getValue as any)("braintrust_span")
+        ) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+          const emptyContext = (currentContext.deleteValue as any)(
+            "braintrust_span",
+          );
           // Run a no-op in the empty context to clear the active context
           otelApi.context.with(emptyContext, () => {
             // No-op - just switching to empty context
@@ -592,7 +597,7 @@ describe("Distributed Tracing (BT → OTEL)", () => {
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
     }
-    
+
     // Clear OTEL context between tests to prevent span leakage
     try {
       const otelApi = require("@opentelemetry/api");
@@ -600,9 +605,14 @@ describe("Distributed Tracing (BT → OTEL)", () => {
         // Create an empty context by removing braintrust_span if it exists
         const currentContext = otelApi.context.active();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+        if (
+          currentContext.getValue &&
+          (currentContext.getValue as any)("braintrust_span")
+        ) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+          const emptyContext = (currentContext.deleteValue as any)(
+            "braintrust_span",
+          );
           // Run a no-op in the empty context to clear the active context
           otelApi.context.with(emptyContext, () => {
             // No-op - just switching to empty context

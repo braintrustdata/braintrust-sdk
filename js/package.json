@@ -56,7 +56,7 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
-    "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\"",
+    "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel-no-deps.test.ts\"",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
     "test:otel": "vitest run src/wrappers/otel.test.ts src/wrappers/otel-compat.test.ts",
