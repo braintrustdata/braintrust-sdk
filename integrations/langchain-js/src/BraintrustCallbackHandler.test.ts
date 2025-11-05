@@ -643,7 +643,7 @@ it("should handle LangGraph state management", async () => {
 
   async function sayHello(state: HelloWorldGraphState) {
     const res = await model.invoke("Say hello");
-    return res.content;
+    return { message: res.content };
   }
 
   function sayBye(state: HelloWorldGraphState) {
