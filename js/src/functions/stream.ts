@@ -55,14 +55,6 @@ export const braintrustStreamChunkSchema = z.union([
 export type BraintrustStreamChunk = z.infer<typeof braintrustStreamChunkSchema>;
 
 /**
- * Types that can be passed to the BraintrustStream constructor.
- */
-export type BraintrustStreamInput =
-  | ReadableStream<Uint8Array>
-  | ReadableStream<string>
-  | ReadableStream<BraintrustStreamChunk>;
-
-/**
  * A Braintrust stream. This is a wrapper around a ReadableStream of `BraintrustStreamChunk`,
  * with some utility methods to make them easy to log and convert into various formats.
  */
@@ -72,7 +64,10 @@ export class BraintrustStream {
   private signal: AbortSignal | undefined;
 
   constructor(
-    baseStream: BraintrustStreamInput,
+    baseStream:
+      | ReadableStream<Uint8Array>
+      | ReadableStream<string>
+      | ReadableStream<BraintrustStreamChunk>,
     opts?: { signal?: AbortSignal },
   ) {
     this.signal = opts?.signal;
