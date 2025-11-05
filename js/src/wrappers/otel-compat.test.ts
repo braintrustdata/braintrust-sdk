@@ -15,7 +15,6 @@ import {
 import { Eval } from "../framework";
 import { base64ToUint8Array } from "../../util/bytes";
 import { configureNode } from "../node";
-import { importWithTimeout } from "../import-utils";
 import { preInitializeOtel } from "../otel";
 
 configureNode();
@@ -49,7 +48,7 @@ try {
   const otelApi = await import("@opentelemetry/api");
   const otelSdk = await import("@opentelemetry/sdk-trace-base");
   const otelExporter = await import("@opentelemetry/exporter-trace-otlp-http");
-
+  
   TracerProvider = otelSdk.TracerProvider;
   SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
   InMemorySpanExporter = otelSdk.InMemorySpanExporter;
@@ -119,6 +118,26 @@ describe("OTEL compatibility mode", () => {
       delete process.env.BRAINTRUST_OTEL_COMPAT;
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
+    }
+    
+    // Clear OTEL context between tests to prevent span leakage
+    try {
+      const otelApi = require("@opentelemetry/api");
+      if (otelApi?.context) {
+        // Create an empty context by removing braintrust_span if it exists
+        const currentContext = otelApi.context.active();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+          // Run a no-op in the empty context to clear the active context
+          otelApi.context.with(emptyContext, () => {
+            // No-op - just switching to empty context
+          });
+        }
+      }
+    } catch {
+      // OTEL not available, ignore
     }
   });
 
@@ -572,6 +591,26 @@ describe("Distributed Tracing (BT → OTEL)", () => {
       delete process.env.BRAINTRUST_OTEL_COMPAT;
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
+    }
+    
+    // Clear OTEL context between tests to prevent span leakage
+    try {
+      const otelApi = require("@opentelemetry/api");
+      if (otelApi?.context) {
+        // Create an empty context by removing braintrust_span if it exists
+        const currentContext = otelApi.context.active();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+          // Run a no-op in the empty context to clear the active context
+          otelApi.context.with(emptyContext, () => {
+            // No-op - just switching to empty context
+          });
+        }
+      }
+    } catch {
+      // OTEL not available, ignore
     }
   });
 

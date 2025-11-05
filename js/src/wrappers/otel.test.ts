@@ -22,6 +22,27 @@ import { _exportsForTestingOnly } from "../otel";
 // Use sync loader for tests (CommonJS/Node.js environment)
 await _exportsForTestingOnly.syncOtelLoader.ensureLoaded();
 
+// Helper function to clear OTEL context between tests to prevent span leakage
+function clearOtelContext() {
+  try {
+    if (context) {
+      // Create an empty context by removing braintrust_span if it exists
+      const currentContext = context.active();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (currentContext.getValue && (currentContext.getValue as any)("braintrust_span")) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const emptyContext = (currentContext.deleteValue as any)("braintrust_span");
+        // Run a no-op in the empty context to clear the active context
+        context.with(emptyContext, () => {
+          // No-op - just switching to empty context
+        });
+      }
+    }
+  } catch {
+    // OTEL not available, ignore
+  }
+}
+
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
   let provider: BasicTracerProvider;
@@ -46,6 +67,7 @@ describe("AISpanProcessor", () => {
 
   afterEach(async () => {
     await provider.shutdown();
+    clearOtelContext();
   });
 
   it("should keep root spans", () => {
@@ -1018,6 +1040,7 @@ describe("otel namespace helpers", () => {
 
   afterEach(async () => {
     await provider.shutdown();
+    clearOtelContext();
   });
 
   describe("addParentToBaggage", () => {
