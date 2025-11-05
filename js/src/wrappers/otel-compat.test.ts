@@ -15,7 +15,6 @@ import {
 import { Eval } from "../framework";
 import { base64ToUint8Array } from "../../util/bytes";
 import { configureNode } from "../node";
-import { preInitializeOtel } from "../otel";
 
 configureNode();
 
@@ -32,6 +31,7 @@ interface OtelSpan {
   setAttribute: (key: string, value: unknown) => void;
   attributes?: Record<string, unknown>;
   name: string;
+  parent?: { spanId: string };
 }
 
 interface SpanExporter {
@@ -42,21 +42,21 @@ let OTEL_AVAILABLE = false;
 let TracerProvider: unknown;
 let InMemorySpanExporter: unknown;
 let SimpleSpanProcessor: unknown;
+let otelApiModule: unknown;
 
 try {
-  // Import OTEL packages - these exact module instances will be used when initializing OTEL
-  const otelApi = await import("@opentelemetry/api");
+  // Import OTEL packages
   const otelSdk = await import("@opentelemetry/sdk-trace-base");
-  const otelExporter = await import("@opentelemetry/exporter-trace-otlp-http");
-
+  otelApiModule = await import("@opentelemetry/api");
   TracerProvider = otelSdk.TracerProvider;
   SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
   InMemorySpanExporter = otelSdk.InMemorySpanExporter;
   OTEL_AVAILABLE = true;
 
-  // Initialize OTEL with the exact same module instances
-  await preInitializeOtel(otelApi, otelSdk, otelExporter);
-} catch {
+  console.log("OTEL_AVAILABLE:", OTEL_AVAILABLE);
+  console.log("TracerProvider assigned:", TracerProvider);
+} catch (e) {
+  console.error("Failed to load OTEL:", e);
   OTEL_AVAILABLE = false;
 }
 
@@ -76,19 +76,11 @@ function setupOtelFixture(): OtelFixture | null {
     return null;
   }
 
-  const TPClass = TracerProvider as new () => {
-    addSpanProcessor: (processor: unknown) => void;
-    getTracer: (name: string) => Tracer;
-  };
-  const SPClass = SimpleSpanProcessor as new (
-    exporter: SpanExporter,
-  ) => unknown;
-  const IEClass = InMemorySpanExporter as new () => SpanExporter;
+  // Use `as any` to bypass TypeScript's type checking since we're dynamically loading these
+  const exporter = new (InMemorySpanExporter as any)() as SpanExporter;
+  const processor = new (SimpleSpanProcessor as any)(exporter);
 
-  const exporter = new IEClass();
-  const processor = new SPClass(exporter);
-
-  const tp = new TPClass();
+  const tp = new (TracerProvider as any)();
   tp.addSpanProcessor(processor);
 
   const tracer = tp.getTracer("otel-compat-test");
@@ -118,31 +110,6 @@ describe("OTEL compatibility mode", () => {
       delete process.env.BRAINTRUST_OTEL_COMPAT;
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
-    }
-
-    // Clear OTEL context between tests to prevent span leakage
-    try {
-      const otelApi = require("@opentelemetry/api");
-      if (otelApi?.context) {
-        // Create an empty context by removing braintrust_span if it exists
-        const currentContext = otelApi.context.active();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (
-          currentContext.getValue &&
-          (currentContext.getValue as any)("braintrust_span")
-        ) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const emptyContext = (currentContext.deleteValue as any)(
-            "braintrust_span",
-          );
-          // Run a no-op in the empty context to clear the active context
-          otelApi.context.with(emptyContext, () => {
-            // No-op - just switching to empty context
-          });
-        }
-      }
-    } catch {
-      // OTEL not available, ignore
     }
   });
 
@@ -597,31 +564,6 @@ describe("Distributed Tracing (BT → OTEL)", () => {
     } else {
       process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
     }
-
-    // Clear OTEL context between tests to prevent span leakage
-    try {
-      const otelApi = require("@opentelemetry/api");
-      if (otelApi?.context) {
-        // Create an empty context by removing braintrust_span if it exists
-        const currentContext = otelApi.context.active();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (
-          currentContext.getValue &&
-          (currentContext.getValue as any)("braintrust_span")
-        ) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const emptyContext = (currentContext.deleteValue as any)(
-            "braintrust_span",
-          );
-          // Run a no-op in the empty context to clear the active context
-          otelApi.context.with(emptyContext, () => {
-            // No-op - just switching to empty context
-          });
-        }
-      }
-    } catch {
-      // OTEL not available, ignore
-    }
   });
 
   test("otelContextFromSpanExport parses BT span and creates OTEL context", async () => {
@@ -650,13 +592,13 @@ describe("Distributed Tracing (BT → OTEL)", () => {
 
     const exportStr = components.toStr();
 
-    const ctx = otelContextFromSpanExport(exportStr);
+    const ctx = await otelContextFromSpanExport(exportStr);
 
     // Verify that a valid context was created
     expect(ctx).toBeDefined();
 
     // Extract the span from the context
-    const span = trace.getSpan(ctx);
+    const span = trace.getSpan(ctx!);
     expect(span).toBeDefined();
 
     const spanContext = span.spanContext();

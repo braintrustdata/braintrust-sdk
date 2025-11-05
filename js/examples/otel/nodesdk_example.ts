@@ -3,15 +3,20 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BraintrustSpanProcessor } from "../../src";
 import { trace } from "@opentelemetry/api";
 
-const sdk = new NodeSDK({
-  serviceName: "my-service",
-  spanProcessor: new BraintrustSpanProcessor({
+async function setupSDK() {
+  const processor = await BraintrustSpanProcessor.create({
     parent: "project_name:otel-examples",
     filterAISpans: true,
-  }),
-});
+  });
 
-sdk.start();
+  const sdk = new NodeSDK({
+    serviceName: "my-service",
+    spanProcessor: processor,
+  });
+
+  sdk.start();
+  return sdk;
+}
 
 console.log("OpenTelemetry NodeSDK started with BraintrustSpanProcessor");
 console.log("BRAINTRUST_API_KEY set:", !!process.env.BRAINTRUST_API_KEY);
@@ -44,6 +49,12 @@ async function makeRequest() {
 
 // Run the example
 async function runExample() {
+  const sdk = await setupSDK();
+  console.log("OpenTelemetry NodeSDK started with BraintrustSpanProcessor");
+  console.log("BRAINTRUST_API_KEY set:", !!process.env.BRAINTRUST_API_KEY);
+  console.log("OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
+
+  const tracer = trace.getTracer("my-service", "1.0.0");
   await makeRequest();
   // Wait a moment for spans to be processed and sent
   await new Promise((resolve) => setTimeout(resolve, 2000));

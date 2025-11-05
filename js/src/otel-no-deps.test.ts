@@ -16,28 +16,20 @@ if (otelInstalled) {
 }
 
 describe("OpenTelemetry not installed", () => {
-  it("should throw error when creating AISpanProcessor without OpenTelemetry", async () => {
-    const { AISpanProcessor } = await import(".");
-
-    expect(() => {
-      new AISpanProcessor({} as any);
-    }).toThrow("OpenTelemetry packages are not installed");
-  });
-
   it("should throw error when creating BraintrustSpanProcessor without OpenTelemetry", async () => {
     const { BraintrustSpanProcessor } = await import(".");
 
-    expect(() => {
-      new BraintrustSpanProcessor({
+    await expect(async () => {
+      await BraintrustSpanProcessor.create({
         apiKey: "test-api-key",
       });
-    }).toThrow("OpenTelemetry packages are not installed");
+    }).rejects.toThrow("OpenTelemetry packages are not installed");
   });
 
   it("should return undefined when calling otel.contextFromSpanExport without OpenTelemetry", async () => {
     const { otel } = await import(".");
 
-    const result = otel.contextFromSpanExport("some-export-string");
+    const result = await otel.contextFromSpanExport("some-export-string");
     expect(result).toBeUndefined();
   });
 
@@ -45,10 +37,8 @@ describe("OpenTelemetry not installed", () => {
     const { otel } = await import(".");
 
     // Should not throw, just return a context (or undefined)
-    expect(() => {
-      const result = otel.addParentToBaggage("project_name:test");
-      expect(result).toBeUndefined();
-    }).not.toThrow();
+    const result = await otel.addParentToBaggage("project_name:test");
+    expect(result).toBeUndefined();
   });
 
   it("should return undefined when calling otel.addSpanParentToBaggage without OpenTelemetry", async () => {
@@ -58,7 +48,7 @@ describe("OpenTelemetry not installed", () => {
       attributes: { "braintrust.parent": "project_name:test" },
     } as any;
 
-    const result = otel.addSpanParentToBaggage(mockSpan);
+    const result = await otel.addSpanParentToBaggage(mockSpan);
     expect(result).toBeUndefined();
   });
 
@@ -70,7 +60,7 @@ describe("OpenTelemetry not installed", () => {
       baggage: "braintrust.parent=project_name:test",
     };
 
-    const result = otel.parentFromHeaders(headers);
+    const result = await otel.parentFromHeaders(headers);
     expect(result).toBeUndefined();
   });
 });

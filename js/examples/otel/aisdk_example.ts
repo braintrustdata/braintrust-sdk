@@ -4,18 +4,17 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod/v3";
 import { BraintrustSpanProcessor } from "braintrust";
 
-const sdk = new NodeSDK({
-  spanProcessors: [
-    new BraintrustSpanProcessor({
-      parent: "project_name:ai sdk test",
-      filterAISpans: true,
-    }),
-  ],
-});
-
-sdk.start();
-
 async function main() {
+  const processor = await BraintrustSpanProcessor.create({
+    parent: "project_name:ai sdk test",
+    filterAISpans: true,
+  });
+
+  const sdk = new NodeSDK({
+    spanProcessors: [processor],
+  });
+
+  sdk.start();
   const result = await generateText({
     model: openai("gpt-4o-mini"),
     messages: [

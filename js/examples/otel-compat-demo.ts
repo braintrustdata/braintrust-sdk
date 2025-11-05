@@ -56,7 +56,7 @@ async function main() {
   context.setGlobalContextManager(contextManager);
 
   // Create Braintrust span processor to export to Braintrust
-  const braintrustProcessor = new BraintrustSpanProcessor({
+  const braintrustProcessor = await BraintrustSpanProcessor.create({
     apiKey: process.env.BRAINTRUST_API_KEY,
     parent: "project_name:otel-compat-demo",
   });

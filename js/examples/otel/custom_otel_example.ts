@@ -3,17 +3,19 @@ import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
 import { BraintrustSpanProcessor } from "../../src";
 
-const provider = new BasicTracerProvider({
-  spanProcessors: [
-    // Add Braintrust span processor with filtering enabled
-    new BraintrustSpanProcessor({
-      parent: "project_name:otel_examples",
-      filterAISpans: true,
-    }),
-  ],
-});
+async function setupProvider() {
+  const processor = await BraintrustSpanProcessor.create({
+    parent: "project_name:otel_examples",
+    filterAISpans: true,
+  });
 
-trace.setGlobalTracerProvider(provider); // sets the global tracer provider
+  const provider = new BasicTracerProvider({
+    spanProcessors: [processor],
+  });
+
+  trace.setGlobalTracerProvider(provider); // sets the global tracer provider
+  return provider;
+}
 
 console.log(
   "OpenTelemetry BasicTracerProvider started with BraintrustSpanProcessor",
@@ -63,6 +65,8 @@ async function makeRequest() {
 
 // Run the example
 async function runExample() {
+  const provider = await setupProvider();
+
   await makeRequest();
   // Wait a moment for spans to be processed and sent
   await new Promise((resolve) => setTimeout(resolve, 2000));

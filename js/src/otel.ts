@@ -2,19 +2,13 @@
 import { SpanComponentsV4 } from "../util/span_identifier_v4";
 import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
 import {
-  syncOtelLoader,
-  asyncOtelLoader,
   getOtelApi,
   getOtelSdk,
   getOtelExporter,
   getOtelAvailable,
-  checkOtelAvailableOrThrow,
   ensureOtelLoaded,
   ensureOtelExporterLoaded,
-  ensureOtelLoadedSync,
-  ensureOtelExporterLoadedSync,
-  ensureOtelLoadedAsync,
-  ensureOtelExporterLoadedAsync,
+  getOtelLoadPromise,
   type OtelApi,
   type OtelContext,
   type SpanProcessor,
@@ -64,10 +58,7 @@ export type CustomSpanFilter = (
  * ```
  */
 export class AISpanProcessor {
-  private static checkOtelAvailable(): void {
-    ensureOtelLoaded();
-    checkOtelAvailableOrThrow();
-  }
+  private readonly otelLoadPromise: Promise<void>;
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
@@ -80,7 +71,9 @@ export class AISpanProcessor {
    *                      null/undefined to not influence the decision
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
-    AISpanProcessor.checkOtelAvailable();
+    // Store the promise that will attempt to load OTEL
+    this.otelLoadPromise = getOtelLoadPromise();
+    
     this.processor = processor;
     this.customFilter = customFilter;
   }
@@ -202,6 +195,9 @@ interface BraintrustSpanProcessorOptions {
  * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
  * by default but can be enabled with the filterAISpans option.
  *
+ * **Important**: Use the static `create()` method to instantiate this processor.
+ * The constructor is private.
+ *
  * Environment Variables:
  * - BRAINTRUST_API_KEY: Your Braintrust API key
  * - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test")
@@ -209,17 +205,16 @@ interface BraintrustSpanProcessorOptions {
  *
  * @example
  * ```typescript
- * const processor = new BraintrustSpanProcessor({
+ * const processor = await BraintrustSpanProcessor.create({
  *   apiKey: 'your-api-key',
  *   apiUrl: 'https://api.braintrust.dev'
  * });
- * const provider = new TracerProvider();
  * provider.addSpanProcessor(processor);
  * ```
  *
  * @example With span filtering enabled:
  * ```typescript
- * const processor = new BraintrustSpanProcessor({
+ * const processor = await BraintrustSpanProcessor.create({
  *   apiKey: 'your-api-key',
  *   filterAISpans: true
  * });
@@ -231,15 +226,38 @@ interface BraintrustSpanProcessorOptions {
  * // BRAINTRUST_API_KEY=your-api-key
  * // BRAINTRUST_PARENT=project_name:test
  * // BRAINTRUST_API_URL=https://api.braintrust.dev
- * const processor = new BraintrustSpanProcessor();
+ * const processor = await BraintrustSpanProcessor.create();
  * ```
  */
 export class BraintrustSpanProcessor {
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
-  constructor(options: BraintrustSpanProcessorOptions = {}) {
-    ensureOtelExporterLoaded();
+  private constructor(processor: SpanProcessor, aiSpanProcessor: SpanProcessor) {
+    this.processor = processor;
+    this.aiSpanProcessor = aiSpanProcessor;
+  }
+
+  /**
+   * Create and initialize a BraintrustSpanProcessor.
+   * This is the only way to create a BraintrustSpanProcessor.
+   * 
+   * @param options - Configuration options for the processor
+   * @returns Promise that resolves to a fully initialized BraintrustSpanProcessor
+   * @throws Error if OTEL is not available or if initialization fails
+   * 
+   * @example
+   * ```typescript
+   * const processor = await BraintrustSpanProcessor.create({
+   *   apiKey: 'your-api-key',
+   *   parent: 'project_name:test'
+   * });
+   * provider.addSpanProcessor(processor);
+   * ```
+   */
+  static async create(options: BraintrustSpanProcessorOptions = {}): Promise<BraintrustSpanProcessor> {
+    // Wait for OTEL to load (throws if not available)
+    await ensureOtelLoaded();
 
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
@@ -271,6 +289,9 @@ export class BraintrustSpanProcessor {
           "Configure with BRAINTRUST_PARENT environment variable or parent parameter.",
       );
     }
+
+    // Ensure exporter is loaded
+    await ensureOtelExporterLoaded();
 
     // Create OTLP exporter
     let exporter: SpanExporter;
@@ -356,19 +377,22 @@ export class BraintrustSpanProcessor {
     if (!otelSdk) {
       throw new Error("OpenTelemetry SDK not available");
     }
-    this.processor = new otelSdk.BatchSpanProcessor(exporter);
+    const processor = new otelSdk.BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on filterAISpans flag
+    let aiSpanProcessor: SpanProcessor;
     if (options.filterAISpans === true) {
       // Only enable filtering if explicitly requested
-      this.aiSpanProcessor = new AISpanProcessor(
-        this.processor,
+      aiSpanProcessor = new AISpanProcessor(
+        processor,
         options.customFilter,
       );
     } else {
       // Use the batch processor directly without filtering (default behavior)
-      this.aiSpanProcessor = this.processor;
+      aiSpanProcessor = processor;
     }
+
+    return new BraintrustSpanProcessor(processor, aiSpanProcessor);
   }
 
   onStart(span: Span, parentContext: Context): void {
@@ -457,13 +481,39 @@ export class BraintrustSpanProcessor {
 }
 
 /**
+ * Helper function to ensure OTEL is loaded and warn if not available.
+ * This will resolve the load promise and check availability.
+ */
+async function ensureOtelLoadedAndWarn(): Promise<boolean> {
+  // Get or create the load promise
+  const loadPromise = getOtelLoadPromise();
+  
+  // Wait for the promise to resolve (even if OTEL is not available)
+  await loadPromise;
+  
+  // Check if OTEL is available
+  const otelApi = getOtelApi();
+  const OTEL_AVAILABLE = getOtelAvailable();
+  
+  if (!otelApi || OTEL_AVAILABLE !== true) {
+    console.warn(
+      "OpenTelemetry is not available. " +
+      "Install OpenTelemetry packages with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions"
+    );
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Create an OTEL context from a Braintrust span export string.
  *
  * Used for distributed tracing scenarios where a Braintrust span in one service
  * needs to be the parent of an OTEL span in another service.
  *
  * @param exportStr - The string returned from span.export()
- * @returns OTEL context that can be used when creating child spans
+ * @returns OTEL context that can be used when creating child spans, or undefined if OTEL is not available
  *
  * @example
  * ```typescript
@@ -474,21 +524,25 @@ export class BraintrustSpanProcessor {
  *
  * // Service B: Import context and create OTEL child
  * import * as api from '@opentelemetry/api';
- * const ctx = otelContextFromSpanExport(exportStr);
- * await api.context.with(ctx, async () => {
- *   await tracer.startActiveSpan("service-b", async (span) => {
- *     // This span is now a child of the Service A span
- *     span.end();
+ * const ctx = await otel.contextFromSpanExport(exportStr);
+ * if (ctx) {
+ *   await api.context.with(ctx, async () => {
+ *     await tracer.startActiveSpan("service-b", async (span) => {
+ *       // This span is now a child of the Service A span
+ *       span.end();
+ *     });
  *   });
- * });
+ * }
  * ```
  */
-export function otelContextFromSpanExport(exportStr: string): unknown {
-  ensureOtelLoaded();
+export async function otelContextFromSpanExport(exportStr: string): Promise<unknown> {
+  const isAvailable = await ensureOtelLoadedAndWarn();
+  if (!isAvailable) {
+    return undefined;
+  }
 
   const otelApi = getOtelApi();
-  const OTEL_AVAILABLE = getOtelAvailable();
-  if (!otelApi || OTEL_AVAILABLE !== true) {
+  if (!otelApi) {
     return undefined;
   }
 
@@ -650,15 +704,49 @@ export function getBraintrustParent(
  * ```
  */
 export class BraintrustExporter {
-  private readonly processor: BraintrustSpanProcessor;
-  private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: ExportResult) => void> = [];
+  private readonly options: BraintrustSpanProcessorOptions;
+  private processorPromise: Promise<BraintrustSpanProcessor> | null = null;
+  private processor: BraintrustSpanProcessor | null = null;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    ensureOtelExporterLoaded();
+    this.options = options;
+  }
 
-    // Use BraintrustSpanProcessor under the hood
-    this.processor = new BraintrustSpanProcessor(options);
+  /**
+   * Create and initialize a BraintrustExporter.
+   * This factory method ensures the processor is fully initialized before returning.
+   * 
+   * @param options - Configuration options for the exporter
+   * @returns Promise that resolves to a fully initialized BraintrustExporter
+   * @throws Error if OTEL is not available or if initialization fails
+   * 
+   * @example
+   * ```typescript
+   * const exporter = await BraintrustExporter.create({
+   *   apiKey: 'your-api-key',
+   *   parent: 'project_name:test'
+   * });
+   * ```
+   */
+  static async create(options: BraintrustSpanProcessorOptions = {}): Promise<BraintrustExporter> {
+    const exporter = new BraintrustExporter(options);
+    // Initialize the processor immediately
+    await exporter.ensureProcessor();
+    return exporter;
+  }
+
+  private async ensureProcessor(): Promise<BraintrustSpanProcessor> {
+    if (this.processor) {
+      return this.processor;
+    }
+
+    if (this.processorPromise) {
+      return this.processorPromise;
+    }
+
+    this.processorPromise = BraintrustSpanProcessor.create(this.options);
+    this.processor = await this.processorPromise;
+    return this.processor;
   }
 
   /**
@@ -668,40 +756,49 @@ export class BraintrustExporter {
     spans: ReadableSpan[],
     resultCallback: (result: ExportResult) => void,
   ): void {
-    try {
-      // Process each span through the processor
-      spans.forEach((span) => {
-        this.processor.onEnd(span);
-      });
+    this.ensureProcessor()
+      .then((processor) => {
+        try {
+          // Process each span through the processor
+          spans.forEach((span) => {
+            processor.onEnd(span);
+          });
 
-      // Force flush to ensure spans are sent
-      this.processor
-        .forceFlush()
-        .then(() => {
-          resultCallback({ code: 0 }); // SUCCESS
-        })
-        .catch((error) => {
+          // Force flush to ensure spans are sent
+          processor
+            .forceFlush()
+            .then(() => {
+              resultCallback({ code: 0 }); // SUCCESS
+            })
+            .catch((error) => {
+              const err = error instanceof Error ? error : new Error(String(error));
+              resultCallback({ code: 1, error: err }); // FAILURE
+            });
+        } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           resultCallback({ code: 1, error: err }); // FAILURE
-        });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      resultCallback({ code: 1, error: err }); // FAILURE
-    }
+        }
+      })
+      .catch((error) => {
+        const err = error instanceof Error ? error : new Error(String(error));
+        resultCallback({ code: 1, error: err }); // FAILURE
+      });
   }
 
   /**
    * Shutdown the exporter.
    */
-  shutdown(): Promise<void> {
-    return this.processor.shutdown();
+  async shutdown(): Promise<void> {
+    const processor = await this.ensureProcessor();
+    return processor.shutdown();
   }
 
   /**
    * Force flush the exporter.
    */
-  forceFlush(): Promise<void> {
-    return this.processor.forceFlush();
+  async forceFlush(): Promise<void> {
+    const processor = await this.ensureProcessor();
+    return processor.forceFlush();
   }
 }
 
@@ -714,7 +811,7 @@ export class BraintrustExporter {
  * @param parent - Braintrust parent identifier (e.g., "project_name:my-project",
  *                 "project_id:abc123", "experiment_id:exp-456")
  * @param ctx - Optional OTEL context to use. If not provided, uses current context.
- * @returns Updated context with braintrust.parent in baggage
+ * @returns Updated context with braintrust.parent in baggage, or the original context if OTEL is not available
  *
  * @example
  * ```typescript
@@ -722,20 +819,21 @@ export class BraintrustExporter {
  * import { propagation } from "@opentelemetry/api";
  *
  * // Set braintrust.parent in baggage
- * otel.addParentToBaggage("project_name:my-project");
+ * const ctx = await otel.addParentToBaggage("project_name:my-project");
  *
  * // Export headers (will include braintrust.parent in baggage)
  * const headers = {};
- * propagation.inject(context.active(), headers);
+ * propagation.inject(ctx, headers);
  * ```
  */
-function addParentToBaggage(parent: string, ctx?: Context): Context {
-  ensureOtelLoaded();
+async function addParentToBaggage(parent: string, ctx?: Context): Promise<Context> {
+  const isAvailable = await ensureOtelLoadedAndWarn();
+  if (!isAvailable) {
+    return ctx as Context;
+  }
 
   const otelApi = getOtelApi();
-  const OTEL_AVAILABLE = getOtelAvailable();
-  if (!otelApi || OTEL_AVAILABLE !== true) {
-    console.error("OpenTelemetry not available");
+  if (!otelApi) {
     return ctx as Context;
   }
 
@@ -768,28 +866,30 @@ function addParentToBaggage(parent: string, ctx?: Context): Context {
  *
  * @param span - OTEL span that has braintrust.parent attribute set
  * @param ctx - Optional OTEL context to use. If not provided, uses current context.
- * @returns Updated context with braintrust.parent in baggage, or undefined if attribute not found
+ * @returns Updated context with braintrust.parent in baggage, or undefined if attribute not found or OTEL is not available
  *
  * @example
  * ```typescript
  * import { otel } from "braintrust";
  * import { propagation } from "@opentelemetry/api";
  *
- * tracer.startActiveSpan("service_b", (span) => {
+ * tracer.startActiveSpan("service_b", async (span) => {
  *   // Copy braintrust.parent from span attribute to baggage
- *   otel.addSpanParentToBaggage(span);
+ *   const ctx = await otel.addSpanParentToBaggage(span);
  *
- *   // Export headers (will include braintrust.parent in baggage)
- *   const headers = {};
- *   propagation.inject(context.active(), headers);
+ *   if (ctx) {
+ *     // Export headers (will include braintrust.parent in baggage)
+ *     const headers = {};
+ *     propagation.inject(ctx, headers);
+ *   }
  *   span.end();
  * });
  * ```
  */
-function addSpanParentToBaggage(
+async function addSpanParentToBaggage(
   span: unknown,
   ctx?: Context,
-): Context | undefined {
+): Promise<Context | undefined> {
   const spanObj = (span as SpanWithAttributes) || {};
   if (!spanObj || !spanObj.attributes) {
     console.warn("addSpanParentToBaggage: span has no attributes");
@@ -805,7 +905,7 @@ function addSpanParentToBaggage(
     return undefined;
   }
 
-  return addParentToBaggage(parentValue, ctx);
+  return await addParentToBaggage(parentValue, ctx);
 }
 
 /**
@@ -816,7 +916,7 @@ function addSpanParentToBaggage(
  *
  * @param headers - Dictionary with 'traceparent' and optionally 'baggage' keys
  * @returns Braintrust V4 export string that can be used as parent parameter,
- *          or undefined if no valid span context is found or braintrust.parent is missing.
+ *          or undefined if no valid span context is found, braintrust.parent is missing, or OTEL is not available.
  *
  * @example
  * ```typescript
@@ -824,23 +924,26 @@ function addSpanParentToBaggage(
  *
  * // Service C receives headers from Service B
  * const headers = { traceparent: '00-trace_id-span_id-01', baggage: '...' };
- * const parent = otel.parentFromHeaders(headers);
+ * const parent = await otel.parentFromHeaders(headers);
  *
- * const logger = initLogger({ projectName: "my-project" });
- * await logger.traced(async (span) => {
- *   span.log({ input: "BT span as child of OTEL parent" });
- * }, { name: "service_c", parent });
+ * if (parent) {
+ *   const logger = initLogger({ projectName: "my-project" });
+ *   await logger.traced(async (span) => {
+ *     span.log({ input: "BT span as child of OTEL parent" });
+ *   }, { name: "service_c", parent });
+ * }
  * ```
  */
-function parentFromHeaders(
+async function parentFromHeaders(
   headers: Record<string, string>,
-): string | undefined {
-  ensureOtelLoaded();
+): Promise<string | undefined> {
+  const isAvailable = await ensureOtelLoadedAndWarn();
+  if (!isAvailable) {
+    return undefined;
+  }
 
   const otelApi = getOtelApi();
-  const OTEL_AVAILABLE = getOtelAvailable();
-  if (!otelApi || OTEL_AVAILABLE !== true) {
-    console.error("OpenTelemetry not available");
+  if (!otelApi) {
     return undefined;
   }
 
@@ -972,22 +1075,24 @@ function parentFromHeaders(
 
 /**
  * OTEL namespace containing distributed tracing helper functions.
+ * All functions are async and will attempt to load OpenTelemetry if not already loaded.
+ * If OpenTelemetry is not available, functions will warn and return undefined/null.
  *
  * @example
  * ```typescript
  * import { otel } from "braintrust";
  *
  * // Export Braintrust span context for OTEL
- * const ctx = otel.contextFromSpanExport(exportStr);
+ * const ctx = await otel.contextFromSpanExport(exportStr);
  *
  * // Add parent to baggage before propagating
- * otel.addParentToBaggage("project_name:my-project");
+ * const ctx2 = await otel.addParentToBaggage("project_name:my-project");
  *
  * // Copy span attribute to baggage
- * otel.addSpanParentToBaggage(span);
+ * const ctx3 = await otel.addSpanParentToBaggage(span);
  *
  * // Create Braintrust parent from OTEL headers
- * const parent = otel.parentFromHeaders(headers);
+ * const parent = await otel.parentFromHeaders(headers);
  * ```
  */
 export const otel = {
@@ -999,10 +1104,5 @@ export const otel = {
 };
 
 export const _exportsForTestingOnly = {
-  ensureOtelLoadedSync,
-  syncOtelLoader,
-  asyncOtelLoader,
+  ensureOtelLoaded,
 };
-
-// Re-export pre-initialization function for ESM users
-export { preInitializeOtel } from "./otel-loader";

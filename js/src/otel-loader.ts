@@ -1,6 +1,3 @@
-// OpenTelemetry loader with sync and async interfaces
-import { preInitializeOtelContext } from "./otel/context";
-
 // Type definitions that don't depend on OpenTelemetry being installed
 export interface OtelContext {
   getValue: (key: symbol) => unknown;
@@ -114,6 +111,28 @@ export function getOtelAvailable(): boolean | null {
   return OTEL_AVAILABLE;
 }
 
+/**
+ * Get or create a promise that resolves when OTEL is loaded.
+ */
+export function getOtelLoadPromise(): Promise<void> {
+  // If already loaded, return resolved promise
+  if (OTEL_AVAILABLE === true) {
+    return Promise.resolve();
+  }
+
+  // If already loading, return existing promise
+  if (otelInitPromise) {
+    return otelInitPromise;
+  }
+
+  // Create async promise for loading
+  otelInitPromise = ensureOtelLoaded().catch(() => {
+    // Promise will resolve even if OTEL is not available
+    // The availability check will happen when it's used
+  });
+  return otelInitPromise;
+}
+
 function setOtelModules(
   apiModule: {
     context: unknown;
@@ -152,67 +171,6 @@ function setOtelExporterModule(exporterModule: {
   };
 }
 
-/**
- * Pass in the OpenTelemetry modules to the preInitializeOtel function.
- * This initializes both the main OTEL loader and the context manager.
- *
- * In ESM environments, this must be async to properly initialize the context manager.
- * In CommonJS environments, it can be synchronous.
- *
- * @param apiModule - The @opentelemetry/api module
- * @param sdkModule - The @opentelemetry/sdk-trace-base module
- * @param exporterModule - Optional: The @opentelemetry/exporter-trace-otlp-http module
- * @returns Promise that resolves when initialization is complete (ESM) or void (CommonJS)
- *
- * @example
- * ```typescript
- * // In ESM file (e.g., app.mjs or with "type": "module" in package.json)
- * import * as api from '@opentelemetry/api';
- * import * as sdk from '@opentelemetry/sdk-trace-base';
- * import * as exporter from '@opentelemetry/exporter-trace-otlp-http';
- * import { preInitializeOtel } from 'braintrust';
- *
- * // Pre-initialize OTEL before using Braintrust OTEL features
- * await preInitializeOtel(api, sdk, exporter);
- *
- * // Now you can use Braintrust OTEL features
- * import { BraintrustSpanProcessor } from 'braintrust';
- * const processor = new BraintrustSpanProcessor({ apiKey: '...' });
- * ```
- */
-export async function preInitializeOtel(
-  apiModule: {
-    context: unknown;
-    trace: unknown;
-    propagation: unknown;
-    TraceFlags?: { SAMPLED: number };
-  },
-  sdkModule: {
-    BatchSpanProcessor: unknown;
-  },
-  exporterModule?: {
-    OTLPTraceExporter: unknown;
-  },
-): Promise<void> {
-  setOtelModules(
-    apiModule,
-    sdkModule as {
-      BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
-    },
-  );
-  if (exporterModule) {
-    setOtelExporterModule(
-      exporterModule as {
-        OTLPTraceExporter: new (config: unknown) => SpanExporter;
-      },
-    );
-  }
-
-  // Initialize the context manager
-  // Use static import - same module instance ensures state is shared
-  await preInitializeOtelContext(apiModule);
-}
-
 export function checkOtelAvailableOrThrow(): void {
   if (OTEL_AVAILABLE === null) {
     throw new Error(OTEL_STILL_LOADING_MESSAGE);
@@ -223,181 +181,86 @@ export function checkOtelAvailableOrThrow(): void {
   }
 }
 
-// Sync loader interface - for CommonJS/Node.js environments
-export interface SyncOtelLoader {
-  ensureLoaded(): void;
-  checkAvailable(): void;
-  ensureExporterLoaded(): void;
-}
-
-// Async loader interface - for environments that support async loading
-export interface AsyncOtelLoader {
-  ensureLoaded(): Promise<void>;
-  checkAvailable(): void;
-  ensureExporterLoaded(): Promise<void>;
-}
-
-class SyncOtelLoaderImpl implements SyncOtelLoader {
-  ensureLoaded(): void {
-    if (OTEL_AVAILABLE !== null) {
-      return;
-    }
-
-    // CommonJS/Node.js: Load via synchronous require()
-    if (typeof require !== "undefined") {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
-        const apiModule = require("@opentelemetry/api");
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
-        const sdkModule = require("@opentelemetry/sdk-trace-base");
-
-        setOtelModules(apiModule, sdkModule);
-
-        // Also initialize the context manager synchronously in CommonJS
-        // Use require to avoid async issues
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
-          const contextModule = require("./otel/context");
-          // Use the synchronous version for CommonJS
-          if (contextModule.preInitializeOtelContextSync) {
-            contextModule.preInitializeOtelContextSync(apiModule);
-          }
-        } catch {
-          // Context module might not be available, that's okay
-        }
-        return;
-      } catch {
-        handleOtelImportFailure();
-        return;
-      }
-    }
-    // Don't attempt async loading it's not possible in ESM
-    throw new Error(OTEL_ESM_PRE_INIT_REQUIRED_MESSAGE);
-  }
-
-  checkAvailable(): void {
-    checkOtelAvailableOrThrow();
-  }
-
-  ensureExporterLoaded(): void {
-    this.ensureLoaded();
-    this.checkAvailable();
-
-    if (otelExporter) {
-      return;
-    }
-
-    // CommonJS/Node.js
-    if (typeof require !== "undefined") {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires -- Synchronous dynamic require
-        const exporterModule = require("@opentelemetry/exporter-trace-otlp-http");
-        setOtelExporterModule(exporterModule);
-        return;
-      } catch {
-        // optional exporter not installed
-      }
-    }
-  }
-}
-
-// Async loader implementation
-class AsyncOtelLoaderImpl implements AsyncOtelLoader {
-  async ensureLoaded(): Promise<void> {
-    if (OTEL_AVAILABLE !== null) {
-      return;
-    }
-
-    if (otelInitPromise) {
-      await otelInitPromise;
-      return;
-    }
-    // This will throw to indicate pre-initialization is required
-    throw new Error(OTEL_ESM_PRE_INIT_REQUIRED_MESSAGE);
-  }
-
-  checkAvailable(): void {
-    checkOtelAvailableOrThrow();
-  }
-
-  async ensureExporterLoaded(): Promise<void> {
-    await this.ensureLoaded();
-    this.checkAvailable();
-
-    if (otelExporter || otelExporterInitPromise) {
-      if (otelExporterInitPromise) {
-        await otelExporterInitPromise;
-      }
-      return;
-    }
-  }
-}
-
-export const syncOtelLoader: SyncOtelLoader = new SyncOtelLoaderImpl();
-export const asyncOtelLoader: AsyncOtelLoader = new AsyncOtelLoaderImpl();
-
-function detectModuleSystem(): "cjs" | "esm" {
-  if (typeof require !== "undefined") {
-    return "cjs";
-  }
-  return "esm";
-}
-
-export function getOtelLoader(): SyncOtelLoader | AsyncOtelLoader {
-  const moduleSystem = detectModuleSystem();
-  if (moduleSystem === "cjs") {
-    return syncOtelLoader;
-  }
-  return asyncOtelLoader;
-}
-
 /**
- * Smart ensure loaded that auto-detects environment.
- * For CommonJS: Synchronously loads via require()
- * For ESM: Throws error indicating pre-initialization is required
+ * Load OTEL API and SDK modules.
  */
-export function ensureOtelLoaded(): void {
-  const loader = getOtelLoader();
-  if (loader === syncOtelLoader) {
-    loader.ensureLoaded();
-  } else {
-    // For ESM, we can't load synchronously, so throw
-    throw new Error(
-      OTEL_ESM_PRE_INIT_REQUIRED_MESSAGE +
-        " In ESM environments, ensure OpenTelemetry packages are imported at the top level before using Braintrust OTEL features.",
-    );
+async function loadOtelModules(): Promise<void> {
+  try {
+    // Dynamically import OpenTelemetry optional modules
+    const [apiModule, sdkModule] = await Promise.all([
+      import("@opentelemetry/api" as string),
+      import("@opentelemetry/sdk-trace-base" as string),
+    ]);
+
+    setOtelModules(apiModule, sdkModule);
+  } catch {
+    // OTEL not installed or import failed
+    handleOtelImportFailure();
   }
 }
 
 /**
- * Smart ensure exporter loaded that auto-detects environment.
+ * Load OTEL exporter module.
  */
-export function ensureOtelExporterLoaded(): void {
-  const loader = getOtelLoader();
-  if (loader === syncOtelLoader) {
-    loader.ensureExporterLoaded();
-  } else {
-    // For ESM, we can't load synchronously, so throw
-    throw new Error(
-      OTEL_ESM_PRE_INIT_REQUIRED_MESSAGE +
-        " In ESM environments, ensure OpenTelemetry packages are imported at the top level before using Braintrust OTEL features.",
+async function loadOtelExporter(): Promise<void> {
+  try {
+    const exporterModule = await import(
+      "@opentelemetry/exporter-trace-otlp-http" as string
     );
+    
+    setOtelExporterModule(exporterModule);
+  } catch {
+    // Optional exporter not installed, that's okay
   }
 }
 
-// Legacy exports for backward compatibility
-export function ensureOtelLoadedSync(): void {
-  syncOtelLoader.ensureLoaded();
+/**
+ * Ensure OTEL is loaded asynchronously and throw if not available.
+ * Returns a promise that resolves when loading is complete.
+ * Throws an error if OTEL is still loading or not available.
+ */
+export async function ensureOtelLoaded(): Promise<void> {
+  // Already checked (success or failure)
+  if (OTEL_AVAILABLE !== null) {
+    checkOtelAvailableOrThrow();
+    return;
+  }
+
+  // Already loading
+  if (otelInitPromise) {
+    await otelInitPromise;
+    checkOtelAvailableOrThrow();
+    return;
+  }
+
+  // Start loading
+  otelInitPromise = loadOtelModules();
+  await otelInitPromise;
+  checkOtelAvailableOrThrow();
 }
 
-export async function ensureOtelLoadedAsync(): Promise<void> {
-  await asyncOtelLoader.ensureLoaded();
+/**
+ * Ensure OTEL exporter is loaded asynchronously.
+ * Returns a promise that resolves when loading is complete.
+ * Throws an error if OTEL is not available.
+ */
+export async function ensureOtelExporterLoaded(): Promise<void> {
+  // First ensure base OTEL is loaded (this will throw if not available)
+  await ensureOtelLoaded();
+
+  // Already loaded
+  if (otelExporter) {
+    return;
+  }
+
+  // Already loading
+  if (otelExporterInitPromise) {
+    await otelExporterInitPromise;
+    return;
+  }
+
+  // Start loading
+  otelExporterInitPromise = loadOtelExporter();
+  await otelExporterInitPromise;
 }
 
-export function ensureOtelExporterLoadedSync(): void {
-  syncOtelLoader.ensureExporterLoaded();
-}
-
-export async function ensureOtelExporterLoadedAsync(): Promise<void> {
-  await asyncOtelLoader.ensureExporterLoaded();
-}
