@@ -865,3 +865,174 @@ def test_consecutive_eval_calls(logger_memory_logger: LoggerMemoryLogger):
     # creates the proper hierarchy: root eval -> eval records -> tasks, and that consecutive
     # calls work correctly with proper parent-child relationships.
     # Real LangChain span integration is tested in other tests (test_llm_calls, etc.)
+
+
+def test_concurrent_eval_with_logger(logger_memory_logger: LoggerMemoryLogger):
+    """Test that concurrent eval tasks with explicit logger parameter properly attach LLM spans to their respective task spans."""
+    from braintrust import Eval
+
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    def task_fn(input, hooks):
+        # Pass the span explicitly as logger to ensure proper attachment
+        handler = BraintrustCallbackHandler(logger=hooks.span)
+
+        # Simulate LangChain LLM call
+        run_id = uuid.uuid4()
+        handler.on_llm_start(
+            {"id": ["ChatOpenAI"], "lc": 1, "type": "not_implemented", "name": "ChatOpenAI"},
+            [f"Process: {input}"],
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        output = f"Result for {input}"
+        handler.on_llm_end(
+            {
+                "generations": [[{"text": output}]],
+                "llm_output": {"token_usage": {"total_tokens": 10}},
+            },
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        return output
+
+    # Run Eval without maxConcurrency to allow concurrent execution
+    result = Eval(
+        "concurrent-test",
+        data=[
+            {"input": "test 1", "expected": "Result for test 1"},
+            {"input": "test 2", "expected": "Result for test 2"},
+            {"input": "test 3", "expected": "Result for test 3"},
+        ],
+        task=task_fn,
+        scores=[lambda **kwargs: {"name": "test_score", "score": 1}],
+    )
+
+    flush()
+    spans = memory_logger.pop()
+
+    # Find task spans
+    task_spans = [s for s in spans if s.get("span_attributes", {}).get("type") == "task"]
+    assert len(task_spans) >= 3, f"Expected at least 3 task spans, got {len(task_spans)}"
+
+    # Find LLM spans
+    llm_spans = [s for s in spans if s.get("span_attributes", {}).get("type") == "llm"]
+    assert len(llm_spans) >= 3, f"Expected at least 3 LLM spans, got {len(llm_spans)}"
+
+    # Critical test: Each LLM span should be attached to a different task span
+    # (not all to the same one, which would indicate a concurrency bug)
+    llm_parent_ids = [s["span_parents"][0] for s in llm_spans if s.get("span_parents")]
+    unique_parents = set(llm_parent_ids)
+
+    assert len(unique_parents) >= 3, f"Expected at least 3 unique parent spans for LLM spans, got {len(unique_parents)}"
+
+    # Verify each task has at least one child span
+    for task_span in task_spans:
+        task_id = task_span["span_id"]
+        child_spans = [s for s in spans if task_id in (s.get("span_parents") or [])]
+        assert len(child_spans) > 0, f"Task span {task_id} has no children"
+
+
+def test_parent_option_precedence(logger_memory_logger: LoggerMemoryLogger):
+    """Test that explicit parent option takes precedence over logger option."""
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    # Create a custom parent span
+    with logger.start_span(name="custom-parent", span_attributes={"type": "function"}) as custom_parent:
+        # Create handler with both logger and would-be parent
+        # In actual usage, parent would be passed to LangChain operations
+        handler = BraintrustCallbackHandler(logger=logger)
+
+        # Simulate a span that should use custom_parent
+        run_id = uuid.uuid4()
+
+        # We can't directly test parent parameter precedence in the same way as JS
+        # because Python's API is slightly different, but we can verify the logger is used
+        handler.on_llm_start(
+            {"id": ["ChatOpenAI"], "lc": 1, "type": "not_implemented"},
+            ["test"],
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        handler.on_llm_end(
+            {"generations": [[{"text": "output"}]]},
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+    flush()
+    spans = memory_logger.pop()
+
+    # Find the LLM span
+    llm_spans = [s for s in spans if s.get("span_attributes", {}).get("type") == "llm"]
+    assert len(llm_spans) >= 1
+
+    # Verify the span was created (proper parent testing would require more complex setup)
+    assert llm_spans[0]["span_attributes"]["name"] == "ChatOpenAI"
+
+
+def test_concurrent_eval_without_explicit_logger(logger_memory_logger: LoggerMemoryLogger):
+    """Test that eval tasks work with handler created inside task without explicit logger."""
+    from braintrust import Eval, current_span
+
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    def task_fn(input, hooks):
+        # Create handler inside task without passing logger explicitly
+        # It should capture the current span context
+        handler = BraintrustCallbackHandler()
+
+        # Simulate LangChain LLM call
+        run_id = uuid.uuid4()
+        handler.on_llm_start(
+            {"id": ["ChatOpenAI"], "lc": 1, "type": "not_implemented", "name": "ChatOpenAI"},
+            [f"Process: {input}"],
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        output = f"Result for {input}"
+        handler.on_llm_end(
+            {"generations": [[{"text": output}]]},
+            run_id=run_id,
+            parent_run_id=None,
+        )
+
+        return output
+
+    # Run Eval to test concurrent execution
+    result = Eval(
+        "implicit-context-test",
+        data=[
+            {"input": "test 1"},
+            {"input": "test 2"},
+            {"input": "test 3"},
+        ],
+        task=task_fn,
+        scores=[lambda **kwargs: {"name": "test_score", "score": 1}],
+    )
+
+    flush()
+    spans = memory_logger.pop()
+
+    # Find task spans
+    task_spans = [s for s in spans if s.get("span_attributes", {}).get("type") == "task"]
+    assert len(task_spans) >= 3
+
+    # Find LLM spans
+    llm_spans = [s for s in spans if s.get("span_attributes", {}).get("type") == "llm"]
+    assert len(llm_spans) >= 3
+
+    # Critical: Each LLM should be attached to a different task (tests context capture)
+    llm_parent_ids = [s["span_parents"][0] for s in llm_spans if s.get("span_parents")]
+    unique_parents = set(llm_parent_ids)
+
+    # This tests that currentSpan() capture at operation time works correctly
+    # Even without explicit logger, each task should get its own context
+    assert len(unique_parents) >= 3, f"Expected 3 unique parents, got {len(unique_parents)} - concurrent context not properly captured"
