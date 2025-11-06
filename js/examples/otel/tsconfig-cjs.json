@@ -10,8 +10,11 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "noEmitOnError": false,
+    "strict": false,
+    "noImplicitAny": false
   },
-  "include": ["nodesdk_example.ts"],
+  "include": ["distributed-tracing.ts"],
   "exclude": ["node_modules"]
 }

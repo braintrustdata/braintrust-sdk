@@ -49,9 +49,8 @@ jobs:
           cp tsconfig-cjs.json tsconfig.json
 
           # Update import to use compiled CJS dist files
-          sed -i 's|from "../../src"|from "../../dist/index.js"|g' nodesdk_example.ts
-          echo "Updated nodesdk_example.ts to use compiled CJS files"
-          cat nodesdk_example.ts | grep "import.*BraintrustSpanProcessor"
+          sed -i 's|from "../../src"|from "../../dist/index.js"|g' distributed-tracing.ts
+          echo "Updated distributed-tracing.ts to use compiled CJS files"
 
       - name: Install OTEL example dependencies
         working-directory: js/examples/otel
@@ -62,13 +61,8 @@ jobs:
         run: |
           npm run build
           echo "Verifying compiled file exists..."
-          ls -la nodesdk_example.js
+          ls -la distributed-tracing.js
           echo "Compiled successfully!"
-
-      - name: Setup Node.js 14 for testing
-        uses: actions/setup-node@v4
-        with:
-          node-version: "14"
 
       - name: Verify OTEL dependencies installed
         working-directory: js/examples/otel

@@ -14,7 +14,7 @@ import {
   otel,
   BraintrustSpanProcessor,
   BraintrustExporter,
-} from "../../dist/index.js";
+} from "braintrust";
 
 const { trace, context, propagation } = api;
 
