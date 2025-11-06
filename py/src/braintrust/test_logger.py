@@ -7,9 +7,8 @@ from typing import AsyncGenerator, List
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import braintrust
+import pytest
 from braintrust import (
     Attachment,
     BaseAttachment,
@@ -599,6 +598,45 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
 
     expected_link = f"https://www.braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
     assert link == expected_link
+
+
+@pytest.mark.asyncio
+async def test_span_link_in_async_context(with_simulate_login, with_memory_logger):
+    """Test that span.link() works correctly when called from within an async function.
+
+    This tests the bug where current_logger was a plain attribute instead of a ContextVar,
+    causing span.link() to return a noop link in async contexts even though the span was valid.
+    """
+    import asyncio
+
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+    )
+
+    # Create a span in the main context
+    span = logger.start_span(name="test-span")
+    # Make it the current span so current_span() returns it
+    span.set_current()
+
+    # Define an async function that calls span.link()
+    async def get_link_in_async():
+        # Simulate some async work
+        await asyncio.sleep(0.01)
+        # This should return a valid link, not the noop link
+        return braintrust.current_span().link()
+
+    # Call the async function
+    link = await get_link_in_async()
+
+    span.end()
+
+    # The link should NOT be the noop link
+    assert link != "https://www.braintrust.dev/noop-span"
+    # The link should contain the span ID
+    assert span._id in link
+    # The link should contain the project ID
+    assert "test-project-id" in link
 
 
 def test_span_set_current(with_memory_logger):
