@@ -57,6 +57,19 @@ jobs:
         working-directory: js/examples/otel
         run: npm install
 
+      - name: Compile example to JavaScript
+        working-directory: js/examples/otel
+        run: |
+          npm run build
+          echo "Verifying compiled file exists..."
+          ls -la nodesdk_example.js
+          echo "Compiled successfully!"
+
+      - name: Setup Node.js 14 for testing
+        uses: actions/setup-node@v4
+        with:
+          node-version: "14"
+
       - name: Verify OTEL dependencies installed
         working-directory: js/examples/otel
         run: |
@@ -67,7 +80,6 @@ jobs:
             "@opentelemetry/sdk-node"
             "@opentelemetry/context-async-hooks"
             "openai"
-            "tsx"
           )
           for package in "${packages[@]}"; do
             if [ ! -d "node_modules/$package" ]; then
@@ -105,5 +117,6 @@ jobs:
           if [ -f tsconfig-esm.json.bak ]; then
             mv tsconfig-esm.json.bak tsconfig.json || true
           fi
-          # Restore original imports
+          # Restore original imports and remove compiled file
           git checkout nodesdk_example.ts || true
+          rm -f nodesdk_example.js || true

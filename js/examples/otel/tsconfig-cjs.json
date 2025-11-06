@@ -8,12 +8,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "declaration": false,
+    "sourceMap": false
   },
-  "ts-node": {
-    "transpileOnly": true,
-    "compilerOptions": {
-      "module": "CommonJS"
-    }
-  }
+  "include": ["nodesdk_example.ts"],
+  "exclude": ["node_modules"]
 }
