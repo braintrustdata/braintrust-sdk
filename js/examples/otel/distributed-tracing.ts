@@ -13,6 +13,7 @@ import {
   login,
   otel,
   BraintrustSpanProcessor,
+  BraintrustExporter,
 } from "../../dist/index.js";
 
 const { trace, context, propagation } = api;
@@ -67,6 +68,19 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   console.log(`\nView trace: ${spanLink}`);
+  await register();
+}
+
+async function register() {
+  // Dynamically import ESM-only @vercel/otel module
+  const { registerOTel } = await import("@vercel/otel");
+  registerOTel({
+    serviceName: "my-braintrust-app",
+    traceExporter: new BraintrustExporter({
+      filterAISpans: true,
+      parent: `project_name:${process.env.PROJECT_NAME}`,
+    }),
+  });
 }
 
 main().catch(console.error);

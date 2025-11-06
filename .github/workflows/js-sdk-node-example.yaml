@@ -21,15 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-
-      - name: Install SDK dependencies
-        working-directory: js
-        run: pnpm install
-
-      - name: Build SDK
-        working-directory: js
-        run: npm run build
+          node-version: "14"
 
       - name: Configure for CJS and update imports
         working-directory: js/examples/otel
@@ -62,7 +54,7 @@ jobs:
             "@opentelemetry/sdk-node"
             "@opentelemetry/context-async-hooks"
             "openai"
-            "ts-node"
+            "tsx"
           )
           for package in "${packages[@]}"; do
             if [ ! -d "node_modules/$package" ]; then
@@ -89,7 +81,6 @@ jobs:
         env:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          TS_NODE_PROJECT: ./tsconfig.json
         run: npm start
 
       - name: Restore original config files
