@@ -12,7 +12,7 @@ const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 console.log("Running ai sdk version:", require("ai/package.json").version);
 
 initLogger({
-  projectName: "golden-ts-ai-sdk",
+  projectName: "golden-ts-ai-sdk-v4",
 });
 
 const SHOULD_WRAP = (process.env.WRAP || "true") === "true";
