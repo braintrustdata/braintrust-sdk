@@ -18,7 +18,20 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20 for building
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install SDK dependencies
+        working-directory: js
+        run: pnpm install
+
+      - name: Build SDK
+        working-directory: js
+        run: npm run build
+
+      - name: Setup Node.js 14 for testing
         uses: actions/setup-node@v4
         with:
           node-version: "14"
