@@ -147,7 +147,7 @@ const wrapGenerateObject = (
 };
 
 const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return async function wrappedStreamText(params: any) {
+  return function wrappedStreamText(params: any) {
     const span = startSpan({
       name: "streamText",
       spanAttributes: {
@@ -168,7 +168,7 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
     try {
       const startTime = Date.now();
       let receivedFirst = false;
-      const result = await withCurrent(span, () =>
+      const result = withCurrent(span, () =>
         streamText({
           ...params,
           tools: wrapTools(params.tools),
@@ -258,7 +258,7 @@ const wrapStreamObject = (
   streamObject: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async function wrappedStreamObject(params: any) {
+  return function wrappedStreamObject(params: any) {
     const span = startSpan({
       name: "streamObject",
       spanAttributes: {
@@ -280,7 +280,7 @@ const wrapStreamObject = (
       const startTime = Date.now();
       let receivedFirst = false;
 
-      const result = await withCurrent(span, () =>
+      const result = withCurrent(span, () =>
         streamObject({
           ...params,
           tools: wrapTools(params.tools),

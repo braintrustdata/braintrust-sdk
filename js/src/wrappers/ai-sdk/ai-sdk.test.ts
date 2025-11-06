@@ -557,6 +557,78 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
   });
 
+  test("streamText returns correct type with toUIMessageStreamResponse", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const result = wrappedAI.streamText({
+      model: openai(TEST_MODEL),
+      prompt: "Say hello in one sentence.",
+    });
+
+    // Verify result is not a Promise (synchronous return)
+    expect(result).not.toBeInstanceOf(Promise);
+
+    // Verify toUIMessageStreamResponse method exists
+    expect(typeof result.toUIMessageStreamResponse).toBe("function");
+
+    // Verify it can be called
+    const response = result.toUIMessageStreamResponse();
+    expect(response).toBeInstanceOf(Response);
+    expect(response.body).toBeTruthy();
+
+    // Consume the stream to trigger logging
+    if (response.body) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+    }
+
+    const spans = await backgroundLogger.drain();
+    const wrapperSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "streamText" &&
+        s?.output &&
+        typeof s.output === "string",
+    );
+    expect(wrapperSpan).toBeTruthy();
+  });
+
+  test("streamText supports async iteration over textStream", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const result = wrappedAI.streamText({
+      model: openai(TEST_MODEL),
+      prompt: "Invent a new holiday and describe its traditions.",
+    });
+
+    // Verify result is not a Promise (synchronous return)
+    expect(result).not.toBeInstanceOf(Promise);
+
+    // Verify textStream property exists
+    expect(result.textStream).toBeTruthy();
+
+    // Consume the stream using async iteration
+    let fullText = "";
+    for await (const textPart of result.textStream) {
+      fullText += textPart;
+    }
+
+    // Verify we got some text
+    expect(fullText.length).toBeGreaterThan(0);
+
+    const spans = await backgroundLogger.drain();
+    const wrapperSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "streamText" &&
+        s?.output &&
+        typeof s.output === "string",
+    );
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.output).toBe(fullText);
+  });
+
   test("omit function respects path specificity", () => {
     // Test that paths only omit specific nested properties
     const testObj = {
