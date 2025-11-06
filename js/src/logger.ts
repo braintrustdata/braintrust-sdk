@@ -393,23 +393,6 @@ function getSpanComponentsClass():
 }
 
 export function getContextManager(): ContextManager {
-  const useOtel =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-
-  if (useOtel) {
-    try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
-      return new OtelContextManager();
-    } catch {
-      console.warn(
-        "OTEL not available, falling back to Braintrust-only context manager",
-      );
-    }
-  }
-
   return new BraintrustContextManager();
 }
 

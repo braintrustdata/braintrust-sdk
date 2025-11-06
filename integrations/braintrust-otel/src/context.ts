@@ -1,44 +1,11 @@
 // Unified context management using OTEL's built-in context
-
-import {
-  ContextManager,
-  type ContextParentSpanIds,
-  type Span,
-} from "../logger";
-
-const OTEL_NOT_INSTALLED_MESSAGE =
-  "OpenTelemetry packages are not installed. " +
-  "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base";
-
-interface OtelTrace {
-  getActiveSpan: () => unknown;
-  wrapSpanContext: (spanContext: unknown) => unknown;
-  setSpan: (ctx: Context, span: unknown) => Context;
-}
-
-interface OtelContext {
-  active: () => Context;
-  with: <T>(context: Context, fn: () => T) => T;
-}
+import * as api from "@opentelemetry/api";
+import { ContextManager, type ContextParentSpanIds, type Span } from "braintrust";
 
 interface Context {
   getValue?: (key: string) => unknown;
   setValue: (key: string, value: unknown, ctx?: Context) => Context;
   deleteValue: (key: string) => Context;
-}
-
-let otelTrace: OtelTrace | null = null;
-let otelContext: OtelContext | null = null;
-let OTEL_AVAILABLE = false;
-
-try {
-  const otelApi = require("@opentelemetry/api");
-  otelTrace = otelApi.trace;
-  otelContext = otelApi.context;
-  OTEL_AVAILABLE = true;
-} catch {
-  console.warn(OTEL_NOT_INSTALLED_MESSAGE);
-  OTEL_AVAILABLE = false;
 }
 
 function isOtelSpan(span: unknown): span is {
@@ -48,7 +15,6 @@ function isOtelSpan(span: unknown): span is {
     typeof span === "object" &&
     span !== null &&
     "spanContext" in span &&
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- Type guard ensures object has property
     typeof (span as { spanContext?: unknown }).spanContext === "function"
   );
 }
@@ -69,18 +35,24 @@ function isValidSpanContext(spanContext: unknown): boolean {
   );
 }
 
+/**
+ * Context manager that integrates Braintrust spans with OpenTelemetry.
+ *
+ * This manager allows Braintrust spans to participate in OpenTelemetry's
+ * context propagation, enabling seamless integration with OTEL instrumentation.
+ *
+ * @example
+ * ```typescript
+ * import { setContextManager } from 'braintrust';
+ * import { OtelContextManager } from '@braintrust/otel';
+ *
+ * // Set the OTEL context manager globally
+ * setContextManager(new OtelContextManager());
+ * ```
+ */
 export class OtelContextManager extends ContextManager {
-  constructor() {
-    super();
-    if (!OTEL_AVAILABLE) {
-      throw new Error(OTEL_NOT_INSTALLED_MESSAGE);
-    }
-  }
-
   getParentSpanIds(): ContextParentSpanIds | undefined {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) return undefined;
-
-    const currentSpan = otelTrace.getActiveSpan();
+    const currentSpan = api.trace.getActiveSpan();
     if (!currentSpan || !isOtelSpan(currentSpan)) {
       return undefined;
     }
@@ -91,7 +63,7 @@ export class OtelContextManager extends ContextManager {
     }
 
     // Check if this is a wrapped BT span
-    const btSpan = otelContext?.active().getValue?.("braintrust_span");
+    const btSpan = api.context.active().getValue?.("braintrust_span");
     if (
       btSpan &&
       currentSpan.constructor.name === "NonRecordingSpan" &&
@@ -117,10 +89,6 @@ export class OtelContextManager extends ContextManager {
   }
 
   runInContext<R>(span: Span, callback: () => R): R {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) {
-      return callback();
-    }
-
     // Store the BT span in OTEL context and wrap it in a NonRecordingSpan
     try {
       if (
@@ -135,25 +103,29 @@ export class OtelContextManager extends ContextManager {
         const spanContext = {
           traceId: btSpan.rootSpanId,
           spanId: btSpan.spanId,
-          traceFlags: 1, // sampled
+          isRemote: false,
+          traceFlags: api.TraceFlags.SAMPLED,
         };
 
         // Wrap the span context
-        const wrappedContext = otelTrace.wrapSpanContext(spanContext);
+        const wrappedContext = api.trace.wrapSpanContext(spanContext);
 
         // Get current context and add both the wrapped span and the BT span
-        const currentContext = otelContext.active();
-        let newContext = otelTrace.setSpan(currentContext, wrappedContext);
-        newContext = newContext.setValue("braintrust_span", span);
+        const currentContext = api.context.active();
+        let newContext = api.trace.setSpan(currentContext, wrappedContext);
+        newContext = newContext.setValue("braintrust_span", span) as Context;
 
         // Get parent value and store it in context (matching Python's behavior)
-        const parentValue = span._getOtelParent();
+        const parentValue = (span as any)._getOtelParent?.();
         if (parentValue) {
-          newContext = newContext.setValue("braintrust.parent", parentValue);
+          newContext = newContext.setValue(
+            "braintrust.parent",
+            parentValue,
+          ) as Context;
         }
 
         // Run the callback in the new context
-        return otelContext.with(newContext, callback);
+        return api.context.with(newContext, callback);
       }
     } catch (error) {
       console.warn("Failed to run in OTEL context:", error);
@@ -163,9 +135,7 @@ export class OtelContextManager extends ContextManager {
   }
 
   getCurrentSpan(): Span | undefined {
-    if (!OTEL_AVAILABLE || !otelContext) return undefined;
-
-    const btSpan = otelContext.active().getValue?.("braintrust_span");
+    const btSpan = api.context.active().getValue?.("braintrust_span");
     if (
       btSpan &&
       typeof btSpan === "object" &&
@@ -178,3 +148,4 @@ export class OtelContextManager extends ContextManager {
     return undefined;
   }
 }
+

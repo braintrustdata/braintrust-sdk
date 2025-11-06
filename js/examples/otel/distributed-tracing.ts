@@ -1,19 +1,13 @@
 #!/usr/bin/env tsx
 /**
  * Minimal example: Distributed Tracing BT → OTEL → BT
- *
- * Run with: BRAINTRUST_OTEL_COMPAT=true tsx examples/otel/distributed-tracing.ts
  */
 
 import * as api from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import {
-  initLogger,
-  login,
-  otel,
-  BraintrustSpanProcessor,
-} from "../../dist/index.js";
+import { initLogger, login } from "braintrust";
+import { otel, BraintrustSpanProcessor } from "@braintrust/otel";
 
 const { trace, context, propagation } = api;
 

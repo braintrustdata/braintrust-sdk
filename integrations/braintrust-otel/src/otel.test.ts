@@ -16,7 +16,7 @@ import {
   BraintrustSpanProcessor,
   BraintrustExporter,
   otel,
-} from "..";
+} from "./index";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
