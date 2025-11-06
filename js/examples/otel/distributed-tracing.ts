@@ -1,6 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Minimal example: Distributed Tracing BT → OTEL → BT
+ * Distributed Tracing Example: BT → OTEL → BT
+ * 
+ * This demonstrates the new @braintrust/otel pattern for distributed tracing:
+ * 1. Service A creates a Braintrust span and exports it
+ * 2. Service B imports it as OTEL context and creates OTEL spans
+ * 3. Service C receives OTEL headers and creates Braintrust spans
+ * 
+ * Migration notes:
+ *   - Import otel utilities from "@braintrust/otel" instead of "braintrust"
+ *   - No need for BRAINTRUST_OTEL_COMPAT=true
+ *   - Explicit dependencies make setup clearer
  */
 
 import * as api from "@opentelemetry/api";

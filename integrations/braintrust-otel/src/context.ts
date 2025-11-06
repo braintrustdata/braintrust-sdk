@@ -1,12 +1,10 @@
 // Unified context management using OTEL's built-in context
 import * as api from "@opentelemetry/api";
-import { ContextManager, type ContextParentSpanIds, type Span } from "braintrust";
+import { ContextManager, type ContextParentSpanIds, type Span } from "./types";
 
-interface Context {
-  getValue?: (key: string) => unknown;
-  setValue: (key: string, value: unknown, ctx?: Context) => Context;
-  deleteValue: (key: string) => Context;
-}
+// Create context keys for Braintrust spans
+export const BRAINTRUST_SPAN_KEY = api.createContextKey("braintrust_span");
+export const BRAINTRUST_PARENT_KEY = api.createContextKey("braintrust.parent");
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -62,30 +60,29 @@ export class OtelContextManager extends ContextManager {
       return undefined;
     }
 
-    // Check if this is a wrapped BT span
-    const btSpan = api.context.active().getValue?.("braintrust_span");
-    if (
-      btSpan &&
-      currentSpan.constructor.name === "NonRecordingSpan" &&
-      typeof btSpan === "object" &&
-      btSpan !== null &&
-      "rootSpanId" in btSpan &&
-      "spanId" in btSpan
-    ) {
-      const typedBtSpan = btSpan as { rootSpanId: string; spanId: string };
-      return {
-        rootSpanId: typedBtSpan.rootSpanId,
-        spanParents: [typedBtSpan.spanId],
-      };
-    }
-
-    // Otherwise use OTEL span IDs
-    const otelTraceId = spanContext.traceId.toString().padStart(32, "0");
-    const otelSpanId = spanContext.spanId.toString().padStart(16, "0");
-    return {
-      rootSpanId: otelTraceId,
-      spanParents: [otelSpanId],
-    };
+    const btSpan = api.context.active().getValue(BRAINTRUST_SPAN_KEY);
+     if (
+       btSpan &&
+       currentSpan.constructor.name === "NonRecordingSpan" &&
+       typeof btSpan === "object" &&
+       btSpan !== null &&
+       "rootSpanId" in btSpan &&
+       "spanId" in btSpan
+     ) {
+       const typedBtSpan = btSpan as { rootSpanId: string; spanId: string };
+       return {
+         rootSpanId: typedBtSpan.rootSpanId,
+         spanParents: [typedBtSpan.spanId],
+       };
+     }
+ 
+     // Otherwise use OTEL span IDs
+     const otelTraceId = spanContext.traceId.toString().padStart(32, "0");
+     const otelSpanId = spanContext.spanId.toString().padStart(16, "0");
+     return {
+       rootSpanId: otelTraceId,
+       spanParents: [otelSpanId],
+     };
   }
 
   runInContext<R>(span: Span, callback: () => R): R {
@@ -99,10 +96,15 @@ export class OtelContextManager extends ContextManager {
       ) {
         const btSpan = span as { spanId: string; rootSpanId: string };
 
+        // Convert UUID format to hex format if needed (OTEL requires hex format)
+        // UUIDs have dashes and are 36 chars, hex IDs are 16/32 chars without dashes
+        const traceIdHex = btSpan.rootSpanId.replace(/-/g, "").padStart(32, "0");
+        const spanIdHex = btSpan.spanId.replace(/-/g, "").padStart(16, "0");
+
         // Create a span context for the NonRecordingSpan
         const spanContext = {
-          traceId: btSpan.rootSpanId,
-          spanId: btSpan.spanId,
+          traceId: traceIdHex,
+          spanId: spanIdHex,
           isRemote: false,
           traceFlags: api.TraceFlags.SAMPLED,
         };
@@ -112,19 +114,19 @@ export class OtelContextManager extends ContextManager {
 
         // Get current context and add both the wrapped span and the BT span
         const currentContext = api.context.active();
+        
+        // Build the context chain: set span first, then add BT span value, then parent value
         let newContext = api.trace.setSpan(currentContext, wrappedContext);
-        newContext = newContext.setValue("braintrust_span", span) as Context;
+        newContext = newContext.setValue(BRAINTRUST_SPAN_KEY, span);
 
         // Get parent value and store it in context (matching Python's behavior)
         const parentValue = (span as any)._getOtelParent?.();
         if (parentValue) {
-          newContext = newContext.setValue(
-            "braintrust.parent",
-            parentValue,
-          ) as Context;
+          newContext = newContext.setValue(BRAINTRUST_PARENT_KEY, parentValue);
         }
 
         // Run the callback in the new context
+        // api.context.with() properly handles async callbacks when AsyncLocalStorageContextManager is enabled
         return api.context.with(newContext, callback);
       }
     } catch (error) {
@@ -135,7 +137,7 @@ export class OtelContextManager extends ContextManager {
   }
 
   getCurrentSpan(): Span | undefined {
-    const btSpan = api.context.active().getValue?.("braintrust_span");
+    const btSpan = api.context.active().getValue(BRAINTRUST_SPAN_KEY);
     if (
       btSpan &&
       typeof btSpan === "object" &&

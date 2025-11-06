@@ -1,3 +1,17 @@
+/**
+ * Vercel AI SDK + Braintrust OTEL Integration Example
+ * 
+ * This shows how to use @braintrust/otel with Vercel's AI SDK.
+ * The pattern is similar to @vercel/otel - explicit OTEL package.
+ * 
+ * Setup:
+ *   npm install @braintrust/otel @opentelemetry/sdk-node ai @ai-sdk/openai
+ * 
+ * Key features:
+ *   - AI span filtering to reduce telemetry volume
+ *   - Clean integration with AI SDK's telemetry
+ *   - Explicit dependencies, no surprises
+ */
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";

@@ -3,13 +3,12 @@ import * as api from "@opentelemetry/api";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
-// Type definitions
-interface Context {
-  getValue?: (key: string) => unknown;
-}
+// Create context key for braintrust.parent
+const BRAINTRUST_PARENT_KEY = api.createContextKey("braintrust.parent");
 
+// Type definitions
 interface SpanProcessor {
-  onStart(span: Span, parentContext?: Context): void;
+  onStart(span: Span, parentContext: api.Context): void;
   onEnd(span: ReadableSpan): void;
   shutdown(): Promise<void>;
   forceFlush(): Promise<void>;
@@ -83,7 +82,7 @@ export class AISpanProcessor {
   /**
    * Forward span start events to the inner processor.
    */
-  onStart(span: Span, parentContext: Context): void {
+  onStart(span: Span, parentContext: api.Context): void {
     this.processor.onStart(span, parentContext);
   }
 
@@ -334,7 +333,7 @@ export class BraintrustSpanProcessor {
     });
 
     // Create batch processor with the exporter
-    this.processor = new BatchSpanProcessor(exporter as any);
+    this.processor = new BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
@@ -349,30 +348,27 @@ export class BraintrustSpanProcessor {
     }
   }
 
-  onStart(span: Span, parentContext: Context): void {
+  onStart(span: Span, parentContext: api.Context): void {
     try {
       let parentValue: string | undefined;
 
       // Priority 1: Check if braintrust.parent is in current OTEL context
       const currentContext = api.context.active();
-      const contextValue = currentContext.getValue?.("braintrust.parent");
+      const contextValue = currentContext.getValue(BRAINTRUST_PARENT_KEY);
       if (typeof contextValue === "string") {
         parentValue = contextValue;
       }
 
       // Priority 2: Check if parent_context has braintrust.parent (backup)
-      if (!parentValue && parentContext) {
-        const parentContextValue =
-          typeof parentContext.getValue === "function"
-            ? parentContext.getValue("braintrust.parent")
-            : undefined;
+      if (!parentValue) {
+        const parentContextValue = parentContext.getValue(BRAINTRUST_PARENT_KEY);
         if (typeof parentContextValue === "string") {
           parentValue = parentContextValue;
         }
       }
 
       // Priority 3: Check if parent OTEL span has braintrust.parent attribute
-      if (!parentValue && parentContext) {
+      if (!parentValue) {
         parentValue = this._getParentOtelBraintrustParent(parentContext);
       }
 
@@ -388,7 +384,7 @@ export class BraintrustSpanProcessor {
   }
 
   private _getParentOtelBraintrustParent(
-    parentContext: Context,
+    parentContext: api.Context,
   ): string | undefined {
     try {
       const currentSpan =

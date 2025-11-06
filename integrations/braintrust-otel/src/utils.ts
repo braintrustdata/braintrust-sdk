@@ -1,15 +1,36 @@
 // OpenTelemetry utility functions for distributed tracing
 import * as api from "@opentelemetry/api";
-// Import span utilities from braintrust util package
-// @ts-expect-error - braintrust/util exports these but TS may not resolve correctly
-import { SpanComponentsV4, SpanObjectTypeV3 } from "braintrust/util";
+import {
+  SpanObjectTypeV3,
+  SpanComponentsV4,
+  SpanComponentsV3,
+  type SpanComponentsV3Data,
+} from "./types";
+import type { Span as BraintrustSpan } from "./types";
 
-interface Context {
-  getValue?: (key: string) => unknown;
+interface OtelSpan {
+  attributes?: Record<string, any>;
 }
 
-interface Span {
-  attributes?: Record<string, any>;
+/**
+ * Convert a hex string to UUID format.
+ * Hex strings are 16 or 32 characters, UUIDs are 36 characters with dashes.
+ */
+function hexToUuid(hex: string): string {
+  // Remove any existing dashes and pad if needed
+  const cleanHex = hex.replace(/-/g, "").toLowerCase();
+  
+  if (cleanHex.length === 32) {
+    // 32 hex chars = 16 bytes = UUID
+    return `${cleanHex.slice(0, 8)}-${cleanHex.slice(8, 12)}-${cleanHex.slice(12, 16)}-${cleanHex.slice(16, 20)}-${cleanHex.slice(20, 32)}`;
+  } else if (cleanHex.length === 16) {
+    // 16 hex chars = 8 bytes = span ID, pad to 32 for UUID
+    const padded = cleanHex.padStart(32, "0");
+    return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;
+  } else {
+    // If it's already in UUID format or unexpected format, return as-is
+    return hex;
+  }
 }
 
 /**
@@ -41,19 +62,41 @@ interface Span {
  * });
  * ```
  */
+/**
+ * Convert UUID format to hex format.
+ * UUIDs are 36 chars with dashes, hex IDs are 16/32 chars without dashes.
+ */
+function uuidToHex(uuid: string): string {
+  // Remove dashes and convert to lowercase
+  return uuid.replace(/-/g, "").toLowerCase();
+}
+
 export function otelContextFromSpanExport(exportStr: string): unknown {
-  // Parse the export string
+  // Parse the export string (handles both V3 and V4 formats)
   const components = SpanComponentsV4.fromStr(exportStr);
 
-  // Get trace and span IDs (already in hex format)
-  const traceIdHex = components.data.root_span_id; // 32 hex chars
-  const spanIdHex = components.data.span_id; // 16 hex chars
+  // Get trace and span IDs (may be in UUID or hex format)
+  let traceIdHex = components.data.root_span_id;
+  let spanIdHex = components.data.span_id;
 
   if (!traceIdHex || !spanIdHex) {
     throw new Error(
       "Export string must contain root_span_id and span_id for distributed tracing",
     );
   }
+
+  // Convert UUID format to hex if needed (V3 uses UUIDs, V4 uses hex)
+  // UUIDs have dashes and are 36 chars, hex IDs are 16/32 chars without dashes
+  if (traceIdHex.includes("-")) {
+    traceIdHex = uuidToHex(traceIdHex);
+  }
+  if (spanIdHex.includes("-")) {
+    spanIdHex = uuidToHex(spanIdHex);
+  }
+
+  // Ensure proper padding
+  traceIdHex = traceIdHex.padStart(32, "0");
+  spanIdHex = spanIdHex.padStart(16, "0");
 
   // Create SpanContext marked as remote (critical for distributed tracing)
   const spanContext = {
@@ -91,7 +134,7 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
     }
   }
 
-  return ctx;
+  return ctx as api.Context;
 }
 
 /**
@@ -161,19 +204,22 @@ export function getBraintrustParent(
  * api.propagation.inject(api.context.active(), headers);
  * ```
  */
-export function addParentToBaggage(parent: string, ctx?: Context): Context {
+export function addParentToBaggage(
+  parent: string,
+  ctx?: api.Context,
+): api.Context {
   try {
-    const currentCtx = (ctx || api.context.active()) as Context;
+    const currentCtx = ctx || api.context.active();
     const baggage =
       api.propagation.getBaggage(currentCtx) ||
       api.propagation.createBaggage();
     return api.propagation.setBaggage(
       currentCtx,
       baggage.setEntry("braintrust.parent", { value: parent }),
-    ) as Context;
+    );
   } catch (error) {
     console.error("Failed to add braintrust.parent to baggage:", error);
-    return (ctx || api.context.active()) as Context;
+    return ctx || api.context.active();
   }
 }
 
@@ -205,9 +251,9 @@ export function addParentToBaggage(parent: string, ctx?: Context): Context {
  * ```
  */
 export function addSpanParentToBaggage(
-  span: Span,
-  ctx?: Context,
-): Context | undefined {
+  span: OtelSpan,
+  ctx?: api.Context,
+): api.Context | undefined {
   if (!span || !span.attributes) {
     console.warn("addSpanParentToBaggage: span has no attributes");
     return undefined;
@@ -342,7 +388,12 @@ export function parentFromHeaders(
       return undefined;
     }
 
-    // Create SpanComponentsV4 and export as string
+    // Check if braintrust is using V4 format (via BRAINTRUST_OTEL_COMPAT env var)
+    // Default to V3 for compatibility
+    const useV4 =
+      typeof process !== "undefined" &&
+      process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
+
     const componentsData: {
       object_type: number;
       object_id?: string | null;
@@ -364,9 +415,33 @@ export function parentFromHeaders(
       componentsData.object_id = objectId;
     }
 
-    const components = new SpanComponentsV4(componentsData as any);
-
-    return components.toStr();
+    if (useV4) {
+      // Use V4 format
+      const components = new SpanComponentsV4(componentsData as any);
+      return components.toStr();
+    } else {
+      // Use V3 format (default)
+      // Convert hex IDs to UUIDs for V3 format
+      // V3 uses UUID format (36 chars with dashes), V4 uses hex (16/32 chars)
+      const spanIdUuid = hexToUuid(spanIdHex);
+      const rootSpanIdUuid = hexToUuid(traceIdHex);
+      
+      const v3Data: SpanComponentsV3Data = {
+        object_type: objectType,
+        row_id: "otel",
+        span_id: spanIdUuid,
+        root_span_id: rootSpanIdUuid,
+      };
+      
+      if (computeArgs) {
+        v3Data.compute_object_metadata_args = computeArgs;
+      } else {
+        v3Data.object_id = objectId;
+      }
+      
+      const components = new SpanComponentsV3(v3Data);
+      return components.toStr();
+    }
   } catch (error) {
     console.error("parentFromHeaders: Error parsing headers:", error);
     return undefined;

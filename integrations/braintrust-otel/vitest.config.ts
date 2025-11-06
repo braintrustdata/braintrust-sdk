@@ -5,5 +5,11 @@ export default defineConfig({
     globals: true,
     environment: "node",
   },
+  ssr: {
+    noExternal: [],
+  },
+  resolve: {
+    preserveSymlinks: false,
+  },
 });
 

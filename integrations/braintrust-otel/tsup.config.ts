@@ -7,6 +7,14 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  external: ["braintrust"],
+  external: [
+    "braintrust",
+    "@opentelemetry/api",
+    "@opentelemetry/sdk-trace-base",
+    "@opentelemetry/exporter-trace-otlp-http",
+    "@opentelemetry/resources",
+    "@opentelemetry/core",
+    "@opentelemetry/semantic-conventions",
+  ],
 });
 

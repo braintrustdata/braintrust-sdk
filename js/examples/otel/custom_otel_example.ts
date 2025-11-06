@@ -1,4 +1,13 @@
 // custom_otel_example.ts
+//
+// This example shows how to use BraintrustSpanProcessor with a custom TracerProvider.
+//
+// New pattern benefits:
+//   - Clean separation: OTEL code in @braintrust/otel package
+//   - No async imports or try-catch blocks needed
+//   - Clear error messages if dependencies missing
+//   - Smaller bundle size for non-OTEL users
+//
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
 import { BraintrustSpanProcessor } from "@braintrust/otel";

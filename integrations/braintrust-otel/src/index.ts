@@ -38,6 +38,16 @@
  * @module @braintrust/otel
  */
 
+// Export types that Braintrust SDK can implement
+export type {
+  ContextParentSpanIds,
+  Span,
+  SpanComponentsV4Data,
+  SpanComponentsV4Constructor,
+} from "./types";
+export { ContextManager, SpanObjectTypeV3, SpanComponentsV4 } from "./types";
+
+// Export OTEL integration classes
 export {
   AISpanProcessor,
   BraintrustSpanProcessor,
@@ -45,7 +55,7 @@ export {
   BraintrustSpanProcessorOptions,
 } from "./processors";
 export { BraintrustExporter } from "./exporter";
-export { OtelContextManager } from "./context";
+export { OtelContextManager, BRAINTRUST_SPAN_KEY, BRAINTRUST_PARENT_KEY } from "./context";
 export {
   otelContextFromSpanExport,
   getBraintrustParent,

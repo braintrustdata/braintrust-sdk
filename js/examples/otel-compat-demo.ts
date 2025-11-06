@@ -16,7 +16,8 @@ import { trace, context } from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import { initLogger, BraintrustSpanProcessor, login } from "../dist/index.js";
+import { initLogger, login } from "../dist/index.js";
+import { BraintrustSpanProcessor } from "@braintrust/otel";
 
 function getExportVersion(exportedSpan: string): number {
   const exportedBytes = Buffer.from(exportedSpan, "base64");

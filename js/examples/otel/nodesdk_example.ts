@@ -1,4 +1,15 @@
 // nodesdk_example.ts
+// 
+// This example demonstrates the new @braintrust/otel package pattern.
+// 
+// Installation:
+//   npm install @braintrust/otel @opentelemetry/sdk-node @opentelemetry/api
+//
+// Key changes from old pattern:
+//   - Import from "@braintrust/otel" instead of "braintrust"
+//   - No BRAINTRUST_OTEL_COMPAT environment variable needed
+//   - Explicit OpenTelemetry dependencies in package.json
+//
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BraintrustSpanProcessor } from "@braintrust/otel";
 import { trace } from "@opentelemetry/api";

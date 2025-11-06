@@ -392,8 +392,24 @@ function getSpanComponentsClass():
   return useV4 ? SpanComponentsV4 : SpanComponentsV3;
 }
 
+let globalContextManager: ContextManager | null = null;
+
 export function getContextManager(): ContextManager {
+  if (globalContextManager !== null) {
+    return globalContextManager;
+  }
   return new BraintrustContextManager();
+}
+
+/**
+ * Set the global context manager for Braintrust spans.
+ * This allows custom context managers (like OtelContextManager) to be used
+ * for span context propagation.
+ *
+ * @param contextManager The context manager to use globally, or undefined to reset to default
+ */
+export function setContextManager(contextManager: ContextManager | undefined | null): void {
+  globalContextManager = contextManager ?? null;
 }
 
 /**
