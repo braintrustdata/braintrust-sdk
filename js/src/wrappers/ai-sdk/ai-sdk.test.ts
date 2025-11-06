@@ -585,12 +585,16 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       }
     }
 
+    // Wait for the stream to fully finish and onFinish callback to complete
+    await result.text;
+
     const spans = await backgroundLogger.drain();
     const wrapperSpan = spans.find(
       (s) =>
         s?.span_attributes?.name === "streamText" &&
         s?.output &&
-        typeof s.output === "string",
+        typeof s.output === "object" &&
+        typeof s.output.text === "string",
     );
     expect(wrapperSpan).toBeTruthy();
   });
@@ -618,15 +622,19 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Verify we got some text
     expect(fullText.length).toBeGreaterThan(0);
 
+    // Wait for the stream to fully finish and onFinish callback to complete
+    await result.text;
+
     const spans = await backgroundLogger.drain();
     const wrapperSpan = spans.find(
       (s) =>
         s?.span_attributes?.name === "streamText" &&
         s?.output &&
-        typeof s.output === "string",
+        typeof s.output === "object" &&
+        typeof s.output.text === "string",
     );
     expect(wrapperSpan).toBeTruthy();
-    expect(wrapperSpan.output).toBe(fullText);
+    expect(wrapperSpan.output.text).toBe(fullText);
   });
 
   test("omit function respects path specificity", () => {
