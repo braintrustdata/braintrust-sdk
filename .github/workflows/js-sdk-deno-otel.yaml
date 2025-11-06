@@ -1,0 +1,80 @@
+name: js-sdk-otel-esm-test
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-esm-otel:
+    name: Test OTEL Distributed Tracing in ESM Env
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install SDK dependencies
+        working-directory: js
+        run: pnpm install
+
+      - name: Install OTEL example dependencies
+        working-directory: js/examples/otel
+        run: npm install
+
+      - name: Verify OTEL dependencies installed
+        working-directory: js/examples/otel
+        run: |
+          echo "Verifying OTEL packages installed..."
+          packages=(
+            "@opentelemetry/api"
+            "@opentelemetry/sdk-trace-base"
+            "@opentelemetry/sdk-node"
+            "@opentelemetry/context-async-hooks"
+            "tsx"
+            "openai"
+          )
+          for package in "${packages[@]}"; do
+            if [ ! -d "node_modules/$package" ]; then
+              echo "❌ Package $package not found"
+              exit 1
+            fi
+            echo "✅ $package verified"
+          done
+          echo "All required packages verified successfully"
+
+      - name: Check if API key is available
+        id: check_api_key
+        run: |
+          if [ -z "${{ secrets.BRAINTRUST_API_KEY }}" ]; then
+            echo "api_key_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ BRAINTRUST_API_KEY secret not set - test will be skipped"
+          else
+            echo "api_key_available=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run OTEL example with npm start
+        if: steps.check_api_key.outputs.api_key_available == 'true'
+        working-directory: js/examples/otel
+        env:
+          BRAINTRUST_OTEL_COMPAT: true
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: npm start
+
+      - name: Display test results
+        if: always()
+        run: |
+          if [ "${{ steps.check_api_key.outputs.api_key_available }}" == "true" ]; then
+            echo "✅ ESM OTEL test completed"
+          else
+            echo "⚠️ Test skipped - BRAINTRUST_API_KEY secret not configured"
+          fi
