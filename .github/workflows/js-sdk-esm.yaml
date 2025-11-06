@@ -1,0 +1,51 @@
+name: JS SDK ESM OTEL Integration Tests
+on:
+  pull_request:
+    paths:
+      - "sdk/js/**"
+      - ".github/workflows/js-sdk-esm.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "sdk/js/**"
+      - ".github/workflows/js-sdk-esm.yaml"
+  workflow_dispatch:
+
+jobs:
+  otel-integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install dependencies
+        uses: ./.github/actions/deps
+
+      - name: Build braintrust SDK
+        shell: bash
+        run: |
+          eval "$(mise activate)"
+          cd sdk/js
+          pnpm build
+
+      - name: Install integration test dependencies
+        shell: bash
+        run: |
+          eval "$(mise activate)"
+          cd sdk/js/integration-tests
+          pnpm install
+
+      - name: Run OTEL integration tests
+        shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          BRAINTRUST_OTEL_COMPAT: "true"
+        run: |
+          eval "$(mise activate)"
+          cd sdk/js/integration-tests
+          pnpm test
+        timeout-minutes: 10

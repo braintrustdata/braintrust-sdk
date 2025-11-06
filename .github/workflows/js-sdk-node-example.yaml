@@ -1,4 +1,4 @@
-name: js-sdk-otel-esm-test
+name: js-sdk-node-example
 
 on:
   pull_request:
@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  test-esm-otel:
-    name: Test OTEL Distributed Tracing in ESM Env
+  test-node-example:
+    name: Test Braintrust Node Example
     runs-on: ubuntu-latest
 
     steps:
@@ -62,6 +62,15 @@ jobs:
             echo "api_key_available=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Configure for CJS
+        shell: bash
+        run: |
+          cd sdk/js/integration-tests
+          # Update package.json to use CommonJS
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); delete pkg.type; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+          # Update tsconfig.json for CJS
+          node -e "const fs = require('fs'); const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8')); cfg.compilerOptions.module = 'CommonJS'; cfg.compilerOptions.moduleResolution = 'node'; fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));"
+
       - name: Run OTEL example with npm start
         if: steps.check_api_key.outputs.api_key_available == 'true'
         working-directory: js/examples/otel
@@ -69,12 +78,3 @@ jobs:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
         run: npm start
-
-      - name: Display test results
-        if: always()
-        run: |
-          if [ "${{ steps.check_api_key.outputs.api_key_available }}" == "true" ]; then
-            echo "✅ ESM OTEL test completed"
-          else
-            echo "⚠️ Test skipped - BRAINTRUST_API_KEY secret not configured"
-          fi
