@@ -48,10 +48,9 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
+from braintrust.functions.stream import BraintrustStream
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-from braintrust.functions.stream import BraintrustStream
 
 from . import context, id_gen
 from .bt_json import bt_dumps

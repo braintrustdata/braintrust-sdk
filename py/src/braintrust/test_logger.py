@@ -7,9 +7,8 @@ from typing import AsyncGenerator, List
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import braintrust
+import pytest
 from braintrust import (
     Attachment,
     BaseAttachment,
