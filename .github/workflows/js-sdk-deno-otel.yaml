@@ -66,7 +66,7 @@ jobs:
         if: steps.check_api_key.outputs.api_key_available == 'true'
         working-directory: js/examples/otel
         env:
-          BRAINTRUST_OTEL_COMPAT: true
+          BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
         run: npm start
 
