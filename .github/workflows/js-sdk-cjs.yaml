@@ -1,16 +1,6 @@
 name: JS SDK CJS OTEL Integration Tests
 on:
   pull_request:
-    paths:
-      - "sdk/js/**"
-      - ".github/workflows/js-sdk-cjs.yaml"
-  push:
-    branches:
-      - main
-    paths:
-      - "sdk/js/**"
-      - ".github/workflows/js-sdk-cjs.yaml"
-  workflow_dispatch:
 
 jobs:
   otel-integration-tests-cjs:

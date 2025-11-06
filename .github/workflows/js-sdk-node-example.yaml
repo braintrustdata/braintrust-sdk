@@ -27,6 +27,27 @@ jobs:
         working-directory: js
         run: pnpm install
 
+      - name: Build SDK
+        working-directory: js
+        run: npm run build
+
+      - name: Configure for CJS and update imports
+        working-directory: js/examples/otel
+        run: |
+          # Backup original files and use CJS versions
+          mv package.json package-esm.json.bak
+          cp package-cjs.json package.json
+          # Only swap tsconfig if it exists
+          if [ -f tsconfig.json ]; then
+            mv tsconfig.json tsconfig-esm.json.bak
+          fi
+          cp tsconfig-cjs.json tsconfig.json
+
+          # Update import to use compiled CJS dist files
+          sed -i 's|from "../../src"|from "../../dist/index.js"|g' nodesdk_example.ts
+          echo "Updated nodesdk_example.ts to use compiled CJS files"
+          cat nodesdk_example.ts | grep "import.*BraintrustSpanProcessor"
+
       - name: Install OTEL example dependencies
         working-directory: js/examples/otel
         run: npm install
@@ -40,8 +61,8 @@ jobs:
             "@opentelemetry/sdk-trace-base"
             "@opentelemetry/sdk-node"
             "@opentelemetry/context-async-hooks"
-            "tsx"
             "openai"
+            "ts-node"
           )
           for package in "${packages[@]}"; do
             if [ ! -d "node_modules/$package" ]; then
@@ -62,24 +83,13 @@ jobs:
             echo "api_key_available=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure for CJS
-        working-directory: js/examples/otel
-        run: |
-          # Backup original files and use CJS versions
-          mv package.json package-esm.json.bak
-          cp package-cjs.json package.json
-          # Only swap tsconfig if it exists
-          if [ -f tsconfig.json ]; then
-            mv tsconfig.json tsconfig-esm.json.bak
-          fi
-          cp tsconfig-cjs.json tsconfig.json
-
       - name: Run OTEL example with npm start
         if: steps.check_api_key.outputs.api_key_available == 'true'
         working-directory: js/examples/otel
         env:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          TS_NODE_PROJECT: ./tsconfig.json
         run: npm start
 
       - name: Restore original config files
@@ -91,3 +101,5 @@ jobs:
           if [ -f tsconfig-esm.json.bak ]; then
             mv tsconfig-esm.json.bak tsconfig.json || true
           fi
+          # Restore original imports
+          git checkout nodesdk_example.ts || true

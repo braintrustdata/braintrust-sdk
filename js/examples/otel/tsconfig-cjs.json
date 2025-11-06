@@ -3,13 +3,17 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "node",
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "strict": true,
+    "target": "ES2020",
+    "lib": ["ES2020"],
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
 }

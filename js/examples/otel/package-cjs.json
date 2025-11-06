@@ -6,7 +6,7 @@
   "description": "Example using BraintrustSpanProcessor with OpenTelemetry NodeSDK (CommonJS)",
   "main": "nodesdk_example.ts",
   "scripts": {
-    "start": "tsx nodesdk_example.ts"
+    "start": "TS_NODE_TRANSPILE_ONLY=true node -r ts-node/register nodesdk_example.ts"
   },
   "dependencies": {
     "@traceloop/instrumentation-openai": "^0.14.0",
@@ -19,7 +19,7 @@
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@opentelemetry/semantic-conventions": "^1.36.0",
     "openai": "^4.73.1",
-    "tsx": "^4.19.2"
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
