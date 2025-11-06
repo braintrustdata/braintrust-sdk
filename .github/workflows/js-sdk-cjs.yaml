@@ -60,12 +60,3 @@ jobs:
           cd sdk/js/integration-tests
           pnpm test
         timeout-minutes: 10
-
-      - name: Restore original config files
-        if: always()
-        shell: bash
-        run: |
-          cd sdk/js/integration-tests
-          # Restore original files
-          mv package-esm.json.bak package.json || true
-          mv tsconfig-esm.json.bak tsconfig.json || true
