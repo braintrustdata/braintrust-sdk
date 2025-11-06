@@ -13,7 +13,7 @@
   "exclude": [
     "**/*.test.ts",
     "**/dist/**",
-    "examples/**",
+    "**/examples/**",
     "node_modules/**",
     "scripts/**",
     "vendor/**"
