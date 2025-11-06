@@ -165,65 +165,72 @@ def wrap_flow(Flow: Any):
             # Extract model name from request or instance
             model_name = _extract_model_name(None, llm_request, instance)
 
-            # Execute the LLM call first to get the response
-            last_event = None
-            event_with_content = None
-            start_time = time.time()
-            first_token_time = None
+            # Create span BEFORE execution so child spans (like mcp_tool) have proper parent
+            # Start with generic name - we'll update it after we see the response
+            with start_span(
+                name="llm_call",
+                type=SpanTypeAttribute.LLM,
+                input=serialized_request,
+                metadata=_try_dict(
+                    {
+                        "invocation_context": invocation_context,
+                        "model_response_event": model_response_event,
+                        "flow_class": instance.__class__.__name__,
+                        "model": model_name,
+                        **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
+                    }
+                ),
+            ) as llm_span:
+                # Execute the LLM call and yield events while span is active
+                last_event = None
+                event_with_content = None
+                start_time = time.time()
+                first_token_time = None
 
-            async with aclosing(wrapped(*args, **kwargs)) as agen:
-                async for event in agen:
-                    # Record time to first token
-                    if first_token_time is None:
-                        first_token_time = time.time()
+                async with aclosing(wrapped(*args, **kwargs)) as agen:
+                    async for event in agen:
+                        # Record time to first token
+                        if first_token_time is None:
+                            first_token_time = time.time()
 
-                    last_event = event
-                    if hasattr(event, "content") and event.content is not None:
-                        event_with_content = event
-                    yield event
+                        last_event = event
+                        if hasattr(event, "content") and event.content is not None:
+                            event_with_content = event
+                        yield event
 
-            # Now create the span with the correct call type based on the actual response
-            if last_event:
-                output = _try_dict(last_event)
-                # If last event is missing content but we have an earlier event with content, merge them
-                if event_with_content and isinstance(output, dict):
-                    if "content" not in output or output.get("content") is None:
-                        content = (
-                            _try_dict(event_with_content.content)
-                            if hasattr(event_with_content, "content")
-                            else None
-                        )
-                        if content:
-                            output["content"] = content
+                # After execution, update span with correct call type and output
+                if last_event:
+                    output = _try_dict(last_event)
+                    # If last event is missing content but we have an earlier event with content, merge them
+                    if event_with_content and isinstance(output, dict):
+                        if "content" not in output or output.get("content") is None:
+                            content = (
+                                _try_dict(event_with_content.content)
+                                if hasattr(event_with_content, "content")
+                                else None
+                            )
+                            if content:
+                                output["content"] = content
 
-                # Extract metrics from response
-                metrics = _extract_metrics(last_event)
+                    # Extract metrics from response
+                    metrics = _extract_metrics(last_event)
 
-                # Add time to first token if we captured it
-                if first_token_time is not None:
-                    if metrics is None:
-                        metrics = {}
-                    metrics["time_to_first_token"] = first_token_time - start_time
+                    # Add time to first token if we captured it
+                    if first_token_time is not None:
+                        if metrics is None:
+                            metrics = {}
+                        metrics["time_to_first_token"] = first_token_time - start_time
 
-                # Determine the actual call type based on the response
-                call_type = _determine_llm_call_type(llm_request, last_event)
+                    # Determine the actual call type based on the response
+                    call_type = _determine_llm_call_type(llm_request, last_event)
 
-                # Create span with correct call type
-                with start_span(
-                    name=f"llm_call [{call_type}]",
-                    type=SpanTypeAttribute.LLM,
-                    input=serialized_request,
-                    metadata=_try_dict(
-                        {
-                            "invocation_context": invocation_context,
-                            "model_response_event": model_response_event,
-                            "flow_class": instance.__class__.__name__,
-                            "llm_call_type": call_type,
-                            "model": model_name,
-                            **_omit(kwargs, ["invocation_context", "model_response_event", "flow_class", "llm_call_type"]),
-                        }
-                    ),
-                ) as llm_span:
+                    # Update span name with the specific call type now that we know it
+                    llm_span.set_attributes(
+                        name=f"llm_call [{call_type}]",
+                        span_attributes={"llm_call_type": call_type},
+                    )
+
+                    # Log output and metrics
                     llm_span.log(output=output, metrics=metrics)
 
         async with aclosing(_trace()) as agen:
@@ -391,7 +398,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
         response_has_function_call = False
         if model_response:
             # Check if it's an Event object with get_function_calls method (ADK Event)
-            if hasattr(model_response, 'get_function_calls'):
+            if hasattr(model_response, "get_function_calls"):
                 try:
                     function_calls = model_response.get_function_calls()
                     if function_calls and len(function_calls) > 0:
@@ -608,3 +615,8 @@ class aclosing(AbstractAsyncContextManager[G]):
             # These occur when spans are created in one context and cleaned up in another during shutdown
             if "was created in a different Context" not in str(e):
                 raise
+            else:
+                logger.debug(
+                    f"Suppressed ContextVar error during async cleanup: {e}. "
+                    "This is expected when async generators yield across context boundaries."
+                )
