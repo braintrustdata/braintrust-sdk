@@ -93,12 +93,12 @@ import {
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "../util/index";
-
-// Context management interfaces
-export interface ContextParentSpanIds {
-  rootSpanId: string;
-  spanParents: string[];
-}
+import {
+  ContextManager,
+  type ContextParentSpanIds,
+  type SpanForContext,
+} from "./context-manager";
+import { createOtelContextManager } from "./otel/context";
 
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed
@@ -348,12 +348,6 @@ export interface Span extends Exportable {
   kind: "span";
 }
 
-export abstract class ContextManager {
-  abstract getParentSpanIds(): ContextParentSpanIds | undefined;
-  abstract runInContext<R>(span: Span, callback: () => R): R;
-  abstract getCurrentSpan(): Span | undefined;
-}
-
 class BraintrustContextManager extends ContextManager {
   private _currentSpan: IsoAsyncLocalStorage<Span>;
 
@@ -374,11 +368,11 @@ class BraintrustContextManager extends ContextManager {
     };
   }
 
-  runInContext<R>(span: Span, callback: () => R): R {
-    return this._currentSpan.run(span, callback);
+  runInContext<R>(span: SpanForContext, callback: () => R): R {
+    return this._currentSpan.run(span as Span, callback);
   }
 
-  getCurrentSpan(): Span | undefined {
+  getCurrentSpan(): SpanForContext | undefined {
     return this._currentSpan.getStore();
   }
 }
@@ -392,25 +386,25 @@ function getSpanComponentsClass():
   return useV4 ? SpanComponentsV4 : SpanComponentsV3;
 }
 
+let _otelContextManager: ContextManager | null = null;
+let _braintrustContextManager: BraintrustContextManager | null = null;
+
 export function getContextManager(): ContextManager {
   const useOtel =
     typeof process !== "undefined" &&
     process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
 
   if (useOtel) {
-    try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
-      return new OtelContextManager();
-    } catch {
-      console.warn(
-        "OTEL not available, falling back to Braintrust-only context manager",
-      );
+    if (!_otelContextManager) {
+      _otelContextManager = createOtelContextManager();
     }
+    return _otelContextManager;
   }
 
-  return new BraintrustContextManager();
+  if (!_braintrustContextManager) {
+    _braintrustContextManager = new BraintrustContextManager();
+  }
+  return _braintrustContextManager;
 }
 
 /**
@@ -3880,7 +3874,8 @@ export function currentLogger<IsAsyncFlush extends boolean>(
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
-  return state.contextManager.getCurrentSpan() ?? NOOP_SPAN;
+  const current = state.contextManager.getCurrentSpan();
+  return (current as Span | undefined) ?? NOOP_SPAN;
 }
 
 /**
