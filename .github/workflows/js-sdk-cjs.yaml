@@ -43,10 +43,11 @@ jobs:
         shell: bash
         run: |
           cd sdk/js/integration-tests
-          # Update package.json to use CommonJS
-          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); delete pkg.type; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
-          # Update tsconfig.json for CJS
-          node -e "const fs = require('fs'); const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8')); cfg.compilerOptions.module = 'CommonJS'; cfg.compilerOptions.moduleResolution = 'node'; fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));"
+          # Backup original files and use CJS versions
+          mv package.json package-esm.json.bak
+          mv tsconfig.json tsconfig-esm.json.bak
+          cp package-cjs.json package.json
+          cp tsconfig-cjs.json tsconfig.json
 
       - name: Run OTEL integration tests (CJS)
         shell: bash
@@ -59,3 +60,12 @@ jobs:
           cd sdk/js/integration-tests
           pnpm test
         timeout-minutes: 10
+
+      - name: Restore original config files
+        if: always()
+        shell: bash
+        run: |
+          cd sdk/js/integration-tests
+          # Restore original files
+          mv package-esm.json.bak package.json || true
+          mv tsconfig-esm.json.bak tsconfig.json || true

@@ -1,0 +1,13 @@
+{
+  "$comment": "This is the CommonJS tsconfig used by .github/workflows/js-sdk-cjs.yaml",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
