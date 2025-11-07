@@ -48,7 +48,7 @@ const config = {
   },
   test: {
     deps: {
-      inline: ['@ai-sdk/openai', 'ai', '@mastra/core'],
+      inline: ["@ai-sdk/openai", "ai", "@mastra/core"],
     },
   },
 };

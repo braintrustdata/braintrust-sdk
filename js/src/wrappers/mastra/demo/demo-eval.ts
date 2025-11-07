@@ -49,7 +49,11 @@ async function main() {
     scores: [
       (args: any) => ({
         name: "contains_answer",
-        score: String(args.output).toLowerCase().includes(String(args.expected).toLowerCase()) ? 1 : 0,
+        score: String(args.output)
+          .toLowerCase()
+          .includes(String(args.expected).toLowerCase())
+          ? 1
+          : 0,
       }),
     ],
   });

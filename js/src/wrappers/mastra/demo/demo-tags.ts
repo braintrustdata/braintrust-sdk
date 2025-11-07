@@ -38,7 +38,10 @@ async function main() {
 
   for (const env of ["production", "staging", "development"]) {
     await logger.traced(async (span) => {
-      span.log({ tags: [`environment:${env}`], metadata: { environment: env } });
+      span.log({
+        tags: [`environment:${env}`],
+        metadata: { environment: env },
+      });
       const agent = mastra.getAgent("demo");
       const response = await agent.generate("Say hi");
       console.log(`${env}: ${response.text}`);

@@ -6,10 +6,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod/v3";
 
 import { MastraExporter } from "./exporter";
-import {
-  _exportsForTestingOnly,
-  initLogger,
-} from "../../logger";
+import { _exportsForTestingOnly, initLogger } from "../../logger";
 
 // Initialize test state for logger utilities
 _exportsForTestingOnly.setInitialTestState();
@@ -71,22 +68,25 @@ describe("MastraExporter", TEST_SUITE_OPTIONS, () => {
     // Run test
     const testAgent = mastra.getAgent("testAgent");
 
-    await logger.traced(async () => {
-      await testAgent.generate("What is 2+2?");
-    }, { name: "test-span" });
+    await logger.traced(
+      async () => {
+        await testAgent.generate("What is 2+2?");
+      },
+      { name: "test-span" },
+    );
 
     const spans = (await testLogger.drain()) as any[];
 
     // Check we have multiple spans (parent + child)
     expect(spans.length).toBeGreaterThan(1);
 
-    const testSpan = spans.find((s) => s?.span_attributes?.name === "test-span");
+    const testSpan = spans.find(
+      (s) => s?.span_attributes?.name === "test-span",
+    );
     expect(testSpan).toBeTruthy();
 
     // Check model span exists with metrics
-    const modelSpan = spans.find(
-      (s) => s?.span_attributes?.type === "llm",
-    );
+    const modelSpan = spans.find((s) => s?.span_attributes?.type === "llm");
     expect(modelSpan).toBeTruthy();
     expect(modelSpan?.metrics?.prompt_tokens).toBeGreaterThan(0);
     expect(modelSpan?.metadata?.model).toBe(OPENAI_MODEL);

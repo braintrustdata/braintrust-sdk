@@ -31,10 +31,10 @@ import type {
   AnyExportedAISpan,
   ModelGenerationAttributes,
   ModelStepAttributes,
-} from '@mastra/core/ai-tracing';
-import { AISpanType, omitKeys } from '@mastra/core/ai-tracing';
-import { currentSpan } from '../../logger';
-import type { Span, Logger } from '../../logger';
+} from "@mastra/core/ai-tracing";
+import { AISpanType, omitKeys } from "@mastra/core/ai-tracing";
+import { currentSpan } from "../../logger";
+import type { Span, Logger } from "../../logger";
 
 export interface MastraExporterConfig {
   /** Braintrust logger instance (required) */
@@ -49,25 +49,26 @@ type SpanData = {
 };
 
 // Default span type for all spans
-const DEFAULT_SPAN_TYPE = 'task';
+const DEFAULT_SPAN_TYPE = "task";
 
 // Exceptions to the default mapping
 const SPAN_TYPE_EXCEPTIONS: Partial<Record<AISpanType, string>> = {
-  [AISpanType.MODEL_GENERATION]: 'llm',
-  [AISpanType.TOOL_CALL]: 'tool',
-  [AISpanType.MCP_TOOL_CALL]: 'tool',
-  [AISpanType.WORKFLOW_CONDITIONAL_EVAL]: 'function',
-  [AISpanType.WORKFLOW_WAIT_EVENT]: 'function',
+  [AISpanType.MODEL_GENERATION]: "llm",
+  [AISpanType.TOOL_CALL]: "tool",
+  [AISpanType.MCP_TOOL_CALL]: "tool",
+  [AISpanType.WORKFLOW_CONDITIONAL_EVAL]: "function",
+  [AISpanType.WORKFLOW_WAIT_EVENT]: "function",
 };
 
 // Mapping function - returns valid Braintrust span types
-function mapSpanType(spanType: AISpanType): 'llm' | 'score' | 'function' | 'eval' | 'task' | 'tool' {
+function mapSpanType(
+  spanType: AISpanType,
+): "llm" | "score" | "function" | "eval" | "task" | "tool" {
   return (SPAN_TYPE_EXCEPTIONS[spanType] as any) ?? DEFAULT_SPAN_TYPE;
 }
 
-
 export class MastraExporter implements AITracingExporter {
-  name = 'braintrust-mastra';
+  name = "braintrust-mastra";
   private traceMap = new Map<string, SpanData>();
   private logger: Logger<true>;
 
@@ -82,13 +83,13 @@ export class MastraExporter implements AITracingExporter {
     }
 
     switch (event.type) {
-      case 'span_started':
+      case "span_started":
         await this.handleSpanStarted(event.exportedSpan);
         break;
-      case 'span_updated':
+      case "span_updated":
         await this.handleSpanUpdateOrEnd(event.exportedSpan, false);
         break;
-      case 'span_ended':
+      case "span_ended":
         await this.handleSpanUpdateOrEnd(event.exportedSpan, true);
         break;
     }
@@ -137,7 +138,10 @@ export class MastraExporter implements AITracingExporter {
     spanData.spans.set(span.id, braintrustSpan);
   }
 
-  private async handleSpanUpdateOrEnd(span: AnyExportedAISpan, isEnd: boolean): Promise<void> {
+  private async handleSpanUpdateOrEnd(
+    span: AnyExportedAISpan,
+    isEnd: boolean,
+  ): Promise<void> {
     const spanData = this.getSpanData({ span });
     if (!spanData) {
       return;
@@ -225,7 +229,9 @@ export class MastraExporter implements AITracingExporter {
     }
   }
 
-  private getSpanData(options: { span: AnyExportedAISpan }): SpanData | undefined {
+  private getSpanData(options: {
+    span: AnyExportedAISpan;
+  }): SpanData | undefined {
     const { span } = options;
     if (this.traceMap.has(span.traceId)) {
       return this.traceMap.get(span.traceId);
@@ -288,7 +294,12 @@ export class MastraExporter implements AITracingExporter {
         payload.metadata.modelParameters = modelAttr.parameters;
       }
 
-      const otherAttributes = omitKeys(attributes, ['model', 'usage', 'parameters', 'provider']);
+      const otherAttributes = omitKeys(attributes, [
+        "model",
+        "usage",
+        "parameters",
+        "provider",
+      ]);
       payload.metadata = {
         ...payload.metadata,
         ...otherAttributes,
@@ -323,7 +334,6 @@ export class MastraExporter implements AITracingExporter {
   }
 }
 
-
 /**
  * Normalizes model usage metrics to Braintrust's canonical format.
  * Handles various provider naming conventions (inputTokens vs promptTokens, etc.)
@@ -332,7 +342,9 @@ export class MastraExporter implements AITracingExporter {
  * Always includes cache and reasoning token fields (set to 0 if not provided)
  * to ensure consistent structure for Braintrust's cost calculation.
  */
-function normalizeUsageMetrics(attributes: ModelGenerationAttributes | ModelStepAttributes): Record<string, any> {
+function normalizeUsageMetrics(
+  attributes: ModelGenerationAttributes | ModelStepAttributes,
+): Record<string, any> {
   const metrics: Record<string, any> = {};
 
   if (attributes.usage) {
