@@ -2,21 +2,19 @@ name: js-sdk-integration
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["js"]
-    types:
-      - completed
+    inputs:
+      build_run_id:
+        description: "The run ID of the js workflow build"
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   test-node-sdk-example:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ["20", "22"]
 
     steps:
       - name: Checkout repository
@@ -28,14 +26,10 @@ jobs:
       - name: Determine artifact name
         id: artifact
         env:
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
           NODE_VERSION: ${{ matrix.node-version }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          if [ -z "$PR_NUMBER" ]; then
-            ARTIFACT_NAME="javascript-sdk-dev--${NODE_VERSION}-dist"
-          else
-            ARTIFACT_NAME="javascript-sdk-dev-${PR_NUMBER}-${NODE_VERSION}-dist"
-          fi
+          ARTIFACT_NAME="javascript-sdk-dev-${RUN_ID}-22-dist"
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Download javascript dist artifact
@@ -49,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
 
       - name: Install example dependencies
         working-directory: sdk/js/examples/otel
