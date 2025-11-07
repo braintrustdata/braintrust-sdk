@@ -17,7 +17,8 @@
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@opentelemetry/semantic-conventions": "^1.36.0",
     "openai": "^4.73.1",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "braintrust": "latest"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",

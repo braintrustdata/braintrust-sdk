@@ -49,8 +49,8 @@ jobs:
           cp tsconfig-cjs.json tsconfig.json
 
           # Update import to use compiled CJS dist files
-          sed -i 's|from "../../src"|from "../../dist/index.js"|g' distributed-tracing.ts
-          echo "Updated distributed-tracing.ts to use compiled CJS files"
+          sed -i 's|from "../../src"|from "../../dist/index.js"|g' nodesdk_example.ts
+          echo "Updated nodesdk_example.ts to use compiled CJS files"
 
       - name: Install OTEL example dependencies
         working-directory: js/examples/otel
@@ -61,7 +61,7 @@ jobs:
         run: |
           npm run build
           echo "Verifying compiled file exists..."
-          ls -la distributed-tracing.js
+          ls -la nodesdk_example.js
           echo "Compiled successfully!"
 
       - name: Verify OTEL dependencies installed

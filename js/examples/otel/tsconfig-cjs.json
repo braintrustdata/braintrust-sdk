@@ -15,6 +15,6 @@
     "strict": false,
     "noImplicitAny": false
   },
-  "include": ["distributed-tracing.ts"],
+  "include": ["nodesdk_example.ts"],
   "exclude": ["node_modules"]
 }

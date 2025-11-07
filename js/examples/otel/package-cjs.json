@@ -4,27 +4,26 @@
   "version": "1.0.0",
   "type": "commonjs",
   "description": "Example using BraintrustSpanProcessor with OpenTelemetry NodeSDK (CommonJS)",
-  "main": "distributed-tracing.js",
+  "main": "nodesdk_example.js",
   "scripts": {
-    "build": "tsc --project tsconfig.json --outDir . || exit 0",
-    "start": "node distributed-tracing.js"
+    "build": "npx tsup --config tsup.config.ts && (tsc --project tsconfig.json --outDir . || exit 0)",
+    "start": "node dist/nodesdk_example.js"
   },
-
   "dependencies": {
-    "@traceloop/instrumentation-openai": "^0.14.0",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-base": "^1.28.0",
-    "@opentelemetry/sdk-node": "^0.54.2",
-    "@opentelemetry/sdk-trace-node": "^1.28.0",
-    "@opentelemetry/resources": "^1.28.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.54.2",
-    "@opentelemetry/auto-instrumentations-node": "^0.62.0",
-    "@opentelemetry/semantic-conventions": "^1.36.0",
     "openai": "^4.73.1",
-    "braintrust": "latest"
+    "braintrust": "latest",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/context-async-hooks": "^1.28.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.2",
+    "@opentelemetry/resources": "^1.28.0",
+    "@opentelemetry/sdk-trace-base": "^1.28.0",
+    "@opentelemetry/sdk-trace-node": "^1.28.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@opentelemetry/sdk-node": "^0.54.2"
   },
   "devDependencies": {
     "@types/node": "^14.18.0",
+    "tsup": "^6.7.0",
     "typescript": "^5.4.4"
   }
 }

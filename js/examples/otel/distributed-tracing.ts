@@ -55,7 +55,7 @@ async function main() {
           async (spanC) => {
             spanC.log({ input: "from service B" });
           },
-          { name: "service_c", parent },
+          { name: "service_c" },
         );
 
         spanB.end();
