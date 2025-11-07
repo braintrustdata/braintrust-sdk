@@ -96,6 +96,11 @@ jobs:
         working-directory: js/examples/otel
         run: npm install --force
 
+      - name: Install root dependencies
+        working-directory: js
+        run: |
+          npm install simple-git
+
       - name: Run CJS check
         working-directory: scripts
         run: ./verify_cjs.sh
