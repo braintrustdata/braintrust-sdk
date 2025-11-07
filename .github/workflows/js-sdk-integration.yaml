@@ -7,7 +7,6 @@ on:
         description: "The run ID of the js workflow build"
         required: false
         type: string
-  pull_request:
 
 permissions:
   contents: read

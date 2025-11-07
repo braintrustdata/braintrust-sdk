@@ -50,4 +50,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/js-sdk-integration.yaml/dispatches \
-            -d '{"ref": "${{ github.ref }}", "inputs": {"build_run_id": "${{ github.run_id }}"}}'
+            -d '{"ref": "${{ github.event.pull_request.head.ref }}", "inputs": {"build_run_id": "${{ github.run_id }}"}}'
