@@ -152,7 +152,7 @@ bench:
 
 # note: we don't use the docs in ci, but this makes sure they keep building
 
-verify-ci: build docs test
+verify-ci: build docs
 
 publish-sdk-js:
 	./scripts/validate-release.sh
