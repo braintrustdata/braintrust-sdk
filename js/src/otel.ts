@@ -109,7 +109,8 @@ export class AISpanProcessor {
       return false;
     }
 
-    if (!span.parentSpanContext && !span.parentSpanId) {
+    const hasParentSpanId = "parentSpanId" in span && span.parentSpanId;
+    if (!span.parentSpanContext && !hasParentSpanId) {
       return true;
     }
 
@@ -364,8 +365,9 @@ export class BraintrustSpanProcessor {
     } catch {
       // If there's an exception, just don't set braintrust.parent
     }
-
-    this.aiSpanProcessor.onStart(span, parentContext);
+    const contextToUse: Context =
+      parentContext ?? (otelApi.context.active() as Context);
+    this.aiSpanProcessor.onStart(span, contextToUse);
   }
 
   private _getParentOtelBraintrustParent(
@@ -375,10 +377,14 @@ export class BraintrustSpanProcessor {
       if (!otelApi || !otelApi.trace) {
         return undefined;
       }
+      const otelContext: otelApi.Context =
+        parentContext && "setValue" in parentContext
+          ? (parentContext as otelApi.Context)
+          : otelApi.context.active();
 
       const currentSpan =
         typeof otelApi.trace.getSpan === "function"
-          ? otelApi.trace.getSpan(parentContext)
+          ? otelApi.trace.getSpan(otelContext)
           : undefined;
 
       if (
@@ -713,12 +719,15 @@ function addSpanParentToBaggage(
   span: otelApi.Span | ReadableSpan,
   ctx?: Context,
 ): Context | undefined {
-  if (!span || !span.attributes) {
+  const attributes =
+    "attributes" in span ? (span as ReadableSpan).attributes : undefined;
+
+  if (!span || !attributes) {
     console.warn("addSpanParentToBaggage: span has no attributes");
     return undefined;
   }
 
-  const parentValue = span.attributes["braintrust.parent"];
+  const parentValue = attributes["braintrust.parent"];
   if (!parentValue || typeof parentValue !== "string") {
     console.warn(
       "addSpanParentToBaggage: braintrust.parent attribute not found. " +
