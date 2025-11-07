@@ -32,7 +32,6 @@ import type {
   ModelGenerationAttributes,
   ModelStepAttributes,
 } from "@mastra/core/ai-tracing";
-import { AISpanType, omitKeys } from "@mastra/core/ai-tracing";
 import { currentSpan } from "../../logger";
 import type { Span, Logger } from "../../logger";
 
@@ -52,19 +51,39 @@ type SpanData = {
 const DEFAULT_SPAN_TYPE = "task";
 
 // Exceptions to the default mapping
-const SPAN_TYPE_EXCEPTIONS: Partial<Record<AISpanType, string>> = {
-  [AISpanType.MODEL_GENERATION]: "llm",
-  [AISpanType.TOOL_CALL]: "tool",
-  [AISpanType.MCP_TOOL_CALL]: "tool",
-  [AISpanType.WORKFLOW_CONDITIONAL_EVAL]: "function",
-  [AISpanType.WORKFLOW_WAIT_EVENT]: "function",
+type MastraSpanType = AnyExportedAISpan["type"];
+
+const MASTRA_SPAN_TYPES = {
+  MODEL_GENERATION: "llm_generation" as MastraSpanType,
+  TOOL_CALL: "tool_call" as MastraSpanType,
+  MCP_TOOL_CALL: "mcp_tool_call" as MastraSpanType,
+  WORKFLOW_CONDITIONAL_EVAL: "workflow_conditional_eval" as MastraSpanType,
+  WORKFLOW_WAIT_EVENT: "workflow_wait_event" as MastraSpanType,
+} as const satisfies Record<string, MastraSpanType>;
+
+const MODEL_GENERATION_TYPE = MASTRA_SPAN_TYPES.MODEL_GENERATION;
+
+const SPAN_TYPE_EXCEPTIONS: Partial<
+  Record<MastraSpanType, BraintrustSpanType>
+> = {
+  [MASTRA_SPAN_TYPES.MODEL_GENERATION]: "llm",
+  [MASTRA_SPAN_TYPES.TOOL_CALL]: "tool",
+  [MASTRA_SPAN_TYPES.MCP_TOOL_CALL]: "tool",
+  [MASTRA_SPAN_TYPES.WORKFLOW_CONDITIONAL_EVAL]: "function",
+  [MASTRA_SPAN_TYPES.WORKFLOW_WAIT_EVENT]: "function",
 };
 
 // Mapping function - returns valid Braintrust span types
-function mapSpanType(
-  spanType: AISpanType,
-): "llm" | "score" | "function" | "eval" | "task" | "tool" {
-  return (SPAN_TYPE_EXCEPTIONS[spanType] as any) ?? DEFAULT_SPAN_TYPE;
+type BraintrustSpanType =
+  | "llm"
+  | "score"
+  | "function"
+  | "eval"
+  | "task"
+  | "tool";
+
+function mapSpanType(spanType: MastraSpanType): BraintrustSpanType {
+  return SPAN_TYPE_EXCEPTIONS[spanType] ?? DEFAULT_SPAN_TYPE;
 }
 
 export class MastraExporter implements AITracingExporter {
@@ -261,65 +280,36 @@ export class MastraExporter implements AITracingExporter {
 
   private buildSpanPayload(span: AnyExportedAISpan): Record<string, any> {
     const payload: Record<string, any> = {};
+    if (span.input !== undefined) payload.input = span.input;
+    if (span.output !== undefined) payload.output = span.output;
 
-    if (span.input !== undefined) {
-      payload.input = span.input;
-    }
-
-    if (span.output !== undefined) {
-      payload.output = span.output;
-    }
-
-    payload.metrics = {};
-    payload.metadata = {
-      ...span.metadata,
-    };
-
+    const metadata: Record<string, any> = { ...span.metadata };
     const attributes = (span.attributes ?? {}) as Record<string, any>;
 
-    if (span.type === AISpanType.MODEL_GENERATION) {
+    if (span.type === MODEL_GENERATION_TYPE) {
       const modelAttr = attributes as ModelGenerationAttributes;
-
-      if (modelAttr.model !== undefined) {
-        payload.metadata.model = modelAttr.model;
-      }
-
-      if (modelAttr.provider !== undefined) {
-        payload.metadata.provider = modelAttr.provider;
-      }
-
-      payload.metrics = normalizeUsageMetrics(modelAttr);
-
+      if (modelAttr.model !== undefined) metadata.model = modelAttr.model;
+      if (modelAttr.provider !== undefined)
+        metadata.provider = modelAttr.provider;
       if (modelAttr.parameters !== undefined) {
-        payload.metadata.modelParameters = modelAttr.parameters;
+        metadata.modelParameters = modelAttr.parameters;
       }
-
-      const otherAttributes = omitKeys(attributes, [
-        "model",
-        "usage",
-        "parameters",
-        "provider",
-      ]);
-      payload.metadata = {
-        ...payload.metadata,
-        ...otherAttributes,
-      };
+      Object.assign(
+        metadata,
+        omitKeys(attributes, ["model", "usage", "parameters", "provider"]),
+      );
+      const metrics = normalizeUsageMetrics(modelAttr);
+      if (metrics) payload.metrics = metrics;
     } else {
-      // For all other span types, put attributes in metadata
-      payload.metadata = {
-        ...payload.metadata,
-        ...attributes,
-      };
+      Object.assign(metadata, attributes);
     }
 
     if (span.errorInfo) {
       payload.error = span.errorInfo.message;
-      payload.metadata.errorDetails = span.errorInfo;
+      metadata.errorDetails = span.errorInfo;
     }
 
-    if (Object.keys(payload.metrics).length === 0) {
-      delete payload.metrics;
-    }
+    payload.metadata = metadata;
 
     return payload;
   }
@@ -334,6 +324,23 @@ export class MastraExporter implements AITracingExporter {
   }
 }
 
+function omitKeys<
+  T extends Record<string, any>,
+  K extends readonly (keyof T | string)[],
+>(obj: T, keys: K) {
+  const omitSet = new Set<string>(keys as readonly string[]);
+  const result: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (omitSet.has(key)) {
+      continue;
+    }
+    result[key] = value;
+  }
+
+  return result as Partial<T>;
+}
+
 /**
  * Normalizes model usage metrics to Braintrust's canonical format.
  * Handles various provider naming conventions (inputTokens vs promptTokens, etc.)
@@ -344,52 +351,40 @@ export class MastraExporter implements AITracingExporter {
  */
 function normalizeUsageMetrics(
   attributes: ModelGenerationAttributes | ModelStepAttributes,
-): Record<string, any> {
+): Record<string, any> | undefined {
+  const usage = attributes.usage;
+  if (!usage) {
+    return undefined;
+  }
+
   const metrics: Record<string, any> = {};
 
-  if (attributes.usage) {
-    const { usage } = attributes;
-
-    // Prompt tokens: inputTokens (AI SDK) or promptTokens (OpenAI)
-    if (usage.inputTokens !== undefined) {
-      metrics.prompt_tokens = usage.inputTokens;
-    } else if (usage.promptTokens !== undefined) {
-      metrics.prompt_tokens = usage.promptTokens;
-    }
-
-    // Completion tokens: outputTokens (AI SDK) or completionTokens (OpenAI)
-    if (usage.outputTokens !== undefined) {
-      metrics.completion_tokens = usage.outputTokens;
-    } else if (usage.completionTokens !== undefined) {
-      metrics.completion_tokens = usage.completionTokens;
-    }
-
-    // Total tokens
-    if (usage.totalTokens !== undefined) {
-      metrics.tokens = usage.totalTokens;
-    }
-
-    // Reasoning tokens (o1 models, Claude thinking, etc.)
-    // Always include this field (default to 0) for consistent cost calculation
-    metrics.completion_reasoning_tokens = usage.reasoningTokens ?? 0;
-
-    // Cache tokens (Anthropic prompt caching, etc.)
-    // Always include these fields (default to 0) for consistent cost calculation
-    if (usage.promptCacheHitTokens !== undefined) {
-      metrics.prompt_cached_tokens = usage.promptCacheHitTokens;
-    } else if (usage.cachedInputTokens !== undefined) {
-      // Cache tokens: cachedInputTokens (AI SDK v5)
-      metrics.prompt_cached_tokens = usage.cachedInputTokens;
-    } else {
-      metrics.prompt_cached_tokens = 0;
-    }
-
-    if (usage.promptCacheMissTokens !== undefined) {
-      metrics.prompt_cache_creation_tokens = usage.promptCacheMissTokens;
-    } else {
-      metrics.prompt_cache_creation_tokens = 0;
-    }
+  // Prompt tokens: inputTokens (AI SDK) or promptTokens (OpenAI)
+  if (usage.inputTokens !== undefined) {
+    metrics.prompt_tokens = usage.inputTokens;
+  } else if (usage.promptTokens !== undefined) {
+    metrics.prompt_tokens = usage.promptTokens;
   }
+
+  // Completion tokens: outputTokens (AI SDK) or completionTokens (OpenAI)
+  if (usage.outputTokens !== undefined) {
+    metrics.completion_tokens = usage.outputTokens;
+  } else if (usage.completionTokens !== undefined) {
+    metrics.completion_tokens = usage.completionTokens;
+  }
+
+  // Total tokens
+  if (usage.totalTokens !== undefined) {
+    metrics.tokens = usage.totalTokens;
+  }
+
+  // Reasoning tokens (o1 models, Claude thinking, etc.)
+  metrics.completion_reasoning_tokens = usage.reasoningTokens ?? 0;
+
+  // Cache tokens (Anthropic prompt caching, etc.)
+  metrics.prompt_cached_tokens =
+    usage.promptCacheHitTokens ?? usage.cachedInputTokens ?? 0;
+  metrics.prompt_cache_creation_tokens = usage.promptCacheMissTokens ?? 0;
 
   return metrics;
 }

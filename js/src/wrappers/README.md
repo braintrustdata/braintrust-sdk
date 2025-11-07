@@ -41,6 +41,8 @@ Users install just one package:
 npm install braintrust
 ```
 
+> **Note**: Mastra-specific helpers (`wrapMastraAgent`, `MastraExporter`) expect `@mastra/core` to be installed in your project. Add `@mastra/core` alongside `braintrust` if you use those features.
+
 And can import any wrapper:
 
 ```typescript
