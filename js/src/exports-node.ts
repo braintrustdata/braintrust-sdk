@@ -31,9 +31,12 @@ export * from "./framework2";
 export * as graph from "./graph-framework";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
-export { BraintrustMiddleware } from "./wrappers/ai-sdk-5/middleware";
-export { wrapAISDKModel } from "./wrappers/ai-sdk-4/ai-sdk";
-export { wrapAISDK } from "./wrappers/ai-sdk-5/ai-sdk";
+
+export {
+  wrapAISDK,
+  wrapAISDKModel,
+  BraintrustMiddleware,
+} from "./wrappers/ai-sdk";
 export { wrapMastraAgent } from "./wrappers/mastra/mastra";
 export { MastraExporter } from "./wrappers/mastra/exporter";
 export { wrapAnthropic } from "./wrappers/anthropic";
