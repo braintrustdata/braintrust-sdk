@@ -5,7 +5,7 @@ on:
     inputs:
       build_run_id:
         description: "The run ID of the js workflow build"
-        required: false
+        required: true
         type: string
 
 permissions:
@@ -23,11 +23,15 @@ jobs:
           repository: ${{ github.event.workflow_run.repository.full_name }}
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Backup original NodeSDK package.json
+        working-directory: js/examples/otel
+        run: cp package.json package.json.bak
+
       - name: Determine artifact name
         id: artifact
         env:
           NODE_VERSION: ${{ matrix.node-version }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ inputs.build_run_id }}
         run: |
           ARTIFACT_NAME="javascript-sdk-dev-${RUN_ID}-22-dist"
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
@@ -36,8 +40,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: sdk/js/artifacts
-          run-id: ${{ github.event.workflow_run.id }}
+          path: js/artifacts
+          run-id: ${{ inputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
@@ -46,19 +50,36 @@ jobs:
           node-version: 22
 
       - name: Install example dependencies
-        working-directory: sdk/js/examples/otel
+        working-directory: js/examples/otel
         run: npm install
 
-      - name: Replace braintrust dist with build artifact
-        working-directory: sdk/js/examples/otel
+      - name: Run NodeSDK as CJS example
+        working-directory: js/examples/otel
         env:
-          ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
-        run: |
-          npm install "file:../../artifacts/${{ env.ARTIFACT_NAME }}"
-
-      - name: Run NodeSDK example
-        working-directory: sdk/js/examples/otel
-        env:
-          BRAINTRUST_OTEL_COMPAT: true
+          BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-        run: npm run sdk-example
+          NODE_PATH: ../../artifacts
+        run: |
+          node -e "console.log('CJS mode:', typeof require !== 'undefined')"
+          npm start
+
+      - name: Enable ESM for this run
+        working-directory: js/examples/otel
+        run: |
+          jq '. + {"type":"module"}' package.json > package.temp.json
+          mv package.temp.json package.json
+
+      - name: Run NodeSDK as ESM example
+        working-directory: js/examples/otel
+        env:
+          BRAINTRUST_OTEL_COMPAT: false
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          NODE_PATH: ../../artifacts
+        run: |
+          node -e "console.log('ESM mode:', typeof import.meta.url === 'string')"
+          npm start
+
+      - name: Restore original package.json
+        if: always()
+        working-directory: js/examples/otel
+        run: mv package.json.bak package.json
