@@ -66,10 +66,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         # This ensures memory logger context is preserved
         self.run_inline = True
 
-        self._start_llm_time = None
-        self._start_chat_model_time = None
-        self._first_token_time = None
-        self.ttft_ms = None
+        self._start_times: Dict[UUID, float] = {}
+        self._first_token_times: Dict[UUID, float] = {}
+        self._ttft_ms: Dict[UUID, float] = {}
 
     def _start_span(
         self,
@@ -217,6 +216,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
 
+        self._start_times.pop(run_id, None)
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
+
     def on_chain_error(
         self,
         error: BaseException,
@@ -341,7 +344,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        self._start_llm_time = time.perf_counter()
+
+        self._start_times[run_id] = time.perf_counter()
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
+
         name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
         self._start_span(
             parent_run_id,
@@ -373,8 +380,12 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         invocation_params: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
+
+        self._start_times[run_id] = time.perf_counter()
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
+
         invocation_params = invocation_params or {}
-        self._start_chat_model_time = time.perf_counter()
         self._start_span(
             parent_run_id,
             run_id,
@@ -408,9 +419,15 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             return
 
         metrics = _get_metrics_from_response(response)
-        if self.ttft_ms:
-            metrics["time_to_first_token"] = self.ttft_ms
+
+        ttft = self._ttft_ms.pop(run_id, None)
+        if ttft is not None:
+            metrics["time_to_first_token"] = ttft
+
         model_name = _get_model_name_from_response(response)
+
+        self._start_times.pop(run_id, None)
+        self._first_token_times.pop(run_id, None)
 
         self._end_span(
             run_id,
@@ -514,11 +531,12 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self._first_token_time is None:
-            self._first_token_time = time.perf_counter()
-            if self._start_llm_time is not None or self._start_chat_model_time is not None:
-                _start_time = self._start_llm_time or self._start_chat_model_time
-                self.ttft_ms = self._first_token_time - _start_time
+        if run_id not in self._first_token_times:
+            now = time.perf_counter()
+            self._first_token_times[run_id] = now
+            start = self._start_times.get(run_id)
+            if start is not None:
+                self._ttft_ms[run_id] = (now - start)
 
     def on_text(
         self,
