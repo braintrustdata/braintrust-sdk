@@ -37,7 +37,10 @@ jobs:
       - name: "verify ci"
         shell: bash
         run: make js-verify-ci
+
+      # Upload build artifacts for Node 22 on Ubuntu for testing
       - name: Determine artifact name
+        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         id: artifact
         env:
           ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}-${{ matrix.node-version }}-dist
@@ -79,18 +82,28 @@ jobs:
         with:
           node-version: 22
 
+      - name: Temporarily point braintrust dependency to local build
+        working-directory: js/examples/otel
+        run: |
+          # Modify package.json to point 'braintrust' to local artifact
+          jq --arg path "file:../../artifacts/${{ needs.build.outputs.artifact-name }}" '.dependencies.braintrust = $path' package.json > package.temp.json
+          mv package.temp.json package.json
+          cat package.json
+
       - name: Install example dependencies
         working-directory: js/examples/otel
-        run: npm install
+        run: npm install --force
+
+      - name: Run CJS check
+        working-directory: scripts
+        run: ./verify_cjs.sh
 
       - name: Run NodeSDK as CJS example
         working-directory: js/examples/otel
         env:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          NODE_PATH: ../../artifacts
         run: |
-          node -e "console.log('CJS mode:', typeof require !== 'undefined')"
           npm start
 
       - name: Enable ESM for this run
@@ -98,15 +111,18 @@ jobs:
         run: |
           jq '. + {"type":"module"}' package.json > package.temp.json
           mv package.temp.json package.json
+          cat package.json
+
+      - name: Run ESM check
+        working-directory: scripts
+        run: ./verify_esm.sh
 
       - name: Run NodeSDK as ESM example
         working-directory: js/examples/otel
         env:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          NODE_PATH: ../../artifacts
         run: |
-          node -e "console.log('ESM mode:', typeof import.meta.url === 'string')"
           npm start
 
       - name: Restore original package.json
