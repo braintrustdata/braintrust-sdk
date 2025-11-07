@@ -1,6 +1,7 @@
 name: js-sdk-integration
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["js"]
     types:
@@ -10,8 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  run-nodesdk-example:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  test-node-sdk-example:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -60,16 +60,7 @@ jobs:
         env:
           ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
         run: |
-          DIST_SRC="../artifacts/${ARTIFACT_NAME}/js/dist"
-          if [ ! -d "$DIST_SRC" ]; then
-            echo "Expected dist directory not found at $DIST_SRC" >&2
-            echo "Available files:" >&2
-            find ../artifacts -maxdepth 3 -type d >&2
-            exit 1
-          fi
-          rm -rf node_modules/braintrust/dist
-          mkdir -p node_modules/braintrust
-          cp -a "$DIST_SRC" node_modules/braintrust/
+          npm install "file:../../artifacts/${{ env.ARTIFACT_NAME }}"
 
       - name: Run NodeSDK example
         working-directory: sdk/js/examples/otel
