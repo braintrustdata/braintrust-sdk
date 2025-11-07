@@ -5,12 +5,7 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: [
-      "zod",
-      "@opentelemetry/api",
-      "@opentelemetry/sdk-trace-base",
-      "@opentelemetry/exporter-trace-otlp-http",
-    ],
+    external: ["zod"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -30,11 +25,6 @@ export default defineConfig([
         skipLibCheck: true,
       },
     },
-    external: [
-      "@opentelemetry/api",
-      "@opentelemetry/sdk-trace-base",
-      "@opentelemetry/exporter-trace-otlp-http",
-    ],
     splitting: true,
     clean: false,
   },
@@ -42,14 +32,7 @@ export default defineConfig([
     entry: ["src/cli.ts"],
     format: ["cjs"],
     outDir: "dist",
-    external: [
-      "esbuild",
-      "prettier",
-      "typescript",
-      "@opentelemetry/api",
-      "@opentelemetry/sdk-trace-base",
-      "@opentelemetry/exporter-trace-otlp-http",
-    ],
+    external: ["esbuild", "prettier", "typescript"],
     // CLI doesn't need DTS
     dts: false,
     clean: false,
@@ -58,14 +41,7 @@ export default defineConfig([
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",
-    external: [
-      "esbuild",
-      "prettier",
-      "typescript",
-      "@opentelemetry/api",
-      "@opentelemetry/sdk-trace-base",
-      "@opentelemetry/exporter-trace-otlp-http",
-    ],
+    external: ["esbuild", "prettier", "typescript"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -79,14 +55,7 @@ export default defineConfig([
     entry: ["util/index.ts"],
     format: ["cjs", "esm"],
     outDir: "util/dist",
-    external: [
-      "esbuild",
-      "prettier",
-      "typescript",
-      "@opentelemetry/api",
-      "@opentelemetry/sdk-trace-base",
-      "@opentelemetry/exporter-trace-otlp-http",
-    ],
+    external: ["esbuild", "prettier", "typescript"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {

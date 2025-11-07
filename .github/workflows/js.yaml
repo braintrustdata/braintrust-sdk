@@ -86,7 +86,8 @@ jobs:
         working-directory: js/examples/otel
         run: |
           # Modify package.json to point 'braintrust' to local artifact
-          jq --arg path "file:../../artifacts/${{ needs.build.outputs.artifact-name }}" '.dependencies.braintrust = $path' package.json > package.temp.json
+          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' package.json > package.temp.json
+          ls ../../artifacts
           mv package.temp.json package.json
           cat package.json
 
