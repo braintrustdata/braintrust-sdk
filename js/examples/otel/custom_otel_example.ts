@@ -1,7 +1,7 @@
 // custom_otel_example.ts
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
-import { BraintrustSpanProcessor } from "../../src";
+import { BraintrustSpanProcessor } from "braintrust";
 
 const provider = new BasicTracerProvider({
   spanProcessors: [
