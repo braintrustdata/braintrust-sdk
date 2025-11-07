@@ -386,25 +386,16 @@ function getSpanComponentsClass():
   return useV4 ? SpanComponentsV4 : SpanComponentsV3;
 }
 
-let _otelContextManager: ContextManager | null = null;
-let _braintrustContextManager: BraintrustContextManager | null = null;
-
 export function getContextManager(): ContextManager {
   const useOtel =
     typeof process !== "undefined" &&
     process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
 
   if (useOtel) {
-    if (!_otelContextManager) {
-      _otelContextManager = createOtelContextManager();
-    }
-    return _otelContextManager;
+    return createOtelContextManager();
   }
 
-  if (!_braintrustContextManager) {
-    _braintrustContextManager = new BraintrustContextManager();
-  }
-  return _braintrustContextManager;
+  return new BraintrustContextManager();
 }
 
 /**

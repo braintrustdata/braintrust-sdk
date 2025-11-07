@@ -14,9 +14,8 @@ const otelSdk = {
   BatchSpanProcessor,
 };
 
-// Use OpenTelemetry types
 type Context = otelApi.Context;
-type Span = SdkSpan; // Use SDK Span type for SpanProcessor
+type Span = SdkSpan;
 
 const FILTER_PREFIXES = [
   "gen_ai.",
@@ -110,10 +109,7 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
-    // parentSpanId may not exist in all versions, so we check for it safely
-    const hasParentSpanId = "parentSpanId" in span && span.parentSpanId;
-    if (!span.parentSpanContext && !hasParentSpanId) {
+    if (!span.parentSpanContext && !span.parentSpanId) {
       return true;
     }
 
@@ -369,11 +365,7 @@ export class BraintrustSpanProcessor {
       // If there's an exception, just don't set braintrust.parent
     }
 
-    // BatchSpanProcessor requires parentContext to be non-undefined
-    // Use provided parentContext or fall back to active context
-    const contextToUse: Context =
-      parentContext ?? (otelApi.context.active() as Context);
-    this.aiSpanProcessor.onStart(span, contextToUse);
+    this.aiSpanProcessor.onStart(span, parentContext);
   }
 
   private _getParentOtelBraintrustParent(
@@ -384,15 +376,9 @@ export class BraintrustSpanProcessor {
         return undefined;
       }
 
-      // Ensure we have a valid OpenTelemetry Context
-      const otelContext: otelApi.Context =
-        parentContext && "setValue" in parentContext
-          ? (parentContext as otelApi.Context)
-          : otelApi.context.active();
-
       const currentSpan =
         typeof otelApi.trace.getSpan === "function"
-          ? otelApi.trace.getSpan(otelContext)
+          ? otelApi.trace.getSpan(parentContext)
           : undefined;
 
       if (
@@ -727,16 +713,12 @@ function addSpanParentToBaggage(
   span: otelApi.Span | ReadableSpan,
   ctx?: Context,
 ): Context | undefined {
-  // Check if span has attributes (ReadableSpan has attributes, API Span might not)
-  const attributes =
-    "attributes" in span ? (span as ReadableSpan).attributes : undefined;
-
-  if (!span || !attributes) {
+  if (!span || !span.attributes) {
     console.warn("addSpanParentToBaggage: span has no attributes");
     return undefined;
   }
 
-  const parentValue = attributes["braintrust.parent"];
+  const parentValue = span.attributes["braintrust.parent"];
   if (!parentValue || typeof parentValue !== "string") {
     console.warn(
       "addSpanParentToBaggage: braintrust.parent attribute not found. " +
