@@ -31,7 +31,26 @@ jobs:
         working-directory: js/examples/otel
         run: npm install
 
-      - name: Run OTEL example with npm start
+      - name: Run otel as CJS example
+        if: steps.check_api_key.outputs.api_key_available == 'true'
+        working-directory: js/examples/otel
+        env:
+          BRAINTRUST_OTEL_COMPAT: false
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: |
+          node -e "console.log('CJS mode:', typeof require !== 'undefined')"
+          npm start
+
+      - name: Backup original otel package.json
+        working-directory: js/examples/otel
+        run: cp package.json package.json.bak
+
+      - name: Enable ESM for this run
+        run: |
+          jq '. + {"type":"module"}' js/package.json > js/package.temp.json
+          mv js/package.temp.json js/package.json
+
+      - name: Run otel as ESM example
         if: steps.check_api_key.outputs.api_key_available == 'true'
         working-directory: js/examples/otel
         env:
@@ -40,3 +59,7 @@ jobs:
         run: |
           node -e "console.log('ESM mode:', typeof import.meta.url === 'string')"
           npm start
+
+      - name: Restore original package.json
+        if: always()
+        run: mv js/package.json.bak js/package.json
