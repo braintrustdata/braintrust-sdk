@@ -28,6 +28,7 @@ const config = {
     exclude: ["vendor/**", "**/vendor/**"],
   },
   test: {
+    fileParallelism: false,
     exclude: [
       // Default vitest exclusions
       "**/node_modules/**",
@@ -45,8 +46,6 @@ const config = {
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
     ],
-  },
-  test: {
     deps: {
       inline: ["@ai-sdk/openai", "ai", "@mastra/core"],
     },

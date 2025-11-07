@@ -54,7 +54,9 @@ const DEFAULT_SPAN_TYPE = "task";
 type MastraSpanType = AnyExportedAISpan["type"];
 
 const MASTRA_SPAN_TYPES = {
-  MODEL_GENERATION: "llm_generation" as MastraSpanType,
+  MODEL_GENERATION: "model_generation" as MastraSpanType,
+  MODEL_STEP: "model_step" as MastraSpanType,
+  MODEL_CHUNK: "model_chunk" as MastraSpanType,
   TOOL_CALL: "tool_call" as MastraSpanType,
   MCP_TOOL_CALL: "mcp_tool_call" as MastraSpanType,
   WORKFLOW_CONDITIONAL_EVAL: "workflow_conditional_eval" as MastraSpanType,

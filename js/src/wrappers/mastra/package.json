@@ -5,14 +5,15 @@
   "description": "Test infrastructure for Mastra wrapper (AI SDK v5)",
   "scripts": {
     "test": "vitest run",
-    "demo": "tsx demo/demo.ts",
-    "demo:eval": "tsx demo/demo-eval.ts",
-    "demo:tags": "tsx demo/demo-tags.ts"
+    "demo": "tsx examples/mastra.ts",
+    "demo:eval": "tsx examples/mastra-eval.ts",
+    "demo:tags": "tsx examples/mastra-tags.ts"
   },
   "peerDependencies": {
     "@mastra/core": "^0.24.0"
   },
   "devDependencies": {
+    "@mastra/core": "^0.24.0",
     "ai": "5.0.76",
     "@ai-sdk/openai": "2.0.53",
     "@types/node": "^20.10.5",
