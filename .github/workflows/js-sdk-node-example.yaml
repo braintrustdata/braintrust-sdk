@@ -100,7 +100,9 @@ jobs:
         env:
           BRAINTRUST_OTEL_COMPAT: false
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-        run: npm start
+        run: |
+          node -e "console.log('ESM mode:', typeof import.meta.url === 'string')"
+          npm start
 
       - name: Restore original config files
         if: always()
