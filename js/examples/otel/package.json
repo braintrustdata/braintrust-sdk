@@ -4,7 +4,11 @@
   "description": "Example using BraintrustSpanProcessor with OpenTelemetry NodeSDK",
   "main": "nodesdk_example.ts",
   "scripts": {
-    "start": "tsx nodesdk_example.ts"
+    "start": "tsx nodesdk_example.ts",
+    "sdk-example": "tsx nodesdk_example.ts",
+    "custom-otel-example": "tsx custom_otel_example.ts",
+    "distributed-tracing": "tsx distributed-tracing.ts",
+    "aisdk-example": "tsx aisdk_example.ts"
   },
   "dependencies": {
     "@traceloop/instrumentation-openai": "^0.14.0",
@@ -17,7 +21,8 @@
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@opentelemetry/semantic-conventions": "^1.36.0",
     "openai": "^4.73.1",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "braintrust": "latest"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
