@@ -10,15 +10,14 @@ import {
 import * as api from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import braintrust from "../../dist/index.js";
 
-const {
+import {
   initLogger,
   login,
   otel,
   BraintrustSpanProcessor,
   _exportsForTestingOnly,
-} = braintrust;
+} from "braintrust";
 
 const { trace, context, propagation } = api;
 

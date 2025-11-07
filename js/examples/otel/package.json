@@ -4,7 +4,8 @@
   "description": "Example using BraintrustSpanProcessor with OpenTelemetry NodeSDK",
   "main": "nodesdk_example.ts",
   "scripts": {
-    "start": "tsx nodesdk_example.ts"
+    "start": "tsx nodesdk_example.ts",
+    "sdk-example": "tsx nodesdk_example.ts"
   },
   "dependencies": {
     "@traceloop/instrumentation-openai": "^0.14.0",

@@ -30,3 +30,9 @@ jobs:
       - name: "verify ci"
         shell: bash
         run: make js-verify-ci
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-sdk-dev-${{ github.event.number }}-${{ matrix.node-version }}-dist
+          path: js/dist/
+          retention-days: 1

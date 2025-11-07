@@ -1,0 +1,79 @@
+name: js-sdk-integration
+
+on:
+  workflow_run:
+    workflows: ["js"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  run-nodesdk-example:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Determine artifact name
+        id: artifact
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+          NODE_VERSION: ${{ matrix.node-version }}
+        run: |
+          if [ -z "$PR_NUMBER" ]; then
+            ARTIFACT_NAME="javascript-sdk-dev--${NODE_VERSION}-dist"
+          else
+            ARTIFACT_NAME="javascript-sdk-dev-${PR_NUMBER}-${NODE_VERSION}-dist"
+          fi
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Download javascript dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: sdk/js/artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install example dependencies
+        working-directory: sdk/js/examples/otel
+        run: npm install
+
+      - name: Replace braintrust dist with build artifact
+        working-directory: sdk/js/examples/otel
+        env:
+          ARTIFACT_NAME: ${{ steps.artifact.outputs.name }}
+        run: |
+          DIST_SRC="../artifacts/${ARTIFACT_NAME}/js/dist"
+          if [ ! -d "$DIST_SRC" ]; then
+            echo "Expected dist directory not found at $DIST_SRC" >&2
+            echo "Available files:" >&2
+            find ../artifacts -maxdepth 3 -type d >&2
+            exit 1
+          fi
+          rm -rf node_modules/braintrust/dist
+          mkdir -p node_modules/braintrust
+          cp -a "$DIST_SRC" node_modules/braintrust/
+
+      - name: Run NodeSDK example
+        working-directory: sdk/js/examples/otel
+        env:
+          BRAINTRUST_OTEL_COMPAT: true
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: npm run sdk-example
