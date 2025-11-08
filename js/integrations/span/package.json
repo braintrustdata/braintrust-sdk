@@ -8,7 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "file:../../artifacts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
