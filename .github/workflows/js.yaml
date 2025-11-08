@@ -92,11 +92,6 @@ jobs:
           jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
           mv span/package.temp.json span/package.json
 
-      - name: Install root dependencies
-        working-directory: js
-        run: |
-          npm install simple-git
-
       - name: Install otel integrations dependencies (CJS)
         working-directory: sdk/js/integrations/otel
         run: npm install
