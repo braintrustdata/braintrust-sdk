@@ -865,3 +865,87 @@ def test_consecutive_eval_calls(logger_memory_logger: LoggerMemoryLogger):
     # creates the proper hierarchy: root eval -> eval records -> tasks, and that consecutive
     # calls work correctly with proper parent-child relationships.
     # Real LangChain span integration is tested in other tests (test_llm_calls, etc.)
+
+
+@pytest.mark.vcr
+def test_streaming_ttft(logger_memory_logger: LoggerMemoryLogger):
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    handler = BraintrustCallbackHandler(logger=logger)
+    prompt = ChatPromptTemplate.from_template("Count from 1 to 5.")
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        max_completion_tokens=50,
+        streaming=True,
+    )
+    chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
+
+    # Collect chunks to verify streaming works
+    chunks: List[str] = []
+    for chunk in chain.stream({}, config={"callbacks": [cast(BaseCallbackHandler, handler)]}):
+        if chunk.content:
+            chunks.append(str(chunk.content))
+
+    # Verify we got streaming chunks
+    assert len(chunks) > 0, "Expected to receive streaming chunks"
+
+    spans = memory_logger.pop()
+    assert len(spans) == 3
+
+    # Find the LLM span
+    llm_spans = find_spans_by_attributes(spans, name="ChatOpenAI", type="llm")
+    assert len(llm_spans) == 1
+    llm_span = llm_spans[0]
+
+    # Verify the span structure matches expectations
+    assert_matches_object(
+        [llm_span],
+        [
+            {
+                "id": ANY,
+                "input": [
+                    [
+                        {
+                            "additional_kwargs": {},
+                            "content": "Count from 1 to 5.",
+                            "example": False,
+                            "id": None,
+                            "name": None,
+                            "response_metadata": {},
+                            "type": "human",
+                        }
+                    ]
+                ],
+                "metadata": {
+                    "braintrust": {
+                        "integration_name": "langchain-py",
+                    }
+                },
+                "metrics": {
+                    "time_to_first_token": ANY,
+                },
+                "output": {
+                    "generations": [
+                        [
+                            {
+                                "generation_info": {
+                                    "finish_reason": "stop",
+                                    "model_name": ANY,
+                                },
+                                "message": {
+                                    "content": "1, 2, 3, 4, 5.",
+                                    "type": "AIMessageChunk",
+                                },
+                                "text": "1, 2, 3, 4, 5.",
+                                "type": "ChatGenerationChunk",
+                            }
+                        ]
+                    ],
+                    "type": "LLMResult",
+                },
+                "project_id": "langchain-py",
+                "span_attributes": {"name": "ChatOpenAI", "type": "llm"},
+            }
+        ],
+    )
