@@ -47,17 +47,43 @@ jobs:
         run: |
           echo "Artifact: $ARTIFACT_NAME"
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+      - name: Prepare artifact
+        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
+        id: prepare_artifact
+        working-directory: js
+        run: |
+          PACKED_TARBALL=$(npm pack --pack-destination dist)
+          # Create a temporary directory to unpack into
+          mkdir -p dist/unpacked
+
+          # Extract the tarball (npm pack produces a .tgz)
+          tar -xzf "dist/$PACKED_TARBALL" -C dist/unpacked
+
+          # For debugging, list contents
+          echo "Contents of unpacked tarball:"
+          ls -R dist/unpacked
+
+          # Output the unpack directory path
+          echo "unpacked_dir=dist/unpacked/package" >> "$GITHUB_OUTPUT"
+
       - name: Upload build artifacts
         if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact.outputs.name }}
+          name: ${{ steps.prepare_artifact.outputs.unpacked_dir }}
           path: js/dist/
           retention-days: 1
 
   integration-tests:
     needs: build
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        integration:
+          - otel
+          - span
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -84,27 +110,30 @@ jobs:
         with:
           node-version: 22
 
-      - name: Temporarily point braintrust dependency to local build
-        working-directory: js/integrations
+      - name: Create temporary package.json files with braintrust dependency
+        working-directory: js/artifacts
+        shell: bash
         run: |
-          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' otel/package.json > otel/package.temp.json
-          mv otel/package.temp.json otel/package.json
-          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
-          mv span/package.temp.json span/package.json
+          cat <<'EOF' > package.json
+          {
+            "name": "braintrust",
+            "version": "0.0.0",
+            "main": "./index.js",
+            "module": "./index.mjs",
+            "types": "./index.d.ts"
+          }
+          EOF
 
-      - name: Run CJS check 
-        working-directory: scripts
-        run: ./verify_cjs.sh
+      - name: Run CJS check for ${{ matrix.integration }}
+        working-directory: js/integrations/${{ matrix.integration }}
+        run: ../../../scripts/verify_cjs.sh
 
-      - name: Run otel integration test (CJS)
-        working-directory: js/integrations/otel
-        run: | 
+      - name: Run integration test (CJS) for ${{ matrix.integration }}
+        working-directory: js/integrations/${{ matrix.integration }}
+        run: |
           npm install
+          npm list braintrust
           npm test
-
-      - name: Run span integration test (CJS)
-        working-directory: js/integrations/span
-        run: npm install && npm test
 
       - name: Enable ESM for integrations tests
         working-directory: js/integrations
@@ -113,18 +142,16 @@ jobs:
           mv otel/package.temp.json otel/package.json
           jq '. + {"type":"module"}' span/package.json > span/package.temp.json
           mv span/package.temp.json span/package.json
-      
-      - name: Run ESM check 
-        working-directory: scripts
-        run: ./verify_esm.sh
 
-      - name: Run otel integration test (ESM)
-        working-directory: js/integrations/otel
-        run: npm install && npm test
+      - name: Run ESM check for ${{ matrix.integration }}
+        working-directory: js/integrations/${{ matrix.integration }}
+        run: ../../../scripts/verify_esm.sh
 
-      - name: Run span integration test (ESM)
-        working-directory: js/integrations/span
-        run: npm install && npm test
+      - name: Run integration test (ESM) for ${{ matrix.integration }}
+        working-directory: js/integrations/${{ matrix.integration }}
+        run: |
+          npm install
+          npm test
 
       - name: Restore original package.json files
         if: always()
