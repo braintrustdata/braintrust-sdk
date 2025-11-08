@@ -87,8 +87,6 @@ jobs:
         run: |
           # Modify package.json to point 'braintrust' to local artifact
           jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' package.json > package.temp.json
-          ls ../../artifacts
-          cat ../../artifacts/index.js | grep simple-git
           mv package.temp.json package.json
           cat package.json
 

@@ -5,7 +5,7 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: ["zod", "simple-git"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -19,6 +19,7 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
+    external: ["simple-git"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
