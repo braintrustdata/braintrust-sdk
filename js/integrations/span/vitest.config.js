@@ -1,2 +1,2 @@
-import { defineConfig } from 'vitest/config'
-export default defineConfig({})
+import { defineConfig } from "vitest/config";
+export default defineConfig({});
