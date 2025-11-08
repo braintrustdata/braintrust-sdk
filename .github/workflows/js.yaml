@@ -53,25 +53,14 @@ jobs:
         working-directory: js
         run: |
           PACKED_TARBALL=$(npm pack --pack-destination dist)
-          # Create a temporary directory to unpack into
-          mkdir -p dist/unpacked
-
-          # Extract the tarball (npm pack produces a .tgz)
-          tar -xzf "dist/$PACKED_TARBALL" -C dist/unpacked
-
-          # For debugging, list contents
-          echo "Contents of unpacked tarball:"
-          ls -R dist/unpacked
-
-          # Output the unpack directory path
-          echo "unpacked_dir=dist/unpacked/package" >> "$GITHUB_OUTPUT"
+          echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
         if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.prepare_artifact.outputs.unpacked_dir }}
-          path: js/dist/
+          name: ${{ steps.artifact.outputs.name }}
+          path: js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
           retention-days: 1
 
   integration-tests:
@@ -110,19 +99,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: Create temporary package.json files with braintrust dependency
-        working-directory: js/artifacts
-        shell: bash
+      - name: Temporarily point braintrust dependency to local build
+        working-directory: js/integrations
         run: |
-          cat <<'EOF' > package.json
-          {
-            "name": "braintrust",
-            "version": "0.0.0",
-            "main": "./index.js",
-            "module": "./index.mjs",
-            "types": "./index.d.ts"
-          }
-          EOF
+          ls ../artifacts
+          TAR_FILE=$(ls -t ../artifacts/braintrust-*.tgz | head -n1)
+          jq --arg path "file:../../artifacts/$TAR_FILE" '.dependencies.braintrust = $path' otel/package.json > otel/package.temp.json
+          mv otel/package.temp.json otel/package.json
+          jq --arg path "file:../../artifacts/$TAR_FILE" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
+          mv span/package.temp.json span/package.json
+          cat otel/package.json
+          cat span/package.json
 
       - name: Run CJS check for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
