@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import time
-
 from typing import (
     Any,
     Dict,
@@ -344,7 +343,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-
         self._start_times[run_id] = time.perf_counter()
         self._first_token_times.pop(run_id, None)
         self._ttft_ms.pop(run_id, None)
@@ -380,7 +378,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         invocation_params: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
-
         self._start_times[run_id] = time.perf_counter()
         self._first_token_times.pop(run_id, None)
         self._ttft_ms.pop(run_id, None)
@@ -536,7 +533,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             self._first_token_times[run_id] = now
             start = self._start_times.get(run_id)
             if start is not None:
-                self._ttft_ms[run_id] = (now - start)
+                self._ttft_ms[run_id] = now - start
 
     def on_text(
         self,
