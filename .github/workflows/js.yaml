@@ -71,7 +71,7 @@ jobs:
           cp otel/package.json otel/package.json.bak
           cp span/package.json span/package.json.bak
 
-      - name: Download javascript dist artifact
+      - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}
@@ -84,29 +84,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: Temporarily point braintrust dependency to local build
-        working-directory: js/integrations
-        run: |
-          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' otel/package.json > otel/package.temp.json
-          mv otel/package.temp.json otel/package.json
-          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
-          mv span/package.temp.json span/package.json
+      - name: Run CJS check 
+        working-directory: scripts
+        run: ./verify_cjs.sh
 
-      - name: Install otel integrations dependencies (CJS)
-        working-directory: sdk/js/integrations/otel
-        run: npm install
+      - name: Run otel integration test (CJS)
+        working-directory: js/integrations/otel
+        run: | 
+          npm install
+          npm test
 
-      - name: Run otel integrations tests (CJS)
-        working-directory: sdk/js/integrations/otel
-        run: npm test
-
-      - name: Install span integrations dependencies (CJS)
-        working-directory: sdk/js/integrations/span
-        run: npm install
-
-      - name: Run span integrations tests (CJS)
-        working-directory: sdk/js/integrations/span
-        run: npm test
+      - name: Run span integration test (CJS)
+        working-directory: js/integrations/span
+        run: npm install && npm test
 
       - name: Enable ESM for integrations tests
         working-directory: js/integrations
@@ -115,22 +105,18 @@ jobs:
           mv otel/package.temp.json otel/package.json
           jq '. + {"type":"module"}' span/package.json > span/package.temp.json
           mv span/package.temp.json span/package.json
+      
+      - name: Run ESM check 
+        working-directory: scripts
+        run: ./verify_esm.sh
 
-      - name: Install otel integrations dependencies (ESM)
-        working-directory: sdk/js/integrations/otel
-        run: npm install
+      - name: Run otel integration test (ESM)
+        working-directory: js/integrations/otel
+        run: npm install && npm test
 
-      - name: Run otel integrations tests (ESM)
-        working-directory: sdk/js/integrations/otel
-        run: npm test
-
-      - name: Install span integrations dependencies (ESM)
-        working-directory: sdk/js/integrations/span
-        run: npm install
-
-      - name: Run span integrations tests (ESM)
-        working-directory: sdk/js/integrations/span
-        run: npm test
+      - name: Run span integration test (ESM)
+        working-directory: js/integrations/span
+        run: npm install && npm test
 
       - name: Restore original package.json files
         if: always()
