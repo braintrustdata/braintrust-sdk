@@ -967,4 +967,93 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(toolSpanTyped.output).toBeDefined();
     expect(toolSpanTyped.output).toBe("42");
   });
+
+  test("ai sdk Agent class support", async () => {
+    const model = openai(TEST_MODEL);
+    const start = getCurrentUnixTimestamp();
+
+    // Create an agent using the wrapped AI SDK
+    const agent = new wrappedAI.Agent({
+      model,
+      system: "You are a helpful assistant.",
+    });
+
+    // Test the generate method
+    const result = await agent.generate({
+      messages: [
+        {
+          role: "user",
+          content: "Say 'hello'",
+        },
+      ],
+      maxTokens: 50,
+    });
+
+    const end = getCurrentUnixTimestamp();
+
+    expect(result.text).toBeDefined();
+    expect(result.text.toLowerCase()).toContain("hello");
+
+    // Check that spans were logged
+    const spans = await backgroundLogger.drain();
+    expect(spans.length).toBeGreaterThanOrEqual(1);
+
+    const span = spans[0];
+
+    // Verify span structure
+    expect(span.project_id).toBeDefined();
+    expect(span.log_id).toBe("g");
+    expect(span.created).toBeGreaterThanOrEqual(start);
+    expect(span.created).toBeLessThanOrEqual(end);
+    expect(span.span_id).toBeDefined();
+    expect(span.root_span_id).toBeDefined();
+    expect(span.span_attributes).toEqual({
+      type: "llm",
+      name: "generateText",
+    });
+    expect(span.metadata).toEqual({
+      model: TEST_MODEL,
+    });
+    expect(span.input).toMatchObject({
+      messages: [
+        {
+          role: "user",
+          content: "Say 'hello'",
+        },
+      ],
+    });
+    expect(span.metrics).toBeDefined();
+
+    const { metrics } = span;
+    expect(start).toBeLessThanOrEqual(metrics.start);
+    expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+  });
+
+  test("ai sdk experimental_Agent support", async () => {
+    // Verify experimental_Agent is also wrapped
+    expect(wrappedAI.experimental_Agent).toBeDefined();
+
+    const model = openai(TEST_MODEL);
+
+    // Create an agent using experimental_Agent
+    const agent = new wrappedAI.experimental_Agent({
+      model,
+    });
+
+    const result = await agent.generate({
+      messages: [
+        {
+          role: "user",
+          content: "Say 'test'",
+        },
+      ],
+      maxTokens: 50,
+    });
+
+    expect(result.text).toBeDefined();
+
+    // Verify spans were created
+    const spans = await backgroundLogger.drain();
+    expect(spans.length).toBeGreaterThanOrEqual(1);
+  });
 });

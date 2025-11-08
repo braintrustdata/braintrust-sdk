@@ -30,8 +30,8 @@ interface WrapAISDKOptions {
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
- * of generateText, streamText, generateObject, and streamObject that automatically
- * create spans and log inputs, outputs, and metrics.
+ * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
+ * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns Object with AI SDK methods with Braintrust tracing
@@ -41,12 +41,15 @@ interface WrapAISDKOptions {
  * import { wrapAISDK } from "braintrust";
  * import * as ai from "ai";
  *
- * const { generateText, streamText, generateObject, streamObject } = wrapAISDK(ai);
+ * const { generateText, streamText, generateObject, streamObject, Agent } = wrapAISDK(ai);
  *
  * const result = await generateText({
  *   model: openai("gpt-4"),
  *   prompt: "Hello world"
  * });
+ *
+ * const agent = new Agent({ model: openai("gpt-4") });
+ * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
 export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
@@ -62,11 +65,57 @@ export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
           return wrapGenerateObject(original, options);
         case "streamObject":
           return wrapStreamObject(original, options);
+        case "Agent":
+        case "experimental_Agent":
+        case "ToolLoopAgent":
+          return wrapAgentClass(original, receiver);
       }
       return original;
     },
   });
 }
+
+const wrapAgentClass = (AgentClass: any, wrappedSDK: any) => {
+  return new Proxy(AgentClass, {
+    construct(target, args) {
+      const instance = new target(...args);
+      return new Proxy(instance, {
+        get(instanceTarget, prop, instanceReceiver) {
+          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+          if (prop === "generate") {
+            return async (options: any) => {
+              // Check if this is a ToolLoopAgent (v6) with prepareCall method
+              if (typeof instanceTarget.prepareCall === "function") {
+                const preparedArgs = await instanceTarget.prepareCall(options);
+                return wrappedSDK.generateText(preparedArgs);
+              }
+              // Regular Agent (v5)
+              return wrappedSDK.generateText({
+                ...instanceTarget.settings,
+                ...options,
+              });
+            };
+          }
+          if (prop === "stream") {
+            return async (options: any) => {
+              // Check if this is a ToolLoopAgent (v6) with prepareCall method
+              if (typeof instanceTarget.prepareCall === "function") {
+                const preparedArgs = await instanceTarget.prepareCall(options);
+                return wrappedSDK.streamText(preparedArgs);
+              }
+              // Regular Agent (v5)
+              return wrappedSDK.streamText({
+                ...instanceTarget.settings,
+                ...options,
+              });
+            };
+          }
+          return original;
+        },
+      });
+    },
+  });
+};
 
 const wrapGenerateText = (
   generateText: any,
