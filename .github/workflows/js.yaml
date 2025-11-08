@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -20,6 +24,9 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
 
+    outputs:
+      artifact-name: ${{ steps.artifact.outputs.name }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,3 +37,109 @@ jobs:
       - name: "verify ci"
         shell: bash
         run: make js-verify-ci
+
+      # Upload build artifacts for Node 22 on Ubuntu for testing
+      - name: Determine artifact name
+        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
+        id: artifact
+        env:
+          ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}-${{ matrix.node-version }}-dist
+        run: |
+          echo "Artifact: $ARTIFACT_NAME"
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+      - name: Upload build artifacts
+        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: js/dist/
+          retention-days: 1
+
+  integration-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Backup original integration package manifests
+        working-directory: js/integrations
+        run: |
+          cp otel/package.json otel/package.json.bak
+          cp span/package.json span/package.json.bak
+
+      - name: Download javascript dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Temporarily point braintrust dependency to local build
+        working-directory: js/integrations
+        run: |
+          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' otel/package.json > otel/package.temp.json
+          mv otel/package.temp.json otel/package.json
+          jq --arg path "file:../../artifacts" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
+          mv span/package.temp.json span/package.json
+
+      - name: Install root dependencies
+        working-directory: js
+        run: |
+          npm install simple-git
+
+      - name: Install otel integrations dependencies (CJS)
+        working-directory: sdk/js/integrations/otel
+        run: npm install
+
+      - name: Run otel integrations tests (CJS)
+        working-directory: sdk/js/integrations/otel
+        run: npm test
+
+      - name: Install span integrations dependencies (CJS)
+        working-directory: sdk/js/integrations/span
+        run: npm install
+
+      - name: Run span integrations tests (CJS)
+        working-directory: sdk/js/integrations/span
+        run: npm test
+
+      - name: Enable ESM for integrations tests
+        working-directory: js/integrations
+        run: |
+          jq '. + {"type":"module"}' otel/package.json > otel/package.temp.json
+          mv otel/package.temp.json otel/package.json
+          jq '. + {"type":"module"}' span/package.json > span/package.temp.json
+          mv span/package.temp.json span/package.json
+
+      - name: Install otel integrations dependencies (ESM)
+        working-directory: sdk/js/integrations/otel
+        run: npm install
+
+      - name: Run otel integrations tests (ESM)
+        working-directory: sdk/js/integrations/otel
+        run: npm test
+
+      - name: Install span integrations dependencies (ESM)
+        working-directory: sdk/js/integrations/span
+        run: npm install
+
+      - name: Run span integrations tests (ESM)
+        working-directory: sdk/js/integrations/span
+        run: npm test
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/integrations
+        run: |
+          mv otel/package.json.bak otel/package.json
+          mv span/package.json.bak span/package.json
