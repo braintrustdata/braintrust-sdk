@@ -8,5 +8,6 @@ _.python.venv = { path = "venv", create = true, uv_create_args = ['--seed']}
 _.file = ".env"
 
 [tools]
+node = "20"
 ruff = "0.12.7"
 uv = "latest"
