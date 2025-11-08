@@ -36,7 +36,7 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.10
     method: POST
-    uri: https://api.openai.com/v1/chat/completions
+    uri: http://localhost:8000/v1/proxy/chat/completions
   response:
     body:
       string: 'data: {"id":"chatcmpl-CZR0zJXGi0lsnYkPoiga2R6HChxps","object":"chat.completion.chunk","created":1762561361,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"logprobs":null,"finish_reason":null}],"obfuscation":"uoycSw"}
@@ -184,7 +184,7 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.10
     method: POST
-    uri: https://api.openai.com/v1/chat/completions
+    uri: http://localhost:8000/v1/proxy/chat/completions
   response:
     body:
       string: 'data: {"id":"chatcmpl-CZR1mouRDQnH9qWlT2zp6Fs0nW1Uq","object":"chat.completion.chunk","created":1762561410,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_560af6e559","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"logprobs":null,"finish_reason":null}],"obfuscation":"ov7JiI"}
