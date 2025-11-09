@@ -1,7 +1,7 @@
 import { _internalGetGlobalState } from "./logger";
 
-const MAX_FETCH_RETRIES = 10;
-const INITIAL_RETRY_DELAY_MS = 200;
+const MAX_FETCH_RETRIES = 8;
+const INITIAL_RETRY_DELAY_MS = 250;
 
 const sleep = (ms: number) =>
   new Promise((resolve) => {
@@ -26,7 +26,6 @@ export class ScorerContext {
   private readonly rootSpanId: string;
 
   constructor({ experimentId, logsId, rootSpanId }: ScorerContextOptions) {
-    console.log("Creating ScorerContext");
     this.experimentId = experimentId;
     this.logsId = logsId;
     this.rootSpanId = rootSpanId;
@@ -75,8 +74,13 @@ export class ScorerContext {
 
       const payload = await response.json();
       const rows = payload?.data ?? [];
-      console.log(rows.length);
-      if (rows.length > 0 || attempt === MAX_FETCH_RETRIES - 1) {
+      const freshness = payload?.freshness_state;
+      const isFresh =
+        freshness?.last_processed_xact_id != null &&
+        freshness?.last_processed_xact_id ===
+          freshness?.last_considered_xact_id;
+
+      if ((rows.length > 0 && isFresh) || attempt === MAX_FETCH_RETRIES - 1) {
         return rows;
       }
 
