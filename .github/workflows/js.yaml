@@ -38,40 +38,38 @@ jobs:
         shell: bash
         run: make js-verify-ci
 
-      # Upload build artifacts for Node 22 on Ubuntu for testing
       - name: Determine artifact name
-        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         id: artifact
         env:
-          ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}-${{ matrix.node-version }}-dist
+          ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}
         run: |
           echo "Artifact: $ARTIFACT_NAME"
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
       - name: Prepare artifact
-        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         id: prepare_artifact
         working-directory: js
+        shell: bash
         run: |
           PACKED_TARBALL=$(npm pack --pack-destination dist)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
-        if: matrix.node-version == '22' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact.outputs.name }}
+          name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
           path: js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
           retention-days: 1
 
   integration-tests:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
-        integration:
-          - otel
-          - span
+        integration: [otel, span]
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
 
     steps:
       - name: Checkout repository
@@ -83,12 +81,13 @@ jobs:
       - name: Backup original integration package manifests
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          cp package.json package.json.bak
+          npm ci
+          npm run backup
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.build.outputs.artifact-name }}
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -96,14 +95,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          ls ../../artifacts
-          TAR_FILE=$(find ../../artifacts -name "braintrust-*.tgz" -print0 | xargs -0 ls -t | head -n1)
-          npm install "file:$TAR_FILE"
+          npm run install-build
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
@@ -111,16 +108,13 @@ jobs:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          npm cache clean --force
-          rm -rf node_modules package-lock.json
-          npm install --force
+          npm ci
           npm start
 
       - name: Enable ESM for integrations tests
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          jq '. + {"type":"module"}' package.json > package.temp.json
-          mv package.temp.json package.json
+          npm run enable-esm
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
@@ -128,13 +122,11 @@ jobs:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          npm cache clean --force
-          rm -rf node_modules package-lock.json
-          npm install --force
+          npm ci
           npm start
 
       - name: Restore original package.json files
         if: always()
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          mv package.json.bak package.json
+           npm run restore
