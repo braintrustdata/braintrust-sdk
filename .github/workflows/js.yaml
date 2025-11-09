@@ -129,4 +129,4 @@ jobs:
         if: always()
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-           npm run restore
+          npm run restore
