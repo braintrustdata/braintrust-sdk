@@ -107,13 +107,14 @@ jobs:
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
+        env:
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
           npm cache clean --force
           rm -rf node_modules package-lock.json
           npm install --force
-          npx vitest run verify_cjs.test.ts
-          npm list braintrust
-          npm test
+          npm start
 
       - name: Enable ESM for integrations tests
         working-directory: js/integrations/${{ matrix.integration }}
@@ -123,12 +124,14 @@ jobs:
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
+        env:
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
           npm cache clean --force
           rm -rf node_modules package-lock.json
           npm install --force
-          npx vitest run verify_esm.test.ts
-          npm test
+          npm start
 
       - name: Restore original package.json files
         if: always()
