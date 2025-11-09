@@ -1,5 +1,9 @@
 import { defineConfig } from "tsup";
 
+/**
+ * This banner is used to support node.js require() in ESM modules.
+ * It is required for the Otel available check to work in ESM modules.
+ */
 const esmNodeSupportBanner = {
   js: `
 import { createRequire as topLevelCreateRequire } from 'module';
