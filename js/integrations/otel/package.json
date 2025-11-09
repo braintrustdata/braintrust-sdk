@@ -2,10 +2,9 @@
     "name": "braintrust-otel-example",
     "version": "1.0.0",
     "description": "Integration tests for Braintrust with OpenTelemetry NodeSDK",
-    "main": "nodesdk_example.ts",
+    "main": "otel_example.ts",
     "scripts": {
-      "start": "tsx otel_example.ts",
-      "test": "vitest run --exclude verify_cjs.test.ts --exclude verify_esm.test.ts"
+      "start": "tsx otel_example.ts"
     },
     "dependencies": {
         "@opentelemetry/api": "^1.9.0",
@@ -16,12 +15,11 @@
         "@opentelemetry/sdk-trace-base": "^2.0.1",
         "@opentelemetry/sdk-trace-node": "^2.0.1",
         "@opentelemetry/semantic-conventions": "^1.36.0",
-        "braintrust": "file:../../artifacts"
+        "braintrust": "latest"
     },
     "devDependencies": {
       "tsx": "^4.19.2",
       "@types/node": "^20.10.5",
-      "typescript": "^5.4.4",
-      "vitest": "^2.1.9" 
+      "typescript": "^5.4.4"
     }
   }
