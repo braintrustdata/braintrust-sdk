@@ -111,14 +111,11 @@ jobs:
           cat otel/package.json
           cat span/package.json
 
-      - name: Run CJS check for ${{ matrix.integration }}
-        working-directory: js/integrations/${{ matrix.integration }}
-        run: ../../../scripts/verify_cjs.sh
-
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          npm install
+          npm install --force
+          npx vitest run ../../../scripts/verify_cjs.test.mjs
           npm list braintrust
           npm test
 
@@ -130,14 +127,11 @@ jobs:
           jq '. + {"type":"module"}' span/package.json > span/package.temp.json
           mv span/package.temp.json span/package.json
 
-      - name: Run ESM check for ${{ matrix.integration }}
-        working-directory: js/integrations/${{ matrix.integration }}
-        run: ../../../scripts/verify_esm.sh
-
       - name: Run integration test (ESM) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          npm install
+          npm install --force
+          npx vitest run ../../../scripts/verify_esm.test.mjs
           npm test
 
       - name: Restore original package.json files
