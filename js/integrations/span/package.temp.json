@@ -5,15 +5,15 @@
   "main": "nodesdk_example.ts",
   "scripts": {
     "start": "tsx simple_span_example.ts",
-    "test": "vitest run --exclude verify_cjs.test.ts --exclude verify_esm.test.ts"
+    "test": "vitest run"
   },
   "dependencies": {
-    "braintrust": "file:../../artifacts"
+    "braintrust": "file:../testing"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
     "@types/node": "^20.10.5",
     "typescript": "^5.4.4",
-    "vitest": "^2.1.9" 
+    "vitest": "^2.1.9"
   }
 }
