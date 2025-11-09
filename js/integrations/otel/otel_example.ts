@@ -27,11 +27,14 @@ type OtelExportPayload = {
 };
 
 function flattenSpans(payloads: OtelExportPayload[]) {
-  return payloads.flatMap((payload) =>
-    payload.resourceSpans?.flatMap((resourceSpan) =>
-      resourceSpan.scopeSpans?.flatMap((scopeSpan) => scopeSpan.spans ?? []) ??
-        [],
-    ) ?? [],
+  return payloads.flatMap(
+    (payload) =>
+      payload.resourceSpans?.flatMap(
+        (resourceSpan) =>
+          resourceSpan.scopeSpans?.flatMap(
+            (scopeSpan) => scopeSpan.spans ?? [],
+          ) ?? [],
+      ) ?? [],
   );
 }
 
@@ -85,7 +88,9 @@ async function main() {
       await tracer.startActiveSpan("otel.example", async (rootSpan) => {
         rootSpan.setAttributes({
           "user.request": "my-request",
-          "request.timestamp": new Date("2025-01-01T00:00:00.000Z").toISOString(),
+          "request.timestamp": new Date(
+            "2025-01-01T00:00:00.000Z",
+          ).toISOString(),
         });
 
         await tracer.startActiveSpan("chat.completion", async (aiSpan) => {
@@ -106,15 +111,24 @@ async function main() {
     await delay(50);
 
     const exportedSpans = flattenSpans(receivedPayloads);
-    assert.ok(exportedSpans.length > 0, "No spans were exported to the collector");
+    assert.ok(
+      exportedSpans.length > 0,
+      "No spans were exported to the collector",
+    );
 
     const names = exportedSpans
       .map((span) => span.name)
       .filter((name): name is string => typeof name === "string");
 
     assert.ok(names.includes("otel.example"), "Root span missing");
-    assert.ok(!names.includes("chat.completion"), "AI span should have been filtered");
-    assert.ok(!names.includes("logging span"), "Logging span should have been filtered");
+    assert.ok(
+      !names.includes("chat.completion"),
+      "AI span should have been filtered",
+    );
+    assert.ok(
+      !names.includes("logging span"),
+      "Logging span should have been filtered",
+    );
   } finally {
     process.env.BRAINTRUST_API_URL = previousApiUrl;
     await new Promise<void>((resolve, reject) => {
