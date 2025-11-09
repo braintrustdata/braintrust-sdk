@@ -31,7 +31,10 @@ async function main() {
 
   const spans = await backgroundLogger.drain();
   try {
-    assert.ok(spans.length > 0, "No spans were captured by the background logger");
+    assert.ok(
+      spans.length > 0,
+      "No spans were captured by the background logger",
+    );
 
     const spanEvent = spans[0];
     assert.equal(spanEvent.input, "What is the capital of France?");
