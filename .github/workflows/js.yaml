@@ -81,10 +81,9 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Backup original integration package manifests
-        working-directory: js/integrations
+        working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          cp otel/package.json otel/package.json.bak
-          cp span/package.json span/package.json.bak
+          cp package.json package.json.bak
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -99,44 +98,40 @@ jobs:
         with:
           node-version: 22
 
-      - name: Temporarily point braintrust dependency to local build
-        working-directory: js/integrations
+      - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
+        working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          ls ../artifacts
-          TAR_FILE=$(ls -t ../artifacts/braintrust-*.tgz | head -n1)
-          jq --arg path "file:../../artifacts/$TAR_FILE" '.dependencies.braintrust = $path' otel/package.json > otel/package.temp.json
-          mv otel/package.temp.json otel/package.json
-          jq --arg path "file:../../artifacts/$TAR_FILE" '.dependencies.braintrust = $path' span/package.json > span/package.temp.json
-          mv span/package.temp.json span/package.json
-          cat otel/package.json
-          cat span/package.json
+          ls ../../artifacts
+          TAR_FILE=$(find ../../artifacts -name "braintrust-*.tgz" -print0 | xargs -0 ls -t | head -n1)
+          npm install "file:$TAR_FILE"
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
           npm install --force
-          npx vitest run ../../../scripts/verify_cjs.test.mjs
+          npx vitest run verify_cjs.test.ts
           npm list braintrust
           npm test
 
       - name: Enable ESM for integrations tests
-        working-directory: js/integrations
+        working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          jq '. + {"type":"module"}' otel/package.json > otel/package.temp.json
-          mv otel/package.temp.json otel/package.json
-          jq '. + {"type":"module"}' span/package.json > span/package.temp.json
-          mv span/package.temp.json span/package.json
+          jq '. + {"type":"module"}' package.json > package.temp.json
+          mv package.temp.json package.json
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
         working-directory: js/integrations/${{ matrix.integration }}
         run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
           npm install --force
-          npx vitest run ../../../scripts/verify_esm.test.mjs
+          npx vitest run verify_esm.test.ts
           npm test
 
       - name: Restore original package.json files
         if: always()
-        working-directory: js/integrations
+        working-directory: js/integrations/${{ matrix.integration }}
         run: |
-          mv otel/package.json.bak otel/package.json
-          mv span/package.json.bak span/package.json
+          mv package.json.bak package.json
