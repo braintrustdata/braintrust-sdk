@@ -1,21 +1,16 @@
-import { defineConfig, type Options } from "tsup";
+import { defineConfig } from "tsup";
 
 const esmNodeSupportBanner = {
-  js: `import { fileURLToPath } from 'url';
+  js: `
 import { createRequire as topLevelCreateRequire } from 'module';
-import _nPath from 'path'
-const require = topLevelCreateRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = _nPath.dirname(__filename);`,
+const require = topLevelCreateRequire(import.meta.url);`,
 };
 
-export default defineConfig((options: Options) => {
-  const isEsm = options.format === "esm";
-  const banner = isEsm ? esmNodeSupportBanner : undefined;
+export default defineConfig(() => {
   return [
     {
       entry: ["src/index.ts"],
-      format: ["cjs", "esm"],
+      format: ["esm"],
       outDir: "dist",
       external: ["zod"],
       dts: {
@@ -24,13 +19,27 @@ export default defineConfig((options: Options) => {
           skipLibCheck: true,
         },
       },
-      banner,
+      banner: esmNodeSupportBanner,
+      splitting: true,
+      clean: true,
+    },
+    {
+      entry: ["src/index.ts"],
+      format: ["cjs"],
+      outDir: "dist",
+      external: ["zod"],
+      dts: {
+        // Split DTS generation to reduce memory usage
+        compilerOptions: {
+          skipLibCheck: true,
+        },
+      },
       splitting: true,
       clean: true,
     },
     {
       entry: ["src/browser.ts"],
-      format: ["cjs", "esm"],
+      format: ["esm"],
       outDir: "dist",
       dts: {
         // Split DTS generation to reduce memory usage
@@ -38,7 +47,20 @@ export default defineConfig((options: Options) => {
           skipLibCheck: true,
         },
       },
-      banner,
+      banner: esmNodeSupportBanner,
+      splitting: true,
+      clean: false,
+    },
+    {
+      entry: ["src/browser.ts"],
+      format: ["cjs"],
+      outDir: "dist",
+      dts: {
+        // Split DTS generation to reduce memory usage
+        compilerOptions: {
+          skipLibCheck: true,
+        },
+      },
       splitting: true,
       clean: false,
     },
@@ -53,7 +75,7 @@ export default defineConfig((options: Options) => {
     },
     {
       entry: ["dev/index.ts"],
-      format: ["cjs", "esm"],
+      format: ["esm"],
       outDir: "dev/dist",
       external: ["esbuild", "prettier", "typescript"],
       dts: {
@@ -62,13 +84,27 @@ export default defineConfig((options: Options) => {
           skipLibCheck: true,
         },
       },
-      banner,
+      banner: esmNodeSupportBanner,
+      splitting: true,
+      clean: true,
+    },
+    {
+      entry: ["dev/index.ts"],
+      format: ["cjs"],
+      outDir: "dev/dist",
+      external: ["esbuild", "prettier", "typescript"],
+      dts: {
+        // Split DTS generation to reduce memory usage
+        compilerOptions: {
+          skipLibCheck: true,
+        },
+      },
       splitting: true,
       clean: true,
     },
     {
       entry: ["util/index.ts"],
-      format: ["cjs", "esm"],
+      format: ["esm"],
       outDir: "util/dist",
       external: ["esbuild", "prettier", "typescript"],
       dts: {
@@ -77,7 +113,21 @@ export default defineConfig((options: Options) => {
           skipLibCheck: true,
         },
       },
-      banner,
+      banner: esmNodeSupportBanner,
+      splitting: true,
+      clean: true,
+    },
+    {
+      entry: ["util/index.ts"],
+      format: ["cjs"],
+      outDir: "util/dist",
+      external: ["esbuild", "prettier", "typescript"],
+      dts: {
+        // Split DTS generation to reduce memory usage
+        compilerOptions: {
+          skipLibCheck: true,
+        },
+      },
       splitting: true,
       clean: true,
     },
