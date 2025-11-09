@@ -15,6 +15,8 @@ import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
+import { ScorerContext } from "./scorer-context";
+export { ScorerContext } from "./scorer-context";
 import {
   BaseMetadata,
   BraintrustState,
@@ -161,6 +163,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
+  scorerContext?: ScorerContext;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -873,6 +876,18 @@ async function runEvaluatorInternal(
     );
 
   progressReporter.start(evaluator.evalName, dataWithTrials.length);
+
+  const experimentIdPromise: Promise<string | undefined> | undefined =
+    experiment
+      ? (async () => {
+          try {
+            return await experiment.id;
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined;
+
   interface EvalResult {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any;
@@ -924,6 +939,12 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
+        const scorerContext = new ScorerContext({
+          experimentId: experimentIdPromise
+            ? await experimentIdPromise
+            : undefined,
+          rootSpanId: rootSpan.rootSpanId,
+        });
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
@@ -991,6 +1012,7 @@ async function runEvaluatorInternal(
             expected: "expected" in datum ? datum.expected : undefined,
             metadata,
             output,
+            scorerContext,
           };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
