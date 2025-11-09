@@ -76,16 +76,22 @@ test-claude-agent-sdk:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed
-
+# test-otel-installed tests with OpenTelemetry installed
 test-otel-installed:
 	pnpm prune
 	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
-# test-otel only runs with dependencies installed
-# otel-no-deps.test.ts is part of core tests and handles both cases automatically
-test-otel: test-otel-installed
+# test-otel-missing tests with OpenTelemetry removed from all workspaces
+test-otel-missing:
+	pnpm prune
+	@echo "Manually removing OpenTelemetry from workspace..."
+	@ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo .); \
+	find $$ROOT -type d -path "*/node_modules/@opentelemetry*" -prune -exec rm -rf {} +
+	pnpm test:otel-no-deps
+	# restore workspace
+	pnpm install
+
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
