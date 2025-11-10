@@ -42,7 +42,6 @@ const config = {
       "src/wrappers/ai-sdk/**",
       "src/wrappers/mastra/**",
       "src/wrappers/claude-agent-sdk/**",
-      "smoke/**",
     ],
     // Additional test environment configuration
     watchExclude: [
