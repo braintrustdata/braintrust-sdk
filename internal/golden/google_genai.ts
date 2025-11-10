@@ -361,7 +361,7 @@ async function testToolUse() {
         parametersJsonSchema: {
           type: "object",
           properties: {
-            location: {
+            city_and_state: {
               type: "string",
               description: "The city and state, e.g. San Francisco, CA",
             },
@@ -371,7 +371,7 @@ async function testToolUse() {
               description: "The unit of temperature",
             },
           },
-          required: ["location"],
+          required: ["city_and_state"],
         },
       };
 

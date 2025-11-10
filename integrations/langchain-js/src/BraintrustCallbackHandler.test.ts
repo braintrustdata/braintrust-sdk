@@ -8,7 +8,7 @@ import { http, HttpResponse } from "msw";
 import { ReadableStream } from "stream/web";
 import { describe, expect, it } from "vitest";
 import { z } from "zod/v3";
-import { zodToJsonSchema } from "zod-to-json-schema";
+
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import {
   CHAT_BEAR_JOKE,
@@ -307,6 +307,77 @@ it("should handle streaming LLM calls", async () => {
   expect(chunks.length).toBeGreaterThan(0);
 });
 
+it("should track time-to-first-token in streaming calls", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post("https://api.openai.com/v1/chat/completions", async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const chunks = CHAT_STREAM_PARROT;
+
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(chunk + "\n\n"));
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Transfer-Encoding": "chunked",
+        },
+      });
+    }),
+
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["stream-span-id"]);
+    }),
+  );
+
+  const prompt = ChatPromptTemplate.fromTemplate("Count from 1 to 5.");
+  const model = new ChatOpenAI({
+    model: "gpt-4o-mini",
+    streaming: true,
+  });
+
+  const chain = prompt.pipe(model);
+
+  const chunks = [];
+  const stream = await chain.stream({}, { callbacks: [handler] });
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+
+  // Verify we got streaming chunks
+  expect(chunks.length).toBeGreaterThan(0);
+
+  await flush();
+
+  const { spans } = logsToSpans(logs);
+
+  // Find the LLM span
+  const llmSpan = spans.find(
+    (s) =>
+      s.span_attributes?.name === "ChatOpenAI" &&
+      s.span_attributes?.type === "llm",
+  );
+
+  expect(llmSpan).toBeDefined();
+  expect(llmSpan?.metrics).toMatchObject({
+    time_to_first_token: expect.any(Number),
+    prompt_tokens: expect.any(Number),
+    completion_tokens: expect.any(Number),
+    total_tokens: expect.any(Number),
+  });
+
+  // Verify TTFT is a reasonable value (positive and less than total time)
+  expect(llmSpan?.metrics?.time_to_first_token).toBeGreaterThan(0);
+});
+
 it("should handle multi-step chains with memory", async () => {
   const logs: LogsRequest[] = [];
 
@@ -574,7 +645,7 @@ it("should handle parallel runnable execution", async () => {
 
   await flush();
 
-  const { spans, root_span_id, root_run_id } = logsToSpans(logs);
+  const { spans, root_span_id } = logsToSpans(logs);
 
   // Check that we have the expected structure
   expect(spans).toMatchObject([

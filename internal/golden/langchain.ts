@@ -718,7 +718,7 @@ async function testToolUse() {
         name: "get_weather",
         description: "Get the current weather for a location",
         schema: z.object({
-          location: z
+          city_and_state: z
             .string()
             .describe("The city and state, e.g. San Francisco, CA"),
           unit: z
@@ -727,8 +727,8 @@ async function testToolUse() {
             .default("celsius")
             .describe("The unit of temperature"),
         }),
-        func: async ({ location, unit }) => {
-          return `22 degrees ${unit} and sunny in ${location}`;
+        func: async ({ city_and_state, unit }) => {
+          return `22 degrees ${unit} and sunny in ${city_and_state}`;
         },
       });
 

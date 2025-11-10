@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -71,7 +71,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@ai-sdk/anthropic": "^1.0.5",
+    "@ai-sdk/anthropic": "2.0.37",
     "@anthropic-ai/sdk": "^0.60.0",
     "@google/genai": "^1.25.0",
     "@jest/globals": "^29.7.0",
@@ -98,8 +98,8 @@
     "tinybench": "^4.0.1",
     "ts-jest": "^29.1.4",
     "tsup": "^8.3.5",
-    "typedoc": "^0.28.5",
-    "typedoc-plugin-markdown": "^4.6.4",
+    "typedoc": "^0.25.13",
+    "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^2.1.9"

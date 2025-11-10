@@ -417,6 +417,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.time_to_first_token > 0);
   });
 
   test("openai.responses.parse", async (context) => {

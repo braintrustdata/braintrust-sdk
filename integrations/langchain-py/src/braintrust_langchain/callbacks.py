@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from typing import (
     Any,
     Dict,
@@ -64,6 +65,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         # Set run_inline=True to avoid thread executor in async contexts
         # This ensures memory logger context is preserved
         self.run_inline = True
+
+        self._start_times: Dict[UUID, float] = {}
+        self._first_token_times: Dict[UUID, float] = {}
+        self._ttft_ms: Dict[UUID, float] = {}
 
     def _start_span(
         self,
@@ -229,6 +234,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
 
+        self._start_times.pop(run_id, None)
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
+
     def on_chain_error(
         self,
         error: BaseException,
@@ -307,8 +316,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         metadata = metadata or {}
         resolved_name = (
-            metadata.get("langgraph_node")
-            or name
+            name
+            or metadata.get("langgraph_node")
             or serialized.get("name")
             or last_item(serialized.get("id") or [])
             or "Chain"
@@ -353,8 +362,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
+        self._start_times[run_id] = time.perf_counter()
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
 
+        name = name or serialized.get("name") or last_item(serialized.get("id") or []) or "LLM"
         self._start_span(
             parent_run_id,
             run_id,
@@ -385,8 +397,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         invocation_params: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
-        invocation_params = invocation_params or {}
+        self._start_times[run_id] = time.perf_counter()
+        self._first_token_times.pop(run_id, None)
+        self._ttft_ms.pop(run_id, None)
 
+        invocation_params = invocation_params or {}
         self._start_span(
             parent_run_id,
             run_id,
@@ -420,7 +435,15 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             return
 
         metrics = _get_metrics_from_response(response)
+
+        ttft = self._ttft_ms.pop(run_id, None)
+        if ttft is not None:
+            metrics["time_to_first_token"] = ttft
+
         model_name = _get_model_name_from_response(response)
+
+        self._start_times.pop(run_id, None)
+        self._first_token_times.pop(run_id, None)
 
         self._end_span(
             run_id,
@@ -450,6 +473,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             parent_run_id,
             run_id,
             name=name or serialized.get("name") or last_item(serialized.get("id") or []) or "Tool",
+            type=SpanTypeAttribute.TOOL,
             event={
                 "input": inputs or safe_parse_serialized_json(input_str),
                 "tags": tags,
@@ -523,7 +547,12 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        pass
+        if run_id not in self._first_token_times:
+            now = time.perf_counter()
+            self._first_token_times[run_id] = now
+            start = self._start_times.get(run_id)
+            if start is not None:
+                self._ttft_ms[run_id] = now - start
 
     def on_text(
         self,

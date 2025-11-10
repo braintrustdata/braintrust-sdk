@@ -48,10 +48,9 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
+from braintrust.functions.stream import BraintrustStream
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-from braintrust.functions.stream import BraintrustStream
 
 from . import context, id_gen
 from .bt_json import bt_dumps
@@ -349,7 +348,9 @@ class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
-        self.current_logger: Optional[Logger] = None
+        self.current_logger: contextvars.ContextVar[Optional[Logger]] = contextvars.ContextVar(
+            "braintrust_current_logger", default=None
+        )
         self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
             "braintrust_current_parent", default=None
         )
@@ -419,7 +420,7 @@ class BraintrustState:
     def reset_parent_state(self):
         # reset possible parent state for tests
         self.current_experiment = None
-        self.current_logger = None
+        self.current_logger.set(None)
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
 
@@ -1598,7 +1599,7 @@ def init_logger(
     if set_current:
         if _state is None:
             raise RuntimeError("_state is None in init_logger. This should never happen.")
-        _state.current_logger = ret
+        _state.current_logger.set(ret)
     return ret
 
 
@@ -1900,7 +1901,7 @@ def current_experiment() -> Optional["Experiment"]:
 def current_logger() -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
 
-    return _state.current_logger
+    return _state.current_logger.get()
 
 
 def current_span() -> Span:
@@ -4006,7 +4007,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger
+            cur_logger = self.state.current_logger.get()
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()

@@ -354,7 +354,7 @@ async function testToolUse() {
             parameters: {
               type: "object",
               properties: {
-                location: {
+                city_and_state: {
                   type: "string",
                   description: "The city and state, e.g. San Francisco, CA",
                 },
@@ -364,7 +364,7 @@ async function testToolUse() {
                   description: "The unit of temperature",
                 },
               },
-              required: ["location"],
+              required: ["city_and_state"],
             },
           },
         },
@@ -539,6 +539,352 @@ async function testReasoning() {
   );
 }
 
+// Test 17: Embeddings
+async function testEmbeddings() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 19: Embeddings ===");
+
+      // Single embedding
+      const response = await client.embeddings.create({
+        model: "text-embedding-3-small",
+        input: "The quick brown fox jumps over the lazy dog",
+      });
+
+      console.log(
+        `Embedding dimensions: ${response.data[0]?.embedding.length}`,
+      );
+      console.log(`First 5 values: ${response.data[0]?.embedding.slice(0, 5)}`);
+      console.log(`Tokens used: ${response.usage.total_tokens}`);
+
+      // Batch embeddings
+      const batchResponse = await client.embeddings.create({
+        model: "text-embedding-3-small",
+        input: [
+          "Document one content",
+          "Document two content",
+          "Document three content",
+        ],
+      });
+
+      console.log(`\nBatch embeddings created: ${batchResponse.data.length}`);
+      batchResponse.data.forEach((item, i) => {
+        console.log(`Embedding ${i}: ${item.embedding.length} dimensions`);
+      });
+
+      return response;
+    },
+    { name: "test_embeddings" },
+  );
+}
+
+// Test 18: Response format (JSON schema)
+async function testResponseFormat() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 20: Response Format (JSON Schema) ===");
+
+      const response = await client.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 300,
+        messages: [
+          {
+            role: "system",
+            content: "You extract structured information from user queries.",
+          },
+          {
+            role: "user",
+            content:
+              "Alice is 30 years old and lives in New York. She works as a software engineer.",
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "person_info",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                age: { type: "number" },
+                city: { type: "string" },
+                occupation: { type: "string" },
+              },
+              required: ["name", "age", "city", "occupation"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      console.log("Structured JSON response:");
+      console.log(response.choices[0].message.content);
+
+      // Parse and validate
+      const parsed = JSON.parse(response.choices[0].message.content!);
+      console.log("\nParsed object:");
+      console.log(`Name: ${parsed.name}`);
+      console.log(`Age: ${parsed.age}`);
+      console.log(`City: ${parsed.city}`);
+      console.log(`Occupation: ${parsed.occupation}`);
+
+      return response;
+    },
+    { name: "test_response_format" },
+  );
+}
+
+// Test 19: Multiple completions (n > 1)
+async function testMultipleCompletions() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 21: Multiple Completions ===");
+
+      const response = await client.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 100,
+        n: 3,
+        messages: [
+          {
+            role: "user",
+            content: "Tell me a one-sentence joke about programming.",
+          },
+        ],
+      });
+
+      console.log(`Generated ${response.choices.length} completions:\n`);
+      response.choices.forEach((choice, i) => {
+        console.log(`Completion ${i + 1}:`);
+        console.log(choice.message.content);
+        console.log(`Finish reason: ${choice.finish_reason}\n`);
+      });
+
+      console.log(`Total tokens used: ${response.usage?.total_tokens}`);
+
+      return response;
+    },
+    { name: "test_multiple_completions" },
+  );
+}
+
+// Test 20: Error handling
+async function testErrorHandling() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 22: Error Handling ===");
+
+      // Test 1: Invalid image URL (404)
+      await traced(
+        async () => {
+          console.log("\n--- Test 1: Invalid Image URL ---");
+          try {
+            await client.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 100,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: "https://example.com/nonexistent-image-404.jpg",
+                      },
+                    },
+                    { type: "text", text: "What's in this image?" },
+                  ],
+                },
+              ],
+            });
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            if (error instanceof OpenAI.APIError) {
+              console.log("Caught image URL error:");
+              console.log(`  Status: ${error.status}`);
+              console.log(`  Message: ${error.message}`);
+            } else {
+              throw error;
+            }
+          }
+        },
+        { name: "test_error_invalid_image_url" },
+      );
+
+      // Test 2: Tool choice for non-existent function
+      await traced(
+        async () => {
+          console.log(
+            "\n--- Test 2: Tool Choice for Non-Existent Function ---",
+          );
+          try {
+            await client.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 100,
+              messages: [
+                { role: "user", content: "What's the weather in Paris?" },
+              ],
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "get_weather",
+                    description: "Get weather for a location",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        location: { type: "string" },
+                      },
+                      required: ["location"],
+                    },
+                  },
+                },
+              ],
+              tool_choice: {
+                type: "function",
+                function: { name: "non_existent_function" },
+              },
+            });
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            if (error instanceof OpenAI.APIError) {
+              console.log("Caught tool choice error:");
+              console.log(`  Status: ${error.status}`);
+              console.log(`  Message: ${error.message}`);
+            } else {
+              throw error;
+            }
+          }
+        },
+        { name: "test_error_nonexistent_tool" },
+      );
+
+      // Test 3: Tool call ID mismatch
+      await traced(
+        async () => {
+          console.log("\n--- Test 3: Tool Call ID Mismatch ---");
+          try {
+            await client.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 100,
+              messages: [
+                { role: "user", content: "Calculate 5 + 3" },
+                {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: "call_abc123",
+                      type: "function",
+                      function: {
+                        name: "calculate",
+                        arguments: '{"a": 5, "b": 3, "operation": "add"}',
+                      },
+                    },
+                  ],
+                },
+                {
+                  role: "tool",
+                  tool_call_id: "call_wrong_id",
+                  content: "8",
+                },
+              ],
+            });
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            if (error instanceof OpenAI.APIError) {
+              console.log("Caught tool call ID mismatch error:");
+              console.log(`  Status: ${error.status}`);
+              console.log(`  Message: ${error.message}`);
+            } else {
+              throw error;
+            }
+          }
+        },
+        { name: "test_error_tool_call_id_mismatch" },
+      );
+
+      // Test 4: Corrupted base64 image data
+      await traced(
+        async () => {
+          console.log("\n--- Test 4: Corrupted Base64 Image ---");
+          try {
+            await client.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 100,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: "data:image/png;base64,INVALID_BASE64_DATA!!!",
+                      },
+                    },
+                    { type: "text", text: "What's in this image?" },
+                  ],
+                },
+              ],
+            });
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            if (error instanceof OpenAI.APIError) {
+              console.log("Caught corrupted image error:");
+              console.log(`  Status: ${error.status}`);
+              console.log(`  Message: ${error.message}`);
+            } else {
+              throw error;
+            }
+          }
+        },
+        { name: "test_error_corrupted_base64_image" },
+      );
+
+      // Test 5: Invalid JSON schema in response_format
+      await traced(
+        async () => {
+          console.log("\n--- Test 5: Invalid JSON Schema ---");
+          try {
+            await client.chat.completions.create({
+              model: "gpt-4o",
+              max_tokens: 100,
+              messages: [{ role: "user", content: "Generate a user profile" }],
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "invalid_schema",
+                  strict: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      name: { type: "invalid_type" },
+                    },
+                    required: ["nonexistent_field"],
+                  },
+                },
+              },
+            });
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            if (error instanceof OpenAI.APIError) {
+              console.log("Caught invalid schema error:");
+              console.log(`  Status: ${error.status}`);
+              console.log(`  Message: ${error.message}`);
+            } else {
+              throw error;
+            }
+          }
+        },
+        { name: "test_error_invalid_json_schema" },
+      );
+
+      console.log("\nError handling tests completed");
+    },
+    { name: "test_error_handling" },
+  );
+}
+
 // Run all tests
 async function runAllTests() {
   const tests = [
@@ -558,6 +904,10 @@ async function runAllTests() {
     testToolUse,
     testToolUseWithResult,
     testReasoning,
+    testEmbeddings,
+    testResponseFormat,
+    testMultipleCompletions,
+    testErrorHandling,
   ];
 
   for (const test of tests) {

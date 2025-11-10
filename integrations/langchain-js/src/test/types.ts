@@ -20,6 +20,7 @@ type LogRow = {
   input?: Record<string, unknown>;
   metadata?: Metadata;
   output?: Output;
+  metrics?: Record<string, number>;
   span_id: string;
   root_span_id: string;
   span_parents: string[];

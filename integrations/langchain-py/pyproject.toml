@@ -1,6 +1,6 @@
 [project]
 name = "braintrust-langchain"
-version = "0.1.2"
+version = "0.1.5"
 description = "Integration for LangChain and Braintrust Tracing"
 readme = "README.md"
 requires-python = ">=3.9"

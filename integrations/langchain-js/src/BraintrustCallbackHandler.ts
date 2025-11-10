@@ -50,6 +50,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
   private rootSpanContext: Map<string, Span>;
   private capturedContext?: Span;
   private options: BraintrustCallbackHandlerOptions<IsAsyncFlush>;
+  private startTimes: Map<string, number>;
+  private firstTokenTimes: Map<string, number>;
+  private ttftMs: Map<string, number>;
 
   constructor(
     options?: Partial<BraintrustCallbackHandlerOptions<IsAsyncFlush>>,
@@ -58,6 +61,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.skippedRuns = new Set();
     this.spans = new Map();
     this.rootSpanContext = new Map();
+    this.startTimes = new Map();
+    this.firstTokenTimes = new Map();
+    this.ttftMs = new Map();
 
     this.parent = options?.parent;
 
@@ -268,6 +274,15 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     const metrics = getMetricsFromResponse(output);
     const modelName = getModelNameFromResponse(output);
 
+    const ttft = this.ttftMs.get(runId);
+    if (ttft !== undefined) {
+      metrics.time_to_first_token = ttft;
+    }
+
+    this.startTimes.delete(runId);
+    this.firstTokenTimes.delete(runId);
+    this.ttftMs.delete(runId);
+
     this.endSpan({
       runId,
       output,
@@ -294,6 +309,10 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     metadata?: Record<string, unknown>,
     runName?: string,
   ): Promise<void> {
+    this.startTimes.set(runId, Date.now());
+    this.firstTokenTimes.delete(runId);
+    this.ttftMs.delete(runId);
+
     this.startSpan({
       runId,
       parentRunId,
@@ -518,6 +537,24 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       error: err,
       tags,
     });
+  }
+
+  async handleLLMNewToken(
+    token: string,
+    idx: { prompt: number; completion: number },
+    runId: string,
+    parentRunId?: string,
+    tags?: string[],
+  ): Promise<void> {
+    if (!this.firstTokenTimes.has(runId)) {
+      const now = Date.now();
+      this.firstTokenTimes.set(runId, now);
+      const start = this.startTimes.get(runId);
+      if (start !== undefined) {
+        // Convert milliseconds to seconds to match Python behavior
+        this.ttftMs.set(runId, (now - start) / 1000);
+      }
+    }
   }
 }
 

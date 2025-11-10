@@ -16,6 +16,5 @@
     "allowSyntheticDefaultImports": true,
     "outDir": "dist",
     "rootDir": "src"
-  },
-  "include": ["."]
+  }
 }
