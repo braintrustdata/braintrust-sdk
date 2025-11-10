@@ -5,10 +5,10 @@
     "main": "otel_example.ts",
     "scripts": {
       "start": "tsx otel_example.ts",
-      "backup": "tsx ../scripts/backup-and-restore.ts backup",
-      "restore": "tsx ../scripts/backup-and-restore.ts restore",
-      "enable-esm": "tsx ../scripts/enable-esm.ts",
-      "install-build": "tsx ../scripts/install-build.ts ../../artifacts"
+      "backup": "tsx ../../backup-and-restore.ts backup",
+      "restore": "tsx ../../backup-and-restore.ts restore",
+      "enable-esm": "tsx ../../enable-esm.ts",
+      "install-build": "tsx ../../install-build.ts ../../../artifacts"
     },
     "dependencies": {
         "@opentelemetry/api": "^1.9.0",
