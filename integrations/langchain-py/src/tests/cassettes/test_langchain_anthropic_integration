@@ -103,4 +103,198 @@ interactions:
     status:
       code: 200
       message: OK
+- request:
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"What is 1 + 2?"}],"model":"claude-sonnet-4-20250514"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '110'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - Anthropic/Python 0.68.0
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 0.68.0
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.10
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//dJDLasMwEEV/xdxtFfAjCa2g29JVoetShJCmsRt75Eij9BH878WhpqSl
+        q4E5Zx7cE4bgqYeG6232tEqBmWS1XtVlvSk31RoKnYfGkHamrB5z87bPfPfwGa+Ph9f7401wL1so
+        yMdIs0Up2R1BIYZ+btiUuiSWBQousBAL9NNp8YXeZ3IuGlVxVdTFbdFgelZIEkYTyabA0CD2RnJk
+        fINEh0zsCJpz3yvk8119QsdjFiNhT5ygq62Cs64l4yJZ6QKbS6FceCTr/2PL7LyfxpYGirY3m+Gv
+        /0Or9jedFEKWi+8ahUTx2Dky0lGExhyWt9Fjmr4AAAD//wMARZkZqp0BAAA=
+    headers:
+      CF-RAY:
+      - 99b0eab2783f1758-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Sat, 08 Nov 2025 00:22:36 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Robots-Tag:
+      - none
+      anthropic-organization-id:
+      - 27796668-7351-40ac-acc4-024aee8995a5
+      anthropic-ratelimit-input-tokens-limit:
+      - '3000000'
+      anthropic-ratelimit-input-tokens-remaining:
+      - '3000000'
+      anthropic-ratelimit-input-tokens-reset:
+      - '2025-11-08T00:22:36Z'
+      anthropic-ratelimit-output-tokens-limit:
+      - '600000'
+      anthropic-ratelimit-output-tokens-remaining:
+      - '600000'
+      anthropic-ratelimit-output-tokens-reset:
+      - '2025-11-08T00:22:36Z'
+      anthropic-ratelimit-tokens-limit:
+      - '3600000'
+      anthropic-ratelimit-tokens-remaining:
+      - '3600000'
+      anthropic-ratelimit-tokens-reset:
+      - '2025-11-08T00:22:36Z'
+      cf-cache-status:
+      - DYNAMIC
+      request-id:
+      - req_011CUuU6ZRKcH4CRrH5o4j6b
+      retry-after:
+      - '24'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-envoy-upstream-service-time:
+      - '1694'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"What is 1 + 2?"}],"model":"claude-sonnet-4-20250514"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '110'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - Anthropic/Python 0.68.0
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 0.68.0
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.10
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//dJBNS8QwEIb/SnmvptDudhUCHvQkC4oieBEJIRl3y7aTmkz8Kv3v0sVF
+        VvE0MM8zH7wj+uCpg4brbPZUpsBMUjblolqsqlXdQKH10OjTxlT1fXPxcHXzubwOZ2vKb7fPu7vL
+        9Q4K8jHQbFFKdkNQiKGbGzalNollgYILLMQC/TgefKH3meyLRl2cFIvivFhielJIEgYTyabA0CD2
+        RnJkfINEL5nYETTnrlPI+7t6RMtDFiNhR5yg61MFZ92WjItkpQ1sjoXqwCNZ/x87zM77adhST9F2
+        ZtX/9X9ovf1NJ4WQ5ei7pUKi+No6MtJShMYclrfRY5q+AAAA//8DAAqaanadAQAA
+    headers:
+      CF-RAY:
+      - 99b0ebe2db3d67ca-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Sat, 08 Nov 2025 00:23:24 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Robots-Tag:
+      - none
+      anthropic-organization-id:
+      - 27796668-7351-40ac-acc4-024aee8995a5
+      anthropic-ratelimit-input-tokens-limit:
+      - '3000000'
+      anthropic-ratelimit-input-tokens-remaining:
+      - '3000000'
+      anthropic-ratelimit-input-tokens-reset:
+      - '2025-11-08T00:23:24Z'
+      anthropic-ratelimit-output-tokens-limit:
+      - '600000'
+      anthropic-ratelimit-output-tokens-remaining:
+      - '600000'
+      anthropic-ratelimit-output-tokens-reset:
+      - '2025-11-08T00:23:24Z'
+      anthropic-ratelimit-tokens-limit:
+      - '3600000'
+      anthropic-ratelimit-tokens-remaining:
+      - '3600000'
+      anthropic-ratelimit-tokens-reset:
+      - '2025-11-08T00:23:24Z'
+      cf-cache-status:
+      - DYNAMIC
+      request-id:
+      - req_011CUuUA9cTfN1Yz5PMKHD5d
+      retry-after:
+      - '37'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-envoy-upstream-service-time:
+      - '1556'
+    status:
+      code: 200
+      message: OK
 version: 1
