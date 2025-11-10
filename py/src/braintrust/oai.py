@@ -238,13 +238,15 @@ class ChatCompletionWrapper:
                         {
                             "id": delta["tool_calls"][0]["id"],
                             "type": delta["tool_calls"][0]["type"],
-                            "function": delta["tool_calls"][0]["function"],
+                            "function": {
+                                "name": delta["tool_calls"][0]["function"]["name"],
+                                "arguments": delta["tool_calls"][0]["function"]["arguments"] or "",
+                            },
                         }
                     ]
                 else:
                     # pylint: disable=unsubscriptable-object
-                    arguments = tool_calls[-1]["function"].get("arguments") or ""
-                    tool_calls[-1]["function"]["arguments"] += arguments + delta["tool_calls"][0]["function"]["arguments"]
+                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
         return {
             "metrics": metrics,
