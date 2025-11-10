@@ -15,6 +15,7 @@
     "**/dist/**",
     "**/examples/**",
     "node_modules/**",
+    "**/smoke/**",
     "scripts/**",
     "vendor/**"
   ]
