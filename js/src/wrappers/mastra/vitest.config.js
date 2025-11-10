@@ -45,10 +45,7 @@ const config = {
       "**/dist/**",
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
-    ],
-    deps: {
-      inline: ["@ai-sdk/openai", "ai", "@mastra/core"],
-    },
+    ]
   },
 };
 export default config;
