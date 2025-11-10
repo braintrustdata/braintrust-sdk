@@ -17,7 +17,6 @@
     "ai": "5.0.76",
     "@ai-sdk/openai": "2.0.53",
     "@types/node": "^20.10.5",
-    "braintrust": "file:../../..",
     "dotenv": "^16.4.5",
     "tsx": "^4.20.6",
     "typescript": "5.4.4",

@@ -5,7 +5,7 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: ["zod", "@mastra/core"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {

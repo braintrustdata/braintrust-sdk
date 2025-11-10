@@ -129,6 +129,12 @@
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
-    "zod": "^3.25.34"
+    "zod": "^3.25.34",
+    "@mastra/core": "^0.24.0"
+  },
+  "peerDependenciesMeta": {
+    "@mastra/core": {
+      "optional": true
+    }
   }
 }
