@@ -43,7 +43,7 @@ export class ScorerContext {
    * Fetch all rows for this root span from its parent experiment.
    * Returns an empty array when no experiment is associated with the context.
    */
-  async fetchRootSpanRows(): Promise<any[]> {
+  async getSpans({ spanType }: { spanType: string }): Promise<any[]> {
     if (!this.experimentId) {
       return [];
     }
@@ -57,7 +57,7 @@ export class ScorerContext {
 
     const query = `
       from: experiment('${this.experimentId}')
-      | filter: root_span_id = '${this.rootSpanId}'
+      | filter: root_span_id = '${this.rootSpanId}' ${spanType ? `AND span_attributes.type = '${spanType}'` : ""}
       | select: *
     `;
 
@@ -67,7 +67,7 @@ export class ScorerContext {
         {
           query,
           use_columnstore: false,
-          brainstore_realtime: false,
+          brainstore_realtime: true,
         },
         { headers: { "Accept-Encoding": "gzip" } },
       );
@@ -81,7 +81,16 @@ export class ScorerContext {
           freshness?.last_considered_xact_id;
 
       if ((rows.length > 0 && isFresh) || attempt === MAX_FETCH_RETRIES - 1) {
-        return rows;
+        return rows
+          .filter((row: any) => row.span_attributes?.type !== "score")
+          .map((row: any) => ({
+            input: row.input,
+            output: row.output,
+            metadata: row.metadata,
+            span_id: row.span_id,
+            span_parents: row.span_parents,
+            span_attributes: row.span_attributes,
+          }));
       }
 
       const backoff =
