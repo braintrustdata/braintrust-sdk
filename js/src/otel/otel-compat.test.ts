@@ -113,6 +113,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL tracing with BT logger first", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -155,6 +160,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL tracing with OTEL first", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -187,6 +197,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("BT span without explicit parent inherits from OTEL", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -215,6 +230,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL with startSpan (matching Python pattern)", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -268,6 +288,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("uses OtelContextManager when OTEL enabled", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     // Test that when OTEL is available and env var is set, we get OtelContextManager
     // Note: In test environment, OTEL packages may not be available even though
     // we checked OTEL_AVAILABLE. If the require fails in getContextManager,
@@ -302,6 +327,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("OTEL spans inherit braintrust.parent attribute", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -329,6 +359,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("separate traces remain separate", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
@@ -379,6 +414,11 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("OTEL spans in experiment Eval() inherit experiment_id parent", async () => {
+    if (!OTEL_AVAILABLE) {
+      console.warn("Skipping test: OpenTelemetry not installed");
+      return;
+    }
+
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
