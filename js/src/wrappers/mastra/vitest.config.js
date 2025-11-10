@@ -45,7 +45,7 @@ const config = {
       "**/dist/**",
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
-    ]
+    ],
   },
 };
 export default config;
