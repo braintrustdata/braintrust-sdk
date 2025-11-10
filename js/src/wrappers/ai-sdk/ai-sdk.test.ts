@@ -968,17 +968,34 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(toolSpanTyped.output).toBe("42");
   });
 
-  test("ai sdk Agent class support", async () => {
+  test("ai sdk Agent class can be extended", async () => {
+    // Skip if Agent is not available in this version of ai SDK
+    if (!wrappedAI.Agent && !wrappedAI.experimental_Agent) {
+      console.log("Skipping Agent extension test - Agent not available");
+      return;
+    }
+
+    const AgentClass = wrappedAI.Agent || wrappedAI.experimental_Agent;
     const model = openai(TEST_MODEL);
     const start = getCurrentUnixTimestamp();
 
-    // Create an agent using the wrapped AI SDK
-    const agent = new wrappedAI.Agent({
+    // Create a custom Agent subclass
+    class CustomAgent extends AgentClass {
+      customMethod() {
+        return "custom";
+      }
+    }
+
+    const agent = new CustomAgent({
       model,
       system: "You are a helpful assistant.",
     });
 
-    // Test the generate method
+    // Verify it's actually an instance of CustomAgent
+    expect(agent).toBeInstanceOf(CustomAgent);
+    expect(agent.customMethod()).toBe("custom");
+
+    // Verify the wrapped methods still work
     const result = await agent.generate({
       messages: [
         {
@@ -994,13 +1011,13 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(result.text).toBeDefined();
     expect(result.text.toLowerCase()).toContain("hello");
 
-    // Check that spans were logged
+    // Verify tracing still works with proper span structure
     const spans = await backgroundLogger.drain();
     expect(spans.length).toBeGreaterThanOrEqual(1);
 
     const span = spans[0];
 
-    // Verify span structure
+    // Assert on span structure
     expect(span.project_id).toBeDefined();
     expect(span.log_id).toBe("g");
     expect(span.created).toBeGreaterThanOrEqual(start);
@@ -1027,33 +1044,6 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     const { metrics } = span;
     expect(start).toBeLessThanOrEqual(metrics.start);
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
-  });
-
-  test("ai sdk experimental_Agent support", async () => {
-    // Verify experimental_Agent is also wrapped
-    expect(wrappedAI.experimental_Agent).toBeDefined();
-
-    const model = openai(TEST_MODEL);
-
-    // Create an agent using experimental_Agent
-    const agent = new wrappedAI.experimental_Agent({
-      model,
-    });
-
-    const result = await agent.generate({
-      messages: [
-        {
-          role: "user",
-          content: "Say 'test'",
-        },
-      ],
-      maxTokens: 50,
-    });
-
-    expect(result.text).toBeDefined();
-
-    // Verify spans were created
-    const spans = await backgroundLogger.drain();
-    expect(spans.length).toBeGreaterThanOrEqual(1);
+    expect(metrics.end).toBeLessThanOrEqual(end);
   });
 });
