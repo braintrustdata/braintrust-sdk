@@ -1,3 +1,9 @@
+/**
+This test is a simple test to verify the braintrust package can be used to send spans using OpenTelemetry to the braintrust API.
+
+This test is not written as a vitest because it needs to be run as CommonJS and ESM. Vitest does not support running both modes.
+**/
+
 import assert from "node:assert/strict";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";

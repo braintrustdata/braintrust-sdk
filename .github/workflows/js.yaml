@@ -82,7 +82,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Backup original integration package manifests
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm ci
           npm run backup
@@ -101,12 +101,12 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run install-build
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
@@ -115,12 +115,12 @@ jobs:
           npm start
 
       - name: Enable ESM for integrations tests
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run enable-esm
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
@@ -130,6 +130,6 @@ jobs:
 
       - name: Restore original package.json files
         if: always()
-        working-directory: js/integrations/${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run restore
