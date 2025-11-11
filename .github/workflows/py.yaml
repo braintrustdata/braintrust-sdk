@@ -4,6 +4,9 @@ on:
   pull_request:
     paths-ignore:
       - "js/**"
+      - "integrations/langchain-js/**"
+      - "integrations/vercel-ai-sdk/**"
+      - "integrations/openai-agents-js/**"
   push:
     branches: [main]
 
