@@ -12,6 +12,6 @@
       "isolatedModules": true,
       "types": ["node"]
     },
-    "include": ["simple_span_example.ts"],
+    "include": ["simple_span_example.ts", "span_test_helper.ts"],
     "exclude": ["node_modules"]
   }
