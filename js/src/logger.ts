@@ -392,25 +392,17 @@ function getSpanComponentsClass():
   return useV4 ? SpanComponentsV4 : SpanComponentsV3;
 }
 
+declare global {
+  // eslint-disable-next-line no-var
+  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
+}
+
+globalThis.BRAINTRUST_CONTEXT_MANAGER = undefined;
+
 export function getContextManager(): ContextManager {
-  const useOtel =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-
-  if (useOtel) {
-    try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
-      return new OtelContextManager();
-    } catch {
-      console.warn(
-        "OTEL not available, falling back to Braintrust-only context manager",
-      );
-    }
-  }
-
-  return new BraintrustContextManager();
+  return globalThis.BRAINTRUST_CONTEXT_MANAGER
+    ? new globalThis.BRAINTRUST_CONTEXT_MANAGER()
+    : new BraintrustContextManager();
 }
 
 /**
@@ -5728,6 +5720,7 @@ export class SpanImpl implements Span {
     return this._state;
   }
 
+  // TODO: !!!
   /**
    * Internal method to get the OTEL parent string for this span.
    * This is used by OtelContextManager to set the braintrust.parent attribute.
