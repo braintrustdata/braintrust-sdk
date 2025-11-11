@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { trace, context, Tracer, propagation } from "@opentelemetry/api";
 import {
@@ -15,8 +17,10 @@ import {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
-  otel,
-} from "..";
+  addSpanParentToBaggage,
+  addParentToBaggage,
+  parentFromHeaders,
+} from "./otel";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -462,7 +466,7 @@ describe("AISpanProcessor", () => {
           droppedAttributesCount: 0,
           droppedEventsCount: 0,
           droppedLinksCount: 0,
-        } as ReadableSpan;
+        } as unknown as ReadableSpan;
 
         const result = (filterProcessor as any).shouldKeepFilteredSpan(
           mockSpan,
@@ -768,7 +772,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -788,7 +792,6 @@ describe("BraintrustExporter", () => {
     const exporter = new BraintrustExporter();
 
     // Mock the processor to throw an error
-    const originalProcessor = (exporter as any).processor;
     (exporter as any).processor = {
       onEnd: vi.fn().mockImplementation(() => {
         throw new Error("Test error");
@@ -804,7 +807,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -825,7 +828,6 @@ describe("BraintrustExporter", () => {
     const exporter = new BraintrustExporter();
 
     // Mock the processor to have forceFlush fail
-    const originalProcessor = (exporter as any).processor;
     (exporter as any).processor = {
       onEnd: vi.fn(),
       forceFlush: vi.fn().mockRejectedValue(new Error("Flush error")),
@@ -839,7 +841,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -895,7 +897,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -1019,7 +1021,7 @@ describe("otel namespace helpers", () => {
   describe("addParentToBaggage", () => {
     it("should add braintrust.parent to baggage", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
-      const ctx = otel.addParentToBaggage(parent);
+      const ctx = addParentToBaggage(parent);
 
       const baggage = propagation.getBaggage(ctx);
       expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
@@ -1028,7 +1030,7 @@ describe("otel namespace helpers", () => {
     it("should use provided context", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
       const initialCtx = context.active();
-      const resultCtx = otel.addParentToBaggage(parent, initialCtx);
+      const resultCtx = addParentToBaggage(parent, initialCtx);
 
       const baggage = propagation.getBaggage(resultCtx);
       expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
@@ -1041,7 +1043,7 @@ describe("otel namespace helpers", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
       span.setAttribute("braintrust.parent", parent);
 
-      const ctx = otel.addSpanParentToBaggage(span);
+      const ctx = addSpanParentToBaggage(span);
       expect(ctx).toBeDefined();
 
       const baggage = propagation.getBaggage(ctx!);
@@ -1053,7 +1055,7 @@ describe("otel namespace helpers", () => {
     it("should return undefined when span has no braintrust.parent attribute", () => {
       const span = tracer.startSpan("test-span");
 
-      const ctx = otel.addSpanParentToBaggage(span);
+      const ctx = addSpanParentToBaggage(span);
       expect(ctx).toBeUndefined();
 
       span.end();
@@ -1065,7 +1067,7 @@ describe("otel namespace helpers", () => {
       span.setAttribute("braintrust.parent", parent);
 
       const initialCtx = context.active();
-      const ctx = otel.addSpanParentToBaggage(span, initialCtx);
+      const ctx = addSpanParentToBaggage(span, initialCtx);
       expect(ctx).toBeDefined();
 
       const baggage = propagation.getBaggage(ctx!);
@@ -1084,7 +1086,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         // Parent string is base64-encoded SpanComponentsV4
         expect(typeof parent).toBe("string");
@@ -1098,7 +1100,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_id:my-project-id",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         expect(typeof parent).toBe("string");
         expect(parent!.length).toBeGreaterThan(0);
@@ -1111,7 +1113,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=experiment_id:my-experiment-id",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         expect(typeof parent).toBe("string");
         expect(parent!.length).toBeGreaterThan(0);
@@ -1127,7 +1129,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalledWith(
           "parentFromHeaders: No valid span context in headers",
@@ -1145,7 +1147,7 @@ describe("otel namespace helpers", () => {
             "00-12345678901234567890123456789012-1234567890123456-01",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalled();
         expect(consoleSpy.mock.calls[0][0]).toContain(
@@ -1165,7 +1167,7 @@ describe("otel namespace helpers", () => {
           baggage: "foo=bar,baz=qux",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalled();
         expect(consoleSpy.mock.calls[0][0]).toContain(
@@ -1184,7 +1186,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalledWith(
           "parentFromHeaders: No valid span context in headers",
@@ -1203,7 +1205,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // OTEL's extract() validates and rejects invalid trace_id
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -1223,7 +1225,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // OTEL's extract() validates and rejects invalid span_id
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -1243,7 +1245,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=invalid",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // Should reach our validation if span context is valid, otherwise OTEL rejects it
         expect(consoleSpy).toHaveBeenCalled();

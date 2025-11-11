@@ -1,76 +1,20 @@
-// Conditional imports for OpenTelemetry to handle missing dependencies gracefully
-import { SpanComponentsV4 } from "../util/span_identifier_v4";
-import { SpanObjectTypeV3 } from "../util/span_identifier_v3";
+import { SpanComponentsV4, SpanObjectTypeV3 } from "braintrust/util";
 
-interface OtelContext {
-  getValue?: (key: string) => unknown;
-}
-
-interface OtelSpanContext {
-  traceId: string;
-  spanId: string;
-  traceFlags: number;
-  traceState?: unknown;
-}
-
-interface OtelApi {
-  context: {
-    active: () => OtelContext;
-  };
-  trace: {
-    getSpan: (ctx: OtelContext) => unknown;
-    getSpanContext: (ctx: OtelContext) => OtelSpanContext | undefined;
-    setSpan: (ctx: OtelContext, span: unknown) => OtelContext;
-    wrapSpanContext: (spanContext: unknown) => unknown;
-  };
-  TraceFlags?: {
-    SAMPLED: number;
-  };
-}
-
-let otelApi: OtelApi | null = null;
-let otelSdk: {
-  BatchSpanProcessor: new (exporter: unknown) => SpanProcessor;
-} | null = null;
-let OTEL_AVAILABLE = false;
-
-try {
-  otelApi = require("@opentelemetry/api");
-  otelSdk = require("@opentelemetry/sdk-trace-base");
-  OTEL_AVAILABLE = true;
-} catch {
-  console.warn(
-    "OpenTelemetry packages are not installed. " +
-      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-  );
-  OTEL_AVAILABLE = false;
-}
-
-// Type definitions that don't depend on OpenTelemetry being installed
-interface Context {
-  getValue?: (key: string) => unknown;
-}
-
-interface SpanProcessor {
-  onStart(span: Span, parentContext?: Context): void;
-  onEnd(span: ReadableSpan): void;
-  shutdown(): Promise<void>;
-  forceFlush(): Promise<void>;
-}
-
-interface ReadableSpan {
-  name: string;
-  parentSpanContext?: { spanId: string; traceId: string };
-  attributes?: Record<string, any>;
-  spanContext(): { spanId: string; traceId: string };
-  parentSpanId?: string; // NOTE: In OTel JS v1.x, ReadableSpan exposed `parentSpanId?: string`
-}
-
-interface Span extends ReadableSpan {
-  end(): void;
-  setAttributes(attributes: Record<string, any>): void;
-  setStatus(status: { code: number; message?: string }): void;
-}
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import {
+  context,
+  Context,
+  trace,
+  TraceFlags,
+  propagation,
+} from "@opentelemetry/api";
+import {
+  SpanProcessor,
+  ReadableSpan,
+  Span,
+  BatchSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { BRAINTRUST_PARENT, BRAINTRUST_PARENT_STRING } from "./constants";
 
 const FILTER_PREFIXES = [
   "gen_ai.",
@@ -85,9 +29,7 @@ const FILTER_PREFIXES = [
  * @param span - The span to evaluate
  * @returns true to definitely keep, false to definitely drop, null/undefined to not influence the decision
  */
-export type CustomSpanFilter = (
-  span: ReadableSpan,
-) => boolean | null | undefined;
+type CustomSpanFilter = (span: ReadableSpan) => boolean | null | undefined;
 
 /**
  * A span processor that filters spans to only export filtered telemetry.
@@ -103,14 +45,6 @@ export type CustomSpanFilter = (
  * ```
  */
 export class AISpanProcessor {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
@@ -123,7 +57,6 @@ export class AISpanProcessor {
    *                      null/undefined to not influence the decision
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
-    AISpanProcessor.checkOtelAvailable();
     this.processor = processor;
     this.customFilter = customFilter;
   }
@@ -174,7 +107,11 @@ export class AISpanProcessor {
     }
 
     // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
-    if (!span.parentSpanContext && !span.parentSpanId) {
+    if (
+      !("parentSpanContext" in span && span.parentSpanContext) &&
+      "parentSpanId" in span &&
+      !span.parentSpanId
+    ) {
       return true;
     }
 
@@ -278,20 +215,10 @@ interface BraintrustSpanProcessorOptions {
  * ```
  */
 export class BraintrustSpanProcessor {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustSpanProcessor.checkOtelAvailable();
-
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
     if (!apiKey) {
@@ -323,87 +250,71 @@ export class BraintrustSpanProcessor {
       );
     }
 
-    // Create OTLP exporter
-    let exporter: unknown;
-    try {
-      const {
-        OTLPTraceExporter,
-      } = require("@opentelemetry/exporter-trace-otlp-http");
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "x-bt-parent": parent,
+      ...options.headers,
+    };
 
-      const headers = {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "x-bt-parent": parent,
-        ...options.headers,
-      };
+    const baseExporter = new OTLPTraceExporter({
+      url: new URL("otel/v1/traces", apiUrl).href,
+      headers,
+    });
 
-      const baseExporter = new OTLPTraceExporter({
-        url: new URL("otel/v1/traces", apiUrl).href,
-        headers,
-      });
-
-      interface RawSpan {
-        instrumentationScope?: unknown;
-        instrumentationLibrary?: unknown;
-        parentSpanContext?: unknown;
-        parentSpanId?: string;
-        spanContext?: () => { traceId: string };
-      }
-
-      exporter = new Proxy(baseExporter, {
-        get(target, prop, receiver) {
-          // If the code is trying to access the 'export' method, return our patched version.
-          if (prop === "export") {
-            return function (
-              spans: RawSpan[],
-              resultCallback: (result: unknown) => void,
-            ) {
-              // This patch handles OTel version mismatches
-              const fixedSpans = spans.map((span: RawSpan) => {
-                if (!span.instrumentationScope && span.instrumentationLibrary) {
-                  span.instrumentationScope = span.instrumentationLibrary;
-                }
-
-                if (!span.parentSpanContext && span.parentSpanId) {
-                  const spanContext = span.spanContext?.();
-                  if (spanContext?.traceId) {
-                    span.parentSpanContext = {
-                      spanId: span.parentSpanId,
-                      traceId: spanContext.traceId,
-                    };
-                  }
-                }
-
-                return span;
-              });
-
-              // Call the original export method with the fixed spans.
-              return Reflect.apply(
-                (target as { export: unknown }).export as (
-                  ...args: unknown[]
-                ) => unknown,
-                target,
-                [fixedSpans, resultCallback],
-              );
-            };
-          }
-
-          // For any other property, pass the access through to the original object.
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    } catch (error) {
-      console.error(error);
-      throw new Error(
-        "Failed to create OTLP exporter. Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
-      );
+    interface RawSpan {
+      instrumentationScope?: unknown;
+      instrumentationLibrary?: unknown;
+      parentSpanContext?: unknown;
+      parentSpanId?: string;
+      spanContext?: () => { traceId: string };
     }
 
-    // Create batch processor with the exporter
-    if (!otelSdk) {
-      throw new Error("OpenTelemetry SDK not available");
-    }
-    this.processor = new otelSdk.BatchSpanProcessor(exporter);
+    const exporter = new Proxy(baseExporter, {
+      get(target, prop, receiver) {
+        // If the code is trying to access the 'export' method, return our patched version.
+        if (prop === "export") {
+          return function (
+            spans: RawSpan[],
+            resultCallback: (result: unknown) => void,
+          ) {
+            // This patch handles OTel version mismatches
+            const fixedSpans = spans.map((span: RawSpan) => {
+              if (!span.instrumentationScope && span.instrumentationLibrary) {
+                span.instrumentationScope = span.instrumentationLibrary;
+              }
+
+              if (!span.parentSpanContext && span.parentSpanId) {
+                const spanContext = span.spanContext?.();
+                if (spanContext?.traceId) {
+                  span.parentSpanContext = {
+                    spanId: span.parentSpanId,
+                    traceId: spanContext.traceId,
+                  };
+                }
+              }
+
+              return span;
+            });
+
+            // Call the original export method with the fixed spans.
+            return Reflect.apply(
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              (target as { export: unknown }).export as (
+                ...args: unknown[]
+              ) => unknown,
+              target,
+              [fixedSpans, resultCallback],
+            );
+          };
+        }
+
+        // For any other property, pass the access through to the original object.
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    this.processor = new BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
@@ -423,9 +334,9 @@ export class BraintrustSpanProcessor {
       let parentValue: string | undefined;
 
       // Priority 1: Check if braintrust.parent is in current OTEL context
-      if (otelApi && otelApi.context) {
-        const currentContext = otelApi.context.active();
-        const contextValue = currentContext.getValue?.("braintrust.parent");
+      if (context) {
+        const currentContext = context.active();
+        const contextValue = currentContext.getValue?.(BRAINTRUST_PARENT);
         if (typeof contextValue === "string") {
           parentValue = contextValue;
         }
@@ -434,7 +345,7 @@ export class BraintrustSpanProcessor {
         if (!parentValue && parentContext) {
           const parentContextValue =
             typeof parentContext.getValue === "function"
-              ? parentContext.getValue("braintrust.parent")
+              ? parentContext.getValue(BRAINTRUST_PARENT)
               : undefined;
           if (typeof parentContextValue === "string") {
             parentValue = parentContextValue;
@@ -448,7 +359,7 @@ export class BraintrustSpanProcessor {
 
         // Set the attribute if we found a parent value
         if (parentValue && typeof span.setAttributes === "function") {
-          span.setAttributes({ "braintrust.parent": parentValue });
+          span.setAttributes({ BRAINTRUST_PARENT: parentValue });
         }
       }
     } catch {
@@ -461,31 +372,21 @@ export class BraintrustSpanProcessor {
   private _getParentOtelBraintrustParent(
     parentContext: Context,
   ): string | undefined {
-    try {
-      if (!otelApi || !otelApi.trace) {
-        return undefined;
-      }
+    const currentSpan = trace?.getSpan(parentContext);
 
-      const currentSpan =
-        typeof otelApi.trace.getSpan === "function"
-          ? otelApi.trace.getSpan(parentContext)
-          : undefined;
-
-      if (
-        currentSpan &&
-        typeof currentSpan === "object" &&
-        "attributes" in currentSpan &&
-        typeof currentSpan.attributes === "object"
-      ) {
-        const attributes = currentSpan.attributes as Record<string, unknown>;
-        const parentAttr = attributes["braintrust.parent"];
-        return typeof parentAttr === "string" ? parentAttr : undefined;
-      }
-
-      return undefined;
-    } catch {
-      return undefined;
+    if (
+      currentSpan &&
+      typeof currentSpan === "object" &&
+      "attributes" in currentSpan &&
+      typeof currentSpan.attributes === "object"
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const attributes = currentSpan.attributes as Record<string, unknown>;
+      const parentAttr = attributes[BRAINTRUST_PARENT_STRING];
+      return typeof parentAttr === "string" ? parentAttr : undefined;
     }
+
+    return undefined;
   }
 
   onEnd(span: ReadableSpan): void {
@@ -519,7 +420,7 @@ export class BraintrustSpanProcessor {
  *
  * // Service B: Import context and create OTEL child
  * import * as api from '@opentelemetry/api';
- * const ctx = otelContextFromSpanExport(exportStr);
+ * const ctx = contextFromSpanExport(exportStr);
  * await api.context.with(ctx, async () => {
  *   await tracer.startActiveSpan("service-b", async (span) => {
  *     // This span is now a child of the Service A span
@@ -528,13 +429,7 @@ export class BraintrustSpanProcessor {
  * });
  * ```
  */
-export function otelContextFromSpanExport(exportStr: string): unknown {
-  if (!OTEL_AVAILABLE || !otelApi) {
-    // Gracefully return undefined when OTEL is not installed
-    // This allows code to work without OTEL dependencies
-    return undefined;
-  }
-
+export function contextFromSpanExport(exportStr: string): unknown {
   // Parse the export string
   const components = SpanComponentsV4.fromStr(exportStr);
 
@@ -548,20 +443,17 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
     );
   }
 
-  // Import OTEL classes dynamically
-  const otelTrace = otelApi.trace;
-
   // Create SpanContext marked as remote (critical for distributed tracing)
   const spanContext = {
     traceId: traceIdHex,
     spanId: spanIdHex,
     isRemote: true,
-    traceFlags: otelApi.TraceFlags?.SAMPLED ?? 1, // SAMPLED flag
+    traceFlags: TraceFlags?.SAMPLED ?? 1, // SAMPLED flag
   };
 
   // Create NonRecordingSpan using wrapSpanContext and set in context
-  const nonRecordingSpan = otelTrace.wrapSpanContext(spanContext);
-  let ctx = otelTrace.setSpan(otelApi.context.active(), nonRecordingSpan);
+  const nonRecordingSpan = trace.wrapSpanContext(spanContext);
+  let ctx = trace.setSpan(context.active(), nonRecordingSpan);
 
   // Construct braintrust.parent identifier
   const braintrustParent = getBraintrustParent(
@@ -574,13 +466,14 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
   if (braintrustParent) {
     try {
       // Try to set baggage if available
-      const propagation = (otelApi as any).propagation;
       if (propagation) {
         const baggage =
           propagation.getBaggage(ctx) || propagation.createBaggage();
         ctx = propagation.setBaggage(
           ctx,
-          baggage.setEntry("braintrust.parent", { value: braintrustParent }),
+          baggage.setEntry(BRAINTRUST_PARENT_STRING, {
+            value: braintrustParent,
+          }),
         );
       }
     } catch (error) {
@@ -602,7 +495,7 @@ export function otelContextFromSpanExport(exportStr: string): unknown {
  * @param computeArgs - Optional dict with project_name/project_id for unresolved cases
  * @returns String like "project_id:abc", "project_name:my-proj", "experiment_id:exp-123", or undefined
  */
-export function getBraintrustParent(
+function getBraintrustParent(
   objectType: number,
   objectId?: string | null,
   computeArgs?: Record<string, unknown> | null,
@@ -653,7 +546,7 @@ export function getBraintrustParent(
  * @example With @vercel/otel:
  * ```typescript
  * import { registerOTel } from '@vercel/otel';
- * import { BraintrustExporter } from 'braintrust';
+ * import { BraintrustExporter } from '@braintrust/otel';
  *
  * export function register() {
  *   registerOTel({
@@ -682,22 +575,11 @@ export function getBraintrustParent(
  * ```
  */
 export class BraintrustExporter {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
-
   private readonly processor: BraintrustSpanProcessor;
   private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: any) => void> = [];
+  private readonly callbacks: Array<(result: unknown) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustExporter.checkOtelAvailable();
-
     // Use BraintrustSpanProcessor under the hood
     this.processor = new BraintrustSpanProcessor(options);
   }
@@ -757,40 +639,36 @@ export class BraintrustExporter {
  *
  * @example
  * ```typescript
- * import { otel } from "braintrust";
+ * import { addParentToBaggage } from "@braintrust/otel";
  * import { propagation } from "@opentelemetry/api";
  *
  * // Set braintrust.parent in baggage
- * otel.addParentToBaggage("project_name:my-project");
+ * addParentToBaggage("project_name:my-project");
  *
  * // Export headers (will include braintrust.parent in baggage)
  * const headers = {};
  * propagation.inject(context.active(), headers);
  * ```
  */
-function addParentToBaggage(parent: string, ctx?: Context): Context {
-  if (!OTEL_AVAILABLE || !otelApi) {
-    console.error("OpenTelemetry not available");
-    return (ctx || otelApi?.context.active()) as Context;
-  }
-
+export function addParentToBaggage(parent: string, ctx?: Context): Context {
   try {
-    const propagation = (otelApi as any).propagation;
     if (!propagation) {
       console.error("OTEL propagation API not available");
-      return (ctx || otelApi.context.active()) as Context;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return (ctx || context.active()) as Context;
     }
 
-    const currentCtx = ctx || otelApi.context.active();
+    const currentCtx = ctx || context.active();
     const baggage =
       propagation.getBaggage(currentCtx) || propagation.createBaggage();
     return propagation.setBaggage(
       currentCtx,
-      baggage.setEntry("braintrust.parent", { value: parent }),
+      baggage.setEntry(BRAINTRUST_PARENT_STRING, { value: parent }),
     );
   } catch (error) {
     console.error("Failed to add braintrust.parent to baggage:", error);
-    return (ctx || otelApi.context.active()) as Context;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return (ctx || context.active()) as Context;
   }
 }
 
@@ -821,7 +699,7 @@ function addParentToBaggage(parent: string, ctx?: Context): Context {
  * });
  * ```
  */
-function addSpanParentToBaggage(
+export function addSpanParentToBaggage(
   span: Span,
   ctx?: Context,
 ): Context | undefined {
@@ -830,7 +708,7 @@ function addSpanParentToBaggage(
     return undefined;
   }
 
-  const parentValue = span.attributes["braintrust.parent"];
+  const parentValue = span.attributes[BRAINTRUST_PARENT_STRING];
   if (!parentValue || typeof parentValue !== "string") {
     console.warn(
       "addSpanParentToBaggage: braintrust.parent attribute not found. " +
@@ -854,11 +732,12 @@ function addSpanParentToBaggage(
  *
  * @example
  * ```typescript
- * import { otel, initLogger } from "braintrust";
+ * import { initLogger } from "braintrust";
+ * import { parentFromHeaders } from "@braintrust/otel";
  *
  * // Service C receives headers from Service B
  * const headers = { traceparent: '00-trace_id-span_id-01', baggage: '...' };
- * const parent = otel.parentFromHeaders(headers);
+ * const parent = parentFromHeaders(headers);
  *
  * const logger = initLogger({ projectName: "my-project" });
  * await logger.traced(async (span) => {
@@ -866,16 +745,10 @@ function addSpanParentToBaggage(
  * }, { name: "service_c", parent });
  * ```
  */
-function parentFromHeaders(
+export function parentFromHeaders(
   headers: Record<string, string>,
 ): string | undefined {
-  if (!OTEL_AVAILABLE || !otelApi) {
-    console.error("OpenTelemetry not available");
-    return undefined;
-  }
-
   try {
-    const propagation = (otelApi as any).propagation;
     if (!propagation) {
       console.error("OTEL propagation API not available");
       return undefined;
@@ -883,17 +756,19 @@ function parentFromHeaders(
 
     // Extract context from headers using W3C Trace Context propagator
     // This parses both traceparent and baggage headers
-    const ctx = propagation.extract(otelApi.context.active(), headers);
+    const ctx = propagation.extract(context.active(), headers);
 
     // Get span context directly from the extracted context
-    const spanContext = otelApi.trace.getSpanContext(ctx);
+    const spanContext = trace.getSpanContext(ctx);
     if (!spanContext) {
       console.error("parentFromHeaders: No valid span context in headers");
       return undefined;
     }
 
     // Get trace_id and span_id from span context
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const traceIdHex = spanContext.traceId as string;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const spanIdHex = spanContext.spanId as string;
 
     // Validate trace_id and span_id are not all zeros
@@ -916,7 +791,7 @@ function parentFromHeaders(
 
     // Get braintrust.parent from baggage
     const baggage = propagation.getBaggage(ctx);
-    const braintrustParent = baggage?.getEntry("braintrust.parent")?.value;
+    const braintrustParent = baggage?.getEntry(BRAINTRUST_PARENT_STRING)?.value;
 
     if (!braintrustParent) {
       console.warn(
@@ -991,6 +866,7 @@ function parentFromHeaders(
       componentsData.object_id = objectId;
     }
 
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const components = new SpanComponentsV4(componentsData as any);
 
     return components.toStr();
@@ -999,31 +875,3 @@ function parentFromHeaders(
     return undefined;
   }
 }
-
-/**
- * OTEL namespace containing distributed tracing helper functions.
- *
- * @example
- * ```typescript
- * import { otel } from "braintrust";
- *
- * // Export Braintrust span context for OTEL
- * const ctx = otel.contextFromSpanExport(exportStr);
- *
- * // Add parent to baggage before propagating
- * otel.addParentToBaggage("project_name:my-project");
- *
- * // Copy span attribute to baggage
- * otel.addSpanParentToBaggage(span);
- *
- * // Create Braintrust parent from OTEL headers
- * const parent = otel.parentFromHeaders(headers);
- * ```
- */
-export const otel = {
-  contextFromSpanExport: otelContextFromSpanExport,
-  getBraintrustParent,
-  addParentToBaggage,
-  addSpanParentToBaggage,
-  parentFromHeaders,
-};

@@ -5,6 +5,7 @@ import {
 } from "braintrust";
 
 import { trace as otelTrace, context as otelContext } from "@opentelemetry/api";
+import { BRAINTRUST_SPAN } from "./constants";
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -34,8 +35,6 @@ function isValidSpanContext(spanContext: unknown): boolean {
     ctx.traceId !== "00000000000000000000000000000000"
   );
 }
-
-const BRAINTRUST_SPAN = Symbol("braintrust_span");
 
 export class OtelContextManager extends ContextManager {
   getParentSpanIds(): ContextParentSpanIds | undefined {

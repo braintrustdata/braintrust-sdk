@@ -1,6 +1,6 @@
 // nodesdk_example.ts
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { BraintrustSpanProcessor } from "../../src";
+import { BraintrustSpanProcessor } from "@braintrust/otel";
 import { trace } from "@opentelemetry/api";
 
 const sdk = new NodeSDK({

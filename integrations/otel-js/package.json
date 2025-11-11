@@ -23,14 +23,37 @@
   "author": "Braintrust Data Inc.",
   "license": "MIT",
   "devDependencies": {
-    "braintrust": "workspace:*"
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@types/node": "^22.15.21",
+    "braintrust": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "5.5.4",
+    "vitest": "^2.1.9"
   },
-  "dependencies": {},
   "peerDependencies": {
-    "braintrust": "^0.4.0"
+    "@opentelemetry/api": ">=1.9.0 <2.0.0",
+    "@opentelemetry/core": ">=2.0.0 <3.0.0",
+    "@opentelemetry/exporter-trace-otlp-http": ">=0.57.0 <0.200.0",
+    "@opentelemetry/sdk-trace-base": ">=2.0.0 <3.0.0",
+    "braintrust": ">=0.5.0"
   },
   "peerDependenciesMeta": {
     "braintrust": {
+      "optional": false
+    },
+    "@opentelemetry/api": {
+      "optional": false
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": false
+    },
+    "@opentelemetry/sdk-trace-base": {
+      "optional": false
+    },
+    "@opentelemetry/core": {
       "optional": false
     }
   }
