@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        integration: [otel, span, deno-browser]
+        integration: [otel, span]
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
@@ -84,7 +84,6 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Backup original integration package manifests
-        if: matrix.integration != 'deno-browser'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm ci
@@ -103,20 +102,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Setup Deno
-        if: matrix.integration == 'deno-browser'
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
-        if: matrix.integration != 'deno-browser'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run install-build
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
-        if: matrix.integration != 'deno-browser'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
@@ -126,40 +117,11 @@ jobs:
           npm start
 
       - name: Enable ESM for integrations tests
-        if: matrix.integration != 'deno-browser'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run enable-esm
 
-      - name: Extract build artifact for Deno
-        if: matrix.integration == 'deno-browser'
-        working-directory: js/smoke/tests/deno-browser
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARTIFACT_DIR=../../../artifacts
-          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
-          if [ -z "$TARBALL" ]; then
-            echo "No braintrust build found in artifacts directory."
-            exit 1
-          fi
-          rm -rf build
-          mkdir -p build
-          tar -xzf "$TARBALL" -C build
-          if [ -d build/package ]; then
-            mv build/package build/braintrust
-          fi
-
-      - name: Run Deno browser logger smoke test
-        if: matrix.integration == 'deno-browser'
-        working-directory: js/smoke/tests/deno-browser
-        env:
-          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno-browser/build/braintrust
-        run: |
-          deno run --config deno.json --allow-env --allow-read=${{ github.workspace }}/js/smoke/tests/deno-browser,${{ github.workspace }}/js/smoke/tests/deno-browser/build/braintrust browser_logger_test.ts
-
       - name: Run integration test (ESM) for ${{ matrix.integration }}
-        if: matrix.integration != 'deno-browser'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
@@ -169,7 +131,56 @@ jobs:
           npm start
 
       - name: Restore original package.json files
-        if: matrix.integration != 'deno-browser' && always()
+        if: always()
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run restore
+
+integration-tests-deno:
+  needs: build
+  runs-on: ubuntu-latest
+
+  strategy:
+  fail-fast: false
+  matrix:
+    integration: [otel, span]
+    os: [ubuntu-latest, windows-latest]
+    node-version: [20, 22]
+
+  steps:
+    - uses: actions/checkout@v4
+    - name: Setup Deno
+      uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+        path: js/artifacts
+        run-id: ${{ github.run_id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract build artifact
+      working-directory: js/smoke/tests/deno
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARTIFACT_DIR=../../../artifacts
+        TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
+        if [ -z "$TARBALL" ]; then
+          echo "No braintrust build found"
+          exit 1
+        fi
+        rm -rf build
+        mkdir -p build
+        tar -xzf "$TARBALL" -C build
+        [ -d build/package ] && mv build/package build/braintrust
+
+    - name: Run logger test
+      working-directory: js/smoke/tests/deno
+      env:
+        BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
+      run: |
+        deno task span-test
