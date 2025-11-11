@@ -1,0 +1,22 @@
+name: test-py-trigger
+
+on:
+  pull_request:
+    paths-ignore:
+      - "js/**"
+      - "integrations/langchain-js/**"
+      - "integrations/vercel-ai-sdk/**"
+      - "integrations/openai-agents-js/**"
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Workflow
+        run: echo "The test py trigger workflow ran"
