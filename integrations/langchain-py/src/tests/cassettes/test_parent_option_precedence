@@ -13,8 +13,8 @@ interactions:
       content-type:
       - application/json
       cookie:
-      - __cf_bm=8kjmchHqjzL4ge.Yw5rt71Inf2i6oaIbIveC7JGrk8E-1762820147-1.0.1.1-hU1S1spNV_jv8o.plkMMXXJHXB3lW.eU_GW5apdYFvFTF.1272.VOzbtZ7EFijfg4g4YHu9XNT_0RyG0joqF.ubpvHJX2Xnz3NvQtjwPYbY;
-        _cfuvid=g7.oQ5yEmynNLlEAQ6QZ6CO9uXRoy9axl38.R2TvQjc-1762820147441-0.0.1.1-604800000
+      - __cf_bm=1sucBJCNErFVxpx2HvBa9Fp0snxfM_FIlRjHlE5qQwo-1762824320-1.0.1.1-N..zbgBE83gWUv5v.4Y8MYbnhAAxwRt2InY64Vz9e8aSI2FXFCCGkSHWCaGqWTiEV.wsO_1jMG3KUyTMPHx2UsUlN6rgW44nqSub.v8jo7Q;
+        _cfuvid=djMo1bUSW38xyzUMOr.5_kQxxS5Olq5XG4DD70XOohc-1762824320240-0.0.1.1-604800000
       host:
       - api.openai.com
       user-agent:
@@ -41,26 +41,26 @@ interactions:
     uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAAAwAAAP//jJJPj9MwEMXv+RSDzw1qov6/cACJIris0AoktIq89iQ1OB7LngBl1e+O
-        nLRNuoDEJYf5zZu8N56nDEAYLXYg1EGyar3NX8tP74/3H4o7+2b78X5j34YQS3u37j7/avZilhT0
-        +BUVX1QvFbXeIhtyA1YBJWOaWqxX5aacF4tND1rSaJOs8ZwvKG+NM3k5Lxf5fJ0Xm7P6QEZhFDv4
-        kgEAPPXf5NNp/Cl2MJ9dKi3GKBsUu2sTgAhkU0XIGE1k6VjMRqjIMbre+h6tpRewpx+gpIN3MAjg
-        SB0waXl8NRUGrLsok3nXWTsB0jlimcL3lh/O5HQ1aanxgR7jM6mojTPxUAWUkVwyFJm86OkpA3jo
-        l9Hd5BM+UOu5YvqG/e+K8y7E+AQj3J4ZE0s70VzqN8MqjSyNjZNdCiXVAfWoHBcvO21oArJJ5D+9
-        /G32ENu45n/Gj0Ap9Iy68gG1Ubd5x7aA6T7/1XZdcW9YRAzfjcKKDYb0DBpr2dnhakQ8Rsa2qo1r
-        MPhghtOpfbVczWW9wuVyK7JT9hsAAP//AwCiKzyYSAMAAA==
+      string: "{\n  \"id\": \"chatcmpl-CaXQKlO38fHN4shJ5b2KosvdIidpw\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1762824324,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+        \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
+        \"assistant\",\n        \"content\": \"Hello! How can I assist you today?\",\n
+        \       \"refusal\": null,\n        \"annotations\": []\n      },\n      \"logprobs\":
+        null,\n      \"finish_reason\": \"stop\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\":
+        10,\n    \"completion_tokens\": 9,\n    \"total_tokens\": 19,\n    \"prompt_tokens_details\":
+        {\n      \"cached_tokens\": 0,\n      \"audio_tokens\": 0\n    },\n    \"completion_tokens_details\":
+        {\n      \"reasoning_tokens\": 0,\n      \"audio_tokens\": 0,\n      \"accepted_prediction_tokens\":
+        0,\n      \"rejected_prediction_tokens\": 0\n    }\n  },\n  \"service_tier\":
+        \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
     headers:
       CF-RAY:
-      - 99c998e6ba676807-SJC
+      - 99c9fed8bbb04f08-SJC
       Connection:
       - keep-alive
-      Content-Encoding:
-      - gzip
       Content-Type:
       - application/json
       Date:
-      - Tue, 11 Nov 2025 00:15:48 GMT
+      - Tue, 11 Nov 2025 01:25:24 GMT
       Server:
       - cloudflare
       Strict-Transport-Security:
@@ -75,16 +75,18 @@ interactions:
       - h3=":443"; ma=86400
       cf-cache-status:
       - DYNAMIC
+      content-length:
+      - '840'
       openai-organization:
       - braintrust-data
       openai-processing-ms:
-      - '412'
+      - '306'
       openai-project:
       - proj_vsCSXafhhByzWOThMrJcZiw9
       openai-version:
       - '2020-10-01'
       x-envoy-upstream-service-time:
-      - '424'
+      - '329'
       x-openai-proxy-wasm:
       - v0.1
       x-ratelimit-limit-requests:
@@ -100,7 +102,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_be9decd9cb8f4829b730d91717481ae8
+      - req_85f58467c9b84514876267c177e5ca5b
     status:
       code: 200
       message: OK

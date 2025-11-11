@@ -1,15 +1,10 @@
 interactions:
 - request:
-    body: '{"messages": [{"content": "What is 3 * 12", "role": "user"}], "model":
-      "gpt-4o-mini", "frequency_penalty": 0.0, "n": 1, "presence_penalty": 0.0, "stream":
-      false, "temperature": 1.0, "tools": [{"type": "function", "function": {"name":
-      "calculator", "description": "Can perform mathematical operations.", "parameters":
-      {"properties": {"input": {"properties": {"operation": {"description": "The type
-      of operation to execute.", "enum": ["add", "subtract", "multiply", "divide"],
-      "type": "string"}, "number1": {"description": "The first number to operate on.",
-      "type": "number"}, "number2": {"description": "The second number to operate
-      on.", "type": "number"}}, "required": ["operation", "number1", "number2"], "type":
-      "object"}}, "required": ["input"], "type": "object"}}}], "top_p": 1.0}'
+    body: '{"messages":[{"content":"What is 3 * 12","role":"user"}],"model":"gpt-4o-mini","frequency_penalty":0.0,"n":1,"presence_penalty":0.0,"stream":false,"temperature":1.0,"tools":[{"type":"function","function":{"name":"calculator","description":"Can
+      perform mathematical operations.","parameters":{"properties":{"input":{"properties":{"operation":{"description":"The
+      type of operation to execute.","enum":["add","subtract","multiply","divide"],"type":"string"},"number1":{"description":"The
+      first number to operate on.","type":"number"},"number2":{"description":"The
+      second number to operate on.","type":"number"}},"required":["operation","number1","number2"],"type":"object"}},"required":["input"],"type":"object"}}}],"top_p":1.0}'
     headers:
       accept:
       - application/json
@@ -21,8 +16,11 @@ interactions:
       - '725'
       content-type:
       - application/json
+      cookie:
+      - __cf_bm=1sucBJCNErFVxpx2HvBa9Fp0snxfM_FIlRjHlE5qQwo-1762824320-1.0.1.1-N..zbgBE83gWUv5v.4Y8MYbnhAAxwRt2InY64Vz9e8aSI2FXFCCGkSHWCaGqWTiEV.wsO_1jMG3KUyTMPHx2UsUlN6rgW44nqSub.v8jo7Q;
+        _cfuvid=djMo1bUSW38xyzUMOr.5_kQxxS5Olq5XG4DD70XOohc-1762824320240-0.0.1.1-604800000
       host:
-      - localhost:8000
+      - api.openai.com
       user-agent:
       - OpenAI/Python 1.108.2
       x-stainless-arch:
@@ -42,16 +40,16 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.11.13
+      - 3.11.10
     method: POST
-    uri: http://localhost:8000/v1/proxy/chat/completions
+    uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: "{\n  \"id\": \"chatcmpl-CJ3pT0xTT4C4WwCqA5bvyrihLFrbd\",\n  \"object\":
-        \"chat.completion\",\n  \"created\": 1758658987,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+      string: "{\n  \"id\": \"chatcmpl-CaXQHyhHTlrBpoYA9o9e8WXyaUtDo\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1762824321,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
         \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
         \"assistant\",\n        \"content\": null,\n        \"tool_calls\": [\n          {\n
-        \           \"id\": \"call_faZyqlGfMGsX50e2EuExUqK0\",\n            \"type\":
+        \           \"id\": \"call_lNiwkkNt3Ryr4y0kr3emAnRr\",\n            \"type\":
         \"function\",\n            \"function\": {\n              \"name\": \"calculator\",\n
         \             \"arguments\": \"{\\\"input\\\":{\\\"operation\\\":\\\"multiply\\\",\\\"number1\\\":3,\\\"number2\\\":12}}\"\n
         \           }\n          }\n        ],\n        \"refusal\": null,\n        \"annotations\":
@@ -61,51 +59,42 @@ interactions:
         0,\n      \"audio_tokens\": 0\n    },\n    \"completion_tokens_details\":
         {\n      \"reasoning_tokens\": 0,\n      \"audio_tokens\": 0,\n      \"accepted_prediction_tokens\":
         0,\n      \"rejected_prediction_tokens\": 0\n    }\n  },\n  \"service_tier\":
-        \"default\",\n  \"system_fingerprint\": \"fp_51db84afab\"\n}\n"
+        \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
     headers:
-      Access-Control-Allow-Credentials:
-      - 'true'
-      Access-Control-Expose-Headers:
-      - x-bt-cursor,x-bt-found-existing,x-bt-span-id,x-bt-span-export,x-bt-query-plan,x-bt-internal-trace-id
+      CF-RAY:
+      - 99c9fec95c0c4f08-SJC
       Connection:
       - keep-alive
+      Content-Type:
+      - application/json
       Date:
-      - Tue, 23 Sep 2025 20:23:07 GMT
-      Keep-Alive:
-      - timeout=5
+      - Tue, 11 Nov 2025 01:25:22 GMT
+      Server:
+      - cloudflare
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
       Transfer-Encoding:
       - chunked
-      Vary:
-      - Origin
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
       alt-svc:
       - h3=":443"; ma=86400
       cf-cache-status:
       - DYNAMIC
-      cf-ray:
-      - 983cc20cabc267ef-SJC
-      content-type:
-      - application/json
+      content-length:
+      - '1133'
       openai-organization:
       - braintrust-data
       openai-processing-ms:
-      - '648'
+      - '675'
       openai-project:
       - proj_vsCSXafhhByzWOThMrJcZiw9
       openai-version:
       - '2020-10-01'
-      set-cookie:
-      - _cfuvid=inx7Y1lMFCkI1jONo8plrYH7k2d1EAvkr2WlMIyrK.s-1758658987739-0.0.1.1-604800000;
-        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
-      strict-transport-security:
-      - max-age=31536000; includeSubDomains; preload
-      x-bt-cached:
-      - MISS
-      x-bt-internal-trace-id:
-      - 475d214543543ac965368ac2a190850f
-      x-content-type-options:
-      - nosniff
       x-envoy-upstream-service-time:
-      - '663'
+      - '697'
       x-openai-proxy-wasm:
       - v0.1
       x-ratelimit-limit-requests:
@@ -121,451 +110,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_f6bcef66199c4bcaa6ad5864f7d1d9fb
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"content":"What is 3 * 12","role":"user"}],"model":"gpt-4o-mini","frequency_penalty":0.0,"n":1,"presence_penalty":0.0,"stream":false,"temperature":1.0,"tools":[{"type":"function","function":{"name":"calculator","description":"Can
-      perform mathematical operations.","parameters":{"properties":{"input":{"properties":{"operation":{"description":"The
-      type of operation to execute.","enum":["add","subtract","multiply","divide"],"type":"string"},"number1":{"description":"The
-      first number to operate on.","type":"number"},"number2":{"description":"The
-      second number to operate on.","type":"number"}},"required":["operation","number1","number2"],"type":"object"}},"required":["input"],"type":"object"}}}],"top_p":1.0}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate, zstd
-      connection:
-      - keep-alive
-      content-length:
-      - '725'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=W_Ukgb.mz8e1GW7CfhzN.QQaN09_xQq1uTHm3a.dJdU-1762561359-1.0.1.1-6IrkySxpZaL.1C65iH0iOLFfere0JxHCiasT6bak.RihYFMyJgIz2OuYJqcUey8c5vicjtorNby_Z_GJX.ZMIHa6PyzVrhqgfZZmtnnn.sA;
-        _cfuvid=jwWMA4k30hLPwBwTSCIdIeS5.m1TkcdYLYTt4YSTZhI-1762561359243-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 1.108.2
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 1.108.2
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.11.10
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAA4xT0W6bMBR95yus+xymQAppedum7SFKNXXSqmqjQo65EG/G9myzLY3y7xMmBZKm
-        UnlAcI/PucfH1/uAEOAlZATYljrWaBF+/P51vnsyt/dSfzCrMmFyeXu3fr96untwX2DWMdTmJzL3
-        zHrHVKMFOq5kDzOD1GGnGi3TOEmjRTr3QKNKFB2t1i68UmHDJQ/jeXwVzpdhdH1kbxVnaCEjPwJC
-        CNn7d+dTlvgPMuK1fKVBa2mNkA2LCAGjRFcBai23jkoHsxFkSjqUnXXZCjEBnFKiYFSIsXH/7Cff
-        Y1hUiALZUupvWK/u/z4k5e9PuNafV+vrab9eeqe9oaqVbAhpgg/17KwZISBpg8eGrBXUKXPGJgSo
-        qdsGpeucwz4HLnXrcsj2OSiNhnbaOWQ5NK1wXItdDrMcZNts0EQ5ZIvhL84hi+LDAU5aHIJL34+T
-        8AxWraXiZapUSuW8AR/r4xE5DCcoVK2N2tgzKlRccrstDFLrg5meT/BsxFuA9mQEQBvVaFc49Qt9
-        05tlLwrjlI5gnB5BpxwVYz2KF7MLckWJjnI/IsNUMsq2WI7UcTppW3I1AYLJ1l+6uaTdb5/L+i3y
-        I8AYaodloQ2WnJ3ueFxmsLvEry0bQvaGwaL5wxkWjqPpjqPEiraiH3WwO+uwKSouazTacH+/oNJF
-        ks5plWKS3EBwCP4DAAD//wMAguKIhm0EAAA=
-    headers:
-      CF-RAY:
-      - 99b0ead42b8caaac-SJC
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Sat, 08 Nov 2025 00:22:40 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '557'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '702'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999995'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_edb893697ec245fbb710a31d27a3ed78
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"content":"What is 3 * 12","role":"user"}],"model":"gpt-4o-mini","frequency_penalty":0.0,"n":1,"presence_penalty":0.0,"stream":false,"temperature":1.0,"tools":[{"type":"function","function":{"name":"calculator","description":"Can
-      perform mathematical operations.","parameters":{"properties":{"input":{"properties":{"operation":{"description":"The
-      type of operation to execute.","enum":["add","subtract","multiply","divide"],"type":"string"},"number1":{"description":"The
-      first number to operate on.","type":"number"},"number2":{"description":"The
-      second number to operate on.","type":"number"}},"required":["operation","number1","number2"],"type":"object"}},"required":["input"],"type":"object"}}}],"top_p":1.0}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate, zstd
-      connection:
-      - keep-alive
-      content-length:
-      - '725'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=.AxQfRhAvElThVl_Qz9zUVdqz_GtBGXwRQ0TVPIg5pc-1762561407-1.0.1.1-klsoMaFKHjzxOrHy2Zfd8Sc76RDHsMXURLAaIzORncnm47NI1MY0BqqBGOEsVXlZb.RdqeqpxzGFhl8DlRDjy.SqRfa2B4zEYdKZqQ2kVB0;
-        _cfuvid=0ohSoYMS21h1NkHWl4FeeVCp5aK2KHeEjclSm1NY7yY-1762561407934-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 1.108.2
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 1.108.2
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.11.10
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAA4xTTY/aMBC951dYc4YqCV+7udEPqSdaVeqh26wiY0/AXce2/MHCIv57lQSSwFKp
-        OUT2PM+b5+eZY0QICA4ZAbalnlVGjj89/UjkfIlfVm+/4o9P4dW/2a/S0dfl5PAAozpDr/8g85es
-        D0xXRqIXWrUws0g91qzJYp7O5sk0fmyASnOUddrG+PFUjyuhxDiN0+k4XoyTMznbasHQQUZ+R4QQ
-        cmz+tU7FcQ8ZiUeXSIXO0Q1C1h0iBKyWdQSoc8J5qjyMepBp5VHV0lWQcgB4rWXBqJR94fY7Dta9
-        WVTK4udkP9upwHY7/nm1XH2Pefi2f4n5oF5LfTCNoDIo1pk0wLt4dlOMEFC0wnNBFiT12t5kEwLU
-        bkKFytfK4ZiDUCb4HLJjDtqgpTV3DlkOVZBeGHnIYZSDCtUabZJDNul2aQ5Zkp5OcFXiFN1bPw/M
-        s1gGR+V7V6lS2jcCGlufz8ipe0GpN8bqtbtJhVIo4baFReoaY4bvE12ENBIgXLUAGKsr4wuvX7Ap
-        +rhoSaHv0h5M52fQa09lH0/SyegOXcHRU9G0SNeVjLIt8j61704auNADIBpc/b2ae9zt9YXa/A99
-        DzCGxiMvjEUu2PWN+2MW6yH+17HO5EYwOLQ7wbDwAm39HBxLGmQ7WuAOzmNVlEJt0BormvmC0hSz
-        hK8fprSka4hO0V8AAAD//wMAMU2sv20EAAA=
-    headers:
-      CF-RAY:
-      - 99b0ec04f9abed3b-SJC
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Sat, 08 Nov 2025 00:23:29 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '614'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '756'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999995'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_b741763f424444f38ded6343a488e723
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"content":"What is 3 * 12","role":"user"}],"model":"gpt-4o-mini","frequency_penalty":0.0,"n":1,"presence_penalty":0.0,"stream":false,"temperature":1.0,"tools":[{"type":"function","function":{"name":"calculator","description":"Can
-      perform mathematical operations.","parameters":{"properties":{"input":{"properties":{"operation":{"description":"The
-      type of operation to execute.","enum":["add","subtract","multiply","divide"],"type":"string"},"number1":{"description":"The
-      first number to operate on.","type":"number"},"number2":{"description":"The
-      second number to operate on.","type":"number"}},"required":["operation","number1","number2"],"type":"object"}},"required":["input"],"type":"object"}}}],"top_p":1.0}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate, zstd
-      connection:
-      - keep-alive
-      content-length:
-      - '725'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=vq2NJij1..ikZXHXz7_9kuewChWm.Ybd1PETHRio9g0-1762816386-1.0.1.1-L41Jq9YIbgP_zYtIVaUval7fJFuwz6Vpyjrn4i44Llzi_ojABvk8qaC5eOZaS7XXIFXYgMvKr24a_SN88kwuIpBUHhYFbOfxcBbO6HU_KEo;
-        _cfuvid=45cD.7ZhcW2RluNg65yctD0X08IbRB9P4F74NPjFFmI-1762816386470-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 1.108.2
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 1.108.2
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.11.10
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAA4xTXW+bMBR951dY9zlMgSQk5W1fXadt6jSp7bRRIcdciFdju/6oGkX57xOQAEk7
-        aTwguMfn3OPj611ACPACUgJsQx2rtQjf09tvX5Kb25t3vz4uP/+4e7v8rj5cz35yv3i4gknDUOs/
-        yNyR9YapWgt0XMkOZgapw0Y1WibxKkpmq1UL1KpA0dAq7cK5CmsueRhP43k4XYbR6sDeKM7QQkp+
-        B4QQsmvfjU9Z4DOkZDo5Vmq0llYIab+IEDBKNBWg1nLrqHQwGUCmpEPZWJdeiBHglBI5o0IMjbtn
-        N/oewqJC5NeMzfHq62P0WJjLT9tqGdPLp/iOj/p10lvdGiq9ZH1II7yvp2fNCAFJazw0ZF5Qp8wZ
-        mxCgpvI1Stc4h10GXGrvMkh3GSiNhjbaGaQZ1F44rsU2g0kG0tdrNFEG6az/izNIo3i/h5MW++C1
-        7/tReAZLb6l4mSqVUrnWQBvr/QHZ9ycoVKWNWtszKpRccrvJDVLbBjM+n+BopLUA/mQEQBtVa5c7
-        9YBt04tlJwrDlA5gnBxApxwVQz2KZ5NX5PICHeXtiPRTySjbYDFQh+mkvuBqBASjrb9085p2t30u
-        q/+RHwDGUDsscm2w4Ox0x8Myg80l/teyPuTWMFg0T5xh7jia5jgKLKkX3dUCu7UO67zkskKjDW/v
-        F5Q6XyRTWia4WFxAsA/+AgAA//8DAFBcdFttBAAA
-    headers:
-      CF-RAY:
-      - 99c93d170b52cff5-SJC
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Mon, 10 Nov 2025 23:13:08 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '673'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '687'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999995'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_71afea66344c47f482f1e1ed4e5e747b
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"messages":[{"content":"What is 3 * 12","role":"user"}],"model":"gpt-4o-mini","frequency_penalty":0.0,"n":1,"presence_penalty":0.0,"stream":false,"temperature":1.0,"tools":[{"type":"function","function":{"name":"calculator","description":"Can
-      perform mathematical operations.","parameters":{"properties":{"input":{"properties":{"operation":{"description":"The
-      type of operation to execute.","enum":["add","subtract","multiply","divide"],"type":"string"},"number1":{"description":"The
-      first number to operate on.","type":"number"},"number2":{"description":"The
-      second number to operate on.","type":"number"}},"required":["operation","number1","number2"],"type":"object"}},"required":["input"],"type":"object"}}}],"top_p":1.0}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate, zstd
-      connection:
-      - keep-alive
-      content-length:
-      - '725'
-      content-type:
-      - application/json
-      cookie:
-      - __cf_bm=YJaxUn7z_pR9XWLzuegDWSQenkg1iCiCvebUUFw6qeg-1762816440-1.0.1.1-C9FKwnXezpW1PyJ4kxiwKp3_11yC77zlItQvKHuyWXgzrOkg9TD49VfdHbNesoFbxlKShYsu5gJvfVfse2KMGGrUxDyordwo4GKAeK4myWg;
-        _cfuvid=9X1ydNrZgj.7hydyxkNcBlc5d_FHq5lh1dkMbVr2Eio-1762816440016-0.0.1.1-604800000
-      host:
-      - api.openai.com
-      user-agent:
-      - OpenAI/Python 1.108.2
-      x-stainless-arch:
-      - arm64
-      x-stainless-async:
-      - 'false'
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - MacOS
-      x-stainless-package-version:
-      - 1.108.2
-      x-stainless-raw-response:
-      - 'true'
-      x-stainless-retry-count:
-      - '0'
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.11.10
-    method: POST
-    uri: https://api.openai.com/v1/chat/completions
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAAwAAAP//jFPBbuIwEL3nK6w5w4qkAdocd/dQcaC9dFVpU0XGmQQvju3akxaE+PdV
-        AiSBstLmECXz/N48P4/3AWMgc0gYiDUnUVk1/sF/Lb/rxfL19flTzV4Wm8/3xebxyZNT71sYNQyz
-        +oOCzqxvwlRWIUmjj7BwyAkb1XA+i+7DWRyHLVCZHFVDKy2NYzOupJbjaBLF48l8HN6f2GsjBXpI
-        2O+AMcb27bvxqXPcQsImo3OlQu95iZB0ixgDZ1RTAe699MQ1wagHhdGEurGua6UGABmjMsGV6hsf
-        n/3guw+LK5VFHy8Uz9bPhLnYPsXTpXz8uZuKyaDfUXpnW0NFrUUX0gDv6slVM8ZA8wpPDUWtOBl3
-        xWYMuCvrCjU1zmGfgtS2phSSfQrGouONdgpJClWtSFq1S2GUgq6rFbowheSu+4tSSMLocICLFofg
-        1vfbIDyHRe25+poq19pQa6CN9e2EHLoTVKa0zqz8FRUKqaVfZw65b4MZnk9wNtJagPpiBMA6U1nK
-        yGywbfowP4pCP6U9GM1OIBniqq+H0d3ohlyWI3HZjkg3lYKLNeY9tZ9OXufSDIBgsPWvbm5pH7cv
-        dfk/8j0gBFrCPLMOcykud9wvc9hc4n8t60JuDYNH9yEFZiTRNceRY8Frdbxa4HeesMoKqUt01sn2
-        fkFhs2mYr+5jXvAVBIfgLwAAAP//AwDmkOI7bQQAAA==
-    headers:
-      CF-RAY:
-      - 99c93e637f2ee612-SJC
-      Connection:
-      - keep-alive
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json
-      Date:
-      - Mon, 10 Nov 2025 23:14:02 GMT
-      Server:
-      - cloudflare
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-expose-headers:
-      - X-Request-ID
-      alt-svc:
-      - h3=":443"; ma=86400
-      cf-cache-status:
-      - DYNAMIC
-      openai-organization:
-      - braintrust-data
-      openai-processing-ms:
-      - '775'
-      openai-project:
-      - proj_vsCSXafhhByzWOThMrJcZiw9
-      openai-version:
-      - '2020-10-01'
-      x-envoy-upstream-service-time:
-      - '947'
-      x-openai-proxy-wasm:
-      - v0.1
-      x-ratelimit-limit-requests:
-      - '30000'
-      x-ratelimit-limit-tokens:
-      - '150000000'
-      x-ratelimit-remaining-requests:
-      - '29999'
-      x-ratelimit-remaining-tokens:
-      - '149999995'
-      x-ratelimit-reset-requests:
-      - 2ms
-      x-ratelimit-reset-tokens:
-      - 0s
-      x-request-id:
-      - req_02e8369b573949439e7bd5c2ecab87af
+      - req_328fb8870fe54b2c834e3f7385738194
     status:
       code: 200
       message: OK

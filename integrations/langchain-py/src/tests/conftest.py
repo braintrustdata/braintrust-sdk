@@ -48,6 +48,7 @@ def vcr_config():
         "match_on": ["uri", "method"],
         "cassette_library_dir": "src/tests/cassettes",
         "path_transformer": lambda path: path.replace(".yaml", ""),
+        "decode_compressed_response": True,
     }
 
 
