@@ -136,51 +136,51 @@ jobs:
         run: |
           npm run restore
 
-integration-tests-deno:
-  needs: build
-  runs-on: ubuntu-latest
+  integration-tests-deno:
+    needs: build
+    runs-on: ubuntu-latest
 
-  strategy:
-  fail-fast: false
-  matrix:
-    integration: [otel, span]
-    os: [ubuntu-latest, windows-latest]
-    node-version: [20, 22]
+    strategy:
+      fail-fast: false
+      matrix:
+        integration: [otel, span]
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
 
-  steps:
-    - uses: actions/checkout@v4
-    - name: Setup Deno
-      uses: denoland/setup-deno@v2
-      with:
-        deno-version: v2.x
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-        path: js/artifacts
-        run-id: ${{ github.run_id }}
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract build artifact
-      working-directory: js/smoke/tests/deno
-      shell: bash
-      run: |
-        set -euo pipefail
-        ARTIFACT_DIR=../../../artifacts
-        TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
-        if [ -z "$TARBALL" ]; then
-          echo "No braintrust build found"
-          exit 1
-        fi
-        rm -rf build
-        mkdir -p build
-        tar -xzf "$TARBALL" -C build
-        [ -d build/package ] && mv build/package build/braintrust
+      - name: Extract build artifact
+        working-directory: js/smoke/tests/deno
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR=../../../artifacts
+          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
+          if [ -z "$TARBALL" ]; then
+            echo "No braintrust build found"
+            exit 1
+          fi
+          rm -rf build
+          mkdir -p build
+          tar -xzf "$TARBALL" -C build
+          [ -d build/package ] && mv build/package build/braintrust
 
-    - name: Run logger test
-      working-directory: js/smoke/tests/deno
-      env:
-        BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
-      run: |
-        deno task test
+      - name: Run logger test
+        working-directory: js/smoke/tests/deno
+        env:
+          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
+        run: |
+          deno task test
