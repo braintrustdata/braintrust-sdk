@@ -3,6 +3,7 @@ name: js
 on:
   pull_request:
   push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -62,7 +63,7 @@ jobs:
           path: js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
           retention-days: 1
 
-  integration-tests:
+  smoke-tests-node:
     needs: build
     runs-on: ${{ matrix.os }}
 
@@ -136,14 +137,13 @@ jobs:
         run: |
           npm run restore
 
-  integration-tests-deno:
+  smoke-tests-deno:
     needs: build
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        integration: [otel, span]
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 

@@ -2,7 +2,11 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.14";
 import { runSpanSmokeTest } from "../span/span_test_helper.ts";
 
-// Helper function to run the smoke test
+/**
+ * This is a simple test to send a span to the braintrust API
+ * Uses BRAINTRUST_BUILD_DIR environment variable to import the braintrust package
+ * ie. BRAINTRUST_BUILD_DIR=./package/dist/browser.mjs
+ */
 export async function runBrowserLoggerSmokeTest() {
   const buildDir = Deno.env.get("BRAINTRUST_BUILD_DIR");
   if (!buildDir) {
