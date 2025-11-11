@@ -1,4 +1,5 @@
 import { _internalGetGlobalState } from "./logger";
+import { createHash } from "node:crypto";
 
 const MAX_FETCH_RETRIES = 8;
 const INITIAL_RETRY_DELAY_MS = 250;
@@ -13,6 +14,22 @@ export interface ScorerContextOptions {
   logsId?: string;
   rootSpanId: string;
 }
+
+function isObject(value: any): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+const getMessageHash = (
+  message: any,
+  hashCache: Map<string, string>,
+): string => {
+  const messageString = JSON.stringify(message);
+  const hashString = createHash("md5").update(messageString).digest("hex");
+
+  // Cache the result
+  hashCache.set(messageString, hashString);
+  return hashString;
+};
 
 /**
  * Carries identifying information about the evaluation so scorers can perform
@@ -43,7 +60,7 @@ export class ScorerContext {
    * Fetch all rows for this root span from its parent experiment.
    * Returns an empty array when no experiment is associated with the context.
    */
-  async getSpans({ spanType }: { spanType: string }): Promise<any[]> {
+  async getSpans({ spanType }: { spanType?: string } = {}): Promise<any[]> {
     if (!this.experimentId) {
       return [];
     }
@@ -59,6 +76,7 @@ export class ScorerContext {
       from: experiment('${this.experimentId}')
       | filter: root_span_id = '${this.rootSpanId}' ${spanType ? `AND span_attributes.type = '${spanType}'` : ""}
       | select: *
+      | sort: _xact_id asc
     `;
 
     for (let attempt = 0; attempt < MAX_FETCH_RETRIES; attempt++) {
@@ -66,7 +84,7 @@ export class ScorerContext {
         "btql",
         {
           query,
-          use_columnstore: false,
+          use_columnstore: true,
           brainstore_realtime: true,
         },
         { headers: { "Accept-Encoding": "gzip" } },
@@ -99,5 +117,53 @@ export class ScorerContext {
     }
 
     return [];
+  }
+
+  async getThread() {
+    const spans = await this.getSpans({ spanType: "llm" });
+    const hashCache = new Map<string, string>();
+    const messages: any[] = [];
+    const hashes = new Set<string>();
+    const addMessage = (
+      rawMessage: any,
+      { skipDedupe = false }: { skipDedupe?: boolean } = {},
+    ) => {
+      if (!isObject(rawMessage)) {
+        return;
+      }
+      const message = { ...rawMessage };
+      const messageHash = getMessageHash(message, hashCache);
+      if (!skipDedupe && hashes.has(messageHash)) {
+        return;
+      }
+      messages.push(message);
+      hashes.add(messageHash);
+    };
+    for (const span of spans) {
+      if (span.input instanceof Array) {
+        for (const message of span.input) {
+          addMessage(message);
+        }
+      } else if (isObject(span.input)) {
+        addMessage(span.input);
+      } else if (typeof span.input === "string") {
+        addMessage({ role: "user", content: span.input });
+      }
+
+      // Always include outputs
+      if (span.output instanceof Array) {
+        for (const message of span.output) {
+          addMessage(message, { skipDedupe: true });
+        }
+      } else if (isObject(span.output)) {
+        addMessage(span.output, { skipDedupe: true });
+      } else if (typeof span.output === "string") {
+        addMessage(
+          { role: "assistant", content: span.output },
+          { skipDedupe: true },
+        );
+      }
+    }
+    return messages;
   }
 }
