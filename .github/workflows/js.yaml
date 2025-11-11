@@ -183,4 +183,4 @@ integration-tests-deno:
       env:
         BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
       run: |
-        deno task span-test
+        deno task test
