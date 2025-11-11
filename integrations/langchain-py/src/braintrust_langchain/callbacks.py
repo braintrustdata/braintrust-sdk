@@ -70,6 +70,17 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._first_token_times: Dict[UUID, float] = {}
         self._ttft_ms: Dict[UUID, float] = {}
 
+        # Capture the current span context at construction time if no explicit
+        # logger is provided. This ensures correct context in concurrent scenarios
+        # when handlers are created inside eval tasks.
+        # Only capture if there's an actual active span (not NOOP_SPAN) to support
+        # handlers created at module level (e.g., with setGlobalHandler).
+        self.captured_context: Optional[Span] = None
+        if not self.logger:
+            current = current_span()
+            if current is not NOOP_SPAN:
+                self.captured_context = current
+
     def _start_span(
         self,
         parent_run_id: Optional[UUID],
@@ -95,6 +106,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             if run_id not in self.root_span_context:
                 if self.logger is not None:
                     context_span = self.logger
+                elif self.captured_context is not None:
+                    context_span = self.captured_context
                 else:
                     context_span = current_span()
                 self.root_span_context[run_id] = context_span

@@ -120,7 +120,7 @@ DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
 def _get_exporter():
-    """ Return the active exporter (e.g. the version of SpanComponentsv*) """
+    """Return the active exporter (e.g. the version of SpanComponentsv*)"""
     use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
     return SpanComponentsV4 if use_v4 else SpanComponentsV3
 
@@ -431,7 +431,7 @@ class BraintrustState:
 
     @property
     def id_generator(self):
-        """ Return the active id generator. """
+        """Return the active id generator."""
         # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
         # so that we could possibly have parallel tests using different id generators.
         if self._id_generator is None:
@@ -442,7 +442,8 @@ class BraintrustState:
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
         import os
-        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
+
+        current_otel_setting = os.environ.get("BRAINTRUST_OTEL_COMPAT", "")
 
         # Cache the context manager unless the environment variable changed
         if self._context_manager is None or self._last_otel_setting != current_otel_setting:
@@ -450,6 +451,7 @@ class BraintrustState:
                 # Double-check after acquiring lock
                 if self._context_manager is None or self._last_otel_setting != current_otel_setting:
                     from braintrust.context import get_context_manager
+
                     self._context_manager = get_context_manager()
                     self._last_otel_setting = current_otel_setting
 
@@ -752,8 +754,6 @@ def _check_json_serializable(event):
         return bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 
 
 class _MaskingError:
@@ -1187,6 +1187,14 @@ class _HTTPBackgroundLogger:
 def _internal_reset_global_state() -> None:
     global _state
     _state = BraintrustState()
+    # Reset the thread pool singleton to ensure fresh state in tests
+    try:
+        from braintrust.framework import _internal_reset_thread_pool
+
+        _internal_reset_thread_pool()
+    except ImportError:
+        # framework module might not be available in all contexts
+        pass
 
 
 def _internal_get_global_state() -> BraintrustState:
@@ -1911,7 +1919,7 @@ def current_span() -> Span:
     """
 
     span_info = _state.context_manager.get_current_span_info()
-    if span_info and hasattr(span_info.span_object, 'span_id'):
+    if span_info and hasattr(span_info.span_object, "span_id"):
         # This is a BT span
         return span_info.span_object
     return NOOP_SPAN
@@ -1939,7 +1947,9 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None, state: Optional[BraintrustState] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
+def get_span_parent_object(
+    parent: Optional[str] = None, state: Optional[BraintrustState] = None
+) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
 
@@ -3135,6 +3145,7 @@ class ParentSpanIds:
 @dataclasses.dataclass
 class SpanIds:
     """The three IDs that define a span's position in the trace tree."""
+
     span_id: str
     root_span_id: str
     span_parents: Optional[List[str]]
@@ -3171,9 +3182,7 @@ def _resolve_span_ids(
     # If we have explicit parent span ids, use them.
     if parent_span_ids:
         return SpanIds(
-            span_id=span_id,
-            root_span_id=parent_span_ids.root_span_id,
-            span_parents=[parent_span_ids.span_id]
+            span_id=span_id, root_span_id=parent_span_ids.root_span_id, span_parents=[parent_span_ids.span_id]
         )
 
     # If we're using the context manager, get to see if there's an active parent
@@ -3182,9 +3191,7 @@ def _resolve_span_ids(
         parent_info = context_manager.get_parent_span_ids()
         if parent_info:
             return SpanIds(
-                span_id=span_id,
-                root_span_id=parent_info.root_span_id,
-                span_parents=parent_info.span_parents
+                span_id=span_id, root_span_id=parent_info.root_span_id, span_parents=parent_info.span_parents
             )
 
     # No parent - create new root span
@@ -3195,11 +3202,7 @@ def _resolve_span_ids(
     else:
         resolved_root_span_id = id_generator.get_trace_id()
 
-    return SpanIds(
-        span_id=span_id,
-        root_span_id=resolved_root_span_id,
-        span_parents=None
-    )
+    return SpanIds(span_id=span_id, root_span_id=resolved_root_span_id, span_parents=None)
 
 
 def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
@@ -3292,9 +3295,9 @@ def _start_span_parent_args(
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3317,7 +3320,6 @@ def _start_span_parent_args(
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
     )
-
 
 
 @dataclasses.dataclass
@@ -5193,9 +5195,21 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         # Capture all current context variables
         context = contextvars.copy_context()
 
+        # Capture the current thread-local background logger override
+        # This is necessary because worker threads have their own thread-local storage
+        override_logger = getattr(_state._override_bg_logger, "logger", None)
+
         def wrapped_fn(*args, **kwargs):
-            # Run the function inside the captured context
-            return context.run(fn, *args, **kwargs)
+            # Restore the background logger override in the worker thread
+            if override_logger is not None:
+                _state._override_bg_logger.logger = override_logger
+            try:
+                # Run the function inside the captured context
+                return context.run(fn, *args, **kwargs)
+            finally:
+                # Clean up the override in the worker thread
+                if override_logger is not None:
+                    _state._override_bg_logger.logger = None
 
         return super().submit(wrapped_fn, *args, **kwargs)
 

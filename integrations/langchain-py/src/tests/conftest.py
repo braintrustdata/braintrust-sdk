@@ -20,10 +20,11 @@ def setup_braintrust():
     os.environ["BRAINTRUST_SYNC_FLUSH"] = "1"
     os.environ["BRAINTRUST_API_URL"] = "http://localhost:8000"
     os.environ["BRAINTRUST_APP_URL"] = "http://localhost:3000"
-    os.environ["BRAINTRUST_API_KEY"] = TEST_API_KEY
-    os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_api_key_here"
-    os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
-    os.environ["OPENAI_BASE_URL"] = "http://localhost:8000/v1/proxy"
+    if (os.environ.get("UPDATE") or "") == "":
+        os.environ["BRAINTRUST_API_KEY"] = TEST_API_KEY
+        os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_api_key_here"
+        os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
+        os.environ["OPENAI_BASE_URL"] = "http://localhost:8000/v1/proxy"
 
     _internal_reset_global_state()
     clear_global_handler()
@@ -34,7 +35,7 @@ def setup_braintrust():
 def vcr_config():
     # In CI, use "none" to never make real requests
     # Locally, use "once" to record new cassettes if they don't exist
-    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+    record_mode = "all" if os.environ.get("UPDATE") else "none"
 
     return {
         "filter_headers": [

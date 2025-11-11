@@ -9,7 +9,6 @@ import sys
 import traceback
 import warnings
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing import cpu_count
 from typing import (
@@ -1182,7 +1181,7 @@ class DictEvalHooks(Dict[str, Any]):
 
     @tags.setter
     def tags(self, tags: Optional[Sequence[str]]) -> None:
-        self["tags"] =  [] if tags is None else list(tags)
+        self["tags"] = [] if tags is None else list(tags)
 
     def meta(self, **info: Any):
         warnings.warn(
@@ -1223,8 +1222,16 @@ class EvalThreadPoolSingleton:
 
     def thread_pool(self):
         if self._thread_pool is None:
-            self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
+            from braintrust.logger import TracedThreadPoolExecutor
+
+            self._thread_pool = TracedThreadPoolExecutor(max_workers=self._max_workers)
         return self._thread_pool
+
+    def reset(self):
+        """Reset the thread pool, shutting down any existing pool."""
+        if self._thread_pool is not None:
+            self._thread_pool.shutdown(wait=True)
+            self._thread_pool = None
 
 
 _THREAD_POOL_SINGLETON = ResourceManager(EvalThreadPoolSingleton())
@@ -1237,6 +1244,12 @@ def set_thread_pool_max_workers(max_workers):
     """
     with _THREAD_POOL_SINGLETON.get() as obj:
         obj.set_max_workers(max_workers)
+
+
+def _internal_reset_thread_pool():
+    """Internal function to reset the thread pool singleton. Used in tests."""
+    with _THREAD_POOL_SINGLETON.get() as obj:
+        obj.reset()
 
 
 def _scorer_name(scorer, scorer_idx):
