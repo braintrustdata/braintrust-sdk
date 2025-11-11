@@ -8,7 +8,10 @@ export {
   addSpanParentToBaggage,
   addParentToBaggage,
   parentFromHeaders,
-} from "./otel";
+} from "./compat";
+
+export { BraintrustExporter } from "./exporter";
+export { BraintrustSpanProcessor } from "./processor";
 
 declare global {
   // eslint-disable-next-line no-var
