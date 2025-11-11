@@ -60,7 +60,7 @@ export class ScorerContext {
    * Fetch all rows for this root span from its parent experiment.
    * Returns an empty array when no experiment is associated with the context.
    */
-  async getSpans({ spanType }: { spanType?: string } = {}): Promise<any[]> {
+  async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<any[]> {
     if (!this.experimentId) {
       return [];
     }
@@ -74,7 +74,7 @@ export class ScorerContext {
 
     const query = `
       from: experiment('${this.experimentId}')
-      | filter: root_span_id = '${this.rootSpanId}' ${spanType ? `AND span_attributes.type = '${spanType}'` : ""}
+      | filter: root_span_id = '${this.rootSpanId}' ${spanType ? `AND span_attributes.type IN ${JSON.stringify(spanType)}` : ""}
       | select: *
       | sort: _xact_id asc
     `;
@@ -120,7 +120,7 @@ export class ScorerContext {
   }
 
   async getThread() {
-    const spans = await this.getSpans({ spanType: "llm" });
+    const spans = await this.getSpans({ spanType: ["llm"] });
     const hashCache = new Map<string, string>();
     const messages: any[] = [];
     const hashes = new Set<string>();
