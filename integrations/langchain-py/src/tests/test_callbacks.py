@@ -867,6 +867,7 @@ def test_consecutive_eval_calls(logger_memory_logger: LoggerMemoryLogger):
     # Real LangChain span integration is tested in other tests (test_llm_calls, etc.)
 
 
+@pytest.mark.vcr
 def test_concurrent_eval_with_logger(logger_memory_logger: LoggerMemoryLogger):
     """Test that concurrent eval tasks with explicit logger parameter properly attach LLM spans to their respective task spans."""
     from braintrust import Eval

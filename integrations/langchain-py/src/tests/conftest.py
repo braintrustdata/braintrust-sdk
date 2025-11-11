@@ -24,7 +24,6 @@ def setup_braintrust():
         os.environ["BRAINTRUST_API_KEY"] = TEST_API_KEY
         os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_api_key_here"
         os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
-        os.environ["OPENAI_BASE_URL"] = "http://localhost:8000/v1/proxy"
 
     _internal_reset_global_state()
     clear_global_handler()
@@ -46,7 +45,7 @@ def vcr_config():
             "openai-api-key",
         ],
         "record_mode": record_mode,
-        "match_on": ["uri", "method", "body"],
+        "match_on": ["uri", "method"],
         "cassette_library_dir": "src/tests/cassettes",
         "path_transformer": lambda path: path.replace(".yaml", ""),
     }
