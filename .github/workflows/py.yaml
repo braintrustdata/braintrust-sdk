@@ -2,6 +2,8 @@ name: py
 
 on:
   pull_request:
+    paths-ignore:
+      - "js/**"
   push:
     branches: [main]
 
