@@ -4,8 +4,8 @@ on:
   pull_request:
     paths-ignore:
       - "py/**"
-      - "integrations/langchain-py/**"
-      - "integrations/adk-py/**"
+      - "integrations/*-py/**"
+
   push:
     branches: [main]
 
