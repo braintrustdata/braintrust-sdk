@@ -24,6 +24,7 @@
   "license": "MIT",
   "devDependencies": {
     "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "1.9.0",
     "@opentelemetry/core": "1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "0.57.2",
     "@opentelemetry/sdk-trace-base": "1.9.0",

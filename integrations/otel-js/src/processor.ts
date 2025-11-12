@@ -1,5 +1,5 @@
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { context, Context, trace } from "@opentelemetry/api";
+import { context, Context, propagation, trace } from "@opentelemetry/api";
 import {
   SpanProcessor,
   ReadableSpan,
@@ -99,11 +99,12 @@ export class AISpanProcessor {
     }
 
     // Always keep root spans (no parent). We check both parentSpanContext and parentSpanId to handle both OTel v1 and v2 child spans.
-    if (
-      !("parentSpanContext" in span && span.parentSpanContext) &&
-      "parentSpanId" in span &&
-      !span.parentSpanId
-    ) {
+    // A span is a root span if it has neither a parentSpanContext nor a parentSpanId.
+    const hasParentContext =
+      "parentSpanContext" in span && span.parentSpanContext;
+    const hasParentId = "parentSpanId" in span && span.parentSpanId;
+
+    if (!hasParentContext && !hasParentId) {
       return true;
     }
 
@@ -349,9 +350,24 @@ export class BraintrustSpanProcessor {
           parentValue = this._getParentOtelBraintrustParent(parentContext);
         }
 
+        // Priority 4: Check if braintrust.parent is in baggage (for distributed tracing)
+        if (!parentValue && parentContext && propagation) {
+          try {
+            const baggage = propagation.getBaggage(parentContext);
+            const baggageValue = baggage?.getEntry(
+              BRAINTRUST_PARENT_STRING,
+            )?.value;
+            if (typeof baggageValue === "string") {
+              parentValue = baggageValue;
+            }
+          } catch {
+            // Ignore baggage errors
+          }
+        }
+
         // Set the attribute if we found a parent value
         if (parentValue && typeof span.setAttributes === "function") {
-          span.setAttributes({ BRAINTRUST_PARENT: parentValue });
+          span.setAttributes({ [BRAINTRUST_PARENT_STRING]: parentValue });
         }
       }
     } catch {

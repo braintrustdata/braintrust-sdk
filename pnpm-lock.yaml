@@ -86,6 +86,9 @@ importers:
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
+      '@opentelemetry/context-async-hooks':
+        specifier: 1.9.0
+        version: 1.9.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/core':
         specifier: 1.9.0
         version: 1.9.0(@opentelemetry/api@1.9.0)
@@ -3443,6 +3446,15 @@ packages:
     transitivePeerDependencies:
       - encoding
       - supports-color
+    dev: true
+
+  /@opentelemetry/context-async-hooks@1.9.0(@opentelemetry/api@1.9.0):
+    resolution: {integrity: sha512-Ur+TgRmJgAEvg6VQuhkqzsWsqoOtr+QSZ8r8Yf6WrvlZpAl/sdRU+yUXWjA7r8JFS9VbBq7IEp7oMStFuJT2ow==}
+    engines: {node: '>=14'}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.5.0'
+    dependencies:
+      '@opentelemetry/api': 1.9.0
     dev: true
 
   /@opentelemetry/context-async-hooks@2.0.1(@opentelemetry/api@1.9.0):

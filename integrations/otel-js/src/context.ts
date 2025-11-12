@@ -5,7 +5,7 @@ import {
 } from "braintrust";
 
 import { trace as otelTrace, context as otelContext } from "@opentelemetry/api";
-import { BRAINTRUST_SPAN } from "./constants";
+import { BRAINTRUST_SPAN, BRAINTRUST_PARENT } from "./constants";
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -101,10 +101,43 @@ export class OtelContextManager extends ContextManager {
         let newContext = otelTrace.setSpan(currentContext, wrappedContext);
         newContext = newContext.setValue(BRAINTRUST_SPAN, span);
 
-        // Get parent value and store it in context (matching Python's behavior)
-        const parentValue = span._getOtelParent();
-        if (parentValue) {
-          newContext = newContext.setValue(BRAINTRUST_SPAN, parentValue);
+        // Set braintrust.parent in context so child OTEL spans can inherit it
+        // Build parent string from span properties
+        if (typeof span === "object" && span !== null) {
+          // Use bracket notation to avoid type assertions
+          const spanRecord: Record<string, unknown> = span;
+          const parentComputeObjectMetadataArgs =
+            spanRecord["parentComputeObjectMetadataArgs"];
+
+          if (
+            typeof parentComputeObjectMetadataArgs === "object" &&
+            parentComputeObjectMetadataArgs !== null
+          ) {
+            const metadata: Record<string, unknown> =
+              parentComputeObjectMetadataArgs;
+            let parentStr = "";
+            const projectName = metadata["project_name"];
+            const projectId = metadata["project_id"];
+            const experimentId = metadata["experiment_id"];
+
+            if (typeof projectName === "string") {
+              parentStr += `project_name:${projectName}`;
+            } else if (typeof projectId === "string") {
+              parentStr += `project_id:${projectId}`;
+            }
+            if (typeof experimentId === "string") {
+              if (parentStr) parentStr += ":";
+              parentStr += `experiment_id:${experimentId}`;
+            }
+            if (parentStr) {
+              parentStr += `:span_id:${btSpan.spanId}`;
+              const spanId = spanRecord["id"];
+              if (typeof spanId === "string") {
+                parentStr += `:row_id:${spanId}`;
+              }
+              newContext = newContext.setValue(BRAINTRUST_PARENT, parentStr);
+            }
+          }
         }
 
         // Run the callback in the new context
