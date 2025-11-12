@@ -14,7 +14,7 @@ import {
   addSpanParentToBaggage,
   parentFromHeaders,
   BraintrustSpanProcessor,
-} from "@braintrust/otel";
+} from "../src";
 
 const { trace, context, propagation } = api;
 

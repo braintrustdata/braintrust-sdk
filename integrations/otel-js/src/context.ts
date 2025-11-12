@@ -105,7 +105,7 @@ export class OtelContextManager extends ContextManager {
         // Build parent string from span properties
         if (typeof span === "object" && span !== null) {
           // Use bracket notation to avoid type assertions
-          const spanRecord: Record<string, unknown> = span;
+          const spanRecord = span as unknown as Record<string, unknown>;
           const parentComputeObjectMetadataArgs =
             spanRecord["parentComputeObjectMetadataArgs"];
 
@@ -113,8 +113,11 @@ export class OtelContextManager extends ContextManager {
             typeof parentComputeObjectMetadataArgs === "object" &&
             parentComputeObjectMetadataArgs !== null
           ) {
-            const metadata: Record<string, unknown> =
-              parentComputeObjectMetadataArgs;
+            const metadata =
+              parentComputeObjectMetadataArgs as unknown as Record<
+                string,
+                unknown
+              >;
             let parentStr = "";
             const projectName = metadata["project_name"];
             const projectId = metadata["project_id"];
