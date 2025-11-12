@@ -30,6 +30,40 @@ def setup_braintrust():
     yield
 
 
+def before_record_response(response):
+    """Remove Transfer-Encoding header and add Content-Length to prevent httpx streaming issues.
+
+    When VCR replays responses with Transfer-Encoding: chunked, httpx treats
+    them as streaming responses, causing ResponseNotRead errors. We remove
+    this header and add Content-Length since we're storing the full response body.
+    """
+    if "headers" in response:
+        # Remove Transfer-Encoding header (case-insensitive)
+        headers_to_remove = [k for k in response["headers"].keys() if k.lower() == "transfer-encoding"]
+        for header in headers_to_remove:
+            del response["headers"][header]
+
+        # Add Content-Length header if not present and we have a body
+        if "body" in response and response["body"]:
+            has_content_length = any(k.lower() == "content-length" for k in response["headers"].keys())
+            if not has_content_length:
+                body = response["body"]
+                if isinstance(body, dict) and "string" in body:
+                    body_content = body["string"]
+                elif isinstance(body, str):
+                    body_content = body
+                else:
+                    body_content = str(body)
+
+                if isinstance(body_content, bytes):
+                    content_length = len(body_content)
+                else:
+                    content_length = len(body_content.encode("utf-8"))
+                response["headers"]["Content-Length"] = str(content_length)
+
+    return response
+
+
 @pytest.fixture(scope="module")
 def vcr_config():
     # In CI, use "none" to never make real requests
@@ -49,6 +83,7 @@ def vcr_config():
         "cassette_library_dir": "src/tests/cassettes",
         "path_transformer": lambda path: path.replace(".yaml", ""),
         "decode_compressed_response": True,
+        "before_record_response": before_record_response,
     }
 
 

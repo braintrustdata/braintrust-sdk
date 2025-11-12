@@ -13,8 +13,8 @@ interactions:
       content-type:
       - application/json
       cookie:
-      - __cf_bm=1sucBJCNErFVxpx2HvBa9Fp0snxfM_FIlRjHlE5qQwo-1762824320-1.0.1.1-N..zbgBE83gWUv5v.4Y8MYbnhAAxwRt2InY64Vz9e8aSI2FXFCCGkSHWCaGqWTiEV.wsO_1jMG3KUyTMPHx2UsUlN6rgW44nqSub.v8jo7Q;
-        _cfuvid=djMo1bUSW38xyzUMOr.5_kQxxS5Olq5XG4DD70XOohc-1762824320240-0.0.1.1-604800000
+      - __cf_bm=ohQEqYr7wAxTMiA4vZv_Jf21VZWdeMT9jtOttUF1BPQ-1762971834-1.0.1.1-gkaAiL0I_USIB8wNPkMzPBRWSiHTbq9CFIaXu.ZzGLKX1aPP_Ky7200Fv6X3BpAe9rxCyVhNDzIcLNjD5S0Jk.OMxDRCfz1w5kZKbtL0t6M;
+        _cfuvid=lI1atncRtUMhCAPBD3nYoVM6UBWG7BM43xmu3yvEPEI-1762971834718-0.0.1.1-604800000
       host:
       - api.openai.com
       user-agent:
@@ -41,8 +41,8 @@ interactions:
     uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: "{\n  \"id\": \"chatcmpl-CaXQKlO38fHN4shJ5b2KosvdIidpw\",\n  \"object\":
-        \"chat.completion\",\n  \"created\": 1762824324,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+      string: "{\n  \"id\": \"chatcmpl-Cb9nb6EVL5UvpNgmlN3Nk75DCyXd3\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1762971839,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
         \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
         \"assistant\",\n        \"content\": \"Hello! How can I assist you today?\",\n
         \       \"refusal\": null,\n        \"annotations\": []\n      },\n      \"logprobs\":
@@ -54,19 +54,17 @@ interactions:
         \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
     headers:
       CF-RAY:
-      - 99c9fed8bbb04f08-SJC
+      - 99d8104eabc3158a-SJC
       Connection:
       - keep-alive
       Content-Type:
       - application/json
       Date:
-      - Tue, 11 Nov 2025 01:25:24 GMT
+      - Wed, 12 Nov 2025 18:24:00 GMT
       Server:
       - cloudflare
       Strict-Transport-Security:
       - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
       X-Content-Type-Options:
       - nosniff
       access-control-expose-headers:
@@ -80,13 +78,13 @@ interactions:
       openai-organization:
       - braintrust-data
       openai-processing-ms:
-      - '306'
+      - '286'
       openai-project:
       - proj_vsCSXafhhByzWOThMrJcZiw9
       openai-version:
       - '2020-10-01'
       x-envoy-upstream-service-time:
-      - '329'
+      - '298'
       x-openai-proxy-wasm:
       - v0.1
       x-ratelimit-limit-requests:
@@ -102,7 +100,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_85f58467c9b84514876267c177e5ca5b
+      - req_a5c8ed365d8b452b9819982b2f2991fe
     status:
       code: 200
       message: OK

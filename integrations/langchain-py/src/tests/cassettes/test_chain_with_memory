@@ -14,8 +14,8 @@ interactions:
       content-type:
       - application/json
       cookie:
-      - __cf_bm=1sucBJCNErFVxpx2HvBa9Fp0snxfM_FIlRjHlE5qQwo-1762824320-1.0.1.1-N..zbgBE83gWUv5v.4Y8MYbnhAAxwRt2InY64Vz9e8aSI2FXFCCGkSHWCaGqWTiEV.wsO_1jMG3KUyTMPHx2UsUlN6rgW44nqSub.v8jo7Q;
-        _cfuvid=djMo1bUSW38xyzUMOr.5_kQxxS5Olq5XG4DD70XOohc-1762824320240-0.0.1.1-604800000
+      - __cf_bm=ohQEqYr7wAxTMiA4vZv_Jf21VZWdeMT9jtOttUF1BPQ-1762971834-1.0.1.1-gkaAiL0I_USIB8wNPkMzPBRWSiHTbq9CFIaXu.ZzGLKX1aPP_Ky7200Fv6X3BpAe9rxCyVhNDzIcLNjD5S0Jk.OMxDRCfz1w5kZKbtL0t6M;
+        _cfuvid=lI1atncRtUMhCAPBD3nYoVM6UBWG7BM43xmu3yvEPEI-1762971834718-0.0.1.1-604800000
       host:
       - api.openai.com
       user-agent:
@@ -42,11 +42,11 @@ interactions:
     uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: "{\n  \"id\": \"chatcmpl-CaXQGFm20jg7bUq7xGZoFOAIOf9SB\",\n  \"object\":
-        \"chat.completion\",\n  \"created\": 1762824320,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+      string: "{\n  \"id\": \"chatcmpl-Cb9nX2zl9vNqcBpU5kGIjBxUcI3yo\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1762971835,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
         \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
         \"assistant\",\n        \"content\": \"Assistant: I don't have a personal
-        name, but you can call me Assistant! How can I help you today?\",\n        \"refusal\":
+        name, but you can call me Assistant. How can I help you today?\",\n        \"refusal\":
         null,\n        \"annotations\": []\n      },\n      \"logprobs\": null,\n
         \     \"finish_reason\": \"stop\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\":
         24,\n    \"completion_tokens\": 23,\n    \"total_tokens\": 47,\n    \"prompt_tokens_details\":
@@ -56,19 +56,17 @@ interactions:
         \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
     headers:
       CF-RAY:
-      - 99c9fec1bc8d4f08-SJC
+      - 99d8102fda27158a-SJC
       Connection:
       - keep-alive
       Content-Type:
       - application/json
       Date:
-      - Tue, 11 Nov 2025 01:25:21 GMT
+      - Wed, 12 Nov 2025 18:23:56 GMT
       Server:
       - cloudflare
       Strict-Transport-Security:
       - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
       X-Content-Type-Options:
       - nosniff
       access-control-expose-headers:
@@ -82,13 +80,13 @@ interactions:
       openai-organization:
       - braintrust-data
       openai-processing-ms:
-      - '651'
+      - '533'
       openai-project:
       - proj_vsCSXafhhByzWOThMrJcZiw9
       openai-version:
       - '2020-10-01'
       x-envoy-upstream-service-time:
-      - '668'
+      - '712'
       x-openai-proxy-wasm:
       - v0.1
       x-ratelimit-limit-requests:
@@ -104,7 +102,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_24465456608b43c1b47082a9a5b9987e
+      - req_2763183673414b88ac3ee012b7ab0e85
     status:
       code: 200
       message: OK

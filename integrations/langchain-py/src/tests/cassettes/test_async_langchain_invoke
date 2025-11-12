@@ -40,21 +40,19 @@ interactions:
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: '{"model":"claude-sonnet-4-20250514","id":"msg_01QqR6FDxMgwWDTBksViue4a","type":"message","role":"assistant","content":[{"type":"text","text":"1
+      string: '{"model":"claude-sonnet-4-20250514","id":"msg_01QK4sb5KJEPpxJEufh8EVHi","type":"message","role":"assistant","content":[{"type":"text","text":"1
         + 2 = 3"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":16,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":13,"service_tier":"standard"}}'
     headers:
       CF-RAY:
-      - 99c9feaf0e582702-SJC
+      - 99d8101a797aeb21-SJC
       Connection:
       - keep-alive
       Content-Type:
       - application/json
       Date:
-      - Tue, 11 Nov 2025 01:25:18 GMT
+      - Wed, 12 Nov 2025 18:23:53 GMT
       Server:
       - cloudflare
-      Transfer-Encoding:
-      - chunked
       X-Robots-Tag:
       - none
       anthropic-organization-id:
@@ -64,31 +62,31 @@ interactions:
       anthropic-ratelimit-input-tokens-remaining:
       - '3000000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2025-11-11T01:25:18Z'
+      - '2025-11-12T18:23:52Z'
       anthropic-ratelimit-output-tokens-limit:
       - '600000'
       anthropic-ratelimit-output-tokens-remaining:
       - '600000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2025-11-11T01:25:18Z'
+      - '2025-11-12T18:23:53Z'
       anthropic-ratelimit-tokens-limit:
       - '3600000'
       anthropic-ratelimit-tokens-remaining:
       - '3600000'
       anthropic-ratelimit-tokens-reset:
-      - '2025-11-11T01:25:18Z'
+      - '2025-11-12T18:23:52Z'
       cf-cache-status:
       - DYNAMIC
       content-length:
       - '413'
       request-id:
-      - req_011CV1EJfgaqfZLp2TnRKf8F
+      - req_011CV4Tna3p4a6WJvAMP6XgP
       retry-after:
-      - '45'
+      - '8'
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       x-envoy-upstream-service-time:
-      - '1600'
+      - '2476'
     status:
       code: 200
       message: OK

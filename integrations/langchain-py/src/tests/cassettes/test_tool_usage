@@ -17,8 +17,8 @@ interactions:
       content-type:
       - application/json
       cookie:
-      - __cf_bm=1sucBJCNErFVxpx2HvBa9Fp0snxfM_FIlRjHlE5qQwo-1762824320-1.0.1.1-N..zbgBE83gWUv5v.4Y8MYbnhAAxwRt2InY64Vz9e8aSI2FXFCCGkSHWCaGqWTiEV.wsO_1jMG3KUyTMPHx2UsUlN6rgW44nqSub.v8jo7Q;
-        _cfuvid=djMo1bUSW38xyzUMOr.5_kQxxS5Olq5XG4DD70XOohc-1762824320240-0.0.1.1-604800000
+      - __cf_bm=ohQEqYr7wAxTMiA4vZv_Jf21VZWdeMT9jtOttUF1BPQ-1762971834-1.0.1.1-gkaAiL0I_USIB8wNPkMzPBRWSiHTbq9CFIaXu.ZzGLKX1aPP_Ky7200Fv6X3BpAe9rxCyVhNDzIcLNjD5S0Jk.OMxDRCfz1w5kZKbtL0t6M;
+        _cfuvid=lI1atncRtUMhCAPBD3nYoVM6UBWG7BM43xmu3yvEPEI-1762971834718-0.0.1.1-604800000
       host:
       - api.openai.com
       user-agent:
@@ -45,11 +45,11 @@ interactions:
     uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: "{\n  \"id\": \"chatcmpl-CaXQHyhHTlrBpoYA9o9e8WXyaUtDo\",\n  \"object\":
-        \"chat.completion\",\n  \"created\": 1762824321,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
+      string: "{\n  \"id\": \"chatcmpl-Cb9nYLHaZqpNxH9C0aYNpIerYNIOm\",\n  \"object\":
+        \"chat.completion\",\n  \"created\": 1762971836,\n  \"model\": \"gpt-4o-mini-2024-07-18\",\n
         \ \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\":
         \"assistant\",\n        \"content\": null,\n        \"tool_calls\": [\n          {\n
-        \           \"id\": \"call_lNiwkkNt3Ryr4y0kr3emAnRr\",\n            \"type\":
+        \           \"id\": \"call_xuEInFtB0Gz49Wx7fyNdEHFT\",\n            \"type\":
         \"function\",\n            \"function\": {\n              \"name\": \"calculator\",\n
         \             \"arguments\": \"{\\\"input\\\":{\\\"operation\\\":\\\"multiply\\\",\\\"number1\\\":3,\\\"number2\\\":12}}\"\n
         \           }\n          }\n        ],\n        \"refusal\": null,\n        \"annotations\":
@@ -62,19 +62,17 @@ interactions:
         \"default\",\n  \"system_fingerprint\": \"fp_560af6e559\"\n}\n"
     headers:
       CF-RAY:
-      - 99c9fec95c0c4f08-SJC
+      - 99d810382a61158a-SJC
       Connection:
       - keep-alive
       Content-Type:
       - application/json
       Date:
-      - Tue, 11 Nov 2025 01:25:22 GMT
+      - Wed, 12 Nov 2025 18:23:56 GMT
       Server:
       - cloudflare
       Strict-Transport-Security:
       - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
       X-Content-Type-Options:
       - nosniff
       access-control-expose-headers:
@@ -88,13 +86,13 @@ interactions:
       openai-organization:
       - braintrust-data
       openai-processing-ms:
-      - '675'
+      - '594'
       openai-project:
       - proj_vsCSXafhhByzWOThMrJcZiw9
       openai-version:
       - '2020-10-01'
       x-envoy-upstream-service-time:
-      - '697'
+      - '613'
       x-openai-proxy-wasm:
       - v0.1
       x-ratelimit-limit-requests:
@@ -110,7 +108,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_328fb8870fe54b2c834e3f7385738194
+      - req_e58807e342d44594aaac9df95db348b2
     status:
       code: 200
       message: OK

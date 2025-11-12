@@ -17,6 +17,9 @@ from .helpers import assert_matches_object
 
 @pytest.mark.vcr
 def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
+    # Note: This test may occasionally fail locally due to a known VCR+httpx
+    # compatibility issue when run with other tests. It passes reliably when
+    # run alone or in fresh CI environments.
     logger, memory_logger = logger_memory_logger
     assert not memory_logger.pop()
 
