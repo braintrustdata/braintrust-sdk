@@ -3,6 +3,7 @@ import os
 
 import pytest
 from braintrust import Tuple
+from braintrust.framework import _internal_reset_thread_pool
 from braintrust.logger import (
     TEST_API_KEY,
     Logger,
@@ -26,6 +27,7 @@ def setup_braintrust():
         os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
 
     _internal_reset_global_state()
+    _internal_reset_thread_pool()
     clear_global_handler()
     yield
 

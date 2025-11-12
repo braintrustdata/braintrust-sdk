@@ -15,12 +15,19 @@ from .conftest import LoggerMemoryLogger
 from .helpers import assert_matches_object
 
 
-@pytest.mark.xfail(strict=False, reason="Known VCR+httpx module caching issue - may pass in fresh CI environments")
+@pytest.mark.xfail(
+    strict=False, reason="Known VCR+httpx streaming response issue - httpx.ResponseNotRead when replaying cassettes"
+)
 @pytest.mark.vcr
 def test_global_handler(logger_memory_logger: LoggerMemoryLogger):
     # Note: This test may occasionally fail locally due to a known VCR+httpx
     # compatibility issue when run with other tests. It passes reliably when
     # run alone or in fresh CI environments.
+    #
+    # The flakiness is caused by httpx treating VCR-replayed responses as streaming
+    # responses even though Transfer-Encoding headers are removed and Content-Length
+    # is added. The SDK changes to TracedThreadPoolExecutor make test execution order
+    # more deterministic, which can expose this infrastructure issue more consistently.
     logger, memory_logger = logger_memory_logger
     assert not memory_logger.pop()
 
