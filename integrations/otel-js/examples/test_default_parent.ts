@@ -1,5 +1,5 @@
 // test_default_parent.ts - Test default parent behavior
-import { BraintrustSpanProcessor } from "../../src";
+import { BraintrustSpanProcessor } from "../src";
 
 console.log("Testing default parent behavior...");
 

@@ -1,10 +1,5 @@
-import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
-import {
-  IDGenerator,
-  UUIDGenerator,
-  OTELIDGenerator,
-  getIdGenerator,
-} from "./id-gen";
+import { expect, test, describe, beforeEach, afterEach } from "vitest";
+import { UUIDGenerator, OTELIDGenerator, getIdGenerator } from "./id-gen";
 
 describe("ID Generation", () => {
   let originalEnv: string | undefined;
