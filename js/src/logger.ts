@@ -114,7 +114,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate as lintMustacheTemplate } from "./mustache-utils";
+import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
 import { prettifyXact } from "../util/index";
 
 // Context management interfaces

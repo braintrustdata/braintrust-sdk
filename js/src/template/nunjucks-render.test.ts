@@ -62,3 +62,70 @@ describe("nunjucks rendering", () => {
     expect(() => env.renderString(tpl, bad)).toThrow();
   });
 });
+
+describe("nunjucks lintTemplate", () => {
+  test("passes when variables exist", () => {
+    expect(() =>
+      lintTemplate("Hello {{ user.name }}", {
+        user: { name: "Ada" },
+      }),
+    ).not.toThrow();
+  });
+
+  test("throws for missing top-level variable", () => {
+    expect(() => lintTemplate("{{ missing }}", {})).toThrow(
+      "Variable 'missing' does not exist.",
+    );
+  });
+
+  test("handles nested lookups with numeric indices", () => {
+    expect(() =>
+      lintTemplate("{{ users[2].profile.city }}", {
+        users: [{}, {}, { profile: { city: "NYC" } }],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      lintTemplate("{{ users[2].profile.city }}", {
+        users: [{}, {}],
+      }),
+    ).toThrow("Variable 'users[2].profile.city' does not exist.");
+  });
+
+  test("reports missing leaf when ancestors exist", () => {
+    expect(() =>
+      lintTemplate("{{ users[1].profile.zip }}", {
+        users: [{ profile: { zip: "10001" } }, { profile: { city: "NYC" } }],
+      }),
+    ).toThrow("Variable 'users[1].profile.zip' does not exist.");
+  });
+
+  test("allows for-loops over missing arrays", () => {
+    expect(() =>
+      lintTemplate(`{% for item in items %}{{ item }}{% endfor %}`, {}),
+    ).not.toThrow();
+  });
+
+  test("tracks loop-scoped variables", () => {
+    expect(() =>
+      lintTemplate(
+        `{% for user in users %}{{ loop.index }} {{ user.name }}{% endfor %}`,
+        { users: [{ name: "Ada" }] },
+      ),
+    ).not.toThrow();
+  });
+
+  test("supports set blocks defining new variables", () => {
+    expect(() =>
+      lintTemplate(
+        `{% set message %}Hello {{ name }}{% endset %}{{ message }}`,
+        { name: "Linus" },
+      ),
+    ).not.toThrow();
+  });
+
+  test("supports macros with arguments", () => {
+    const tpl = `{% macro greet(person, fallback="friend") %}Hi {{ person or fallback }}{% endmacro %}{{ greet(name) }}`;
+    expect(() => lintTemplate(tpl, { name: "Alex" })).not.toThrow();
+    expect(() => lintTemplate(tpl, {})).not.toThrow();
+  });
+});
