@@ -115,6 +115,7 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
+import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 
 // Context management interfaces
@@ -6329,21 +6330,31 @@ export function deserializePlainStringAsJSON(s: string) {
 function renderTemplatedObject(
   obj: unknown,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    if (options.strict) {
-      lintMustacheTemplate(obj, args);
+    const strict = !!options.strict;
+    if (options.templateFormat === "nunjucks") {
+      if (strict) {
+        lintNunjucksTemplate(obj, args);
+      }
+      return getNunjucksEnv(strict).renderString(obj, args);
     }
-    return Mustache.render(obj, args, undefined, {
-      escape: (value) => {
-        if (typeof value === "string") {
-          return value;
-        } else {
-          return JSON.stringify(value);
-        }
-      },
-    });
+    if (options.templateFormat === "mustache") {
+      if (strict) {
+        lintMustacheTemplate(obj, args);
+      }
+      return Mustache.render(obj, args, undefined, {
+        escape: (value) => {
+          if (typeof value === "string") {
+            return value;
+          } else {
+            return JSON.stringify(value);
+          }
+        },
+      });
+    }
+    return obj;
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
@@ -6360,8 +6371,11 @@ function renderTemplatedObject(
 export function renderPromptParams(
   params: ModelParams | undefined,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat?: TemplateFormat } = {},
 ): ModelParams | undefined {
+  const templateFormat = parseTemplateFormat(options.templateFormat);
+  const strict = !!options.strict;
+
   const schemaParsed = z
     .object({
       response_format: z.object({
@@ -6376,7 +6390,10 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, {
+      strict,
+      templateFormat,
+    });
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -6399,12 +6416,15 @@ export function renderPromptParams(
 export function renderTemplateContent(
   template: string,
   variables: Record<string, unknown>,
-  templateFormat: TemplateFormat,
   escape: (v: unknown) => string,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat?: TemplateFormat },
 ): string {
   const strict = !!options.strict;
+  const templateFormat = parseTemplateFormat(options.templateFormat);
   if (templateFormat === "nunjucks") {
+    if (strict) {
+      lintNunjucksTemplate(template, variables);
+    }
     const rendered = getNunjucksEnv(strict).renderString(template, variables);
     return rendered;
   } else if (templateFormat === "mustache") {
@@ -6611,7 +6631,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
@@ -6629,7 +6652,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         prompt: renderedPrompt.content,
       } as CompiledPrompt<Flavor>;
@@ -6675,8 +6701,9 @@ export class Prompt<
 
     if (prompt.type === "chat") {
       const render = (template: string) =>
-        renderTemplateContent(template, variables, templateFormat, escape, {
+        renderTemplateContent(template, variables, escape, {
           strict: options.strict,
+          templateFormat: templateFormat,
         });
 
       const baseMessages = (prompt.messages || []).map((m) =>
@@ -6707,13 +6734,10 @@ export class Prompt<
         );
       }
 
-      const content = renderTemplateContent(
-        prompt.content,
-        variables,
-        templateFormat,
-        escape,
-        { strict: options.strict },
-      );
+      const content = renderTemplateContent(prompt.content, variables, escape, {
+        strict: options.strict,
+        templateFormat: templateFormat,
+      });
       return {
         type: "completion",
         content,

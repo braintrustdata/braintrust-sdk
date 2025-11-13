@@ -134,24 +134,16 @@ describe("renderTemplateContent", () => {
   };
 
   test("renders mustache templates", () => {
-    const result = renderTemplateContent(
-      "Hello {{name}}!",
-      variables,
-      "mustache",
-      escape,
-      {},
-    );
+    const result = renderTemplateContent("Hello {{name}}!", variables, escape, {
+      templateFormat: "mustache",
+    });
     expect(result).toBe("Hello World!");
   });
 
   test("renders with none format (no templating)", () => {
-    const result = renderTemplateContent(
-      "Hello {{name}}!",
-      variables,
-      "none",
-      escape,
-      {},
-    );
+    const result = renderTemplateContent("Hello {{name}}!", variables, escape, {
+      templateFormat: "none",
+    });
     expect(result).toBe("Hello {{name}}!");
   });
 
@@ -159,7 +151,6 @@ describe("renderTemplateContent", () => {
     const result = renderTemplateContent(
       "Value: {{value}}",
       variables,
-      parseTemplateFormat(undefined),
       escape,
       {},
     );
@@ -167,88 +158,154 @@ describe("renderTemplateContent", () => {
   });
 
   test("escapes non-string values in mustache", () => {
-    const result = renderTemplateContent(
-      "Data: {{value}}",
-      variables,
-      "mustache",
-      escape,
-      {},
-    );
+    const result = renderTemplateContent("Data: {{value}}", variables, escape, {
+      templateFormat: "mustache",
+    });
     expect(result).toBe("Data: 42");
   });
 });
 
-test("prompt.build with structured output templating", () => {
-  const prompt = new Prompt<false, false>(
-    {
-      name: "Calculator",
-      slug: "calculator",
-      project_id: "p",
-      prompt_data: {
-        prompt: {
-          type: "chat",
-          messages: [
-            {
-              role: "system",
-              content:
-                "Please compute {{input.expression}} and return the result in JSON.",
-            },
-          ],
-        },
-        options: {
-          model: "gpt-4o",
-          params: {
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "schema",
-                schema: "{{input.schema}}",
-                strict: true,
+describe("prompt.build structured output templating", () => {
+  test("applies nunjucks templating inside schema", () => {
+    const prompt = new Prompt<false, false>(
+      {
+        name: "Greeter",
+        slug: "greeter",
+        project_id: "p",
+        prompt_data: {
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "system",
+                content: "Greet the user.",
+              },
+            ],
+          },
+          options: {
+            model: "gpt-4o",
+            params: {
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "schema",
+                  schema: {
+                    type: "object",
+                    properties: {
+                      greeting: {
+                        type: "string",
+                        description: "Hello {{ user.name | upper }}",
+                      },
+                    },
+                  },
+                },
               },
             },
           },
         },
       },
-    },
-    {},
-    false,
-  );
+      {},
+      false,
+    );
 
-  const result = prompt.build({
-    input: {
-      expression: "2 + 3",
-      schema: {
-        type: "object",
-        properties: {
-          final_answer: {
-            type: "string",
+    const result = prompt.build(
+      {
+        user: { name: "ada" },
+      },
+      { templateFormat: "nunjucks" },
+    );
+
+    expect(result).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "schema",
+          schema: {
+            type: "object",
+            properties: {
+              greeting: {
+                type: "string",
+                description: "Hello ADA",
+              },
+            },
           },
         },
-        required: ["final_answer"],
-        additionalProperties: false,
       },
-    },
+    });
   });
-  expect(result).toMatchObject({
-    model: "gpt-4o",
-    messages: [
+
+  test("prompt.build with structured output templating", () => {
+    const prompt = new Prompt<false, false>(
       {
-        role: "system",
-        content: "Please compute 2 + 3 and return the result in JSON.",
+        name: "Calculator",
+        slug: "calculator",
+        project_id: "p",
+        prompt_data: {
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Please compute {{input.expression}} and return the result in JSON.",
+              },
+            ],
+          },
+          options: {
+            model: "gpt-4o",
+            params: {
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "schema",
+                  schema: "{{input.schema}}",
+                  strict: true,
+                },
+              },
+            },
+          },
+        },
       },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "schema",
+      {},
+      false,
+    );
+
+    const result = prompt.build({
+      input: {
+        expression: "2 + 3",
         schema: {
           type: "object",
           properties: {
-            final_answer: { type: "string" },
+            final_answer: {
+              type: "string",
+            },
+          },
+          required: ["final_answer"],
+          additionalProperties: false,
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "Please compute 2 + 3 and return the result in JSON.",
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "schema",
+          schema: {
+            type: "object",
+            properties: {
+              final_answer: { type: "string" },
+            },
           },
         },
       },
-    },
+    });
   });
 });
 
