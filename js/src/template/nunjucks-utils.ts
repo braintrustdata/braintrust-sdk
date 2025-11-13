@@ -172,35 +172,44 @@ function collectVariablePaths(root: NodeListNode): string[][] {
     }
 
     if (isNodeList(node)) {
-      for (let i = node.children.length - 1; i >= 0; i--) {
-        stack.push({ type: "visit", node: asNode(node.children[i]) });
+      const children = (node as any).children as unknown[];
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push({ type: "visit", node: asNode(children[i]) });
       }
       continue;
     }
 
     if (isForNode(node)) {
-      const loopNames = collectBindingNames(node.name);
+      const loopNames = collectBindingNames(asNode((node as any).name));
       loopNames.push("loop");
       stack.push({
         type: "forBody",
-        body: asNode(node.body),
-        elseBody: asNode(node.else_),
+        body: asNode((node as any).body),
+        elseBody: asNode((node as any).else_),
         loopNames,
       });
-      stack.push({ type: "optionalVisit", node: asNode(node.arr) });
+      stack.push({ type: "optionalVisit", node: asNode((node as any).arr) });
       continue;
     }
 
     if (isSetNode(node)) {
-      stack.push({ type: "add", names: collectSetTargets(node.targets) });
-      stack.push({ type: "visit", node: asNode(node.body) });
-      stack.push({ type: "visit", node: asNode(node.value) });
+      stack.push({
+        type: "add",
+        names: collectSetTargets((node as any).targets as NunjucksNode[]),
+      });
+      stack.push({ type: "visit", node: asNode((node as any).body) });
+      stack.push({ type: "visit", node: asNode((node as any).value) });
       continue;
     }
 
     if (isMacroNode(node)) {
-      const { names, defaults } = collectMacroArgs(node.args);
-      stack.push({ type: "add", names: [node.name.value] });
+      const { names, defaults } = collectMacroArgs(
+        (node as any).args as NodeListNode,
+      );
+      stack.push({
+        type: "add",
+        names: [((node as any).name as SymbolNode).value],
+      });
       const scope = new Set<string>();
       for (const name of names) {
         if (name) {
@@ -214,7 +223,7 @@ function collectVariablePaths(root: NodeListNode): string[][] {
           scopeStack.pop();
         },
       });
-      const bodyNode = asNode(node.body);
+      const bodyNode = asNode((node as any).body);
       if (bodyNode) {
         stack.push({ type: "visit", node: bodyNode });
       }
@@ -228,19 +237,25 @@ function collectVariablePaths(root: NodeListNode): string[][] {
     }
 
     if (isBlockNode(node)) {
-      stack.push({ type: "visit", node: asNode(node.body) });
+      stack.push({ type: "visit", node: asNode((node as any).body) });
       continue;
     }
 
     if (isImportNode(node)) {
-      stack.push({ type: "add", names: collectBindingNames(node.target) });
-      stack.push({ type: "visit", node: asNode(node.template) });
+      stack.push({
+        type: "add",
+        names: collectBindingNames(asNode((node as any).target)),
+      });
+      stack.push({ type: "visit", node: asNode((node as any).template) });
       continue;
     }
 
     if (isFromImportNode(node)) {
-      stack.push({ type: "add", names: collectImportedNames(node.names) });
-      stack.push({ type: "visit", node: asNode(node.template) });
+      stack.push({
+        type: "add",
+        names: collectImportedNames((node as any).names as NodeListNode),
+      });
+      stack.push({ type: "visit", node: asNode((node as any).template) });
       continue;
     }
 
@@ -249,34 +264,35 @@ function collectVariablePaths(root: NodeListNode): string[][] {
       if (path && !isDefined(path[0])) {
         record(path);
       }
-      stack.push({ type: "visit", node: asNode(node.val) });
-      stack.push({ type: "visit", node: asNode(node.target) });
+      stack.push({ type: "visit", node: asNode((node as any).val) });
+      stack.push({ type: "visit", node: asNode((node as any).target) });
       continue;
     }
 
     if (isFilterNode(node)) {
-      stack.push({ type: "visit", node: asNode(node.args) });
+      stack.push({ type: "visit", node: asNode((node as any).args) });
       continue;
     }
 
     if (isFunCallNode(node)) {
-      const argsNode = asNode(node.args);
+      const argsNode = asNode((node as any).args);
       if (argsNode) {
         stack.push({ type: "optionalVisit", node: argsNode });
       }
-      stack.push({ type: "visit", node: asNode(node.name) });
+      stack.push({ type: "visit", node: asNode((node as any).name) });
       continue;
     }
 
     if (isCallExtensionNode(node)) {
-      for (let i = node.contentArgs.length - 1; i >= 0; i--) {
-        stack.push({ type: "visit", node: asNode(node.contentArgs[i]) });
+      const contentArgs = (node as any).contentArgs as unknown[];
+      for (let i = contentArgs.length - 1; i >= 0; i--) {
+        stack.push({ type: "visit", node: asNode(contentArgs[i]) });
       }
-      stack.push({ type: "visit", node: asNode(node.args) });
+      stack.push({ type: "visit", node: asNode((node as any).args) });
       continue;
     }
 
-    node.iterFields((value) => {
+    (node as any).iterFields((value: unknown) => {
       if (isNode(value)) {
         stack.push({ type: "visit", node: value });
       } else if (Array.isArray(value)) {
@@ -303,13 +319,13 @@ function collectBindingNames(node: NunjucksNode | null | undefined): string[] {
   }
   if (isNodeList(node)) {
     const out: string[] = [];
-    for (const child of node.children) {
+    for (const child of (node as any).children as unknown[]) {
       out.push(...collectBindingNames(asNode(child)));
     }
     return out;
   }
   if (isPairNode(node)) {
-    return collectBindingNames(asNode(node.value));
+    return collectBindingNames(asNode((node as any).value));
   }
   return [];
 }
@@ -333,7 +349,7 @@ function collectMacroArgs(args: NodeListNode): {
 } {
   const names: string[] = [];
   const defaults: NunjucksNode[] = [];
-  for (const child of args.children) {
+  for (const child of (args as any).children as unknown[]) {
     const node = asNode(child);
     if (!node) continue;
     if (isSymbolNode(node)) {
@@ -345,7 +361,7 @@ function collectMacroArgs(args: NodeListNode): {
       continue;
     }
     if (isKeywordArgsNode(node)) {
-      for (const pairNode of node.children) {
+      for (const pairNode of (node as any).children as unknown[]) {
         const pair = asNode(pairNode);
         if (pair && isPairNode(pair)) {
           collectPair(pair);
@@ -356,11 +372,11 @@ function collectMacroArgs(args: NodeListNode): {
   return { names, defaults };
 
   function collectPair(pair: PairNode) {
-    const keyNode = asNode(pair.key);
+    const keyNode = asNode((pair as any).key);
     if (keyNode && isSymbolNode(keyNode)) {
       names.push(keyNode.value);
     }
-    const valueNode = asNode(pair.value);
+    const valueNode = asNode((pair as any).value);
     if (valueNode) {
       defaults.push(valueNode);
     }
@@ -370,16 +386,16 @@ function collectMacroArgs(args: NodeListNode): {
 // Resolve imported symbol names (with aliases) that enter scope.
 function collectImportedNames(names: NodeListNode): string[] {
   const out: string[] = [];
-  for (const child of names.children) {
+  for (const child of (names as any).children as unknown[]) {
     const node = asNode(child);
     if (!node) continue;
     if (isPairNode(node)) {
-      const alias = asNode(node.value);
+      const alias = asNode((node as any).value);
       if (alias && isSymbolNode(alias)) {
         out.push(alias.value);
       }
     } else if (isSymbolNode(node)) {
-      out.push(node.value);
+      out.push((node as SymbolNode).value);
     }
   }
   return out;
@@ -387,7 +403,7 @@ function collectImportedNames(names: NodeListNode): string[] {
 
 // Build the full lookup path (e.g., user.profile.name) represented by a LookupVal node.
 function resolveLookupPath(node: LookupValNode): string[] | null {
-  const target = asNode(node.target);
+  const target = asNode((node as any).target);
   if (!target) {
     return null;
   }
@@ -395,7 +411,7 @@ function resolveLookupPath(node: LookupValNode): string[] | null {
   if (!base) {
     return null;
   }
-  const keyNode = asNode(node.val);
+  const keyNode = asNode((node as any).val);
   if (!keyNode) {
     return base;
   }
@@ -412,7 +428,7 @@ function resolveBasePath(node: NunjucksNode): string[] | null {
     return resolveLookupPath(node);
   }
   if (isSymbolNode(node)) {
-    return [node.value];
+    return [(node as SymbolNode).value];
   }
   return null;
 }
@@ -420,11 +436,12 @@ function resolveBasePath(node: NunjucksNode): string[] | null {
 // Determine the literal key/index from a lookup tail node, if statically known.
 function resolveLookupKey(node: NunjucksNode): string | null {
   if (isLiteralNode(node)) {
-    if (typeof node.value === "string") {
-      return node.value;
+    const literalValue = (node as any).value;
+    if (typeof literalValue === "string") {
+      return literalValue;
     }
-    if (typeof node.value === "number") {
-      return String(node.value);
+    if (typeof literalValue === "number") {
+      return String(literalValue);
     }
   }
   if (isSymbolNode(node)) {
