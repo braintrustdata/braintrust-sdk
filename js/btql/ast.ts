@@ -118,7 +118,7 @@ export interface Function {
 export const functionSchema: z.ZodType<Function> = z.object({
   op: z.literal("function"),
   name: identSchema,
-  args: z.array(z.lazy(() => z.union([aliasExpr, exprSchema]))),
+  args: z.array(z.union([z.lazy(() => exprSchema), z.lazy(() => aliasExpr)])),
   loc,
 });
 
