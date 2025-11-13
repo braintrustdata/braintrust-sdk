@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { lintTemplate } from "./nunjucks-utils";
-import * as nunjucks from "nunjucks";
+import { nunjucks } from "./nunjucks-browser";
 
 function getEnv() {
   const N = nunjucks.default || nunjucks;

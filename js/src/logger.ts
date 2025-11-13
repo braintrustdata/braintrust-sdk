@@ -72,12 +72,11 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import * as nunjucks from "nunjucks";
+import { nunjucks } from "./template/nunjucks-browser";
 import type { Environment as NunjucksEnvironment } from "nunjucks";
 
 const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
-  const N = nunjucks.default || nunjucks;
-  return new N.Environment(null, {
+  return new nunjucks.Environment(null, {
     autoescape: false,
     throwOnUndefined,
   });

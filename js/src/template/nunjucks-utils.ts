@@ -1,6 +1,4 @@
-import * as nunjucksImport from "nunjucks";
-
-const nunjucks = nunjucksImport.default ?? nunjucksImport;
+import { nunjucks } from "./nunjucks-browser";
 const nunjucksParser = (nunjucks as any).parser;
 const nunjucksNodes = (nunjucks as any).nodes;
 
@@ -296,8 +294,9 @@ function collectVariablePaths(root: NodeListNode): string[][] {
       if (isNode(value)) {
         stack.push({ type: "visit", node: value });
       } else if (Array.isArray(value)) {
-        for (let i = value.length - 1; i >= 0; i--) {
-          const element = value[i];
+        const elements = value as unknown[];
+        for (let i = elements.length - 1; i >= 0; i--) {
+          const element = elements[i];
           if (isNode(element)) {
             stack.push({ type: "visit", node: element });
           }
