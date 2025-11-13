@@ -250,6 +250,9 @@ importers:
       '@next/env':
         specifier: ^14.2.3
         version: 14.2.3
+      '@types/nunjucks':
+        specifier: ^3.2.6
+        version: 3.2.6
       '@vercel/functions':
         specifier: ^1.0.2
         version: 1.0.2
@@ -5306,6 +5309,10 @@ packages:
     dependencies:
       undici-types: 6.21.0
     dev: true
+
+  /@types/nunjucks@3.2.6:
+    resolution: {integrity: sha512-pHiGtf83na1nCzliuAdq8GowYiXvH5l931xZ0YEHaLMNFgynpEqx+IPStlu7UaDkehfvl01e4x/9Tpwhy7Ue3w==}
+    dev: false
 
   /@types/oracledb@6.5.2:
     resolution: {integrity: sha512-kK1eBS/Adeyis+3OlBDMeQQuasIDLUYXsi2T15ccNJ0iyUpQ4xDF7svFu3+bGVrI0CMBUclPciz+lsQR3JX3TQ==}
