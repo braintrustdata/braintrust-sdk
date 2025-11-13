@@ -120,7 +120,7 @@ DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
 def _get_exporter():
-    """ Return the active exporter (e.g. the version of SpanComponentsv*) """
+    """Return the active exporter (e.g. the version of SpanComponentsv*)"""
     use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
     return SpanComponentsV4 if use_v4 else SpanComponentsV3
 
@@ -431,7 +431,7 @@ class BraintrustState:
 
     @property
     def id_generator(self):
-        """ Return the active id generator. """
+        """Return the active id generator."""
         # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
         # so that we could possibly have parallel tests using different id generators.
         if self._id_generator is None:
@@ -442,7 +442,8 @@ class BraintrustState:
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
         import os
-        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
+
+        current_otel_setting = os.environ.get("BRAINTRUST_OTEL_COMPAT", "")
 
         # Cache the context manager unless the environment variable changed
         if self._context_manager is None or self._last_otel_setting != current_otel_setting:
@@ -450,6 +451,7 @@ class BraintrustState:
                 # Double-check after acquiring lock
                 if self._context_manager is None or self._last_otel_setting != current_otel_setting:
                     from braintrust.context import get_context_manager
+
                     self._context_manager = get_context_manager()
                     self._last_otel_setting = current_otel_setting
 
@@ -457,24 +459,22 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update(
-            {
-                k: v
-                for (k, v) in other.__dict__.items()
-                if k
-                not in (
-                    "current_experiment",
-                    "current_logger",
-                    "current_parent",
-                    "current_span",
-                    "_global_bg_logger",
-                    "_override_bg_logger",
-                    "_context_manager",
-                    "_last_otel_setting",
-                    "_context_manager_lock",
-                )
-            }
-        )
+        self.__dict__.update({
+            k: v
+            for (k, v) in other.__dict__.items()
+            if k
+            not in (
+                "current_experiment",
+                "current_logger",
+                "current_parent",
+                "current_span",
+                "_global_bg_logger",
+                "_override_bg_logger",
+                "_context_manager",
+                "_last_otel_setting",
+                "_context_manager_lock",
+            )
+        })
 
     def login(
         self,
@@ -752,8 +752,6 @@ def _check_json_serializable(event):
         return bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 
 
 class _MaskingError:
@@ -1911,7 +1909,7 @@ def current_span() -> Span:
     """
 
     span_info = _state.context_manager.get_current_span_info()
-    if span_info and hasattr(span_info.span_object, 'span_id'):
+    if span_info and hasattr(span_info.span_object, "span_id"):
         # This is a BT span
         return span_info.span_object
     return NOOP_SPAN
@@ -1939,7 +1937,9 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None, state: Optional[BraintrustState] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
+def get_span_parent_object(
+    parent: Optional[str] = None, state: Optional[BraintrustState] = None
+) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
 
@@ -2587,6 +2587,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,
+                        "query_source": f"py_sdk_object_fetcher_{self.object_type}",
                         **({"version": self._pinned_version} if self._pinned_version is not None else {}),
                     },
                     headers={
@@ -3135,6 +3136,7 @@ class ParentSpanIds:
 @dataclasses.dataclass
 class SpanIds:
     """The three IDs that define a span's position in the trace tree."""
+
     span_id: str
     root_span_id: str
     span_parents: Optional[List[str]]
@@ -3171,9 +3173,7 @@ def _resolve_span_ids(
     # If we have explicit parent span ids, use them.
     if parent_span_ids:
         return SpanIds(
-            span_id=span_id,
-            root_span_id=parent_span_ids.root_span_id,
-            span_parents=[parent_span_ids.span_id]
+            span_id=span_id, root_span_id=parent_span_ids.root_span_id, span_parents=[parent_span_ids.span_id]
         )
 
     # If we're using the context manager, get to see if there's an active parent
@@ -3182,9 +3182,7 @@ def _resolve_span_ids(
         parent_info = context_manager.get_parent_span_ids()
         if parent_info:
             return SpanIds(
-                span_id=span_id,
-                root_span_id=parent_info.root_span_id,
-                span_parents=parent_info.span_parents
+                span_id=span_id, root_span_id=parent_info.root_span_id, span_parents=parent_info.span_parents
             )
 
     # No parent - create new root span
@@ -3195,11 +3193,7 @@ def _resolve_span_ids(
     else:
         resolved_root_span_id = id_generator.get_trace_id()
 
-    return SpanIds(
-        span_id=span_id,
-        root_span_id=resolved_root_span_id,
-        span_parents=None
-    )
+    return SpanIds(span_id=span_id, root_span_id=resolved_root_span_id, span_parents=None)
 
 
 def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
@@ -3284,9 +3278,9 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
@@ -3317,7 +3311,6 @@ def _start_span_parent_args(
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
     )
-
 
 
 @dataclasses.dataclass
@@ -4460,12 +4453,10 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append(
-                        {
-                            **c,
-                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                        }
-                    )
+                    rendered_content.append({
+                        **c,
+                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                    })
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
