@@ -1,4 +1,4 @@
-import { nunjucks } from "./nunjucks-browser";
+import { nunjucks } from "./nunjucks";
 const nunjucksParser = (nunjucks as any).parser;
 const nunjucksNodes = (nunjucks as any).nodes;
 

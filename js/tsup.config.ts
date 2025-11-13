@@ -19,6 +19,7 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
+    external: ["nunjucks"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
