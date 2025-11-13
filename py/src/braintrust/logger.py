@@ -1185,6 +1185,14 @@ class _HTTPBackgroundLogger:
 def _internal_reset_global_state() -> None:
     global _state
     _state = BraintrustState()
+    # Reset the thread pool singleton to ensure fresh state in tests
+    try:
+        from braintrust.framework import _internal_reset_thread_pool
+
+        _internal_reset_thread_pool()
+    except ImportError:
+        # framework module might not be available in all contexts
+        pass
 
 
 def _internal_get_global_state() -> BraintrustState:
@@ -3286,9 +3294,9 @@ def _start_span_parent_args(
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -5184,9 +5192,21 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         # Capture all current context variables
         context = contextvars.copy_context()
 
+        # Capture the current thread-local background logger override
+        # This is necessary because worker threads have their own thread-local storage
+        override_logger = getattr(_state._override_bg_logger, "logger", None)
+
         def wrapped_fn(*args, **kwargs):
-            # Run the function inside the captured context
-            return context.run(fn, *args, **kwargs)
+            # Restore the background logger override in the worker thread
+            if override_logger is not None:
+                _state._override_bg_logger.logger = override_logger
+            try:
+                # Run the function inside the captured context
+                return context.run(fn, *args, **kwargs)
+            finally:
+                # Clean up the override in the worker thread
+                if override_logger is not None:
+                    _state._override_bg_logger.logger = None
 
         return super().submit(wrapped_fn, *args, **kwargs)
 
