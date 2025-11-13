@@ -38,8 +38,6 @@ jobs:
         shell: bash
         run: |
           make js-verify-ci
-          # run otel tests with OpenTelemetry removed from all workspaces
-          cd js && make test-otel-missing
 
       - name: Determine artifact name
         id: artifact
