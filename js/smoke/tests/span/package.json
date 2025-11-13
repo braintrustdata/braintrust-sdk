@@ -1,0 +1,21 @@
+{
+  "name": "braintrust-otel-example",
+  "version": "1.0.0",
+  "description": "Integration tests for Braintrust with OpenTelemetry NodeSDK",
+  "main": "simple_span_example.ts",
+  "scripts": {
+    "start": "tsx simple_span_example.ts",
+    "backup": "tsx ../../backup-and-restore.ts backup",
+    "restore": "tsx ../../backup-and-restore.ts restore",
+    "enable-esm": "tsx ../../enable-esm.ts",
+    "install-build": "tsx ../../install-build.ts ../../../artifacts"
+  },
+  "dependencies": {
+    "braintrust": "latest"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/node": "^20.10.5",
+    "typescript": "^5.4.4"
+  }
+}
