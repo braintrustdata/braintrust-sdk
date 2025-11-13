@@ -127,7 +127,7 @@
     "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "uuid": "^9.0.1",
-    "zod": "^3.25.34",
+    "zod": "3.25.34",
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
