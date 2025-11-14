@@ -23,6 +23,7 @@ repos:
               |.*deno.lock
               |.*.yaml
               |.*/cassettes/.*
+              |js/src/vendor/.*
           )$
         args:
           - "-L"
@@ -31,4 +32,4 @@ repos:
     rev: v3.3.2
     hooks:
       - id: prettier
-        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml|js/scripts/openapi_zod_client_output_template\.hbs|.*cassette.*\.ya?ml)$
+        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml|js/src/vendor/.*|js/scripts/openapi_zod_client_output_template\.hbs|.*cassette.*\.ya?ml)$
