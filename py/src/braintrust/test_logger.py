@@ -20,7 +20,7 @@ from braintrust import (
     logger,
 )
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
-from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
+from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_message, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -458,6 +458,46 @@ class TestLogger(TestCase):
         # Array too short should fail in strict mode
         with self.assertRaises(ValueError):
             prompt.build(items=["only_one"], strict=True)
+
+    def test_render_message_with_file_content_parts(self):
+        """Test render_message with mixed text, image, and file content parts including all file fields."""
+        message = PromptMessage(
+            role="user",
+            content=[
+                {"type": "text", "text": "Here is a {{item}}:"},
+                {"type": "image_url", "image_url": {"url": "{{image_url}}"}},
+                {
+                    "type": "file",
+                    "file": {
+                        "file_data": "{{file_data}}",
+                        "file_id": "{{file_id}}",
+                        "filename": "{{filename}}",
+                    },
+                },
+            ],
+        )
+
+        rendered = render_message(
+            lambda template: template.replace("{{item}}", "document")
+            .replace("{{image_url}}", "https://example.com/image.png")
+            .replace("{{file_data}}", "base64data")
+            .replace("{{file_id}}", "file-456")
+            .replace("{{filename}}", "report.pdf"),
+            message,
+        )
+
+        assert rendered["content"] == [
+            {"type": "text", "text": "Here is a document:"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+            {
+                "type": "file",
+                "file": {
+                    "file_data": "base64data",
+                    "file_id": "file-456",
+                    "filename": "report.pdf",
+                },
+            },
+        ]
 
 
 def test_noop_permalink_issue_1837():
@@ -1762,7 +1802,6 @@ def test_parent_precedence_traced_baseline(with_memory_logger, with_simulate_log
     assert top_log["span_id"] in (child_log.get("span_parents") or [])
 
 
-
 def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_simulate_login):
     """Test that explicit parent overrides current span."""
     init_test_logger(__name__)
@@ -1800,6 +1839,7 @@ def reset_id_generator_state():
         if original_env:
             os.environ["BRAINTRUST_OTEL_COMPAT"] = original_env
 
+
 def test_otel_compatible_span_export_import():
     """Test that spans with OTEL-compatible IDs can be exported and imported correctly."""
     from braintrust.span_identifier_v4 import SpanComponentsV4, SpanObjectTypeV3
@@ -1807,21 +1847,21 @@ def test_otel_compatible_span_export_import():
     # Generate OTEL-compatible IDs
     otel_gen = OTELIDGenerator()
     trace_id = otel_gen.get_trace_id()  # 32-char hex (16 bytes)
-    span_id = otel_gen.get_span_id()    # 16-char hex (8 bytes)
+    span_id = otel_gen.get_span_id()  # 16-char hex (8 bytes)
 
     # Test that trace_id is 32 chars and span_id is 16 chars
     assert len(trace_id) == 32
     assert len(span_id) == 16
-    assert all(c in '0123456789abcdef' for c in trace_id)
-    assert all(c in '0123456789abcdef' for c in span_id)
+    assert all(c in "0123456789abcdef" for c in trace_id)
+    assert all(c in "0123456789abcdef" for c in span_id)
 
     # Create span components
     components = SpanComponentsV4(
         object_type=SpanObjectTypeV3.PROJECT_LOGS,
-        object_id='test-project-id',
-        row_id='test-row-id',
+        object_id="test-project-id",
+        row_id="test-row-id",
         span_id=span_id,
-        root_span_id=trace_id
+        root_span_id=trace_id,
     )
 
     # Test export/import cycle
@@ -1856,14 +1896,15 @@ def test_span_with_otel_ids_export_import(reset_id_generator_state):
         # Verify the span has OTEL-compatible IDs
         assert len(span.span_id) == 16  # 8-byte hex
         assert len(span.root_span_id) == 32  # 16-byte hex
-        assert all(c in '0123456789abcdef' for c in span.span_id)
-        assert all(c in '0123456789abcdef' for c in span.root_span_id)
+        assert all(c in "0123456789abcdef" for c in span.span_id)
+        assert all(c in "0123456789abcdef" for c in span.root_span_id)
 
         # Export the span
         exported = span.export()
 
         # Parse it back
         from braintrust.span_identifier_v4 import SpanComponentsV4
+
         imported = SpanComponentsV4.from_str(exported)
 
         # Verify IDs are preserved exactly
@@ -1874,9 +1915,10 @@ def test_span_with_otel_ids_export_import(reset_id_generator_state):
 def test_span_with_uuid_ids_share_root_span_id(reset_id_generator_state):
     """Test that UUID generators share span_id as root_span_id for backwards compatibility."""
     import os
+
     # Ensure UUID generator is used (default behavior)
-    if 'BRAINTRUST_OTEL_COMPAT' in os.environ:
-        del os.environ['BRAINTRUST_OTEL_COMPAT']
+    if "BRAINTRUST_OTEL_COMPAT" in os.environ:
+        del os.environ["BRAINTRUST_OTEL_COMPAT"]
 
     init_test_logger(__name__)
 
@@ -1901,7 +1943,7 @@ def test_parent_context_with_otel_ids(with_memory_logger, reset_id_generator_sta
         original_root_span_id = parent_span.root_span_id
 
     def is_hex(s):
-        return all(c in '0123456789abcdef' for c in s.lower())
+        return all(c in "0123456789abcdef" for c in s.lower())
 
     assert is_hex(original_span_id)
     assert is_hex(original_root_span_id)
@@ -1978,14 +2020,15 @@ def test_span_start_span_with_explicit_parent(with_memory_logger):
     span3_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "span3")
 
     # span3 should NOT have span2 as parent (would happen if it inherited from context)
-    assert span2_span_id not in span3_log.get("span_parents", []), \
+    assert span2_span_id not in span3_log.get("span_parents", []), (
         "span3 should not inherit from span2 context when explicit parent is provided"
+    )
 
     # span3 should inherit from root (the explicit parent)
-    assert root_span_id in span3_log.get("span_parents", []), \
+    assert root_span_id in span3_log.get("span_parents", []), (
         "span3 should have root_span_id in span_parents from explicit parent"
-    assert span3_log["root_span_id"] == root_root_span_id, \
-        "span3 should have root's root_span_id"
+    )
+    assert span3_log["root_span_id"] == root_root_span_id, "span3 should have root's root_span_id"
 
 
 def test_span_start_span_inherits_from_self(with_memory_logger):
@@ -2011,8 +2054,9 @@ def test_span_start_span_inherits_from_self(with_memory_logger):
 
     # Child should inherit parent's root_span_id and have parent_span_id in span_parents
     assert child_log["root_span_id"] == parent_root_span_id
-    assert parent_span_id in child_log.get("span_parents", []), \
+    assert parent_span_id in child_log.get("span_parents", []), (
         "child should have parent_span_id in span_parents when no explicit parent is provided"
+    )
 
 
 def test_span_start_span_with_exported_span_parent(with_memory_logger):
@@ -2046,10 +2090,12 @@ def test_span_start_span_with_exported_span_parent(with_memory_logger):
 
     # Child should inherit from exported_parent, not active_context
     assert child_log["root_span_id"] == exported_parent_root_span_id
-    assert exported_parent_span_id in child_log.get("span_parents", []), \
+    assert exported_parent_span_id in child_log.get("span_parents", []), (
         "child should have exported_parent_span_id in span_parents"
-    assert active_context_span_id not in child_log.get("span_parents", []), \
+    )
+    assert active_context_span_id not in child_log.get("span_parents", []), (
         "child should NOT have active_context_span_id in span_parents"
+    )
 
 
 def test_get_exporter_returns_v3_by_default():
@@ -2082,6 +2128,7 @@ def test_experiment_export_respects_otel_compat_default():
         exported = experiment.export()
 
         from braintrust.span_identifier_v4 import SpanComponentsV4
+
         version = SpanComponentsV4.get_version(exported)
         assert version == 3, f"Expected V3 encoding (version=3), got version={version}"
 
@@ -2094,6 +2141,7 @@ def test_experiment_export_respects_otel_compat_enabled():
         exported = experiment.export()
 
         from braintrust.span_identifier_v4 import SpanComponentsV4
+
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
 
@@ -2106,6 +2154,7 @@ def test_logger_export_respects_otel_compat_default():
         exported = test_logger.export()
 
         from braintrust.span_identifier_v4 import SpanComponentsV4
+
         version = SpanComponentsV4.get_version(exported)
         assert version == 3, f"Expected V3 encoding (version=3), got version={version}"
 
@@ -2118,6 +2167,7 @@ def test_logger_export_respects_otel_compat_enabled():
         exported = test_logger.export()
 
         from braintrust.span_identifier_v4 import SpanComponentsV4
+
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
 
