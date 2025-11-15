@@ -3,6 +3,7 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 import slugify
+from braintrust.logger import api_conn, app_conn, login
 
 from .framework import _is_lazy_load, bcolors  # type: ignore
 from .generated_types import (
@@ -14,9 +15,7 @@ from .generated_types import (
     SavedFunctionId,
     ToolFunctionDefinition,
 )
-from .logger import Prompt, api_conn, app_conn, login
-from .prompt import PromptSchema
-from .util import LazyValue, eprint
+from .util import eprint
 
 
 class ProjectIdCache:
@@ -178,8 +177,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-        no_trace: bool = False,
-    ) -> Prompt: ...
+    ) -> CodePrompt: ...
 
     @overload  # messages only, no prompt
     def create(
@@ -194,8 +192,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-        no_trace: bool = False,
-    ) -> Prompt: ...
+    ) -> CodePrompt: ...
 
     def create(
         self,
@@ -210,7 +207,6 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-        no_trace: bool = False,
     ):
         """Creates a prompt.
 
@@ -263,30 +259,8 @@ class PromptBuilder:
             options["params"] = params
         prompt_data["options"] = options
 
-        project = self.project
-
-        def metadata():
-            return PromptSchema.from_dict_deep(  # type:ignore[reportUnknownMemberType]
-                {
-                    "id": id or "",
-                    "name": name,
-                    "project_id": getattr(project, "id", ""),
-                    "_xact_id": "",
-                    "slug": slug,
-                    "prompt_data": prompt_data,
-                    "description": description,
-                    "tags": None,
-                }
-            )
-
-        p = Prompt(
-            lazy_metadata=LazyValue(metadata, use_mutex=False),
-            defaults={},
-            no_trace=no_trace,
-        )
-
-        code_prompt = CodePrompt(
-            project=project,
+        p = CodePrompt(
+            project=self.project,
             name=name,
             slug=slug,
             prompt=prompt_data,
@@ -296,9 +270,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
         )
-
-        project.add_prompt(code_prompt)
-
+        self.project.add_prompt(p)
         return p
 
 
