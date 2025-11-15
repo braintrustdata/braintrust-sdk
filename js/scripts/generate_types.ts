@@ -37,7 +37,7 @@ async function main() {
   const internalGitSha = openApiDoc.info["x-internal-git-sha"] || "UNKNOWN";
   const banner = `// Auto-generated file (internal git SHA ${internalGitSha}) -- do not modify\n\n`;
   await fs.writeFile(OUTPUT_PATH, banner + code);
-  await fs.copyFile(OUTPUT_PATH, OUTPUT_PATH2);
+  // await fs.copyFile(OUTPUT_PATH, OUTPUT_PATH2);
 }
 
 main();
