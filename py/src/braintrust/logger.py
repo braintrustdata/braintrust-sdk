@@ -459,22 +459,24 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update({
-            k: v
-            for (k, v) in other.__dict__.items()
-            if k
-            not in (
-                "current_experiment",
-                "current_logger",
-                "current_parent",
-                "current_span",
-                "_global_bg_logger",
-                "_override_bg_logger",
-                "_context_manager",
-                "_last_otel_setting",
-                "_context_manager_lock",
-            )
-        })
+        self.__dict__.update(
+            {
+                k: v
+                for (k, v) in other.__dict__.items()
+                if k
+                not in (
+                    "current_experiment",
+                    "current_logger",
+                    "current_parent",
+                    "current_span",
+                    "_global_bg_logger",
+                    "_override_bg_logger",
+                    "_context_manager",
+                    "_last_otel_setting",
+                    "_context_manager_lock",
+                )
+            }
+        )
 
     def login(
         self,
@@ -3278,17 +3280,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -4453,10 +4455,24 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
+                elif c["type"] == "file":
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
