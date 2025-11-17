@@ -38,6 +38,8 @@ def memory_logger():
 
 def test_tracing_processor_sets_current_span(memory_logger):
     """Ensure that on_trace_start sets the span as current so nested spans work."""
+    pytest.importorskip("agents", reason="agents package not available")
+
     assert not memory_logger.pop()
     processor = BraintrustTracingProcessor()
 
@@ -291,7 +293,16 @@ def test_openai_responses_sparse_indices(memory_logger):
     # Create a mock response with sparse content indices (e.g., indices 0, 2, 5)
     # This simulates a streaming response where items arrive out of order or with gaps
     class MockResult:
-        def __init__(self, type, content_index=None, delta=None, annotation_index=None, annotation=None, output_index=None, item=None):
+        def __init__(
+            self,
+            type,
+            content_index=None,
+            delta=None,
+            annotation_index=None,
+            annotation=None,
+            output_index=None,
+            item=None,
+        ):
             self.type = type
             if content_index is not None:
                 self.content_index = content_index
@@ -342,8 +353,20 @@ def test_openai_responses_sparse_indices(memory_logger):
     all_results_with_annotations = [
         MockResult("response.output_item.added", item=MockItem()),
         MockResult("response.output_text.delta", content_index=0, delta="Text", output_index=0),
-        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=1, annotation={"text": "Second annotation"}, output_index=0),
-        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=3, annotation={"text": "Fourth annotation"}, output_index=0),
+        MockResult(
+            "response.output_text.annotation.added",
+            content_index=0,
+            annotation_index=1,
+            annotation={"text": "Second annotation"},
+            output_index=0,
+        ),
+        MockResult(
+            "response.output_text.annotation.added",
+            content_index=0,
+            annotation_index=3,
+            annotation={"text": "Fourth annotation"},
+            output_index=0,
+        ),
     ]
 
     result = wrapper._postprocess_streaming_results(all_results_with_annotations)
