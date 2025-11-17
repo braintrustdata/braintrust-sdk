@@ -1,6 +1,9 @@
 import asyncio
 import time
 
+# Optional deps like `agents` are only installed in certain CI jobs, so pylint can't resolve them.
+# pylint: disable=import-error,no-name-in-module,no-member
+
 import braintrust
 import openai
 import pytest
