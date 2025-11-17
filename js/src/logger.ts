@@ -75,6 +75,11 @@ import Mustache from "mustache";
 import { nunjucks } from "./template/nunjucks";
 
 const createNunjucksEnv = (throwOnUndefined: boolean) => {
+  if (!nunjucks) {
+    throw new Error(
+      "nunjucks is not available. Please install it separately when using ESM: npm install nunjucks"
+    );
+  }
   return new nunjucks.Environment(null, {
     autoescape: false,
     throwOnUndefined,

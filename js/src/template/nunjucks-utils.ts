@@ -1,6 +1,21 @@
 import { nunjucks } from "./nunjucks";
-const nunjucksParser = (nunjucks as any).parser;
-const nunjucksNodes = (nunjucks as any).nodes;
+
+// Lazy check for nunjucks availability - only throws when actually used
+const ensureNunjucks = () => {
+  if (!nunjucks) {
+    throw new Error(
+      "nunjucks is not available. Please install it separately when using ESM: npm install nunjucks"
+    );
+  }
+  return nunjucks;
+};
+
+const getNunjucksParser = () => (ensureNunjucks() as any).parser;
+const getNunjucksNodes = () => (ensureNunjucks() as any).nodes;
+
+// Use these getters instead of direct access
+const nunjucksParser = { parse: (...args: any[]) => getNunjucksParser().parse(...args) };
+const nunjucksNodes = getNunjucksNodes();
 
 type NodesModule = typeof nunjucksNodes;
 type NunjucksNode = InstanceType<NodesModule["Node"]>;
