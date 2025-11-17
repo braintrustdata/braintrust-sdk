@@ -3,7 +3,6 @@ import time
 
 # Optional deps like `agents` are only installed in certain CI jobs, so pylint can't resolve them.
 # pylint: disable=import-error,no-name-in-module,no-member
-
 import braintrust
 import openai
 import pytest
@@ -20,7 +19,6 @@ PROJECT_NAME = "test-project-openai-py-tracing"
 TEST_MODEL = "gpt-4o-mini"  # cheapest model for tests
 TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
-
 
 @pytest.fixture(scope="module")
 def vcr_config():
