@@ -47,7 +47,7 @@ install-dev: install-build-deps
 	python -m uv pip install -r requirements-dev.txt
 
 install-optional:
-	python -m uv pip install anthropic openai openai-agents pydantic_ai litellm agno google-genai eval_type_backport
+	python -m uv pip install anthropic openai openai-agents pydantic_ai litellm agno google-genai eval_type_backport griffe
 
 _publish:
 	./scripts/publish.sh

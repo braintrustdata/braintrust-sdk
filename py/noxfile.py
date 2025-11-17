@@ -132,6 +132,7 @@ def test_openai(session, version):
     if sys.version_info < (3, 10):
         session.install("eval_type_backport", silent=SILENT_INSTALLS)
     _install(session, "openai", version)
+    session.install("griffe", silent=SILENT_INSTALLS)
     session.install("--no-deps", "openai-agents", silent=SILENT_INSTALLS)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
