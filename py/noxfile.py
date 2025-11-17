@@ -38,6 +38,7 @@ VENDOR_PACKAGES = (
     "agno",
     "anthropic",
     "dspy",
+    "agents",
     "openai",
     "pydantic_ai",
     "autoevals",
@@ -129,6 +130,7 @@ def test_google_genai(session, version):
 def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
+    session.install("--no-deps", "openai-agents", silent=SILENT_INSTALLS)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
