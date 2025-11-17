@@ -1654,6 +1654,9 @@ def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
             self.name = name
             self.metadata = metadata
 
+        def export(self):
+            return {"metadata": self.metadata}
+
     trace = MockTrace("test-trace", "Test Trace", {"conversation_id": "test-12345"})
 
     # Execute trace lifecycle
