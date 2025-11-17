@@ -383,18 +383,20 @@ class BraintrustContextManager extends ContextManager {
   }
 }
 
-function getSpanComponentsClass():
-  | typeof SpanComponentsV3
-  | typeof SpanComponentsV4 {
-  const useV4 =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-  return useV4 ? SpanComponentsV4 : SpanComponentsV3;
+declare global {
+  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
+  var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
+  var BRAINTRUST_SPAN_COMPONENT: SpanComponent | undefined;
 }
 
-declare global {
-  // eslint-disable-next-line no-var
-  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
+type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
+
+globalThis.BRAINTRUST_SPAN_COMPONENT = undefined;
+
+function getSpanComponentsClass(): SpanComponent {
+  return globalThis.BRAINTRUST_SPAN_COMPONENT
+    ? globalThis.BRAINTRUST_SPAN_COMPONENT
+    : SpanComponentsV3;
 }
 
 globalThis.BRAINTRUST_CONTEXT_MANAGER = undefined;

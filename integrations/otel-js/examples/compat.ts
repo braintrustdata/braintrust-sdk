@@ -9,13 +9,15 @@
  * - @opentelemetry/sdk-trace-base
  * - @opentelemetry/context-async-hooks (required for Node.js context propagation)
  *
- * Run with: BRAINTRUST_OTEL_COMPAT=true npx tsx examples/otel-compat-demo.ts
+ * Run with: npx tsx examples/otel-compat-demo.ts
  */
 
 import { trace, context } from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { initLogger, login } from "braintrust";
-import { BraintrustSpanProcessor } from "../src";
+import { BraintrustSpanProcessor, initOtel } from "../src";
+
+initOtel();
 
 function getExportVersion(exportedSpan: string): number {
   const exportedBytes = Buffer.from(exportedSpan, "base64");
@@ -26,10 +28,8 @@ async function main() {
   await login();
   console.log("🚀 Starting OTEL + Braintrust Integration Demo\n");
 
-  const expectedVersion = process.env.BRAINTRUST_OTEL_COMPAT === "true" ? 4 : 3;
-  console.log(
-    `Expected export version: ${expectedVersion} (BRAINTRUST_OTEL_COMPAT=${process.env.BRAINTRUST_OTEL_COMPAT})\n`,
-  );
+  const expectedVersion = 4;
+  console.log(`Expected export version: ${expectedVersion}\n`);
 
   // Try to import AsyncHooksContextManager - it's optional but required for context propagation
   let AsyncHooksContextManager: any;

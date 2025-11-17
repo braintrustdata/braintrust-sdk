@@ -14,7 +14,8 @@ import {
   Span,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { BRAINTRUST_PARENT, BRAINTRUST_PARENT_STRING } from "./constants";
+import { BRAINTRUST_PARENT } from "./constants";
+import { IDGenerator } from "braintrust";
 
 const FILTER_PREFIXES = [
   "gen_ai.",
@@ -382,7 +383,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     ) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const attributes = currentSpan.attributes as Record<string, unknown>;
-      const parentAttr = attributes[BRAINTRUST_PARENT_STRING];
+      const parentAttr = attributes["braintrust.parent"];
       return typeof parentAttr === "string" ? parentAttr : undefined;
     }
 
@@ -471,7 +472,7 @@ export function contextFromSpanExport(exportStr: string): unknown {
           propagation.getBaggage(ctx) || propagation.createBaggage();
         ctx = propagation.setBaggage(
           ctx,
-          baggage.setEntry(BRAINTRUST_PARENT_STRING, {
+          baggage.setEntry("braintrust.parent", {
             value: braintrustParent,
           }),
         );
@@ -663,7 +664,7 @@ export function addParentToBaggage(parent: string, ctx?: Context): Context {
       propagation.getBaggage(currentCtx) || propagation.createBaggage();
     return propagation.setBaggage(
       currentCtx,
-      baggage.setEntry(BRAINTRUST_PARENT_STRING, { value: parent }),
+      baggage.setEntry("braintrust.parent", { value: parent }),
     );
   } catch (error) {
     console.error("Failed to add braintrust.parent to baggage:", error);
@@ -708,7 +709,7 @@ export function addSpanParentToBaggage(
     return undefined;
   }
 
-  const parentValue = span.attributes[BRAINTRUST_PARENT_STRING];
+  const parentValue = span.attributes["braintrust.parent"];
   if (!parentValue || typeof parentValue !== "string") {
     console.warn(
       "addSpanParentToBaggage: braintrust.parent attribute not found. " +
@@ -791,7 +792,7 @@ export function parentFromHeaders(
 
     // Get braintrust.parent from baggage
     const baggage = propagation.getBaggage(ctx);
-    const braintrustParent = baggage?.getEntry(BRAINTRUST_PARENT_STRING)?.value;
+    const braintrustParent = baggage?.getEntry("braintrust.parent")?.value;
 
     if (!braintrustParent) {
       console.warn(
@@ -873,5 +874,35 @@ export function parentFromHeaders(
   } catch (error) {
     console.error("parentFromHeaders: Error parsing headers:", error);
     return undefined;
+  }
+}
+
+function generateHexId(bytes: number): string {
+  let result = "";
+  for (let i = 0; i < bytes; i++) {
+    result += Math.floor(Math.random() * 256)
+      .toString(16)
+      .padStart(2, "0");
+  }
+  return result;
+}
+
+/**
+ * ID generator that generates OpenTelemetry-compatible IDs
+ * Uses hex strings for compatibility with OpenTelemetry systems
+ */
+export class OTELIDGenerator extends IDGenerator {
+  getSpanId(): string {
+    // Generate 8 random bytes and convert to hex (16 characters)
+    return generateHexId(8);
+  }
+
+  getTraceId(): string {
+    // Generate 16 random bytes and convert to hex (32 characters)
+    return generateHexId(16);
+  }
+
+  shareRootSpanId(): boolean {
+    return false;
   }
 }

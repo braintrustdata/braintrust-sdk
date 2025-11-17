@@ -627,7 +627,7 @@ export async function Eval<
     if (
       experiment &&
       typeof process !== "undefined" &&
-      process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true"
+      globalThis.BRAINTRUST_CONTEXT_MANAGER !== undefined
     ) {
       await experiment._waitForId();
     }

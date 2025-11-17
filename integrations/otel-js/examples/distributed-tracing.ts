@@ -2,7 +2,7 @@
 /**
  * Minimal example: Distributed Tracing BT → OTEL → BT
  *
- * Run with: BRAINTRUST_OTEL_COMPAT=true tsx examples/otel/distributed-tracing.ts
+ * Run with: tsx examples/otel/distributed-tracing.ts
  */
 
 import * as api from "@opentelemetry/api";
@@ -14,15 +14,17 @@ import {
   addSpanParentToBaggage,
   parentFromHeaders,
   BraintrustSpanProcessor,
-} from "@braintrust/otel";
+  initOtel,
+} from "../src";
 
 const { trace, context, propagation } = api;
 
+initOtel();
+
 async function main() {
   // Setup OTEL
-  const provider = new BasicTracerProvider({
-    spanProcessors: [new BraintrustSpanProcessor()],
-  });
+  const provider = new BasicTracerProvider();
+  provider.addSpanProcessor(new BraintrustSpanProcessor());
   trace.setGlobalTracerProvider(provider);
   const tracer = trace.getTracer("service-b");
 

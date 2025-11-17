@@ -6,8 +6,6 @@
  */
 
 import { beforeEach, afterEach, describe, expect, test } from "vitest";
-// Import otel package to call setup() and register OtelContextManager BEFORE braintrust imports
-import "./index";
 import {
   initLogger,
   currentSpan,
@@ -15,79 +13,19 @@ import {
   _exportsForTestingOnly,
   Eval,
 } from "braintrust";
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { getExportVersion } from "./utils";
+import { initOtel, resetOtel } from "./";
 
-// Utility function copied from braintrust/util/bytes to avoid import issues
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const uint8Array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    uint8Array[i] = binary.charCodeAt(i);
-  }
-  return uint8Array;
-}
+function setupOtelFixture() {
+  const exporter = new InMemorySpanExporter();
+  const processor = new SimpleSpanProcessor(exporter);
 
-interface Tracer {
-  startActiveSpan: (
-    name: string,
-    fn: (span: OtelSpan) => Promise<void>,
-  ) => Promise<void>;
-}
-
-interface OtelSpan {
-  end: () => void;
-  spanContext: () => { traceId: string; spanId: string };
-  setAttribute: (key: string, value: unknown) => void;
-  attributes?: Record<string, unknown>;
-  name: string;
-}
-
-interface SpanExporter {
-  getFinishedSpans: () => OtelSpan[];
-}
-
-let OTEL_AVAILABLE = false;
-let TracerProvider: unknown;
-let InMemorySpanExporter: unknown;
-let SimpleSpanProcessor: unknown;
-
-try {
-  const otelSdk = await import("@opentelemetry/sdk-trace-base");
-  TracerProvider = otelSdk.TracerProvider;
-  SimpleSpanProcessor = otelSdk.SimpleSpanProcessor;
-  InMemorySpanExporter = otelSdk.InMemorySpanExporter;
-  OTEL_AVAILABLE = true;
-} catch {
-  OTEL_AVAILABLE = false;
-}
-
-interface OtelFixture {
-  tracer: Tracer;
-  exporter: SpanExporter;
-}
-
-function setupOtelFixture(): OtelFixture | null {
-  if (
-    !OTEL_AVAILABLE ||
-    !TracerProvider ||
-    !SimpleSpanProcessor ||
-    !InMemorySpanExporter
-  ) {
-    return null;
-  }
-
-  const TPClass = TracerProvider as new () => {
-    addSpanProcessor: (processor: unknown) => void;
-    getTracer: (name: string) => Tracer;
-  };
-  const SPClass = SimpleSpanProcessor as new (
-    exporter: SpanExporter,
-  ) => unknown;
-  const IEClass = InMemorySpanExporter as new () => SpanExporter;
-
-  const exporter = new IEClass();
-  const processor = new SPClass(exporter);
-
-  const tp = new TPClass();
+  const tp = new BasicTracerProvider();
   tp.addSpanProcessor(processor);
 
   const tracer = tp.getTracer("otel-compat-test");
@@ -98,38 +36,18 @@ function setupOtelFixture(): OtelFixture | null {
   };
 }
 
-function getExportVersion(exportedSpan: string): number {
-  const exportedBytes = base64ToUint8Array(exportedSpan);
-  return exportedBytes[0];
-}
-
 describe("OTEL compatibility mode", () => {
-  let originalEnv: string | undefined;
-
   beforeEach(() => {
-    originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
-    process.env.BRAINTRUST_OTEL_COMPAT = "true";
+    initOtel();
     process.env.BRAINTRUST_API_KEY = "test-api-key";
   });
 
   afterEach(() => {
-    if (originalEnv === undefined) {
-      delete process.env.BRAINTRUST_OTEL_COMPAT;
-    } else {
-      process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
-    }
+    resetOtel();
   });
 
   test("mixed BT/OTEL tracing with BT logger first", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
     const logger = initLogger({ projectName: "mixed-tracing-bt-first" });
 
     await logger.traced(
@@ -168,15 +86,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL tracing with OTEL first", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
     const logger = initLogger({ projectName: "mixed-tracing-otel-first" });
 
     await tracer.startActiveSpan("otel-span-1", async (otelSpan1) => {
@@ -205,15 +115,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("BT span without explicit parent inherits from OTEL", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
     const logger = initLogger({ projectName: "bt-inherits-otel" });
 
     await tracer.startActiveSpan("otel-parent", async (otelParent) => {
@@ -238,15 +140,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL with startSpan (matching Python pattern)", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
     const logger = initLogger({ projectName: "mixed-start-span-test" });
 
     const span1 = logger.startSpan({ name: "bt-span-1" });
@@ -285,7 +179,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("uses BraintrustContextManager when OTEL disabled", () => {
-    delete process.env.BRAINTRUST_OTEL_COMPAT;
+    resetOtel();
 
     const cm = getContextManager();
 
@@ -296,54 +190,31 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("uses OtelContextManager when OTEL enabled", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
     // Test that when OTEL is available and env var is set, we get OtelContextManager
     // Note: In test environment, OTEL packages may not be available even though
     // we checked OTEL_AVAILABLE. If the require fails in getContextManager,
     // it falls back to BraintrustContextManager, which is correct behavior.
-    const originalEnvValue = process.env.BRAINTRUST_OTEL_COMPAT;
-    process.env.BRAINTRUST_OTEL_COMPAT = "true";
 
-    try {
-      // Clear module cache and re-import to get fresh context manager
-      const loggerModule = await import("../logger?t=" + Date.now());
-      const cm = loggerModule.getContextManager();
+    // Clear module cache and re-import to get fresh context manager
+    const loggerModule = await import("braintrust?t=" + Date.now());
+    const cm = loggerModule.getContextManager();
 
-      // If OTEL is truly available, we should get OtelContextManager
-      // Otherwise, fallback to BraintrustContextManager is acceptable
-      if (cm.constructor.name === "OtelContextManager") {
-        expect(cm.getParentSpanIds).toBeDefined();
-        expect(cm.runInContext).toBeDefined();
-        expect(cm.getCurrentSpan).toBeDefined();
-      } else {
-        // OTEL module not actually available at runtime, which is fine
-        console.warn(
-          "OTEL context manager not available at runtime, using fallback",
-        );
-      }
-    } finally {
-      if (originalEnvValue === undefined) {
-        delete process.env.BRAINTRUST_OTEL_COMPAT;
-      } else {
-        process.env.BRAINTRUST_OTEL_COMPAT = originalEnvValue;
-      }
+    // If OTEL is truly available, we should get OtelContextManager
+    // Otherwise, fallback to BraintrustContextManager is acceptable
+    if (cm.constructor.name === "OtelContextManager") {
+      expect(cm.getParentSpanIds).toBeDefined();
+      expect(cm.runInContext).toBeDefined();
+      expect(cm.getCurrentSpan).toBeDefined();
+    } else {
+      // OTEL module not actually available at runtime, which is fine
+      console.warn(
+        "OTEL context manager not available at runtime, using fallback",
+      );
     }
   });
 
   test("OTEL spans inherit braintrust.parent attribute", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
     const logger = initLogger({ projectName: "parent-propagation-test" });
 
     await logger.traced(
@@ -367,15 +238,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("separate traces remain separate", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer } = fixture;
+    const { tracer } = setupOtelFixture();
     const logger = initLogger({ projectName: "separate-traces" });
 
     let trace1Id: string | undefined;
@@ -422,15 +285,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("OTEL spans in experiment Eval() inherit experiment_id parent", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const fixture = setupOtelFixture();
-    if (!fixture) return;
-
-    const { tracer, exporter } = fixture;
+    const { tracer, exporter } = setupOtelFixture();
 
     // Capture BT span info from inside the task
     const btSpanInfo: Array<{ traceId: string; spanId: string }> = [];
@@ -533,7 +388,7 @@ describe("OTEL compatibility mode", () => {
     parentSpan.end();
 
     // Use withParent helper - this uses getSpanParentObject which has the bug at line 3902
-    const { withParent, startSpan } = await import("../logger");
+    const { withParent, startSpan } = await import("braintrust");
     withParent(exported, () => {
       // Use global startSpan without logger to trigger getSpanParentObject path
       const childSpan = startSpan({
@@ -549,39 +404,30 @@ describe("OTEL compatibility mode", () => {
 });
 
 describe("Distributed Tracing (BT → OTEL)", () => {
-  let originalEnv: string | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let trace: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let context: any;
 
   beforeEach(async () => {
-    originalEnv = process.env.BRAINTRUST_OTEL_COMPAT;
-    process.env.BRAINTRUST_OTEL_COMPAT = "true";
+    initOtel();
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
-    if (OTEL_AVAILABLE) {
-      const otelApi = await import("@opentelemetry/api");
-      trace = otelApi.trace;
-      context = otelApi.context;
-    }
+    const otelApi = await import("@opentelemetry/api");
+    trace = otelApi.trace;
+    context = otelApi.context;
   });
 
   afterEach(() => {
-    if (originalEnv === undefined) {
-      delete process.env.BRAINTRUST_OTEL_COMPAT;
-    } else {
-      process.env.BRAINTRUST_OTEL_COMPAT = originalEnv;
-    }
+    resetOtel();
   });
 
   test("otelContextFromSpanExport parses BT span and creates OTEL context", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
-    const { otelContextFromSpanExport } = await import("../otel");
-    const { SpanComponentsV4 } = await import("../../util/span_identifier_v4");
-    const { SpanObjectTypeV3 } = await import("../../util/span_identifier_v3");
+    const { contextFromSpanExport: otelContextFromSpanExport } = await import(
+      "./"
+    );
+    const { SpanComponentsV4 } = await import("braintrust/util");
+    const { SpanObjectTypeV3 } = await import("braintrust/util");
 
     // Create a sample span export string
     const rootSpanId = "a1b2c3d4e5f6789012345678abcdef01"; // 32 hex chars (16 bytes)
@@ -622,16 +468,13 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   });
 
   test("BT span in Service A can be parent of OTEL span in Service B", async () => {
-    if (!OTEL_AVAILABLE) {
-      console.warn("Skipping test: OpenTelemetry not installed");
-      return;
-    }
-
     const fixture = setupOtelFixture();
     if (!fixture) return;
 
     const { tracer, exporter } = fixture;
-    const { otelContextFromSpanExport } = await import("../otel");
+    const { contextFromSpanExport: otelContextFromSpanExport } = await import(
+      "./"
+    );
 
     const projectName = "service-a-project";
     const logger = initLogger({ projectName });

@@ -1,12 +1,7 @@
 export * from "./logger";
 export * from "./functions/stream";
 export * from "./functions/invoke";
-export {
-  IDGenerator,
-  UUIDGenerator,
-  OTELIDGenerator,
-  getIdGenerator,
-} from "./id-gen";
+export { IDGenerator, UUIDGenerator, getIdGenerator } from "./id-gen";
 export {
   BaseExperiment,
   Evaluator,
