@@ -52,7 +52,8 @@ VENDOR_PACKAGES = (
 
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+# openai-agents requires a very recent openai version, so we only exercise the latest build.
+OPENAI_VERSIONS = (LATEST,)
 LITELLM_VERSIONS = (LATEST, "1.74.0")
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 AGNO_VERSIONS = (LATEST, "2.1.0")
