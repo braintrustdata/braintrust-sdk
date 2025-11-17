@@ -5,8 +5,9 @@ Exports `BraintrustTracingProcessor`, a `tracing.TracingProcessor` that logs tra
 import datetime
 from typing import Any, Dict, Optional, Union
 
-import braintrust
 from agents import tracing
+
+import braintrust
 from braintrust.logger import NOOP_SPAN
 
 
