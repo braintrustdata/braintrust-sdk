@@ -2,15 +2,13 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod/v3";
-import { BraintrustSpanProcessor } from "@braintrust/otel";
+import { BraintrustSpanProcessor } from "../src";
 
 const sdk = new NodeSDK({
-  spanProcessors: [
-    new BraintrustSpanProcessor({
-      parent: "project_name:ai sdk test",
-      filterAISpans: true,
-    }),
-  ],
+  spanProcessor: new BraintrustSpanProcessor({
+    parent: "project_name:ai sdk test",
+    filterAISpans: true,
+  }),
 });
 
 sdk.start();

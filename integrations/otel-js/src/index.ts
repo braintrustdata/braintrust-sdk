@@ -10,6 +10,8 @@ export {
   parentFromHeaders,
 } from "./otel";
 
+export { BraintrustSpanProcessor } from "./otel";
+
 declare global {
   // eslint-disable-next-line no-var
   var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;

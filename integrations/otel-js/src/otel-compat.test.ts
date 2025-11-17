@@ -5,18 +5,26 @@
  * when created in mixed contexts.
  */
 
-import { beforeEach, afterEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, test } from "vitest";
+// Import otel package to call setup() and register OtelContextManager BEFORE braintrust imports
+import "./index";
 import {
   initLogger,
   currentSpan,
   getContextManager,
   _exportsForTestingOnly,
-} from "../logger";
-import { Eval } from "../framework";
-import { base64ToUint8Array } from "../../util/bytes";
-import { configureNode } from "../node";
+  Eval,
+} from "braintrust";
 
-configureNode();
+// Utility function copied from braintrust/util/bytes to avoid import issues
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const uint8Array = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    uint8Array[i] = binary.charCodeAt(i);
+  }
+  return uint8Array;
+}
 
 interface Tracer {
   startActiveSpan: (

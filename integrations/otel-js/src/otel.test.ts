@@ -36,9 +36,8 @@ describe("AISpanProcessor", () => {
     baseProcessor = new SimpleSpanProcessor(memoryExporter);
     filterProcessor = new AISpanProcessor(baseProcessor);
 
-    provider = new BasicTracerProvider({
-      spanProcessors: [filterProcessor],
-    });
+    provider = new BasicTracerProvider();
+    provider.addSpanProcessor(filterProcessor);
 
     // Don't set global tracer provider - use local one instead
     tracer = provider.getTracer("test_tracer");
@@ -185,9 +184,9 @@ describe("AISpanProcessor", () => {
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
+    const customProvider = new BasicTracerProvider();
+    customProvider.addSpanProcessor(customFilterProcessor);
+
     const customTracer = customProvider.getTracer("custom_test");
 
     const rootSpan = customTracer.startSpan("root");
@@ -231,9 +230,9 @@ describe("AISpanProcessor", () => {
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
+    const customProvider = new BasicTracerProvider();
+    customProvider.addSpanProcessor(customFilterProcessor);
+
     const customTracer = customProvider.getTracer("custom_test");
 
     const rootSpan = customTracer.startSpan("root");
@@ -278,9 +277,9 @@ describe("AISpanProcessor", () => {
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
+    const customProvider = new BasicTracerProvider();
+    customProvider.addSpanProcessor(customFilterProcessor);
+
     const customTracer = customProvider.getTracer("custom_test");
 
     const rootSpan = customTracer.startSpan("root");

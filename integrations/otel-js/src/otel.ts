@@ -214,7 +214,7 @@ interface BraintrustSpanProcessorOptions {
  * const processor = new BraintrustSpanProcessor();
  * ```
  */
-export class BraintrustSpanProcessor {
+export class BraintrustSpanProcessor implements SpanProcessor {
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
