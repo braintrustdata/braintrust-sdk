@@ -1358,7 +1358,7 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
 
         try:
             # Create a simple agent
-            agent = Agent(
+            agent = Agent(  # type: ignore[call-arg]
                 name="test-agent",
                 model=TEST_MODEL,
                 instructions="You are a helpful assistant. Be very concise.",
@@ -1461,11 +1461,11 @@ async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
 
     try:
         # Create agents for testing
-        agent_a = Agent(
+        agent_a = Agent(  # type: ignore[call-arg]
             name="agent-a", model=TEST_MODEL, instructions="You are agent A. Just respond with 'A' and nothing else."
         )
 
-        agent_b = Agent(
+        agent_b = Agent(  # type: ignore[call-arg]
             name="agent-b", model=TEST_MODEL, instructions="You are agent B. Just respond with 'B' and nothing else."
         )
 
@@ -1578,7 +1578,7 @@ async def test_agents_tool_openai_nested_spans(memory_logger):
     set_trace_processors([BraintrustTracingProcessor()])
 
     # Create agent with the tool
-    agent = Agent(
+    agent = Agent(  # type: ignore[call-arg]
         name="Text Analysis Agent",
         instructions="You are a helpful assistant that analyzes text. When asked to analyze text, you MUST use the analyze_text tool. Always call the tool with the exact text provided by the user. After using the tool, provide a two sentence summary of what the tool returned.",
         tools=[analyze_text],
