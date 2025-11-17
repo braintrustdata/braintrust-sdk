@@ -14,9 +14,8 @@
 
 import { trace, context } from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
-import { Resource } from "@opentelemetry/resources";
-import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import { initLogger, BraintrustSpanProcessor, login } from "../dist/index.js";
+import { initLogger, login } from "braintrust";
+import { BraintrustSpanProcessor } from "../src";
 
 function getExportVersion(exportedSpan: string): number {
   const exportedBytes = Buffer.from(exportedSpan, "base64");
@@ -62,12 +61,8 @@ async function main() {
   });
 
   // Setup OpenTelemetry with Braintrust processor
-  const provider = new BasicTracerProvider({
-    resource: new Resource({
-      [ATTR_SERVICE_NAME]: "otel-braintrust-demo",
-    }),
-    spanProcessors: [braintrustProcessor],
-  });
+  const provider = new BasicTracerProvider();
+  provider.addSpanProcessor(braintrustProcessor);
 
   // Set as global tracer provider so OTEL context APIs work
   trace.setGlobalTracerProvider(provider);

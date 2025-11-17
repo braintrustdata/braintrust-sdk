@@ -13,6 +13,7 @@
     "@opentelemetry/exporter-trace-otlp-http": "0.57.2",
     "@opentelemetry/sdk-trace-base": "1.9.0",
     "@opentelemetry/sdk-node": "0.35.0",
+    "braintrust": "workspace:*",
     "tsx": "^4.19.2"
   },
   "devDependencies": {
