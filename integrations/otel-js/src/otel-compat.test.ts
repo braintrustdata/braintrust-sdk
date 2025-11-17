@@ -18,6 +18,8 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
+import { context as otelContext, trace as otelTrace } from "@opentelemetry/api";
+import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { getExportVersion } from "./utils";
 import { initOtel, resetOtel } from "./";
 
@@ -37,12 +39,24 @@ function setupOtelFixture() {
 }
 
 describe("OTEL compatibility mode", () => {
+  let contextManager: AsyncHooksContextManager;
+
   beforeEach(() => {
     initOtel();
     process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    // Set up OTEL context manager to enable context propagation
+    contextManager = new AsyncHooksContextManager();
+    contextManager.enable();
+    otelContext.setGlobalContextManager(contextManager);
   });
 
   afterEach(() => {
+    // Clean up context manager
+    if (contextManager) {
+      otelContext.disable();
+      contextManager.disable();
+    }
     resetOtel();
   });
 
@@ -408,6 +422,7 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   let trace: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let context: any;
+  let contextManager: AsyncHooksContextManager;
 
   beforeEach(async () => {
     initOtel();
@@ -416,9 +431,19 @@ describe("Distributed Tracing (BT → OTEL)", () => {
     const otelApi = await import("@opentelemetry/api");
     trace = otelApi.trace;
     context = otelApi.context;
+
+    // Set up OTEL context manager to enable context propagation
+    contextManager = new AsyncHooksContextManager();
+    contextManager.enable();
+    context.setGlobalContextManager(contextManager);
   });
 
   afterEach(() => {
+    // Clean up context manager
+    if (contextManager) {
+      context.disable();
+      contextManager.disable();
+    }
     resetOtel();
   });
 
