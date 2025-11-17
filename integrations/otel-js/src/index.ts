@@ -1,6 +1,3 @@
-import * as _ from "braintrust";
-import type { ContextManager, IDGenerator } from "braintrust";
-
 import { OtelContextManager } from "./context";
 
 export {
@@ -15,17 +12,14 @@ import { SpanComponentsV4 } from "braintrust/util";
 
 export { BraintrustSpanProcessor } from "./otel";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
-  var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
-  var BRAINTRUST_SPAN_COMPONENT: typeof SpanComponentsV4 | undefined;
-}
-
 export const initOtel = () => {
-  globalThis.BRAINTRUST_CONTEXT_MANAGER = OtelContextManager;
-  globalThis.BRAINTRUST_ID_GENERATOR = OTELIDGenerator;
-  globalThis.BRAINTRUST_SPAN_COMPONENT = SpanComponentsV4;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+  (globalThis as any).globalThis.BRAINTRUST_CONTEXT_MANAGER =
+    OtelContextManager;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+  (globalThis as any).globalThis.BRAINTRUST_ID_GENERATOR = OTELIDGenerator;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+  (globalThis as any).BRAINTRUST_SPAN_COMPONENT = SpanComponentsV4;
 };
 
 export const resetOtel = () => {

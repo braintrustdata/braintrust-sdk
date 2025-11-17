@@ -383,6 +383,7 @@ class BraintrustContextManager extends ContextManager {
   }
 }
 
+// make sure to update @braintrust/otel package
 declare global {
   var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
   var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
@@ -391,15 +392,11 @@ declare global {
 
 type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
 
-globalThis.BRAINTRUST_SPAN_COMPONENT = undefined;
-
 function getSpanComponentsClass(): SpanComponent {
   return globalThis.BRAINTRUST_SPAN_COMPONENT
     ? globalThis.BRAINTRUST_SPAN_COMPONENT
     : SpanComponentsV3;
 }
-
-globalThis.BRAINTRUST_CONTEXT_MANAGER = undefined;
 
 export function getContextManager(): ContextManager {
   return globalThis.BRAINTRUST_CONTEXT_MANAGER

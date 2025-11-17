@@ -51,5 +51,3 @@ export function getIdGenerator(): IDGenerator {
     ? new globalThis.BRAINTRUST_ID_GENERATOR()
     : new UUIDGenerator();
 }
-
-globalThis.BRAINTRUST_ID_GENERATOR = undefined;
