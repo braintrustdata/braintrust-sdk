@@ -129,6 +129,8 @@ def test_google_genai(session, version):
 @nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
 def test_openai(session, version):
     _install_test_deps(session)
+    if sys.version_info < (3, 10):
+        session.install("eval_type_backport", silent=SILENT_INSTALLS)
     _install(session, "openai", version)
     session.install("--no-deps", "openai-agents", silent=SILENT_INSTALLS)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
