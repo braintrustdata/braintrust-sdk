@@ -4,14 +4,13 @@ import time
 import braintrust
 import openai
 import pytest
-from openai import AsyncOpenAI
-from openai._types import NOT_GIVEN
-from pydantic import BaseModel
-
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.openai import BraintrustTracingProcessor
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from openai import AsyncOpenAI
+from openai._types import NOT_GIVEN
+from pydantic import BaseModel
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
 PROJECT_NAME = "test-project-openai-py-tracing"
@@ -292,7 +291,16 @@ def test_openai_responses_sparse_indices(memory_logger):
     # Create a mock response with sparse content indices (e.g., indices 0, 2, 5)
     # This simulates a streaming response where items arrive out of order or with gaps
     class MockResult:
-        def __init__(self, type, content_index=None, delta=None, annotation_index=None, annotation=None, output_index=None, item=None):
+        def __init__(
+            self,
+            type,
+            content_index=None,
+            delta=None,
+            annotation_index=None,
+            annotation=None,
+            output_index=None,
+            item=None,
+        ):
             self.type = type
             if content_index is not None:
                 self.content_index = content_index
@@ -343,8 +351,20 @@ def test_openai_responses_sparse_indices(memory_logger):
     all_results_with_annotations = [
         MockResult("response.output_item.added", item=MockItem()),
         MockResult("response.output_text.delta", content_index=0, delta="Text", output_index=0),
-        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=1, annotation={"text": "Second annotation"}, output_index=0),
-        MockResult("response.output_text.annotation.added", content_index=0, annotation_index=3, annotation={"text": "Fourth annotation"}, output_index=0),
+        MockResult(
+            "response.output_text.annotation.added",
+            content_index=0,
+            annotation_index=1,
+            annotation={"text": "Second annotation"},
+            output_index=0,
+        ),
+        MockResult(
+            "response.output_text.annotation.added",
+            content_index=0,
+            annotation_index=3,
+            annotation={"text": "Fourth annotation"},
+            output_index=0,
+        ),
     ]
 
     result = wrapper._postprocess_streaming_results(all_results_with_annotations)
@@ -1314,10 +1334,9 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
     pytest.importorskip("agents", reason="agents package not available")
 
     import agents
+    import braintrust
     from agents import Agent
     from agents.run import AgentRunner
-
-    import braintrust
     from braintrust.wrappers.openai import BraintrustTracingProcessor
 
     assert not memory_logger.pop()
