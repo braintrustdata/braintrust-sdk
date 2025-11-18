@@ -6,7 +6,6 @@ import openai
 import pytest
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
-from braintrust.wrappers.openai import BraintrustTracingProcessor
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
 from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
@@ -39,6 +38,7 @@ def memory_logger():
 def test_tracing_processor_sets_current_span(memory_logger):
     """Ensure that on_trace_start sets the span as current so nested spans work."""
     pytest.importorskip("agents", reason="agents package not available")
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
 
     assert not memory_logger.pop()
     processor = BraintrustTracingProcessor()

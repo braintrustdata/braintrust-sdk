@@ -130,7 +130,9 @@ def test_google_genai(session, version):
 def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
-    _install(session, "openai-agents")
+    # openai-agents requires Python >= 3.10
+    if sys.version_info >= (3, 10):
+        _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
