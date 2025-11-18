@@ -72,23 +72,25 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { nunjucks } from "./template/nunjucks";
+import { nunjucks } from "./template/nunjucks-browser";
+import type { Environment as NunjucksEnvironment } from "nunjucks";
 
-const createNunjucksEnv = (throwOnUndefined: boolean) => {
-  if (!nunjucks) {
-    throw new Error("nunjucks is not available in ESM environments.");
-  }
+const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
   return new nunjucks.Environment(null, {
     autoescape: false,
     throwOnUndefined,
   });
 };
 
-const nunjucksEnv = new SyncLazyValue<any>(() => createNunjucksEnv(false));
+const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(false),
+);
 
-const nunjucksStrictEnv = new SyncLazyValue<any>(() => createNunjucksEnv(true));
+const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(true),
+);
 
-function getNunjucksEnv(strict = false) {
+function getNunjucksEnv(strict = false): NunjucksEnvironment {
   return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
 }
 
