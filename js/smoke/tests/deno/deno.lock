@@ -72,6 +72,9 @@
       "integrity": "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="
     }
   },
+  "remote": {
+    "https://mozilla.github.io/nunjucks/files/nunjucks.min.js": "36b31fabed0b7d923a840f963d9c7465ce390d3a6e71a2fe29b8287fad35dbd6"
+  },
   "workspace": {
     "dependencies": [
       "npm:@vercel/functions@^3.3.0",

@@ -5,8 +5,12 @@ This test is not written as a vitest because it needs to be run as CommonJS and 
 **/
 import assert from "node:assert/strict";
 
-import { initLogger, _exportsForTestingOnly } from "braintrust";
-import { runSpanSmokeTest } from "./span_test_helper";
+import { initLogger, _exportsForTestingOnly, Prompt } from "braintrust";
+import {
+  runSpanSmokeTest,
+  runMustacheTemplateTest,
+  runNunjucksTemplateTest,
+} from "./span_test_helper";
 
 async function main() {
   const spans = await runSpanSmokeTest({
@@ -19,13 +23,37 @@ async function main() {
     throw new Error("No spans were captured by the background logger");
   }
 
-  const spanEvent = spans[0]!;
+  const spanEvent = spans[0] as {
+    input: unknown;
+    output: unknown;
+    expected: unknown;
+  };
 
   assert.equal(spanEvent.input, "What is the capital of France?");
   assert.equal(spanEvent.output, "Paris");
   assert.equal(spanEvent.expected, "Paris");
 
   console.log("Simple span example passed");
+
+  const mustacheResult = runMustacheTemplateTest(Prompt);
+
+  assert.equal(
+    mustacheResult.messages[0]?.content,
+    "Hello, World!",
+    "Mustache template should render simple variable",
+  );
+
+  console.log("Mustache template test passed");
+
+  const nunjucksResult = runNunjucksTemplateTest(Prompt);
+
+  assert.equal(
+    nunjucksResult.messages[0]?.content,
+    "Items: apple, banana, cherry",
+    "Nunjucks template should render loop correctly",
+  );
+
+  console.log("Nunjucks template test passed");
 }
 
 main().catch((error) => {
