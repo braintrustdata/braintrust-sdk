@@ -337,13 +337,6 @@ export interface Span extends Exportable {
    */
   state(): BraintrustState;
 
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined;
-
   // For type identification.
   kind: "span";
 }
@@ -471,10 +464,6 @@ export class NoopSpan implements Span {
 
   public state() {
     return _internalGetGlobalState();
-  }
-
-  public _getOtelParent(): string | undefined {
-    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -5720,54 +5709,6 @@ export class SpanImpl implements Span {
   }
 
   // TODO: !!!
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined {
-    if (!this.parentObjectType) {
-      return undefined;
-    }
-
-    try {
-      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-        const args = this.parentComputeObjectMetadataArgs;
-
-        if (id) {
-          return `project_id:${id}`;
-        }
-
-        const projectName = args?.project_name;
-        if (projectName) {
-          return `project_name:${projectName}`;
-        }
-      } else if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-
-        // If not resolved yet, trigger async resolution as a fallback
-        // This shouldn't typically happen since Eval() resolves experiment IDs early,
-        // but we keep this as a safety net for other use cases.
-        if (!syncResult.resolved) {
-          this.parentObjectId.get().catch(() => {
-            // Ignore errors, matching Python's except clause behavior
-          });
-        }
-
-        if (id) {
-          return `experiment_id:${id}`;
-        }
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-
-    return undefined;
-  }
-
   // Custom inspect for Node.js console.log
   [Symbol.for("nodejs.util.inspect.custom")](): string {
     return `SpanImpl {

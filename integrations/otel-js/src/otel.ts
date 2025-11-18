@@ -360,7 +360,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
 
         // Set the attribute if we found a parent value
         if (parentValue && typeof span.setAttributes === "function") {
-          span.setAttributes({ BRAINTRUST_PARENT: parentValue });
+          span.setAttributes({ "braintrust.parent": parentValue });
         }
       }
     } catch {
@@ -532,7 +532,91 @@ function getBraintrustParent(
 }
 
 /**
+ * Get the OTEL parent string from a Braintrust span.
+ * This is used to set the braintrust.parent attribute in OTEL contexts.
+ *
+ * @param span - Braintrust Span object
+ * @returns A string like "project_id:X", "project_name:X", or "experiment_id:X", or undefined if no parent
+ */
+export function getOtelParentFromSpan(span: {
+  parentObjectType?: number;
+  parentObjectId?: { getSync: () => { value?: string; resolved: boolean } };
+  parentComputeObjectMetadataArgs?: Record<string, unknown>;
+}): string | undefined {
+  if (!span.parentObjectType) {
+    // Debug: no parent object type
+    // eslint-disable-next-line no-console
+    console.debug("[getOtelParentFromSpan] missing parentObjectType");
+    return undefined;
+  }
+
+  try {
+    if (span.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
+      const syncResult = span.parentObjectId?.getSync();
+      const id = syncResult?.value;
+      const args = span.parentComputeObjectMetadataArgs;
+
+      // Debug details for project logs
+      // eslint-disable-next-line no-console
+      console.debug("[getOtelParentFromSpan] PROJECT_LOGS", {
+        id,
+        project_name: args?.project_name,
+      });
+
+      if (id) {
+        // eslint-disable-next-line no-console
+        console.debug("[getOtelParentFromSpan] PROJECT_LOGS using project_id", {
+          id,
+        });
+        return `project_id:${id}`;
+      }
+
+      const projectName = args?.project_name;
+      if (typeof projectName === "string") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[getOtelParentFromSpan] PROJECT_LOGS using project_name",
+          { project_name: projectName },
+        );
+        return `project_name:${projectName}`;
+      }
+    } else if (span.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const syncResult = span.parentObjectId?.getSync();
+      const id = syncResult?.value;
+
+      // Debug details for experiment
+      // eslint-disable-next-line no-console
+      console.debug("[getOtelParentFromSpan] EXPERIMENT", { id });
+
+      if (id) {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[getOtelParentFromSpan] EXPERIMENT using experiment_id",
+          { id },
+        );
+        return `experiment_id:${id}`;
+      }
+    }
+  } catch (e) {
+    // Debug: unexpected error reading parent info
+    // eslint-disable-next-line no-console
+    console.warn("[getOtelParentFromSpan] error extracting parent", e);
+  }
+
+  // Debug: fell through without deriving a parent
+  // eslint-disable-next-line no-console
+  console.debug("[getOtelParentFromSpan] no parent derived", {
+    parentObjectType: span.parentObjectType,
+    parentObjectIdResolved: span.parentObjectId?.getSync?.()?.resolved,
+  });
+
+  return undefined;
+}
+
+/**
  * A trace exporter that sends OpenTelemetry spans to Braintrust.
+</text>
+
  *
  * This exporter wraps the standard OTLP trace exporter and can be used with
  * any OpenTelemetry setup, including @vercel/otel's registerOTel function,

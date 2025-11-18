@@ -6,6 +6,7 @@ import {
 
 import { trace as otelTrace, context as otelContext } from "@opentelemetry/api";
 import { BRAINTRUST_SPAN, BRAINTRUST_PARENT } from "./constants";
+import { getOtelParentFromSpan } from "./otel";
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -102,7 +103,7 @@ export class OtelContextManager extends ContextManager {
         newContext = newContext.setValue(BRAINTRUST_SPAN, span);
 
         // Get parent value and store it in context (matching Python's behavior)
-        const parentValue = span._getOtelParent();
+        const parentValue = getOtelParentFromSpan(span);
         if (parentValue) {
           newContext = newContext.setValue(BRAINTRUST_PARENT, parentValue);
         }
