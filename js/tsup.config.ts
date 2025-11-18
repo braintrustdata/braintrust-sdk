@@ -7,7 +7,7 @@ const createNunjucksPlugin = (variant: "cjs" | "esm") => ({
     build.onResolve({ filter: /_platform-nunjucks$/ }, (args: any) => {
       const resolvedPath = path.resolve(
         args.resolveDir,
-        `./_platform-nunjucks-${variant}.ts`
+        `./_platform-nunjucks-${variant}.ts`,
       );
       return { path: resolvedPath };
     });

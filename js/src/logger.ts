@@ -76,9 +76,7 @@ import { nunjucks } from "./template/nunjucks";
 
 const createNunjucksEnv = (throwOnUndefined: boolean) => {
   if (!nunjucks) {
-    throw new Error(
-      "nunjucks is not available. Please install it separately when using ESM: npm install nunjucks"
-    );
+    throw new Error("nunjucks is not available in ESM environments.");
   }
   return new nunjucks.Environment(null, {
     autoescape: false,
