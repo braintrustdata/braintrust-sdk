@@ -96,6 +96,7 @@ const wrapGenerateText = (
           input: processInputAttachments(params),
           metadata: {
             model: serializeModel(params.model),
+            prompt: params?.span_info?.metadata?.prompt,
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -135,6 +136,7 @@ const wrapGenerateObject = (
           input: processInputAttachments(params),
           metadata: {
             model: serializeModel(params.model),
+            prompt: params?.span_info?.metadata?.prompt,
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -157,6 +159,7 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
         input: processInputAttachments(params),
         metadata: {
           model: serializeModel(params.model),
+          prompt: params?.span_info?.metadata?.prompt,
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -268,6 +271,7 @@ const wrapStreamObject = (
         input: processInputAttachments(params),
         metadata: {
           model: serializeModel(params.model),
+          prompt: params?.span_info?.metadata?.prompt,
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
