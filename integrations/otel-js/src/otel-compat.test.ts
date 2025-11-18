@@ -18,7 +18,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { context as otelContext, trace as otelTrace } from "@opentelemetry/api";
+import { context as otelContext } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { getExportVersion } from "./utils";
 import { initOtel, resetOtel } from "./";
@@ -41,9 +41,11 @@ function setupOtelFixture() {
 describe("OTEL compatibility mode", () => {
   let contextManager: AsyncHooksContextManager;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     initOtel();
-    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
 
     // Set up OTEL context manager to enable context propagation
     contextManager = new AsyncHooksContextManager();
@@ -57,6 +59,8 @@ describe("OTEL compatibility mode", () => {
       otelContext.disable();
       contextManager.disable();
     }
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
     resetOtel();
   });
 
@@ -93,7 +97,7 @@ describe("OTEL compatibility mode", () => {
     const otelSpan = otelSpans.find((s) => s.name === "otel-span-2");
     expect(otelSpan).toBeDefined();
     if (otelSpan && otelSpan.attributes) {
-      expect(otelSpan.attributes["braintrust.parent"]).toContain(
+      expect(otelSpan.attributes["braintrust.parent"] || "").toContain(
         "project_name:",
       );
     }
@@ -425,8 +429,9 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   let contextManager: AsyncHooksContextManager;
 
   beforeEach(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
     initOtel();
-    process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     const otelApi = await import("@opentelemetry/api");
     trace = otelApi.trace;

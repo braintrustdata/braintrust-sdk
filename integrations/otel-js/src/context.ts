@@ -5,7 +5,6 @@ import {
 } from "braintrust";
 
 import { trace as otelTrace, context as otelContext } from "@opentelemetry/api";
-import { BRAINTRUST_SPAN, BRAINTRUST_PARENT } from "./constants";
 import { getOtelParentFromSpan } from "./otel";
 
 function isOtelSpan(span: unknown): span is {
@@ -50,7 +49,8 @@ export class OtelContextManager extends ContextManager {
     }
 
     // Check if this is a wrapped BT span
-    const btSpan = otelContext?.active().getValue?.(BRAINTRUST_SPAN);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const btSpan = otelContext?.active().getValue?.("braintrust_span" as any);
     if (
       btSpan &&
       currentSpan.constructor.name === "NonRecordingSpan" &&
@@ -100,12 +100,20 @@ export class OtelContextManager extends ContextManager {
         // Get current context and add both the wrapped span and the BT span
         const currentContext = otelContext.active();
         let newContext = otelTrace.setSpan(currentContext, wrappedContext);
-        newContext = newContext.setValue(BRAINTRUST_SPAN, span);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+        newContext = newContext.setValue("braintrust_span" as any, span);
 
         // Get parent value and store it in context (matching Python's behavior)
-        const parentValue = getOtelParentFromSpan(span);
-        if (parentValue) {
-          newContext = newContext.setValue(BRAINTRUST_PARENT, parentValue);
+        if (isBraintrustSpan(span)) {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const parentValue = getOtelParentFromSpan(span as never);
+          if (parentValue) {
+            newContext = newContext.setValue(
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+              "braintrust.parent" as any,
+              parentValue,
+            );
+          }
         }
 
         // Run the callback in the new context
@@ -119,7 +127,8 @@ export class OtelContextManager extends ContextManager {
   }
 
   getCurrentSpan(): Span | undefined {
-    const btSpan = otelContext.active().getValue?.(BRAINTRUST_SPAN);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const btSpan = otelContext.active().getValue?.("braintrust_span" as any);
 
     if (
       btSpan &&

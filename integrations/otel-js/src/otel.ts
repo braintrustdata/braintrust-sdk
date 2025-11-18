@@ -14,8 +14,7 @@ import {
   Span,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { BRAINTRUST_PARENT } from "./constants";
-import { IDGenerator } from "braintrust";
+import { IDGenerator, type Span as BraintrustSpan } from "braintrust";
 
 const FILTER_PREFIXES = [
   "gen_ai.",
@@ -337,7 +336,10 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       // Priority 1: Check if braintrust.parent is in current OTEL context
       if (context) {
         const currentContext = context.active();
-        const contextValue = currentContext.getValue?.(BRAINTRUST_PARENT);
+        const contextValue = currentContext.getValue?.(
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+          "braintrust.parent" as any,
+        );
         if (typeof contextValue === "string") {
           parentValue = contextValue;
         }
@@ -346,7 +348,8 @@ export class BraintrustSpanProcessor implements SpanProcessor {
         if (!parentValue && parentContext) {
           const parentContextValue =
             typeof parentContext.getValue === "function"
-              ? parentContext.getValue(BRAINTRUST_PARENT)
+              ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+                parentContext.getValue("braintrust.parent" as any)
               : undefined;
           if (typeof parentContextValue === "string") {
             parentValue = parentContextValue;
@@ -538,50 +541,31 @@ function getBraintrustParent(
  * @param span - Braintrust Span object
  * @returns A string like "project_id:X", "project_name:X", or "experiment_id:X", or undefined if no parent
  */
-export function getOtelParentFromSpan(span: {
-  parentObjectType?: number;
-  parentObjectId?: { getSync: () => { value?: string; resolved: boolean } };
-  parentComputeObjectMetadataArgs?: Record<string, unknown>;
-}): string | undefined {
-  if (!span.parentObjectType) {
-    // Debug: no parent object type
-    // eslint-disable-next-line no-console
-    console.debug("[getOtelParentFromSpan] missing parentObjectType");
+export function getOtelParentFromSpan(
+  span: BraintrustSpan,
+): string | undefined {
+  const parent = span.getParentInfo();
+
+  if (!parent || !parent.objectType || !parent.objectId) {
     return undefined;
   }
 
   try {
-    if (span.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
-      const syncResult = span.parentObjectId?.getSync();
+    if (parent.objectType === SpanObjectTypeV3.PROJECT_LOGS) {
+      const syncResult = parent.objectId.getSync();
       const id = syncResult?.value;
-      const args = span.parentComputeObjectMetadataArgs;
-
-      // Debug details for project logs
-      // eslint-disable-next-line no-console
-      console.debug("[getOtelParentFromSpan] PROJECT_LOGS", {
-        id,
-        project_name: args?.project_name,
-      });
+      const args = parent.computeObjectMetadataArgs;
 
       if (id) {
-        // eslint-disable-next-line no-console
-        console.debug("[getOtelParentFromSpan] PROJECT_LOGS using project_id", {
-          id,
-        });
         return `project_id:${id}`;
       }
 
       const projectName = args?.project_name;
       if (typeof projectName === "string") {
-        // eslint-disable-next-line no-console
-        console.debug(
-          "[getOtelParentFromSpan] PROJECT_LOGS using project_name",
-          { project_name: projectName },
-        );
         return `project_name:${projectName}`;
       }
-    } else if (span.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
-      const syncResult = span.parentObjectId?.getSync();
+    } else if (parent.objectType === SpanObjectTypeV3.EXPERIMENT) {
+      const syncResult = parent.objectId.getSync();
       const id = syncResult?.value;
 
       // Debug details for experiment
@@ -602,14 +586,6 @@ export function getOtelParentFromSpan(span: {
     // eslint-disable-next-line no-console
     console.warn("[getOtelParentFromSpan] error extracting parent", e);
   }
-
-  // Debug: fell through without deriving a parent
-  // eslint-disable-next-line no-console
-  console.debug("[getOtelParentFromSpan] no parent derived", {
-    parentObjectType: span.parentObjectType,
-    parentObjectIdResolved: span.parentObjectId?.getSync?.()?.resolved,
-  });
-
   return undefined;
 }
 

@@ -211,6 +211,14 @@ export interface Span extends Exportable {
    */
   spanParents: string[];
 
+  getParentInfo():
+    | {
+        objectType: SpanObjectTypeV3;
+        objectId: LazyValue<string>;
+        computeObjectMetadataArgs: Record<string, unknown> | undefined;
+      }
+    | undefined;
+
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
    *
@@ -424,6 +432,10 @@ export class NoopSpan implements Span {
     _1?: StartSpanArgs & SetCurrentArg,
   ): R {
     return callback(this);
+  }
+
+  public getParentInfo() {
+    return undefined;
   }
 
   public startSpan(_1?: StartSpanArgs) {
@@ -5356,6 +5368,7 @@ export class SpanImpl implements Span {
   private parentObjectType: SpanObjectTypeV3;
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
+
   private _id: string;
   private _spanId: string;
   private _rootSpanId: string;
@@ -5444,6 +5457,16 @@ export class SpanImpl implements Span {
     this.isMerge = false;
     this.logInternal({ event, internalData });
     this.isMerge = true;
+  }
+
+  public getParentInfo() {
+    return {
+      objectType: this.parentObjectType,
+      objectId: this.parentObjectId,
+      computeObjectMetadataArgs: this.parentComputeObjectMetadataArgs && {
+        ...this.parentComputeObjectMetadataArgs,
+      },
+    };
   }
 
   public get id(): string {
@@ -5708,7 +5731,6 @@ export class SpanImpl implements Span {
     return this._state;
   }
 
-  // TODO: !!!
   // Custom inspect for Node.js console.log
   [Symbol.for("nodejs.util.inspect.custom")](): string {
     return `SpanImpl {
