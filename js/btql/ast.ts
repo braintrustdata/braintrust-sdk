@@ -112,13 +112,13 @@ export interface Star {
 export interface Function {
   op: "function";
   name: Ident;
-  args: Expr[];
+  args: (Expr | AliasExpr)[];
   loc?: NullableLoc;
 }
 export const functionSchema: z.ZodType<Function> = z.object({
   op: z.literal("function"),
   name: identSchema,
-  args: z.array(z.lazy(() => exprSchema)),
+  args: z.array(z.union([z.lazy(() => exprSchema), z.lazy(() => aliasExpr)])),
   loc,
 });
 
