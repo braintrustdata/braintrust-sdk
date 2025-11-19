@@ -51,6 +51,8 @@ test("meta (write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   // @ts-expect-error metadata is not typed if the experiment is missing
@@ -87,6 +89,8 @@ test("metadata (read/write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   expect(passedIn).toEqual(metadata);
@@ -125,6 +129,8 @@ test("expected (read/write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   expect(passedIn).toEqual({
@@ -173,6 +179,7 @@ describe("runEvaluator", () => {
         new NoopProgressReporter(),
         [],
         undefined,
+        true,
       );
 
       expect(out.results.every((r) => Object.keys(r.scores).length === 0)).toBe(
@@ -200,6 +207,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -229,6 +237,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -262,6 +271,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -287,6 +297,7 @@ describe("runEvaluator", () => {
             new BarProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -451,6 +462,9 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
+    undefined,
+    true,
   );
 
   // Should have 3 results (one for each trial)
@@ -490,6 +504,9 @@ test("trialIndex with multiple inputs", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
+    undefined,
+    true,
   );
 
   // Should have 4 results total (2 inputs × 2 trials)
@@ -530,7 +547,7 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
         () => ({ name: "simple_scorer", score: 0.8 }),
       ],
     },
-    { noSendLogs: true },
+    { noSendLogs: true, returnResults: true },
   );
 
   // Verify it returns results
@@ -587,6 +604,8 @@ test("tags can be appended and logged to root span", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -634,6 +653,8 @@ test.each([
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -672,6 +693,8 @@ test("tags are persisted with a failing scorer", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -703,6 +726,8 @@ test("tags remain empty when not set", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(undefined);
 
