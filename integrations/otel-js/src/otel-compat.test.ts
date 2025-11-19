@@ -14,7 +14,11 @@ import {
   runEvaluator,
   type ProgressReporter,
 } from "braintrust";
-import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { context as otelContext } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { getExportVersion } from "./utils";
@@ -27,18 +31,25 @@ class NoopProgressReporter implements ProgressReporter {
 }
 
 function setupOtelFixture(projectName: string = "otel-compat-test") {
-  const processor = new BraintrustSpanProcessor({
+  // For introspection in tests
+  const exporter = new InMemorySpanExporter();
+  const memoryProcessor = new SimpleSpanProcessor(exporter);
+
+  // For actual Braintrust integration
+  const braintrustProcessor = new BraintrustSpanProcessor({
     parent: `project_name:${projectName}`,
   });
 
   const tp = new BasicTracerProvider();
-  tp.addSpanProcessor(processor);
+  tp.addSpanProcessor(memoryProcessor); // For testing assertions
+  tp.addSpanProcessor(braintrustProcessor); // For actual functionality
 
   const tracer = tp.getTracer("otel-compat-test");
 
   return {
     tracer,
-    processor,
+    exporter,
+    processor: braintrustProcessor,
   };
 }
 
@@ -69,7 +80,9 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("mixed BT/OTEL tracing with BT logger first", async () => {
-    const { tracer, processor } = setupOtelFixture("mixed-tracing-bt-first");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "mixed-tracing-bt-first",
+    );
     const logger = initLogger({
       projectName: "mixed-tracing-bt-first",
       // projectId: "test-mixed-tracing-bt-first",
@@ -98,10 +111,24 @@ describe("OTEL compatibility mode", () => {
     );
 
     await processor.forceFlush();
+
+    // Verify OTEL spans were created and have correct attributes
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBeGreaterThanOrEqual(1);
+
+    const otelSpan = otelSpans.find((s) => s.name === "otel-span-2");
+    expect(otelSpan).toBeDefined();
+    if (otelSpan?.attributes) {
+      expect(otelSpan.attributes["braintrust.parent"]).toContain(
+        "project_name:mixed-tracing-bt-first",
+      );
+    }
   });
 
   test("mixed BT/OTEL tracing with OTEL first", async () => {
-    const { tracer, processor } = setupOtelFixture("mixed-tracing-otel-first");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "mixed-tracing-otel-first",
+    );
     const logger = initLogger({ projectName: "mixed-tracing-otel-first" });
 
     await tracer.startActiveSpan("otel-span-1", async (otelSpan1) => {
@@ -126,10 +153,15 @@ describe("OTEL compatibility mode", () => {
     });
 
     await processor.forceFlush();
+
+    // Verify OTEL spans were created
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBeGreaterThanOrEqual(2);
   });
 
   test("BT span without explicit parent inherits from OTEL", async () => {
-    const { tracer, processor } = setupOtelFixture("bt-inherits-otel");
+    const { tracer, exporter, processor } =
+      setupOtelFixture("bt-inherits-otel");
     const logger = initLogger({ projectName: "bt-inherits-otel" });
 
     await tracer.startActiveSpan("otel-parent", async (otelParent) => {
@@ -150,10 +182,16 @@ describe("OTEL compatibility mode", () => {
     });
 
     await processor.forceFlush();
+
+    // Verify OTEL span was created
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBeGreaterThanOrEqual(1);
   });
 
   test("mixed BT/OTEL with startSpan (matching Python pattern)", async () => {
-    const { tracer, processor } = setupOtelFixture("mixed-start-span-test");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "mixed-start-span-test",
+    );
     const logger = initLogger({ projectName: "mixed-start-span-test" });
     const cm = getContextManager();
 
@@ -186,6 +224,18 @@ describe("OTEL compatibility mode", () => {
     span1.end();
 
     await processor.forceFlush();
+
+    // Verify OTEL span was created with correct parent attribute
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBe(1);
+
+    const otelSpan = otelSpans.find((s) => s.name === "otel-span-2");
+    expect(otelSpan).toBeDefined();
+    if (otelSpan?.attributes) {
+      expect(otelSpan.attributes["braintrust.parent"]).toContain(
+        "project_name:mixed-start-span-test",
+      );
+    }
   });
 
   test("uses BraintrustContextManager when OTEL disabled", () => {
@@ -224,7 +274,9 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("OTEL spans inherit braintrust.parent attribute", async () => {
-    const { tracer, processor } = setupOtelFixture("test-otel-parent-attr");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "test-otel-parent-attr",
+    );
     const logger = initLogger({
       projectName: "test-otel-parent-attr",
     });
@@ -241,10 +293,23 @@ describe("OTEL compatibility mode", () => {
     );
 
     await processor.forceFlush();
+
+    // Verify OTEL span has braintrust.parent attribute
+    const otelSpans = exporter.getFinishedSpans();
+    const otelChild = otelSpans.find((s) => s.name === "otel-child");
+
+    expect(otelChild).toBeDefined();
+    if (otelChild?.attributes) {
+      expect(otelChild.attributes["braintrust.parent"]).toContain(
+        "project_name:test-otel-parent-attr",
+      );
+    }
   });
 
   test("separate traces remain separate", async () => {
-    const { tracer, processor } = setupOtelFixture("separate-traces-test");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "separate-traces-test",
+    );
     const logger = initLogger({ projectName: "separate-traces" });
 
     let trace1Id: string | undefined;
@@ -291,7 +356,9 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("OTEL spans in experiment Eval() inherit experiment_id parent", async () => {
-    const { tracer, processor } = setupOtelFixture("experiment-eval-test");
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "experiment-eval-test",
+    );
 
     // Capture BT span info from inside the task
     const btSpanInfo: Array<{ traceId: string; spanId: string }> = [];
@@ -337,6 +404,213 @@ describe("OTEL compatibility mode", () => {
 
     // Ensure spans are flushed
     await processor.forceFlush();
+
+    // Verify OTEL spans were created
+    const otelSpans = exporter.getFinishedSpans();
+    const computeSpans = otelSpans.filter((s) => s.name === "otel-compute");
+    expect(computeSpans.length).toBe(2);
+
+    // Verify each OTEL span has trace ID that matches a BT span
+    for (const otelSpan of computeSpans) {
+      const otelContext = otelSpan.spanContext();
+      const otelTraceId = otelContext.traceId.toString().padStart(32, "0");
+
+      // OTEL span should inherit the BT span's root trace ID
+      expect(btSpanInfo.some((bt) => bt.traceId === otelTraceId)).toBe(true);
+
+      // Verify OTEL span has braintrust.parent attribute
+      expect(otelSpan.attributes).toBeDefined();
+      if (otelSpan.attributes) {
+        // Should have project or experiment context
+        const parentAttr = otelSpan.attributes["braintrust.parent"];
+        expect(parentAttr).toBeDefined();
+        expect(
+          typeof parentAttr === "string" &&
+            (parentAttr.includes("project_name:") ||
+              parentAttr.includes("experiment_id:")),
+        ).toBe(true);
+      }
+    }
+  });
+
+  test("OTEL spans are created when BT spans are active", async () => {
+    const { tracer, exporter, processor } =
+      setupOtelFixture("span-creation-test");
+    const logger = initLogger({ projectName: "span-creation-test" });
+
+    let otelSpanCreated = false;
+    let otelSpanHasValidContext = false;
+
+    await logger.traced(
+      async () => {
+        await tracer.startActiveSpan("otel-child", async (otelSpan) => {
+          const ctx = otelSpan.spanContext();
+          otelSpanCreated = true;
+          otelSpanHasValidContext =
+            ctx.traceId.length > 0 && ctx.spanId.length > 0;
+          otelSpan.end();
+        });
+      },
+      { name: "bt-parent" },
+    );
+
+    expect(otelSpanCreated).toBe(true);
+    expect(otelSpanHasValidContext).toBe(true);
+
+    await processor.forceFlush();
+
+    // Verify the span was exported
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBeGreaterThanOrEqual(1);
+    const createdSpan = otelSpans.find((s) => s.name === "otel-child");
+    expect(createdSpan).toBeDefined();
+  });
+
+  test("OTEL spans inherit BT trace ID (trace unification)", async () => {
+    const { tracer, exporter, processor } = setupOtelFixture("trace-id-test");
+    const logger = initLogger({ projectName: "trace-id-test" });
+
+    let btTraceId: string | undefined;
+    let otelTraceId: string | undefined;
+    let btSpanId: string | undefined;
+    let otelSpanParentId: string | undefined;
+
+    await logger.traced(
+      async (btSpan) => {
+        btTraceId = btSpan.rootSpanId;
+        btSpanId = btSpan.spanId;
+
+        await tracer.startActiveSpan("otel-child", async (otelSpan) => {
+          const ctx = otelSpan.spanContext();
+          otelTraceId = ctx.traceId.toString().padStart(32, "0");
+          otelSpan.end();
+        });
+      },
+      { name: "bt-parent" },
+    );
+
+    // Critical assertion: trace IDs should match for unified tracing
+    expect(btTraceId).toBeDefined();
+    expect(otelTraceId).toBeDefined();
+    expect(otelTraceId).toBe(btTraceId);
+
+    await processor.forceFlush();
+
+    // Verify in exported spans
+    const otelSpans = exporter.getFinishedSpans();
+    const otelChild = otelSpans.find((s) => s.name === "otel-child");
+    expect(otelChild).toBeDefined();
+
+    if (otelChild) {
+      const exportedTraceId = otelChild.spanContext().traceId;
+      expect(exportedTraceId).toBe(btTraceId);
+
+      // Verify parent relationship
+      if (otelChild.parentSpanId) {
+        expect(otelChild.parentSpanId).toBe(btSpanId);
+      }
+    }
+  });
+
+  test("multiple OTEL spans in nested BT contexts maintain parent chain", async () => {
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "nested-parent-chain",
+    );
+    const logger = initLogger({ projectName: "nested-parent-chain" });
+
+    const spanIds: string[] = [];
+
+    await logger.traced(
+      async (btSpan1) => {
+        spanIds.push(btSpan1.spanId);
+
+        await tracer.startActiveSpan("otel-span-1", async (otelSpan1) => {
+          spanIds.push(
+            otelSpan1.spanContext().spanId.toString().padStart(16, "0"),
+          );
+
+          await logger.traced(
+            async (btSpan2) => {
+              spanIds.push(btSpan2.spanId);
+
+              await tracer.startActiveSpan("otel-span-2", async (otelSpan2) => {
+                spanIds.push(
+                  otelSpan2.spanContext().spanId.toString().padStart(16, "0"),
+                );
+                otelSpan2.end();
+              });
+            },
+            { name: "bt-span-2" },
+          );
+
+          otelSpan1.end();
+        });
+      },
+      { name: "bt-span-1" },
+    );
+
+    await processor.forceFlush();
+
+    // Verify all spans were created
+    expect(spanIds.length).toBe(4);
+
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBe(2);
+
+    // Verify parent chain
+    const otelSpan1 = otelSpans.find((s) => s.name === "otel-span-1");
+    const otelSpan2 = otelSpans.find((s) => s.name === "otel-span-2");
+
+    expect(otelSpan1).toBeDefined();
+    expect(otelSpan2).toBeDefined();
+
+    if (otelSpan1 && otelSpan2) {
+      // otel-span-1 should have bt-span-1 as parent
+      expect(otelSpan1.parentSpanId).toBe(spanIds[0]);
+
+      // otel-span-2 should have bt-span-2 as parent
+      expect(otelSpan2.parentSpanId).toBe(spanIds[2]);
+
+      // Both should have same trace ID
+      expect(otelSpan1.spanContext().traceId).toBe(
+        otelSpan2.spanContext().traceId,
+      );
+    }
+  });
+
+  test("OTEL span attributes include braintrust.parent with project context", async () => {
+    const { tracer, exporter, processor } = setupOtelFixture(
+      "attribute-verification",
+    );
+    const logger = initLogger({ projectName: "attribute-verification" });
+
+    await logger.traced(
+      async () => {
+        await tracer.startActiveSpan("otel-with-attrs", async (otelSpan) => {
+          otelSpan.setAttribute("custom.attribute", "test-value");
+          otelSpan.end();
+        });
+      },
+      { name: "bt-parent" },
+    );
+
+    await processor.forceFlush();
+
+    const otelSpans = exporter.getFinishedSpans();
+    const otelSpan = otelSpans.find((s) => s.name === "otel-with-attrs");
+
+    expect(otelSpan).toBeDefined();
+    expect(otelSpan?.attributes).toBeDefined();
+
+    if (otelSpan?.attributes) {
+      // Verify custom attribute is preserved
+      expect(otelSpan.attributes["custom.attribute"]).toBe("test-value");
+
+      // Verify braintrust.parent is set
+      expect(otelSpan.attributes["braintrust.parent"]).toContain(
+        "project_name:attribute-verification",
+      );
+    }
   });
 
   test("exported V4 span can be used as parent (issue #986)", async () => {
@@ -473,7 +747,8 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   });
 
   test("BT span in Service A can be parent of OTEL span in Service B", async () => {
-    const { tracer, processor } = setupOtelFixture("service-a-project");
+    const { tracer, exporter, processor } =
+      setupOtelFixture("service-a-project");
     const { contextFromSpanExport: otelContextFromSpanExport } = await import(
       "./"
     );
@@ -512,12 +787,35 @@ describe("Distributed Tracing (BT → OTEL)", () => {
       });
     });
 
-    // ===== Verify spans are flushed =====
-    // The BraintrustSpanProcessor handles sending spans to Braintrust
-    // We've verified that the context was properly imported and used
-    expect(serviceATraceId).toBeDefined();
-    expect(serviceASpanId).toBeDefined();
-
     await processor.forceFlush();
+
+    // ===== Verify distributed tracing worked correctly =====
+    const otelSpans = exporter.getFinishedSpans();
+    expect(otelSpans.length).toBe(1);
+
+    const serviceBSpan = otelSpans[0];
+    expect(serviceBSpan.name).toBe("service_b_span");
+
+    // Get OTEL span context
+    const serviceBContext = serviceBSpan.spanContext();
+    const serviceBTraceId = serviceBContext.traceId;
+
+    // Assert unified trace ID across services
+    expect(serviceBTraceId).toBe(serviceATraceId);
+
+    // Service B span should have Service A span as parent
+    if (serviceBSpan.parentSpanId) {
+      expect(serviceBSpan.parentSpanId).toBe(serviceASpanId);
+    }
+
+    // Note: In distributed tracing, the braintrust.parent attribute is NOT
+    // automatically set in Service B because there's no active BT span context.
+    // The imported context only contains trace/span IDs for parent-child relationships.
+    // This is expected behavior - the key feature is trace ID unification.
+    expect(serviceBSpan.attributes).toBeDefined();
+    if (serviceBSpan.attributes) {
+      // Verify the attribute is NOT set (this is expected in distributed scenarios)
+      expect(serviceBSpan.attributes["braintrust.parent"]).toBeUndefined();
+    }
   });
 });
