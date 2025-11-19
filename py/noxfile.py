@@ -39,7 +39,7 @@ VENDOR_PACKAGES = (
     "anthropic",
     "dspy",
     "openai",
-    "agents",
+    "openai-agents",
     "pydantic_ai",
     "autoevals",
     "braintrust_core",
