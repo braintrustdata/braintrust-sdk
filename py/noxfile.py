@@ -38,6 +38,7 @@ VENDOR_PACKAGES = (
     "agno",
     "anthropic",
     "dspy",
+    "agents",
     "openai",
     "pydantic_ai",
     "autoevals",
@@ -51,7 +52,8 @@ VENDOR_PACKAGES = (
 
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+# openai-agents requires a very recent openai version, so we only exercise the latest build.
+OPENAI_VERSIONS = (LATEST,)
 LITELLM_VERSIONS = (LATEST, "1.74.0")
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 AGNO_VERSIONS = (LATEST, "2.1.0")
@@ -128,7 +130,11 @@ def test_google_genai(session, version):
 @nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
 def test_openai(session, version):
     _install_test_deps(session)
+    if sys.version_info < (3, 10):
+        session.install("eval_type_backport", silent=SILENT_INSTALLS)
     _install(session, "openai", version)
+    session.install("griffe", silent=SILENT_INSTALLS)
+    session.install("--no-deps", "openai-agents", silent=SILENT_INSTALLS)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
