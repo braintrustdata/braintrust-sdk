@@ -81,8 +81,6 @@ export function runMustacheTemplateTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Prompt: any,
 ): MustacheTemplateTestResult {
-  // Test mustache template with simple variable
-  // Use new Prompt() directly like in the tests, matching the pattern from logger.test.ts
   const mustachePrompt = new Prompt(
     {
       name: "mustache-test",
@@ -122,7 +120,6 @@ export function runNunjucksTemplateTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Prompt: any,
 ): NunjucksTemplateTestResult {
-  // Test nunjucks template with loop
   const nunjucksPrompt = new Prompt(
     {
       name: "nunjucks-test",

@@ -23,7 +23,6 @@ repos:
               |.*deno.lock
               |.*.yaml
               |.*/cassettes/.*
-
           )$
         args:
           - "-L"
