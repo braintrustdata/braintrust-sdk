@@ -18,7 +18,9 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
-    "test": "vitest run"
+    "test": "pnpm test:v1 && pnpm test:v2",
+    "test:v1": "cd otel-v1 && pnpm test",
+    "test:v2": "cd otel-v2 && pnpm test"
   },
   "author": "Braintrust Data Inc.",
   "license": "MIT",
