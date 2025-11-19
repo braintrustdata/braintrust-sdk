@@ -537,7 +537,7 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   parameters?: InferParameters<Parameters>;
   /**
    * Whether to retain the per-example Eval results and return them from Eval().
-   * Defaults to false to avoid holding the entire dataset in memory.
+   * Defaults to true for backwards compatibility.
    */
   returnResults?: boolean;
 }
@@ -608,7 +608,7 @@ export async function Eval<
   }
 
   const progressReporter = options.progress ?? new BarProgressReporter();
-  const shouldCollectResults = options.returnResults ?? false;
+  const shouldCollectResults = options.returnResults ?? true;
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -804,7 +804,7 @@ export async function runEvaluator(
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters?: InferParameters<EvalParameters>,
-  collectResults = false,
+  collectResults = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
