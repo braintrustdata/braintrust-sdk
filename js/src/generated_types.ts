@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify
+// Auto-generated file (internal git SHA 93e76a7bcdf0f874a1827af017d26ac37995a47b) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -109,6 +109,8 @@ export const AnyModelParams = z.object({
   verbosity: z.enum(["low", "medium", "high"]).optional(),
   top_k: z.number().optional(),
   stop_sequences: z.array(z.string()).optional(),
+  reasoning_enabled: z.boolean().optional(),
+  reasoning_budget: z.number().optional(),
   max_tokens_to_sample: z.number().optional(),
   maxOutputTokens: z.number().optional(),
   topP: z.number().optional(),
@@ -178,7 +180,11 @@ export const AttachmentStatus = z.object({
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
 export const BraintrustModelParams = z
-  .object({ use_cache: z.boolean() })
+  .object({
+    use_cache: z.boolean(),
+    reasoning_enabled: z.boolean(),
+    reasoning_budget: z.number(),
+  })
   .partial();
 export type BraintrustModelParamsType = z.infer<typeof BraintrustModelParams>;
 export const CallEvent = z.union([
@@ -564,12 +570,12 @@ export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
 export const PromptBlockDataNullish = z.union([
-  z.object({ type: z.literal("completion"), content: z.string() }),
   z.object({
     type: z.literal("chat"),
     messages: z.array(ChatCompletionMessageParam),
     tools: z.string().optional(),
   }),
+  z.object({ type: z.literal("completion"), content: z.string() }),
   z.null(),
 ]);
 export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
@@ -577,6 +583,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       top_p: z.number(),
       max_tokens: z.number(),
@@ -608,6 +616,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean().optional(),
+      reasoning_enabled: z.boolean().optional(),
+      reasoning_budget: z.number().optional(),
       max_tokens: z.number(),
       temperature: z.number(),
       top_p: z.number().optional(),
@@ -619,6 +629,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       maxOutputTokens: z.number(),
       topP: z.number(),
@@ -629,12 +641,21 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       topK: z.number(),
     })
     .partial()
     .passthrough(),
-  z.object({ use_cache: z.boolean() }).partial().passthrough(),
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+    })
+    .partial()
+    .passthrough(),
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
@@ -690,12 +711,12 @@ export type FunctionTypeEnumNullishType = z.infer<
 export const FunctionIdRef = z.object({}).partial().passthrough();
 export type FunctionIdRefType = z.infer<typeof FunctionIdRef>;
 export const PromptBlockData = z.union([
-  z.object({ type: z.literal("completion"), content: z.string() }),
   z.object({
     type: z.literal("chat"),
     messages: z.array(ChatCompletionMessageParam),
     tools: z.string().optional(),
   }),
+  z.object({ type: z.literal("completion"), content: z.string() }),
 ]);
 export type PromptBlockDataType = z.infer<typeof PromptBlockData>;
 export const GraphNode = z.union([
@@ -1049,6 +1070,7 @@ export const ProjectSettings = z.union([
         ),
         z.null(),
       ]),
+      disable_realtime_queries: z.union([z.boolean(), z.null()]),
     })
     .partial(),
   z.null(),
@@ -1402,7 +1424,7 @@ export const ViewDataSearch = z.union([
 ]);
 export type ViewDataSearchType = z.infer<typeof ViewDataSearch>;
 export const ViewData = z.union([
-  z.object({ search: ViewDataSearch }).partial(),
+  z.object({ search: ViewDataSearch, custom_charts: z.unknown() }).partial(),
   z.null(),
 ]);
 export type ViewDataType = z.infer<typeof ViewData>;
@@ -1473,6 +1495,7 @@ export const ViewOptions = z.union([
         z.object({ from: z.string(), to: z.string() }),
         z.null(),
       ]),
+      queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
     })
     .partial(),
   z.null(),
@@ -1496,6 +1519,7 @@ export const View = z.object({
     "logs",
     "agents",
     "monitor",
+    "for_review",
   ]),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
