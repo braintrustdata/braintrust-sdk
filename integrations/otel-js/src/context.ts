@@ -19,6 +19,16 @@ function isOtelSpan(span: unknown): span is {
   );
 }
 
+function isBraintrustSpan(span: unknown): span is Span {
+  return (
+    typeof span === "object" &&
+    span !== null &&
+    "spanId" in span &&
+    "rootSpanId" in span &&
+    typeof (span as { spanId?: unknown }).spanId === "string"
+  );
+}
+
 function isValidSpanContext(spanContext: unknown): boolean {
   if (
     !spanContext ||
