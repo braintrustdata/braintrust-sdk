@@ -12,7 +12,6 @@ import {
   getContextManager,
   _exportsForTestingOnly,
   runEvaluator,
-  type ProgressReporter,
 } from "braintrust";
 import {
   BasicTracerProvider,
@@ -21,10 +20,10 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { context as otelContext } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import { getExportVersion } from "./utils";
+import { getExportVersion, createTracerProvider } from "./utils";
 import { initOtel, resetOtel, BraintrustSpanProcessor } from "./";
 
-class NoopProgressReporter implements ProgressReporter {
+class NoopProgressReporter {
   public start() {}
   public stop() {}
   public increment() {}
@@ -40,9 +39,10 @@ function setupOtelFixture(projectName: string = "otel-compat-test") {
     parent: `project_name:${projectName}`,
   });
 
-  const tp = new BasicTracerProvider();
-  tp.addSpanProcessor(memoryProcessor); // For testing assertions
-  tp.addSpanProcessor(braintrustProcessor); // For actual functionality
+  const tp = createTracerProvider(BasicTracerProvider, [
+    memoryProcessor, // For testing assertions
+    braintrustProcessor, // For actual functionality
+  ]);
 
   const tracer = tp.getTracer("otel-compat-test");
 
@@ -307,9 +307,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("separate traces remain separate", async () => {
-    const { tracer, exporter, processor } = setupOtelFixture(
-      "separate-traces-test",
-    );
+    const { tracer } = setupOtelFixture("separate-traces-test");
     const logger = initLogger({ projectName: "separate-traces" });
 
     let trace1Id: string | undefined;
@@ -473,7 +471,6 @@ describe("OTEL compatibility mode", () => {
     let btTraceId: string | undefined;
     let otelTraceId: string | undefined;
     let btSpanId: string | undefined;
-    let otelSpanParentId: string | undefined;
 
     await logger.traced(
       async (btSpan) => {

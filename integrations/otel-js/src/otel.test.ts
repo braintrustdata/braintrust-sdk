@@ -22,7 +22,11 @@ import {
   parentFromHeaders,
 } from "./otel";
 import { _exportsForTestingOnly, initLogger } from "braintrust";
-import { base64ToUint8Array, getExportVersion } from "./utils";
+import {
+  base64ToUint8Array,
+  getExportVersion,
+  createTracerProvider,
+} from "./utils";
 import { SpanComponentsV3, SpanComponentsV4 } from "braintrust/util";
 import { initOtel, resetOtel } from ".";
 
@@ -40,8 +44,7 @@ describe("AISpanProcessor", () => {
     baseProcessor = new SimpleSpanProcessor(memoryExporter);
     filterProcessor = new AISpanProcessor(baseProcessor);
 
-    provider = new BasicTracerProvider();
-    provider.addSpanProcessor(filterProcessor);
+    provider = createTracerProvider(BasicTracerProvider, [filterProcessor]);
 
     // Don't set global tracer provider - use local one instead
     tracer = provider.getTracer("test_tracer");
@@ -175,23 +178,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that keeps spans", () => {
-    const customFilter = (span: ReadableSpan) => {
-      if (span.name === "custom_keep") {
-        return true;
-      }
-      return null; // Don't influence decision
+    const customFilter: CustomSpanFilter = (span) => {
+      return span.name.includes("keep") ? true : undefined;
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider();
-    customProvider.addSpanProcessor(customFilterProcessor);
-
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
@@ -221,23 +220,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that drops spans", () => {
-    const customFilter = (span: ReadableSpan) => {
-      if (span.name === "gen_ai.drop_this") {
-        return false;
-      }
-      return null; // Don't influence decision
+    const customFilter: CustomSpanFilter = (span) => {
+      return span.name.includes("drop") ? false : undefined;
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider();
-    customProvider.addSpanProcessor(customFilterProcessor);
-
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
@@ -271,20 +266,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that defers to default logic", () => {
-    const customFilter = (span: ReadableSpan) => {
-      return null; // Always defer to default logic
+    const customFilter: CustomSpanFilter = () => {
+      return undefined; // Defer to default logic
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider();
-    customProvider.addSpanProcessor(customFilterProcessor);
-
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
