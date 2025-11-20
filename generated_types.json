@@ -1759,6 +1759,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2136,6 +2152,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2728,7 +2760,8 @@
           "tool",
           "scorer",
           "task",
-          "agent"
+          "agent",
+          "renderer"
         ]
       },
       "FunctionOutputType": {
@@ -2745,7 +2778,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "renderer"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2757,7 +2791,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "renderer"
         ]
       },
       "GitMetadataSettings": {
@@ -4461,6 +4496,25 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
+          },
+          "_async_scoring_state": {
+            "description": "The async scoring state for this event"
           }
         },
         "required": [
@@ -6558,7 +6612,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "93e76a7bcdf0f874a1827af017d26ac37995a47b"
+    "x-internal-git-sha": "02e9faae85e753f61a87500a1c170379e7004af4"
   },
   "paths": {},
   "webhooks": {}
