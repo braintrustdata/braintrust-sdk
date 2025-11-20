@@ -1565,7 +1565,7 @@ def build_local_summary(
             curr = scores_by_name[name]
             if curr is None:
                 continue
-            scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+            scores_by_name[name] = (curr[0] + (score or 0), curr[1] + 1)
     longest_score_name = max(len(name) for name in scores_by_name) if scores_by_name else 0
     avg_scores = {
         name: ScoreSummary(
