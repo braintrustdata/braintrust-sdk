@@ -72,9 +72,6 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
-    # TODO: Remove this once Otel is a separate package
-    continue-on-error: true
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -121,6 +118,8 @@ jobs:
           npm run enable-esm
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
+        # TODO: Remove continue-on-error once Otel is a separate package
+        continue-on-error: ${{ matrix.integration == 'otel' }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
