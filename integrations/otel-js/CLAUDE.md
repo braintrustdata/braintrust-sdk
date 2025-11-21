@@ -280,6 +280,25 @@ pnpm test exporter.test.ts
 
 ## Troubleshooting
 
+### Error: "Cannot find module 'braintrust' or its corresponding type declarations"
+
+**Cause:** The `braintrust` peer dependency is not available during TypeScript declaration (`.d.ts`) build
+
+**Solution:** The `braintrust` package must be added as a dev dependency in addition to being a peer dependency. This is already configured in `package.json`:
+
+```json
+{
+  "devDependencies": {
+    "braintrust": "workspace:*"
+  },
+  "peerDependencies": {
+    "braintrust": ">=0.5.0"
+  }
+}
+```
+
+The workspace reference ensures the local `braintrust` SDK is available during builds while the peer dependency ensures consumers provide their own version.
+
 ### Error: "Cannot find module './detect-resources'"
 
 **Cause:** `@opentelemetry/resources@2.1.0` is being used (it's broken)
