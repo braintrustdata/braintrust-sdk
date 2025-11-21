@@ -1,16 +1,19 @@
-name: js
+name: otel-js
 
 on:
   pull_request:
-    paths-ignore:
+    paths:
       - "integrations/otel-js/**"
+      - "js/**"
+      - ".github/workflows/otel-js-test.yaml"
   push:
     branches: [main]
-    paths-ignore:
+    paths:
       - "integrations/otel-js/**"
+      - "js/**"
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -22,15 +25,23 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
+
       - uses: pnpm/action-setup@v4
-      - name: "verify ci"
+
+      # Run otel-js tests with proper isolation setup
+      # This uses the Makefile target which handles:
+      # - Installing workspace dependencies
+      # - Building braintrust SDK and @braintrust/otel
+      # - Setting up isolated node_modules for otel-v1 and otel-v2
+      # - Running tests for both OpenTelemetry versions
+      - name: "Build and test otel-js"
         shell: bash
-        run: make js-verify-ci
+        run: make js-test-otel

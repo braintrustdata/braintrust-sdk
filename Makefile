@@ -56,7 +56,7 @@ pylint:
 #
 #
 
-.PHONY: js-build js-test js-docs js-verify-ci
+.PHONY: js-build js-test js-docs js-verify-ci js-test-otel
 
 js-build:
 	pnpm install --frozen-lockfile
@@ -70,6 +70,17 @@ js-docs: js-build
 	cd js && make docs
 
 js-verify-ci: js-docs js-test
+
+js-test-otel: js-build
+	@echo "Setting up otel-v1 isolated dependencies..."
+	cd integrations/otel-js/otel-v1 && rm -rf node_modules && pnpm add -D vitest
+	@echo "Setting up otel-v2 isolated dependencies..."
+	cd integrations/otel-js/otel-v2 && rm -rf node_modules && pnpm add -D vitest
+	@echo "Running otel-v1 tests (OpenTelemetry 1.x)..."
+	cd integrations/otel-js/otel-v1 && pnpm test
+	@echo "Running otel-v2 tests (OpenTelemetry 2.x)..."
+	cd integrations/otel-js/otel-v2 && pnpm test
+	@echo "✅ All otel-js tests passed"
 
 
 # -------------------------------------------------------------------------------------------------
