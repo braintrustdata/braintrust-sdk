@@ -3,10 +3,10 @@ import os
 
 import braintrust
 
-# Initialize logger at module level before importing interceptor
+# Initialize logger at module level before importing plugin
 braintrust.init_logger(project="temporal-example")
 
-from braintrust.contrib.temporal import BraintrustInterceptor
+from braintrust.contrib.temporal import BraintrustPlugin
 from temporalio.client import Client
 from temporalio.worker import Worker
 from workflow import (
@@ -41,7 +41,7 @@ async def main() -> None:
             square,
             cube,
         ],
-        interceptors=[BraintrustInterceptor()],
+        plugins=[BraintrustPlugin()],
     )
 
     print(f"🚀 {worker_id} started on task queue: {TASK_QUEUE_NAME}")

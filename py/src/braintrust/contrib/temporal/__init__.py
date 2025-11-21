@@ -1,6 +1,6 @@
-"""Braintrust interceptor for Temporal workflows and activities.
+"""Braintrust integration for Temporal workflows and activities.
 
-This module provides Temporal interceptors that automatically trace workflow executions
+This module provides Temporal integration that automatically traces workflow executions
 and activities in Braintrust. To use this integration, install braintrust with the
 temporal extra:
 
@@ -9,29 +9,26 @@ temporal extra:
 Example usage:
 
     import braintrust
-    from braintrust.contrib.temporal import BraintrustInterceptor
+    from braintrust.contrib.temporal import BraintrustPlugin
     from temporalio.client import Client
     from temporalio.worker import Worker
 
     # Initialize Braintrust logger
     braintrust.init_logger(project="my-project")
 
-    # Create Temporal client with Braintrust interceptor
-    client = await Client.connect(
-        "localhost:7233",
-        interceptors=[BraintrustInterceptor()],
-    )
+    # Create Temporal client
+    client = await Client.connect("localhost:7233")
 
-    # Create worker with Braintrust interceptor
+    # Create worker with Braintrust plugin
     worker = Worker(
         client,
         task_queue="my-queue",
         workflows=[MyWorkflow],
         activities=[my_activity],
-        interceptors=[BraintrustInterceptor()],
+        plugins=[BraintrustPlugin()],
     )
 
-The interceptor will automatically:
+The plugin will automatically:
 - Trace workflow executions
 - Trace all activity executions
 - Trace local activities
@@ -40,7 +37,10 @@ The interceptor will automatically:
 - Respect Temporal replay safety (no duplicate spans during replay)
 """
 
-from typing import Any, Dict, Mapping, Optional, Type
+import dataclasses
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Type
 
 import braintrust
 import temporalio.activity
@@ -49,6 +49,16 @@ import temporalio.client
 import temporalio.converter
 import temporalio.worker
 import temporalio.workflow
+from temporalio.client import WorkflowHistory
+from temporalio.worker import (
+    Plugin,
+    Replayer,
+    ReplayerConfig,
+    Worker,
+    WorkerConfig,
+    WorkflowReplayResult,
+)
+from temporalio.worker.workflow_sandbox import SandboxedWorkflowRunner
 
 # Braintrust dynamically chooses its context implementation at runtime based on
 # BRAINTRUST_OTEL_COMPAT environment variable. When first accessed, it reads
@@ -326,4 +336,80 @@ class _BraintrustWorkflowOutboundInterceptor(
         return super().start_child_workflow(input)
 
 
-__all__ = ["BraintrustInterceptor"]
+class BraintrustPlugin(Plugin):
+    """Braintrust plugin for Temporal that automatically configures tracing.
+
+    This plugin simplifies Braintrust integration with Temporal by:
+    - Automatically adding BraintrustInterceptor to the worker
+    - Configuring the sandbox to allow braintrust imports without unsafe.imports_passed_through()
+
+    Example usage:
+        from braintrust.contrib.temporal import BraintrustPlugin
+        from temporalio.worker import Worker
+
+        worker = Worker(
+            client,
+            task_queue="my-queue",
+            workflows=[MyWorkflow],
+            activities=[my_activity],
+            plugins=[BraintrustPlugin()],
+        )
+    """
+
+    def __init__(self) -> None:
+        """Initialize the Braintrust plugin."""
+        self._interceptor = BraintrustInterceptor()
+
+    def configure_worker(self, config: WorkerConfig) -> WorkerConfig:
+        """Configure worker to add braintrust to sandbox passthrough modules.
+
+        This modifies the workflow runner to allow braintrust imports without
+        requiring workflow.unsafe.imports_passed_through().
+        """
+        workflow_runner = config["workflow_runner"]
+
+        if isinstance(workflow_runner, SandboxedWorkflowRunner):
+            new_restrictions = workflow_runner.restrictions.with_passthrough_modules("braintrust")
+            config["workflow_runner"] = dataclasses.replace(
+                workflow_runner,
+                restrictions=new_restrictions,
+            )
+
+        interceptors = list(config.get("interceptors", []))
+        if not any(isinstance(i, BraintrustInterceptor) for i in interceptors):
+            interceptors.append(self._interceptor)
+        config["interceptors"] = interceptors
+
+        return config
+
+    async def run_worker(
+        self, worker: Worker, next: Callable[[Worker], Awaitable[None]]
+    ) -> None:
+        """Run the worker with no additional behavior."""
+        await next(worker)
+
+    def configure_replayer(self, config: ReplayerConfig) -> ReplayerConfig:
+        """Configure replayer to include the Braintrust interceptor."""
+        interceptors = list(config.get("interceptors", []))
+        if not any(isinstance(i, BraintrustInterceptor) for i in interceptors):
+            interceptors.append(self._interceptor)
+        config["interceptors"] = interceptors
+
+        return config
+
+    @asynccontextmanager
+    async def run_replayer(
+        self,
+        replayer: Replayer,
+        histories: AsyncIterator[WorkflowHistory],
+        next: Callable[
+            [Replayer, AsyncIterator[WorkflowHistory]],
+            AsyncIterator[WorkflowReplayResult],
+        ],
+    ) -> AsyncIterator[AsyncIterator[WorkflowReplayResult]]:
+        """Run the replayer with no additional behavior."""
+        async with next(replayer, histories) as result:
+            yield result
+
+
+__all__ = ["BraintrustInterceptor", "BraintrustPlugin"]

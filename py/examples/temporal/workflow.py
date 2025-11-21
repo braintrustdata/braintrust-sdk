@@ -3,11 +3,9 @@ import os
 from dataclasses import dataclass
 from datetime import timedelta
 
+import braintrust
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
-
-with workflow.unsafe.imports_passed_through():
-    import braintrust
 
 TASK_QUEUE_NAME = "braintrust-example-task-queue"
 
