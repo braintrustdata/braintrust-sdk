@@ -263,60 +263,9 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       headers,
     });
 
-    interface RawSpan {
-      instrumentationScope?: unknown;
-      instrumentationLibrary?: unknown;
-      parentSpanContext?: unknown;
-      parentSpanId?: string;
-      spanContext?: () => { traceId: string };
-    }
-
-    const exporter = new Proxy(baseExporter, {
-      get(target, prop, receiver) {
-        // If the code is trying to access the 'export' method, return our patched version.
-        if (prop === "export") {
-          return function (
-            spans: RawSpan[],
-            resultCallback: (result: unknown) => void,
-          ) {
-            // This patch handles OTel version mismatches
-            const fixedSpans = spans.map((span: RawSpan) => {
-              if (!span.instrumentationScope && span.instrumentationLibrary) {
-                span.instrumentationScope = span.instrumentationLibrary;
-              }
-
-              if (!span.parentSpanContext && span.parentSpanId) {
-                const spanContext = span.spanContext?.();
-                if (spanContext?.traceId) {
-                  span.parentSpanContext = {
-                    spanId: span.parentSpanId,
-                    traceId: spanContext.traceId,
-                  };
-                }
-              }
-
-              return span;
-            });
-
-            // Call the original export method with the fixed spans.
-            return Reflect.apply(
-              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-              (target as { export: unknown }).export as (
-                ...args: unknown[]
-              ) => unknown,
-              target,
-              [fixedSpans, resultCallback],
-            );
-          };
-        }
-
-        // For any other property, pass the access through to the original object.
-        return Reflect.get(target, prop, receiver);
-      },
-    });
+    const exporter = baseExporter;
 
     this.processor = new BatchSpanProcessor(exporter);
-
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
       // Only enable filtering if explicitly requested
