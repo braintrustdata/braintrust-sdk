@@ -30,8 +30,8 @@ interface WrapAISDKOptions {
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
- * of generateText, streamText, generateObject, and streamObject that automatically
- * create spans and log inputs, outputs, and metrics.
+ * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
+ * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns Object with AI SDK methods with Braintrust tracing
@@ -41,12 +41,15 @@ interface WrapAISDKOptions {
  * import { wrapAISDK } from "braintrust";
  * import * as ai from "ai";
  *
- * const { generateText, streamText, generateObject, streamObject } = wrapAISDK(ai);
+ * const { generateText, streamText, generateObject, streamObject, Agent } = wrapAISDK(ai);
  *
  * const result = await generateText({
  *   model: openai("gpt-4"),
  *   prompt: "Hello world"
  * });
+ *
+ * const agent = new Agent({ model: openai("gpt-4") });
+ * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
 export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
@@ -62,11 +65,153 @@ export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
           return wrapGenerateObject(original, options);
         case "streamObject":
           return wrapStreamObject(original, options);
+        case "Agent":
+        case "Experimental_Agent":
+        case "ToolLoopAgent":
+          return original ? wrapAgentClass(original, options) : original;
       }
       return original;
     },
   });
 }
+
+const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
+  return new Proxy(AgentClass, {
+    construct(target, args) {
+      const instance = new target(...args);
+      return new Proxy(instance, {
+        get(instanceTarget, prop, instanceReceiver) {
+          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+
+          if (prop === "generate") {
+            return wrapAgentGenerate(original, instanceTarget, options);
+          }
+
+          if (prop === "stream") {
+            return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          return original;
+        },
+      });
+    },
+  });
+};
+
+const wrapAgentGenerate = (
+  originalGenerate: any,
+  instanceTarget: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return async (params: any) => {
+    return traced(
+      async (span) => {
+        // Call original agent.generate() - let it handle all its logic
+        const result = await originalGenerate.call(instanceTarget, params);
+
+        span.log({
+          output: await processOutput(result, options.denyOutputPaths),
+          metrics: extractTokenMetrics(result),
+        });
+
+        return result;
+      },
+      {
+        name: "Agent.generate",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input: processInputAttachments(params),
+          metadata: {
+            model: serializeModel(
+              instanceTarget.settings?.model || params?.model,
+            ),
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
+          },
+        },
+      },
+    );
+  };
+};
+
+const wrapAgentStream = (
+  originalStream: any,
+  instanceTarget: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return (params: any) => {
+    const span = startSpan({
+      name: "Agent.stream",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
+      event: {
+        input: processInputAttachments(params),
+        metadata: {
+          model: serializeModel(
+            instanceTarget.settings?.model || params?.model,
+          ),
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
+        },
+      },
+    });
+
+    try {
+      const startTime = Date.now();
+      let receivedFirst = false;
+
+      // Wrap callbacks to capture metrics - this is DRY because we're
+      // calling the original method but intercepting its callbacks
+      const wrappedParams = {
+        ...params,
+        onChunk: (chunk: any) => {
+          if (!receivedFirst) {
+            receivedFirst = true;
+            span.log({
+              metrics: {
+                time_to_first_token: (Date.now() - startTime) / 1000,
+              },
+            });
+          }
+          params.onChunk?.(chunk);
+        },
+        onFinish: async (event: any) => {
+          params.onFinish?.(event);
+          span.log({
+            output: await processOutput(event, options.denyOutputPaths),
+            metrics: extractTokenMetrics(event),
+          });
+          span.end();
+        },
+        onError: async (err: unknown) => {
+          params.onError?.(err);
+          span.log({
+            error: serializeError(err),
+          });
+          span.end();
+        },
+      };
+
+      // Call original agent.stream() with wrapped callbacks
+      const result = withCurrent(span, () =>
+        originalStream.call(instanceTarget, wrappedParams),
+      );
+
+      return result;
+    } catch (error) {
+      span.log({ error: serializeError(error) });
+      span.end();
+      throw error;
+    }
+  };
+};
 
 const wrapGenerateText = (
   generateText: any,
