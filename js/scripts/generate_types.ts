@@ -13,10 +13,6 @@ const TEMPLATE_PATH = path.join(
   "./openapi_zod_client_output_template.hbs",
 );
 const OUTPUT_PATH = path.join(SCRIPT_DIR, "../src/generated_types.ts");
-const OUTPUT_PATH2 = path.join(
-  SCRIPT_DIR,
-  "../../core/js/src/generated_types.ts",
-);
 
 async function main() {
   const openApiDoc = JSON.parse(await fs.readFile(OPENAPI_SPEC_PATH, "utf-8"));
@@ -37,7 +33,6 @@ async function main() {
   const internalGitSha = openApiDoc.info["x-internal-git-sha"] || "UNKNOWN";
   const banner = `// Auto-generated file (internal git SHA ${internalGitSha}) -- do not modify\n\n`;
   await fs.writeFile(OUTPUT_PATH, banner + code);
-  await fs.copyFile(OUTPUT_PATH, OUTPUT_PATH2);
 }
 
 main();

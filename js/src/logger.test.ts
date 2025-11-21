@@ -1,4 +1,8 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
+import type {
+  ChatCompletionContentPartText,
+  ChatCompletionContentPartImage,
+} from "openai/resources";
 import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
@@ -13,6 +17,7 @@ import {
   Attachment,
   NOOP_SPAN,
   deepCopyEvent,
+  renderMessage,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
@@ -29,6 +34,64 @@ function getExportVersion(exportedSpan: string): number {
   const exportedBytes = base64ToUint8Array(exportedSpan);
   return exportedBytes[0];
 }
+
+test("renderMessage with file content parts", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "text" as const,
+        text: "Here is a {{item}}:",
+      },
+      {
+        type: "image_url" as const,
+        image_url: {
+          url: "{{image_url}}",
+        },
+      },
+      {
+        type: "file" as const,
+        file: {
+          file_data: "{{file_data}}",
+          file_id: "{{file_id}}",
+          filename: "{{filename}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template
+        .replace("{{item}}", "document")
+        .replace("{{image_url}}", "https://example.com/image.png")
+        .replace("{{file_data}}", "base64data")
+        .replace("{{file_id}}", "file-456")
+        .replace("{{filename}}", "report.pdf"),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "text",
+      text: "Here is a document:",
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/image.png",
+      },
+    },
+    {
+      type: "file",
+      file: {
+        file_data: "base64data",
+        file_id: "file-456",
+        filename: "report.pdf",
+      },
+    },
+  ]);
+});
 
 test("verify MemoryBackgroundLogger intercepts logs", async () => {
   // Log to memory for the tests.

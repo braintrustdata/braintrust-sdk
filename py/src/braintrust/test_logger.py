@@ -20,7 +20,7 @@ from braintrust import (
     logger,
 )
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
-from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_mustache
+from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_message, render_mustache
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -484,6 +484,46 @@ class TestLogger(TestCase):
         # Array too short should fail in strict mode
         with self.assertRaises(ValueError):
             prompt.build(items=["only_one"], strict=True)
+
+    def test_render_message_with_file_content_parts(self):
+        """Test render_message with mixed text, image, and file content parts including all file fields."""
+        message = PromptMessage(
+            role="user",
+            content=[
+                {"type": "text", "text": "Here is a {{item}}:"},
+                {"type": "image_url", "image_url": {"url": "{{image_url}}"}},
+                {
+                    "type": "file",
+                    "file": {
+                        "file_data": "{{file_data}}",
+                        "file_id": "{{file_id}}",
+                        "filename": "{{filename}}",
+                    },
+                },
+            ],
+        )
+
+        rendered = render_message(
+            lambda template: template.replace("{{item}}", "document")
+            .replace("{{image_url}}", "https://example.com/image.png")
+            .replace("{{file_data}}", "base64data")
+            .replace("{{file_id}}", "file-456")
+            .replace("{{filename}}", "report.pdf"),
+            message,
+        )
+
+        assert rendered["content"] == [
+            {"type": "text", "text": "Here is a document:"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+            {
+                "type": "file",
+                "file": {
+                    "file_data": "base64data",
+                    "file_id": "file-456",
+                    "filename": "report.pdf",
+                },
+            },
+        ]
 
 
 def test_noop_permalink_issue_1837():
