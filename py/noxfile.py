@@ -48,6 +48,7 @@ VENDOR_PACKAGES = (
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
     "google.genai",
+    "temporalio",
 )
 
 # Test matrix

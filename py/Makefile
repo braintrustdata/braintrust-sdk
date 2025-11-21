@@ -48,6 +48,7 @@ install-dev: install-build-deps
 
 install-optional:
 	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai
+	python -m uv pip install -e .[temporal]
 
 _publish:
 	./scripts/publish.sh
