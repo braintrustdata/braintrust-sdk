@@ -7,12 +7,13 @@ import {
   trace,
   TraceFlags,
   propagation,
+  Span,
 } from "@opentelemetry/api";
 import {
   SpanProcessor,
   ReadableSpan,
-  Span,
   BatchSpanProcessor,
+  type Span as SDKSpan,
 } from "@opentelemetry/sdk-trace-base";
 import { IDGenerator, type Span as BraintrustSpan } from "braintrust";
 
@@ -30,6 +31,13 @@ const FILTER_PREFIXES = [
  * @returns true to definitely keep, false to definitely drop, null/undefined to not influence the decision
  */
 type CustomSpanFilter = (span: ReadableSpan) => boolean | null | undefined;
+
+/**
+ * Type guard to check if a span has the attributes property (i.e., is a ReadableSpan).
+ */
+function isReadableSpan(span: Span | ReadableSpan): span is ReadableSpan {
+  return "attributes" in span;
+}
 
 /**
  * A span processor that filters spans to only export filtered telemetry.
@@ -64,7 +72,7 @@ export class AISpanProcessor {
   /**
    * Forward span start events to the inner processor.
    */
-  onStart(span: Span, parentContext: Context): void {
+  onStart(span: SDKSpan, parentContext: Context): void {
     this.processor.onStart(span, parentContext);
   }
 
@@ -279,7 +287,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     }
   }
 
-  onStart(span: Span, parentContext: Context): void {
+  onStart(span: SDKSpan, parentContext: Context): void {
     try {
       let parentValue: string | undefined;
 
@@ -312,8 +320,8 @@ export class BraintrustSpanProcessor implements SpanProcessor {
         }
 
         // Set the attribute if we found a parent value
-        if (parentValue && typeof span.setAttributes === "function") {
-          span.setAttributes({ "braintrust.parent": parentValue });
+        if (parentValue) {
+          span.setAttributes?.({ "braintrust.parent": parentValue });
         }
       }
     } catch {
@@ -711,10 +719,10 @@ export function addParentToBaggage(parent: string, ctx?: Context): Context {
  * ```
  */
 export function addSpanParentToBaggage(
-  span: Span,
+  span: Span | ReadableSpan,
   ctx?: Context,
 ): Context | undefined {
-  if (!span || !span.attributes) {
+  if (!span || !isReadableSpan(span)) {
     console.warn("addSpanParentToBaggage: span has no attributes");
     return undefined;
   }

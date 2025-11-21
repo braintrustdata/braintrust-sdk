@@ -10791,7 +10791,7 @@ packages:
       chai: 5.2.0
       debug: 4.4.3
       expect-type: 1.2.0
-      magic-string: 0.30.19
+      magic-string: 0.30.21
       pathe: 1.1.2
       std-env: 3.8.1
       tinybench: 2.9.0
@@ -10907,7 +10907,7 @@ packages:
       chai: 5.2.0
       debug: 4.4.3
       expect-type: 1.2.0
-      magic-string: 0.30.19
+      magic-string: 0.30.21
       pathe: 1.1.2
       std-env: 3.8.1
       tinybench: 2.9.0
@@ -10965,7 +10965,7 @@ packages:
       chai: 5.2.0
       debug: 4.4.3
       expect-type: 1.2.0
-      magic-string: 0.30.19
+      magic-string: 0.30.21
       pathe: 1.1.2
       std-env: 3.8.1
       tinybench: 2.9.0

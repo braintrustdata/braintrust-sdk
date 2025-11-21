@@ -178,7 +178,7 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that keeps spans", () => {
-    const customFilter: CustomSpanFilter = (span) => {
+    const customFilter = (span) => {
       return span.name.includes("keep") ? true : undefined;
     };
 
@@ -220,7 +220,7 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that drops spans", () => {
-    const customFilter: CustomSpanFilter = (span) => {
+    const customFilter = (span) => {
       return span.name.includes("drop") ? false : undefined;
     };
 
@@ -266,7 +266,7 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that defers to default logic", () => {
-    const customFilter: CustomSpanFilter = () => {
+    const customFilter = () => {
       return undefined; // Defer to default logic
     };
 

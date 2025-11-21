@@ -25,7 +25,7 @@ function isBraintrustSpan(span: unknown): span is Span {
     span !== null &&
     "spanId" in span &&
     "rootSpanId" in span &&
-    typeof (span as { spanId?: unknown }).spanId === "string"
+    typeof span.spanId === "string"
   );
 }
 
