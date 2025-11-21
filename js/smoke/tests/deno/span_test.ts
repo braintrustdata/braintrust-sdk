@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { assertEquals } from "jsr:@std/assert@^1.0.14";
-import { runSpanSmokeTest } from "../span/span_test_helper.ts";
+import {
+  runSpanSmokeTest,
+  runMustacheTemplateTest,
+  runNunjucksTemplateTest,
+} from "../span/span_test_helper.ts";
 
 /**
  * This is a simple test to send a span to the braintrust API
@@ -13,7 +17,7 @@ export async function runBrowserLoggerSmokeTest() {
     throw new Error("BRAINTRUST_BUILD_DIR environment variable is not set");
   }
 
-  const { initLogger, _exportsForTestingOnly } = await import(
+  const { initLogger, _exportsForTestingOnly, Prompt } = await import(
     `file://${Deno.env.get("BRAINTRUST_BUILD_DIR")}`
   );
 
@@ -31,6 +35,28 @@ export async function runBrowserLoggerSmokeTest() {
   assertEquals(event.expected, "Paris");
 
   console.log("Deno smoke test passed");
+
+  // Test mustache template with simple variable
+  const mustacheResult = runMustacheTemplateTest(Prompt);
+
+  assertEquals(
+    mustacheResult.messages[0]?.content,
+    "Hello, World!",
+    "Mustache template should render simple variable",
+  );
+
+  console.log("Mustache template test passed");
+
+  // Test nunjucks template with loop
+  const nunjucksResult = runNunjucksTemplateTest(Prompt);
+
+  assertEquals(
+    nunjucksResult.messages[0]?.content,
+    "Items: apple, banana, cherry",
+    "Nunjucks template should render loop correctly",
+  );
+
+  console.log("Nunjucks template test passed");
 }
 
 Deno.test("Create a span", async () => {
