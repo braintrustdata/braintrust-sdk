@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
+import { describe, it, expect, beforeEach, afterEach, vi, test } from "vitest";
 import { trace, context, Tracer, propagation } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
@@ -15,8 +17,18 @@ import {
   AISpanProcessor,
   BraintrustSpanProcessor,
   BraintrustExporter,
-  otel,
-} from "..";
+  addSpanParentToBaggage,
+  addParentToBaggage,
+  parentFromHeaders,
+} from "./otel";
+import { _exportsForTestingOnly, initLogger } from "braintrust";
+import {
+  base64ToUint8Array,
+  getExportVersion,
+  createTracerProvider,
+} from "../tests/utils";
+import { SpanComponentsV3, SpanComponentsV4 } from "braintrust/util";
+import { initOtel, resetOtel } from ".";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -32,9 +44,7 @@ describe("AISpanProcessor", () => {
     baseProcessor = new SimpleSpanProcessor(memoryExporter);
     filterProcessor = new AISpanProcessor(baseProcessor);
 
-    provider = new BasicTracerProvider({
-      spanProcessors: [filterProcessor],
-    });
+    provider = createTracerProvider(BasicTracerProvider, [filterProcessor]);
 
     // Don't set global tracer provider - use local one instead
     tracer = provider.getTracer("test_tracer");
@@ -168,23 +178,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that keeps spans", () => {
-    const customFilter = (span: ReadableSpan) => {
-      if (span.name === "custom_keep") {
-        return true;
-      }
-      return null; // Don't influence decision
+    const customFilter = (span) => {
+      return span.name.includes("keep") ? true : undefined;
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
@@ -214,23 +220,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that drops spans", () => {
-    const customFilter = (span: ReadableSpan) => {
-      if (span.name === "gen_ai.drop_this") {
-        return false;
-      }
-      return null; // Don't influence decision
+    const customFilter = (span) => {
+      return span.name.includes("drop") ? false : undefined;
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
@@ -264,20 +266,19 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that defers to default logic", () => {
-    const customFilter = (span: ReadableSpan) => {
-      return null; // Always defer to default logic
+    const customFilter = () => {
+      return undefined; // Defer to default logic
     };
 
-    // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
     const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
-    const customProvider = new BasicTracerProvider({
-      spanProcessors: [customFilterProcessor],
-    });
-    const customTracer = customProvider.getTracer("custom_test");
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
 
     const rootSpan = customTracer.startSpan("root");
 
@@ -462,7 +463,7 @@ describe("AISpanProcessor", () => {
           droppedAttributesCount: 0,
           droppedEventsCount: 0,
           droppedLinksCount: 0,
-        } as ReadableSpan;
+        } as unknown as ReadableSpan;
 
         const result = (filterProcessor as any).shouldKeepFilteredSpan(
           mockSpan,
@@ -477,13 +478,17 @@ describe("AISpanProcessor", () => {
 describe("BraintrustSpanProcessor", () => {
   let originalEnv: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalEnv = { ...process.env };
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
   afterEach(() => {
     process.env = originalEnv;
     vi.restoreAllMocks();
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   it("should create BraintrustSpanProcessor with API key from environment", () => {
@@ -699,13 +704,17 @@ describe("BraintrustSpanProcessor", () => {
 describe("BraintrustExporter", () => {
   let originalEnv: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalEnv = { ...process.env };
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
   afterEach(() => {
     process.env = originalEnv;
     vi.restoreAllMocks();
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   it("should create BraintrustExporter with API key from environment", () => {
@@ -768,7 +777,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -788,7 +797,6 @@ describe("BraintrustExporter", () => {
     const exporter = new BraintrustExporter();
 
     // Mock the processor to throw an error
-    const originalProcessor = (exporter as any).processor;
     (exporter as any).processor = {
       onEnd: vi.fn().mockImplementation(() => {
         throw new Error("Test error");
@@ -804,7 +812,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -825,7 +833,6 @@ describe("BraintrustExporter", () => {
     const exporter = new BraintrustExporter();
 
     // Mock the processor to have forceFlush fail
-    const originalProcessor = (exporter as any).processor;
     (exporter as any).processor = {
       onEnd: vi.fn(),
       forceFlush: vi.fn().mockRejectedValue(new Error("Flush error")),
@@ -839,7 +846,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -895,7 +902,7 @@ describe("BraintrustExporter", () => {
         attributes: {},
         parentSpanContext: undefined,
       },
-    ] as ReadableSpan[];
+    ] as unknown as ReadableSpan[];
 
     return new Promise<void>((resolve, reject) => {
       exporter.export(mockSpans, (result) => {
@@ -955,41 +962,50 @@ describe("BraintrustExporter", () => {
     consoleSpy.mockRestore();
   });
 
-  it("proxy exporter should make OTEL v1 traces compatible with v2", () => {
+  it("exporter handles spans with common v1/v2 attributes", () => {
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     const exporter = new BraintrustExporter();
     const processor = (exporter as any).processor;
     const batchProcessor = (processor as any).processor;
-    const proxiedExporter = (batchProcessor as any)._exporter;
+    const baseExporter = (batchProcessor as any)._exporter;
 
     const mockExport = vi.fn();
-    proxiedExporter.export = mockExport;
+    baseExporter.export = mockExport;
 
-    const v1Span = {
+    const testSpan = {
       name: "gen_ai.completion",
       spanContext: () => ({ traceId: "trace-123", spanId: "span-456" }),
       parentSpanId: "parent-789",
       instrumentationLibrary: { name: "openai", version: "1.0.0" },
-    } as any;
-
-    proxiedExporter.export([v1Span], () => {});
-    expect(mockExport).toHaveBeenCalledOnce();
-    const [transformedSpans] = mockExport.mock.calls[0];
-
-    expect(transformedSpans).toHaveLength(1);
-    const transformedSpan = transformedSpans[0];
-
-    // transformed span should have OTEL v2 fields
-    const expectedV2Span = {
-      ...v1Span,
-      parentSpanContext: {
-        spanId: v1Span.parentSpanId,
-        traceId: v1Span.spanContext().traceId,
+      resource: {
+        attributes: {
+          "service.name": "test-service",
+        },
       },
-      instrumentationScope: v1Span.instrumentationLibrary,
     } as any;
-    expect(transformedSpan).toEqual(expectedV2Span);
+
+    baseExporter.export([testSpan], () => {});
+    expect(mockExport).toHaveBeenCalledOnce();
+    const [exportedSpans] = mockExport.mock.calls[0];
+
+    expect(exportedSpans).toHaveLength(1);
+    const exportedSpan = exportedSpans[0];
+
+    // Check attributes that exist in both v1 and v2
+    expect(exportedSpan.name).toBe("gen_ai.completion");
+    expect(exportedSpan.spanContext).toBeTypeOf("function");
+    expect(exportedSpan.spanContext()).toEqual({
+      traceId: "trace-123",
+      spanId: "span-456",
+    });
+    expect(exportedSpan.instrumentationLibrary).toEqual({
+      name: "openai",
+      version: "1.0.0",
+    });
+    expect(exportedSpan.resource.attributes).toEqual({
+      "service.name": "test-service",
+    });
   });
 });
 
@@ -1019,7 +1035,7 @@ describe("otel namespace helpers", () => {
   describe("addParentToBaggage", () => {
     it("should add braintrust.parent to baggage", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
-      const ctx = otel.addParentToBaggage(parent);
+      const ctx = addParentToBaggage(parent);
 
       const baggage = propagation.getBaggage(ctx);
       expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
@@ -1028,7 +1044,7 @@ describe("otel namespace helpers", () => {
     it("should use provided context", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
       const initialCtx = context.active();
-      const resultCtx = otel.addParentToBaggage(parent, initialCtx);
+      const resultCtx = addParentToBaggage(parent, initialCtx);
 
       const baggage = propagation.getBaggage(resultCtx);
       expect(baggage?.getEntry("braintrust.parent")?.value).toBe(parent);
@@ -1041,7 +1057,7 @@ describe("otel namespace helpers", () => {
       const parent = "project_name:test:span_id:abc123:row_id:xyz789";
       span.setAttribute("braintrust.parent", parent);
 
-      const ctx = otel.addSpanParentToBaggage(span);
+      const ctx = addSpanParentToBaggage(span);
       expect(ctx).toBeDefined();
 
       const baggage = propagation.getBaggage(ctx!);
@@ -1053,7 +1069,7 @@ describe("otel namespace helpers", () => {
     it("should return undefined when span has no braintrust.parent attribute", () => {
       const span = tracer.startSpan("test-span");
 
-      const ctx = otel.addSpanParentToBaggage(span);
+      const ctx = addSpanParentToBaggage(span);
       expect(ctx).toBeUndefined();
 
       span.end();
@@ -1065,7 +1081,7 @@ describe("otel namespace helpers", () => {
       span.setAttribute("braintrust.parent", parent);
 
       const initialCtx = context.active();
-      const ctx = otel.addSpanParentToBaggage(span, initialCtx);
+      const ctx = addSpanParentToBaggage(span, initialCtx);
       expect(ctx).toBeDefined();
 
       const baggage = propagation.getBaggage(ctx!);
@@ -1084,7 +1100,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         // Parent string is base64-encoded SpanComponentsV4
         expect(typeof parent).toBe("string");
@@ -1098,7 +1114,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_id:my-project-id",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         expect(typeof parent).toBe("string");
         expect(parent!.length).toBeGreaterThan(0);
@@ -1111,7 +1127,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=experiment_id:my-experiment-id",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeDefined();
         expect(typeof parent).toBe("string");
         expect(parent!.length).toBeGreaterThan(0);
@@ -1127,7 +1143,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalledWith(
           "parentFromHeaders: No valid span context in headers",
@@ -1145,7 +1161,7 @@ describe("otel namespace helpers", () => {
             "00-12345678901234567890123456789012-1234567890123456-01",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalled();
         expect(consoleSpy.mock.calls[0][0]).toContain(
@@ -1165,7 +1181,7 @@ describe("otel namespace helpers", () => {
           baggage: "foo=bar,baz=qux",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalled();
         expect(consoleSpy.mock.calls[0][0]).toContain(
@@ -1184,7 +1200,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         expect(consoleSpy).toHaveBeenCalledWith(
           "parentFromHeaders: No valid span context in headers",
@@ -1203,7 +1219,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // OTEL's extract() validates and rejects invalid trace_id
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -1223,7 +1239,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=project_name:test",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // OTEL's extract() validates and rejects invalid span_id
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -1243,7 +1259,7 @@ describe("otel namespace helpers", () => {
           baggage: "braintrust.parent=invalid",
         };
 
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         expect(parent).toBeUndefined();
         // Should reach our validation if span context is valid, otherwise OTEL rejects it
         expect(consoleSpy).toHaveBeenCalled();
@@ -1251,5 +1267,396 @@ describe("otel namespace helpers", () => {
         consoleSpy.mockRestore();
       });
     });
+  });
+});
+
+describe("Otel Compat tests Integration", () => {
+  beforeEach(async () => {
+    initOtel();
+
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
+    _exportsForTestingOnly.setInitialTestState();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+  });
+
+  afterEach(() => {
+    resetOtel();
+
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+  });
+
+  test("UUID generator should share span_id as root_span_id for backwards compatibility", async () => {
+    // Ensure UUID generator is used (default behavior)
+    resetOtel();
+
+    const testLogger = initLogger({
+      projectName: "test-uuid-integration",
+      projectId: "test-project-id",
+    });
+
+    const span = testLogger.startSpan({ name: "test-uuid-span" });
+
+    // UUID generators should share span_id as root_span_id for backwards compatibility
+    expect(span.spanId).toBe(span.rootSpanId);
+
+    // Verify UUID format (36 characters with dashes)
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(span.spanId).toMatch(uuidRegex);
+    expect(span.rootSpanId).toMatch(uuidRegex);
+
+    span.end();
+  });
+
+  test("OTEL generator should not share span_id as root_span_id", async () => {
+    const testLogger = initLogger({
+      projectName: "test-otel-integration",
+      projectId: "test-project-id",
+    });
+
+    const span = testLogger.startSpan({ name: "test-otel-span" });
+
+    // OTEL generators should not share span_id as root_span_id
+    expect(span.spanId).not.toBe(span.rootSpanId);
+
+    // Verify OTEL hex format
+    expect(span.spanId.length).toBe(16); // 8 bytes = 16 hex characters
+    expect(span.rootSpanId.length).toBe(32); // 16 bytes = 32 hex characters
+    expect(/^[0-9a-f]{16}$/.test(span.spanId)).toBe(true);
+    expect(/^[0-9a-f]{32}$/.test(span.rootSpanId)).toBe(true);
+
+    span.end();
+  });
+
+  test("parent-child relationships work with UUID generators", async () => {
+    resetOtel();
+
+    const testLogger = initLogger({
+      projectName: "test-uuid-parent-child",
+      projectId: "test-project-id",
+    });
+
+    const parentSpan = testLogger.startSpan({ name: "uuid-parent" });
+
+    // Parent should have span_id === root_span_id
+    expect(parentSpan.spanId).toBe(parentSpan.rootSpanId);
+
+    const childSpan = parentSpan.startSpan({ name: "uuid-child" });
+
+    // Child should inherit parent's root_span_id
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+
+    // Child should have parent in spanParents
+    expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+    // Child should have its own span_id (different from parent)
+    expect(childSpan.spanId).not.toBe(parentSpan.spanId);
+
+    parentSpan.end();
+    childSpan.end();
+  });
+
+  test("parent-child relationships work with OTEL generators", async () => {
+    const testLogger = initLogger({
+      projectName: "test-otel-parent-child",
+      projectId: "test-project-id",
+    });
+
+    const parentSpan = testLogger.startSpan({ name: "otel-parent" });
+
+    // Parent should have span_id !== root_span_id for OTEL
+    expect(parentSpan.spanId).not.toBe(parentSpan.rootSpanId);
+
+    const childSpan = parentSpan.startSpan({ name: "otel-child" });
+
+    // Child should inherit parent's root_span_id
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+
+    // Child should have parent in spanParents
+    expect(childSpan.spanParents).toContain(parentSpan.spanId);
+
+    // Child should have its own span_id (different from parent)
+    expect(childSpan.spanId).not.toBe(parentSpan.spanId);
+
+    // All IDs should be proper hex format
+    expect(/^[0-9a-f]{16}$/.test(parentSpan.spanId)).toBe(true);
+    expect(/^[0-9a-f]{32}$/.test(parentSpan.rootSpanId)).toBe(true);
+    expect(/^[0-9a-f]{16}$/.test(childSpan.spanId)).toBe(true);
+    expect(/^[0-9a-f]{32}$/.test(childSpan.rootSpanId)).toBe(true);
+
+    parentSpan.end();
+    childSpan.end();
+  });
+
+  test("environment variable switching works correctly", async () => {
+    // Test default (UUID)
+    resetOtel();
+
+    const uuidLogger = initLogger({
+      projectName: "test-env-uuid",
+      projectId: "test-project-id",
+    });
+
+    const uuidSpan = uuidLogger.startSpan({ name: "uuid-test" });
+    expect(uuidSpan.spanId).toBe(uuidSpan.rootSpanId);
+    expect(uuidSpan.spanId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    uuidSpan.end();
+
+    // Switch to OTEL
+    initOtel();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const otelLogger = initLogger({
+      projectName: "test-env-otel",
+      projectId: "test-project-id",
+    });
+
+    const otelSpan = otelLogger.startSpan({ name: "otel-test" });
+    expect(otelSpan.spanId).not.toBe(otelSpan.rootSpanId);
+    expect(otelSpan.spanId.length).toBe(16);
+    expect(otelSpan.rootSpanId.length).toBe(32);
+    otelSpan.end();
+
+    // Switch back to UUID
+    resetOtel();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const uuidLogger2 = initLogger({
+      projectName: "test-env-uuid2",
+      apiKey: "test-key",
+    });
+
+    const uuidSpan2 = uuidLogger2.startSpan({ name: "uuid-test2" });
+    expect(uuidSpan2.spanId).toBe(uuidSpan2.rootSpanId);
+    expect(uuidSpan2.spanId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    uuidSpan2.end();
+  });
+
+  test("case insensitive environment variable", async () => {
+    // Test uppercase
+
+    const logger1 = initLogger({
+      projectName: "test-case-upper",
+      apiKey: "test-key",
+    });
+
+    const span1 = logger1.startSpan({ name: "test" });
+    expect(span1.spanId).not.toBe(span1.rootSpanId); // Should be OTEL
+    span1.end();
+
+    // Test mixed case
+    initOtel();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const logger2 = initLogger({
+      projectName: "test-case-mixed",
+      apiKey: "test-key",
+    });
+
+    const span2 = logger2.startSpan({ name: "test" });
+    expect(span2.spanId).not.toBe(span2.rootSpanId); // Should be OTEL
+    span2.end();
+  });
+});
+
+describe("export() format selection based on if otel is initialized", () => {
+  beforeEach(async () => {
+    initOtel();
+
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+  });
+
+  afterEach(() => {
+    resetOtel();
+
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+    _exportsForTestingOnly.resetIdGenStateForTests();
+  });
+
+  test("uses SpanComponentsV3 when otel is not initialized", async () => {
+    resetOtel();
+
+    const testLogger = initLogger({
+      projectName: "test-export-v3",
+      projectId: "test-project-id",
+    });
+    const span = testLogger.startSpan({ name: "test-span" });
+
+    const exported = await span.export();
+    expect(typeof exported).toBe("string");
+    expect(exported.length).toBeGreaterThan(0);
+
+    // Verify version byte is 3
+    expect(getExportVersion(exported)).toBe(3);
+
+    // The exported string should be parseable by both V3 and V4 (V4 can read V3)
+    const v3Components = SpanComponentsV3.fromStr(exported);
+    expect(v3Components.data.row_id).toBe(span.id);
+    expect(v3Components.data.span_id).toBe(span.spanId);
+    expect(v3Components.data.root_span_id).toBe(span.rootSpanId);
+
+    // V4 should also be able to read V3 format
+    const v4Components = SpanComponentsV4.fromStr(exported);
+    expect(v4Components.data.row_id).toBe(span.id);
+
+    span.end();
+  });
+
+  test("uses SpanComponentsV4 when otel is initialized", async () => {
+    const testLogger = initLogger({
+      projectName: "test-export-v4",
+      apiKey: "test-key",
+    });
+    const span = testLogger.startSpan({ name: "test-span-v4" });
+
+    const exported = await span.export();
+    expect(typeof exported).toBe("string");
+    expect(exported.length).toBeGreaterThan(0);
+
+    // Verify version byte is 4
+    expect(getExportVersion(exported)).toBe(4);
+
+    // The exported string should be parseable by V4
+    const v4Components = SpanComponentsV4.fromStr(exported);
+    expect(v4Components.data.row_id).toBe(span.id);
+    expect(v4Components.data.span_id).toBe(span.spanId);
+    expect(v4Components.data.root_span_id).toBe(span.rootSpanId);
+
+    span.end();
+  });
+
+  test("Logger.export() uses correct format based on env var", async () => {
+    // Test V3
+    resetOtel();
+
+    const loggerV3 = initLogger({
+      projectName: "test-logger-export-v3",
+      projectId: "test-project-id",
+    });
+    const exportedV3 = await loggerV3.export();
+    expect(typeof exportedV3).toBe("string");
+
+    const v3Parsed = SpanComponentsV3.fromStr(exportedV3);
+    expect(v3Parsed.data.object_type).toBeDefined();
+
+    // Test V4
+    initOtel();
+    const loggerV4 = initLogger({
+      projectName: "test-logger-export-v4",
+      apiKey: "test-key",
+    });
+    const exportedV4 = await loggerV4.export();
+    expect(typeof exportedV4).toBe("string");
+
+    const v4Parsed = SpanComponentsV4.fromStr(exportedV4);
+    expect(v4Parsed.data.object_type).toBeDefined();
+  });
+
+  test("exported V4 span can be used as parent", async () => {
+    const testLogger = initLogger({
+      projectName: "test-v4-parent",
+      apiKey: "test-key",
+    });
+
+    const parentSpan = testLogger.startSpan({ name: "parent-span-v4" });
+    const exported = await parentSpan.export();
+    parentSpan.end();
+
+    // Should be able to use V4 exported string as parent
+    const childSpan = testLogger.startSpan({
+      name: "child-span-v4",
+      parent: exported,
+    });
+
+    expect(childSpan.rootSpanId).toBe(parentSpan.rootSpanId);
+    childSpan.end();
+  });
+
+  test("V4 format uses hex IDs (not UUIDs) when otel is initialized", async () => {
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const testLogger = initLogger({
+      projectName: "test-hex-ids",
+      apiKey: "test-key",
+    });
+
+    const span = testLogger.startSpan({ name: "test-span-hex" });
+
+    // Verify the span has hex IDs (not UUIDs)
+    expect(span.spanId.length).toBe(16); // 16 hex chars = 8 bytes
+    expect(span.rootSpanId.length).toBe(32); // 32 hex chars = 16 bytes
+    expect(/^[0-9a-f]{16}$/.test(span.spanId)).toBe(true);
+    expect(/^[0-9a-f]{32}$/.test(span.rootSpanId)).toBe(true);
+
+    // Verify these are NOT UUIDs (no dashes)
+    expect(span.spanId).not.toContain("-");
+    expect(span.rootSpanId).not.toContain("-");
+
+    // Export the span
+    const exported = await span.export();
+
+    // Parse the exported data with V4
+    const parsed = SpanComponentsV4.fromStr(exported);
+
+    // Verify the parsed data has the same hex IDs
+    expect(parsed.data.span_id).toBe(span.spanId);
+    expect(parsed.data.root_span_id).toBe(span.rootSpanId);
+
+    // V4 should efficiently encode hex IDs in binary format
+    // The exported string should be shorter than V3 would produce with hex IDs
+    // (V4 uses 8 bytes for span_id, 16 bytes for root_span_id in binary)
+    const rawBytes = base64ToUint8Array(exported);
+
+    // Check that version byte is 4
+    expect(rawBytes[0]).toBe(4);
+
+    span.end();
+  });
+
+  test("V3 format uses UUIDs when otel is not initialized", async () => {
+    resetOtel();
+
+    _exportsForTestingOnly.resetIdGenStateForTests();
+
+    const testLogger = initLogger({
+      projectName: "test-uuid-ids",
+      projectId: "test-project-id",
+    });
+
+    const span = testLogger.startSpan({ name: "test-span-uuid" });
+
+    // Verify the span has UUID format (with dashes)
+    expect(span.spanId.length).toBe(36); // UUID format
+    expect(span.spanId).toContain("-");
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(span.spanId).toMatch(uuidRegex);
+
+    // Export the span
+    const exported = await span.export();
+
+    // Parse the exported data with V3
+    const parsed = SpanComponentsV3.fromStr(exported);
+
+    // Verify the parsed data has the same UUID
+    expect(parsed.data.span_id).toBe(span.spanId);
+
+    // V3 uses UUID compression in binary format
+    const rawBytes = base64ToUint8Array(exported);
+
+    // Check that version byte is 3
+    expect(rawBytes[0]).toBe(3);
+
+    span.end();
   });
 });

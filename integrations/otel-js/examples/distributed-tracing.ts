@@ -2,26 +2,29 @@
 /**
  * Minimal example: Distributed Tracing BT → OTEL → BT
  *
- * Run with: BRAINTRUST_OTEL_COMPAT=true tsx examples/otel/distributed-tracing.ts
+ * Run with: tsx examples/otel/distributed-tracing.ts
  */
 
 import * as api from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
+import { initLogger, login } from "braintrust";
 import {
-  initLogger,
-  login,
-  otel,
+  contextFromSpanExport,
+  addSpanParentToBaggage,
+  parentFromHeaders,
   BraintrustSpanProcessor,
-} from "../../dist/index.js";
+  initOtel,
+} from "../src";
 
 const { trace, context, propagation } = api;
 
+initOtel();
+
 async function main() {
   // Setup OTEL
-  const provider = new BasicTracerProvider({
-    spanProcessors: [new BraintrustSpanProcessor()],
-  });
+  const provider = new BasicTracerProvider();
+  provider.addSpanProcessor(new BraintrustSpanProcessor());
   trace.setGlobalTracerProvider(provider);
   const tracer = trace.getTracer("service-b");
 
@@ -40,16 +43,16 @@ async function main() {
     const exported = await spanA.export();
 
     // Service B (OTEL)
-    const ctx = otel.contextFromSpanExport(exported);
+    const ctx = contextFromSpanExport(exported);
     await context.with(ctx, async () => {
       await tracer.startActiveSpan("service_b", async (spanB) => {
         // Export to Service C
-        const currentCtx = otel.addSpanParentToBaggage(spanB);
+        const currentCtx = addSpanParentToBaggage(spanB);
         const headers: Record<string, string> = {};
         propagation.inject(currentCtx, headers);
 
         // Service C (Braintrust)
-        const parent = otel.parentFromHeaders(headers);
+        const parent = parentFromHeaders(headers);
         await logger.traced(
           async (spanC) => {
             spanC.log({ input: "from service B" });

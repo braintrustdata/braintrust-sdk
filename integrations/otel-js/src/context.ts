@@ -1,45 +1,11 @@
-// Unified context management using OTEL's built-in context
-
 import {
   ContextManager,
   type ContextParentSpanIds,
   type Span,
-} from "../logger";
+} from "braintrust";
 
-const OTEL_NOT_INSTALLED_MESSAGE =
-  "OpenTelemetry packages are not installed. " +
-  "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base";
-
-interface OtelTrace {
-  getActiveSpan: () => unknown;
-  wrapSpanContext: (spanContext: unknown) => unknown;
-  setSpan: (ctx: Context, span: unknown) => Context;
-}
-
-interface OtelContext {
-  active: () => Context;
-  with: <T>(context: Context, fn: () => T) => T;
-}
-
-interface Context {
-  getValue?: (key: string) => unknown;
-  setValue: (key: string, value: unknown, ctx?: Context) => Context;
-  deleteValue: (key: string) => Context;
-}
-
-let otelTrace: OtelTrace | null = null;
-let otelContext: OtelContext | null = null;
-let OTEL_AVAILABLE = false;
-
-try {
-  const otelApi = require("@opentelemetry/api");
-  otelTrace = otelApi.trace;
-  otelContext = otelApi.context;
-  OTEL_AVAILABLE = true;
-} catch {
-  console.warn(OTEL_NOT_INSTALLED_MESSAGE);
-  OTEL_AVAILABLE = false;
-}
+import { trace as otelTrace, context as otelContext } from "@opentelemetry/api";
+import { getOtelParentFromSpan } from "./otel";
 
 function isOtelSpan(span: unknown): span is {
   spanContext: () => { spanId: string; traceId: string };
@@ -53,6 +19,16 @@ function isOtelSpan(span: unknown): span is {
   );
 }
 
+function isBraintrustSpan(span: unknown): span is Span {
+  return (
+    typeof span === "object" &&
+    span !== null &&
+    "spanId" in span &&
+    "rootSpanId" in span &&
+    typeof span.spanId === "string"
+  );
+}
+
 function isValidSpanContext(spanContext: unknown): boolean {
   if (
     !spanContext ||
@@ -62,6 +38,7 @@ function isValidSpanContext(spanContext: unknown): boolean {
   ) {
     return false;
   }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   const ctx = spanContext as { spanId: string; traceId: string };
   return (
     ctx.spanId !== "0000000000000000" &&
@@ -70,16 +47,7 @@ function isValidSpanContext(spanContext: unknown): boolean {
 }
 
 export class OtelContextManager extends ContextManager {
-  constructor() {
-    super();
-    if (!OTEL_AVAILABLE) {
-      throw new Error(OTEL_NOT_INSTALLED_MESSAGE);
-    }
-  }
-
   getParentSpanIds(): ContextParentSpanIds | undefined {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) return undefined;
-
     const currentSpan = otelTrace.getActiveSpan();
     if (!currentSpan || !isOtelSpan(currentSpan)) {
       return undefined;
@@ -91,7 +59,8 @@ export class OtelContextManager extends ContextManager {
     }
 
     // Check if this is a wrapped BT span
-    const btSpan = otelContext?.active().getValue?.("braintrust_span");
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const btSpan = otelContext?.active().getValue?.("braintrust_span" as any);
     if (
       btSpan &&
       currentSpan.constructor.name === "NonRecordingSpan" &&
@@ -100,6 +69,7 @@ export class OtelContextManager extends ContextManager {
       "rootSpanId" in btSpan &&
       "spanId" in btSpan
     ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const typedBtSpan = btSpan as { rootSpanId: string; spanId: string };
       return {
         rootSpanId: typedBtSpan.rootSpanId,
@@ -117,11 +87,6 @@ export class OtelContextManager extends ContextManager {
   }
 
   runInContext<R>(span: Span, callback: () => R): R {
-    if (!OTEL_AVAILABLE || !otelTrace || !otelContext) {
-      return callback();
-    }
-
-    // Store the BT span in OTEL context and wrap it in a NonRecordingSpan
     try {
       if (
         typeof span === "object" &&
@@ -129,6 +94,7 @@ export class OtelContextManager extends ContextManager {
         "spanId" in span &&
         "rootSpanId" in span
       ) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const btSpan = span as { spanId: string; rootSpanId: string };
 
         // Create a span context for the NonRecordingSpan
@@ -144,12 +110,20 @@ export class OtelContextManager extends ContextManager {
         // Get current context and add both the wrapped span and the BT span
         const currentContext = otelContext.active();
         let newContext = otelTrace.setSpan(currentContext, wrappedContext);
-        newContext = newContext.setValue("braintrust_span", span);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+        newContext = newContext.setValue("braintrust_span" as any, span);
 
         // Get parent value and store it in context (matching Python's behavior)
-        const parentValue = span._getOtelParent();
-        if (parentValue) {
-          newContext = newContext.setValue("braintrust.parent", parentValue);
+        if (isBraintrustSpan(span)) {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const parentValue = getOtelParentFromSpan(span as never);
+          if (parentValue) {
+            newContext = newContext.setValue(
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+              "braintrust.parent" as any,
+              parentValue,
+            );
+          }
         }
 
         // Run the callback in the new context
@@ -163,9 +137,9 @@ export class OtelContextManager extends ContextManager {
   }
 
   getCurrentSpan(): Span | undefined {
-    if (!OTEL_AVAILABLE || !otelContext) return undefined;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const btSpan = otelContext.active().getValue?.("braintrust_span" as any);
 
-    const btSpan = otelContext.active().getValue?.("braintrust_span");
     if (
       btSpan &&
       typeof btSpan === "object" &&
@@ -173,6 +147,7 @@ export class OtelContextManager extends ContextManager {
       "spanId" in btSpan &&
       "rootSpanId" in btSpan
     ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return btSpan as Span;
     }
     return undefined;
