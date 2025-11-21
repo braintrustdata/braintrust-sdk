@@ -38,14 +38,14 @@ function setupOtelFixture(projectName: string = "otel-compat-test") {
   const exporter = new InMemorySpanExporter();
   const memoryProcessor = new SimpleSpanProcessor(exporter);
 
-  // For actual Braintrust integration
+  // For actual Braintrust integration - inject test processor to avoid hitting APIs
   const braintrustProcessor = new BraintrustSpanProcessor({
     parent: `project_name:${projectName}`,
+    _spanProcessor: memoryProcessor,
   });
 
   const tp = createTracerProvider(BasicTracerProvider, [
-    memoryProcessor, // For testing assertions
-    braintrustProcessor, // For actual functionality
+    braintrustProcessor, // Already wraps memoryProcessor for actual functionality
   ]);
 
   const tracer = tp.getTracer("otel-compat-test");

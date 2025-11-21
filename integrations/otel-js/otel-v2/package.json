@@ -30,10 +30,12 @@
     "@opentelemetry/context-async-hooks": "^2.0.0",
     "@opentelemetry/core": "^2.0.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/resources": "2.0.0",
     "@opentelemetry/sdk-node": "^0.200.0",
-    "@opentelemetry/sdk-trace-base": "^2.0.0",
+    "@opentelemetry/sdk-trace-base": "2.0.0",
     "@types/node": "^22.15.21",
     "braintrust": "file:../../../js",
+    "msw": "^2.6.6",
     "tsup": "^8.5.0",
     "typescript": "5.5.4",
     "vitest": "^2.1.9"

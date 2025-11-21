@@ -478,13 +478,17 @@ describe("AISpanProcessor", () => {
 describe("BraintrustSpanProcessor", () => {
   let originalEnv: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalEnv = { ...process.env };
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
   afterEach(() => {
     process.env = originalEnv;
     vi.restoreAllMocks();
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   it("should create BraintrustSpanProcessor with API key from environment", () => {
@@ -700,13 +704,17 @@ describe("BraintrustSpanProcessor", () => {
 describe("BraintrustExporter", () => {
   let originalEnv: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalEnv = { ...process.env };
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
   afterEach(() => {
     process.env = originalEnv;
     vi.restoreAllMocks();
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
   });
 
   it("should create BraintrustExporter with API key from environment", () => {
@@ -1263,9 +1271,11 @@ describe("otel namespace helpers", () => {
 });
 
 describe("Otel Compat tests Integration", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     initOtel();
 
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
     _exportsForTestingOnly.setInitialTestState();
     _exportsForTestingOnly.resetIdGenStateForTests();
   });
@@ -1273,6 +1283,8 @@ describe("Otel Compat tests Integration", () => {
   afterEach(() => {
     resetOtel();
 
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
     _exportsForTestingOnly.resetIdGenStateForTests();
   });
 
@@ -1455,15 +1467,19 @@ describe("Otel Compat tests Integration", () => {
 });
 
 describe("export() format selection based on if otel is initialized", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     initOtel();
 
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
     _exportsForTestingOnly.resetIdGenStateForTests();
   });
 
   afterEach(() => {
     resetOtel();
 
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
     _exportsForTestingOnly.resetIdGenStateForTests();
   });
 

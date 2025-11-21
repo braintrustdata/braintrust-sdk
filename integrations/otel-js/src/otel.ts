@@ -182,6 +182,12 @@ interface BraintrustSpanProcessorOptions {
    * Additional headers to send with telemetry data
    */
   headers?: Record<string, string>;
+  /**
+   * @internal
+   * Internal option for dependency injection during testing.
+   * If provided, this processor will be used instead of creating an OTLP exporter.
+   */
+  _spanProcessor?: SpanProcessor;
 }
 
 /**
@@ -228,6 +234,21 @@ export class BraintrustSpanProcessor implements SpanProcessor {
   private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
+    // If a processor is injected (for testing), use it directly
+    if (options._spanProcessor) {
+      this.processor = options._spanProcessor;
+      // Apply filtering if requested
+      if (options.filterAISpans === true) {
+        this.aiSpanProcessor = new AISpanProcessor(
+          this.processor,
+          options.customFilter,
+        );
+      } else {
+        this.aiSpanProcessor = this.processor;
+      }
+      return;
+    }
+
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
     if (!apiKey) {
