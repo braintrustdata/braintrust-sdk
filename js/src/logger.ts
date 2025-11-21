@@ -4808,6 +4808,7 @@ class ObjectFetcher<RecordType>
             },
             use_columnstore: false,
             brainstore_realtime: true,
+            query_source: `js_sdk_object_fetcher_${this.objectType}`,
             ...(this.pinnedVersion !== undefined
               ? {
                   version: this.pinnedVersion,
