@@ -405,10 +405,9 @@ def context_from_span_export(export_str: str):
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
+    from braintrust.span_identifier_v4 import SpanComponentsV4
     from opentelemetry import baggage, trace
     from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
-
-    from braintrust.span_identifier_v4 import SpanComponentsV4
 
     # Parse the export string (handles V3/V4 automatically)
     components = SpanComponentsV4.from_str(export_str)
@@ -554,23 +553,43 @@ def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
-    from opentelemetry import baggage, trace
-    from opentelemetry.propagate import extract
-
     from braintrust.span_identifier_v4 import SpanComponentsV4
+    from opentelemetry import baggage, trace
+    from opentelemetry.propagate import extract, get_global_textmap
+
+    # Check propagator configuration
+    try:
+        propagator = get_global_textmap()
+        propagator_type = type(propagator).__name__
+        logging.debug(f"parent_from_headers: propagator={propagator_type}")
+        if hasattr(propagator, '_propagators'):
+            propagator_names = [type(p).__name__ for p in propagator._propagators]
+            logging.debug(f"parent_from_headers: propagators={propagator_names}")
+    except Exception as e:
+        logging.warning(f"parent_from_headers: propagator check failed: {e}")
 
     # Extract context from headers using W3C Trace Context propagator
     ctx = extract(headers)
 
     # Get span from context
     span = trace.get_current_span(ctx)
+    span_type = type(span).__name__
+    is_recording = getattr(span, 'is_recording', lambda: False)()
+
     if not span or not hasattr(span, 'get_span_context'):
-        logging.error("parent_from_headers: No valid span found in headers")
+        logging.error(f"parent_from_headers: No valid span (type={span_type})")
         return None
 
     span_context = span.get_span_context()
-    if not span_context or span_context.span_id == 0:
-        logging.error("parent_from_headers: Invalid span context (span_id is 0)")
+    if not span_context:
+        logging.error(f"parent_from_headers: span_context is None (type={span_type}, recording={is_recording})")
+        return None
+
+    if span_context.span_id == 0:
+        logging.error(
+            f"parent_from_headers: Invalid span context (span_id is 0) "
+            f"type={span_type}, recording={is_recording}, trace_id={span_context.trace_id}, flags={span_context.trace_flags}"
+        )
         return None
 
     # Convert OTEL IDs to hex strings
