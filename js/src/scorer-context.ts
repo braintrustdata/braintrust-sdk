@@ -13,6 +13,7 @@ export interface ScorerContextOptions {
   experimentId?: string;
   logsId?: string;
   rootSpanId: string;
+  ensureSpansFlushed?: () => Promise<void>;
 }
 
 function isObject(value: any): value is Record<string, unknown> {
@@ -41,11 +42,20 @@ export class ScorerContext {
   private readonly experimentId?: string;
   private readonly logsId?: string;
   private readonly rootSpanId: string;
+  private readonly ensureSpansFlushed?: () => Promise<void>;
+  private spansFlushed = false;
+  private spansFlushPromise: Promise<void> | null = null;
 
-  constructor({ experimentId, logsId, rootSpanId }: ScorerContextOptions) {
+  constructor({
+    experimentId,
+    logsId,
+    rootSpanId,
+    ensureSpansFlushed,
+  }: ScorerContextOptions) {
     this.experimentId = experimentId;
     this.logsId = logsId;
     this.rootSpanId = rootSpanId;
+    this.ensureSpansFlushed = ensureSpansFlushed;
   }
 
   getConfiguration() {
@@ -64,6 +74,8 @@ export class ScorerContext {
     if (!this.experimentId) {
       return [];
     }
+
+    await this.ensureSpansReady();
 
     const state = _internalGetGlobalState();
     if (!state) {
@@ -165,5 +177,25 @@ export class ScorerContext {
       }
     }
     return messages;
+  }
+
+  private async ensureSpansReady() {
+    if (this.spansFlushed || !this.ensureSpansFlushed) {
+      return;
+    }
+
+    if (!this.spansFlushPromise) {
+      this.spansFlushPromise = this.ensureSpansFlushed().then(
+        () => {
+          this.spansFlushed = true;
+        },
+        (err) => {
+          this.spansFlushPromise = null;
+          throw err;
+        },
+      );
+    }
+
+    await this.spansFlushPromise;
   }
 }

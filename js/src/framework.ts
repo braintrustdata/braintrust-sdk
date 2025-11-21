@@ -939,11 +939,24 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
+        const ensureSpansFlushed = async () => {
+          if (experiment) {
+            await flush({ state: experiment.loggingState });
+            return;
+          }
+          if (evaluator.state) {
+            await flush({ state: evaluator.state });
+            return;
+          }
+          await flush();
+        };
+
         const scorerContext = new ScorerContext({
           experimentId: experimentIdPromise
             ? await experimentIdPromise
             : undefined,
           rootSpanId: rootSpan.rootSpanId,
+          ensureSpansFlushed,
         });
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
