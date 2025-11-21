@@ -77,6 +77,7 @@ help:
 	@echo "  install-dev         - Install package in development mode with all dependencies"
 	@echo "  lint                - Run pylint checks"
 	@echo "  test                - Run all tests"
+	@echo "  test-core           - Run core tests only"
 	@echo "  test-wheel          - Run tests against built wheel"
 	@echo "  verify              - Run all CI checks"
 	@echo "  publish-to-pypi     - Publish to PyPI"
