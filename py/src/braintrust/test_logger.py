@@ -252,6 +252,32 @@ class TestLogger(TestCase):
         self.assertIs(copy["output"]["attachmentList"][1], attachment2)
         self.assertIs(copy["output"]["attachmentList"][3], attachment3)
 
+    def test_check_json_serializable_catches_circular_references(self):
+        """Test that _check_json_serializable properly handles circular references.
+
+        After fix, _check_json_serializable should catch ValueError from circular
+        references and convert them to a more appropriate exception or handle them.
+        """
+        from braintrust.logger import _check_json_serializable
+
+        # Create data with circular reference
+        data = {"a": "b"}
+        data["self"] = data
+
+        # Should either succeed (by handling circular refs) or raise a clear exception
+        # The error message should indicate the data is not serializable
+        try:
+            result = _check_json_serializable(data)
+            # If it succeeds, it should return a serialized string
+            self.assertIsInstance(result, str)
+        except Exception as e:
+            # If it raises an exception, it should mention serialization issue
+            error_msg = str(e).lower()
+            self.assertTrue(
+                "json-serializable" in error_msg or "circular" in error_msg,
+                f"Expected error message to mention serialization issue, got: {e}",
+            )
+
     def test_prompt_build_with_structured_output_templating(self):
         self.maxDiff = None
         prompt = Prompt(
@@ -509,6 +535,185 @@ def test_noop_permalink_issue_1837():
     assert link == "https://www.braintrust.dev/noop-span"
 
     assert span.link() == "https://www.braintrust.dev/noop-span"
+
+
+def test_span_log_with_simple_circular_reference(with_memory_logger):
+    """Test that span.log() with simple circular reference works gracefully."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Create simple circular reference
+        data = {"key": "value"}
+        data["self"] = data
+
+        # Should handle circular reference gracefully
+        span.log(
+            input={"test": "simple circular ref"},
+            output=data,
+        )
+
+    # Verify the log was recorded with circular reference replaced by placeholder
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+
+    logged_output = logs[0]["output"]
+    assert logged_output["key"] == "value"
+    # Circular reference should be replaced with a placeholder string
+    assert isinstance(logged_output["self"], str)
+    assert "circular" in logged_output["self"].lower()
+
+
+def test_span_log_with_nested_circular_reference(with_memory_logger):
+    """Test that span.log() with nested circular reference works gracefully."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Create nested structure with circular reference
+        page = {"page_number": 1, "content": "text"}
+        document = {"pages": [page]}
+        page["document"] = document
+
+        # Should handle circular reference gracefully
+        span.log(
+            input={"file": "test.pdf"},
+            output=document,
+        )
+
+    # Verify the log was recorded with nested circular reference handled
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+
+    logged_output = logs[0]["output"]
+    assert len(logged_output["pages"]) == 1
+    assert logged_output["pages"][0]["page_number"] == 1
+    assert logged_output["pages"][0]["content"] == "text"
+    # Circular reference should be replaced with a placeholder
+    assert isinstance(logged_output["pages"][0]["document"], str)
+    assert "circular" in logged_output["pages"][0]["document"].lower()
+
+
+def test_span_log_with_deep_document_structure(with_memory_logger):
+    """Test that span.log() with deeply nested document structure works gracefully."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Create deeply nested document structure with circular reference
+        doc_data = {
+            "model_id": "document-model",
+            "content": "Document content",
+            "pages": [],
+        }
+
+        page = {
+            "page_number": 1,
+            "lines": [{"content": "Line 1"}],
+        }
+
+        # Create circular reference
+        page["document"] = doc_data
+        doc_data["pages"].append(page)
+
+        # Should handle circular reference gracefully
+        span.log(
+            input={"file": "test.pdf"},
+            output=doc_data,
+            metadata={"source": "document_processor"},
+        )
+
+    # Verify the log was recorded with proper structure
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+
+    logged_output = logs[0]["output"]
+    assert logged_output["model_id"] == "document-model"
+    assert logged_output["content"] == "Document content"
+    assert len(logged_output["pages"]) == 1
+    assert logged_output["pages"][0]["page_number"] == 1
+    assert len(logged_output["pages"][0]["lines"]) == 1
+    assert logged_output["pages"][0]["lines"][0]["content"] == "Line 1"
+    # Circular reference should be replaced with placeholder
+    assert isinstance(logged_output["pages"][0]["document"], str)
+    assert "circular" in logged_output["pages"][0]["document"].lower()
+
+
+def test_span_log_with_extremely_deep_nesting(with_memory_logger):
+    """Test that span.log() with extremely deep nesting works gracefully."""
+    import sys
+
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        recursion_limit = sys.getrecursionlimit()
+
+        # Create structure deeper than recursion limit
+        deeply_nested = {"level": 0}
+        current = deeply_nested
+        for i in range(1, recursion_limit + 100):
+            current["nested"] = {"level": i}
+            current = current["nested"]
+
+        # Should handle extremely deep nesting without RecursionError
+        span.log(
+            input={"test": "deep nesting"},
+            output=deeply_nested,
+        )
+
+    # Verify the log was recorded (may be truncated or have placeholder for deep nesting)
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+
+    logged_output = logs[0]["output"]
+    assert logged_output["level"] == 0
+    # Either the structure is preserved up to a safe depth, or replaced with placeholder
+    assert "nested" in logged_output
+
+
+def test_span_log_with_large_document_many_pages(with_memory_logger):
+    """Test that span.log() with large multi-page document works gracefully."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Create realistic large document: 20 pages × 30 lines × 10 words
+        pages = []
+        for page_num in range(20):
+            lines = []
+            for line_num in range(30):
+                words = []
+                for word_num in range(10):
+                    words.append(
+                        {
+                            "content": f"word_{word_num}",
+                            "confidence": 0.98,
+                        }
+                    )
+                lines.append(
+                    {
+                        "content": f"line_{line_num}",
+                        "words": words,
+                    }
+                )
+            pages.append(
+                {
+                    "page_number": page_num + 1,
+                    "lines": lines,
+                }
+            )
+
+        # Should handle large document structure
+        span.log(
+            input={"file": "large_document.pdf"},
+            output={"pages": pages},
+        )
+
+    # Verify the log was recorded with full structure intact (no circular refs)
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+
+    logged_output = logs[0]["output"]
+    assert len(logged_output["pages"]) == 20
+    assert len(logged_output["pages"][0]["lines"]) == 30
+    assert len(logged_output["pages"][0]["lines"][0]["words"]) == 10
+    assert logged_output["pages"][0]["lines"][0]["words"][0]["content"] == "word_0"
 
 
 def test_span_link_logged_out(with_memory_logger):
