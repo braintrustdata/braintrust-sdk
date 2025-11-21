@@ -14,6 +14,7 @@ export interface ProgressReporter {
   start: (name: string, total: number) => void;
   stop: () => void;
   increment: (name: string) => void;
+  setTotal?: (name: string, total: number) => void;
 }
 
 export class SimpleProgressReporter implements ProgressReporter {
@@ -22,6 +23,7 @@ export class SimpleProgressReporter implements ProgressReporter {
   }
   public stop() {}
   public increment(_name: string) {}
+  public setTotal(_name: string, _total: number) {}
 }
 
 export class BarProgressReporter implements ProgressReporter {
@@ -53,5 +55,9 @@ export class BarProgressReporter implements ProgressReporter {
     this.bars[name].increment({
       evaluator: fitNameToSpaces(name, MAX_NAME_LENGTH),
     });
+  }
+
+  public setTotal(name: string, total: number) {
+    this.bars[name].setTotal(total);
   }
 }
