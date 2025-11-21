@@ -164,7 +164,7 @@ importers:
     devDependencies:
       '@braintrust/otel':
         specifier: file:..
-        version: file:integrations/otel-js(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.1.0)(@opentelemetry/exporter-trace-otlp-http@0.200.0)(@opentelemetry/sdk-trace-base@2.0.0)(braintrust@0.5.0)
+        version: file:integrations/otel-js(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.0.0)(@opentelemetry/exporter-trace-otlp-http@0.200.0)(@opentelemetry/sdk-trace-base@2.0.0)(braintrust@0.5.0)
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -172,8 +172,8 @@ importers:
         specifier: ^2.0.0
         version: 2.1.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/core':
-        specifier: ^2.0.0
-        version: 2.1.0(@opentelemetry/api@1.9.0)
+        specifier: 2.0.0
+        version: 2.0.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-trace-otlp-http':
         specifier: ^0.200.0
         version: 0.200.0(@opentelemetry/api@1.9.0)
@@ -12406,7 +12406,7 @@ packages:
       braintrust: file:js(zod@3.25.76)
     dev: true
 
-  file:integrations/otel-js(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.1.0)(@opentelemetry/exporter-trace-otlp-http@0.200.0)(@opentelemetry/sdk-trace-base@2.0.0)(braintrust@0.5.0):
+  file:integrations/otel-js(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.0.0)(@opentelemetry/exporter-trace-otlp-http@0.200.0)(@opentelemetry/sdk-trace-base@2.0.0)(braintrust@0.5.0):
     resolution: {directory: integrations/otel-js, type: directory}
     id: file:integrations/otel-js
     name: '@braintrust/otel'
@@ -12418,7 +12418,7 @@ packages:
       braintrust: '>=0.5.0'
     dependencies:
       '@opentelemetry/api': 1.9.0
-      '@opentelemetry/core': 2.1.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/core': 2.0.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-trace-otlp-http': 0.200.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.0.0(@opentelemetry/api@1.9.0)
       braintrust: file:js(zod@3.25.76)
