@@ -20,8 +20,12 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { context as otelContext } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import { getExportVersion, createTracerProvider } from "./utils";
-import { initOtel, resetOtel, BraintrustSpanProcessor } from "./";
+import {
+  getExportVersion,
+  createTracerProvider,
+  getParentSpanId,
+} from "../tests/utils";
+import { initOtel, resetOtel, BraintrustSpanProcessor } from "@braintrust/otel";
 
 class NoopProgressReporter {
   public start() {}
@@ -503,8 +507,9 @@ describe("OTEL compatibility mode", () => {
       expect(exportedTraceId).toBe(btTraceId);
 
       // Verify parent relationship
-      if (otelChild.parentSpanId) {
-        expect(otelChild.parentSpanId).toBe(btSpanId);
+      const parentId = getParentSpanId(otelChild);
+      if (parentId) {
+        expect(parentId).toBe(btSpanId);
       }
     }
   });
@@ -563,10 +568,10 @@ describe("OTEL compatibility mode", () => {
 
     if (otelSpan1 && otelSpan2) {
       // otel-span-1 should have bt-span-1 as parent
-      expect(otelSpan1.parentSpanId).toBe(spanIds[0]);
+      expect(getParentSpanId(otelSpan1)).toBe(spanIds[0]);
 
       // otel-span-2 should have bt-span-2 as parent
-      expect(otelSpan2.parentSpanId).toBe(spanIds[2]);
+      expect(getParentSpanId(otelSpan2)).toBe(spanIds[2]);
 
       // Both should have same trace ID
       expect(otelSpan1.spanContext().traceId).toBe(

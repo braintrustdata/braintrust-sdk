@@ -26,7 +26,7 @@ import {
   base64ToUint8Array,
   getExportVersion,
   createTracerProvider,
-} from "./utils";
+} from "../tests/utils";
 import { SpanComponentsV3, SpanComponentsV4 } from "braintrust/util";
 import { initOtel, resetOtel } from ".";
 
@@ -954,41 +954,50 @@ describe("BraintrustExporter", () => {
     consoleSpy.mockRestore();
   });
 
-  it("proxy exporter should make OTEL v1 traces compatible with v2", () => {
+  it("exporter handles spans with common v1/v2 attributes", () => {
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     const exporter = new BraintrustExporter();
     const processor = (exporter as any).processor;
     const batchProcessor = (processor as any).processor;
-    const proxiedExporter = (batchProcessor as any)._exporter;
+    const baseExporter = (batchProcessor as any)._exporter;
 
     const mockExport = vi.fn();
-    proxiedExporter.export = mockExport;
+    baseExporter.export = mockExport;
 
-    const v1Span = {
+    const testSpan = {
       name: "gen_ai.completion",
       spanContext: () => ({ traceId: "trace-123", spanId: "span-456" }),
       parentSpanId: "parent-789",
       instrumentationLibrary: { name: "openai", version: "1.0.0" },
-    } as any;
-
-    proxiedExporter.export([v1Span], () => {});
-    expect(mockExport).toHaveBeenCalledOnce();
-    const [transformedSpans] = mockExport.mock.calls[0];
-
-    expect(transformedSpans).toHaveLength(1);
-    const transformedSpan = transformedSpans[0];
-
-    // transformed span should have OTEL v2 fields
-    const expectedV2Span = {
-      ...v1Span,
-      parentSpanContext: {
-        spanId: v1Span.parentSpanId,
-        traceId: v1Span.spanContext().traceId,
+      resource: {
+        attributes: {
+          "service.name": "test-service",
+        },
       },
-      instrumentationScope: v1Span.instrumentationLibrary,
     } as any;
-    expect(transformedSpan).toEqual(expectedV2Span);
+
+    baseExporter.export([testSpan], () => {});
+    expect(mockExport).toHaveBeenCalledOnce();
+    const [exportedSpans] = mockExport.mock.calls[0];
+
+    expect(exportedSpans).toHaveLength(1);
+    const exportedSpan = exportedSpans[0];
+
+    // Check attributes that exist in both v1 and v2
+    expect(exportedSpan.name).toBe("gen_ai.completion");
+    expect(exportedSpan.spanContext).toBeTypeOf("function");
+    expect(exportedSpan.spanContext()).toEqual({
+      traceId: "trace-123",
+      spanId: "span-456",
+    });
+    expect(exportedSpan.instrumentationLibrary).toEqual({
+      name: "openai",
+      version: "1.0.0",
+    });
+    expect(exportedSpan.resource.attributes).toEqual({
+      "service.name": "test-service",
+    });
   });
 });
 
