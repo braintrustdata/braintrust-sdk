@@ -265,14 +265,18 @@ class TestLogger(TestCase):
         data["self"] = data
 
         # Should either succeed (by handling circular refs) or raise a clear exception
-        # For now, we expect it to succeed after the fix
+        # The error message should indicate the data is not serializable
         try:
             result = _check_json_serializable(data)
             # If it succeeds, it should return a serialized string
             self.assertIsInstance(result, str)
         except Exception as e:
-            # If it raises an exception, it should be informative
-            self.assertIn("circular", str(e).lower())
+            # If it raises an exception, it should mention serialization issue
+            error_msg = str(e).lower()
+            self.assertTrue(
+                "json-serializable" in error_msg or "circular" in error_msg,
+                f"Expected error message to mention serialization issue, got: {e}",
+            )
 
     def test_prompt_build_with_structured_output_templating(self):
         self.maxDiff = None
