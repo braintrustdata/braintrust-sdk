@@ -7,7 +7,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "ai": "5.0.76",
+    "ai": "5.0.52",
     "@ai-sdk/openai": "2.0.53",
     "@ai-sdk/anthropic": "2.0.34",
     "@types/node": "^20.10.5",
