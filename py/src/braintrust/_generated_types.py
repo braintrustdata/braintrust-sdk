@@ -674,10 +674,10 @@ FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent']
 FunctionOutputType = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
 class GitMetadataSettings(TypedDict):

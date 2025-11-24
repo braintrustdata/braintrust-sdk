@@ -1502,7 +1502,8 @@
                 "type": "string",
                 "enum": [
                   "node",
-                  "python"
+                  "python",
+                  "browser"
                 ]
               },
               "version": {
@@ -2479,7 +2480,8 @@
                             "type": "string",
                             "enum": [
                               "node",
-                              "python"
+                              "python",
+                              "browser"
                             ]
                           },
                           "version": {
@@ -2663,7 +2665,8 @@
                     "type": "string",
                     "enum": [
                       "node",
-                      "python"
+                      "python",
+                      "browser"
                     ]
                   },
                   "version": {
@@ -2761,7 +2764,7 @@
           "scorer",
           "task",
           "agent",
-          "renderer"
+          "custom_view"
         ]
       },
       "FunctionOutputType": {
@@ -2779,7 +2782,7 @@
           "scorer",
           "task",
           "tool",
-          "renderer"
+          "custom_view"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2792,7 +2795,7 @@
           "scorer",
           "task",
           "tool",
-          "renderer"
+          "custom_view"
         ]
       },
       "GitMetadataSettings": {
@@ -6612,7 +6615,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "02e9faae85e753f61a87500a1c170379e7004af4"
+    "x-internal-git-sha": "998df82d7471618f0c2e92a742c554b966e07055"
   },
   "paths": {},
   "webhooks": {}

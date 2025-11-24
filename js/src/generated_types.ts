@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 02e9faae85e753f61a87500a1c170379e7004af4) -- do not modify
+// Auto-generated file (internal git SHA 998df82d7471618f0c2e92a742c554b966e07055) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -378,7 +378,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python"]),
+    runtime: z.enum(["node", "python", "browser"]),
     version: z.string(),
   }),
   location: z.union([
@@ -706,7 +706,7 @@ export const PromptDataNullish = z.union([
 ]);
 export type PromptDataNullishType = z.infer<typeof PromptDataNullish>;
 export const FunctionTypeEnumNullish = z.union([
-  z.enum(["llm", "scorer", "task", "tool", "renderer"]),
+  z.enum(["llm", "scorer", "task", "tool", "custom_view"]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -808,7 +808,7 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python"]),
+          runtime: z.enum(["node", "python", "browser"]),
           version: z.string(),
         }),
         code: z.string(),
@@ -886,7 +886,7 @@ export const FunctionTypeEnum = z.enum([
   "scorer",
   "task",
   "tool",
-  "renderer",
+  "custom_view",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
@@ -904,7 +904,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python"]),
+      runtime: z.enum(["node", "python", "browser"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -929,7 +929,7 @@ export const FunctionObjectType = z.enum([
   "scorer",
   "task",
   "agent",
-  "renderer",
+  "custom_view",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
