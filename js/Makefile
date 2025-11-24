@@ -18,7 +18,7 @@ help:
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -105,10 +105,10 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-google-genai
+test: test-core test-openai test-anthropic test-google-genai
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai
 
 
 prune:

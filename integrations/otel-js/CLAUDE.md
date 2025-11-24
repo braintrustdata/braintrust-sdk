@@ -472,10 +472,14 @@ pnpm test:v2        # Only OTel 2.x tests
 ```
 
 **For Docker local development:**
-```bash
-docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22 -t otel-js-test . && docker run --rm otel-js-test
-```
 
+```bash
+# Build and run otel-v1 tests
+docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22 --build-arg TEST_DIR=otel-v1 -t otel-js-test-v1 . && docker run --rm otel-js-test-v1
+
+# Build and run otel-v2 tests
+docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22 --build-arg TEST_DIR=otel-v2 -t otel-js-test-v2 . && docker run --rm otel-js-test-v2
+```
 
 ## Related Files
 

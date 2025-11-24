@@ -27,7 +27,7 @@ RUN corepack prepare pnpm@10 --activate
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     git \
     python3 \
-    build-essential 
+    build-essential
 
 WORKDIR /workspace
 

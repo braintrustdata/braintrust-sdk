@@ -13,7 +13,7 @@
     "start": "turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "test": "turbo run test"
+    "test": "turbo run test --filter='!@braintrust/otel'"
   },
   "devDependencies": {
     "pyright": "^1.1.404",
