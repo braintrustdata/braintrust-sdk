@@ -1,5 +1,5 @@
 /**
-This test is a simple test to verify the braintrust package can be used to send spans using OpenTelemetry to the braintrust API.
+This test is a simple test to verify the braintrust otel and braintrust package can work be used to send spans using OpenTelemetry to the braintrust API.
 
 This test is not written as a vitest because it needs to be run as CommonJS and ESM. Vitest does not support running both modes.
 **/
@@ -15,11 +15,11 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
 
 import {
-  BraintrustSpanProcessor,
   TestBackgroundLogger,
   initLogger,
   _exportsForTestingOnly,
 } from "braintrust";
+import { BraintrustSpanProcessor } from "@braintrust/otel";
 
 type OtelExportPayload = {
   resourceSpans?: Array<{
@@ -91,7 +91,7 @@ async function main() {
 
     try {
       const tracer = trace.getTracer("my-tracer", "1.0.0");
-      await tracer.startActiveSpan("otel.example", async (rootSpan) => {
+      await tracer.startActiveSpan("otel-v1.example", async (rootSpan) => {
         rootSpan.setAttributes({
           "user.request": "my-request",
           "request.timestamp": new Date(
@@ -126,7 +126,7 @@ async function main() {
       .map((span) => span.name)
       .filter((name): name is string => typeof name === "string");
 
-    assert.ok(names.includes("otel.example"), "Root span missing");
+    assert.ok(names.includes("otel-v1.example"), "Root span missing");
     assert.ok(
       !names.includes("chat.completion"),
       "AI span should have been filtered",
@@ -141,10 +141,10 @@ async function main() {
       otlpServer.close((err) => (err ? reject(err) : resolve()));
     });
   }
-  console.log("Otel example passed");
+  console.log("Otel v1 example passed");
 }
 
 main().catch((error) => {
-  console.log("Otel example failed:", error);
+  console.log("Otel v1 example failed:", error);
   process.exitCode = 1;
 });

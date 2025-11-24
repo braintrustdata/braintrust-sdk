@@ -58,11 +58,45 @@ jobs:
           PACKED_TARBALL=$(npm pack --pack-destination dist)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
+      - name: Build and pack @braintrust/otel
+        id: prepare_otel_artifact
+        shell: bash
+        run: |
+          # Install the built braintrust package in otel-js to satisfy peer dependency
+          BRAINTRUST_TARBALL=$(ls js/dist/braintrust-*.tgz | head -n 1)
+          if [ -z "$BRAINTRUST_TARBALL" ]; then
+            echo "Error: braintrust tarball not found"
+            exit 1
+          fi
+          echo "Using braintrust tarball: $BRAINTRUST_TARBALL"
+
+          # Install braintrust and OpenTelemetry peer dependencies in otel-js directory for build
+          # Use pnpm to match the workspace, with no-save flags to avoid modifying lockfile
+          cd integrations/otel-js
+          if ! npm_config_save=false npm_config_lockfile=false pnpm add \
+            file:../../$BRAINTRUST_TARBALL \
+            @opentelemetry/api@^1.9.0 \
+            @opentelemetry/core@^1.9.0 \
+            @opentelemetry/exporter-trace-otlp-http@^0.35.0 \
+            @opentelemetry/sdk-trace-base@^1.9.0; then
+            echo "Error: Failed to install dependencies"
+            exit 1
+          fi
+
+          # Build the otel package
+          pnpm run build
+
+          # Pack the otel package
+          PACKED_OTEL_TARBALL=$(pnpm pack --pack-destination ../../js/dist)
+          echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
-          path: js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
+          path: |
+            js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
+            js/dist/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
           retention-days: 1
 
   smoke-tests-node:
@@ -72,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        integration: [otel, span]
+        integration: [otel-v1, span]
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
@@ -110,8 +144,8 @@ jobs:
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
-          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
-          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
           npm ci
           npm start
@@ -123,11 +157,11 @@ jobs:
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
         # TODO: Remove continue-on-error once Otel is a separate package
-        continue-on-error: ${{ matrix.integration == 'otel' }}
+        continue-on-error: ${{ matrix.integration == 'otel-v1' }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         env:
-          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
-          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
           npm ci
           npm start
