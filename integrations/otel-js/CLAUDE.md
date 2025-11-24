@@ -471,6 +471,12 @@ pnpm test:v1        # Only OTel 1.x tests
 pnpm test:v2        # Only OTel 2.x tests
 ```
 
+**For Docker local development:**
+```bash
+docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22 -t otel-js-test . && docker run --rm otel-js-test
+```
+
+
 ## Related Files
 
 - `package.json` - Main package definition and peer dependencies
