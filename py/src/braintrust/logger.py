@@ -2472,7 +2472,15 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
                     # `json.dumps`. However, that runs at log upload time, while we want to
                     # cut out all the references to user objects synchronously in this
                     # function.
-                    return {str(k): _deep_copy_object(v[k], depth + 1) for k in v}
+                    result = {}
+                    for k in v:
+                        try:
+                            key_str = str(k)
+                        except Exception:
+                            # If str() fails on the key, use a fallback representation
+                            key_str = f"<non-stringifiable-key: {type(k).__name__}>"
+                        result[key_str] = _deep_copy_object(v[k], depth + 1)
+                    return result
                 elif isinstance(v, (List, Tuple, Set)):
                     return [_deep_copy_object(x, depth + 1) for x in v]
             finally:
@@ -2492,7 +2500,16 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
-        elif isinstance(v, (int, float, str, bool)) or v is None:
+        elif isinstance(v, float):
+            # Handle NaN and Infinity for JSON compatibility
+            import math
+
+            if math.isnan(v):
+                return "NaN"
+            elif math.isinf(v):
+                return "Infinity" if v > 0 else "-Infinity"
+            return v
+        elif isinstance(v, (int, str, bool)) or v is None:
             # Skip roundtrip for primitive types.
             return v
         else:

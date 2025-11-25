@@ -677,10 +677,7 @@ def test_span_log_with_large_document_many_pages(with_memory_logger):
 
 
 def test_span_log_handles_nan_gracefully(with_memory_logger):
-    """Test that span.log() should handle NaN values gracefully without raising.
-
-    This test currently FAILS - it demonstrates the desired behavior after the fix.
-    """
+    """Test that span.log() handles NaN values by converting them to "NaN" string."""
     logger = init_test_logger(__name__)
 
     with logger.start_span(name="test_span") as span:
@@ -694,16 +691,13 @@ def test_span_log_handles_nan_gracefully(with_memory_logger):
     logs = with_memory_logger.pop()
     assert len(logs) == 1
     assert logs[0]["input"]["test"] == "input"
-    # NaN should be replaced with null or a string representation
+    # NaN should be converted to "NaN" string for JSON compatibility
     output_value = logs[0]["output"]["value"]
-    assert output_value is None or isinstance(output_value, str)
+    assert output_value == "NaN"
 
 
 def test_span_log_handles_infinity_gracefully(with_memory_logger):
-    """Test that span.log() should handle Infinity values gracefully without raising.
-
-    This test currently FAILS - it demonstrates the desired behavior after the fix.
-    """
+    """Test that span.log() handles Infinity values by converting them to "Infinity"/"-Infinity" strings."""
     logger = init_test_logger(__name__)
 
     with logger.start_span(name="test_span") as span:
@@ -717,9 +711,9 @@ def test_span_log_handles_infinity_gracefully(with_memory_logger):
     logs = with_memory_logger.pop()
     assert len(logs) == 1
     assert logs[0]["input"]["test"] == "input"
-    # Infinity should be replaced with null or a string representation
-    output_value = logs[0]["output"]["value"]
-    assert output_value is None or isinstance(output_value, str)
+    # Infinity should be converted to string representations for JSON compatibility
+    assert logs[0]["output"]["value"] == "Infinity"
+    assert logs[0]["output"]["neg"] == "-Infinity"
 
 
 def test_span_log_handles_unstringifiable_object_gracefully(with_memory_logger):
