@@ -53,7 +53,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps
+from .bt_json import bt_dumps, bt_loads
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -2518,7 +2518,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             # E.g. the original type could have a `__del__` method that alters
             # some shared internal state, and we need this deep copy to be
             # fully-independent from the original.
-            return json.loads(bt_dumps(v))
+            return bt_loads(bt_dumps(v))
 
     return _deep_copy_object(event)
 
