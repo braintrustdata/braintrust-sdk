@@ -73,13 +73,15 @@ def bt_dumps(obj, **kwargs) -> str:
     if _HAS_ORJSON:
         # Try orjson first for better performance
         try:
-            return orjson.dumps(obj, default=_default_handler).decode("utf-8")
+            # Use OPT_SORT_KEYS for deterministic output and consistency with standard json
+            return orjson.dumps(obj, default=_default_handler, option=orjson.OPT_SORT_KEYS).decode("utf-8")
         except Exception:
             # If orjson fails, fall back to standard json
             pass
 
     # Use standard json (either orjson not available or it failed)
-    return json.dumps(obj, cls=BraintrustJSONEncoder, allow_nan=False, **kwargs)
+    # Use sort_keys=True for deterministic output (matches orjson OPT_SORT_KEYS)
+    return json.dumps(obj, cls=BraintrustJSONEncoder, allow_nan=False, sort_keys=True, **kwargs)
 
 
 def bt_loads(s: str, **kwargs) -> Any:
