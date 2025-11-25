@@ -315,6 +315,12 @@
               "type": "string"
             }
           },
+          "reasoning_enabled": {
+            "type": "boolean"
+          },
+          "reasoning_budget": {
+            "type": "number"
+          },
           "max_tokens_to_sample": {
             "type": "number",
             "description": "This is a legacy parameter that should not be used."
@@ -595,6 +601,12 @@
         "properties": {
           "use_cache": {
             "type": "boolean"
+          },
+          "reasoning_enabled": {
+            "type": "boolean"
+          },
+          "reasoning_budget": {
+            "type": "number"
           }
         }
       },
@@ -1490,7 +1502,8 @@
                 "type": "string",
                 "enum": [
                   "node",
-                  "python"
+                  "python",
+                  "browser"
                 ]
               },
               "version": {
@@ -1747,6 +1760,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2124,6 +2153,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2435,7 +2480,8 @@
                             "type": "string",
                             "enum": [
                               "node",
-                              "python"
+                              "python",
+                              "browser"
                             ]
                           },
                           "version": {
@@ -2619,7 +2665,8 @@
                     "type": "string",
                     "enum": [
                       "node",
-                      "python"
+                      "python",
+                      "browser"
                     ]
                   },
                   "version": {
@@ -2716,7 +2763,8 @@
           "tool",
           "scorer",
           "task",
-          "agent"
+          "agent",
+          "custom_view"
         ]
       },
       "FunctionOutputType": {
@@ -2733,7 +2781,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2745,7 +2794,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "GitMetadataSettings": {
@@ -3466,6 +3516,12 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "reasoning_enabled": {
+                "type": "boolean"
+              },
+              "reasoning_budget": {
+                "type": "number"
+              },
               "temperature": {
                 "type": "number"
               },
@@ -3606,6 +3662,12 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "reasoning_enabled": {
+                "type": "boolean"
+              },
+              "reasoning_budget": {
+                "type": "number"
+              },
               "max_tokens": {
                 "type": "number"
               },
@@ -3642,6 +3704,12 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "reasoning_enabled": {
+                "type": "boolean"
+              },
+              "reasoning_budget": {
+                "type": "number"
+              },
               "temperature": {
                 "type": "number"
               },
@@ -3664,6 +3732,12 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "reasoning_enabled": {
+                "type": "boolean"
+              },
+              "reasoning_budget": {
+                "type": "number"
+              },
               "temperature": {
                 "type": "number"
               },
@@ -3679,6 +3753,12 @@
             "properties": {
               "use_cache": {
                 "type": "boolean"
+              },
+              "reasoning_enabled": {
+                "type": "boolean"
+              },
+              "reasoning_budget": {
+                "type": "number"
               }
             },
             "additionalProperties": {},
@@ -4419,6 +4499,25 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
+          },
+          "_async_scoring_state": {
+            "description": "The async scoring state for this event"
           }
         },
         "required": [
@@ -4672,6 +4771,13 @@
               ]
             },
             "description": "The remote eval sources to use for the project"
+          },
+          "disable_realtime_queries": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "If true, disable real-time queries for this project. This can improve query performance for high-volume logs."
           }
         }
       },
@@ -4829,25 +4935,6 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "completion"
-                ]
-              },
-              "content": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "content"
-            ],
-            "title": "completion"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
                   "chat"
                 ]
               },
@@ -4866,6 +4953,25 @@
               "messages"
             ],
             "title": "chat"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "completion"
+                ]
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "content"
+            ],
+            "title": "completion"
           }
         ]
       },
@@ -4877,25 +4983,6 @@
               "type": {
                 "type": "string",
                 "enum": [
-                  "completion"
-                ]
-              },
-              "content": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "content"
-            ],
-            "title": "completion"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
                   "chat"
                 ]
               },
@@ -4914,6 +5001,25 @@
               "messages"
             ],
             "title": "chat"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "completion"
+                ]
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "content"
+            ],
+            "title": "completion"
           },
           {
             "type": "null"
@@ -6082,7 +6188,8 @@
               "scorers",
               "logs",
               "agents",
-              "monitor"
+              "monitor",
+              "for_review"
             ],
             "description": "Type of object that the view corresponds to."
           },
@@ -6137,7 +6244,8 @@
         "properties": {
           "search": {
             "$ref": "#/components/schemas/ViewDataSearch"
-          }
+          },
+          "custom_charts": {}
         },
         "description": "The view definition"
       },
@@ -6476,6 +6584,16 @@
                     "type": "null"
                   }
                 ]
+              },
+              "queryShape": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "traces",
+                  "spans"
+                ]
               }
             },
             "title": "TableViewOptions"
@@ -6497,7 +6615,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83"
+    "x-internal-git-sha": "998df82d7471618f0c2e92a742c554b966e07055"
   },
   "paths": {},
   "webhooks": {}

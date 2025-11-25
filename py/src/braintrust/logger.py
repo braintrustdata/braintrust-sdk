@@ -752,7 +752,7 @@ def construct_logs3_data(items: Sequence[str]):
 def _check_json_serializable(event):
     try:
         return bt_dumps(event)
-    except TypeError as e:
+    except (TypeError, ValueError) as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
@@ -2449,19 +2449,46 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     Creates a deep copy of the given event. Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
     and `ExternalAttachment` objects, which are preserved and not deep-copied.
-    """
 
-    def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Mapping):
-            # Prevent dict keys from holding references to user data. Note that
-            # `bt_json` already coerces keys to string, a behavior that comes from
-            # `json.dumps`. However, that runs at log upload time, while we want to
-            # cut out all the references to user objects synchronously in this
-            # function.
-            return {str(k): _deep_copy_object(v[k]) for k in v}
-        elif isinstance(v, (List, Tuple, Set)):
-            return [_deep_copy_object(x) for x in v]
-        elif isinstance(v, Span):
+    Handles circular references and excessive nesting depth to prevent
+    RecursionError during serialization.
+    """
+    # Maximum depth to prevent hitting Python's recursion limit
+    # Python's default limit is ~1000, we use a conservative limit
+    # to account for existing call stack usage from pytest, application code, etc.
+    MAX_DEPTH = 200
+
+    # Track visited objects to detect circular references
+    visited: set[int] = set()
+
+    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
+        # Check depth limit - use >= to stop before exceeding
+        if depth >= MAX_DEPTH:
+            return "<max depth exceeded>"
+
+        # Check for circular references in mutable containers
+        # Use id() to track object identity
+        if isinstance(v, (Mapping, List, Tuple, Set)):
+            obj_id = id(v)
+            if obj_id in visited:
+                return "<circular reference>"
+            visited.add(obj_id)
+            try:
+                if isinstance(v, Mapping):
+                    # Prevent dict keys from holding references to user data. Note that
+                    # `bt_json` already coerces keys to string, a behavior that comes from
+                    # `json.dumps`. However, that runs at log upload time, while we want to
+                    # cut out all the references to user objects synchronously in this
+                    # function.
+                    return {str(k): _deep_copy_object(v[k], depth + 1) for k in v}
+                elif isinstance(v, (List, Tuple, Set)):
+                    return [_deep_copy_object(x, depth + 1) for x in v]
+            finally:
+                # Remove from visited set after processing to allow the same object
+                # to appear in different branches of the tree
+                visited.discard(obj_id)
+
+        if isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
             return "<experiment>"
@@ -2597,6 +2624,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,
+                        "query_source": f"py_sdk_object_fetcher_{self.object_type}",
                         **({"version": self._pinned_version} if self._pinned_version is not None else {}),
                     },
                     headers={
@@ -3905,8 +3933,8 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        _check_json_serializable(partial_record)
         serializable_partial_record = _deep_copy_event(partial_record)
+        _check_json_serializable(serializable_partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 

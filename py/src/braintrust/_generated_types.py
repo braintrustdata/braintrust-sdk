@@ -148,6 +148,8 @@ class BraintrustAttachmentReference(TypedDict):
 
 class BraintrustModelParams(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
 
 
 class CallEventCallEvent(TypedDict):
@@ -663,7 +665,7 @@ class FunctionIdFunctionId4(TypedDict):
     """
 
 
-FunctionIdRef = Optional[Mapping[str, Any]]
+FunctionIdRef = Mapping[str, Any]
 
 
 FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent']
@@ -672,10 +674,10 @@ FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent']
 FunctionOutputType = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
 class GitMetadataSettings(TypedDict):
@@ -1011,6 +1013,8 @@ class ModelParamsModelParamsFunctionCall(TypedDict):
 
 class ModelParamsModelParams1(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
     max_tokens: float
     temperature: float
     top_p: NotRequired[Optional[float]]
@@ -1024,6 +1028,8 @@ class ModelParamsModelParams1(TypedDict):
 
 class ModelParamsModelParams2(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
     temperature: NotRequired[Optional[float]]
     maxOutputTokens: NotRequired[Optional[float]]
     topP: NotRequired[Optional[float]]
@@ -1032,12 +1038,16 @@ class ModelParamsModelParams2(TypedDict):
 
 class ModelParamsModelParams3(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
     temperature: NotRequired[Optional[float]]
     topK: NotRequired[Optional[float]]
 
 
 class ModelParamsModelParams4(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
 
 
 class ObjectReference(TypedDict):
@@ -1299,6 +1309,10 @@ class ProjectSettings(TypedDict):
     """
     The remote eval sources to use for the project
     """
+    disable_realtime_queries: NotRequired[Optional[bool]]
+    """
+    If true, disable real-time queries for this project. This can improve query performance for high-volume logs.
+    """
 
 
 class ProjectTag(TypedDict):
@@ -1333,12 +1347,12 @@ class ProjectTag(TypedDict):
     """
 
 
-class PromptBlockDataPromptBlockData(TypedDict):
+class PromptBlockDataPromptBlockData1(TypedDict):
     type: Literal['completion']
     content: str
 
 
-class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
+class PromptBlockDataNullishPromptBlockDataNullish1(TypedDict):
     type: Literal['completion']
     content: str
 
@@ -1785,6 +1799,7 @@ class ViewOptionsViewOptions1(TypedDict):
     """
     chartAnnotations: NotRequired[Optional[Sequence[ViewOptionsViewOptions1ChartAnnotation]]]
     timeRangeFilter: NotRequired[Optional[Union[str, ViewOptionsViewOptions1TimeRangeFilter]]]
+    queryShape: NotRequired[Optional[Literal['traces', 'spans']]]
 
 
 ViewOptions = Optional[Union[ViewOptionsViewOptions, ViewOptionsViewOptions1]]
@@ -1843,6 +1858,8 @@ class AnyModelParams(TypedDict):
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
     top_k: NotRequired[Optional[float]]
     stop_sequences: NotRequired[Optional[Sequence[str]]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
     max_tokens_to_sample: NotRequired[Optional[float]]
     """
     This is a legacy parameter that should not be used.
@@ -2040,6 +2057,8 @@ class Experiment(TypedDict):
 
 class ModelParamsModelParams(TypedDict):
     use_cache: NotRequired[Optional[bool]]
+    reasoning_enabled: NotRequired[Optional[bool]]
+    reasoning_budget: NotRequired[Optional[float]]
     temperature: NotRequired[Optional[float]]
     top_p: NotRequired[Optional[float]]
     max_tokens: NotRequired[Optional[float]]
@@ -2176,7 +2195,7 @@ class ProjectScoreConfig(TypedDict):
     online: NotRequired[Optional[OnlineScoreConfig]]
 
 
-class PromptBlockDataPromptBlockData1(TypedDict):
+class PromptBlockDataPromptBlockData(TypedDict):
     type: Literal['chat']
     messages: Sequence[ChatCompletionMessageParam]
     tools: NotRequired[Optional[str]]
@@ -2185,7 +2204,7 @@ class PromptBlockDataPromptBlockData1(TypedDict):
 PromptBlockData = Union[PromptBlockDataPromptBlockData, PromptBlockDataPromptBlockData1]
 
 
-class PromptBlockDataNullishPromptBlockDataNullish1(TypedDict):
+class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
     type: Literal['chat']
     messages: Sequence[ChatCompletionMessageParam]
     tools: NotRequired[Optional[str]]
@@ -2226,6 +2245,7 @@ class SpanAttributes(TypedDict):
 
 class ViewData(TypedDict):
     search: NotRequired[Optional[ViewDataSearch]]
+    custom_charts: NotRequired[Optional[Any]]
 
 
 class ExperimentEvent(TypedDict):
@@ -2490,6 +2510,7 @@ class View(TypedDict):
         'logs',
         'agents',
         'monitor',
+        'for_review',
     ]
     """
     Type of object that the view corresponds to.
