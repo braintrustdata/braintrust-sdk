@@ -8,6 +8,7 @@ from braintrust.logger import init_logger
 
 # Initialize logger at module level before importing plugin
 init_logger(project="temporal-example")
+
 from temporalio.client import Client
 from temporalio.worker import Worker
 from workflow import (
