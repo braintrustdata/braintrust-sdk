@@ -11,7 +11,9 @@
     "install-build": "tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "file:../../../",
+    "nunjucks": "^3.2.4",
+    "mustache": "^4.2.0"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

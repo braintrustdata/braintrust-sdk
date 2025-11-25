@@ -72,6 +72,28 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
+import { nunjucks } from "./template/nunjucks";
+import type { Environment as NunjucksEnvironment } from "nunjucks";
+
+const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
+  return new nunjucks.Environment(null, {
+    autoescape: false,
+    throwOnUndefined,
+  });
+};
+
+const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(false),
+);
+
+const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
+  createNunjucksEnv(true),
+);
+
+function getNunjucksEnv(strict = false): NunjucksEnvironment {
+  return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
+}
+
 import { z, ZodError } from "zod/v3";
 import {
   BraintrustStream,
@@ -91,7 +113,8 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate } from "./mustache-utils";
+import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
+import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 
 // Context management interfaces
@@ -6278,6 +6301,19 @@ export type PromptRowWithId<
     ? Pick<PromptRow, "_xact_id">
     : Partial<Pick<PromptRow, "_xact_id">>);
 
+export type TemplateFormat = "mustache" | "nunjucks" | "none";
+
+export function isTemplateFormat(v: unknown): v is TemplateFormat {
+  return v === "mustache" || v === "nunjucks" || v === "none";
+}
+
+export function parseTemplateFormat(
+  value: unknown,
+  defaultFormat: TemplateFormat = "mustache",
+): TemplateFormat {
+  return isTemplateFormat(value) ? value : defaultFormat;
+}
+
 export function deserializePlainStringAsJSON(s: string) {
   if (s.trim() === "") {
     return { value: null, error: undefined };
@@ -6293,21 +6329,31 @@ export function deserializePlainStringAsJSON(s: string) {
 function renderTemplatedObject(
   obj: unknown,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    if (options.strict) {
-      lintTemplate(obj, args);
+    const strict = !!options.strict;
+    if (options.templateFormat === "nunjucks") {
+      if (strict) {
+        lintNunjucksTemplate(obj, args);
+      }
+      return getNunjucksEnv(strict).renderString(obj, args);
     }
-    return Mustache.render(obj, args, undefined, {
-      escape: (value) => {
-        if (typeof value === "string") {
-          return value;
-        } else {
-          return JSON.stringify(value);
-        }
-      },
-    });
+    if (options.templateFormat === "mustache") {
+      if (strict) {
+        lintMustacheTemplate(obj, args);
+      }
+      return Mustache.render(obj, args, undefined, {
+        escape: (value) => {
+          if (typeof value === "string") {
+            return value;
+          } else {
+            return JSON.stringify(value);
+          }
+        },
+      });
+    }
+    return obj;
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
@@ -6324,8 +6370,11 @@ function renderTemplatedObject(
 export function renderPromptParams(
   params: ModelParams | undefined,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat?: TemplateFormat } = {},
 ): ModelParams | undefined {
+  const templateFormat = parseTemplateFormat(options.templateFormat);
+  const strict = !!options.strict;
+
   const schemaParsed = z
     .object({
       response_format: z.object({
@@ -6340,7 +6389,10 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, {
+      strict,
+      templateFormat,
+    });
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -6358,6 +6410,33 @@ export function renderPromptParams(
     };
   }
   return params;
+}
+
+export function renderTemplateContent(
+  template: string,
+  variables: Record<string, unknown>,
+  escape: (v: unknown) => string,
+  options: { strict?: boolean; templateFormat?: TemplateFormat },
+): string {
+  const strict = !!options.strict;
+  const templateFormat = parseTemplateFormat(options.templateFormat);
+  if (templateFormat === "nunjucks") {
+    if (strict) {
+      lintNunjucksTemplate(template, variables);
+    }
+    const rendered = getNunjucksEnv(strict).renderString(template, variables);
+    return rendered;
+  } else if (templateFormat === "mustache") {
+    if (strict) {
+      lintMustacheTemplate(template, variables);
+    }
+    const rendered = Mustache.render(template, variables, undefined, {
+      escape,
+    });
+    return rendered;
+  } else {
+    return template;
+  }
 }
 
 export class Prompt<
@@ -6427,6 +6506,7 @@ export class Prompt<
       flavor?: Flavor;
       messages?: Message[];
       strict?: boolean;
+      templateFormat?: TemplateFormat;
     } = {},
   ): CompiledPrompt<Flavor> {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -6434,6 +6514,7 @@ export class Prompt<
       flavor: options.flavor ?? "chat",
       messages: options.messages,
       strict: options.strict,
+      templateFormat: options.templateFormat,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -6453,6 +6534,7 @@ export class Prompt<
       messages?: Message[];
       strict?: boolean;
       state?: BraintrustState;
+      templateFormat?: TemplateFormat;
     } = {},
   ): Promise<CompiledPrompt<Flavor>> {
     const hydrated =
@@ -6464,6 +6546,7 @@ export class Prompt<
       flavor: options.flavor ?? "chat",
       messages: options.messages,
       strict: options.strict,
+      templateFormat: options.templateFormat,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -6473,6 +6556,7 @@ export class Prompt<
       flavor: Flavor;
       messages?: Message[];
       strict?: boolean;
+      templateFormat?: TemplateFormat;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -6529,10 +6613,12 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const resolvedTemplateFormat = parseTemplateFormat(options.templateFormat);
+
     const renderedPrompt = Prompt.renderPrompt({
       prompt,
       buildArgs,
-      options,
+      options: { ...options, templateFormat: resolvedTemplateFormat },
     });
 
     if (flavor === "chat") {
@@ -6544,7 +6630,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
@@ -6562,7 +6651,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         prompt: renderedPrompt.content,
       } as CompiledPrompt<Flavor>;
@@ -6581,6 +6673,7 @@ export class Prompt<
     options: {
       strict?: boolean;
       messages?: Message[];
+      templateFormat?: TemplateFormat;
     };
   }): PromptBlockData {
     const escape = (v: unknown) => {
@@ -6603,16 +6696,14 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
-    if (prompt.type === "chat") {
-      const render = (template: string) => {
-        if (options.strict) {
-          lintTemplate(template, variables);
-        }
+    const templateFormat = parseTemplateFormat(options.templateFormat);
 
-        return Mustache.render(template, variables, undefined, {
-          escape,
+    if (prompt.type === "chat") {
+      const render = (template: string) =>
+        renderTemplateContent(template, variables, escape, {
+          strict: options.strict,
+          templateFormat: templateFormat,
         });
-      };
 
       const baseMessages = (prompt.messages || []).map((m) =>
         renderMessage(render, m),
@@ -6642,15 +6733,13 @@ export class Prompt<
         );
       }
 
-      if (options.strict) {
-        lintTemplate(prompt.content, variables);
-      }
-
+      const content = renderTemplateContent(prompt.content, variables, escape, {
+        strict: options.strict,
+        templateFormat: templateFormat,
+      });
       return {
         type: "completion",
-        content: Mustache.render(prompt.content, variables, undefined, {
-          escape,
-        }),
+        content,
       };
     } else {
       const _: never = prompt;
