@@ -117,15 +117,14 @@ jobs:
           repository: ${{ github.event.workflow_run.repository.full_name }}
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
       - name: Backup original integration package manifests
         working-directory: js/smoke/tests/${{ matrix.integration }}
-        shell: bash
         run: |
-          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm ci
-          else
-            npm ci --legacy-peer-deps
-          fi
           npm run backup
 
       - name: Download build artifact
@@ -135,11 +134,6 @@ jobs:
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
