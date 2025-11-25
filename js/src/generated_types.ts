@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA e6490ffb3d42f5dbc59d748bb5016f6d8f11cac2) -- do not modify
+// Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -105,7 +105,9 @@ export const AnyModelParams = z.object({
     .optional(),
   n: z.number().optional(),
   stop: z.array(z.string()).optional(),
-  reasoning_effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+  reasoning_effort: z
+    .enum(["none", "minimal", "low", "medium", "high"])
+    .optional(),
   verbosity: z.enum(["low", "medium", "high"]).optional(),
   top_k: z.number().optional(),
   stop_sequences: z.array(z.string()).optional(),
@@ -392,7 +394,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python"]),
+    runtime: z.enum(["node", "python", "browser"]),
     version: z.string(),
   }),
   location: z.union([
@@ -626,7 +628,7 @@ export const ModelParams = z.union([
       ]),
       n: z.number(),
       stop: z.array(z.string()),
-      reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
+      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
       verbosity: z.enum(["low", "medium", "high"]),
     })
     .partial()
@@ -720,7 +722,7 @@ export const PromptDataNullish = z.union([
 ]);
 export type PromptDataNullishType = z.infer<typeof PromptDataNullish>;
 export const FunctionTypeEnumNullish = z.union([
-  z.enum(["llm", "scorer", "task", "tool"]),
+  z.enum(["llm", "scorer", "task", "tool", "custom_view"]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -822,7 +824,7 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python"]),
+          runtime: z.enum(["node", "python", "browser"]),
           version: z.string(),
         }),
         code: z.string(),
@@ -895,7 +897,13 @@ export const PromptData = z
   })
   .partial();
 export type PromptDataType = z.infer<typeof PromptData>;
-export const FunctionTypeEnum = z.enum(["llm", "scorer", "task", "tool"]);
+export const FunctionTypeEnum = z.enum([
+  "llm",
+  "scorer",
+  "task",
+  "tool",
+  "custom_view",
+]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
@@ -912,7 +920,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python"]),
+      runtime: z.enum(["node", "python", "browser"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -937,6 +945,7 @@ export const FunctionObjectType = z.enum([
   "scorer",
   "task",
   "agent",
+  "custom_view",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);

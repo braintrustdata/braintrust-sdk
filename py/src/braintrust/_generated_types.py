@@ -353,7 +353,7 @@ class ChatCompletionTool(TypedDict):
 
 
 class CodeBundleRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -581,7 +581,7 @@ class Data(CodeBundle):
 
 
 class FunctionDataFunctionData1DataRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -660,7 +660,7 @@ class FunctionIdFunctionId3(TypedDict):
 
 
 class FunctionIdFunctionId4InlineContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -676,19 +676,19 @@ class FunctionIdFunctionId4(TypedDict):
     """
 
 
-FunctionIdRef = Optional[Mapping[str, Any]]
+FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent']
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view']
 
 
 FunctionOutputType = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
 class GitMetadataSettings(TypedDict):
@@ -1865,7 +1865,7 @@ class AnyModelParams(TypedDict):
     function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], AnyModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
     top_k: NotRequired[Optional[float]]
     stop_sequences: NotRequired[Optional[Sequence[str]]]
@@ -2098,7 +2098,7 @@ class ModelParamsModelParams(TypedDict):
     function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], ModelParamsModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
 
 

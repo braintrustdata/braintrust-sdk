@@ -292,6 +292,7 @@
           "reasoning_effort": {
             "type": "string",
             "enum": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -1539,7 +1540,8 @@
                 "type": "string",
                 "enum": [
                   "node",
-                  "python"
+                  "python",
+                  "browser"
                 ]
               },
               "version": {
@@ -2516,7 +2518,8 @@
                             "type": "string",
                             "enum": [
                               "node",
-                              "python"
+                              "python",
+                              "browser"
                             ]
                           },
                           "version": {
@@ -2700,7 +2703,8 @@
                     "type": "string",
                     "enum": [
                       "node",
-                      "python"
+                      "python",
+                      "browser"
                     ]
                   },
                   "version": {
@@ -2797,7 +2801,8 @@
           "tool",
           "scorer",
           "task",
-          "agent"
+          "agent",
+          "custom_view"
         ]
       },
       "FunctionOutputType": {
@@ -2814,7 +2819,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2826,7 +2832,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "GitMetadataSettings": {
@@ -3669,6 +3676,7 @@
               "reasoning_effort": {
                 "type": "string",
                 "enum": [
+                  "none",
                   "minimal",
                   "low",
                   "medium",
@@ -6646,7 +6654,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "e6490ffb3d42f5dbc59d748bb5016f6d8f11cac2"
+    "x-internal-git-sha": "8e9c0a96b3cf291360978c17580f72f6817bd6c8"
   },
   "paths": {},
   "webhooks": {}
