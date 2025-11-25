@@ -9,6 +9,7 @@ import inspect
 import io
 import json
 import logging
+import math
 import os
 import sys
 import textwrap
@@ -2502,8 +2503,6 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v.reference
         elif isinstance(v, float):
             # Handle NaN and Infinity for JSON compatibility
-            import math
-
             if math.isnan(v):
                 return "NaN"
             elif math.isinf(v):
