@@ -36,15 +36,15 @@ async def main() -> None:
         # Optionally send a signal if --signal argument is provided
         if "--signal" in sys.argv:
             signal_value = 100
-            print(f"\n📨 Sending signal with value: {signal_value}")
+            print(f"\nSending signal with value: {signal_value}")
             await handle.signal(SimpleWorkflow.add_signal_value, signal_value)
 
         # Wait for workflow to complete
         result = await handle.result()
 
         span.log(output=result)
-        print(f"\n✅ Result: {result}")
-        print(f"\n🔗 View trace: {span.permalink()}")
+        print(f"\nResult: {result}")
+        print(f"\nView trace: {span.permalink()}")
 
 
 if __name__ == "__main__":

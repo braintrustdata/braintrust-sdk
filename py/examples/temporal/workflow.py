@@ -18,7 +18,7 @@ class TaskInput:
 @activity.defn
 async def add_ten(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 Adding 10 to {input.value}")
+    print(f"[{worker_id}] Adding 10 to {input.value}")
 
     # Sleep to simulate realistic work
     await asyncio.sleep(0.5)
@@ -27,20 +27,16 @@ async def add_ten(input: TaskInput) -> int:
     with braintrust.start_span(name="validate_input", type="task") as span:
         span.log(input={"value": input.value, "operation": "add_ten"})
         await asyncio.sleep(0.2)
-        if input.value < 0:
-            span.log(output={"valid": False})
-        else:
-            span.log(output={"valid": True})
 
     result = input.value + 10
-    print(f"[{worker_id}] ✅ Result: {input.value} + 10 = {result}")
+    print(f"[{worker_id}] Result: {input.value} + 10 = {result}")
     return result
 
 
 @activity.defn
 async def multiply_by_two(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 Multiplying {input.value} by 2")
+    print(f"[{worker_id}] Multiplying {input.value} by 2")
 
     # Sleep to simulate realistic work
     await asyncio.sleep(0.3)
@@ -52,20 +48,20 @@ async def multiply_by_two(input: TaskInput) -> int:
         result = input.value * 2
         span.log(output={"result": result})
 
-    print(f"[{worker_id}] ✅ Result: {input.value} * 2 = {result}")
+    print(f"[{worker_id}] Result: {input.value} * 2 = {result}")
     return result
 
 
 @activity.defn
 async def subtract_five(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 Subtracting 5 from {input.value}")
+    print(f"[{worker_id}] Subtracting 5 from {input.value}")
 
     # Sleep to simulate realistic work
     await asyncio.sleep(0.3)
 
     result = input.value - 5
-    print(f"[{worker_id}] ✅ Result: {input.value} - 5 = {result}")
+    print(f"[{worker_id}] Result: {input.value} - 5 = {result}")
     return result
 
 
@@ -73,7 +69,7 @@ async def subtract_five(input: TaskInput) -> int:
 @activity.defn
 async def add_three_local(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 [LOCAL] Adding 3 to {input.value}")
+    print(f"[{worker_id}] [LOCAL] Adding 3 to {input.value}")
 
     # Sleep to simulate realistic work (local activities are typically faster)
     await asyncio.sleep(0.1)
@@ -85,7 +81,7 @@ async def add_three_local(input: TaskInput) -> int:
         result = input.value + 3
         span.log(output={"result": result})
 
-    print(f"[{worker_id}] ✅ [LOCAL] Result: {input.value} + 3 = {result}")
+    print(f"[{worker_id}] [LOCAL] Result: {input.value} + 3 = {result}")
     return result
 
 
@@ -104,7 +100,7 @@ async def divide_by_two_with_retry(input: TaskInput) -> int:
     _divide_attempt_count[activity_id] += 1
 
     attempt = _divide_attempt_count[activity_id]
-    print(f"[{worker_id}] 🔄 Attempt {attempt}: Dividing {input.value} by 2")
+    print(f"[{worker_id}] Attempt {attempt}: Dividing {input.value} by 2")
 
     # Sleep to simulate work
     await asyncio.sleep(0.4)
@@ -114,7 +110,7 @@ async def divide_by_two_with_retry(input: TaskInput) -> int:
         raise ValueError("Simulated error for retry testing")
 
     result = input.value // 2
-    print(f"[{worker_id}] ✅ Result: {input.value} / 2 = {result}")
+    print(f"[{worker_id}] Result: {input.value} / 2 = {result}")
     return result
 
 
@@ -122,26 +118,26 @@ async def divide_by_two_with_retry(input: TaskInput) -> int:
 @activity.defn
 async def square(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 Squaring {input.value}")
+    print(f"[{worker_id}] Squaring {input.value}")
 
     # Sleep to simulate work - should run in parallel with cube
     await asyncio.sleep(0.6)
 
     result = input.value * input.value
-    print(f"[{worker_id}] ✅ Result: {input.value}^2 = {result}")
+    print(f"[{worker_id}] Result: {input.value}^2 = {result}")
     return result
 
 
 @activity.defn
 async def cube(input: TaskInput) -> int:
     worker_id = f"pid-{os.getpid()}"
-    print(f"[{worker_id}] 🔢 Cubing {input.value}")
+    print(f"[{worker_id}] Cubing {input.value}")
 
     # Sleep to simulate work - should run in parallel with square
     await asyncio.sleep(0.7)
 
     result = input.value * input.value * input.value
-    print(f"[{worker_id}] ✅ Result: {input.value}^3 = {result}")
+    print(f"[{worker_id}] Result: {input.value}^3 = {result}")
     return result
 
 

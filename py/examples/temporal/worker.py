@@ -46,7 +46,7 @@ async def main() -> None:
         plugins=[BraintrustPlugin()],
     )
 
-    print(f"🚀 {worker_id} started on task queue: {TASK_QUEUE_NAME}")
+    print(f"{worker_id} started on task queue: {TASK_QUEUE_NAME}")
     await worker.run()
 
 

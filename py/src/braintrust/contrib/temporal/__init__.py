@@ -6,20 +6,32 @@ temporal extra:
 
     pip install braintrust[temporal]
 
-Example usage:
+Components
+----------
+
+There are two main components:
+
+- **BraintrustPlugin**: Use this for Temporal workers. It's a convenience wrapper that
+  automatically configures the interceptor and sandbox settings.
+
+- **BraintrustInterceptor**: Use this for Temporal clients. Clients don't support plugins,
+  so you must use the interceptor directly to propagate span context from client calls
+  to workflows.
+
+Worker Setup
+------------
+
+Use ``BraintrustPlugin`` when creating a worker::
 
     import braintrust
     from braintrust.contrib.temporal import BraintrustPlugin
     from temporalio.client import Client
     from temporalio.worker import Worker
 
-    # Initialize Braintrust logger
     braintrust.init_logger(project="my-project")
 
-    # Create Temporal client
     client = await Client.connect("localhost:7233")
 
-    # Create worker with Braintrust plugin
     worker = Worker(
         client,
         task_queue="my-queue",
@@ -28,7 +40,38 @@ Example usage:
         plugins=[BraintrustPlugin()],
     )
 
-The plugin will automatically:
+    await worker.run()
+
+Client Setup
+------------
+
+Use ``BraintrustInterceptor`` when creating a client to propagate span context to workflows::
+
+    import braintrust
+    from braintrust.contrib.temporal import BraintrustInterceptor
+    from temporalio.client import Client
+
+    braintrust.init_logger(project="my-project")
+
+    client = await Client.connect(
+        "localhost:7233",
+        interceptors=[BraintrustInterceptor()],
+    )
+
+    # Spans created around workflow calls will be linked as parents
+    with braintrust.start_span(name="my-operation") as span:
+        result = await client.execute_workflow(
+            MyWorkflow.run,
+            args,
+            id="workflow-id",
+            task_queue="my-queue",
+        )
+
+What Gets Traced
+----------------
+
+The integration will automatically:
+
 - Trace workflow executions
 - Trace all activity executions
 - Trace local activities
