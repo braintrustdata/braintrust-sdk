@@ -2506,13 +2506,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     while (index < wrappedItems.length) {
       const chunk = wrappedItems.slice(index, index + chunkSize);
       await this.flushWrappedItemsChunk(chunk, batchSize);
-      wrappedItems.fill(
-        undefined as unknown as LazyValue<BackgroundLogEvent>,
-        index,
-        index + chunk.length,
-      );
       index += chunk.length;
     }
+    // Clear the array once at the end to allow garbage collection
+    // More efficient than filling with undefined after each chunk
     wrappedItems.length = 0;
 
     // If more items were added while we were flushing, flush again

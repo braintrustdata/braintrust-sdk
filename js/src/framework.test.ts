@@ -573,6 +573,79 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
   expect(await memoryLogger.drain()).toHaveLength(0);
 });
 
+test("Eval with returnResults: false produces empty results but valid summary", async () => {
+  const result = await Eval(
+    "test-no-results",
+    {
+      projectName: "test-no-results-project",
+      data: [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+        { input: "foo", expected: "foo bar" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        () => ({ name: "length_score", score: 0.75 }),
+        () => ({ name: "quality_score", score: 0.9 }),
+      ],
+    },
+    { noSendLogs: true, returnResults: false },
+  );
+
+  // Verify that results array is empty (memory not retained)
+  expect(result.results).toHaveLength(0);
+
+  // Verify that summary still has accurate aggregate scores
+  expect(result.summary.projectName).toBe("test-no-results-project");
+  expect(result.summary.experimentUrl).toBeUndefined();
+
+  // exact_match: 2 out of 3 match = 2/3 ≈ 0.6667
+  expect(result.summary.scores.exact_match.score).toBeCloseTo(2 / 3, 4);
+
+  // length_score: always 0.75, so average is 0.75
+  expect(result.summary.scores.length_score.score).toBe(0.75);
+
+  // quality_score: always 0.9, so average is 0.9
+  expect(result.summary.scores.quality_score.score).toBe(0.9);
+});
+
+test("Eval with returnResults: true collects all results", async () => {
+  const result = await Eval(
+    "test-with-results",
+    {
+      projectName: "test-with-results-project",
+      data: [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+      ],
+    },
+    { noSendLogs: true, returnResults: true },
+  );
+
+  // Verify that results are collected
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+
+  // Summary should also be correct
+  expect(result.summary.scores.exact_match.score).toBe(1);
+});
+
 test("tags can be appended and logged to root span", async () => {
   await _exportsForTestingOnly.simulateLoginForTests();
   const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();

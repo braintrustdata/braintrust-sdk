@@ -537,7 +537,29 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   parameters?: InferParameters<Parameters>;
   /**
    * Whether to retain the per-example Eval results and return them from Eval().
-   * Defaults to true for backwards compatibility.
+   *
+   * When `true` (default): All evaluation results are collected in memory and returned,
+   * allowing inspection of individual test case inputs, outputs, scores, and metadata.
+   * This is convenient for interactive analysis but can consume significant memory for
+   * large datasets (e.g., millions of examples).
+   *
+   * When `false`: Individual results are not retained in memory. Only aggregate score
+   * statistics are computed incrementally. The returned `results` array will be empty,
+   * but the `summary` will still contain accurate score aggregates. This is suitable for:
+   * - Large-scale evaluations (millions of examples)
+   * - Memory-constrained environments
+   * - Scenarios where only aggregate metrics are needed
+   *
+   * Note: When `false`, you cannot access individual test case results after evaluation.
+   * If you need to inspect specific failures or outputs, keep this as `true`.
+   *
+   * Defaults to `true` for backwards compatibility.
+   *
+   * @example
+   * // Memory-efficient evaluation of a large dataset
+   * await Eval("large-eval", evaluator, {
+   *   returnResults: false  // Only keep aggregate scores
+   * });
    */
   returnResults?: boolean;
 }
@@ -893,7 +915,9 @@ async function runEvaluatorInternal(
         }
       })();
     }
-    throw new Error("Evaluator data must be iterable");
+    throw new Error(
+      "Evaluator data must be an array, iterable, or async iterable",
+    );
   })();
 
   progressReporter.start(evaluator.evalName, 0);
@@ -1202,7 +1226,13 @@ async function runEvaluatorInternal(
   })();
 
   const cancel = async () => {
-    await new Promise((_, reject) => {
+    await new Promise<never>((_, reject) => {
+      // If already cancelled, reject immediately
+      if (cancelled) {
+        reject(new InternalAbortError("Evaluator already cancelled"));
+        return;
+      }
+
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let abortHandler: (() => void) | undefined;
 
@@ -1245,11 +1275,22 @@ async function runEvaluatorInternal(
   try {
     await Promise.race([waitForQueue, cancel()]);
   } catch (e) {
+    // Always kill the queue to prevent hanging tasks and memory leaks
+    q.kill();
+
     if (e instanceof InternalAbortError) {
-      q.kill();
+      // Log cancellation for debugging
+      if (process.env.BRAINTRUST_VERBOSE) {
+        console.warn("Evaluator cancelled:", (e as Error).message);
+      }
     }
 
     throw e;
+  } finally {
+    // Ensure results are cleared if not collecting to free memory
+    if (!collectResults) {
+      collectedResults.length = 0;
+    }
   }
 
   const summary = experiment
