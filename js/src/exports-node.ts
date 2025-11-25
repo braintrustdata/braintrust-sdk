@@ -38,6 +38,7 @@ export {
   BraintrustMiddleware,
 } from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
+export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export {
