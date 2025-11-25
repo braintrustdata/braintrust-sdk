@@ -65,7 +65,6 @@
     "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v3": "vitest run src/wrappers/ai-sdk-v3.test.ts",
-    "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts"
   },
   "author": "",
