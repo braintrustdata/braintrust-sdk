@@ -119,8 +119,13 @@ jobs:
 
       - name: Backup original integration package manifests
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
         run: |
-          npm ci
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm ci
+          else
+            npm ci --legacy-peer-deps
+          fi
           npm run backup
 
       - name: Download build artifact
@@ -143,11 +148,17 @@ jobs:
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          npm ci
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm ci
+          else
+            npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts otel
+          fi
           npm start
 
       - name: Enable ESM for integrations tests
@@ -159,11 +170,17 @@ jobs:
         # TODO: Remove continue-on-error once Otel is a separate package
         continue-on-error: ${{ matrix.integration == 'otel-v1' }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          npm ci
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm ci
+          else
+            npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts otel
+          fi
           npm start
 
       - name: Restore original package.json files

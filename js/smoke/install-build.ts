@@ -3,6 +3,7 @@ import path from "path";
 import { execSync } from "child_process";
 
 const artifactsDir = path.resolve(process.argv[2] || "../../artifacts");
+const packageToInstall = process.argv[3] || "both"; // "braintrust", "otel", or "both"
 
 function findLatestTarball(prefixes: string[]): string | null {
   if (!fs.existsSync(artifactsDir)) {
@@ -31,28 +32,27 @@ function installTarball(label: string, tarPath: string): void {
 }
 
 // Install braintrust
-const braintrustTar = findLatestTarball(["braintrust-"]);
-if (!braintrustTar) {
-  console.error(`No braintrust tarball found in ${artifactsDir}.`);
-  console.error(
-    "Build it first: cd js && npm run build && npm pack --pack-destination artifacts",
-  );
-  process.exit(1);
+if (packageToInstall === "braintrust") {
+  const braintrustTar = findLatestTarball(["braintrust-"]);
+  if (!braintrustTar) {
+    console.error(`No braintrust tarball found in ${artifactsDir}.`);
+    console.error(
+      "Build it first: cd js && npm run build && npm pack --pack-destination artifacts",
+    );
+    process.exit(1);
+  }
+  installTarball("braintrust", path.join(artifactsDir, braintrustTar));
 }
-installTarball("braintrust", path.join(artifactsDir, braintrustTar));
 
-// Install @braintrust/otel (only for otel-v1 test)
-const cwd = process.cwd();
-const isOtelTest = cwd.includes("otel-v1");
-
-if (isOtelTest) {
-  const otelTar = findLatestTarball(["@braintrust-otel-", "braintrust-otel-"]);
-  if (otelTar) {
-    installTarball("@braintrust/otel", path.join(artifactsDir, otelTar));
-  } else {
-    console.warn(`No @braintrust/otel tarball found in ${artifactsDir}.`);
-    console.warn(
+// Install @braintrust/otel
+if (packageToInstall === "otel") {
+  const otelTar = findLatestTarball(["braintrust-otel-"]);
+  if (!otelTar) {
+    console.error(`No @braintrust/otel tarball found in ${artifactsDir}.`);
+    console.error(
       "Build it first: cd integrations/otel-js && npm run build && npm pack --pack-destination ../../../js/artifacts",
     );
+    process.exit(1);
   }
+  installTarball("@braintrust/otel", path.join(artifactsDir, otelTar));
 }

@@ -8,9 +8,10 @@
         "backup": "tsx ../../backup-and-restore.ts backup",
         "restore": "tsx ../../backup-and-restore.ts restore",
         "enable-esm": "tsx ../../enable-esm.ts",
-        "install-build": "npm install && npx tsx ../../install-build.ts ../../../artifacts"
+        "install-build": "npm install --legacy-peer-deps && npx tsx ../../install-build.ts ../../../artifacts"
     },
     "dependencies": {
+        "@braintrust/otel": "file:../../../artifacts/braintrust-otel-0.1.0.tgz",
         "@opentelemetry/api": "1.9.0",
         "@opentelemetry/context-async-hooks": "1.9.0",
         "@opentelemetry/core": "1.9.0",
