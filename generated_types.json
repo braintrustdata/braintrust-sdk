@@ -1502,7 +1502,8 @@
                 "type": "string",
                 "enum": [
                   "node",
-                  "python"
+                  "python",
+                  "browser"
                 ]
               },
               "version": {
@@ -1759,6 +1760,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2136,6 +2153,22 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
           }
         },
         "required": [
@@ -2447,7 +2480,8 @@
                             "type": "string",
                             "enum": [
                               "node",
-                              "python"
+                              "python",
+                              "browser"
                             ]
                           },
                           "version": {
@@ -2631,7 +2665,8 @@
                     "type": "string",
                     "enum": [
                       "node",
-                      "python"
+                      "python",
+                      "browser"
                     ]
                   },
                   "version": {
@@ -2728,7 +2763,8 @@
           "tool",
           "scorer",
           "task",
-          "agent"
+          "agent",
+          "custom_view"
         ]
       },
       "FunctionOutputType": {
@@ -2745,7 +2781,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2757,7 +2794,8 @@
           "llm",
           "scorer",
           "task",
-          "tool"
+          "tool",
+          "custom_view"
         ]
       },
       "GitMetadataSettings": {
@@ -4461,6 +4499,25 @@
           },
           "origin": {
             "$ref": "#/components/schemas/ObjectReferenceNullish"
+          },
+          "comments": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of comments attached to this event"
+          },
+          "audit_data": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Optional list of audit entries attached to this event"
+          },
+          "_async_scoring_state": {
+            "description": "The async scoring state for this event"
           }
         },
         "required": [
@@ -6558,7 +6615,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "93e76a7bcdf0f874a1827af017d26ac37995a47b"
+    "x-internal-git-sha": "998df82d7471618f0c2e92a742c554b966e07055"
   },
   "paths": {},
   "webhooks": {}
