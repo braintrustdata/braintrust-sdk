@@ -74,7 +74,8 @@ def bt_dumps(obj, **kwargs) -> str:
         # Try orjson first for better performance
         try:
             # Use OPT_SORT_KEYS for deterministic output and consistency with standard json
-            return orjson.dumps(obj, default=_default_handler, option=orjson.OPT_SORT_KEYS).decode("utf-8")
+            # pylint: disable=no-member  # orjson is a C extension, pylint can't introspect it
+            return orjson.dumps(obj, default=_default_handler, option=orjson.OPT_SORT_KEYS).decode("utf-8")  # type: ignore[possibly-unbound]
         except Exception:
             # If orjson fails, fall back to standard json
             pass
@@ -101,7 +102,8 @@ def bt_loads(s: str, **kwargs) -> Any:
     if _HAS_ORJSON:
         # Try orjson first for better performance
         try:
-            return orjson.loads(s)
+            # pylint: disable=no-member  # orjson is a C extension, pylint can't introspect it
+            return orjson.loads(s)  # type: ignore[possibly-unbound]
         except Exception:
             # If orjson fails, fall back to standard json
             pass
