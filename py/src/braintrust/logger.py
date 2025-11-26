@@ -4496,6 +4496,18 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                             "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
                         }
                     )
+                elif c["type"] == "file":
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
