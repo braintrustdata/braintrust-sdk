@@ -2363,6 +2363,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+  public flushChunkSize: number = 25;
 
   private _disabled = false;
 
@@ -2397,10 +2398,16 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.numTries = numTriesEnv + 1;
     }
 
+    // BRAINTRUST_QUEUE_MAX_SIZE: General queue size limit (applies to both experiments and logging)
+    // BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE: Legacy name, same as BRAINTRUST_QUEUE_MAX_SIZE
+    const queueMaxSizeEnv = Number(iso.getEnv("BRAINTRUST_QUEUE_MAX_SIZE"));
     const queueDropExceedingMaxsizeEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE"),
     );
-    if (!isNaN(queueDropExceedingMaxsizeEnv)) {
+
+    if (!isNaN(queueMaxSizeEnv)) {
+      this.queueDropExceedingMaxsize = queueMaxSizeEnv;
+    } else if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
@@ -2411,6 +2418,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     );
     if (!isNaN(queueDropLoggingPeriodEnv)) {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
+    }
+
+    const flushChunkSizeEnv = Number(
+      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
+    );
+    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
+      this.flushChunkSize = flushChunkSizeEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2488,6 +2502,36 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     // Drain the queue.
     const wrappedItems = this.queue.drain();
 
+    if (wrappedItems.length === 0) {
+      return;
+    }
+
+    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
+
+    let index = 0;
+    while (index < wrappedItems.length) {
+      const chunk = wrappedItems.slice(index, index + chunkSize);
+      await this.flushWrappedItemsChunk(chunk, batchSize);
+      index += chunk.length;
+    }
+    // Clear the array once at the end to allow garbage collection
+    // More efficient than filling with undefined after each chunk
+    wrappedItems.length = 0;
+
+    // If more items were added while we were flushing, flush again
+    if (this.queue.length() > 0) {
+      await this.flushOnce(args);
+    }
+  }
+
+  private async flushWrappedItemsChunk(
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
+    batchSize: number,
+  ) {
+    if (!wrappedItems.length) {
+      return;
+    }
+
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
@@ -2545,11 +2589,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         attachmentErrors,
         `Encountered the following errors while uploading attachments:`,
       );
-    }
-
-    // If more items were added while we were flushing, flush again
-    if (this.queue.length() > 0) {
-      await this.flushOnce(args);
     }
   }
 
@@ -2941,9 +2980,10 @@ export function init<IsOpen extends boolean = false>(
 
   const state = stateArg ?? _globalState;
 
-  // Ensure unlimited queue for init() calls (experiments)
-  // Experiments should never drop data
-  state.enforceQueueSizeLimit(false);
+  // Enable queue size limits to prevent OOM in memory-constrained environments.
+  // For experiments with maxConcurrency set in Eval(), this provides backpressure by
+  // flushing logs after each task. For regular logging, logs will be dropped when full.
+  state.enforceQueueSizeLimit(true);
 
   if (open) {
     if (isEmpty(experiment)) {
@@ -4770,9 +4810,79 @@ class ObjectFetcher<RecordType>
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
+  private async *fetchRecordsFromApi(): AsyncGenerator<
+    WithTransactionId<RecordType>
+  > {
+    const state = await this.getState();
+    const objectId = await this.id;
+    let cursor = undefined;
+    let iterations = 0;
+    while (true) {
+      const resp = await state.apiConn().post(
+        `btql`,
+        {
+          query: {
+            ...this._internal_btql,
+            select: [
+              {
+                op: "star",
+              },
+            ],
+            from: {
+              op: "function",
+              name: {
+                op: "ident",
+                name: [this.objectType],
+              },
+              args: [
+                {
+                  op: "literal",
+                  value: objectId,
+                },
+              ],
+            },
+            cursor,
+            limit: INTERNAL_BTQL_LIMIT,
+          },
+          use_columnstore: false,
+          brainstore_realtime: true,
+          query_source: `js_sdk_object_fetcher_${this.objectType}`,
+          ...(this.pinnedVersion !== undefined
+            ? {
+                version: this.pinnedVersion,
+              }
+            : {}),
+        },
+        { headers: { "Accept-Encoding": "gzip" } },
+      );
+      const respJson = await resp.json();
+      const mutate = this.mutateRecord;
+      for (const record of respJson.data ?? []) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        yield mutate
+          ? mutate(record)
+          : (record as WithTransactionId<RecordType>);
+      }
+      if (!respJson.cursor) {
+        break;
+      }
+      cursor = respJson.cursor;
+      iterations++;
+      if (iterations > MAX_BTQL_ITERATIONS) {
+        throw new Error("Too many BTQL iterations");
+      }
+    }
+  }
+
   async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
-    const records = await this.fetchedData();
-    for (const record of records) {
+    if (this._fetchedData !== undefined) {
+      for (const record of this._fetchedData) {
+        yield record;
+      }
+      return;
+    }
+
+    for await (const record of this.fetchRecordsFromApi()) {
       yield record;
     }
   }
@@ -4783,62 +4893,11 @@ class ObjectFetcher<RecordType>
 
   async fetchedData() {
     if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      let data: WithTransactionId<RecordType>[] | undefined = undefined;
-      let cursor = undefined;
-      let iterations = 0;
-      while (true) {
-        const resp = await state.apiConn().post(
-          `btql`,
-          {
-            query: {
-              ...this._internal_btql,
-              select: [
-                {
-                  op: "star",
-                },
-              ],
-              from: {
-                op: "function",
-                name: {
-                  op: "ident",
-                  name: [this.objectType],
-                },
-                args: [
-                  {
-                    op: "literal",
-                    value: await this.id,
-                  },
-                ],
-              },
-              cursor,
-              limit: INTERNAL_BTQL_LIMIT,
-            },
-            use_columnstore: false,
-            brainstore_realtime: true,
-            query_source: `js_sdk_object_fetcher_${this.objectType}`,
-            ...(this.pinnedVersion !== undefined
-              ? {
-                  version: this.pinnedVersion,
-                }
-              : {}),
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        const respJson = await resp.json();
-        data = (data ?? []).concat(respJson.data);
-        if (!respJson.cursor) {
-          break;
-        }
-        cursor = respJson.cursor;
-        iterations++;
-        if (iterations > MAX_BTQL_ITERATIONS) {
-          throw new Error("Too many BTQL iterations");
-        }
+      const data: WithTransactionId<RecordType>[] = [];
+      for await (const record of this.fetchRecordsFromApi()) {
+        data.push(record);
       }
-      this._fetchedData = this.mutateRecord
-        ? data?.map(this.mutateRecord)
-        : data;
+      this._fetchedData = data;
     }
     return this._fetchedData || [];
   }
@@ -4851,9 +4910,8 @@ class ObjectFetcher<RecordType>
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
-      const fetchedData = await this.fetchedData();
       let maxVersion: string | undefined = undefined;
-      for (const record of fetchedData) {
+      for await (const record of this.fetch()) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
         if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
