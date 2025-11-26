@@ -56,6 +56,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
     ):
         self.logger = logger
         self.spans: Dict[UUID, Span] = {}
+        self.root_span_context: Dict[UUID, Span] = {}
         self.debug = debug  # DEPRECATED
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
@@ -68,6 +69,17 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._start_times: Dict[UUID, float] = {}
         self._first_token_times: Dict[UUID, float] = {}
         self._ttft_ms: Dict[UUID, float] = {}
+
+        # Capture the current span context at construction time if no explicit
+        # logger is provided. This ensures correct context in concurrent scenarios
+        # when handlers are created inside eval tasks.
+        # Only capture if there's an actual active span (not NOOP_SPAN) to support
+        # handlers created at module level (e.g., with setGlobalHandler).
+        self.captured_context: Optional[Span] = None
+        if not self.logger:
+            current = current_span()
+            if current is not NOOP_SPAN:
+                self.captured_context = current
 
     def _start_span(
         self,
@@ -86,19 +98,35 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             _logger.warning(f"Span already exists for run_id {run_id} (this is likely a bug)")
             return
 
-        if not parent_run_id:
+        if not parent_run_id or parent_run_id == run_id:
             self.root_run_id = run_id
 
-        current_parent = current_span()
+            # Capture the current span context once per root run to avoid
+            # async context issues in concurrent scenarios
+            if run_id not in self.root_span_context:
+                if self.logger is not None:
+                    context_span = self.logger
+                elif self.captured_context is not None:
+                    context_span = self.captured_context
+                else:
+                    context_span = current_span()
+                self.root_span_context[run_id] = context_span
+
         parent_span = None
         if parent_run_id and parent_run_id in self.spans:
+            # Use the parent span from the spans map for child operations
             parent_span = self.spans[parent_run_id]
-        elif current_parent != NOOP_SPAN:
-            parent_span = current_parent
-        elif self.logger is not None:
-            parent_span = self.logger
         else:
-            parent_span = braintrust
+            # For root spans, use the captured context for this root run
+            # This avoids async context issues in concurrent scenarios
+            root_id = self.root_run_id or run_id
+            captured_context = self.root_span_context.get(root_id)
+
+            if captured_context is not None:
+                parent_span = captured_context
+            else:
+                # Fallback to braintrust module
+                parent_span = braintrust
 
         if event is None:
             event = {}
@@ -175,6 +203,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         if self.root_run_id == run_id:
             self.root_run_id = None
+
+        # Clean up root span context when root run ends
+        if run_id in self.root_span_context:
+            del self.root_span_context[run_id]
 
         span.log(
             input=input,
