@@ -3,7 +3,6 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 import slugify
-
 from braintrust.logger import api_conn, app_conn, login
 
 from .framework import _is_lazy_load, bcolors  # type: ignore

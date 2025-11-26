@@ -292,6 +292,7 @@
           "reasoning_effort": {
             "type": "string",
             "enum": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -803,9 +804,46 @@
           },
           {
             "$ref": "#/components/schemas/ChatCompletionContentPartImageWithTitle"
+          },
+          {
+            "$ref": "#/components/schemas/ChatCompletionContentPartFileWithTitle"
           }
         ],
         "title": "chat_completion_content_part"
+      },
+      "ChatCompletionContentPartFileFile": {
+        "type": "object",
+        "properties": {
+          "file_data": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "file_id": {
+            "type": "string",
+            "title": "The ID of an uploaded file to use as input."
+          }
+        }
+      },
+      "ChatCompletionContentPartFileWithTitle": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/ChatCompletionContentPartFileFile"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "type"
+        ],
+        "title": "file"
       },
       "ChatCompletionContentPartImageWithTitle": {
         "type": "object",
@@ -3638,6 +3676,7 @@
               "reasoning_effort": {
                 "type": "string",
                 "enum": [
+                  "none",
                   "minimal",
                   "low",
                   "medium",
@@ -6615,7 +6654,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "998df82d7471618f0c2e92a742c554b966e07055"
+    "x-internal-git-sha": "8e9c0a96b3cf291360978c17580f72f6817bd6c8"
   },
   "paths": {},
   "webhooks": {}
