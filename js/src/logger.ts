@@ -2398,10 +2398,16 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.numTries = numTriesEnv + 1;
     }
 
+    // BRAINTRUST_QUEUE_MAX_SIZE: General queue size limit (applies to both experiments and logging)
+    // BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE: Legacy name, same as BRAINTRUST_QUEUE_MAX_SIZE
+    const queueMaxSizeEnv = Number(iso.getEnv("BRAINTRUST_QUEUE_MAX_SIZE"));
     const queueDropExceedingMaxsizeEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE"),
     );
-    if (!isNaN(queueDropExceedingMaxsizeEnv)) {
+
+    if (!isNaN(queueMaxSizeEnv)) {
+      this.queueDropExceedingMaxsize = queueMaxSizeEnv;
+    } else if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
@@ -2974,9 +2980,10 @@ export function init<IsOpen extends boolean = false>(
 
   const state = stateArg ?? _globalState;
 
-  // Ensure unlimited queue for init() calls (experiments)
-  // Experiments should never drop data
-  state.enforceQueueSizeLimit(false);
+  // Enable queue size limits to prevent OOM in memory-constrained environments.
+  // For experiments with maxConcurrency set in Eval(), this provides backpressure by
+  // flushing logs after each task. For regular logging, logs will be dropped when full.
+  state.enforceQueueSizeLimit(true);
 
   if (open) {
     if (isEmpty(experiment)) {

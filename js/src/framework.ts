@@ -1199,7 +1199,14 @@ async function runEvaluatorInternal(
           state: evaluator.state,
         });
       } else {
-        return await experiment.traced(callback, baseEvent);
+        const result = await experiment.traced(callback, baseEvent);
+        // Flush logs after each task to provide backpressure and prevent memory accumulation
+        // when maxConcurrency is set. This ensures logs are sent before the next task starts,
+        // preventing unbounded memory growth with large log payloads.
+        if (evaluator.maxConcurrency !== undefined) {
+          await experiment.flush();
+        }
+        return result;
       }
     },
     Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
