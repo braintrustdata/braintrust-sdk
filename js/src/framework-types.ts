@@ -20,6 +20,7 @@ interface BaseFnOpts {
   slug: string;
   description: string;
   ifExists: IfExists;
+  metadata?: Record<string, unknown>;
 }
 
 export type ToolOpts<
