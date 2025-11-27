@@ -722,7 +722,7 @@ export const PromptDataNullish = z.union([
 ]);
 export type PromptDataNullishType = z.infer<typeof PromptDataNullish>;
 export const FunctionTypeEnumNullish = z.union([
-  z.enum(["llm", "scorer", "task", "tool", "custom_view"]),
+  z.enum(["llm", "scorer", "task", "tool", "custom_view", "preprocessor"]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -903,6 +903,7 @@ export const FunctionTypeEnum = z.enum([
   "task",
   "tool",
   "custom_view",
+  "preprocessor",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([

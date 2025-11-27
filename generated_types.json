@@ -2820,7 +2820,8 @@
           "scorer",
           "task",
           "tool",
-          "custom_view"
+          "custom_view",
+          "preprocessor"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2833,7 +2834,8 @@
           "scorer",
           "task",
           "tool",
-          "custom_view"
+          "custom_view",
+          "preprocessor"
         ]
       },
       "GitMetadataSettings": {
