@@ -16,12 +16,11 @@ help:
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
 	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests"
-	@echo "  make test-mastra        - Run Mastra wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -56,14 +55,6 @@ test-google-genai-latest:
 test-ai-sdk:
 	cd src/wrappers/ai-sdk && pnpm install && pnpm test
 
-
-# -------------------------------------------------------------------------------------------------
-# Mastra testing
-# -------------------------------------------------------------------------------------------------
-
-test-mastra:
-	cd src/wrappers/mastra && pnpm install && pnpm test
-
 # -------------------------------------------------------------------------------------------------
 # Claude Agent SDK testing
 # -------------------------------------------------------------------------------------------------
@@ -76,16 +67,22 @@ test-claude-agent-sdk:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel test-otel-installed
-
+# test-otel-installed tests with OpenTelemetry installed
 test-otel-installed:
 	pnpm prune
 	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
 	pnpm test:otel
 
-# test-otel only runs with dependencies installed
-# otel-no-deps.test.ts is part of core tests and handles both cases automatically
-test-otel: test-otel-installed
+# test-otel-missing tests with OpenTelemetry removed from all workspaces
+test-otel-missing:
+	pnpm prune
+	@echo "Manually removing OpenTelemetry from workspace..."
+	@ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo .); \
+	find $$ROOT -type d -path "*/node_modules/@opentelemetry*" -prune -exec rm -rf {} +
+	pnpm test:otel-no-deps
+	# restore workspace
+	pnpm install
+
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing

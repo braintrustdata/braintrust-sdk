@@ -4816,6 +4816,7 @@ class ObjectFetcher<RecordType>
             },
             use_columnstore: false,
             brainstore_realtime: true,
+            query_source: `js_sdk_object_fetcher_${this.objectType}`,
             ...(this.pinnedVersion !== undefined
               ? {
                   version: this.pinnedVersion,
@@ -6232,6 +6233,19 @@ export function renderMessage<T extends Message>(
                         image_url: {
                           ...c.image_url,
                           url: render(c.image_url.url),
+                        },
+                      };
+                    case "file":
+                      return {
+                        ...c,
+                        file: {
+                          file_data: render(c.file.file_data || ""),
+                          ...(c.file.file_id && {
+                            file_id: render(c.file.file_id),
+                          }),
+                          ...(c.file.filename && {
+                            filename: render(c.file.filename),
+                          }),
                         },
                       };
                     default:
