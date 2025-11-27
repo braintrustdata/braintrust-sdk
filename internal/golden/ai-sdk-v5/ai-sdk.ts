@@ -16,16 +16,7 @@ initLogger({
   projectName: "golden-ts-ai-sdk-v5",
 });
 
-const SHOULD_WRAP = (process.env.WRAP || "true") === "true";
-
-const {
-  generateText,
-  streamText,
-  Agent: Regular_Agent,
-  Experimental_Agent,
-} = SHOULD_WRAP ? wrapAISDK(ai) : ai;
-
-const Agent = Regular_Agent || Experimental_Agent;
+const { generateText, streamText, Experimental_Agent: Agent } = wrapAISDK(ai);
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
@@ -550,8 +541,8 @@ async function testToolUseWithResult() {
           tools: {
             calculate: calculateTool,
           },
-          prompt: "What is 127 multiplied by 49?",
-          maxToolRoundtrips: 2,
+          prompt: "What is 127 multiplied by 49? Use the calculate tool.",
+          stopWhen: ai.stepCountIs(2),
         });
 
         await new Agent({
@@ -560,8 +551,7 @@ async function testToolUseWithResult() {
             calculate: calculateTool,
           },
         }).generate({
-          prompt: "What is 127 multiplied by 49?",
-          maxToolRoundtrips: 2,
+          prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
         });
       }
     },

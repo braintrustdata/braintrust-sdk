@@ -52,8 +52,9 @@ interface WrapAISDKOptions {
  * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
-export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
-  return new Proxy(aiSDK, {
+export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy(aiSDK as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
@@ -72,7 +73,7 @@ export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
       }
       return original;
     },
-  });
+  }) as T;
 }
 
 const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
@@ -103,11 +104,17 @@ const wrapAgentGenerate = (
   instanceTarget: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async (params: any) => {
+  return async (callParams: any) => {
+    // follows what ai-sdk library does under the hood when it calls generateText
+    const params = { ...instanceTarget.settings, ...callParams };
+
     return traced(
       async (span) => {
         // Call original agent.generate() - let it handle all its logic
-        const result = await originalGenerate.call(instanceTarget, params);
+        const result = await originalGenerate.call(instanceTarget, {
+          ...params,
+          tools: wrapTools(params.tools),
+        });
 
         span.log({
           output: await processOutput(result, options.denyOutputPaths),
@@ -124,9 +131,7 @@ const wrapAgentGenerate = (
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: serializeModel(
-              instanceTarget.settings?.model || params?.model,
-            ),
+            model: serializeModel(params.model),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -143,7 +148,10 @@ const wrapAgentStream = (
   instanceTarget: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return (params: any) => {
+  return (callParams: any) => {
+    // follows what ai-sdk library does under the hood when it calls generateText
+    const params = { ...instanceTarget.settings, ...callParams };
+
     const span = startSpan({
       name: "Agent.stream",
       spanAttributes: {
@@ -152,9 +160,7 @@ const wrapAgentStream = (
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: serializeModel(
-            instanceTarget.settings?.model || params?.model,
-          ),
+          model: serializeModel(params?.model),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
