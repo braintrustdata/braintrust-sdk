@@ -6190,6 +6190,19 @@ export function renderMessage<T extends Message>(
                           url: render(c.image_url.url),
                         },
                       };
+                    case "file":
+                      return {
+                        ...c,
+                        file: {
+                          file_data: render(c.file.file_data || ""),
+                          ...(c.file.file_id && {
+                            file_id: render(c.file.file_id),
+                          }),
+                          ...(c.file.filename && {
+                            filename: render(c.file.filename),
+                          }),
+                        },
+                      };
                     default:
                       const _exhaustiveCheck: never = c;
                       return _exhaustiveCheck;

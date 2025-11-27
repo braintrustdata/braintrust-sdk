@@ -212,6 +212,17 @@ CallEvent = Union[
 ]
 
 
+class ChatCompletionContentPartFileFile(TypedDict):
+    file_data: NotRequired[Optional[str]]
+    filename: NotRequired[Optional[str]]
+    file_id: NotRequired[Optional[str]]
+
+
+class ChatCompletionContentPartFileWithTitle(TypedDict):
+    file: ChatCompletionContentPartFileFile
+    type: Literal['file']
+
+
 class ChatCompletionContentPartImageWithTitleImageUrl(TypedDict):
     url: str
     detail: NotRequired[Optional[Union[Literal['auto'], Literal['low'], Literal['high']]]]
@@ -342,7 +353,7 @@ class ChatCompletionTool(TypedDict):
 
 
 class CodeBundleRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -570,7 +581,7 @@ class Data(CodeBundle):
 
 
 class FunctionDataFunctionData1DataRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -649,7 +660,7 @@ class FunctionIdFunctionId3(TypedDict):
 
 
 class FunctionIdFunctionId4InlineContext(TypedDict):
-    runtime: Literal['node', 'python']
+    runtime: Literal['node', 'python', 'browser']
     version: str
 
 
@@ -668,16 +679,16 @@ class FunctionIdFunctionId4(TypedDict):
 FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent']
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view']
 
 
 FunctionOutputType = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool']
+FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
 
 
 class GitMetadataSettings(TypedDict):
@@ -1854,7 +1865,7 @@ class AnyModelParams(TypedDict):
     function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], AnyModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
     top_k: NotRequired[Optional[float]]
     stop_sequences: NotRequired[Optional[Sequence[str]]]
@@ -1894,7 +1905,11 @@ class AttachmentStatus(TypedDict):
     """
 
 
-ChatCompletionContentPart = Union[ChatCompletionContentPartTextWithTitle, ChatCompletionContentPartImageWithTitle]
+ChatCompletionContentPart = Union[
+    ChatCompletionContentPartTextWithTitle,
+    ChatCompletionContentPartImageWithTitle,
+    ChatCompletionContentPartFileWithTitle,
+]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam1(TypedDict):
@@ -1993,6 +2008,14 @@ class DatasetEvent(TypedDict):
     Whether this span is a root span
     """
     origin: NotRequired[Optional[ObjectReferenceNullish]]
+    comments: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of comments attached to this event
+    """
+    audit_data: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of audit entries attached to this event
+    """
 
 
 class Experiment(TypedDict):
@@ -2075,7 +2098,7 @@ class ModelParamsModelParams(TypedDict):
     function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], ModelParamsModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['minimal', 'low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
 
 
@@ -2327,6 +2350,14 @@ class ExperimentEvent(TypedDict):
     Whether this span is a root span
     """
     origin: NotRequired[Optional[ObjectReferenceNullish]]
+    comments: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of comments attached to this event
+    """
+    audit_data: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of audit entries attached to this event
+    """
 
 
 class GraphNodeGraphNode7(TypedDict):
@@ -2437,6 +2468,18 @@ class ProjectLogsEvent(TypedDict):
     """
     span_attributes: NotRequired[Optional[SpanAttributes]]
     origin: NotRequired[Optional[ObjectReferenceNullish]]
+    comments: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of comments attached to this event
+    """
+    audit_data: NotRequired[Optional[Sequence[Any]]]
+    """
+    Optional list of audit entries attached to this event
+    """
+    _async_scoring_state: NotRequired[Optional[Any]]
+    """
+    The async scoring state for this event
+    """
 
 
 class ProjectScore(TypedDict):
