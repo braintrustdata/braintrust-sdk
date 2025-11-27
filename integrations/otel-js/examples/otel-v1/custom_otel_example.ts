@@ -1,15 +1,34 @@
-// custom_otel_example.ts
-import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
-import { trace } from "@opentelemetry/api";
-import { BraintrustSpanProcessor } from "../src";
+// custom_otel_example.ts - OpenTelemetry v1.x example
+import {
+  BasicTracerProvider,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
+import { trace, context } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
 
-const provider = new BasicTracerProvider();
-provider.addSpanProcessor(
+// Manually set up context manager BEFORE initOtel() to test that initOtel()
+// properly detects and doesn't overwrite an existing context manager
+const contextManager = new AsyncLocalStorageContextManager();
+contextManager.enable();
+context.setGlobalContextManager(contextManager);
+
+// Initialize OpenTelemetry - this should detect the existing context manager
+// and not overwrite it
+initOtel();
+
+const provider = new BasicTracerProvider({
+  resource: new Resource({
+    "service.name": "custom-braintrust-service",
+  }),
+});
+(provider as any).addSpanProcessor(
   // Add Braintrust span processor with filtering enabled
   new BraintrustSpanProcessor({
-    parent: "project_name:otel_examples",
+    parent: "project_name:otel-v1-examples",
     filterAISpans: true,
-  }),
+  }) as unknown as SpanProcessor,
 );
 
 trace.setGlobalTracerProvider(provider); // sets the global tracer provider
@@ -29,7 +48,7 @@ async function makeRequest() {
     });
 
     // This span will be kept by the filter (gen_ai prefix)
-    tracer.startActiveSpan("gen_ai.chat.completions", async (aiSpan) => {
+    await tracer.startActiveSpan("gen_ai.chat.completions", async (aiSpan) => {
       aiSpan.setAttributes({
         "gen_ai.system": "openai",
         "gen_ai.operation.name": "chat.completions",
@@ -39,16 +58,19 @@ async function makeRequest() {
     });
 
     // This span will be kept by the filter (braintrust prefix)
-    tracer.startActiveSpan("braintrust.evaluation", async (braintrustSpan) => {
-      braintrustSpan.setAttributes({
-        "braintrust.dataset": "test-dataset",
-        "braintrust.experiment": "test-experiment",
-      });
-      braintrustSpan.end();
-    });
+    await tracer.startActiveSpan(
+      "braintrust.evaluation",
+      async (braintrustSpan) => {
+        braintrustSpan.setAttributes({
+          "braintrust.dataset": "test-dataset",
+          "braintrust.experiment": "test-experiment",
+        });
+        braintrustSpan.end();
+      },
+    );
 
     // This span will be filtered out (no matching prefix)
-    tracer.startActiveSpan("database.query", async (dbSpan) => {
+    await tracer.startActiveSpan("database.query", async (dbSpan) => {
       dbSpan.setAttributes({
         "db.system": "postgresql",
         "db.statement": "SELECT * FROM users",

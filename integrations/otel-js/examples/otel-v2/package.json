@@ -1,0 +1,28 @@
+{
+  "name": "braintrust-otel-v2-examples",
+  "version": "1.0.0",
+  "description": "Examples using BraintrustSpanProcessor with OpenTelemetry v2.x",
+  "main": "nodesdk_example.ts",
+  "scripts": {
+    "start": "npx tsx nodesdk_example.ts",
+    "example:nodesdk": "npx tsx nodesdk_example.ts",
+    "example:all": "npm run example:nodesdk"
+  },
+  "dependencies": {
+    "@braintrust/otel": "file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "^2.2.0",
+    "@opentelemetry/core": "2.0.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/otlp-exporter-base": "^0.200.0",
+    "@opentelemetry/resources": "2.0.0",
+    "@opentelemetry/sdk-node": "^0.200.0",
+    "@opentelemetry/sdk-trace-base": "2.0.0",
+    "braintrust": "file:../../../../js/artifacts/braintrust-0.5.0.tgz",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "typescript": "^5.9.3"
+  }
+}

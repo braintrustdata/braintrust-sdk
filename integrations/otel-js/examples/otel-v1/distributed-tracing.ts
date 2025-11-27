@@ -6,7 +6,11 @@
  */
 
 import * as api from "@opentelemetry/api";
-import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+import {
+  BasicTracerProvider,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { initLogger, login } from "braintrust";
 import {
@@ -15,7 +19,7 @@ import {
   parentFromHeaders,
   BraintrustSpanProcessor,
   initOtel,
-} from "../src";
+} from "@braintrust/otel";
 
 const { trace, context, propagation } = api;
 
@@ -23,8 +27,15 @@ initOtel();
 
 async function main() {
   // Setup OTEL
-  const provider = new BasicTracerProvider();
-  provider.addSpanProcessor(new BraintrustSpanProcessor());
+  const provider = new BasicTracerProvider({
+    resource: new Resource({
+      "service.name": "service-b",
+    }),
+  });
+  // Type assertion needed for OTel version compatibility
+  (provider as any).addSpanProcessor(
+    new BraintrustSpanProcessor() as unknown as SpanProcessor,
+  );
   trace.setGlobalTracerProvider(provider);
   const tracer = trace.getTracer("service-b");
 
@@ -34,7 +45,7 @@ async function main() {
   context.setGlobalContextManager(contextManager);
 
   await login();
-  const logger = initLogger({ projectName: "otel-demo" });
+  const logger = initLogger({ projectName: "otel-v1-examples" });
 
   // Service A (Braintrust) → Service B (OTEL) → Service C (Braintrust)
   let spanLink = "";
@@ -47,9 +58,19 @@ async function main() {
     await context.with(ctx, async () => {
       await tracer.startActiveSpan("service_b", async (spanB) => {
         // Export to Service C
-        const currentCtx = addSpanParentToBaggage(spanB);
+        // Add braintrust.parent to baggage for propagation
+        const currentCtx = context.active();
+        const updatedCtx = addSpanParentToBaggage(spanB, currentCtx);
+        if (!updatedCtx) {
+          console.warn(
+            "Warning: Could not add braintrust.parent to baggage. " +
+              "The span may not have the braintrust.parent attribute set.",
+          );
+        }
         const headers: Record<string, string> = {};
-        propagation.inject(currentCtx, headers);
+        // Use the updated context if available, otherwise fall back to current
+        const ctxToUse = (updatedCtx || currentCtx) as api.Context;
+        propagation.inject(ctxToUse, headers);
 
         // Service C (Braintrust)
         const parent = parentFromHeaders(headers);

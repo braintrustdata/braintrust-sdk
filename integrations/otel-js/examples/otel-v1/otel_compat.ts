@@ -15,7 +15,7 @@
 import { trace, context } from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { initLogger, login } from "braintrust";
-import { BraintrustSpanProcessor, initOtel } from "../src";
+import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
 
 initOtel();
 
@@ -57,7 +57,7 @@ async function main() {
   // Create Braintrust span processor to export to Braintrust
   const braintrustProcessor = new BraintrustSpanProcessor({
     apiKey: process.env.BRAINTRUST_API_KEY,
-    parent: "project_name:otel-compat-demo",
+    parent: "project_name:otel-v1-examples",
   });
 
   // Setup OpenTelemetry with Braintrust processor
@@ -72,7 +72,7 @@ async function main() {
 
   // Initialize Braintrust logger
   const logger = initLogger({
-    projectName: "otel-compat-demo",
+    projectName: "otel-v1-examples",
   });
 
   console.log("📊 Demo 1: BT root span with OTEL instrumentation inside\n");

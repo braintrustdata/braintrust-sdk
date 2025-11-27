@@ -10,7 +10,7 @@ export {
 import { OTELIDGenerator } from "./otel";
 import { SpanComponentsV4 } from "braintrust/util";
 
-export { BraintrustSpanProcessor } from "./otel";
+export { BraintrustSpanProcessor, BraintrustExporter } from "./otel";
 
 export const initOtel = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
