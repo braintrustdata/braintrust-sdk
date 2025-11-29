@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@ai-sdk/openai':
+    specifier: 2.0.53
+    version: 2.0.53(zod@3.25.76)
   '@braintrust/otel':
     specifier: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz
     version: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.2.0)(@opentelemetry/core@2.0.0)(@opentelemetry/exporter-trace-otlp-http@0.200.0)(@opentelemetry/sdk-trace-base@2.0.0)(braintrust@0.5.0)
@@ -32,12 +35,24 @@ dependencies:
   '@opentelemetry/sdk-trace-base':
     specifier: 2.0.0
     version: 2.0.0(@opentelemetry/api@1.9.0)
+  ai:
+    specifier: 5.0.76
+    version: 5.0.76(zod@3.25.76)
   braintrust:
     specifier: file:../../../../js/artifacts/braintrust-0.5.0.tgz
     version: file:../../../../js/artifacts/braintrust-0.5.0.tgz(zod@3.25.76)
+  openai:
+    specifier: ^5.23.2
+    version: 5.23.2(zod@3.25.76)
   tsx:
     specifier: ^4.20.6
     version: 4.20.6
+  zod:
+    specifier: ^3.25.76
+    version: 3.25.76
+  zod-to-json-schema:
+    specifier: ^3.25.0
+    version: 3.25.0(zod@3.25.76)
 
 devDependencies:
   '@types/node':
@@ -49,8 +64,50 @@ devDependencies:
 
 packages:
 
+  /@ai-sdk/gateway@2.0.0(zod@3.25.76):
+    resolution: {integrity: sha512-Gj0PuawK7NkZuyYgO/h5kDK/l6hFOjhLdTq3/Lli1FTl47iGmwhH1IZQpAL3Z09BeFYWakcwUmn02ovIm2wy9g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
+      '@vercel/oidc': 3.0.3
+      zod: 3.25.76
+    dev: false
+
+  /@ai-sdk/openai@2.0.53(zod@3.25.76):
+    resolution: {integrity: sha512-GIkR3+Fyif516ftXv+YPSPstnAHhcZxNoR2s8uSHhQ1yBT7I7aQYTVwpjAuYoT3GR+TeP50q7onj2/nDRbT2FQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
+      zod: 3.25.76
+    dev: false
+
+  /@ai-sdk/provider-utils@3.0.12(zod@3.25.76):
+    resolution: {integrity: sha512-ZtbdvYxdMoria+2SlNarEk6Hlgyf+zzcznlD55EAl+7VZvJaSg2sqPvwArY7L6TfDEDJsnCq0fdhBSkYo0Xqdg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 3.25.76
+    dev: false
+
   /@ai-sdk/provider@1.1.3:
     resolution: {integrity: sha512-qZMxYJ0qqX/RfnuIaab+zp8UAeJn/ygXXAffR5I4N0n1IrvA6qBsjc8hXLmBiMV2zoXlifkacF7sEFnYnjBcqg==}
+    engines: {node: '>=18'}
+    dependencies:
+      json-schema: 0.4.0
+    dev: false
+
+  /@ai-sdk/provider@2.0.0:
+    resolution: {integrity: sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==}
     engines: {node: '>=18'}
     dependencies:
       json-schema: 0.4.0
@@ -744,6 +801,10 @@ packages:
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
     dev: false
 
+  /@standard-schema/spec@1.0.0:
+    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
+    dev: false
+
   /@types/node@20.19.25:
     resolution: {integrity: sha512-ZsJzA5thDQMSQO788d7IocwwQbI8B5OPzmqNvpf3NY/+MHDAS759Wo0gd2WQeXYt5AAAQjzcrTVC6SKCuYgoCQ==}
     dependencies:
@@ -761,6 +822,11 @@ packages:
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-web-identity':
         optional: true
+    dev: false
+
+  /@vercel/oidc@3.0.3:
+    resolution: {integrity: sha512-yNEQvPcVrK9sIe637+I0jD6leluPxzwJKx/Haw6F4H77CdDsszUn5V3o96LPziXkSNE2B83+Z3mjqGKBK/R6Gg==}
+    engines: {node: '>= 20'}
     dev: false
 
   /accepts@1.3.8:
@@ -783,6 +849,19 @@ packages:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+    dev: false
+
+  /ai@5.0.76(zod@3.25.76):
+    resolution: {integrity: sha512-ZCxi1vrpyCUnDbtYrO/W8GLvyacV9689f00yshTIQ3mFFphbD7eIv40a2AOZBv3GGRA7SSRYIDnr56wcS/gyQg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+    dependencies:
+      '@ai-sdk/gateway': 2.0.0(zod@3.25.76)
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
+      '@opentelemetry/api': 1.9.0
+      zod: 3.25.76
     dev: false
 
   /ansi-regex@5.0.1:
@@ -1057,6 +1136,11 @@ packages:
   /eventsource-parser@1.1.2:
     resolution: {integrity: sha512-v0eOBUbiaFojBu2s2NPBfYUoRR9GjcDNvCXVaqEf5vVfpIAh9f8RCo4vXTP8c63QRKCFwoLpMpTdPwwhEKVgzA==}
     engines: {node: '>=14.18'}
+    dev: false
+
+  /eventsource-parser@3.0.6:
+    resolution: {integrity: sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==}
+    engines: {node: '>=18.0.0'}
     dev: false
 
   /express@4.21.2:
@@ -1348,6 +1432,21 @@ packages:
     engines: {node: '>= 0.8'}
     dependencies:
       ee-first: 1.1.1
+    dev: false
+
+  /openai@5.23.2(zod@3.25.76):
+    resolution: {integrity: sha512-MQBzmTulj+MM5O8SKEk/gL8a7s5mktS9zUtAkU257WjvobGc9nKcBuVwjyEEcb9SI8a8Y2G/mzn3vm9n1Jlleg==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+    dependencies:
+      zod: 3.25.76
     dev: false
 
   /parseurl@1.3.3:

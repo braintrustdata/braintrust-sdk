@@ -6,9 +6,12 @@
   "scripts": {
     "start": "npx tsx nodesdk_example.ts",
     "example:nodesdk": "npx tsx nodesdk_example.ts",
-    "example:all": "npm run example:nodesdk"
+    "example:custom": "npx tsx custom_otel_example.ts",
+    "example:distributed": "npx tsx distributed-tracing.ts",
+    "example:all": "pnpm run example:nodesdk && pnpm run example:custom && pnpm run example:distributed"
   },
   "dependencies": {
+    "@ai-sdk/openai": "2.0.53",
     "@braintrust/otel": "file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/context-async-hooks": "^2.2.0",
@@ -18,8 +21,12 @@
     "@opentelemetry/resources": "2.0.0",
     "@opentelemetry/sdk-node": "^0.200.0",
     "@opentelemetry/sdk-trace-base": "2.0.0",
+    "ai": "5.0.76",
     "braintrust": "file:../../../../js/artifacts/braintrust-0.5.0.tgz",
-    "tsx": "^4.20.6"
+    "openai": "^5.23.2",
+    "tsx": "^4.20.6",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.25",

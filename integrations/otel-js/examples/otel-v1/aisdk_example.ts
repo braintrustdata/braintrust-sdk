@@ -8,7 +8,7 @@ import { BraintrustSpanProcessor } from "@braintrust/otel";
 
 const sdk = new NodeSDK({
   spanProcessor: new BraintrustSpanProcessor({
-    parent: "project_name:ai sdk test",
+    parent: "project_name:otel-v1-examples",
     filterAISpans: true,
   }),
 });

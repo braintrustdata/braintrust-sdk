@@ -13,19 +13,9 @@ import { BraintrustSpanProcessor } from "@braintrust/otel";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
-// Validate API key before creating processor
-const apiKey = process.env.BRAINTRUST_API_KEY;
-if (!apiKey) {
-  throw new Error(
-    "BRAINTRUST_API_KEY environment variable is required. " +
-      "Set it with: export BRAINTRUST_API_KEY='your-api-key'",
-  );
-}
-
 const sdk = new NodeSDK({
   serviceName: "vercel-ai-sdk-example",
   spanProcessor: new BraintrustSpanProcessor({
-    apiKey: apiKey, // Explicitly pass API key
     parent: "project_name:otel-v1-examples",
     filterAISpans: true,
   }) as unknown as SpanProcessor,
