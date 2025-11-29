@@ -88,8 +88,14 @@ jobs:
           pnpm run build
 
           # Pack the otel package
-          PACKED_OTEL_TARBALL=$(pnpm pack --pack-destination ../../js/artifacts)
+          PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: List artifacts before upload
+        run: |
+          echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
+          echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
+          ls -la js/artifacts/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
