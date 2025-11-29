@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     env:
@@ -142,10 +142,6 @@ jobs:
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: List downloaded artifacts
-        run: |
-          ls -la js/artifacts/
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
