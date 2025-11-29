@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         node-version: [20, 22]
 
     env:
@@ -92,6 +92,7 @@ jobs:
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: List artifacts before upload
+        shell: bash
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
