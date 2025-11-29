@@ -55,7 +55,8 @@ jobs:
         working-directory: js
         shell: bash
         run: |
-          PACKED_TARBALL=$(npm pack --pack-destination dist)
+          mkdir -p artifacts
+          PACKED_TARBALL=$(npm pack --pack-destination artifacts)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Build and pack @braintrust/otel
@@ -63,7 +64,7 @@ jobs:
         shell: bash
         run: |
           # Install the built braintrust package in otel-js to satisfy peer dependency
-          BRAINTRUST_TARBALL=$(ls js/dist/braintrust-*.tgz | head -n 1)
+          BRAINTRUST_TARBALL=$(ls js/artifacts/braintrust-*.tgz | head -n 1)
           if [ -z "$BRAINTRUST_TARBALL" ]; then
             echo "Error: braintrust tarball not found"
             exit 1
@@ -87,7 +88,7 @@ jobs:
           pnpm run build
 
           # Pack the otel package
-          PACKED_OTEL_TARBALL=$(pnpm pack --pack-destination ../../js/dist)
+          PACKED_OTEL_TARBALL=$(pnpm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
@@ -95,8 +96,8 @@ jobs:
         with:
           name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
           path: |
-            js/dist/${{ steps.prepare_artifact.outputs.packed_tarball }}
-            js/dist/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
+            js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
+            js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
           retention-days: 1
 
   smoke-tests-node:
@@ -134,6 +135,10 @@ jobs:
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List downloaded artifacts
+        run: |
+          ls -la js/artifacts/
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
