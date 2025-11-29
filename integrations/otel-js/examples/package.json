@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Examples for @braintrust/otel with OpenTelemetry v1.x and v2.x",
   "scripts": {
-    "v1:all": "cd otel-v1 && npm install && npm run example:all",
-    "v2:all": "cd otel-v2 && npm install && npm run example:all",
-    "install:v1": "cd otel-v1 && npm install",
-    "install:v2": "cd otel-v2 && npm install",
-    "install:all": "npm run install:v1 && npm run install:v2"
+    "v1:all": "cd otel-v1 && pnpm install && pnpm run example:all",
+    "v2:all": "cd otel-v2 && pnpm install && pnpm run example:all",
+    "install:v1": "cd otel-v1 && pnpm install",
+    "install:v2": "cd otel-v2 && pnpm install",
+    "install:all": "pnpm run install:v1 && pnpm run install:v2"
   }
 }

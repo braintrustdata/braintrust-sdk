@@ -1,9 +1,7 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { trace, context } from "@opentelemetry/api";
 import * as ai from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
-import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { BraintrustSpanProcessor } from "@braintrust/otel";
 
 const sdk = new NodeSDK({
@@ -42,11 +40,6 @@ const viewTrackingInformationTool = {
 };
 
 async function main() {
-  // const provider = new BasicTracerProvider();
-  // provider.addSpanProcessor(new BraintrustSpanProcessor());
-  // provider.register();
-  //trace.setGlobalTracerProvider(provider);
-  const tracer = trace.getTracer("ai");
   const result = await ai.generateText({
     model: openai("gpt-5-mini"),
     messages: [
@@ -61,9 +54,8 @@ async function main() {
     },
     experimental_telemetry: {
       isEnabled: true,
-      //functionId: "my-awesome-function",
-      //metadata: { something: "custom", someOtherThing: "other-value" },
-      //tracer: tracer,
+      functionId: "my-awesome-function",
+      metadata: { something: "custom", someOtherThing: "other-value" },
     },
     stopWhen: ai.stepCountIs(10),
   });

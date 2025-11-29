@@ -17,6 +17,7 @@ import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { initLogger, login } from "braintrust";
 import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
 
+// Initialize Braintrust OpenTelemetry
 initOtel();
 
 function getExportVersion(exportedSpan: string): number {

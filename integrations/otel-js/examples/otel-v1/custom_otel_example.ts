@@ -1,4 +1,6 @@
-// custom_otel_example.ts - OpenTelemetry v1.x example
+/**
+ * This example demonstrates how to use BraintrustSpanProcessor with OpenTelemetry v1.x when filtering AI spans.
+ */
 import {
   BasicTracerProvider,
   type SpanProcessor,
@@ -8,14 +10,11 @@ import { trace, context } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
 
-// Manually set up context manager BEFORE initOtel() to test that initOtel()
-// properly detects and doesn't overwrite an existing context manager
 const contextManager = new AsyncLocalStorageContextManager();
 contextManager.enable();
 context.setGlobalContextManager(contextManager);
 
-// Initialize OpenTelemetry - this should detect the existing context manager
-// and not overwrite it
+// Initialize Braintrust OpenTelemetry
 initOtel();
 
 const provider = new BasicTracerProvider({
