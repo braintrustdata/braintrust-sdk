@@ -5,10 +5,10 @@
   "main": "simple_span_example.ts",
   "scripts": {
     "start": "tsx simple_span_example.ts",
-    "backup": "tsx ../../backup-and-restore.ts backup",
-    "restore": "tsx ../../backup-and-restore.ts restore",
-    "enable-esm": "tsx ../../enable-esm.ts",
-    "install-build": "tsx ../../install-build.ts ../../../artifacts"
+    "backup": "npx tsx ../../backup-and-restore.ts backup",
+    "restore": "npx tsx ../../backup-and-restore.ts restore",
+    "enable-esm": "npx tsx ../../enable-esm.ts",
+    "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
     "braintrust": "latest"

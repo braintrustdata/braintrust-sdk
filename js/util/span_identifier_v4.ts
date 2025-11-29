@@ -5,7 +5,6 @@ import {
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3EnumSchema,
-  spanObjectTypeV3ToString,
 } from "./span_identifier_v3";
 import {
   ParentExperimentIds,

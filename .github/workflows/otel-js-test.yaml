@@ -1,0 +1,42 @@
+name: otel-js
+
+on:
+  pull_request:
+    paths:
+      - "integrations/otel-js/**"
+      - "js/**"
+      - ".github/workflows/otel-js-test.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/otel-js/**"
+      - "js/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+        test-dir: [otel-v1, otel-v2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for ${{ matrix.test-dir }}
+        shell: bash
+        run: |
+          docker build -f integrations/otel-js/Dockerfile.test \
+            --build-arg NODE_VERSION=${{ matrix.node-version }} \
+            --build-arg TEST_DIR=${{ matrix.test-dir }} \
+            -t otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }} .
+
+      - name: Run tests for ${{ matrix.test-dir }}
+        shell: bash
+        run: |
+          docker run --rm otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }}

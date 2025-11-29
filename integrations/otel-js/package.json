@@ -1,0 +1,57 @@
+{
+  "name": "@braintrust/otel",
+  "version": "0.1.0",
+  "description": "SDK for integrating Braintrust with OpenTelemetry",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -r dist/*",
+    "test": "pnpm test:v1 && pnpm test:v2",
+    "test:v1": "cd otel-v1 && pnpm test",
+    "test:v2": "cd otel-v2 && pnpm test"
+  },
+  "author": "Braintrust Data Inc.",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "braintrust": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "5.5.4"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": ">=1.9.0",
+    "@opentelemetry/core": ">=1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": ">=0.35.0",
+    "@opentelemetry/sdk-trace-base": ">=1.9.0",
+    "braintrust": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "braintrust": {
+      "optional": false
+    },
+    "@opentelemetry/api": {
+      "optional": false
+    },
+    "@opentelemetry/exporter-trace-otlp-http": {
+      "optional": false
+    },
+    "@opentelemetry/sdk-trace-base": {
+      "optional": false
+    },
+    "@opentelemetry/core": {
+      "optional": false
+    }
+  }
+}
