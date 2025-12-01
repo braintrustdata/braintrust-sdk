@@ -466,22 +466,6 @@ export type SpanContext = {
   NOOP_SPAN: typeof NOOP_SPAN;
 };
 
-function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
-  );
-}
-
-function isIterable<T>(value: unknown): value is Iterable<T> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Iterable<T>)[Symbol.iterator] === "function"
-  );
-}
-
 declare global {
   // eslint-disable-next-line no-var
   var _evals: EvaluatorFile;
@@ -535,33 +519,6 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    * The parameters to use for the evaluator.
    */
   parameters?: InferParameters<Parameters>;
-  /**
-   * Whether to retain the per-example Eval results and return them from Eval().
-   *
-   * When `true` (default): All evaluation results are collected in memory and returned,
-   * allowing inspection of individual test case inputs, outputs, scores, and metadata.
-   * This is convenient for interactive analysis but can consume significant memory for
-   * large datasets (e.g., millions of examples).
-   *
-   * When `false`: Individual results are not retained in memory. Only aggregate score
-   * statistics are computed incrementally. The returned `results` array will be empty,
-   * but the `summary` will still contain accurate score aggregates. This is suitable for:
-   * - Large-scale evaluations (millions of examples)
-   * - Memory-constrained environments
-   * - Scenarios where only aggregate metrics are needed
-   *
-   * Note: When `false`, you cannot access individual test case results after evaluation.
-   * If you need to inspect specific failures or outputs, keep this as `true`.
-   *
-   * Defaults to `true` for backwards compatibility.
-   *
-   * @example
-   * // Memory-efficient evaluation of a large dataset
-   * await Eval("large-eval", evaluator, {
-   *   returnResults: false  // Only keep aggregate scores
-   * });
-   */
-  returnResults?: boolean;
 }
 
 export function _initializeSpanContext() {
@@ -630,7 +587,6 @@ export async function Eval<
   }
 
   const progressReporter = options.progress ?? new BarProgressReporter();
-  const shouldCollectResults = options.returnResults ?? true;
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -700,7 +656,6 @@ export async function Eval<
               [],
               options.stream,
               options.parameters,
-              shouldCollectResults,
             ),
           evaluator.state,
         );
@@ -712,7 +667,6 @@ export async function Eval<
           [],
           options.stream,
           options.parameters,
-          shouldCollectResults,
         );
       }
       progressReporter.stop();
@@ -826,7 +780,6 @@ export async function runEvaluator(
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters?: InferParameters<EvalParameters>,
-  collectResults = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
@@ -836,7 +789,6 @@ export async function runEvaluator(
     filters,
     stream,
     parameters,
-    collectResults,
   );
 }
 
@@ -858,7 +810,6 @@ async function runEvaluatorInternal(
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters: InferParameters<EvalParameters> | undefined,
-  collectResults: boolean,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
@@ -897,34 +848,43 @@ async function runEvaluatorInternal(
     }).asDataset();
   }
 
-  const resolvedDataResult =
-    dataResult instanceof Promise ? await dataResult : dataResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: EvalCase<any, any, any>[] = [];
+  if (dataResult instanceof Promise) {
+    data = await dataResult;
+  } else if (Symbol.asyncIterator in dataResult) {
+    // TODO: Eventually, we may want to support pushing the async generator logic
+    // down into the evaluator, so we can avoid materializing large datasets
+    data = [];
+    for await (const d of dataResult) {
+      data.push(d);
+    }
+  } else {
+    data = dataResult;
+  }
 
-  const dataIterable: AsyncIterable<EvalCase<any, any, any>> = (() => {
-    if (isAsyncIterable<EvalCase<any, any, any>>(resolvedDataResult)) {
-      return resolvedDataResult;
-    }
-    if (
-      Array.isArray(resolvedDataResult) ||
-      isIterable<EvalCase<any, any, any>>(resolvedDataResult)
-    ) {
-      const iterable = resolvedDataResult as Iterable<EvalCase<any, any, any>>;
-      return (async function* () {
-        for (const datum of iterable) {
-          yield datum;
-        }
-      })();
-    }
-    throw new Error(
-      "Evaluator data must be an array, iterable, or async iterable",
+  const dataWithTrials = data
+    .filter((d) => filters.every((f) => evaluateFilter(d, f)))
+    .flatMap((datum) =>
+      [...Array(evaluator.trialCount ?? 1).keys()].map((trialIndex) => ({
+        datum,
+        trialIndex,
+      })),
     );
-  })();
 
-  progressReporter.start(evaluator.evalName, 0);
-  const collectedResults: EvalResult<any, any, any, any>[] = [];
-  const localScoreAccumulator: ScoreAccumulator | null = experiment ? null : {};
-  let cancelled = false;
-  let scheduledTrials = 0;
+  progressReporter.start(evaluator.evalName, dataWithTrials.length);
+  interface EvalResult {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    input: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    output: any;
+    tags?: string[];
+    metadata: Record<string, unknown>;
+    scores: Record<string, number | null>;
+    error: unknown;
+    origin?: ObjectReference;
+  }
+  const results: EvalResult[] = [];
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async ({
@@ -1162,33 +1122,25 @@ async function runEvaluatorInternal(
           progressReporter.increment(evaluator.evalName);
         }
 
-        const mergedScores = {
-          ...(evaluator.errorScoreHandler && unhandledScores
-            ? evaluator.errorScoreHandler({
-                rootSpan,
-                data: datum,
-                unhandledScores,
-              })
-            : undefined),
-          ...scores,
-        } as Record<string, number | null>;
-
-        if (localScoreAccumulator) {
-          accumulateScores(localScoreAccumulator, mergedScores);
-        }
-
-        if (collectResults) {
-          collectedResults.push({
-            input: datum.input,
-            ...("expected" in datum ? { expected: datum.expected } : {}),
-            output,
-            tags: tags.length ? tags : undefined,
-            metadata,
-            scores: mergedScores,
-            error,
-            origin: baseEvent.event?.origin,
-          });
-        }
+        results.push({
+          input: datum.input,
+          ...("expected" in datum ? { expected: datum.expected } : {}),
+          output,
+          tags: tags.length ? tags : undefined,
+          metadata,
+          scores: {
+            ...(evaluator.errorScoreHandler && unhandledScores
+              ? evaluator.errorScoreHandler({
+                  rootSpan,
+                  data: datum,
+                  unhandledScores,
+                })
+              : undefined),
+            ...scores,
+          },
+          error,
+          origin: baseEvent.event?.origin,
+        });
       };
 
       if (!experiment) {
@@ -1199,119 +1151,45 @@ async function runEvaluatorInternal(
           state: evaluator.state,
         });
       } else {
-        const result = await experiment.traced(callback, baseEvent);
-        // Flush logs after each task to provide backpressure and prevent memory accumulation
-        // when maxConcurrency is set. This ensures logs are sent before the next task starts,
-        // preventing unbounded memory growth with large log payloads.
-        if (evaluator.maxConcurrency !== undefined) {
-          await experiment.flush();
-        }
-        return result;
+        return await experiment.traced(callback, baseEvent);
       }
     },
-    Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
+    Math.max(evaluator.maxConcurrency ?? dataWithTrials.length, 1),
   );
-
-  const enqueuePromise = (async () => {
-    for await (const datum of dataIterable) {
-      if (cancelled) {
-        break;
-      }
-      if (!filters.every((f) => evaluateFilter(datum, f))) {
-        continue;
-      }
-      const trialCount = evaluator.trialCount ?? 1;
-      for (let trialIndex = 0; trialIndex < trialCount; trialIndex++) {
-        if (cancelled) {
-          break;
-        }
-        scheduledTrials++;
-        progressReporter.setTotal?.(evaluator.evalName, scheduledTrials);
-        q.push({ datum, trialIndex });
-      }
-    }
-  })();
+  q.push(dataWithTrials);
 
   const cancel = async () => {
-    await new Promise<never>((_, reject) => {
-      // If already cancelled, reject immediately
-      if (cancelled) {
-        reject(new InternalAbortError("Evaluator already cancelled"));
-        return;
-      }
-
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      let abortHandler: (() => void) | undefined;
-
-      const rejectOnce = (error: InternalAbortError) => {
-        if (cancelled) {
-          return;
-        }
-        cancelled = true;
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-        if (abortHandler && evaluator.signal) {
-          evaluator.signal.removeEventListener("abort", abortHandler);
-        }
-        reject(error);
-      };
-
+    await new Promise((_, reject) => {
       if (evaluator.timeout) {
-        timeoutId = setTimeout(() => {
-          rejectOnce(new InternalAbortError("Evaluator timed out"));
+        setTimeout(() => {
+          reject(new InternalAbortError("Evaluator timed out"));
         }, evaluator.timeout);
       }
       if (evaluator.signal) {
-        abortHandler = () => {
-          rejectOnce(new InternalAbortError("Evaluator aborted"));
-        };
-        evaluator.signal.addEventListener("abort", abortHandler);
+        evaluator.signal.addEventListener("abort", () => {
+          reject(new InternalAbortError("Evaluator aborted"));
+        });
       }
     });
   };
 
-  const waitForQueue = (async () => {
-    await enqueuePromise;
-    await q.drain();
-  })();
-
   // wait for tasks to be completed or the evaluator to be cancelled
   // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
   try {
-    await Promise.race([waitForQueue, cancel()]);
+    await Promise.race([q.drain(), cancel()]);
   } catch (e) {
-    // Always kill the queue to prevent hanging tasks and memory leaks
-    q.kill();
-
     if (e instanceof InternalAbortError) {
-      // Log cancellation for debugging
-      if (process.env.BRAINTRUST_VERBOSE) {
-        console.warn("Evaluator cancelled:", (e as Error).message);
-      }
+      q.kill();
     }
 
     throw e;
-  } finally {
-    // Ensure results are cleared if not collecting to free memory
-    if (!collectResults) {
-      collectedResults.length = 0;
-    }
   }
 
   const summary = experiment
     ? await experiment.summarize({ summarizeScores: evaluator.summarizeScores })
-    : buildLocalSummary(
-        evaluator,
-        collectResults ? collectedResults : [],
-        localScoreAccumulator ?? undefined,
-      );
+    : buildLocalSummary(evaluator, results);
 
-  return new EvalResultWithSummary(
-    summary,
-    collectResults ? collectedResults : [],
-  );
+  return new EvalResultWithSummary(summary, results);
 }
 
 export const error = chalk.bold.red;
@@ -1325,45 +1203,22 @@ export function logError(e: unknown, verbose: boolean) {
   }
 }
 
-type ScoreAccumulator = {
-  [name: string]: { total: number; count: number };
-};
-
-function accumulateScores(
-  accumulator: ScoreAccumulator,
-  scores: Record<string, number | null>,
-) {
-  for (const [name, score] of Object.entries(scores)) {
-    if (score === null || score === undefined) {
-      continue;
-    }
-    const existing = accumulator[name] ?? { total: 0, count: 0 };
-    accumulator[name] = {
-      total: existing.total + score,
-      count: existing.count + 1,
-    };
-  }
-}
-
-function ensureScoreAccumulator(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  results: EvalResult<any, any, any, any>[],
-) {
-  const accumulator: ScoreAccumulator = {};
-  for (const result of results) {
-    accumulateScores(accumulator, result.scores);
-  }
-  return accumulator;
-}
-
 export function buildLocalSummary(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
-  precomputedScores?: ScoreAccumulator,
 ): ExperimentSummary {
-  const scoresByName = precomputedScores ?? ensureScoreAccumulator(results);
+  const scoresByName: { [name: string]: { total: number; count: number } } = {};
+  for (const result of results) {
+    for (const [name, score] of Object.entries(result.scores)) {
+      const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+      if (score === null) {
+        continue;
+      }
+      scoresByName[name] = { total: total + score, count: count + 1 };
+    }
+  }
 
   return {
     projectName: evaluator.projectName,
@@ -1373,7 +1228,7 @@ export function buildLocalSummary(
         name,
         {
           name,
-          score: count === 0 ? 0 : total / count,
+          score: total / count,
           improvements: 0,
           regressions: 0,
         },
