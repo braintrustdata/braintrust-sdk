@@ -459,22 +459,24 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update({
-            k: v
-            for (k, v) in other.__dict__.items()
-            if k
-            not in (
-                "current_experiment",
-                "current_logger",
-                "current_parent",
-                "current_span",
-                "_global_bg_logger",
-                "_override_bg_logger",
-                "_context_manager",
-                "_last_otel_setting",
-                "_context_manager_lock",
-            )
-        })
+        self.__dict__.update(
+            {
+                k: v
+                for (k, v) in other.__dict__.items()
+                if k
+                not in (
+                    "current_experiment",
+                    "current_logger",
+                    "current_parent",
+                    "current_span",
+                    "_global_bg_logger",
+                    "_override_bg_logger",
+                    "_context_manager",
+                    "_last_otel_setting",
+                    "_context_manager_lock",
+                )
+            }
+        )
 
     def login(
         self,
@@ -750,7 +752,7 @@ def construct_logs3_data(items: Sequence[str]):
 def _check_json_serializable(event):
     try:
         return bt_dumps(event)
-    except TypeError as e:
+    except (TypeError, ValueError) as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
@@ -2439,19 +2441,46 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     Creates a deep copy of the given event. Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
     and `ExternalAttachment` objects, which are preserved and not deep-copied.
-    """
 
-    def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Mapping):
-            # Prevent dict keys from holding references to user data. Note that
-            # `bt_json` already coerces keys to string, a behavior that comes from
-            # `json.dumps`. However, that runs at log upload time, while we want to
-            # cut out all the references to user objects synchronously in this
-            # function.
-            return {str(k): _deep_copy_object(v[k]) for k in v}
-        elif isinstance(v, (List, Tuple, Set)):
-            return [_deep_copy_object(x) for x in v]
-        elif isinstance(v, Span):
+    Handles circular references and excessive nesting depth to prevent
+    RecursionError during serialization.
+    """
+    # Maximum depth to prevent hitting Python's recursion limit
+    # Python's default limit is ~1000, we use a conservative limit
+    # to account for existing call stack usage from pytest, application code, etc.
+    MAX_DEPTH = 200
+
+    # Track visited objects to detect circular references
+    visited: set[int] = set()
+
+    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
+        # Check depth limit - use >= to stop before exceeding
+        if depth >= MAX_DEPTH:
+            return "<max depth exceeded>"
+
+        # Check for circular references in mutable containers
+        # Use id() to track object identity
+        if isinstance(v, (Mapping, List, Tuple, Set)):
+            obj_id = id(v)
+            if obj_id in visited:
+                return "<circular reference>"
+            visited.add(obj_id)
+            try:
+                if isinstance(v, Mapping):
+                    # Prevent dict keys from holding references to user data. Note that
+                    # `bt_json` already coerces keys to string, a behavior that comes from
+                    # `json.dumps`. However, that runs at log upload time, while we want to
+                    # cut out all the references to user objects synchronously in this
+                    # function.
+                    return {str(k): _deep_copy_object(v[k], depth + 1) for k in v}
+                elif isinstance(v, (List, Tuple, Set)):
+                    return [_deep_copy_object(x, depth + 1) for x in v]
+            finally:
+                # Remove from visited set after processing to allow the same object
+                # to appear in different branches of the tree
+                visited.discard(obj_id)
+
+        if isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
             return "<experiment>"
@@ -3278,17 +3307,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3896,8 +3925,8 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        _check_json_serializable(partial_record)
         serializable_partial_record = _deep_copy_event(partial_record)
+        _check_json_serializable(serializable_partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
@@ -4453,10 +4482,24 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
+                elif c["type"] == "file":
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
