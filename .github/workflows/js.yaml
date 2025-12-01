@@ -169,8 +169,6 @@ jobs:
           npm run enable-esm
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
-        # TODO: Remove continue-on-error once Otel is a separate package
-        continue-on-error: ${{ matrix.integration == 'otel-v1' }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
         env:
