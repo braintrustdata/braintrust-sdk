@@ -131,6 +131,11 @@ export class Trace {
     return [];
   }
 
+  /**
+   * Fetch the thread of messages for this trace.
+   *
+   * @experimental This method is experimental and may change in the future.
+   */
   async getThread() {
     const spans = await this.getSpans({ spanType: ["llm"] });
     const hashCache = new Map<string, string>();
