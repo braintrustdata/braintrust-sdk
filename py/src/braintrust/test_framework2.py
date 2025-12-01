@@ -1,11 +1,17 @@
 """Tests for framework2 module, specifically metadata support."""
 
+import importlib.util
 from unittest.mock import MagicMock
+
+import pytest
 
 from .framework2 import (
     ProjectIdCache,
     projects,
 )
+
+# Check if pydantic is available
+HAS_PYDANTIC = importlib.util.find_spec("pydantic") is not None
 
 
 class TestCodeFunctionMetadata:
@@ -112,6 +118,7 @@ class TestCodePromptMetadata:
 class TestScorerMetadata:
     """Tests for Scorer metadata support."""
 
+    @pytest.mark.skipif(not HAS_PYDANTIC, reason="pydantic not installed")
     def test_code_scorer_with_metadata(self):
         """Test that code scorer stores metadata correctly."""
         from pydantic import BaseModel
@@ -154,6 +161,7 @@ class TestScorerMetadata:
         assert scorer.name == "llm-scorer"
 
 
+@pytest.mark.skipif(not HAS_PYDANTIC, reason="pydantic not installed")
 class TestPushMetadata:
     """Tests for metadata in push command serialization."""
 
