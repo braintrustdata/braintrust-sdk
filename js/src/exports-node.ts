@@ -22,7 +22,7 @@ export {
   ReporterBody,
   Reporter,
   SpanContext,
-  ScorerContext,
+  Trace,
   buildLocalSummary,
   reportFailures,
   runEvaluator,

@@ -9,7 +9,7 @@ const sleep = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
-export interface ScorerContextOptions {
+export interface TraceOptions {
   experimentId?: string;
   logsId?: string;
   rootSpanId: string;
@@ -37,7 +37,7 @@ const getMessageHash = (
  * richer logging or side effects. Additional behavior will be layered on top
  * of this skeleton class later.
  */
-export class ScorerContext {
+export class Trace {
   // Store values privately so future helper methods can expose them safely.
   private readonly experimentId?: string;
   private readonly logsId?: string;
@@ -51,7 +51,7 @@ export class ScorerContext {
     logsId,
     rootSpanId,
     ensureSpansFlushed,
-  }: ScorerContextOptions) {
+  }: TraceOptions) {
     this.experimentId = experimentId;
     this.logsId = logsId;
     this.rootSpanId = rootSpanId;

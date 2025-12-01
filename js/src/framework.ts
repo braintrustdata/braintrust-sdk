@@ -15,8 +15,8 @@ import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
-import { ScorerContext } from "./scorer-context";
-export { ScorerContext } from "./scorer-context";
+import { Trace } from "./trace";
+export { Trace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
@@ -163,7 +163,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
-  scorerContext?: ScorerContext;
+  trace?: Trace;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -991,7 +991,7 @@ async function runEvaluatorInternal(
           await flush();
         };
 
-        const scorerContext = new ScorerContext({
+        const trace = new Trace({
           experimentId: experimentIdPromise
             ? await experimentIdPromise
             : undefined,
@@ -1065,7 +1065,7 @@ async function runEvaluatorInternal(
             expected: "expected" in datum ? datum.expected : undefined,
             metadata,
             output,
-            scorerContext,
+            trace,
           };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
