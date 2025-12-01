@@ -1,0 +1,41 @@
+{
+  "name": "braintrust-otel-v1-examples",
+  "version": "1.0.0",
+  "description": "Examples using BraintrustSpanProcessor with OpenTelemetry v1.x",
+  "main": "nodesdk_example.ts",
+  "scripts": {
+    "start": "npx tsx nodesdk_example.ts",
+    "example:nodesdk": "npx tsx nodesdk_example.ts",
+    "example:aisdk": "npx tsx aisdk_example.ts",
+    "example:custom": "npx tsx custom_otel_example.ts",
+    "example:distributed": "npx tsx distributed-tracing.ts",
+    "example:compat": "npx tsx otel_compat.ts",
+    "example:test-default": "npx tsx test_default_parent.ts",
+    "example:vercel-ai": "npx tsx vercel_ai_sdk_example.ts",
+    "example:all": "pnpm run example:nodesdk && pnpm run example:aisdk && pnpm run example:custom && pnpm run example:distributed && pnpm run example:compat && pnpm run example:vercel-ai"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "2.0.53",
+    "@braintrust/otel": "file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "1.9.0",
+    "@opentelemetry/core": "1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.35.0",
+    "@opentelemetry/otlp-exporter-base": "0.35.0",
+    "@opentelemetry/otlp-transformer": "0.35.0",
+    "@opentelemetry/resources": "1.30.1",
+    "@opentelemetry/sdk-node": "0.35.0",
+    "@opentelemetry/sdk-trace-base": "1.9.0",
+    "@vercel/otel": "^0.1.0",
+    "ai": "5.0.76",
+    "braintrust": "file:../../../../js/artifacts/braintrust-0.5.0.tgz",
+    "openai": "^5.23.2",
+    "tsx": "^4.20.6",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,12 +1,7 @@
 export * from "./logger";
 export * from "./functions/stream";
 export * from "./functions/invoke";
-export {
-  IDGenerator,
-  UUIDGenerator,
-  OTELIDGenerator,
-  getIdGenerator,
-} from "./id-gen";
+export { IDGenerator, UUIDGenerator, getIdGenerator } from "./id-gen";
 export {
   BaseExperiment,
   Evaluator,
@@ -41,9 +36,3 @@ export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
-export {
-  AISpanProcessor,
-  BraintrustSpanProcessor,
-  BraintrustExporter,
-  otel,
-} from "./otel";
