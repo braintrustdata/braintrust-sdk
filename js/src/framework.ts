@@ -1,18 +1,17 @@
 import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
 import {
-  GitMetadataSettings as GitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
-  ObjectReference as ObjectReferenceSchema,
   type ObjectReferenceType as ObjectReference,
-  RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
-  SSEProgressEventData as SSEProgressEventDataSchema,
   type SSEProgressEventDataType as SSEProgressEventData,
 } from "./generated_types";
 import { queue } from "async";
 
 import chalk from "chalk";
+import boxen from "boxen";
+import terminalLink from "terminal-link";
 import pluralize from "pluralize";
+import Table from "cli-table3";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
 import {
@@ -24,9 +23,7 @@ import {
   Experiment,
   ExperimentSummary,
   FullInitOptions,
-  MetricSummary,
   NOOP_SPAN,
-  ScoreSummary,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -483,11 +480,10 @@ function isIterable<T>(value: unknown): value is Iterable<T> {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var _evals: EvaluatorFile;
-  // eslint-disable-next-line no-var
+
   var _spanContext: SpanContext | undefined;
-  // eslint-disable-next-line no-var
+
   var _lazy_load: boolean;
 }
 
@@ -926,11 +922,11 @@ async function runEvaluatorInternal(
   let cancelled = false;
   let scheduledTrials = 0;
   const q = queue(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async ({
       datum,
       trialIndex,
     }: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       datum: EvalCase<any, any, any>;
       trialIndex: number;
     }) => {
@@ -1314,8 +1310,8 @@ async function runEvaluatorInternal(
   );
 }
 
-export const error = chalk.bold.red;
-export const warning = chalk.hex("#FFA500"); // Orange color
+export const error = chalk.red;
+export const warning = chalk.yellow;
 
 export function logError(e: unknown, verbose: boolean) {
   if (!verbose) {
@@ -1462,52 +1458,167 @@ export const defaultReporter: ReporterDef<boolean> = {
   },
 };
 
-function formatExperimentSummary(summary: ExperimentSummary) {
+export function formatExperimentSummary(summary: ExperimentSummary) {
   let comparisonLine = "";
   if (summary.comparisonExperimentName) {
-    comparisonLine = `${summary.experimentName} compared to ${summary.comparisonExperimentName}:\n`;
+    comparisonLine = `${summary.comparisonExperimentName} ${chalk.gray("(baseline)")} ← ${summary.experimentName} ${chalk.gray("(comparison)")}\n\n`;
   }
-  const longestScoreName = Math.max(
-    ...Object.values(summary.scores).map((score) => score.name.length),
-  );
-  const longestMetricName = Math.max(
-    ...Object.values(summary.metrics ?? {}).map((metric) => metric.name.length),
-  );
+
+  const tableParts: string[] = [];
+
+  // Create combined table for scores and metrics
+  const hasScores = Object.keys(summary.scores).length > 0;
+  const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
+  const hasComparison = !!summary.comparisonExperimentName;
+
+  if (hasScores || hasMetrics) {
+    const headers = [chalk.gray("Name"), chalk.gray("Value")];
+
+    if (hasComparison) {
+      headers.push(
+        chalk.gray("Change"),
+        chalk.gray("Improvements"),
+        chalk.gray("Regressions"),
+      );
+    }
+
+    const combinedTable = new Table({
+      head: hasComparison ? headers : [],
+      style: { head: [], "padding-left": 0, "padding-right": 0, border: [] },
+      chars: {
+        top: "",
+        "top-mid": "",
+        "top-left": "",
+        "top-right": "",
+        bottom: "",
+        "bottom-mid": "",
+        "bottom-left": "",
+        "bottom-right": "",
+        left: "",
+        "left-mid": "",
+        mid: "",
+        "mid-mid": "",
+        right: "",
+        "right-mid": "",
+        middle: " ",
+      },
+      colWidths: hasComparison ? [18, 10, 10, 13, 12] : [20, 15],
+      colAligns: hasComparison
+        ? ["left", "right", "right", "right", "right"]
+        : ["left", "right"],
+      wordWrap: false,
+    });
+
+    // Add empty row at the top of the table
+    // const emptyTopRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
+    // combinedTable.push(emptyTopRow);
+
+    // Add scores first
+    const scoreValues = Object.values(summary.scores);
+    for (let i = 0; i < scoreValues.length; i++) {
+      const score = scoreValues[i];
+      const scorePercent = (score.score * 100).toFixed(2);
+      const scoreValue = chalk.white(`${scorePercent}%`);
+
+      let diffString = "";
+      if (!isEmpty(score.diff)) {
+        const diffPercent = (score.diff! * 100).toFixed(2);
+        const diffSign = score.diff! > 0 ? "+" : "";
+        const diffColor = score.diff! > 0 ? chalk.green : chalk.red;
+        diffString = diffColor(`${diffSign}${diffPercent}%`);
+      } else {
+        diffString = chalk.gray("-");
+      }
+
+      const improvements =
+        score.improvements > 0
+          ? chalk.dim.green(score.improvements)
+          : chalk.gray("-");
+      const regressions =
+        score.regressions > 0
+          ? chalk.dim.red(score.regressions)
+          : chalk.gray("-");
+
+      const row = [`${chalk.blue("◯")} ${score.name}`, scoreValue];
+      if (hasComparison) {
+        row.push(diffString, improvements, regressions);
+      }
+      combinedTable.push(row);
+
+      // Add spacing between rows (except after the last score if there are metrics)
+      // if (i < scoreValues.length - 1 || hasMetrics) {
+      //   const emptyRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
+      //   combinedTable.push(emptyRow);
+      // }
+    }
+
+    // Add metrics after scores
+    const metricValues = Object.values(summary.metrics ?? {});
+    for (let i = 0; i < metricValues.length; i++) {
+      const metric = metricValues[i];
+      const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
+      const formattedValue = metric.metric.toFixed(fractionDigits);
+      const metricValue = chalk.white(
+        metric.unit === "$"
+          ? `${metric.unit}${formattedValue}`
+          : `${formattedValue}${metric.unit}`,
+      );
+
+      let diffString = "";
+      if (!isEmpty(metric.diff)) {
+        const diffPercent = (metric.diff! * 100).toFixed(2);
+        const diffSign = metric.diff! > 0 ? "+" : "";
+        const diffColor = metric.diff! > 0 ? chalk.green : chalk.red;
+        diffString = diffColor(`${diffSign}${diffPercent}%`);
+      } else {
+        diffString = chalk.gray("-");
+      }
+
+      const improvements =
+        metric.improvements > 0
+          ? chalk.dim.green(metric.improvements)
+          : chalk.gray("-");
+      const regressions =
+        metric.regressions > 0
+          ? chalk.dim.red(metric.regressions)
+          : chalk.gray("-");
+
+      const row = [`${chalk.magenta("◯")} ${metric.name}`, metricValue];
+      if (hasComparison) {
+        row.push(diffString, improvements, regressions);
+      }
+      combinedTable.push(row);
+
+      // Add spacing between rows (except after the last metric)
+      // if (i < metricValues.length - 1) {
+      //   const emptyRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
+      //   combinedTable.push(emptyRow);
+      // }
+    }
+
+    tableParts.push(combinedTable.toString());
+  }
+
+  const content = [comparisonLine, ...tableParts].filter(Boolean).join("\n");
+
+  const footer = summary.experimentUrl
+    ? terminalLink(
+        `View results for ${summary.experimentName}`,
+        summary.experimentUrl,
+        { fallback: () => `See results at ${summary.experimentUrl}` },
+      )
+    : "";
+
+  const boxContent = [content, footer].filter(Boolean).join("\n\n");
+
   return (
-    `\n=========================SUMMARY=========================\n${comparisonLine}` +
-    Object.values(summary.scores)
-      .map((score) => formatScoreSummary(score, longestScoreName))
-      .join("\n") +
-    (Object.keys(summary.scores).length ? "\n\n" : "") +
-    Object.values(summary.metrics ?? {})
-      .map((metric) => formatMetricSummary(metric, longestMetricName))
-      .join("\n") +
-    (Object.keys(summary.metrics ?? {}).length ? "\n\n" : "") +
-    (summary.experimentUrl
-      ? `See results for ${summary.experimentName} at ${summary.experimentUrl}`
-      : "")
+    "\n" +
+    boxen(boxContent, {
+      title: chalk.gray("Experiment summary"),
+      titleAlignment: "left",
+      padding: 0.5,
+      borderColor: "gray",
+      borderStyle: "round",
+    })
   );
-}
-
-function formatScoreSummary(summary: ScoreSummary, longestScoreName: number) {
-  const diffString = isEmpty(summary.diff)
-    ? ""
-    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
-  const scoreName = `'${summary.name}'`.padEnd(longestScoreName + 2);
-  return `${(summary.score * 100).toFixed(
-    2,
-  )}%${diffString} ${scoreName} score\t(${summary.improvements} improvements, ${
-    summary.regressions
-  } regressions)`;
-}
-
-function formatMetricSummary(
-  summary: MetricSummary,
-  longestMetricName: number,
-) {
-  const fractionDigits = Number.isInteger(summary.metric) ? 0 : 2;
-  const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
-  return `${summary.metric.toFixed(fractionDigits)}${summary.unit} ${metricName}\t(${
-    summary.improvements
-  } improvements, ${summary.regressions} regressions)`;
 }
