@@ -8,14 +8,14 @@ import {
 import { Resource } from "@opentelemetry/resources";
 import { trace, context } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
-import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
+import { BraintrustSpanProcessor, setupOtelCompat } from "@braintrust/otel";
 
 const contextManager = new AsyncLocalStorageContextManager();
 contextManager.enable();
 context.setGlobalContextManager(contextManager);
 
 // Initialize Braintrust OpenTelemetry
-initOtel();
+setupOtelCompat();
 
 const provider = new BasicTracerProvider({
   resource: new Resource({

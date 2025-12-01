@@ -1,15 +1,15 @@
 import { expect, test, describe, beforeEach, afterEach } from "vitest";
 import { UUIDGenerator, getIdGenerator } from "braintrust";
 import { OTELIDGenerator } from "./otel";
-import { initOtel, resetOtel } from ".";
+import { setupOtelCompat, resetOtelCompat } from ".";
 
 describe("ID Generation", () => {
   beforeEach(() => {
-    initOtel();
+    setupOtelCompat();
   });
 
   afterEach(() => {
-    resetOtel();
+    resetOtelCompat();
   });
 
   describe("OTELIDGenerator", () => {
@@ -43,7 +43,7 @@ describe("ID Generation", () => {
 
   describe("getIdGenerator factory function", () => {
     test("returns UUID generator by default", () => {
-      resetOtel();
+      resetOtelCompat();
 
       const generator = getIdGenerator();
       expect(generator).toBeInstanceOf(UUIDGenerator);

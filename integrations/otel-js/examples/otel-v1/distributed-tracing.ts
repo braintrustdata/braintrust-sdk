@@ -18,12 +18,12 @@ import {
   addSpanParentToBaggage,
   parentFromHeaders,
   BraintrustSpanProcessor,
-  initOtel,
+  setupOtelCompat,
 } from "@braintrust/otel";
 
 const { trace, context, propagation } = api;
 
-initOtel();
+setupOtelCompat();
 
 async function main() {
   // Setup OTEL

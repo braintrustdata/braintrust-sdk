@@ -15,10 +15,10 @@
 import { trace, context } from "@opentelemetry/api";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { initLogger, login } from "braintrust";
-import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
+import { BraintrustSpanProcessor, setupOtelCompat } from "@braintrust/otel";
 
 // Initialize Braintrust OpenTelemetry
-initOtel();
+setupOtelCompat();
 
 function getExportVersion(exportedSpan: string): number {
   const exportedBytes = Buffer.from(exportedSpan, "base64");

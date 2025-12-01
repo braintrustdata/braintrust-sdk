@@ -12,7 +12,7 @@ import { SpanComponentsV4 } from "braintrust/util";
 
 export { BraintrustSpanProcessor, BraintrustExporter } from "./otel";
 
-export const initOtel = () => {
+export const setupOtelCompat = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
   (globalThis as any).BRAINTRUST_CONTEXT_MANAGER = OtelContextManager;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
@@ -21,7 +21,7 @@ export const initOtel = () => {
   (globalThis as any).BRAINTRUST_SPAN_COMPONENT = SpanComponentsV4;
 };
 
-export const resetOtel = () => {
+export const resetOtelCompat = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
   (globalThis as any).BRAINTRUST_CONTEXT_MANAGER = undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions

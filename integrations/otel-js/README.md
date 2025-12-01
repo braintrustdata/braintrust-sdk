@@ -35,7 +35,7 @@ This integration provides two main capabilities:
 
 1. **Export OpenTelemetry spans to Braintrust**: Use `BraintrustSpanProcessor` to send your OpenTelemetry traces to Braintrust for logging, monitoring, and analysis.
 
-2. **Bidirectional interoperability between Braintrust and OpenTelemetry**: Use `initOtel()` to enable Braintrust spans and OpenTelemetry spans to work together in the same unified trace. This allows:
+2. **Bidirectional interoperability between Braintrust and OpenTelemetry**: Use `setupOtelCompat()` to enable Braintrust spans and OpenTelemetry spans to work together in the same unified trace. This allows:
    - OpenTelemetry spans to be children of Braintrust spans
    - Braintrust spans to be children of OpenTelemetry spans
    - Both systems share the same trace/span IDs (using OpenTelemetry's format)
@@ -82,7 +82,7 @@ trace.setGlobalTracerProvider(provider);
 - `customFilter` (function, optional): Custom filter function for advanced span filtering logic.
 - `headers` (object, optional): Additional HTTP headers to send with telemetry data.
 
-### `initOtel()`
+### `setupOtelCompat()`
 
 Configures Braintrust to use OpenTelemetry's context management and ID generation, enabling bidirectional interoperability.
 
@@ -94,11 +94,11 @@ Configures Braintrust to use OpenTelemetry's context management and ID generatio
 - **Distributed tracing**: Proper context propagation across services that use different tracing systems
 
 ```typescript
-import { initOtel } from "@braintrust/otel";
+import { setupOtelCompat } from "@braintrust/otel";
 import { initLogger } from "braintrust";
 
-// IMPORTANT: Call initOtel() before creating any Braintrust loggers or OpenTelemetry spans
-initOtel();
+// IMPORTANT: Call setupOtelCompat() before creating any Braintrust loggers or OpenTelemetry spans
+setupOtelCompat();
 
 // Now Braintrust will use OpenTelemetry context management
 const logger = initLogger({ projectName: "my_project" });

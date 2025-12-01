@@ -28,7 +28,7 @@ import {
   createTracerProvider,
 } from "../tests/utils";
 import { SpanComponentsV3, SpanComponentsV4 } from "braintrust/util";
-import { initOtel, resetOtel } from ".";
+import { setupOtelCompat, resetOtelCompat } from ".";
 
 describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -1272,7 +1272,7 @@ describe("otel namespace helpers", () => {
 
 describe("Otel Compat tests Integration", () => {
   beforeEach(async () => {
-    initOtel();
+    setupOtelCompat();
 
     await _exportsForTestingOnly.simulateLoginForTests();
     _exportsForTestingOnly.useTestBackgroundLogger();
@@ -1281,7 +1281,7 @@ describe("Otel Compat tests Integration", () => {
   });
 
   afterEach(() => {
-    resetOtel();
+    resetOtelCompat();
 
     _exportsForTestingOnly.clearTestBackgroundLogger();
     _exportsForTestingOnly.simulateLogoutForTests();
@@ -1290,7 +1290,7 @@ describe("Otel Compat tests Integration", () => {
 
   test("UUID generator should share span_id as root_span_id for backwards compatibility", async () => {
     // Ensure UUID generator is used (default behavior)
-    resetOtel();
+    resetOtelCompat();
 
     const testLogger = initLogger({
       projectName: "test-uuid-integration",
@@ -1332,7 +1332,7 @@ describe("Otel Compat tests Integration", () => {
   });
 
   test("parent-child relationships work with UUID generators", async () => {
-    resetOtel();
+    resetOtelCompat();
 
     const testLogger = initLogger({
       projectName: "test-uuid-parent-child",
@@ -1393,7 +1393,7 @@ describe("Otel Compat tests Integration", () => {
 
   test("environment variable switching works correctly", async () => {
     // Test default (UUID)
-    resetOtel();
+    resetOtelCompat();
 
     const uuidLogger = initLogger({
       projectName: "test-env-uuid",
@@ -1408,7 +1408,7 @@ describe("Otel Compat tests Integration", () => {
     uuidSpan.end();
 
     // Switch to OTEL
-    initOtel();
+    setupOtelCompat();
     _exportsForTestingOnly.resetIdGenStateForTests();
 
     const otelLogger = initLogger({
@@ -1423,7 +1423,7 @@ describe("Otel Compat tests Integration", () => {
     otelSpan.end();
 
     // Switch back to UUID
-    resetOtel();
+    resetOtelCompat();
     _exportsForTestingOnly.resetIdGenStateForTests();
 
     const uuidLogger2 = initLogger({
@@ -1452,7 +1452,7 @@ describe("Otel Compat tests Integration", () => {
     span1.end();
 
     // Test mixed case
-    initOtel();
+    setupOtelCompat();
     _exportsForTestingOnly.resetIdGenStateForTests();
 
     const logger2 = initLogger({
@@ -1468,7 +1468,7 @@ describe("Otel Compat tests Integration", () => {
 
 describe("export() format selection based on if otel is initialized", () => {
   beforeEach(async () => {
-    initOtel();
+    setupOtelCompat();
 
     await _exportsForTestingOnly.simulateLoginForTests();
     _exportsForTestingOnly.useTestBackgroundLogger();
@@ -1476,7 +1476,7 @@ describe("export() format selection based on if otel is initialized", () => {
   });
 
   afterEach(() => {
-    resetOtel();
+    resetOtelCompat();
 
     _exportsForTestingOnly.clearTestBackgroundLogger();
     _exportsForTestingOnly.simulateLogoutForTests();
@@ -1484,7 +1484,7 @@ describe("export() format selection based on if otel is initialized", () => {
   });
 
   test("uses SpanComponentsV3 when otel is not initialized", async () => {
-    resetOtel();
+    resetOtelCompat();
 
     const testLogger = initLogger({
       projectName: "test-export-v3",
@@ -1537,7 +1537,7 @@ describe("export() format selection based on if otel is initialized", () => {
 
   test("Logger.export() uses correct format based on env var", async () => {
     // Test V3
-    resetOtel();
+    resetOtelCompat();
 
     const loggerV3 = initLogger({
       projectName: "test-logger-export-v3",
@@ -1550,7 +1550,7 @@ describe("export() format selection based on if otel is initialized", () => {
     expect(v3Parsed.data.object_type).toBeDefined();
 
     // Test V4
-    initOtel();
+    setupOtelCompat();
     const loggerV4 = initLogger({
       projectName: "test-logger-export-v4",
       apiKey: "test-key",
@@ -1624,7 +1624,7 @@ describe("export() format selection based on if otel is initialized", () => {
   });
 
   test("V3 format uses UUIDs when otel is not initialized", async () => {
-    resetOtel();
+    resetOtelCompat();
 
     _exportsForTestingOnly.resetIdGenStateForTests();
 

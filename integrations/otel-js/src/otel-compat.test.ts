@@ -25,7 +25,11 @@ import {
   createTracerProvider,
   getParentSpanId,
 } from "../tests/utils";
-import { initOtel, resetOtel, BraintrustSpanProcessor } from "@braintrust/otel";
+import {
+  setupOtelCompat,
+  resetOtelCompat,
+  BraintrustSpanProcessor,
+} from "@braintrust/otel";
 
 class NoopProgressReporter {
   public start() {}
@@ -61,7 +65,7 @@ describe("OTEL compatibility mode", () => {
   let contextManager: AsyncHooksContextManager;
 
   beforeEach(async () => {
-    initOtel();
+    setupOtelCompat();
 
     await _exportsForTestingOnly.simulateLoginForTests();
     _exportsForTestingOnly.useTestBackgroundLogger();
@@ -80,7 +84,7 @@ describe("OTEL compatibility mode", () => {
     }
     _exportsForTestingOnly.clearTestBackgroundLogger();
     _exportsForTestingOnly.simulateLogoutForTests();
-    resetOtel();
+    resetOtelCompat();
   });
 
   test("mixed BT/OTEL tracing with BT logger first", async () => {
@@ -243,7 +247,7 @@ describe("OTEL compatibility mode", () => {
   });
 
   test("uses BraintrustContextManager when OTEL disabled", () => {
-    resetOtel();
+    resetOtelCompat();
 
     const cm = getContextManager();
 
@@ -682,7 +686,7 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   beforeEach(async () => {
     await _exportsForTestingOnly.simulateLoginForTests();
     _exportsForTestingOnly.useTestBackgroundLogger();
-    initOtel();
+    setupOtelCompat();
 
     const otelApi = await import("@opentelemetry/api");
     trace = otelApi.trace;
@@ -700,7 +704,7 @@ describe("Distributed Tracing (BT → OTEL)", () => {
       context.disable();
       contextManager.disable();
     }
-    resetOtel();
+    resetOtelCompat();
   });
 
   test("otelContextFromSpanExport parses BT span and creates OTEL context", async () => {

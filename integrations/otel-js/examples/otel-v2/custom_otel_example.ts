@@ -4,7 +4,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { trace, context } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
-import { BraintrustSpanProcessor, initOtel } from "@braintrust/otel";
+import { BraintrustSpanProcessor, setupOtelCompat } from "@braintrust/otel";
 
 // Setup context manager to group span
 const contextManager = new AsyncLocalStorageContextManager();
@@ -12,7 +12,7 @@ contextManager.enable();
 context.setGlobalContextManager(contextManager);
 
 // Initialize Braintrust OpenTelemetry
-initOtel();
+setupOtelCompat();
 
 const braintrustProcessor = new BraintrustSpanProcessor({
   parent: "project_name:otel-v2-examples",
