@@ -712,3 +712,199 @@ test("tags remain empty when not set", async () => {
   expect(rootSpans).toHaveLength(1);
   expect((rootSpans[0] as any).tags).toEqual(undefined);
 });
+
+// ========== framework2 metadata tests ==========
+import { z } from "zod/v3";
+import { projects, CodePrompt } from "./framework2";
+
+describe("framework2 metadata support", () => {
+  describe("CodeFunction metadata", () => {
+    test("tool stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { version: "1.0", author: "test" };
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+        metadata,
+      });
+
+      expect(tool.metadata).toEqual(metadata);
+      expect(tool.name).toBe("test-tool");
+      expect(tool.slug).toBe("test-tool");
+    });
+
+    test("tool works without metadata", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+      });
+
+      expect(tool.metadata).toBeUndefined();
+    });
+  });
+
+  describe("CodePrompt metadata", () => {
+    test("prompt stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { category: "greeting", priority: "high" };
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+        metadata,
+      });
+
+      // The metadata is stored on the CodePrompt in _publishablePrompts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+
+    test("prompt works without metadata", () => {
+      const project = projects.create({ name: "test-project" });
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toBeUndefined();
+    });
+
+    test("toFunctionDefinition includes metadata when present", async () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { version: "2.0", tag: "production" };
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+          metadata,
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.metadata).toEqual(metadata);
+      expect(funcDef.name).toBe("test-prompt");
+      expect(funcDef.project_id).toBe("project-123");
+    });
+
+    test("toFunctionDefinition excludes metadata when undefined", async () => {
+      const project = projects.create({ name: "test-project" });
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.metadata).toBeUndefined();
+    });
+  });
+
+  describe("Scorer metadata", () => {
+    test("code scorer stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { type: "accuracy", version: "1.0" };
+
+      project.scorers.create({
+        handler: ({
+          output,
+          expected,
+        }: {
+          output: string;
+          expected?: string;
+        }) => (output === expected ? 1 : 0),
+        name: "test-scorer",
+        parameters: z.object({
+          output: z.string(),
+          expected: z.string().optional(),
+        }),
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scorers = (project as any)._publishableCodeFunctions;
+      expect(scorers).toHaveLength(1);
+      expect(scorers[0].metadata).toEqual(metadata);
+    });
+
+    test("LLM scorer prompt stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { type: "llm_classifier", version: "2.0" };
+
+      project.scorers.create({
+        name: "llm-scorer",
+        prompt: "Is this correct?",
+        model: "gpt-4",
+        useCot: true,
+        choiceScores: { yes: 1.0, no: 0.0 },
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+  });
+
+  describe("Project with messages", () => {
+    test("prompt with messages stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { template: "chat", version: "1.0" };
+
+      project.prompts.create({
+        name: "chat-prompt",
+        messages: [
+          { role: "system", content: "You are a helpful assistant" },
+          { role: "user", content: "Hello {{name}}" },
+        ],
+        model: "gpt-4",
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+  });
+});
