@@ -1,3 +1,4 @@
+import chalk from "chalk";
 import * as cliProgress from "cli-progress";
 
 const MAX_NAME_LENGTH = 40;
@@ -33,10 +34,11 @@ export class BarProgressReporter implements ProgressReporter {
   constructor() {
     this.multiBar = new cliProgress.MultiBar(
       {
-        clearOnComplete: false,
-        format:
-          " {bar} | {evaluator} | {percentage}% | {value}/{total} datapoints",
-        autopadding: true,
+        // clearOnComplete: true,
+        format: `${chalk.blueBright("{bar}")} ${chalk.blue("{evaluator}")} {percentage}% ${chalk.gray("{value}/{total} {eta_formatted}")}`,
+        // autopadding: true,
+        hideCursor: true,
+        barsize: 10,
       },
       cliProgress.Presets.shades_grey,
     );
