@@ -719,9 +719,9 @@ export async function Eval<
       return ret;
     } finally {
       if (experiment) {
-        experiment.flush().catch(console.error);
+        await experiment.flush().catch(console.error);
       } else if (options.parent) {
-        flush().catch(console.error);
+        await flush().catch(console.error);
       }
     }
   } finally {
