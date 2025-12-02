@@ -35,6 +35,7 @@ test("parameters are passed to task", async () => {
     [],
     undefined,
     { prefix: "start:", suffix: ":end" },
+    true,
   );
 
   expect(out.results).toHaveLength(1);
@@ -79,6 +80,7 @@ test("prompt parameter is passed correctly", async () => {
     [],
     undefined,
     undefined,
+    true,
   );
 
   expect(result.results).toHaveLength(1);
@@ -109,6 +111,7 @@ test("custom parameter values override defaults", async () => {
       prefix: "custom:",
       suffix: ":custom",
     },
+    true,
   );
 
   expect(result.results).toHaveLength(1);
@@ -136,6 +139,7 @@ test("array parameter is handled correctly", async () => {
     [],
     undefined,
     undefined,
+    true,
   );
 
   expect(result.results).toHaveLength(1);
@@ -173,6 +177,7 @@ test("object parameter is handled correctly", async () => {
     [],
     undefined,
     undefined,
+    true,
   );
 
   expect(result.results).toHaveLength(1);
