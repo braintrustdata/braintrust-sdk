@@ -1,5 +1,4 @@
-// Browser-compatible type exports only
-// Node only types are in exports-node.ts
+// Type exports (includes both browser-compatible and node-only types)
 export type {
   ParentExperimentIds,
   ParentProjectLogIds,
@@ -14,3 +13,18 @@ export type {
   DatasetRecord,
 } from "../util/index";
 export type { AttachmentReference } from "./generated_types";
+
+// Node-only types, removed from browser builds
+export type {
+  EvaluatorManifest,
+  EvalParameterSerializedSchema,
+  EvaluatorDefinition,
+  EvaluatorDefinitions,
+} from "../dev/types";
+
+export {
+  evaluatorDefinitionSchema,
+  evaluatorDefinitionsSchema,
+} from "../dev/types";
+
+export type { EvalParameters } from "./eval-parameters";
