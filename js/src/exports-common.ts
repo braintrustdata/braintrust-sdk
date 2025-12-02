@@ -1,4 +1,4 @@
-// Common exports shared between all builds
+// Common exports shared between browser and node builds
 export { LazyValue } from "./util";
 export * from "./logger";
 export * from "./functions/invoke";
@@ -11,4 +11,19 @@ export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export * as graph from "./graph-framework";
-export * from "./exports-types";
+
+// Common type exports (browser-compatible)
+export type {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+} from "../util/index";
+export type { AttachmentReference } from "./generated_types";
