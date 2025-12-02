@@ -1,9 +1,10 @@
-// nodesdk_example.ts - OpenTelemetry v2.x example
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BraintrustSpanProcessor } from "@braintrust/otel";
-import { trace } from "@opentelemetry/api";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { runNodesdkExample } from "../common/nodesdk_example_common";
+import * as ai from "ai";
+import * as openaiModule from "@ai-sdk/openai";
+import * as zod from "zod";
+import { runAISDKExample } from "../common/aisdk_example_common";
 
 const sdk = new NodeSDK({
   spanProcessors: [
@@ -16,12 +17,8 @@ const sdk = new NodeSDK({
 
 sdk.start();
 
-console.log("OpenTelemetry v2.x NodeSDK started with BraintrustSpanProcessor");
-console.log("BRAINTRUST_API_KEY set:", !!process.env.BRAINTRUST_API_KEY);
-console.log("OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
-
 async function main() {
-  await runNodesdkExample(sdk, "otel-v2-examples", false);
+  await runAISDKExample(sdk, ai, openaiModule, zod);
 }
 
 main().catch(console.error);
