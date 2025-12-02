@@ -14,7 +14,22 @@ permissions:
   actions: write
 
 jobs:
+  check-labels:
+    runs-on: ubuntu-latest
+    outputs:
+      skip-windows: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-windows') }}
+      skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}
+      skip-typescript: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-typescript') }}
+    steps:
+      - name: Check for skip labels
+        run: |
+          echo "skip-windows: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-windows') }}"
+          echo "skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}"
+          echo "skip-typescript: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-typescript') }}"
+
   build:
+    needs: check-labels
+    if: needs.check-labels.outputs.skip-typescript != 'true'
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -32,18 +47,37 @@ jobs:
       artifact-name: ${{ steps.artifact.outputs.name }}
 
     steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" && "${{ needs.check-labels.outputs.skip-windows }}" == "true" ]]; then
+            echo "Skipping Windows build due to skip-windows label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 build due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.skip-check.outputs.should-skip != 'true'
       - uses: actions/setup-node@v4
+        if: steps.skip-check.outputs.should-skip != 'true'
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
+        if: steps.skip-check.outputs.should-skip != 'true'
       - name: "verify ci"
+        if: steps.skip-check.outputs.should-skip != 'true'
         shell: bash
         run: |
           make js-verify-ci
 
       - name: Determine artifact name
+        if: steps.skip-check.outputs.should-skip != 'true'
         id: artifact
         env:
           ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}
@@ -51,6 +85,7 @@ jobs:
           echo "Artifact: $ARTIFACT_NAME"
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
       - name: Prepare artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
         id: prepare_artifact
         working-directory: js
         shell: bash
@@ -60,6 +95,7 @@ jobs:
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Build and pack @braintrust/otel
+        if: steps.skip-check.outputs.should-skip != 'true'
         id: prepare_otel_artifact
         shell: bash
         run: |
@@ -92,6 +128,7 @@ jobs:
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: List artifacts before upload
+        if: steps.skip-check.outputs.should-skip != 'true'
         shell: bash
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
@@ -99,6 +136,7 @@ jobs:
           ls -la js/artifacts/
 
       - name: Upload build artifacts
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
@@ -108,7 +146,8 @@ jobs:
           retention-days: 1
 
   smoke-tests-node:
-    needs: build
+    needs: [check-labels, build]
+    if: needs.check-labels.outputs.skip-typescript != 'true'
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -119,23 +158,41 @@ jobs:
         node-version: [20, 22]
 
     steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" && "${{ needs.check-labels.outputs.skip-windows }}" == "true" ]]; then
+            echo "Skipping Windows tests due to skip-windows label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 tests due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.workflow_run.repository.full_name }}
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Backup original integration package manifests
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run backup
 
       - name: Download build artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
@@ -144,11 +201,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run install-build
 
       - name: Run integration test (CJS) for ${{ matrix.integration }}
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
         env:
@@ -164,11 +223,13 @@ jobs:
           npm start
 
       - name: Enable ESM for integrations tests
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run enable-esm
 
       - name: Run integration test (ESM) for ${{ matrix.integration }}
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
         env:
@@ -184,13 +245,14 @@ jobs:
           npm start
 
       - name: Restore original package.json files
-        if: always()
+        if: always() && steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run restore
 
   smoke-tests-nextjs:
-    needs: build
+    needs: [check-labels, build]
+    if: needs.check-labels.outputs.skip-typescript != 'true'
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -200,20 +262,38 @@ jobs:
         node-version: [20, 22]
 
     steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" && "${{ needs.check-labels.outputs.skip-windows }}" == "true" ]]; then
+            echo "Skipping Windows tests due to skip-windows label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 tests due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Backup original package manifests
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/nextjs-instrumentation
         run: |
           npm run backup
 
       - name: Download build artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
@@ -222,6 +302,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies and local builds
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/nextjs-instrumentation
         shell: bash
         run: |
@@ -230,35 +311,50 @@ jobs:
           npx tsx ../../install-build.ts ../../../artifacts otel
 
       - name: Run Next.js build test
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/nextjs-instrumentation
         shell: bash
         run: |
           npm test
 
       - name: Restore original package.json files
-        if: always()
+        if: always() && steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/nextjs-instrumentation
         run: |
           npm run restore
 
   smoke-tests-deno:
-    needs: build
+    needs: [check-labels, build]
+    if: needs.check-labels.outputs.skip-typescript != 'true'
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 artifact due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.skip-check.outputs.should-skip != 'true'
       - name: Setup Deno
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
       - name: Download build artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
@@ -267,6 +363,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract build artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/deno
         shell: bash
         run: |
@@ -283,6 +380,7 @@ jobs:
           [ -d build/package ] && mv build/package build/braintrust
 
       - name: Run logger test
+        if: steps.skip-check.outputs.should-skip != 'true'
         working-directory: js/smoke/tests/deno
         env:
           BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
