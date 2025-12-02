@@ -59,6 +59,7 @@
       "npm:eventsource-parser@^3.0.6",
       "npm:mustache@^4.2.0",
       "npm:uuid@13",
+      "npm:zod-to-json-schema@^3.25.0",
       "npm:zod@^4.1.12"
     ]
   }
