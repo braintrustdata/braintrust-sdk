@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/otel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK for integrating Braintrust with OpenTelemetry",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -33,7 +33,7 @@
   "peerDependencies": {
     "@opentelemetry/api": ">=1.9.0",
     "@opentelemetry/core": ">=1.9.0",
-    "@opentelemetry/exporter-trace-otlp-http": ">=0.35.0",
+    "@opentelemetry/exporter-trace-otlp-http": ">=0.205.0",
     "@opentelemetry/sdk-trace-base": ">=1.9.0",
     "braintrust": ">=1.0.0-0"
   },
