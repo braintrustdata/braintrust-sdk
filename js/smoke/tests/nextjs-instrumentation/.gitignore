@@ -8,9 +8,6 @@ out/
 # build
 dist/
 
-# package manager
-package-lock.json
-
 # misc
 .DS_Store
 *.pem
