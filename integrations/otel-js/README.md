@@ -23,11 +23,20 @@ npm install @opentelemetry/context-async-hooks
 ## Requirements
 
 - Node.js >= 16
-- OpenTelemetry API >= 1.9.0, @opentelemetry/exporter-trace-otlp-http >= 0.205.0 (due to [otel bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545))
+- OpenTelemetry API >= 1.9.0
 - OpenTelemetry SDK >= 1.9.0
 - Braintrust >= 0.5.0
 
 This package supports both OpenTelemetry 1.x and 2.x versions.
+
+Note: You may run into a known [OpenTelemetry browser bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545)) with `@opentelemetry/exporter-trace-otlp-http` < 0.205.0. If you encounter this issue, upgrade the `@opentelemetry/exporter-trace-otlp-http` and related packages to a minimum of:
+
+- `@opentelemetry/exporter-trace-otlp-http` >= 0.205.0
+- `@opentelemetry/sdk-trace-base` >= 2.1.0
+- `@opentelemetry/api` >= 2.1.0
+- `@opentelemetry/core` >= 2.1.0
+
+It's **important** you do not mix `@opentelemetry/core` and related packages with 1.x with 2.x packages.
 
 ## Overview
 
