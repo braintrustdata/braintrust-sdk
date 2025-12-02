@@ -1,2 +1,3 @@
-// Browser exports: common exports only (no Node.js-only code)
+// Browser exports: common exports + types
 export * from "./exports-common";
+export * from "./exports-types";

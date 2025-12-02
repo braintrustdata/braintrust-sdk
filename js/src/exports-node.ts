@@ -22,7 +22,3 @@ export {
 } from "./framework";
 export * from "./framework2";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";
-
-// Node-only type exports
-// Note: EvalParameters is needed here for framework.ts Evaluator interface
-export type { EvalParameters } from "./eval-parameters";
