@@ -156,7 +156,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "Say hello",
         },
       ],
-      maxOutputTokens: 10,
+      maxOutputTokens: 16,
     });
 
     const spans = await backgroundLogger.drain();
