@@ -56,6 +56,5 @@ import { configureNode } from "./node";
 configureNode();
 
 export * from "./exports-node";
-export * from "./exports-types";
 import * as braintrust from "./exports-node";
 export default braintrust;
