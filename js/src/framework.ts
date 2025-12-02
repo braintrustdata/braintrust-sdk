@@ -930,6 +930,9 @@ async function runEvaluatorInternal(
       datum: EvalCase<any, any, any>;
       trialIndex: number;
     }) => {
+      if (cancelled) {
+        return;
+      }
       const eventDataset: Dataset | undefined = experiment
         ? experiment.dataset
         : Dataset.isDataset(evaluator.data)
@@ -1270,6 +1273,9 @@ async function runEvaluatorInternal(
 
   const waitForQueue = (async () => {
     await enqueuePromise;
+    if (q.idle()) {
+      return;
+    }
     await q.drain();
   })();
 
