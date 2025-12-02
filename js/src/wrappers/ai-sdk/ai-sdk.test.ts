@@ -5,6 +5,7 @@ import {
   beforeAll,
   afterEach,
   describe,
+  expectTypeOf,
   expect,
 } from "vitest";
 import { configureNode } from "../../node";
@@ -54,6 +55,16 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("ai wrapping preserves type", () => {
+    const wrapped = wrapAISDK(ai);
+    expectTypeOf(wrapped.generateText).toEqualTypeOf<typeof ai.generateText>();
+    expectTypeOf(wrapped.streamText).toEqualTypeOf<typeof ai.streamText>();
+    expectTypeOf(wrapped.generateObject).toEqualTypeOf<
+      typeof ai.generateObject
+    >();
+    expectTypeOf(wrapped.streamObject).toEqualTypeOf<typeof ai.streamObject>();
   });
 
   test("ai sdk basic completion", async () => {
