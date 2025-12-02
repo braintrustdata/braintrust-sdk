@@ -11,8 +11,7 @@
     "example:distributed": "npx tsx distributed-tracing.ts",
     "example:compat": "npx tsx otel_compat.ts",
     "example:exporter": "npx tsx exporter_example.ts",
-    "example:vercel-otel": "npx tsx vercel_otel_example.ts",
-    "example:all": "pnpm run example:nodesdk && pnpm run example:aisdk && pnpm run example:custom && pnpm run example:distributed && pnpm run example:compat && pnpm run example:exporter && pnpm run example:vercel-otel"
+    "example:all": "pnpm run example:nodesdk && pnpm run example:aisdk && pnpm run example:custom && pnpm run example:distributed && pnpm run example:compat && pnpm run example:exporter"
   },
   "dependencies": {
     "@ai-sdk/openai": "2.0.53",
