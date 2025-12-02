@@ -13,7 +13,20 @@ on:
       - "js/**"
 
 jobs:
+  check-labels:
+    runs-on: ubuntu-latest
+    outputs:
+      skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}
+      skip-typescript: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-typescript') }}
+    steps:
+      - name: Check for skip labels
+        run: |
+          echo "skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}"
+          echo "skip-typescript: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-typescript') }}"
+
   test:
+    needs: check-labels
+    if: needs.check-labels.outputs.skip-typescript != 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -23,12 +36,26 @@ jobs:
         test-dir: [otel-v1, otel-v2]
 
     steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 tests due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.skip-check.outputs.should-skip != 'true'
 
       - name: Set up Docker Buildx
+        if: steps.skip-check.outputs.should-skip != 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image for ${{ matrix.test-dir }}
+        if: steps.skip-check.outputs.should-skip != 'true'
         shell: bash
         run: |
           docker build -f integrations/otel-js/Dockerfile.test \
@@ -37,6 +64,7 @@ jobs:
             -t otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }} .
 
       - name: Run tests for ${{ matrix.test-dir }}
+        if: steps.skip-check.outputs.should-skip != 'true'
         shell: bash
         run: |
           docker run --rm otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }}
