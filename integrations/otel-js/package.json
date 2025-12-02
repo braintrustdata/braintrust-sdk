@@ -35,7 +35,7 @@
     "@opentelemetry/core": ">=1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": ">=0.35.0",
     "@opentelemetry/sdk-trace-base": ">=1.9.0",
-    "braintrust": ">=0.5.0"
+    "braintrust": ">=1.0.0-0"
   },
   "peerDependenciesMeta": {
     "braintrust": {
