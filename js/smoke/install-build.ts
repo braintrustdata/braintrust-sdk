@@ -33,7 +33,26 @@ function installTarball(label: string, tarPath: string): void {
 
 // Install braintrust
 if (packageToInstall === "braintrust") {
-  const braintrustTar = findLatestTarball(["braintrust-"]);
+  // Find braintrust tarball, but exclude braintrust-otel- packages
+  if (!fs.existsSync(artifactsDir)) {
+    console.error(`Artifacts directory not found: ${artifactsDir}`);
+    process.exit(1);
+  }
+  const files = fs
+    .readdirSync(artifactsDir)
+    .filter(
+      (f) =>
+        f.startsWith("braintrust-") &&
+        !f.startsWith("braintrust-otel-") &&
+        f.endsWith(".tgz"),
+    )
+    .map((f) => ({
+      f,
+      mtime: fs.statSync(path.join(artifactsDir, f)).mtime,
+    }))
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+  const braintrustTar = files[0]?.f || null;
   if (!braintrustTar) {
     console.error(`No braintrust tarball found in ${artifactsDir}.`);
     console.error(
