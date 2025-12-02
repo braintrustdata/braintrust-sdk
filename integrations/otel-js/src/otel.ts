@@ -17,6 +17,11 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { IDGenerator, type Span as BraintrustSpan } from "braintrust";
 
+interface ExportResult {
+  code: number;
+  error?: Error;
+}
+
 const FILTER_PREFIXES = [
   "gen_ai.",
   "braintrust.",
@@ -629,7 +634,7 @@ export class BraintrustExporter {
    */
   export(
     spans: ReadableSpan[],
-    resultCallback: (result: { code: number; error?: unknown }) => void,
+    resultCallback: (result: ExportResult) => void,
   ): void {
     try {
       // Process each span through the processor
@@ -644,10 +649,14 @@ export class BraintrustExporter {
           resultCallback({ code: 0 }); // SUCCESS
         })
         .catch((error) => {
-          resultCallback({ code: 1, error }); // FAILURE
+          const errorObj =
+            error instanceof Error ? error : new Error(String(error));
+          resultCallback({ code: 1, error: errorObj }); // FAILURE
         });
     } catch (error) {
-      resultCallback({ code: 1, error }); // FAILURE
+      const errorObj =
+        error instanceof Error ? error : new Error(String(error));
+      resultCallback({ code: 1, error: errorObj }); // FAILURE
     }
   }
 
