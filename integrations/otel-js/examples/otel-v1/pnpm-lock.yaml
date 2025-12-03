@@ -9,8 +9,8 @@ dependencies:
     specifier: 2.0.53
     version: 2.0.53(zod@3.25.76)
   '@braintrust/otel':
-    specifier: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz
-    version: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@0.5.0)
+    specifier: 0.1.1
+    version: 0.1.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.1)
   '@opentelemetry/api':
     specifier: 1.9.0
     version: 1.9.0
@@ -45,8 +45,8 @@ dependencies:
     specifier: 5.0.76
     version: 5.0.76(zod@3.25.76)
   braintrust:
-    specifier: file:../../../../js/artifacts/braintrust-0.5.0.tgz
-    version: file:../../../../js/artifacts/braintrust-0.5.0.tgz(zod@3.25.76)
+    specifier: 1.0.0-rc.1
+    version: 1.0.0-rc.1(zod@3.25.76)
   openai:
     specifier: ^5.23.2
     version: 5.23.2(zod@3.25.76)
@@ -118,6 +118,29 @@ packages:
     dependencies:
       json-schema: 0.4.0
     dev: false
+
+  /@braintrust/otel@0.1.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.1):
+    resolution: {integrity: sha512-dVjdIc7ZYubFCzARXlE39eEb6qDsNxtFEcmWrAjgHRo6dNAKHBHRSazpnBlg80rOrT2lOSKAuqhXIpWu2CFdlA==}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.9.0'
+      '@opentelemetry/core': '>=1.9.0'
+      '@opentelemetry/exporter-trace-otlp-http': '>=0.205.0'
+      '@opentelemetry/sdk-trace-base': '>=1.9.0'
+      braintrust: '>=1.0.0-0'
+    dependencies:
+      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/core': 1.9.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/exporter-trace-otlp-http': 0.35.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-trace-base': 1.9.0(@opentelemetry/api@1.9.0)
+      braintrust: 1.0.0-rc.1(zod@3.25.76)
+    dev: false
+
+  /@colors/colors@1.5.0:
+    resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
+    engines: {node: '>=0.1.90'}
+    requiresBuild: true
+    dev: false
+    optional: true
 
   /@esbuild/aix-ppc64@0.25.12:
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -1186,8 +1209,21 @@ packages:
       zod: 3.25.76
     dev: false
 
+  /ansi-align@3.0.1:
+    resolution: {integrity: sha512-IOfwwBF5iczOjp/WeY4YxyjqAFMQoZufdQWDd19SEExbVLNXqvpzSJ/M7Za4/sCPmQ0+GRquoA7bGcINcxew6w==}
+    dependencies:
+      string-width: 4.2.3
+    dev: false
+
   /ansi-color@0.2.1:
     resolution: {integrity: sha512-bF6xLaZBLpOQzgYUtYEhJx090nPSZk1BQ/q2oyBK9aMMcJHzx9uXGCjI2Y+LebsN4Jwoykr0V9whbPiogdyHoQ==}
+    dev: false
+
+  /ansi-escapes@7.2.0:
+    resolution: {integrity: sha512-g6LhBsl+GBPRWGWsBtutpzBYuIIdBkLEvad5C/va/74Db018+5TZiyA26cZJAr3Rft5lprVqOIPxf5Vid6tqAw==}
+    engines: {node: '>=18'}
+    dependencies:
+      environment: 1.1.0
     dev: false
 
   /ansi-regex@5.0.1:
@@ -1195,11 +1231,21 @@ packages:
     engines: {node: '>=8'}
     dev: false
 
+  /ansi-regex@6.2.2:
+    resolution: {integrity: sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==}
+    engines: {node: '>=12'}
+    dev: false
+
   /ansi-styles@4.3.0:
     resolution: {integrity: sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg==}
     engines: {node: '>=8'}
     dependencies:
       color-convert: 2.0.1
+    dev: false
+
+  /ansi-styles@6.2.3:
+    resolution: {integrity: sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==}
+    engines: {node: '>=12'}
     dev: false
 
   /argparse@2.0.1:
@@ -1234,10 +1280,60 @@ packages:
       - supports-color
     dev: false
 
+  /boxen@8.0.1:
+    resolution: {integrity: sha512-F3PH5k5juxom4xktynS7MoFY+NUWH5LC4CnH11YB8NPew+HLpmBLCybSAEyb2F+4pRXhuhWqFesoQd6DAyc2hw==}
+    engines: {node: '>=18'}
+    dependencies:
+      ansi-align: 3.0.1
+      camelcase: 8.0.0
+      chalk: 5.6.2
+      cli-boxes: 3.0.0
+      string-width: 7.2.0
+      type-fest: 4.41.0
+      widest-line: 5.0.0
+      wrap-ansi: 9.0.2
+    dev: false
+
   /brace-expansion@2.0.2:
     resolution: {integrity: sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ==}
     dependencies:
       balanced-match: 1.0.2
+    dev: false
+
+  /braintrust@1.0.0-rc.1(zod@3.25.76):
+    resolution: {integrity: sha512-i4re4yTdMH6R2NtV90bjhnFkS/SRT/iJxkCThPgqa4zGhp0u9VtrFLeZMeVCqCwlw7HdTTsCirLEvsYTr61+7g==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.34
+    dependencies:
+      '@ai-sdk/provider': 1.1.3
+      '@next/env': 14.2.33
+      '@vercel/functions': 1.6.0
+      argparse: 2.0.1
+      boxen: 8.0.1
+      chalk: 4.1.2
+      cli-progress: 3.12.0
+      cli-table3: 0.6.5
+      cors: 2.8.5
+      dotenv: 16.6.1
+      esbuild: 0.25.12
+      eventsource-parser: 1.1.2
+      express: 4.21.2
+      graceful-fs: 4.2.11
+      http-errors: 2.0.1
+      minimatch: 9.0.5
+      mustache: 4.2.0
+      pluralize: 8.0.0
+      simple-git: 3.30.0
+      slugify: 1.6.6
+      source-map: 0.7.6
+      terminal-link: 5.0.0
+      uuid: 9.0.1
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.0(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-web-identity'
+      - supports-color
     dev: false
 
   /bufrw@1.4.0:
@@ -1271,6 +1367,11 @@ packages:
       get-intrinsic: 1.3.0
     dev: false
 
+  /camelcase@8.0.0:
+    resolution: {integrity: sha512-8WB3Jcas3swSvjIeA2yvCJ+Miyz5l1ZmB6HFb9R1317dt9LCQoswg/BGrmAmkWVEszSrrg4RwmO46qIm2OEnSA==}
+    engines: {node: '>=16'}
+    dev: false
+
   /chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
@@ -1279,11 +1380,30 @@ packages:
       supports-color: 7.2.0
     dev: false
 
+  /chalk@5.6.2:
+    resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
+    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
+    dev: false
+
+  /cli-boxes@3.0.0:
+    resolution: {integrity: sha512-/lzGpEWL/8PfI0BmBOPRwp0c/wFNX1RdUML3jK/RcSBA9T8mZDdQpqYBKtCFTOfQbwPqWEOpjqW+Fnayc0969g==}
+    engines: {node: '>=10'}
+    dev: false
+
   /cli-progress@3.12.0:
     resolution: {integrity: sha512-tRkV3HJ1ASwm19THiiLIXLO7Im7wlTuKnvkYaTkyoAPefqjNg7W7DHKUlGRxy9vxDvbyCYQkQozvptuMkGCg8A==}
     engines: {node: '>=4'}
     dependencies:
       string-width: 4.2.3
+    dev: false
+
+  /cli-table3@0.6.5:
+    resolution: {integrity: sha512-+W/5efTR7y5HRD7gACw9yQjqMVvEMLBHmboM/kPWam+H+Hmyrgjh6YncVKK122YZkXrLudzTuAukUw9FnMf7IQ==}
+    engines: {node: 10.* || >= 12.*}
+    dependencies:
+      string-width: 4.2.3
+    optionalDependencies:
+      '@colors/colors': 1.5.0
     dev: false
 
   /cliui@8.0.1:
@@ -1386,6 +1506,10 @@ packages:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
     dev: false
 
+  /emoji-regex@10.6.0:
+    resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
+    dev: false
+
   /emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
     dev: false
@@ -1398,6 +1522,11 @@ packages:
   /encodeurl@2.0.0:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
+    dev: false
+
+  /environment@1.1.0:
+    resolution: {integrity: sha512-xUtoPkMggbz0MPyPiIWr1Kp4aeWJjDZ6SMvURhimjdZgsRuDplF5/s9hcgGhyXMhs+6vpnuoiZ2kFiu3FMnS8Q==}
+    engines: {node: '>=18'}
     dev: false
 
   /error@7.0.2:
@@ -1563,6 +1692,11 @@ packages:
     engines: {node: 6.* || 8.* || >= 10.*}
     dev: false
 
+  /get-east-asian-width@1.4.0:
+    resolution: {integrity: sha512-QZjmEOC+IT1uk6Rx0sX22V6uHWVwbdbxf1faPqJ1QhLdGgsRGCZoyaQBm/piRdJy/D2um6hM1UP7ZEeQ4EkP+Q==}
+    engines: {node: '>=18'}
+    dev: false
+
   /get-intrinsic@1.3.0:
     resolution: {integrity: sha512-9fSjSaos/fRIVIp+xSJlE6lfwhES7LNtKaCBIamHsjr2na1BiABJPo0mOjjz8GJDURarmCPGqaiVg5mfjb98CQ==}
     engines: {node: '>= 0.4'}
@@ -1605,6 +1739,11 @@ packages:
   /has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
+    dev: false
+
+  /has-flag@5.0.1:
+    resolution: {integrity: sha512-CsNUt5x9LUdx6hnk/E2SZLsDyvfqANZSUq4+D3D8RzDJ2M+HDTIkF60ibS1vHaK55vzgiZw1bEPFG9yH7l33wA==}
+    engines: {node: '>=12'}
     dev: false
 
   /has-symbols@1.1.0:
@@ -2074,11 +2213,32 @@ packages:
       strip-ansi: 6.0.1
     dev: false
 
+  /string-width@7.2.0:
+    resolution: {integrity: sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==}
+    engines: {node: '>=18'}
+    dependencies:
+      emoji-regex: 10.6.0
+      get-east-asian-width: 1.4.0
+      strip-ansi: 7.1.2
+    dev: false
+
   /strip-ansi@6.0.1:
     resolution: {integrity: sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==}
     engines: {node: '>=8'}
     dependencies:
       ansi-regex: 5.0.1
+    dev: false
+
+  /strip-ansi@7.1.2:
+    resolution: {integrity: sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA==}
+    engines: {node: '>=12'}
+    dependencies:
+      ansi-regex: 6.2.2
+    dev: false
+
+  /supports-color@10.2.2:
+    resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
+    engines: {node: '>=18'}
     dev: false
 
   /supports-color@7.2.0:
@@ -2088,9 +2248,25 @@ packages:
       has-flag: 4.0.0
     dev: false
 
+  /supports-hyperlinks@4.3.0:
+    resolution: {integrity: sha512-i6sWEzuwadSlcr2mOnb0ktlIl+K5FVxsPXmoPfknDd2gyw4ZBIAZ5coc0NQzYqDdEYXMHy8NaY9rWwa1Q1myiQ==}
+    engines: {node: '>=20'}
+    dependencies:
+      has-flag: 5.0.1
+      supports-color: 10.2.2
+    dev: false
+
   /supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+    dev: false
+
+  /terminal-link@5.0.0:
+    resolution: {integrity: sha512-qFAy10MTMwjzjU8U16YS4YoZD+NQLHzLssFMNqgravjbvIPNiqkGFR4yjhJfmY9R5OFU7+yHxc6y+uGHkKwLRA==}
+    engines: {node: '>=20'}
+    dependencies:
+      ansi-escapes: 7.2.0
+      supports-hyperlinks: 4.3.0
     dev: false
 
   /thriftrw@3.11.4:
@@ -2117,6 +2293,11 @@ packages:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
+    dev: false
+
+  /type-fest@4.41.0:
+    resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
+    engines: {node: '>=16'}
     dev: false
 
   /type-is@1.6.18:
@@ -2161,6 +2342,13 @@ packages:
     engines: {node: '>= 0.8'}
     dev: false
 
+  /widest-line@5.0.0:
+    resolution: {integrity: sha512-c9bZp7b5YtRj2wOe6dlj32MK+Bx/M/d+9VB2SHM1OtsUHR0aV0tdP6DWh/iMt0kWi1t5g1Iudu6hQRNd1A4PVA==}
+    engines: {node: '>=18'}
+    dependencies:
+      string-width: 7.2.0
+    dev: false
+
   /wrap-ansi@7.0.0:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
     engines: {node: '>=10'}
@@ -2168,6 +2356,15 @@ packages:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
+    dev: false
+
+  /wrap-ansi@9.0.2:
+    resolution: {integrity: sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==}
+    engines: {node: '>=18'}
+    dependencies:
+      ansi-styles: 6.2.3
+      string-width: 7.2.0
+      strip-ansi: 7.1.2
     dev: false
 
   /xorshift@1.2.0:
@@ -2212,61 +2409,4 @@ packages:
 
   /zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-    dev: false
-
-  file:../../../../js/artifacts/braintrust-0.5.0.tgz(zod@3.25.76):
-    resolution: {integrity: sha512-txPFsreLA0AAwPtnrwBoyUDzYA0aqj58ly+C81l6SXzOtDa0uR8C3D84xSguZuDiGrRJppeb48Avkfr8a4XHNg==, tarball: file:../../../../js/artifacts/braintrust-0.5.0.tgz}
-    id: file:../../../../js/artifacts/braintrust-0.5.0.tgz
-    name: braintrust
-    version: 0.5.0
-    hasBin: true
-    peerDependencies:
-      zod: ^3.25.34
-    dependencies:
-      '@ai-sdk/provider': 1.1.3
-      '@next/env': 14.2.33
-      '@vercel/functions': 1.6.0
-      argparse: 2.0.1
-      chalk: 4.1.2
-      cli-progress: 3.12.0
-      cors: 2.8.5
-      dotenv: 16.6.1
-      esbuild: 0.25.12
-      eventsource-parser: 1.1.2
-      express: 4.21.2
-      graceful-fs: 4.2.11
-      http-errors: 2.0.1
-      minimatch: 9.0.5
-      mustache: 4.2.0
-      pluralize: 8.0.0
-      simple-git: 3.30.0
-      slugify: 1.6.6
-      source-map: 0.7.6
-      uuid: 9.0.1
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.0(zod@3.25.76)
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-web-identity'
-      - supports-color
-    dev: false
-
-  file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@0.5.0):
-    resolution: {integrity: sha512-jS/BexBqtNVVpbO5ZLuOeXqSHLukyD1EOPzU4RXENwZk+mVcfZMohALjKoWJZZEhcRBZoaN0P1lVx7GQrToUMA==, tarball: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz}
-    id: file:../../../../js/artifacts/braintrust-otel-0.1.0.tgz
-    name: '@braintrust/otel'
-    version: 0.1.0
-    peerDependencies:
-      '@opentelemetry/api': '>=1.9.0'
-      '@opentelemetry/context-async-hooks': '>=1.9.0'
-      '@opentelemetry/core': '>=1.9.0'
-      '@opentelemetry/exporter-trace-otlp-http': '>=0.35.0'
-      '@opentelemetry/sdk-trace-base': '>=1.9.0'
-      braintrust: '>=0.5.0'
-    dependencies:
-      '@opentelemetry/api': 1.9.0
-      '@opentelemetry/context-async-hooks': 1.9.0(@opentelemetry/api@1.9.0)
-      '@opentelemetry/core': 1.9.0(@opentelemetry/api@1.9.0)
-      '@opentelemetry/exporter-trace-otlp-http': 0.35.0(@opentelemetry/api@1.9.0)
-      '@opentelemetry/sdk-trace-base': 1.9.0(@opentelemetry/api@1.9.0)
-      braintrust: file:../../../../js/artifacts/braintrust-0.5.0.tgz(zod@3.25.76)
     dev: false
