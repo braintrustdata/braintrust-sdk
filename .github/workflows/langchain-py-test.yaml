@@ -34,6 +34,7 @@ jobs:
       - name: Skip check
         id: skip-check
         shell: bash
+        working-directory: .
         run: |
           if [[ "${{ inputs.os }}" == "windows-latest" && "${{ inputs.skip-windows }}" == "true" ]]; then
             echo "Skipping Windows tests due to skip-windows label"
