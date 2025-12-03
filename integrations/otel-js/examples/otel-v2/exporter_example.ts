@@ -36,9 +36,7 @@ const exporter = new BraintrustExporter({
 // Option 1: Use BatchSpanProcessor (recommended for production)
 // BatchSpanProcessor batches spans before exporting, which is more efficient
 // Type assertion needed for OTel version compatibility
-const batchProcessor = new BatchSpanProcessor(
-  exporter as unknown as SpanExporter,
-);
+const batchProcessor = new BatchSpanProcessor(exporter);
 
 // Option 2: Use SimpleSpanProcessor (useful for debugging)
 // SimpleSpanProcessor exports spans immediately, one at a time
