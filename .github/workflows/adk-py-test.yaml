@@ -30,6 +30,8 @@ jobs:
         working-directory: integrations/adk-py
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Skip check
         id: skip-check
         shell: bash
@@ -43,9 +45,6 @@ jobs:
           else
             echo "should-skip=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - uses: actions/checkout@v4
-        if: steps.skip-check.outputs.should-skip != 'true'
 
       - name: Set up uv
         if: steps.skip-check.outputs.should-skip != 'true'
