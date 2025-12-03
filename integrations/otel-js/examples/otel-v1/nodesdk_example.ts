@@ -13,7 +13,7 @@ const sdk = new NodeSDK({
   spanProcessor: new BraintrustSpanProcessor({
     parent: "project_name:otel-v1-examples",
     filterAISpans: true,
-  }) as unknown as SpanProcessor,
+  }),
 });
 
 sdk.start();
