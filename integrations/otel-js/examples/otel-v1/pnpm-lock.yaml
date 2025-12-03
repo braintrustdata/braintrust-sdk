@@ -45,7 +45,7 @@ dependencies:
     specifier: 5.0.76
     version: 5.0.76(zod@3.25.76)
   braintrust:
-    specifier: 1.0.0-rc.2
+    specifier: next
     version: 1.0.0-rc.2(zod@3.25.76)
   openai:
     specifier: ^5.23.2
