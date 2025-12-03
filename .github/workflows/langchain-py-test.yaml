@@ -31,10 +31,11 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Skip check
         id: skip-check
         shell: bash
-        working-directory: .
         run: |
           if [[ "${{ inputs.os }}" == "windows-latest" && "${{ inputs.skip-windows }}" == "true" ]]; then
             echo "Skipping Windows tests due to skip-windows label"
@@ -45,9 +46,6 @@ jobs:
           else
             echo "should-skip=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - uses: actions/checkout@v4
-        if: steps.skip-check.outputs.should-skip != 'true'
 
       - name: Set up uv
         if: steps.skip-check.outputs.should-skip != 'true'
