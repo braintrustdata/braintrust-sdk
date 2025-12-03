@@ -1,8 +1,13 @@
 packages:
-  - "js"
-  - "core/js"
-  - "integrations/*"
-  - "internal/golden"
-  - "js/src/wrappers/*"
+  - js
+  - core/js
+  - integrations/*
+  - internal/golden
+  - js/src/wrappers/*
   - "!js/vendor/**"
   - "!internal/golden/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - msw
+  - unrs-resolver
