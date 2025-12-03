@@ -9,8 +9,8 @@ dependencies:
     specifier: 2.0.53
     version: 2.0.53(zod@3.25.76)
   '@braintrust/otel':
-    specifier: 0.1.1
-    version: 0.1.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.1)
+    specifier: 0.1.2
+    version: 0.1.2(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.2)
   '@opentelemetry/api':
     specifier: 1.9.0
     version: 1.9.0
@@ -45,8 +45,8 @@ dependencies:
     specifier: 5.0.76
     version: 5.0.76(zod@3.25.76)
   braintrust:
-    specifier: 1.0.0-rc.1
-    version: 1.0.0-rc.1(zod@3.25.76)
+    specifier: next
+    version: 1.0.0-rc.2(zod@3.25.76)
   openai:
     specifier: ^5.23.2
     version: 5.23.2(zod@3.25.76)
@@ -119,12 +119,12 @@ packages:
       json-schema: 0.4.0
     dev: false
 
-  /@braintrust/otel@0.1.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.1):
-    resolution: {integrity: sha512-dVjdIc7ZYubFCzARXlE39eEb6qDsNxtFEcmWrAjgHRo6dNAKHBHRSazpnBlg80rOrT2lOSKAuqhXIpWu2CFdlA==}
+  /@braintrust/otel@0.1.2(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.9.0)(@opentelemetry/exporter-trace-otlp-http@0.35.0)(@opentelemetry/sdk-trace-base@1.9.0)(braintrust@1.0.0-rc.2):
+    resolution: {integrity: sha512-tyh/69Uu5GcIwSQ2k0ytQdR3t/KIRc45L8lUYxQDbGYDxekVWTzfOhBCQ4G34aJKT3Q527k9Ye0IbvrcdABT+g==}
     peerDependencies:
       '@opentelemetry/api': '>=1.9.0'
       '@opentelemetry/core': '>=1.9.0'
-      '@opentelemetry/exporter-trace-otlp-http': '>=0.205.0'
+      '@opentelemetry/exporter-trace-otlp-http': '>=0.35.0'
       '@opentelemetry/sdk-trace-base': '>=1.9.0'
       braintrust: '>=1.0.0-0'
     dependencies:
@@ -132,7 +132,7 @@ packages:
       '@opentelemetry/core': 1.9.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-trace-otlp-http': 0.35.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 1.9.0(@opentelemetry/api@1.9.0)
-      braintrust: 1.0.0-rc.1(zod@3.25.76)
+      braintrust: 1.0.0-rc.2(zod@3.25.76)
     dev: false
 
   /@colors/colors@1.5.0:
@@ -1300,8 +1300,8 @@ packages:
       balanced-match: 1.0.2
     dev: false
 
-  /braintrust@1.0.0-rc.1(zod@3.25.76):
-    resolution: {integrity: sha512-i4re4yTdMH6R2NtV90bjhnFkS/SRT/iJxkCThPgqa4zGhp0u9VtrFLeZMeVCqCwlw7HdTTsCirLEvsYTr61+7g==}
+  /braintrust@1.0.0-rc.2(zod@3.25.76):
+    resolution: {integrity: sha512-cr8RCYlIXDtiA0jp1H1xTkKblMgAZA3nZKXEbe6gQXVyftCZi4EoW4SNh1GNN1aJreLWNfXR51osGWQ3C7hPOA==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.34

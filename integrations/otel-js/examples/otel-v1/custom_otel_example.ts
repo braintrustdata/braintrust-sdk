@@ -23,12 +23,12 @@ const provider = new BasicTracerProvider({
     "service.name": "custom-braintrust-service",
   }),
 });
-(provider as any).addSpanProcessor(
+provider.addSpanProcessor(
   // Add Braintrust span processor with filtering enabled
   new BraintrustSpanProcessor({
     parent: "project_name:otel-v1-examples",
     filterAISpans: true,
-  }) as unknown as SpanProcessor,
+  }),
 );
 
 trace.setGlobalTracerProvider(provider); // sets the global tracer provider

@@ -1,7 +1,5 @@
-import {
-  BasicTracerProvider,
-  type SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { trace, context } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { BraintrustSpanProcessor, setupOtelCompat } from "@braintrust/otel";
@@ -18,14 +16,12 @@ setupOtelCompat();
 const braintrustProcessor = new BraintrustSpanProcessor({
   parent: "project_name:otel-v2-examples",
   filterAISpans: true,
-}) as unknown as SpanProcessor;
+});
 
 const provider = new BasicTracerProvider({
-  resource: {
-    attributes: {
-      "service.name": "custom-braintrust-service",
-    },
-  } as any,
+  resource: resourceFromAttributes({
+    "service.name": "custom-braintrust-service",
+  }),
   spanProcessors: [braintrustProcessor],
 });
 

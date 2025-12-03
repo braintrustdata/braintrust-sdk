@@ -18,11 +18,7 @@
  */
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import {
-  BatchSpanProcessor,
-  SimpleSpanProcessor,
-  type SpanExporter,
-} from "@opentelemetry/sdk-trace-base";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { BraintrustExporter } from "@braintrust/otel";
 import { trace } from "@opentelemetry/api";
 
