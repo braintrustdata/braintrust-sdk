@@ -1,8 +1,6 @@
 // nodesdk_example.ts - OpenTelemetry v2.x example
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BraintrustSpanProcessor } from "@braintrust/otel";
-import { trace } from "@opentelemetry/api";
-import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { runNodesdkExample } from "../common/nodesdk_example_common";
 
 const sdk = new NodeSDK({
@@ -10,7 +8,7 @@ const sdk = new NodeSDK({
     new BraintrustSpanProcessor({
       parent: "project_name:otel-v2-examples",
       filterAISpans: true,
-    }) as unknown as SpanProcessor,
+    }),
   ],
 });
 

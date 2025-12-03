@@ -1,7 +1,6 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { Resource } from "@opentelemetry/resources";
 import { BraintrustSpanProcessor } from "@braintrust/otel";
-import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import * as ai from "ai";
 import * as openaiModule from "@ai-sdk/openai";
 import * as zod from "zod";
@@ -14,7 +13,7 @@ const sdk = new NodeSDK({
   spanProcessor: new BraintrustSpanProcessor({
     parent: "project_name:otel-v1-examples",
     filterAISpans: true,
-  }) as unknown as SpanProcessor,
+  }),
 });
 
 sdk.start();

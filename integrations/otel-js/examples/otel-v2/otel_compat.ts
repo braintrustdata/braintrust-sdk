@@ -50,7 +50,7 @@ async function main() {
   // Setup OpenTelemetry with Braintrust processor (v2 API - spanProcessors array)
   const provider = new BasicTracerProvider({
     spanProcessors: [braintrustProcessor],
-  } as any);
+  });
 
   // Set as global tracer provider so OTEL context APIs work
   trace.setGlobalTracerProvider(provider);
