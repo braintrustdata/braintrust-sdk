@@ -53,6 +53,8 @@ jobs:
 
       - uses: actions/checkout@v4
         if: steps.skip-check.outputs.should-skip != 'true'
+        with:
+          fetch-depth: 2
       - name: Set up Python
         if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/setup-python@v5
