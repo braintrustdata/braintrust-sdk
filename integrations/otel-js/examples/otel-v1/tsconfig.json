@@ -12,6 +12,6 @@
     "downlevelIteration": true,
     "baseUrl": "."
   },
-  "include": ["*.ts"],
+  "include": ["*.ts", "../common/*.ts"],
   "exclude": ["node_modules", "../../../js/**"]
 }
