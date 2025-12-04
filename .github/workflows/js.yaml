@@ -324,6 +324,74 @@ jobs:
         run: |
           npm run restore
 
+  smoke-tests-cloudflare:
+    needs: [check-labels, build]
+    if: needs.check-labels.outputs.skip-typescript != 'true'
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Skip check
+        id: skip-check
+        shell: bash
+        run: |
+          if [[ "${{ matrix.node-version }}" == "20" && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
+            echo "Skipping Node 20 tests due to skip-legacy label"
+            echo "should-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.skip-check.outputs.should-skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: steps.skip-check.outputs.should-skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        if: steps.skip-check.outputs.should-skip != 'true'
+        working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        if: steps.skip-check.outputs.should-skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build
+        if: steps.skip-check.outputs.should-skip != 'true'
+        working-directory: js/smoke/tests/cloudflare-worker
+        shell: bash
+        run: |
+          npm ci
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Run Cloudflare Worker smoke test
+        if: steps.skip-check.outputs.should-skip != 'true'
+        working-directory: js/smoke/tests/cloudflare-worker
+        shell: bash
+        run: |
+          npm test
+
+      - name: Restore original package.json files
+        if: always() && steps.skip-check.outputs.should-skip != 'true'
+        working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run restore
+
   smoke-tests-deno:
     needs: [check-labels, build]
     if: needs.check-labels.outputs.skip-typescript != 'true'
