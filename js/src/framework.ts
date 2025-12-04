@@ -9,7 +9,6 @@ import { queue } from "async";
 
 import chalk from "chalk";
 import boxen from "boxen";
-import terminalLink from "terminal-link";
 import pluralize from "pluralize";
 import Table from "cli-table3";
 import { GenericFunction } from "./framework-types";
@@ -667,7 +666,7 @@ export async function Eval<
     if (
       experiment &&
       typeof process !== "undefined" &&
-      process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true"
+      globalThis.BRAINTRUST_CONTEXT_MANAGER !== undefined
     ) {
       await experiment._waitForId();
     }
@@ -1608,11 +1607,7 @@ export function formatExperimentSummary(summary: ExperimentSummary) {
   const content = [comparisonLine, ...tableParts].filter(Boolean).join("\n");
 
   const footer = summary.experimentUrl
-    ? terminalLink(
-        `View results for ${summary.experimentName}`,
-        summary.experimentUrl,
-        { fallback: () => `See results at ${summary.experimentUrl}` },
-      )
+    ? `See results at ${summary.experimentUrl}`
     : "";
 
   const boxContent = [content, footer].filter(Boolean).join("\n\n");
