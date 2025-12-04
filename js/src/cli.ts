@@ -23,6 +23,7 @@ import {
   SimpleProgressReporter,
   ProgressReporter,
 } from "./progress";
+import chalk from "chalk";
 
 // Re-use the module resolution logic from Jest
 import {
@@ -129,8 +130,10 @@ async function initExperiment(
     setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
+  const linkText = info.experimentUrl || "locally";
   console.error(
-    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`,
+    chalk.cyan("▶") +
+      ` Experiment ${chalk.bold(info.experimentName)} is running at ${linkText}`,
   );
   return logger;
 }
@@ -564,7 +567,11 @@ async function runOnce(
     }
   });
 
-  console.error(`Processing ${resultPromises.length} evaluators...`);
+  console.error(
+    chalk.dim(
+      `Processing ${chalk.bold(resultPromises.length)} evaluator${resultPromises.length === 1 ? "" : "s"}...`,
+    ),
+  );
   const allEvalsResults = await Promise.all(resultPromises);
   opts.progressReporter.stop();
   console.error("");

@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.4.10",
+  "version": "1.0.0",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -65,7 +65,9 @@
     "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v3": "vitest run src/wrappers/ai-sdk-v3.test.ts",
-    "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts"
+    "test:mastra": "vitest run src/wrappers/mastra.test.ts",
+    "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
+    "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
   },
   "author": "",
   "license": "MIT",
@@ -108,8 +110,10 @@
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
     "argparse": "^2.0.1",
+    "boxen": "^8.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
+    "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "esbuild": "^0.27.0",
