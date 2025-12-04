@@ -2,6 +2,7 @@ name: js
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths-ignore:
       - "integrations/otel-js/**"
   push:

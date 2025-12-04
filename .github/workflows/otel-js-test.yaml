@@ -2,6 +2,7 @@ name: otel-js
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - "integrations/otel-js/**"
       - "js/**"
