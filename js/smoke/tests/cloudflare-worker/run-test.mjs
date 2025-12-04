@@ -37,12 +37,28 @@ async function runTest() {
   wrangler.stdout.on("data", (d) => (output += d));
   wrangler.stderr.on("data", (d) => (output += d));
 
+  const killWrangler = () => {
+    return new Promise((resolve) => {
+      if (wrangler.exitCode !== null) {
+        resolve();
+        return;
+      }
+      wrangler.once("exit", resolve);
+      wrangler.kill("SIGTERM");
+      setTimeout(() => {
+        if (wrangler.exitCode === null) {
+          wrangler.kill("SIGKILL");
+        }
+      }, 1000);
+    });
+  };
+
   let exitCode = 1;
 
   try {
     if (!(await waitForServer())) {
       console.error("Server failed to start:\n", output);
-      wrangler.kill("SIGTERM");
+      await killWrangler();
       return 1;
     }
 
@@ -56,7 +72,7 @@ async function runTest() {
     exitCode = 1;
   }
 
-  wrangler.kill("SIGTERM");
+  await killWrangler();
   return exitCode;
 }
 

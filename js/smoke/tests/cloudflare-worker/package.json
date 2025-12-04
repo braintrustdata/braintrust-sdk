@@ -10,7 +10,7 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts braintrust"
   },
   "dependencies": {
-    "braintrust": "~1.0.0-0"
+    "braintrust": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
