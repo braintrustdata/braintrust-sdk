@@ -9,14 +9,6 @@ on:
       os:
         required: true
         type: string
-      skip-legacy:
-        required: false
-        type: string
-        default: "false"
-      skip-windows:
-        required: false
-        type: string
-        default: "false"
 
 jobs:
   test:
@@ -33,22 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip check
-        id: skip-check
-        shell: bash
-        run: |
-          if [[ "${{ inputs.os }}" == "windows-latest" && "${{ inputs.skip-windows }}" == "true" ]]; then
-            echo "Skipping Windows tests due to skip-windows label"
-            echo "should-skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ ("${{ inputs.python-version }}" == "3.9" || "${{ inputs.python-version }}" == "3.10") && "${{ inputs.skip-legacy }}" == "true" ]]; then
-            echo "Skipping Python ${{ inputs.python-version }} tests due to skip-legacy label"
-            echo "should-skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should-skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up uv
-        if: steps.skip-check.outputs.should-skip != 'true'
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -57,23 +34,20 @@ jobs:
             integrations/langchain-py/uv.lock
 
       - name: Install dependencies
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           uv python install ${{ inputs.python-version }}
           uv sync
 
       - name: Lint with ruff
-        if: steps.skip-check.outputs.should-skip != 'true' && inputs.os == 'ubuntu-latest'
+        if: ${{ inputs.os == 'ubuntu-latest' }}
         run: |
           uv run ruff check $(git ls-files '*.py' | grep -v 'examples/')
 
       - name: Run tests
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           uv run pytest src
 
       - name: Test import
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           uv run python -c "import braintrust_langchain; print('braintrust_langchain imported successfully')"
           uv run python -c "from braintrust_langchain import BraintrustCallbackHandler; print('BraintrustCallbackHandler imported successfully')"

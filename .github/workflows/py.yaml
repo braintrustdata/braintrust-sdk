@@ -2,27 +2,11 @@ name: py
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
 jobs:
-  check-labels:
-    runs-on: ubuntu-latest
-    outputs:
-      skip-windows: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-windows') }}
-      skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}
-      skip-python: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-python') }}
-    steps:
-      - name: Check for skip labels
-        run: |
-          echo "skip-windows: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-windows') }}"
-          echo "skip-legacy: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-legacy') }}"
-          echo "skip-python: ${{ contains(toJSON(github.event.pull_request.labels.*.name), 'skip-python') }}"
-
   build:
-    needs: check-labels
-    if: needs.check-labels.outputs.skip-python != 'true'
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -38,51 +22,27 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
-      - name: Skip check
-        id: skip-check
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" && "${{ needs.check-labels.outputs.skip-windows }}" == "true" ]]; then
-            echo "Skipping Windows build due to skip-windows label"
-            echo "should-skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ ("${{ matrix.python-version }}" == "3.9" || "${{ matrix.python-version }}" == "3.10") && "${{ needs.check-labels.outputs.skip-legacy }}" == "true" ]]; then
-            echo "Skipping Python ${{ matrix.python-version }} build due to skip-legacy label"
-            echo "should-skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should-skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.skip-check.outputs.should-skip != 'true'
-        with:
-          fetch-depth: 2
       - name: Set up Python
-        if: steps.skip-check.outputs.should-skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           cd py && make install-dev
       - name: Test whether the Python SDK can be installed
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           # This is already done by make install-dev, but we're keeping this as a separate step
           # to explicitly verify that installation works
           python -m uv pip install -e ./py[all]
       - name: Test whether the Python SDK can be imported
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           python -c 'import braintrust'
       - name: Run nox tests
-        if: steps.skip-check.outputs.should-skip != 'true'
         run: |
           make nox
 
   adk-py:
-    needs: check-labels
-    if: needs.check-labels.outputs.skip-python != 'true'
     uses: ./.github/workflows/adk-py-test.yaml
     strategy:
       fail-fast: false
@@ -92,13 +52,9 @@ jobs:
     with:
       python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}
-      skip-legacy: ${{ needs.check-labels.outputs.skip-legacy }}
-      skip-windows: ${{ needs.check-labels.outputs.skip-windows }}
     secrets: inherit
 
   langchain-py:
-    needs: check-labels
-    if: needs.check-labels.outputs.skip-python != 'true'
     uses: ./.github/workflows/langchain-py-test.yaml
     strategy:
       fail-fast: false
@@ -108,13 +64,10 @@ jobs:
     with:
       python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}
-      skip-legacy: ${{ needs.check-labels.outputs.skip-legacy }}
-      skip-windows: ${{ needs.check-labels.outputs.skip-windows }}
     secrets: inherit
 
   upload-wheel:
-    needs: [check-labels, build]
-    if: needs.check-labels.outputs.skip-python != 'true'
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
