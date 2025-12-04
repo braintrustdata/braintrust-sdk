@@ -42,6 +42,7 @@ async function runTest() {
   try {
     if (!(await waitForServer())) {
       console.error("Server failed to start:\n", output);
+      wrangler.kill("SIGTERM");
       return 1;
     }
 
@@ -56,9 +57,6 @@ async function runTest() {
   }
 
   wrangler.kill("SIGTERM");
-  await sleep(100);
-  killPort(PORT);
-
   return exitCode;
 }
 
