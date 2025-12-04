@@ -143,6 +143,14 @@ def test_openai(session, version):
 
 
 @nox.session()
+def test_openrouter(session):
+    """Test wrap_openai with OpenRouter. Requires OPENROUTER_API_KEY env var."""
+    _install_test_deps(session)
+    _install(session, "openai")
+    _run_tests(session, f"{WRAPPER_DIR}/test_openrouter.py")
+
+
+@nox.session()
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
     _install_test_deps(session)
