@@ -39,7 +39,7 @@
   "dependencies": {},
   "peerDependencies": {
     "@langchain/core": ">=0.3.42 <0.4.0",
-    "braintrust": "^0.4.0"
+    "braintrust": ">=0.4.0"
   },
   "peerDependenciesMeta": {
     "braintrust": {
