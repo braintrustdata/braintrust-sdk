@@ -1690,3 +1690,35 @@ def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
     spans = memory_logger.pop()
     root_span = spans[0]
     assert root_span["metadata"]["conversation_id"] == "test-12345", "Should log trace metadata"
+
+
+def test_parse_metrics_excludes_booleans():
+    """Test that boolean fields in usage objects are excluded from metrics.
+
+    Reproduces issue where OpenRouter returns is_byok (a boolean) in the usage
+    object, which caused API validation errors: "Expected number, received boolean".
+
+    In Python, bool is a subclass of int, so isinstance(True, int) returns True.
+    The fix ensures _is_numeric explicitly excludes booleans.
+    """
+    from braintrust.oai import _parse_metrics_from_usage
+
+    # Simulate OpenRouter's usage object with boolean field
+    usage = {
+        "completion_tokens": 11,
+        "prompt_tokens": 8,
+        "total_tokens": 19,
+        "cost": 0.000104,
+        "is_byok": False,  # This boolean should be filtered out
+    }
+
+    metrics = _parse_metrics_from_usage(usage)
+
+    # Numeric fields should be included
+    assert metrics["completion_tokens"] == 11
+    assert metrics["prompt_tokens"] == 8
+    assert metrics["tokens"] == 19  # total_tokens gets renamed
+    assert metrics["cost"] == 0.000104
+
+    # Boolean field should NOT be in metrics (this was the bug)
+    assert "is_byok" not in metrics
