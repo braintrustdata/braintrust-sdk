@@ -51,11 +51,6 @@ def _get_async_client():
 
 @pytest.mark.vcr
 def test_openrouter_chat_completion_sync(memory_logger):
-    """Test that wrap_openai works with OpenRouter's sync client.
-
-    OpenRouter returns additional fields like `is_byok` (boolean) in usage objects.
-    This test verifies that boolean fields are correctly filtered from metrics.
-    """
     assert not memory_logger.pop()
 
     client = wrap_openai(_get_client())
