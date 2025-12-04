@@ -100,6 +100,12 @@ export interface ContextParentSpanIds {
   spanParents: string[];
 }
 
+export class LoginInvalidOrgError extends Error {
+  constructor(public message: string) {
+    super(message);
+  }
+}
+
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed
 const REDACTION_FIELDS = [
@@ -4472,7 +4478,9 @@ function _saveOrgInfo(
   org_name: string | undefined,
 ) {
   if (org_info.length === 0) {
-    throw new Error("This user is not part of any organizations.");
+    throw new LoginInvalidOrgError(
+      "This user is not part of any organizations.",
+    );
   }
 
   for (const org of org_info) {
@@ -4487,7 +4495,7 @@ function _saveOrgInfo(
   }
 
   if (state.orgId === undefined) {
-    throw new Error(
+    throw new LoginInvalidOrgError(
       `Organization ${org_name} not found. Must be one of ${org_info
         .map((x: any) => x.name)
         .join(", ")}`,
