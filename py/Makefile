@@ -1,5 +1,4 @@
-.PHONY: lint test test-wheel _template-version clean fixup build verify help _check-git-clean
-.PHONY: publish-to-pypi publish-to-testpypi _verify-build-publish install-build-deps install-dev _publish
+.PHONY: lint test test-wheel _template-version clean fixup build verify-build verify help install-build-deps install-dev _check-git-clean
 
 clean:
 	rm -rf build dist
@@ -14,12 +13,13 @@ lint: fixup
 test:
 	nox -x
 
-test-wheel: build
+test-wheel:
 	# This target runs a small set of sanity checks before we release our
 	# build artifact to pypi. We skip running the full test suite because
 	# (a) theoretically it should have been run before (b) it has
 	# integration tests and we don't want to block the release because
 	# some service is down, etc. This decision could be revisited anytime.
+	# Note: Caller must run 'make build' first.
 	nox -s test_core -- --wheel
 
 test-core:
@@ -32,6 +32,14 @@ build: clean _template-version
 	python -m build
 	# Restore the original version file after the build
 	git checkout src/braintrust/version.py
+
+_check-git-clean:
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Git working directory is not clean."; \
+		exit 1; \
+	fi
+
+verify-build: _check-git-clean build test-wheel
 
 verify: lint test
 
@@ -50,23 +58,6 @@ install-optional:
 	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai dspy
 	python -m uv pip install -e .[temporal]
 
-_publish:
-	./scripts/publish.sh
-
-_check-git-clean:
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Error: Git working directory is not clean. Won't run publish."; \
-		exit 1; \
-	fi
-
-_verify-build-publish: _check-git-clean build test-wheel _publish
-
-publish-to-pypi: export PYPI_REPO := pypi
-publish-to-pypi: _verify-build-publish
-
-publish-to-testpypi: export PYPI_REPO := testpypi
-publish-to-testpypi: _verify-build-publish
-
 .DEFAULT_GOAL := help
 help:
 	@echo "Available targets:"
@@ -80,5 +71,4 @@ help:
 	@echo "  test-core           - Run core tests only"
 	@echo "  test-wheel          - Run tests against built wheel"
 	@echo "  verify              - Run all CI checks"
-	@echo "  publish-to-pypi     - Publish to PyPI"
-	@echo "  publish-to-testpypi - Publish to TestPyPI"
+	@echo "  verify-build        - Verify git clean, build, and test wheel"
