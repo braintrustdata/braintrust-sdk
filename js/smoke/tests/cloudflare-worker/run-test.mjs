@@ -37,39 +37,29 @@ async function runTest() {
   wrangler.stdout.on("data", (d) => (output += d));
   wrangler.stderr.on("data", (d) => (output += d));
 
-  const cleanup = () => {
-    wrangler.kill("SIGTERM");
-    killPort(PORT);
-  };
-
-  process.on("SIGINT", () => {
-    cleanup();
-    process.exit(1);
-  });
-  process.on("SIGTERM", () => {
-    cleanup();
-    process.exit(1);
-  });
+  let exitCode = 1;
 
   try {
     if (!(await waitForServer())) {
       console.error("Server failed to start:\n", output);
-      cleanup();
-      process.exit(1);
+      return 1;
     }
 
     const response = await fetch(`http://localhost:${PORT}/test`);
     const result = await response.json();
 
     console.log(JSON.stringify(result, null, 2));
-
-    cleanup();
-    process.exit(result.success ? 0 : 1);
+    exitCode = result.success ? 0 : 1;
   } catch (error) {
     console.error("Error:", error.message, "\n", output);
-    cleanup();
-    process.exit(1);
+    exitCode = 1;
   }
+
+  wrangler.kill("SIGTERM");
+  await sleep(100);
+  killPort(PORT);
+
+  return exitCode;
 }
 
-runTest();
+runTest().then((code) => process.exit(code));
