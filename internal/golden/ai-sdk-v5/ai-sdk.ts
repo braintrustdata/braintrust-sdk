@@ -460,6 +460,18 @@ interface CalculateToolArgs {
   b: number;
 }
 
+// Type for store price tool args
+interface StorePriceToolArgs {
+  store: string;
+  item: string;
+}
+
+// Type for discount tool args
+interface ApplyDiscountToolArgs {
+  total: number;
+  discountCode: string;
+}
+
 // Test 14: Tool use
 async function testToolUse() {
   return traced(
@@ -559,7 +571,121 @@ async function testToolUseWithResult() {
   );
 }
 
-// Test 16: Reasoning tokens generation and follow-up
+// Test 16: Multi-round tool use (to see LLM ↔ tool roundtrips)
+async function testMultiRoundToolUse() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 16: Multi-Round Tool Use ===");
+
+      const getStorePriceTool = ai.tool({
+        description: "Get the price of an item from a specific store",
+        inputSchema: z.object({
+          store: z
+            .string()
+            .describe("The store name (e.g., 'StoreA', 'StoreB')"),
+          item: z.string().describe("The item to get the price for"),
+        }),
+        execute: async (args: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const typedArgs = args as StorePriceToolArgs;
+          const prices: Record<string, Record<string, number>> = {
+            StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+            StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+          };
+          const price = prices[typedArgs.store]?.[typedArgs.item] ?? 0;
+          return JSON.stringify({
+            store: typedArgs.store,
+            item: typedArgs.item,
+            price,
+          });
+        },
+      });
+
+      const applyDiscountTool = ai.tool({
+        description: "Apply a discount code to a total amount",
+        inputSchema: z.object({
+          total: z.number().describe("The total amount before discount"),
+          discountCode: z.string().describe("The discount code to apply"),
+        }),
+        execute: async (args: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const typedArgs = args as ApplyDiscountToolArgs;
+          const discounts: Record<string, number> = {
+            SAVE10: 0.1,
+            SAVE20: 0.2,
+            HALF: 0.5,
+          };
+          const discountRate = discounts[typedArgs.discountCode] ?? 0;
+          const discountAmount = typedArgs.total * discountRate;
+          const finalTotal = typedArgs.total - discountAmount;
+          return JSON.stringify({
+            originalTotal: typedArgs.total,
+            discountCode: typedArgs.discountCode,
+            discountRate: `${discountRate * 100}%`,
+            discountAmount,
+            finalTotal,
+          });
+        },
+      });
+
+      for (const [provider, model] of [
+        ["openai", openai("gpt-5-mini")],
+        ["anthropic", anthropic("claude-sonnet-4-5")],
+      ] as const) {
+        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+
+        // @ts-ignore - Type instantiation depth issue with tools
+        const result = await generateText({
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          model: model as LanguageModel,
+          system:
+            "You are a shopping assistant. When asked about prices, always get the price from each store mentioned, then apply any discount codes. Use the tools provided.",
+          tools: {
+            get_store_price: getStorePriceTool,
+            apply_discount: applyDiscountTool,
+          },
+          toolChoice: "required",
+          prompt:
+            "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+          stopWhen: ai.stepCountIs(3),
+        });
+
+        console.log("\nRoundtrip summary:");
+        console.log(`Total tool calls: ${result.toolCalls?.length ?? 0}`);
+        console.log(`Total tool results: ${result.toolResults?.length ?? 0}`);
+
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          result.toolCalls.forEach((call, i) => {
+            console.log(`  Tool call ${i + 1}: ${call.toolName}`);
+            if ("args" in call) {
+              console.log(`    Args: ${JSON.stringify(call.args)}`);
+            }
+          });
+        }
+
+        if (result.toolResults && result.toolResults.length > 0) {
+          result.toolResults.forEach((res, i) => {
+            console.log(`  Tool result ${i + 1}: ${res.toolName}`);
+            console.log(`    Result: ${JSON.stringify(res.result)}`);
+          });
+        }
+
+        console.log("\nFinal response:");
+        console.log(result.text);
+        console.log(`Steps count: ${result.steps?.length ?? 0}`);
+        result.steps?.forEach((step, i) => {
+          console.log(
+            `  Step ${i + 1}: ${step.toolCalls?.length ?? 0} tool calls`,
+          );
+        });
+        console.log();
+      }
+    },
+    { name: "test_multi_round_tool_use" },
+  );
+}
+
+// Test 18: Reasoning tokens generation and follow-up - ADDITIONAL TEST
 async function testReasoning() {
   return traced(
     async () => {
@@ -663,6 +789,7 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
+    testMultiRoundToolUse,
     testReasoning,
   ];
 
