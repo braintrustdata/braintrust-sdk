@@ -23,6 +23,7 @@ nox.options.default_venv_backend = "uv"
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
 CONTRIB_DIR = "braintrust/contrib"
+DEVSERVER_DIR = "braintrust/devserver"
 
 
 SILENT_INSTALLS = True
@@ -139,6 +140,14 @@ def test_openai(session, version):
         _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
+
+
+@nox.session()
+def test_openrouter(session):
+    """Test wrap_openai with OpenRouter. Requires OPENROUTER_API_KEY env var."""
+    _install_test_deps(session)
+    _install(session, "openai")
+    _run_tests(session, f"{WRAPPER_DIR}/test_openrouter.py")
 
 
 @nox.session()
@@ -298,7 +307,7 @@ def _get_braintrust_wheel():
 
 def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_paths=[WRAPPER_DIR, CONTRIB_DIR])
+    _run_tests(session, SRC_DIR, ignore_paths=[WRAPPER_DIR, CONTRIB_DIR, DEVSERVER_DIR])
 
 
 def _run_tests(session, test_path, ignore_path="", ignore_paths=None, env=None):

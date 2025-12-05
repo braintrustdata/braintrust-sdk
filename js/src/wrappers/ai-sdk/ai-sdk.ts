@@ -49,8 +49,9 @@ interface WrapAISDKOptions {
  * });
  * ```
  */
-export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
-  return new Proxy(aiSDK, {
+export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy(aiSDK as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
@@ -65,7 +66,7 @@ export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
       }
       return original;
     },
-  });
+  }) as T;
 }
 
 const wrapGenerateText = (

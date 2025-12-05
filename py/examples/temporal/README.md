@@ -7,7 +7,7 @@ This example demonstrates distributed tracing for Temporal workflows using Brain
 1. Install Braintrust with Temporal support:
 
    ```bash
-   pip install braintrust[temporal]
+   pip install "braintrust[temporal]"
    ```
 
    Or if using mise:

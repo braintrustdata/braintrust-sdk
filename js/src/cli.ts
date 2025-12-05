@@ -24,7 +24,6 @@ import {
   ProgressReporter,
 } from "./progress";
 import chalk from "chalk";
-import terminalLink from "terminal-link";
 
 // Re-use the module resolution logic from Jest
 import {
@@ -131,11 +130,7 @@ async function initExperiment(
     setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
-  const linkText = info.experimentUrl
-    ? terminalLink(info.experimentUrl, info.experimentUrl, {
-        fallback: () => info.experimentUrl!,
-      })
-    : "locally";
+  const linkText = info.experimentUrl || "locally";
   console.error(
     chalk.cyan("▶") +
       ` Experiment ${chalk.bold(info.experimentName)} is running at ${linkText}`,
