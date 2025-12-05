@@ -59,11 +59,11 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
-          return wrapGenerateText(original, options);
+          return wrapGenerateText(original, options, aiSDK);
         case "streamText":
           return wrapStreamText(original, options);
         case "generateObject":
-          return wrapGenerateObject(original, options);
+          return wrapGenerateObject(original, options, aiSDK);
         case "streamObject":
           return wrapStreamObject(original, options);
         case "Agent":
@@ -131,12 +131,14 @@ const makeGenerateTextWrapper = (
   name: string,
   options: WrapAISDKOptions,
   generateText: any,
+  aiSDK?: any,
 ) => {
   const wrapper = async function (params: any) {
     return traced(
       async (span) => {
         const result = await generateText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
         });
 
@@ -169,22 +171,154 @@ const makeGenerateTextWrapper = (
   return wrapper;
 };
 
+/**
+ * Resolves a model string ID to a model instance using AI SDK's global provider.
+ * This mirrors the internal resolveLanguageModel function in AI SDK.
+ */
+const resolveModel = (model: any, ai: any): any => {
+  if (typeof model !== "string") {
+    return model;
+  }
+  // Use AI SDK's global provider if set, otherwise fall back to gateway
+  const provider =
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER ?? ai?.gateway ?? null;
+  if (provider && typeof provider.languageModel === "function") {
+    return provider.languageModel(model);
+  }
+  // If no provider available, return as-is (AI SDK will resolve it)
+  return model;
+};
+
+/**
+ * Wraps a model's doGenerate method to create a span for each LLM call.
+ * This allows visibility into each step of a multi-round tool interaction.
+ */
+const wrapModel = (model: any, ai?: any): any => {
+  // Resolve string model IDs to model instances
+  const resolvedModel = resolveModel(model, ai);
+
+  if (
+    !resolvedModel ||
+    typeof resolvedModel !== "object" ||
+    typeof resolvedModel.doGenerate !== "function"
+  ) {
+    return model; // Return original if we can't wrap
+  }
+
+  // Already wrapped - avoid double wrapping
+  if (resolvedModel._braintrustWrapped) {
+    return resolvedModel;
+  }
+
+  const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
+  const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
+
+  const wrappedModel = {
+    ...model,
+    _braintrustWrapped: true,
+    doGenerate: async (options: any) => {
+      return traced(
+        async (span) => {
+          const result = await originalDoGenerate(options);
+
+          span.log({
+            output: {
+              content: result.content,
+              finishReason: result.finishReason,
+            },
+            metrics: extractTokenMetricsFromUsage(result.usage),
+          });
+
+          return result;
+        },
+        {
+          name: "doGenerate",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+          event: {
+            input: {
+              prompt: options.prompt,
+            },
+            metadata: {
+              model: resolvedModel.modelId,
+              provider: resolvedModel.provider,
+            },
+          },
+        },
+      );
+    },
+    doStream: originalDoStream
+      ? async (options: any) => {
+          // For streaming, we don't wrap doStream itself since streamText handles that
+          return originalDoStream(options);
+        }
+      : undefined,
+  };
+
+  // Copy over any other properties/methods from the original model
+  for (const key of Object.keys(resolvedModel)) {
+    if (!(key in wrappedModel)) {
+      wrappedModel[key] = resolvedModel[key];
+    }
+  }
+
+  // Preserve prototype chain for instanceof checks
+  Object.setPrototypeOf(wrappedModel, Object.getPrototypeOf(resolvedModel));
+
+  return wrappedModel;
+};
+
+/**
+ * Extracts token metrics directly from usage object (for doGenerate results).
+ */
+const extractTokenMetricsFromUsage = (usage: any): Record<string, number> => {
+  const metrics: Record<string, number> = {};
+  if (!usage) return metrics;
+
+  if (usage.inputTokens !== undefined) {
+    metrics.prompt_tokens = usage.inputTokens;
+  }
+  if (usage.outputTokens !== undefined) {
+    metrics.completion_tokens = usage.outputTokens;
+  }
+  if (usage.totalTokens !== undefined) {
+    metrics.tokens = usage.totalTokens;
+  } else if (
+    metrics.prompt_tokens !== undefined &&
+    metrics.completion_tokens !== undefined
+  ) {
+    metrics.tokens = metrics.prompt_tokens + metrics.completion_tokens;
+  }
+  if (usage.reasoningTokens !== undefined) {
+    metrics.reasoning_tokens = usage.reasoningTokens;
+  }
+  if (usage.cachedInputTokens !== undefined) {
+    metrics.prompt_cached_tokens = usage.cachedInputTokens;
+  }
+
+  return metrics;
+};
+
 const wrapGenerateText = (
   generateText: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
-  return makeGenerateTextWrapper("generateText", options, generateText);
+  return makeGenerateTextWrapper("generateText", options, generateText, aiSDK);
 };
 
 const wrapGenerateObject = (
   generateObject: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
   return async function wrappedGenerateObject(params: any) {
     return traced(
       async (span) => {
         const result = await generateObject({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
         });
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import {
   test,
   assert,
@@ -90,9 +91,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(result.text.toLowerCase()).toContain("paris");
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate (per-step LLM call)
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -160,9 +164,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     });
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     // Verify braintrust fingerprint metadata
     expect(span.metadata.braintrust).toBeDefined();
@@ -213,9 +220,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     ).toBe(true);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -315,9 +325,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.ok(result.text);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -472,9 +485,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(result.text.toLowerCase()).toContain("alice");
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span.input.messages).toHaveLength(3);
     expect(span.input.messages[0].role).toBe("user");
@@ -522,9 +538,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(hasPirateSpeak).toBe(true);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span.input).toMatchObject({
       system: "You are a pirate. Always respond in pirate speak.",
@@ -1059,5 +1078,331 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(start).toBeLessThanOrEqual(metrics.start);
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
+  });
+
+  test("ai sdk multi-round tool use with metrics", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const getStorePriceTool = ai.tool({
+      description: "Get the price of an item from a specific store",
+      inputSchema: z.object({
+        store: z.string().describe("The store name (e.g., 'StoreA', 'StoreB')"),
+        item: z.string().describe("The item to get the price for"),
+      }),
+      execute: async (args: { store: string; item: string }) => {
+        const prices: Record<string, Record<string, number>> = {
+          StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+          StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+        };
+        const price = prices[args.store]?.[args.item] ?? 0;
+        return JSON.stringify({ store: args.store, item: args.item, price });
+      },
+    });
+
+    const applyDiscountTool = ai.tool({
+      description: "Apply a discount code to a total amount",
+      inputSchema: z.object({
+        total: z.number().describe("The total amount before discount"),
+        discountCode: z.string().describe("The discount code to apply"),
+      }),
+      execute: async (args: { total: number; discountCode: string }) => {
+        const discounts: Record<string, number> = {
+          SAVE10: 0.1,
+          SAVE20: 0.2,
+        };
+        const discountRate = discounts[args.discountCode] ?? 0;
+        const finalTotal = args.total - args.total * discountRate;
+        return JSON.stringify({
+          originalTotal: args.total,
+          discountCode: args.discountCode,
+          finalTotal,
+        });
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+    const start = getCurrentUnixTimestamp();
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "You are a shopping assistant. When asked about prices, always get the price from each store mentioned using get_store_price, then apply any discount codes using apply_discount. Use the tools provided.",
+      tools: {
+        get_store_price: getStorePriceTool,
+        apply_discount: applyDiscountTool,
+      },
+      toolChoice: "required",
+      prompt:
+        "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+      stopWhen: ai.stepCountIs(6),
+    });
+
+    const end = getCurrentUnixTimestamp();
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const llmSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Should have multiple doGenerate spans - one per LLM round/step
+    // This allows visualizing the LLM ↔ tool roundtrips
+    expect(llmSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Should have tool spans for get_store_price calls (at least 2 for StoreA and StoreB)
+    expect(toolSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify each doGenerate span has its own metrics
+    for (const llmSpan of llmSpans) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const span = llmSpan as any;
+      expect(span.metrics).toBeDefined();
+      expect(span.metrics.start).toBeDefined();
+      expect(span.metrics.end).toBeDefined();
+      expect(start).toBeLessThanOrEqual(span.metrics.start);
+      expect(span.metrics.end).toBeLessThanOrEqual(end);
+
+      // Each doGenerate span should have token metrics for that specific LLM call
+      expect(span.metrics.tokens).toBeGreaterThan(0);
+      expect(span.metrics.prompt_tokens).toBeGreaterThan(0);
+      expect(span.metrics.completion_tokens).toBeGreaterThanOrEqual(0);
+    }
+
+    // Verify tool spans have the expected structure
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storePriceSpans = toolSpans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "get_store_price",
+    );
+    expect(storePriceSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify tool spans have input/output
+    for (const toolSpan of storePriceSpans) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const span = toolSpan as any;
+      expect(span.input).toBeDefined();
+      expect(span.output).toBeDefined();
+
+      const inputData = Array.isArray(span.input) ? span.input[0] : span.input;
+      expect(inputData.store).toMatch(/^Store[AB]$/);
+      expect(inputData.item).toBe("laptop");
+    }
+  });
+
+  test("ai sdk multi-round tool use span hierarchy", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const stepOneTool = ai.tool({
+      description: "First step tool that returns a number",
+      inputSchema: z.object({
+        input: z.string(),
+      }),
+      execute: async () => "42",
+    });
+
+    const stepTwoTool = ai.tool({
+      description: "Second step tool that uses the result from step one",
+      inputSchema: z.object({
+        value: z.number(),
+      }),
+      execute: async (args: { value: number }) => String(args.value * 2),
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "You must use the tools in sequence. First call step_one to get a number, then call step_two with that number.",
+      tools: {
+        step_one: stepOneTool,
+        step_two: stepTwoTool,
+      },
+      toolChoice: "required",
+      prompt:
+        "Execute the two-step process: first get a number, then double it.",
+      stopWhen: ai.stepCountIs(5),
+    });
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const llmSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Should have multiple doGenerate spans (one per LLM call)
+    expect(llmSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Should have at least 1 tool span (step_one)
+    expect(toolSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Verify spans have root_span_id linking them together
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rootSpanIds = new Set(spans.map((s: any) => s.root_span_id));
+    // All spans should share the same root (they're part of the same generateText call)
+    expect(rootSpanIds.size).toBe(1);
+
+    // Verify step_one tool was called
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stepOneSpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "step_one",
+    );
+    expect(stepOneSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((stepOneSpan as any).output).toBe("42");
+  });
+
+  test("ai sdk parallel tool calls in single round", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    let toolACalls = 0;
+    let toolBCalls = 0;
+
+    const toolA = ai.tool({
+      description: "Tool A - gets value A",
+      inputSchema: z.object({ id: z.string() }),
+      execute: async () => {
+        toolACalls++;
+        return "value_a";
+      },
+    });
+
+    const toolB = ai.tool({
+      description: "Tool B - gets value B",
+      inputSchema: z.object({ id: z.string() }),
+      execute: async () => {
+        toolBCalls++;
+        return "value_b";
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "When asked to get both values, you MUST call both tool_a and tool_b in parallel in the same response.",
+      tools: {
+        tool_a: toolA,
+        tool_b: toolB,
+      },
+      toolChoice: "required",
+      prompt:
+        'Get both value A (id: "1") and value B (id: "2") at the same time.',
+      stopWhen: ai.stepCountIs(4),
+    });
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Both tools should have been called
+    expect(toolACalls).toBeGreaterThanOrEqual(1);
+    expect(toolBCalls).toBeGreaterThanOrEqual(1);
+
+    // Should have tool spans for both
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolASpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "tool_a",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolBSpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "tool_b",
+    );
+
+    expect(toolASpan).toBeDefined();
+    expect(toolBSpan).toBeDefined();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolASpan as any).output).toBe("value_a");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolBSpan as any).output).toBe("value_b");
+
+    // Both tool spans should share the same root
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolASpan as any).root_span_id).toBe(
+      (toolBSpan as any).root_span_id,
+    );
+  });
+
+  test("ai sdk string model ID resolution with per-step spans", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Set up the global provider so string model IDs can be resolved
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const simpleTool = ai.tool({
+      description: "A simple tool that echoes input",
+      inputSchema: z.object({ message: z.string() }),
+      execute: async (args: { message: string }) => `Echo: ${args.message}`,
+    });
+
+    // Use string model ID instead of openai("gpt-4o-mini")
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      tools: { echo: simpleTool },
+      toolChoice: "required",
+      prompt: "Use the echo tool with message 'hello'",
+      stopWhen: ai.stepCountIs(4),
+    });
+
+    // Clean up global provider
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // Should have parent generateText span + doGenerate spans + tool spans
+    expect(spans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify we have doGenerate spans (per-step LLM calls)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Verify doGenerate span has proper metadata from resolved model
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const firstDoGenerate = doGenerateSpans[0] as any;
+    expect(firstDoGenerate.metadata).toBeDefined();
+    expect(firstDoGenerate.metadata.model).toBe("gpt-4o-mini");
+    expect(firstDoGenerate.metadata.provider).toMatch(/openai/);
+
+    // Verify metrics are captured
+    expect(firstDoGenerate.metrics.tokens).toBeGreaterThan(0);
   });
 });
