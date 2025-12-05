@@ -209,4 +209,5 @@ export const baseAllowedHeaders = [
   "x-stainless-runtime",
   "x-stainless-runtime-version",
   "x-stainless-arch",
+  "x-bt-project-id",
 ];
