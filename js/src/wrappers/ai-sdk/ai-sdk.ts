@@ -100,130 +100,39 @@ const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
 };
 
 const wrapAgentGenerate = (
-  originalGenerate: any,
-  instanceTarget: any,
+  generate: any,
+  instance: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async (callParams: any) => {
-    // follows what ai-sdk library does under the hood when it calls generateText
-    const params = { ...instanceTarget.settings, ...callParams };
-
-    return traced(
-      async (span) => {
-        // Call original agent.generate() - let it handle all its logic
-        const result = await originalGenerate.call(instanceTarget, {
-          ...params,
-          tools: wrapTools(params.tools),
-        });
-
-        span.log({
-          output: await processOutput(result, options.denyOutputPaths),
-          metrics: extractTokenMetrics(result),
-        });
-
-        return result;
-      },
-      {
-        name: "Agent.generate",
-        spanAttributes: {
-          type: SpanTypeAttribute.LLM,
-        },
-        event: {
-          input: processInputAttachments(params),
-          metadata: {
-            model: serializeModel(params.model),
-            braintrust: {
-              integration_name: "ai-sdk",
-              sdk_language: "typescript",
-            },
-          },
-        },
-      },
-    );
-  };
+  return async (params: any) =>
+    makeGenerateTextWrapper(
+      "Agent.generate",
+      options,
+      generate.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling generateText
+    )({ ...instance.settings, ...params });
 };
 
 const wrapAgentStream = (
-  originalStream: any,
-  instanceTarget: any,
+  stream: any,
+  instance: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return (callParams: any) => {
-    // follows what ai-sdk library does under the hood when it calls generateText
-    const params = { ...instanceTarget.settings, ...callParams };
-
-    const span = startSpan({
-      name: "Agent.stream",
-      spanAttributes: {
-        type: SpanTypeAttribute.LLM,
-      },
-      event: {
-        input: processInputAttachments(params),
-        metadata: {
-          model: serializeModel(params?.model),
-          braintrust: {
-            integration_name: "ai-sdk",
-            sdk_language: "typescript",
-          },
-        },
-      },
-    });
-
-    try {
-      const startTime = Date.now();
-      let receivedFirst = false;
-
-      // Wrap callbacks to capture metrics - this is DRY because we're
-      // calling the original method but intercepting its callbacks
-      const wrappedParams = {
-        ...params,
-        onChunk: (chunk: any) => {
-          if (!receivedFirst) {
-            receivedFirst = true;
-            span.log({
-              metrics: {
-                time_to_first_token: (Date.now() - startTime) / 1000,
-              },
-            });
-          }
-          params.onChunk?.(chunk);
-        },
-        onFinish: async (event: any) => {
-          params.onFinish?.(event);
-          span.log({
-            output: await processOutput(event, options.denyOutputPaths),
-            metrics: extractTokenMetrics(event),
-          });
-          span.end();
-        },
-        onError: async (err: unknown) => {
-          params.onError?.(err);
-          span.log({
-            error: serializeError(err),
-          });
-          span.end();
-        },
-      };
-
-      // Call original agent.stream() with wrapped callbacks
-      const result = withCurrent(span, () =>
-        originalStream.call(instanceTarget, wrappedParams),
-      );
-
-      return result;
-    } catch (error) {
-      span.log({ error: serializeError(error) });
-      span.end();
-      throw error;
-    }
-  };
+  return (params: any) =>
+    makeStreamTextWrapper(
+      "Agent.stream",
+      options,
+      stream.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling streamText
+    )({ ...instance.settings, ...params });
 };
 
-const wrapGenerateText = (
+const makeGenerateTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
   generateText: any,
-  options: WrapAISDKOptions = {},
 ) => {
-  return async function wrappedGenerateText(params: any) {
+  const wrapper = async function (params: any) {
     return traced(
       async (span) => {
         const result = await generateText({
@@ -239,7 +148,7 @@ const wrapGenerateText = (
         return result;
       },
       {
-        name: "generateText",
+        name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -256,6 +165,15 @@ const wrapGenerateText = (
       },
     );
   };
+  wrapper.name = name;
+  return wrapper;
+};
+
+const wrapGenerateText = (
+  generateText: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return makeGenerateTextWrapper("generateText", options, generateText);
 };
 
 const wrapGenerateObject = (
@@ -297,10 +215,14 @@ const wrapGenerateObject = (
   };
 };
 
-const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return function wrappedStreamText(params: any) {
+const makeStreamTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  streamText: any,
+) => {
+  const wrapper = function (params: any) {
     const span = startSpan({
-      name: "streamText",
+      name,
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
@@ -403,6 +325,12 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       throw error;
     }
   };
+  wrapper.name = name;
+  return wrapper;
+};
+
+const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
+  return makeStreamTextWrapper("streamText", options, streamText);
 };
 
 const wrapStreamObject = (

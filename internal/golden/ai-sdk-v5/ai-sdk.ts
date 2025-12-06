@@ -272,7 +272,7 @@ async function testStopSequences() {
       for (const [model, stopSequences] of [
         [openai("gpt-5-mini"), ["END", "\n\n"]],
         [anthropic("claude-sonnet-4-5"), ["END"]],
-      ]) {
+      ] satisfies [LanguageModel, string[]][]) {
         await generateText({
           model: model as LanguageModel,
           stopSequences,
