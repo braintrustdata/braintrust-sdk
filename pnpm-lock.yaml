@@ -223,6 +223,9 @@ importers:
       source-map:
         specifier: ^0.7.4
         version: 0.7.4
+      termi-link:
+        specifier: ^1.0.1
+        version: 1.1.0
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -8421,6 +8424,11 @@ packages:
       tslib: 2.8.1
       typescript: 4.9.5
     dev: true
+
+  /termi-link@1.1.0:
+    resolution: {integrity: sha512-2qSN6TnomHgVLtk+htSWbaYs4Rd2MH/RU7VpHTy6MBstyNyWbM4yKd1DCYpE3fDg8dmGWojXCngNi/MHCzGuAA==}
+    engines: {node: '>=12'}
+    dev: false
 
   /test-exclude@6.0.0:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}

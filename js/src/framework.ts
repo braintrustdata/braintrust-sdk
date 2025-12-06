@@ -8,6 +8,7 @@ import {
 import { queue } from "async";
 
 import chalk from "chalk";
+import { terminalLink } from "termi-link";
 import boxen from "boxen";
 import pluralize from "pluralize";
 import Table from "cli-table3";
@@ -1607,7 +1608,11 @@ export function formatExperimentSummary(summary: ExperimentSummary) {
   const content = [comparisonLine, ...tableParts].filter(Boolean).join("\n");
 
   const footer = summary.experimentUrl
-    ? `See results at ${summary.experimentUrl}`
+    ? terminalLink(
+        `View results for ${summary.experimentName}`,
+        summary.experimentUrl,
+        { fallback: () => `See results at ${summary.experimentUrl}` },
+      )
     : "";
 
   const boxContent = [content, footer].filter(Boolean).join("\n\n");
