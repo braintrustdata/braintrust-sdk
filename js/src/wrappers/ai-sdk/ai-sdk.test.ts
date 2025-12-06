@@ -5,6 +5,7 @@ import {
   beforeAll,
   afterEach,
   describe,
+  expectTypeOf,
   expect,
 } from "vitest";
 import { configureNode } from "../../node";
@@ -35,7 +36,7 @@ test("ai sdk is installed", () => {
 });
 
 describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
-  let wrappedAI: ReturnType<typeof wrapAISDK>;
+  let wrappedAI: typeof ai;
   let backgroundLogger: TestBackgroundLogger;
   let _logger: Logger<false>;
 
@@ -56,6 +57,16 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
+  test("ai wrapping preserves type", () => {
+    const wrapped = wrapAISDK(ai);
+    expectTypeOf(wrapped.generateText).toEqualTypeOf<typeof ai.generateText>();
+    expectTypeOf(wrapped.streamText).toEqualTypeOf<typeof ai.streamText>();
+    expectTypeOf(wrapped.generateObject).toEqualTypeOf<
+      typeof ai.generateObject
+    >();
+    expectTypeOf(wrapped.streamObject).toEqualTypeOf<typeof ai.streamObject>();
+  });
+
   test("ai sdk basic completion", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -70,7 +81,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "What is the capital of France? Answer in one word.",
         },
       ],
-      maxTokens: 100,
+      maxOutputTokens: 100,
     });
 
     const end = getCurrentUnixTimestamp();
@@ -145,7 +156,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "Say hello",
         },
       ],
-      maxTokens: 10,
+      maxOutputTokens: 16,
     });
 
     const spans = await backgroundLogger.drain();
@@ -186,7 +197,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           ],
         },
       ],
-      maxTokens: 100,
+      maxOutputTokens: 100,
     });
 
     const end = getCurrentUnixTimestamp();
@@ -296,7 +307,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           ],
         },
       ],
-      maxTokens: 150,
+      maxOutputTokens: 150,
     });
 
     const end = getCurrentUnixTimestamp();
@@ -388,7 +399,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "Count from 1 to 5.",
         },
       ],
-      maxTokens: 100,
+      maxOutputTokens: 100,
     });
 
     let ttft = -1.0;
@@ -452,7 +463,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "What did I just tell you my name was?",
         },
       ],
-      maxTokens: 100,
+      maxOutputTokens: 100,
     });
 
     const end = getCurrentUnixTimestamp();
@@ -493,7 +504,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: "Tell me about the weather.",
         },
       ],
-      maxTokens: 150,
+      maxOutputTokens: 150,
     });
 
     assert.ok(result);
@@ -546,7 +557,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       expect(fullText.length).toBeGreaterThan(0);
     }
 
-    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
     const wrapperSpan = spans.find(
       (s) =>
         s?.span_attributes?.name === "streamObject" &&
@@ -588,7 +600,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Wait for the stream to fully finish and onFinish callback to complete
     await result.text;
 
-    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
     const wrapperSpan = spans.find(
       (s) =>
         s?.span_attributes?.name === "streamText" &&
@@ -625,7 +638,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Wait for the stream to fully finish and onFinish callback to complete
     await result.text;
 
-    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
     const wrapperSpan = spans.find(
       (s) =>
         s?.span_attributes?.name === "streamText" &&
@@ -919,7 +933,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
         calculate: calculateTool,
       },
       prompt: "What is 25 plus 17? Use the calculate tool.",
-      maxToolRoundtrips: 2,
+      stopWhen: ai.stepCountIs(2),
     });
 
     assert.ok(result);
