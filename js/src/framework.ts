@@ -14,6 +14,8 @@ import pluralize from "pluralize";
 import Table from "cli-table3";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
+import { Trace } from "./trace";
+export { Trace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
@@ -158,6 +160,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
+  trace?: Trace;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -917,6 +920,18 @@ async function runEvaluatorInternal(
   })();
 
   progressReporter.start(evaluator.evalName, 0);
+
+  const experimentIdPromise: Promise<string | undefined> | undefined =
+    experiment
+      ? (async () => {
+          try {
+            return await experiment.id;
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined;
+
   const collectedResults: EvalResult<any, any, any, any>[] = [];
   const localScoreAccumulator: ScoreAccumulator | null = experiment ? null : {};
   let cancelled = false;
@@ -963,6 +978,25 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
+        const ensureSpansFlushed = async () => {
+          if (experiment) {
+            await flush({ state: experiment.loggingState });
+            return;
+          }
+          if (evaluator.state) {
+            await flush({ state: evaluator.state });
+            return;
+          }
+          await flush();
+        };
+
+        const trace = new Trace({
+          experimentId: experimentIdPromise
+            ? await experimentIdPromise
+            : undefined,
+          rootSpanId: rootSpan.rootSpanId,
+          ensureSpansFlushed,
+        });
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
@@ -1030,6 +1064,7 @@ async function runEvaluatorInternal(
             expected: "expected" in datum ? datum.expected : undefined,
             metadata,
             output,
+            trace,
           };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
