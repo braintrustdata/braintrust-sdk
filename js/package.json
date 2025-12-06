@@ -89,7 +89,7 @@
     "@types/node": "^20.10.5",
     "@types/pluralize": "^0.0.30",
     "@types/uuid": "^9.0.7",
-    "ai": "^4.3.16",
+    "ai": "^5.0.52",
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
     "cross-env": "^7.0.3",
