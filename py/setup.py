@@ -29,6 +29,7 @@ extras_require = {
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],
+    "performance": ["orjson"],
     "temporal": ["temporalio>=1.19.0; python_version>='3.10'"],
 }
 
