@@ -981,4 +981,83 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(toolSpanTyped.output).toBeDefined();
     expect(toolSpanTyped.output).toBe("42");
   });
+
+  test("ai sdk Agent class can be extended", async () => {
+    // Skip if Agent is not available in this version of ai SDK
+    if (!wrappedAI.Agent && !wrappedAI.experimental_Agent) {
+      console.log("Skipping Agent extension test - Agent not available");
+      return;
+    }
+
+    const AgentClass = wrappedAI.Agent || wrappedAI.experimental_Agent;
+    const model = openai(TEST_MODEL);
+    const start = getCurrentUnixTimestamp();
+
+    // Create a custom Agent subclass
+    class CustomAgent extends AgentClass {
+      customMethod() {
+        return "custom";
+      }
+    }
+
+    const agent = new CustomAgent({
+      model,
+      system: "You are a helpful assistant.",
+    });
+
+    // Verify it's actually an instance of CustomAgent
+    expect(agent).toBeInstanceOf(CustomAgent);
+    expect(agent.customMethod()).toBe("custom");
+
+    // Verify the wrapped methods still work
+    const result = await agent.generate({
+      messages: [
+        {
+          role: "user",
+          content: "Say 'hello'",
+        },
+      ],
+      maxTokens: 50,
+    });
+
+    const end = getCurrentUnixTimestamp();
+
+    expect(result.text).toBeDefined();
+    expect(result.text.toLowerCase()).toContain("hello");
+
+    // Verify tracing still works with proper span structure
+    const spans = await backgroundLogger.drain();
+    expect(spans.length).toBeGreaterThanOrEqual(1);
+
+    const span = spans[0];
+
+    // Assert on span structure
+    expect(span.project_id).toBeDefined();
+    expect(span.log_id).toBe("g");
+    expect(span.created).toBeGreaterThanOrEqual(start);
+    expect(span.created).toBeLessThanOrEqual(end);
+    expect(span.span_id).toBeDefined();
+    expect(span.root_span_id).toBeDefined();
+    expect(span.span_attributes).toEqual({
+      type: "llm",
+      name: "generateText",
+    });
+    expect(span.metadata).toEqual({
+      model: TEST_MODEL,
+    });
+    expect(span.input).toMatchObject({
+      messages: [
+        {
+          role: "user",
+          content: "Say 'hello'",
+        },
+      ],
+    });
+    expect(span.metrics).toBeDefined();
+
+    const { metrics } = span;
+    expect(start).toBeLessThanOrEqual(metrics.start);
+    expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+    expect(metrics.end).toBeLessThanOrEqual(end);
+  });
 });

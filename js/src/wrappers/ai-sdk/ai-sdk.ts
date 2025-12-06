@@ -30,8 +30,8 @@ interface WrapAISDKOptions {
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
- * of generateText, streamText, generateObject, and streamObject that automatically
- * create spans and log inputs, outputs, and metrics.
+ * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
+ * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns Object with AI SDK methods with Braintrust tracing
@@ -41,17 +41,20 @@ interface WrapAISDKOptions {
  * import { wrapAISDK } from "braintrust";
  * import * as ai from "ai";
  *
- * const { generateText, streamText, generateObject, streamObject } = wrapAISDK(ai);
+ * const { generateText, streamText, generateObject, streamObject, Agent } = wrapAISDK(ai);
  *
  * const result = await generateText({
  *   model: openai("gpt-4"),
  *   prompt: "Hello world"
  * });
+ *
+ * const agent = new Agent({ model: openai("gpt-4") });
+ * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
 export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(aiSDK as any, {
+  return new Proxy(aiSDK as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
@@ -63,17 +66,73 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
           return wrapGenerateObject(original, options);
         case "streamObject":
           return wrapStreamObject(original, options);
+        case "Agent":
+        case "Experimental_Agent":
+        case "ToolLoopAgent":
+          return original ? wrapAgentClass(original, options) : original;
       }
       return original;
     },
   }) as T;
 }
 
-const wrapGenerateText = (
-  generateText: any,
+const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
+  return new Proxy(AgentClass, {
+    construct(target, args) {
+      const instance = new target(...args);
+      return new Proxy(instance, {
+        get(instanceTarget, prop, instanceReceiver) {
+          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+
+          if (prop === "generate") {
+            return wrapAgentGenerate(original, instanceTarget, options);
+          }
+
+          if (prop === "stream") {
+            return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          return original;
+        },
+      });
+    },
+  });
+};
+
+const wrapAgentGenerate = (
+  generate: any,
+  instance: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async function wrappedGenerateText(params: any) {
+  return async (params: any) =>
+    makeGenerateTextWrapper(
+      "Agent.generate",
+      options,
+      generate.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling generateText
+    )({ ...instance.settings, ...params });
+};
+
+const wrapAgentStream = (
+  stream: any,
+  instance: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return (params: any) =>
+    makeStreamTextWrapper(
+      "Agent.stream",
+      options,
+      stream.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling streamText
+    )({ ...instance.settings, ...params });
+};
+
+const makeGenerateTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  generateText: any,
+) => {
+  const wrapper = async function (params: any) {
     return traced(
       async (span) => {
         const result = await generateText({
@@ -89,7 +148,7 @@ const wrapGenerateText = (
         return result;
       },
       {
-        name: "generateText",
+        name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -106,6 +165,15 @@ const wrapGenerateText = (
       },
     );
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
+};
+
+const wrapGenerateText = (
+  generateText: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return makeGenerateTextWrapper("generateText", options, generateText);
 };
 
 const wrapGenerateObject = (
@@ -147,10 +215,14 @@ const wrapGenerateObject = (
   };
 };
 
-const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return function wrappedStreamText(params: any) {
+const makeStreamTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  streamText: any,
+) => {
+  const wrapper = function (params: any) {
     const span = startSpan({
-      name: "streamText",
+      name,
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
@@ -253,6 +325,12 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       throw error;
     }
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
+};
+
+const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
+  return makeStreamTextWrapper("streamText", options, streamText);
 };
 
 const wrapStreamObject = (

@@ -6,7 +6,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.39",
     "@ai-sdk/openai": "^2.0.56",
-    "ai": "^5.0.82",
+    "ai": "^5.0.102",
     "braintrust": "file:../../../js",
     "zod": "^3.23.8"
   },
