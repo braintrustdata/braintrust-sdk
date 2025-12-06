@@ -10,6 +10,7 @@ from ..logger import BraintrustState
 ORIGIN_HEADER = "origin"
 BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token"
 BRAINTRUST_ORG_NAME_HEADER = "x-bt-org-name"
+BRAINTRUST_PROJECT_ID_HEADER = "x-bt-project-id"
 
 
 @dataclass
@@ -17,6 +18,7 @@ class RequestContext:
     app_origin: Optional[str]
     token: Optional[str]
     org_name: Optional[str]
+    project_id: Optional[str]
     state: Optional[BraintrustState]
 
 
@@ -56,6 +58,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 app_origin=extract_allowed_origin(request.headers.get(ORIGIN_HEADER)),
                 token=None,
                 org_name=request.headers.get(BRAINTRUST_ORG_NAME_HEADER),
+                project_id=request.headers.get(BRAINTRUST_PROJECT_ID_HEADER),
                 state=None,
             )
 
