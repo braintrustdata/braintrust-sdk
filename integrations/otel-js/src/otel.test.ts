@@ -20,6 +20,7 @@ import {
   addSpanParentToBaggage,
   addParentToBaggage,
   parentFromHeaders,
+  type CustomSpanFilter,
 } from "./otel";
 import { _exportsForTestingOnly, initLogger } from "braintrust";
 import {
@@ -306,6 +307,52 @@ describe("AISpanProcessor", () => {
 
     expect(spanNames).toContain("root");
     expect(spanNames).toContain("gen_ai.completion"); // kept by default filter logic
+    expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
+
+    customProvider.shutdown();
+  });
+
+  it("should allow opting into root span filtering via custom filter flag", () => {
+    const customFilter: CustomSpanFilter = (span: ReadableSpan) => {
+      if (span.name === "root") {
+        return false;
+      }
+      return span.name.includes("keep") ? true : undefined;
+    };
+    customFilter.allowRootSpanFiltering = true;
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
+
+    const rootSpan = customTracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const keepSpan = customTracer.startSpan("custom_keep", {}, parentContext);
+    const regularSpan = customTracer.startSpan(
+      "regular_operation",
+      {},
+      parentContext,
+    );
+
+    keepSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    // Root span is now eligible for filtering and is dropped by custom filter
+    expect(spanNames).not.toContain("root");
+    expect(spanNames).toContain("custom_keep"); // kept by custom filter
     expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
 
     customProvider.shutdown();

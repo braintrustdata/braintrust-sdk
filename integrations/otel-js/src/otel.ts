@@ -34,8 +34,21 @@ const FILTER_PREFIXES = [
  * Custom filter function type for span filtering.
  * @param span - The span to evaluate
  * @returns true to definitely keep, false to definitely drop, null/undefined to not influence the decision
+ *
+ * Note: by default, root spans (spans without a parent) are always kept even
+ * when a custom filter is provided. To allow root spans to be filtered by the
+ * custom filter and prefix heuristics, set
+ * `customFilter.allowRootSpanFiltering = true` on the filter function.
  */
-type CustomSpanFilter = (span: ReadableSpan) => boolean | null | undefined;
+export type CustomSpanFilter = ((
+  span: ReadableSpan,
+) => boolean | null | undefined) & {
+  /**
+   * When true, root spans are eligible for filtering by this custom filter.
+   * When false/undefined, root spans are always kept.
+   */
+  allowRootSpanFiltering?: boolean;
+};
 
 /**
  * Type guard to check if a span has the attributes property (i.e., is a ReadableSpan).
@@ -60,6 +73,7 @@ function isReadableSpan(span: Span | ReadableSpan): span is ReadableSpan {
 export class AISpanProcessor {
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
+  private readonly allowRootSpanFiltering: boolean;
 
   /**
    * Initialize the filter span processor.
@@ -72,6 +86,8 @@ export class AISpanProcessor {
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
     this.processor = processor;
     this.customFilter = customFilter;
+    this.allowRootSpanFiltering =
+      customFilter?.allowRootSpanFiltering === true ? true : false;
   }
 
   /**
@@ -109,8 +125,9 @@ export class AISpanProcessor {
    * Determine if a span should be kept based on filtering criteria.
    *
    * Keep spans if:
-   * 1. It's a root span (no parent)
-   * 2. Custom filter returns true/false (if provided)
+   * 1. Custom filter returns true/false (if provided). For root spans this only
+   *    applies when allowRootSpanFiltering === true.
+   * 2. It's a root span (no parent) and root span filtering is not enabled
    * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
    * 4. Any attribute name starts with those prefixes
    */
@@ -119,25 +136,28 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent)
-    // Check both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x)
     const hasParent =
       ("parentSpanId" in span && span.parentSpanId) ||
       ("parentSpanContext" in span && span.parentSpanContext);
 
-    if (!hasParent) {
-      return true;
-    }
+    const isRootSpan = !hasParent;
+    const customFilter = this.customFilter;
+    const allowRootFiltering = this.allowRootSpanFiltering;
 
-    // Apply custom filter if provided
-    if (this.customFilter) {
-      const customResult = this.customFilter(span);
+    if (customFilter && (!isRootSpan || allowRootFiltering)) {
+      const customResult = customFilter(span);
       if (customResult === true) {
         return true;
-      } else if (customResult === false) {
+      }
+      if (customResult === false) {
         return false;
       }
       // customResult is null/undefined - continue with default logic
+    }
+
+    if (isRootSpan && !allowRootFiltering) {
+      // Always keep root spans when root span filtering is not enabled
+      return true;
     }
 
     // Check span name
