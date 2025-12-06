@@ -9,9 +9,6 @@ help:
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
-	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
-	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
@@ -20,7 +17,7 @@ help:
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -64,27 +61,6 @@ test-claude-agent-sdk:
 
 
 # -------------------------------------------------------------------------------------------------
-# OpenTelemetry testing
-# -------------------------------------------------------------------------------------------------
-
-# test-otel-installed tests with OpenTelemetry installed
-test-otel-installed:
-	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
-	pnpm test:otel
-
-# test-otel-missing tests with OpenTelemetry removed from all workspaces
-test-otel-missing:
-	pnpm prune
-	@echo "Manually removing OpenTelemetry from workspace..."
-	@ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo .); \
-	find $$ROOT -type d -path "*/node_modules/@opentelemetry*" -prune -exec rm -rf {} +
-	pnpm test:otel-no-deps
-	# restore workspace
-	pnpm install
-
-
-# -------------------------------------------------------------------------------------------------
 # OpenAI testing
 # -------------------------------------------------------------------------------------------------
 
@@ -111,12 +87,7 @@ test-openai-%:
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
 		"openai" \
-		"@anthropic-ai/sdk" \
-		"@opentelemetry/api" \
-		"@opentelemetry/sdk-trace-base" \
-		"@opentelemetry/exporter-trace-otlp-http" \
-		"@opentelemetry/core" \
-		"@opentelemetry/context-async-hooks"
+		"@anthropic-ai/sdk"
 
 
 # Test everything but the wrappers.
@@ -125,10 +96,10 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-google-genai
+test: test-core test-openai test-anthropic test-google-genai
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai
 
 
 prune:

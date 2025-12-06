@@ -2135,11 +2135,13 @@ def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_si
 def reset_id_generator_state():
     """Reset ID generator state and environment variables before each test"""
     logger._state._reset_id_generator()
+    logger._state._reset_context_manager()
     original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
     try:
         yield
     finally:
         logger._state._reset_id_generator()
+        logger._state._reset_context_manager()
         if "BRAINTRUST_OTEL_COMPAT" in os.environ:
             del os.environ["BRAINTRUST_OTEL_COMPAT"]
         if original_env:

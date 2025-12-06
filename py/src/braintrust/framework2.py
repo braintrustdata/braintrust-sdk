@@ -51,6 +51,7 @@ class CodeFunction:
     parameters: Any
     returns: Any
     if_exists: Optional[IfExists]
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclasses.dataclass
@@ -66,6 +67,7 @@ class CodePrompt:
     function_type: Optional[str]
     id: Optional[str]
     if_exists: Optional[IfExists]
+    metadata: Optional[Dict[str, Any]] = None
 
     def to_function_definition(self, if_exists: Optional[IfExists], project_ids: ProjectIdCache) -> Dict[str, Any]:
         prompt_data = self.prompt
@@ -97,6 +99,8 @@ class CodePrompt:
             j["description"] = self.description
         if self.function_type is not None:
             j["function_type"] = self.function_type
+        if self.metadata is not None:
+            j["metadata"] = self.metadata
 
         return j
 
@@ -118,6 +122,7 @@ class ToolBuilder:
         parameters: Any = None,
         returns: Any = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> CodeFunction:
         """Creates a tool.
 
@@ -129,6 +134,7 @@ class ToolBuilder:
             parameters: The tool's input schema, as a Pydantic model.
             returns: The tool's output schema, as a Pydantic model.
             if_exists: What to do if the tool already exists.
+            metadata: Custom metadata to attach to the tool.
 
         Returns:
             A handle to the created tool, that can be used in a prompt.
@@ -152,6 +158,7 @@ class ToolBuilder:
             parameters=parameters,
             returns=returns,
             if_exists=if_exists,
+            metadata=metadata,
         )
         self.project.add_code_function(f)
         return f
@@ -177,6 +184,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> CodePrompt: ...
 
     @overload  # messages only, no prompt
@@ -192,6 +200,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> CodePrompt: ...
 
     def create(
@@ -207,6 +216,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """Creates a prompt.
 
@@ -221,6 +231,7 @@ class PromptBuilder:
             params: The model parameters to use for the prompt.
             tools: The tools to use for the prompt.
             if_exists: What to do if the prompt already exists.
+            metadata: Custom metadata to attach to the prompt.
         """
         self._task_counter += 1
         if not name:
@@ -269,6 +280,7 @@ class PromptBuilder:
             function_type=None,
             id=id,
             if_exists=if_exists,
+            metadata=metadata,
         )
         self.project.add_prompt(p)
         return p
@@ -290,6 +302,7 @@ class ScorerBuilder:
         slug: Optional[str] = None,
         description: Optional[str] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         handler: Callable[..., Any],
         parameters: Any,
         returns: Any = None,
@@ -304,6 +317,7 @@ class ScorerBuilder:
         slug: Optional[str] = None,
         description: Optional[str] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         prompt: str,
         model: str,
         params: Optional[ModelParams] = None,
@@ -320,6 +334,7 @@ class ScorerBuilder:
         slug: Optional[str] = None,
         description: Optional[str] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         messages: List[ChatCompletionMessageParam],
         model: str,
         params: Optional[ModelParams] = None,
@@ -334,6 +349,7 @@ class ScorerBuilder:
         slug: Optional[str] = None,
         description: Optional[str] = None,
         if_exists: Optional[IfExists] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         # Code scorer params.
         handler: Optional[Callable[..., Any]] = None,
         parameters: Any = None,
@@ -353,6 +369,7 @@ class ScorerBuilder:
             slug: A unique identifier for the scorer.
             description: The description of the scorer.
             if_exists: What to do if the scorer already exists.
+            metadata: Custom metadata to attach to the scorer.
 
             The remaining args are mutually exclusive; that is,
             the function will only accept args from one of the following overloads.
@@ -391,6 +408,7 @@ class ScorerBuilder:
                 parameters=parameters,
                 returns=returns,
                 if_exists=if_exists,
+                metadata=metadata,
             )
             self.project.add_code_function(f)
             return f
@@ -429,6 +447,7 @@ class ScorerBuilder:
                 function_type="scorer",
                 id=None,
                 if_exists=if_exists,
+                metadata=metadata,
             )
             self.project.add_prompt(p)
             return p

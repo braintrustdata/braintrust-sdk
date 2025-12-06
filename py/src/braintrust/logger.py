@@ -361,7 +361,6 @@ class BraintrustState:
 
         # Context manager is dynamically selected based on current environment
         self._context_manager = None
-        self._last_otel_setting = None
         self._context_manager_lock = threading.Lock()
 
         def default_get_api_conn():
@@ -430,6 +429,11 @@ class BraintrustState:
         # which are controlled by env vars.
         self._id_generator = None
 
+    def _reset_context_manager(self):
+        # used in tests when we want to test with a different context manager
+        # which is controlled by BRAINTRUST_OTEL_COMPAT env var.
+        self._context_manager = None
+
     @property
     def id_generator(self):
         """Return the active id generator."""
@@ -442,19 +446,14 @@ class BraintrustState:
     @property
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
-        import os
-
-        current_otel_setting = os.environ.get("BRAINTRUST_OTEL_COMPAT", "")
-
-        # Cache the context manager unless the environment variable changed
-        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+        # Cache the context manager on first access
+        if self._context_manager is None:
             with self._context_manager_lock:
                 # Double-check after acquiring lock
-                if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+                if self._context_manager is None:
                     from braintrust.context import get_context_manager
 
                     self._context_manager = get_context_manager()
-                    self._last_otel_setting = current_otel_setting
 
         return self._context_manager
 
