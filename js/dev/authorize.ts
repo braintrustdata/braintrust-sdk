@@ -8,6 +8,7 @@ export interface RequestContext {
   appOrigin: string;
   token: string | undefined;
   state: BraintrustState | undefined;
+  projectId: string | undefined;
 }
 declare module "express" {
   interface Request {
@@ -25,6 +26,7 @@ export function authorizeRequest(
       appOrigin: extractAllowedOrigin(req.headers[ORIGIN_HEADER]),
       token: undefined,
       state: undefined,
+      projectId: parseHeader(req.headers, PROJECT_ID_HEADER),
     };
 
     // Extract token and data from request
@@ -145,6 +147,7 @@ export function checkOrigin(
 
 const BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token";
 const ORIGIN_HEADER = "origin";
+const PROJECT_ID_HEADER = "x-bt-project-id";
 
 export function extractAllowedOrigin(originHeader: string | undefined): string {
   let allowedOrigin: string = MAIN_ORIGIN;
@@ -201,6 +204,7 @@ export const baseAllowedHeaders = [
   "x-bt-parent",
   // These are eval-specific
   "x-bt-org-name",
+  "x-bt-project-id",
   "x-bt-stream-fmt",
   "x-bt-use-cache",
   "x-stainless-os",
