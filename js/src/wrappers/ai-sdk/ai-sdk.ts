@@ -165,7 +165,7 @@ const makeGenerateTextWrapper = (
       },
     );
   };
-  wrapper.name = name;
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
   return wrapper;
 };
 
@@ -325,7 +325,7 @@ const makeStreamTextWrapper = (
       throw error;
     }
   };
-  wrapper.name = name;
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
   return wrapper;
 };
 
