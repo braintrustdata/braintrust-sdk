@@ -4,6 +4,7 @@ import os
 import pytest
 from braintrust import Tuple
 from braintrust.logger import (
+    TEST_API_KEY,
     Logger,
     _internal_reset_global_state,
     _internal_with_memory_background_logger,
@@ -19,7 +20,7 @@ def setup_braintrust():
     os.environ["BRAINTRUST_SYNC_FLUSH"] = "1"
     os.environ["BRAINTRUST_API_URL"] = "http://localhost:8000"
     os.environ["BRAINTRUST_APP_URL"] = "http://localhost:3000"
-    os.environ["BRAINTRUST_API_KEY"] = "your_api_key_here"
+    os.environ["BRAINTRUST_API_KEY"] = TEST_API_KEY
     os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_api_key_here"
     os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
     os.environ["OPENAI_BASE_URL"] = "http://localhost:8000/v1/proxy"

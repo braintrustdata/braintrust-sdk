@@ -36,3 +36,12 @@ def override_app_url_for_tests():
 @pytest.fixture(autouse=True)
 def setup_braintrust():
     os.environ.setdefault("GOOGLE_API_KEY", os.getenv("GEMINI_API_KEY", "your_google_api_key_here"))
+
+
+@pytest.fixture(autouse=True)
+def reset_braintrust_state():
+    """Reset all Braintrust global state after each test."""
+    yield
+    from braintrust import logger
+
+    logger._state = logger.BraintrustState()

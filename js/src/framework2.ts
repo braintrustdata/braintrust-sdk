@@ -35,6 +35,7 @@ interface BaseFnOpts {
   slug: string;
   description: string;
   ifExists: IfExists;
+  metadata?: Record<string, unknown>;
 }
 
 export { toolFunctionDefinitionSchema };
@@ -284,12 +285,14 @@ export type CodeOpts<
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
+  metadata?: Record<string, unknown>;
 } & Schema<Params, Returns>;
 
 type ScorerPromptOpts = Partial<BaseFnOpts> &
   PromptOpts<false, false, false, false> & {
     useCot: boolean;
     choiceScores: Record<string, number>;
+    metadata?: Record<string, unknown>;
   };
 
 // A more correct ScorerArgs than that in core/js/src/score.ts.
@@ -306,7 +309,7 @@ type Exact<T, Shape> = T extends Shape
     : never
   : never;
 
-export type ScorerOpts<
+type ScorerOptsUnion<
   Output,
   Input,
   Params,
@@ -315,6 +318,16 @@ export type ScorerOpts<
 > =
   | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
   | ScorerPromptOpts;
+
+export type ScorerOpts<
+  Output,
+  Input,
+  Params,
+  Returns,
+  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
+> = ScorerOptsUnion<Output, Input, Params, Returns, Fn> & {
+  metadata?: Record<string, unknown>;
+};
 
 export class CodeFunction<
   Input,
@@ -329,6 +342,7 @@ export class CodeFunction<
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
   public readonly ifExists?: IfExists;
+  public readonly metadata?: Record<string, unknown>;
 
   constructor(
     public readonly project: Project,
@@ -346,6 +360,7 @@ export class CodeFunction<
     this.type = opts.type;
 
     this.ifExists = opts.ifExists;
+    this.metadata = opts.metadata;
 
     this.parameters = opts.parameters;
     this.returns = opts.returns;
@@ -385,6 +400,7 @@ export class CodePrompt {
   public readonly id?: string;
   public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
+  public readonly metadata?: Record<string, unknown>;
 
   constructor(
     project: Project,
@@ -405,6 +421,7 @@ export class CodePrompt {
     this.description = opts.description;
     this.id = opts.id;
     this.functionType = functionType;
+    this.metadata = opts.metadata;
   }
 
   async toFunctionDefinition(
@@ -445,6 +462,7 @@ export class CodePrompt {
       function_type: this.functionType,
       prompt_data,
       if_exists: this.ifExists,
+      metadata: this.metadata,
     };
   }
 }
@@ -598,6 +616,7 @@ export interface FunctionEvent {
   function_data: z.infer<typeof functionDataSchema>;
   function_type?: FunctionType;
   if_exists?: IfExists;
+  metadata?: Record<string, unknown>;
 }
 
 export class ProjectNameIdMap {

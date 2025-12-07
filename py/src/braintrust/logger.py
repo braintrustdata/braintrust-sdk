@@ -48,10 +48,9 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
+from braintrust.functions.stream import BraintrustStream
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
-from braintrust.functions.stream import BraintrustStream
 
 from . import context, id_gen
 from .bt_json import bt_dumps
@@ -121,7 +120,7 @@ DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
 def _get_exporter():
-    """ Return the active exporter (e.g. the version of SpanComponentsv*) """
+    """Return the active exporter (e.g. the version of SpanComponentsv*)"""
     use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
     return SpanComponentsV4 if use_v4 else SpanComponentsV3
 
@@ -349,7 +348,9 @@ class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
-        self.current_logger: Optional[Logger] = None
+        self.current_logger: contextvars.ContextVar[Optional[Logger]] = contextvars.ContextVar(
+            "braintrust_current_logger", default=None
+        )
         self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
             "braintrust_current_parent", default=None
         )
@@ -359,7 +360,6 @@ class BraintrustState:
 
         # Context manager is dynamically selected based on current environment
         self._context_manager = None
-        self._last_otel_setting = None
         self._context_manager_lock = threading.Lock()
 
         def default_get_api_conn():
@@ -419,7 +419,7 @@ class BraintrustState:
     def reset_parent_state(self):
         # reset possible parent state for tests
         self.current_experiment = None
-        self.current_logger = None
+        self.current_logger.set(None)
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
 
@@ -428,9 +428,14 @@ class BraintrustState:
         # which are controlled by env vars.
         self._id_generator = None
 
+    def _reset_context_manager(self):
+        # used in tests when we want to test with a different context manager
+        # which is controlled by BRAINTRUST_OTEL_COMPAT env var.
+        self._context_manager = None
+
     @property
     def id_generator(self):
-        """ Return the active id generator. """
+        """Return the active id generator."""
         # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
         # so that we could possibly have parallel tests using different id generators.
         if self._id_generator is None:
@@ -440,17 +445,14 @@ class BraintrustState:
     @property
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
-        import os
-        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
-
-        # Cache the context manager unless the environment variable changed
-        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+        # Cache the context manager on first access
+        if self._context_manager is None:
             with self._context_manager_lock:
                 # Double-check after acquiring lock
-                if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+                if self._context_manager is None:
                     from braintrust.context import get_context_manager
+
                     self._context_manager = get_context_manager()
-                    self._last_otel_setting = current_otel_setting
 
         return self._context_manager
 
@@ -749,10 +751,8 @@ def construct_logs3_data(items: Sequence[str]):
 def _check_json_serializable(event):
     try:
         return bt_dumps(event)
-    except TypeError as e:
+    except (TypeError, ValueError) as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 
 
 class _MaskingError:
@@ -1598,7 +1598,7 @@ def init_logger(
     if set_current:
         if _state is None:
             raise RuntimeError("_state is None in init_logger. This should never happen.")
-        _state.current_logger = ret
+        _state.current_logger.set(ret)
     return ret
 
 
@@ -1900,7 +1900,7 @@ def current_experiment() -> Optional["Experiment"]:
 def current_logger() -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
 
-    return _state.current_logger
+    return _state.current_logger.get()
 
 
 def current_span() -> Span:
@@ -1910,7 +1910,7 @@ def current_span() -> Span:
     """
 
     span_info = _state.context_manager.get_current_span_info()
-    if span_info and hasattr(span_info.span_object, 'span_id'):
+    if span_info and hasattr(span_info.span_object, "span_id"):
         # This is a BT span
         return span_info.span_object
     return NOOP_SPAN
@@ -1938,7 +1938,9 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None, state: Optional[BraintrustState] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
+def get_span_parent_object(
+    parent: Optional[str] = None, state: Optional[BraintrustState] = None
+) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
 
@@ -2438,19 +2440,46 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     Creates a deep copy of the given event. Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
     and `ExternalAttachment` objects, which are preserved and not deep-copied.
-    """
 
-    def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Mapping):
-            # Prevent dict keys from holding references to user data. Note that
-            # `bt_json` already coerces keys to string, a behavior that comes from
-            # `json.dumps`. However, that runs at log upload time, while we want to
-            # cut out all the references to user objects synchronously in this
-            # function.
-            return {str(k): _deep_copy_object(v[k]) for k in v}
-        elif isinstance(v, (List, Tuple, Set)):
-            return [_deep_copy_object(x) for x in v]
-        elif isinstance(v, Span):
+    Handles circular references and excessive nesting depth to prevent
+    RecursionError during serialization.
+    """
+    # Maximum depth to prevent hitting Python's recursion limit
+    # Python's default limit is ~1000, we use a conservative limit
+    # to account for existing call stack usage from pytest, application code, etc.
+    MAX_DEPTH = 200
+
+    # Track visited objects to detect circular references
+    visited: set[int] = set()
+
+    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
+        # Check depth limit - use >= to stop before exceeding
+        if depth >= MAX_DEPTH:
+            return "<max depth exceeded>"
+
+        # Check for circular references in mutable containers
+        # Use id() to track object identity
+        if isinstance(v, (Mapping, List, Tuple, Set)):
+            obj_id = id(v)
+            if obj_id in visited:
+                return "<circular reference>"
+            visited.add(obj_id)
+            try:
+                if isinstance(v, Mapping):
+                    # Prevent dict keys from holding references to user data. Note that
+                    # `bt_json` already coerces keys to string, a behavior that comes from
+                    # `json.dumps`. However, that runs at log upload time, while we want to
+                    # cut out all the references to user objects synchronously in this
+                    # function.
+                    return {str(k): _deep_copy_object(v[k], depth + 1) for k in v}
+                elif isinstance(v, (List, Tuple, Set)):
+                    return [_deep_copy_object(x, depth + 1) for x in v]
+            finally:
+                # Remove from visited set after processing to allow the same object
+                # to appear in different branches of the tree
+                visited.discard(obj_id)
+
+        if isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
             return "<experiment>"
@@ -2586,6 +2615,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,
+                        "query_source": f"py_sdk_object_fetcher_{self.object_type}",
                         **({"version": self._pinned_version} if self._pinned_version is not None else {}),
                     },
                     headers={
@@ -3134,6 +3164,7 @@ class ParentSpanIds:
 @dataclasses.dataclass
 class SpanIds:
     """The three IDs that define a span's position in the trace tree."""
+
     span_id: str
     root_span_id: str
     span_parents: Optional[List[str]]
@@ -3170,9 +3201,7 @@ def _resolve_span_ids(
     # If we have explicit parent span ids, use them.
     if parent_span_ids:
         return SpanIds(
-            span_id=span_id,
-            root_span_id=parent_span_ids.root_span_id,
-            span_parents=[parent_span_ids.span_id]
+            span_id=span_id, root_span_id=parent_span_ids.root_span_id, span_parents=[parent_span_ids.span_id]
         )
 
     # If we're using the context manager, get to see if there's an active parent
@@ -3181,9 +3210,7 @@ def _resolve_span_ids(
         parent_info = context_manager.get_parent_span_ids()
         if parent_info:
             return SpanIds(
-                span_id=span_id,
-                root_span_id=parent_info.root_span_id,
-                span_parents=parent_info.span_parents
+                span_id=span_id, root_span_id=parent_info.root_span_id, span_parents=parent_info.span_parents
             )
 
     # No parent - create new root span
@@ -3194,11 +3221,7 @@ def _resolve_span_ids(
     else:
         resolved_root_span_id = id_generator.get_trace_id()
 
-    return SpanIds(
-        span_id=span_id,
-        root_span_id=resolved_root_span_id,
-        span_parents=None
-    )
+    return SpanIds(span_id=span_id, root_span_id=resolved_root_span_id, span_parents=None)
 
 
 def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
@@ -3291,9 +3314,9 @@ def _start_span_parent_args(
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3316,7 +3339,6 @@ def _start_span_parent_args(
         parent_span_ids=arg_parent_span_ids,
         propagated_event=arg_propagated_event,
     )
-
 
 
 @dataclasses.dataclass
@@ -3902,8 +3924,8 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        _check_json_serializable(partial_record)
         serializable_partial_record = _deep_copy_event(partial_record)
+        _check_json_serializable(serializable_partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
@@ -4006,7 +4028,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger
+            cur_logger = self.state.current_logger.get()
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -4463,6 +4485,18 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                         {
                             **c,
                             "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
+                elif c["type"] == "file":
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
                         }
                     )
                 else:

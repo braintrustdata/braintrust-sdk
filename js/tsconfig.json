@@ -9,5 +9,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["node_modules/**", "**/dist/**", "examples/**", "scripts/**", "**/*.test.ts"]
+  "include": ["."],
+  "exclude": [
+    "**/*.test.ts",
+    "**/dist/**",
+    "**/examples/**",
+    "node_modules/**",
+    "**/smoke/**",
+    "scripts/**",
+    "vendor/**"
+  ]
 }

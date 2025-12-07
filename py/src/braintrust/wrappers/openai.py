@@ -5,9 +5,8 @@ Exports `BraintrustTracingProcessor`, a `tracing.TracingProcessor` that logs tra
 import datetime
 from typing import Any, Dict, Optional, Union
 
-from agents import tracing
-
 import braintrust
+from agents import tracing
 from braintrust.logger import NOOP_SPAN
 
 
@@ -77,13 +76,13 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
 
         current_context = braintrust.current_span()
         if current_context != NOOP_SPAN:
-            self._spans[trace.trace_id] = current_context.start_span(
+            span = current_context.start_span(
                 name=trace.name,
                 span_attributes={"type": "task", "name": trace.name},
                 metadata=metadata,
             )
         elif self._logger is not None:
-            self._spans[trace.trace_id] = self._logger.start_span(
+            span = self._logger.start_span(
                 span_attributes={"type": "task", "name": trace.name},
                 span_id=trace.trace_id,
                 root_span_id=trace.trace_id,
@@ -92,13 +91,16 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
         else:
-            self._spans[trace.trace_id] = braintrust.start_span(
+            span = braintrust.start_span(
                 id=trace.trace_id,
                 span_attributes={"type": "task", "name": trace.name},
                 metadata=metadata,
                 # TODO(sachin): Add start time when SDK provides it.
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
+        if span != NOOP_SPAN:
+            span.set_current()
+        self._spans[trace.trace_id] = span
 
     def on_trace_end(self, trace: tracing.Trace) -> None:
         span = self._spans.pop(trace.trace_id)
@@ -107,6 +109,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         trace_last_output = self._last_output.pop(trace.trace_id, None)
         span.log(input=trace_first_input, output=trace_last_output)
         span.end()
+        span.unset_current()
         # TODO(sachin): Add end time when SDK provides it.
         # span.end(_timestamp_from_maybe_iso(trace.ended_at))
 

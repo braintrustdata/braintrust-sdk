@@ -51,6 +51,8 @@ test("meta (write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   // @ts-expect-error metadata is not typed if the experiment is missing
@@ -87,6 +89,8 @@ test("metadata (read/write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   expect(passedIn).toEqual(metadata);
@@ -125,6 +129,8 @@ test("expected (read/write) is passed to task", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
 
   expect(passedIn).toEqual({
@@ -173,6 +179,7 @@ describe("runEvaluator", () => {
         new NoopProgressReporter(),
         [],
         undefined,
+        true,
       );
 
       expect(out.results.every((r) => Object.keys(r.scores).length === 0)).toBe(
@@ -200,6 +207,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -229,6 +237,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -262,6 +271,7 @@ describe("runEvaluator", () => {
             new NoopProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -287,6 +297,7 @@ describe("runEvaluator", () => {
             new BarProgressReporter(),
             [],
             undefined,
+            true,
           );
 
           expect(
@@ -451,6 +462,9 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
+    undefined,
+    true,
   );
 
   // Should have 3 results (one for each trial)
@@ -490,6 +504,9 @@ test("trialIndex with multiple inputs", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
+    undefined,
+    true,
   );
 
   // Should have 4 results total (2 inputs × 2 trials)
@@ -530,7 +547,7 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
         () => ({ name: "simple_scorer", score: 0.8 }),
       ],
     },
-    { noSendLogs: true },
+    { noSendLogs: true, returnResults: true },
   );
 
   // Verify it returns results
@@ -554,6 +571,79 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
   // Most importantly: verify that no logs were sent
   await memoryLogger.flush();
   expect(await memoryLogger.drain()).toHaveLength(0);
+});
+
+test("Eval with returnResults: false produces empty results but valid summary", async () => {
+  const result = await Eval(
+    "test-no-results",
+    {
+      projectName: "test-no-results-project",
+      data: [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+        { input: "foo", expected: "foo bar" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        () => ({ name: "length_score", score: 0.75 }),
+        () => ({ name: "quality_score", score: 0.9 }),
+      ],
+    },
+    { noSendLogs: true, returnResults: false },
+  );
+
+  // Verify that results array is empty (memory not retained)
+  expect(result.results).toHaveLength(0);
+
+  // Verify that summary still has accurate aggregate scores
+  expect(result.summary.projectName).toBe("test-no-results-project");
+  expect(result.summary.experimentUrl).toBeUndefined();
+
+  // exact_match: 2 out of 3 match = 2/3 ≈ 0.6667
+  expect(result.summary.scores.exact_match.score).toBeCloseTo(2 / 3, 4);
+
+  // length_score: always 0.75, so average is 0.75
+  expect(result.summary.scores.length_score.score).toBe(0.75);
+
+  // quality_score: always 0.9, so average is 0.9
+  expect(result.summary.scores.quality_score.score).toBe(0.9);
+});
+
+test("Eval with returnResults: true collects all results", async () => {
+  const result = await Eval(
+    "test-with-results",
+    {
+      projectName: "test-with-results-project",
+      data: [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+      ],
+    },
+    { noSendLogs: true, returnResults: true },
+  );
+
+  // Verify that results are collected
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+
+  // Summary should also be correct
+  expect(result.summary.scores.exact_match.score).toBe(1);
 });
 
 test("tags can be appended and logged to root span", async () => {
@@ -587,6 +677,8 @@ test("tags can be appended and logged to root span", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -634,6 +726,8 @@ test.each([
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -672,6 +766,8 @@ test("tags are persisted with a failing scorer", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
 
@@ -703,6 +799,8 @@ test("tags remain empty when not set", async () => {
     new NoopProgressReporter(),
     [],
     undefined,
+    undefined,
+    true,
   );
   expect(result.results[0].tags).toEqual(undefined);
 
@@ -711,4 +809,200 @@ test("tags remain empty when not set", async () => {
   const rootSpans = logs.filter((l: any) => !l["span_parents"]);
   expect(rootSpans).toHaveLength(1);
   expect((rootSpans[0] as any).tags).toEqual(undefined);
+});
+
+// ========== framework2 metadata tests ==========
+import { z } from "zod/v3";
+import { projects, CodePrompt } from "./framework2";
+
+describe("framework2 metadata support", () => {
+  describe("CodeFunction metadata", () => {
+    test("tool stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { version: "1.0", author: "test" };
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+        metadata,
+      });
+
+      expect(tool.metadata).toEqual(metadata);
+      expect(tool.name).toBe("test-tool");
+      expect(tool.slug).toBe("test-tool");
+    });
+
+    test("tool works without metadata", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+      });
+
+      expect(tool.metadata).toBeUndefined();
+    });
+  });
+
+  describe("CodePrompt metadata", () => {
+    test("prompt stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { category: "greeting", priority: "high" };
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+        metadata,
+      });
+
+      // The metadata is stored on the CodePrompt in _publishablePrompts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+
+    test("prompt works without metadata", () => {
+      const project = projects.create({ name: "test-project" });
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toBeUndefined();
+    });
+
+    test("toFunctionDefinition includes metadata when present", async () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { version: "2.0", tag: "production" };
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+          metadata,
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.metadata).toEqual(metadata);
+      expect(funcDef.name).toBe("test-prompt");
+      expect(funcDef.project_id).toBe("project-123");
+    });
+
+    test("toFunctionDefinition excludes metadata when undefined", async () => {
+      const project = projects.create({ name: "test-project" });
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.metadata).toBeUndefined();
+    });
+  });
+
+  describe("Scorer metadata", () => {
+    test("code scorer stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { type: "accuracy", version: "1.0" };
+
+      project.scorers.create({
+        handler: ({
+          output,
+          expected,
+        }: {
+          output: string;
+          expected?: string;
+        }) => (output === expected ? 1 : 0),
+        name: "test-scorer",
+        parameters: z.object({
+          output: z.string(),
+          expected: z.string().optional(),
+        }),
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scorers = (project as any)._publishableCodeFunctions;
+      expect(scorers).toHaveLength(1);
+      expect(scorers[0].metadata).toEqual(metadata);
+    });
+
+    test("LLM scorer prompt stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { type: "llm_classifier", version: "2.0" };
+
+      project.scorers.create({
+        name: "llm-scorer",
+        prompt: "Is this correct?",
+        model: "gpt-4",
+        useCot: true,
+        choiceScores: { yes: 1.0, no: 0.0 },
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+  });
+
+  describe("Project with messages", () => {
+    test("prompt with messages stores metadata correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const metadata = { template: "chat", version: "1.0" };
+
+      project.prompts.create({
+        name: "chat-prompt",
+        messages: [
+          { role: "system", content: "You are a helpful assistant" },
+          { role: "user", content: "Hello {{name}}" },
+        ],
+        model: "gpt-4",
+        metadata,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].metadata).toEqual(metadata);
+    });
+  });
 });

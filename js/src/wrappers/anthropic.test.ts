@@ -262,6 +262,8 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
       usage.cache_creation_input_tokens,
     );
     expect(metrics.prompt_cached_tokens).toBe(usage.cache_read_input_tokens);
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
     expect(startTime <= metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
@@ -327,6 +329,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         tokens: expect.any(Number),
         start: expect.any(Number),
         end: expect.any(Number),
+        time_to_first_token: expect.any(Number),
       },
     });
 
@@ -572,7 +575,8 @@ function assertValidMetrics(metrics: any, start: number, end: number) {
   expect(metrics).toBeDefined();
   expect(metrics.start).toBeDefined();
   expect(metrics.end).toBeDefined();
-  //expect(metrics.time_to_first_token).toBeDefined();
+  expect(metrics.time_to_first_token).toBeDefined();
+  expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
   for (const [key, value] of Object.entries(metrics)) {
     expect(value).toBeDefined();
     // if "tokens" is in key, it should be greater than 0

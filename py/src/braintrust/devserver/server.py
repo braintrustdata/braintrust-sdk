@@ -196,7 +196,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
                     "state": state,
                     "scores": evaluator.scores
                     + [
-                        make_scorer(state, score["name"], score["function_id"])
+                        make_scorer(state, score["name"], score["function_id"], ctx.project_id)
                         for score in eval_data.get("scores", [])
                     ],
                     "stream": stream_fn,
@@ -305,7 +305,7 @@ def snake_to_camel(snake_str: str) -> str:
     return components[0] + "".join(x.title() for x in components[1:]) if components else snake_str
 
 
-def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalScorer[Any, Any]:
+def make_scorer(state: BraintrustState, name: str, score: FunctionId, project_id: Optional[str] = None) -> EvalScorer[Any, Any]:
     def scorer_fn(input, output, expected, metadata):
         request = {
             **score,
@@ -315,7 +315,10 @@ def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalSco
             "mode": "auto",
             "strict": True,
         }
-        result = state.proxy_conn().post("function/invoke", json=request, headers={"Accept": "application/json"})
+        headers = {"Accept": "application/json"}
+        if project_id:
+            headers["x-bt-project-id"] = project_id
+        result = state.proxy_conn().post("function/invoke", json=request, headers=headers)
         result.raise_for_status()
         data = result.json()
         return data

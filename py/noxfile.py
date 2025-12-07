@@ -22,6 +22,8 @@ nox.options.default_venv_backend = "uv"
 
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
+CONTRIB_DIR = "braintrust/contrib"
+DEVSERVER_DIR = "braintrust/devserver"
 
 
 SILENT_INSTALLS = True
@@ -39,6 +41,7 @@ VENDOR_PACKAGES = (
     "anthropic",
     "dspy",
     "openai",
+    "openai-agents",
     "pydantic_ai",
     "autoevals",
     "braintrust_core",
@@ -47,6 +50,7 @@ VENDOR_PACKAGES = (
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
     "google.genai",
+    "temporalio",
 )
 
 # Test matrix
@@ -64,6 +68,8 @@ else:
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
 DSPY_VERSIONS = (LATEST,)
+# temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
+TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
 
 
 @nox.session()
@@ -129,8 +135,19 @@ def test_google_genai(session, version):
 def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
+    # openai-agents requires Python >= 3.10
+    if sys.version_info >= (3, 10):
+        _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
+
+
+@nox.session()
+def test_openrouter(session):
+    """Test wrap_openai with OpenRouter. Requires OPENROUTER_API_KEY env var."""
+    _install_test_deps(session)
+    _install(session, "openai")
+    _run_tests(session, f"{WRAPPER_DIR}/test_openrouter.py")
 
 
 @nox.session()
@@ -192,6 +209,18 @@ def test_otel(session):
 
 
 @nox.session()
+@nox.parametrize("version", TEMPORAL_VERSIONS, ids=TEMPORAL_VERSIONS)
+def test_temporal(session, version):
+    """Test Temporal integration with temporalio installed."""
+    # temporalio 1.19.0+ requires Python >= 3.10
+    if sys.version_info < (3, 10):
+        session.skip("temporalio 1.19.0+ requires Python >= 3.10")
+    _install_test_deps(session)
+    _install(session, "temporalio", version)
+    _run_tests(session, "braintrust/contrib/temporal")
+
+
+@nox.session()
 def test_otel_not_installed(session):
     _install_test_deps(session)
     otel_packages = ["opentelemetry", "opentelemetry.trace", "opentelemetry.exporter.otlp.proto.http.trace_exporter"]
@@ -203,6 +232,9 @@ def test_otel_not_installed(session):
 @nox.session()
 def pylint(session):
     # pylint needs everything so we don't trigger missing import errors
+    # Skip on Python < 3.10 because some deps (like temporalio 1.19+) require 3.10+
+    if sys.version_info < (3, 10):
+        session.skip("pylint requires Python >= 3.10 for full dependency support")
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
@@ -275,22 +307,30 @@ def _get_braintrust_wheel():
 
 def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
-    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+    _run_tests(session, SRC_DIR, ignore_paths=[WRAPPER_DIR, CONTRIB_DIR, DEVSERVER_DIR])
 
 
-def _run_tests(session, test_path, ignore_path="", env=None):
+def _run_tests(session, test_path, ignore_path="", ignore_paths=None, env=None):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
     env = env.copy() if env else {}
     wheel_flag = "--wheel" in session.posargs
     common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
+
+    # Support both ignore_path (for backward compatibility) and ignore_paths
+    paths_to_ignore = []
+    if ignore_path:
+        paths_to_ignore.append(ignore_path)
+    if ignore_paths:
+        paths_to_ignore.extend(ignore_paths)
+
     if not wheel_flag:
         # Run the tests in the src directory
         test_args = [
             "pytest",
             f"src/{test_path}",
         ]
-        if ignore_path:
-            test_args.append(f"--ignore=src/{ignore_path}")
+        for path in paths_to_ignore:
+            test_args.append(f"--ignore=src/{path}")
         session.run(*test_args, *common_args, env=env)
         return
 
@@ -300,9 +340,12 @@ def _run_tests(session, test_path, ignore_path="", env=None):
     py = os.path.join(session.bin, "python")
     site_packages = session.run(py, "-c", "import site; print(site.getsitepackages()[0])", silent=True).strip()
     abs_test_path = os.path.abspath(os.path.join(site_packages, test_path))
-    ignore_path = os.path.abspath(os.path.join(site_packages, ignore_path))
     pytest_path = os.path.join(session.bin, "pytest")
-    ignore = f"--ignore={ignore_path}" if ignore_path else ""
+
+    ignore_args = []
+    for path in paths_to_ignore:
+        abs_ignore_path = os.path.abspath(os.path.join(site_packages, path))
+        ignore_args.append(f"--ignore={abs_ignore_path}")
 
     # Lastly, change to a different directory to ensure we don't install local stuff.
     with tempfile.TemporaryDirectory() as tmp:
@@ -311,7 +354,7 @@ def _run_tests(session, test_path, ignore_path="", env=None):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env["BRAINTRUST_TESTING_WHEEL"] = "1"
-        session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
+        session.run(pytest_path, abs_test_path, *ignore_args, *common_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?

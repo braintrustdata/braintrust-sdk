@@ -2,8 +2,16 @@ name: js
 
 on:
   pull_request:
+    paths-ignore:
+      - "integrations/otel-js/**"
   push:
     branches: [main]
+    paths-ignore:
+      - "integrations/otel-js/**"
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   build:
@@ -20,6 +28,9 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
 
+    outputs:
+      artifact-name: ${{ steps.artifact.outputs.name }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,4 +40,301 @@ jobs:
       - uses: pnpm/action-setup@v4
       - name: "verify ci"
         shell: bash
-        run: make js-verify-ci
+        run: |
+          make js-verify-ci
+
+      - name: Determine artifact name
+        id: artifact
+        env:
+          ARTIFACT_NAME: javascript-sdk-dev-${{ github.run_id }}
+        run: |
+          echo "Artifact: $ARTIFACT_NAME"
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+      - name: Prepare artifact
+        id: prepare_artifact
+        working-directory: js
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          PACKED_TARBALL=$(npm pack --pack-destination artifacts)
+          echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Build and pack @braintrust/otel
+        id: prepare_otel_artifact
+        shell: bash
+        run: |
+          # Install the built braintrust package in otel-js to satisfy peer dependency
+          BRAINTRUST_TARBALL=$(ls js/artifacts/braintrust-*.tgz | head -n 1)
+          if [ -z "$BRAINTRUST_TARBALL" ]; then
+            echo "Error: braintrust tarball not found"
+            exit 1
+          fi
+          echo "Using braintrust tarball: $BRAINTRUST_TARBALL"
+
+          # Install braintrust and OpenTelemetry peer dependencies in otel-js directory for build
+          # Use pnpm to match the workspace, with no-save flags to avoid modifying lockfile
+          cd integrations/otel-js
+          if ! npm_config_save=false npm_config_lockfile=false pnpm add \
+            file:../../$BRAINTRUST_TARBALL \
+            @opentelemetry/api@^1.9.0 \
+            @opentelemetry/core@^1.9.0 \
+            @opentelemetry/exporter-trace-otlp-http@^0.35.0 \
+            @opentelemetry/sdk-trace-base@^1.9.0; then
+            echo "Error: Failed to install dependencies"
+            exit 1
+          fi
+
+          # Build the otel package
+          pnpm run build
+
+          # Pack the otel package
+          PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: List artifacts before upload
+        shell: bash
+        run: |
+          echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
+          echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
+          ls -la js/artifacts/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
+          path: |
+            js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
+            js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
+          retention-days: 1
+
+  smoke-tests-node:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        integration: [otel-v1, span]
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original integration package manifests
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run install-build
+
+      - name: Run integration test (CJS) for ${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+        run: |
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm ci
+          else
+            npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts otel
+          fi
+          npm start
+
+      - name: Enable ESM for integrations tests
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run enable-esm
+
+      - name: Run integration test (ESM) for ${{ matrix.integration }}
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
+        run: |
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm ci
+          else
+            npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts otel
+          fi
+          npm start
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run restore
+
+  smoke-tests-nextjs:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        working-directory: js/smoke/tests/nextjs-instrumentation
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local builds
+        working-directory: js/smoke/tests/nextjs-instrumentation
+        shell: bash
+        run: |
+          npm ci --legacy-peer-deps
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+          npx tsx ../../install-build.ts ../../../artifacts otel
+
+      - name: Run Next.js build test
+        working-directory: js/smoke/tests/nextjs-instrumentation
+        shell: bash
+        run: |
+          npm test
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/nextjs-instrumentation
+        run: |
+          npm run restore
+
+  smoke-tests-cloudflare:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build
+        working-directory: js/smoke/tests/cloudflare-worker
+        shell: bash
+        run: |
+          npm ci
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Run Cloudflare Worker smoke test
+        working-directory: js/smoke/tests/cloudflare-worker
+        shell: bash
+        run: |
+          npm test
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run restore
+
+  smoke-tests-deno:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract build artifact
+        working-directory: js/smoke/tests/deno
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR=../../../artifacts
+          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
+          if [ -z "$TARBALL" ]; then
+            echo "No braintrust build found"
+            exit 1
+          fi
+          rm -rf build
+          mkdir -p build
+          tar -xzf "$TARBALL" -C build
+          [ -d build/package ] && mv build/package build/braintrust
+
+      - name: Run logger test
+        working-directory: js/smoke/tests/deno
+        env:
+          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
+        run: |
+          deno task test

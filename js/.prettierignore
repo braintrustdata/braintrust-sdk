@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dev/dist/
+util/dist/
+
+# Vendor libraries
+vendor/
+
+# Test files and examples
+examples/
+scripts/
+
+# Turbo cache
+.turbo/
+
+# Documentation
+docs/
+
+# Test wrapper directories
+test-ai-sdk-wrapper/
+vercel/
+
+# Coverage reports
+coverage/
+
+# Log files
+*.log
+
+# Package files
+*.tgz

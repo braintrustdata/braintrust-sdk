@@ -6,7 +6,6 @@ import time
 
 import anthropic
 import pytest
-
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.anthropic import wrap_anthropic
@@ -361,6 +360,8 @@ def _assert_metrics_are_valid(metrics, start, end):
     assert metrics["tokens"] > 0
     assert metrics["prompt_tokens"] > 0
     assert metrics["completion_tokens"] > 0
+    assert "time_to_first_token" in metrics
+    assert metrics["time_to_first_token"] >= 0
     if start and end:
         assert start <= metrics["start"] <= metrics["end"] <= end
     else:

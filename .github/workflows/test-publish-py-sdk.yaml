@@ -19,13 +19,14 @@ on:
 jobs:
   build-and-publish-test:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Required for PyPI trusted publishing
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      TWINE_USERNAME: __token__
-      TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      PYPI_REPO: testpypi
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +40,12 @@ jobs:
         working-directory: py
         run: |
           make install-dev
-      - name: Verify, build and publish to TestPyPI
+      - name: Build and verify
         working-directory: py
         run: |
-          make publish-to-testpypi
+          make verify-build
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: py/dist/

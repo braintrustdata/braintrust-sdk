@@ -109,5 +109,5 @@ Braintrust provides integrations with several popular AI development tools and p
 
 For more information, check out the [docs](https://www.braintrust.dev/docs):
 
-- [TypeScript](https://www.braintrust.dev/docs/libs/nodejs)
-- [Python](https://www.braintrust.dev/docs/libs/python)
+- [TypeScript](https://www.braintrust.dev/docs/reference/sdks/typescript)
+- [Python](https://www.braintrust.dev/docs/reference/sdks/python)

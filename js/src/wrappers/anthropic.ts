@@ -113,12 +113,16 @@ function createProxy(create: (params: any) => Promise<any>) {
       const onThen: ThenFn<any> = function (msgOrStream: any) {
         // handle the sync interface create(stream=False)
         if (!args["stream"]) {
+          const ttft = getCurrentUnixTimestamp() - sspan.startTime;
           const event = parseEventFromMessage(msgOrStream);
           span.log({
             ...event,
             metrics: event.metrics
-              ? finalizeAnthropicTokens(event.metrics)
-              : undefined,
+              ? finalizeAnthropicTokens({
+                  ...event.metrics,
+                  time_to_first_token: ttft,
+                })
+              : { time_to_first_token: ttft },
           });
           span.end();
           return msgOrStream;

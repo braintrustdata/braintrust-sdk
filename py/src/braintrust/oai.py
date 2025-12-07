@@ -845,7 +845,7 @@ def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
 
 
 def _is_numeric(v):
-    return isinstance(v, (int, float, complex))
+    return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
 
 
 def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:

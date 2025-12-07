@@ -1,6 +1,7 @@
 type SpanAttributes = {
   name: string;
   exec_counter: number;
+  type?: string;
 };
 
 type Metadata = {
@@ -19,6 +20,7 @@ type LogRow = {
   input?: Record<string, unknown>;
   metadata?: Metadata;
   output?: Output;
+  metrics?: Record<string, number>;
   span_id: string;
   root_span_id: string;
   span_parents: string[];
