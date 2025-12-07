@@ -420,6 +420,51 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.time_to_first_token > 0);
   });
 
+  test("openai.responses.create withResponse", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const start = getCurrentUnixTimestamp();
+    const { data, response } = await client.responses
+      .create({
+        model: TEST_MODEL,
+        input: "What is 2+2? Reply with just the number.",
+      })
+      .withResponse();
+    const end = getCurrentUnixTimestamp();
+
+    // Verify data
+    assert.ok(data);
+    expect(data.output_text).toContain("4");
+
+    // Verify response object (duck-typing check for Response)
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
+    expect(response.status).toBe(200);
+
+    // Verify span was logged correctly
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "openai.responses.create");
+    assert.equal(span.span_attributes.type, "llm");
+    assert.equal(span.input, "What is 2+2? Reply with just the number.");
+    assert.ok(span.metadata.model.startsWith(TEST_MODEL));
+    assert.equal(span.metadata.provider, "openai");
+    const outputStr = JSON.stringify(span.output);
+    expect(outputStr).toContain("4");
+    const m = span.metrics;
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.time_to_first_token > 0);
+  });
+
   test("openai.responses.parse", async (context) => {
     if (!oai.responses) {
       context.skip();
