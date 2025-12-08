@@ -121,7 +121,7 @@ const wrapGenerateObject = (
         });
 
         span.log({
-          output: processOutput(result, options.denyOutputPaths),
+          output: await processOutput(result, options.denyOutputPaths),
           metrics: extractTokenMetrics(result),
         });
 
