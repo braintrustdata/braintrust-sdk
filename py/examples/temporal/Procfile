@@ -1,0 +1,4 @@
+server: temporal server start-dev
+worker1: python worker.py
+worker2: python worker.py
+worker3: python worker.py

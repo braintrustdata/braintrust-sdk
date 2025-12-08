@@ -82,6 +82,7 @@
       "npm:mustache@^4.2.0",
       "npm:nunjucks@^3.2.4",
       "npm:uuid@13",
+      "npm:zod-to-json-schema@^3.25.0",
       "npm:zod@^4.1.12"
     ]
   }
