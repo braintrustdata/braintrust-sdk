@@ -692,10 +692,90 @@ class ChatV1Wrapper(NamedWrapper):
             self.completions = CompletionsV1Wrapper(chat.completions)
 
 
+class StreamingRawResponseWrapper:
+    """Wrapper that preserves raw response interface (status_code, headers) while tracing the stream."""
+
+    def __init__(self, raw_response: Any, traced_stream: Any):
+        self.__raw_response = raw_response
+        self.__traced_stream = traced_stream
+
+    @property
+    def status_code(self) -> int:
+        return self.__raw_response.status_code
+
+    @property
+    def headers(self) -> Any:
+        return self.__raw_response.headers
+
+    def parse(self) -> Any:
+        return self.__traced_stream
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__raw_response, name)
+
+
+class WithRawResponseResponsesWrapper:
+    """Wrapper for responses.with_raw_response that traces calls while returning raw response objects."""
+
+    def __init__(self, with_raw_response: Any):
+        self.__with_raw_response = with_raw_response
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        params = ResponseWrapper._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="openai.responses.create", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            create_response = self.__with_raw_response.create(*args, **kwargs)
+            raw_response = create_response.parse()
+            log_headers(create_response, span)
+
+            if stream:
+                def gen():
+                    try:
+                        first = True
+                        all_results = []
+                        for item in raw_response:
+                            if first:
+                                span.log(metrics={"time_to_first_token": time.time() - start})
+                                first = False
+                            all_results.append(item)
+                            yield item
+                        span.log(**ResponseWrapper._postprocess_streaming_results(all_results))
+                    finally:
+                        span.end()
+
+                should_end = False
+                return StreamingRawResponseWrapper(create_response, gen())
+            else:
+                log_response = _try_to_dict(raw_response)
+                event_data = ResponseWrapper._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
+                span.log(**event_data)
+                return create_response
+        finally:
+            if should_end:
+                span.end()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__with_raw_response, name)
+
+
 class ResponsesV1Wrapper(NamedWrapper):
     def __init__(self, responses: Any):
         self.__responses = responses
         super().__init__(responses)
+
+    @property
+    def with_raw_response(self) -> WithRawResponseResponsesWrapper:
+        return WithRawResponseResponsesWrapper(self.__responses.with_raw_response)
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
@@ -704,10 +784,90 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.parse, None, "openai.responses.parse").create(*args, **kwargs)
 
 
+class AsyncStreamingRawResponseWrapper:
+    """Async wrapper that preserves raw response interface (status_code, headers) while tracing the stream."""
+
+    def __init__(self, raw_response: Any, traced_stream: Any):
+        self.__raw_response = raw_response
+        self.__traced_stream = traced_stream
+
+    @property
+    def status_code(self) -> int:
+        return self.__raw_response.status_code
+
+    @property
+    def headers(self) -> Any:
+        return self.__raw_response.headers
+
+    def parse(self) -> Any:
+        return self.__traced_stream
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__raw_response, name)
+
+
+class AsyncWithRawResponseResponsesWrapper:
+    """Async wrapper for responses.with_raw_response that traces calls while returning raw response objects."""
+
+    def __init__(self, with_raw_response: Any):
+        self.__with_raw_response = with_raw_response
+
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        params = ResponseWrapper._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="openai.responses.create", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            create_response = await self.__with_raw_response.create(*args, **kwargs)
+            raw_response = create_response.parse()
+            log_headers(create_response, span)
+
+            if stream:
+                async def gen():
+                    try:
+                        first = True
+                        all_results = []
+                        async for item in raw_response:
+                            if first:
+                                span.log(metrics={"time_to_first_token": time.time() - start})
+                                first = False
+                            all_results.append(item)
+                            yield item
+                        span.log(**ResponseWrapper._postprocess_streaming_results(all_results))
+                    finally:
+                        span.end()
+
+                should_end = False
+                return AsyncStreamingRawResponseWrapper(create_response, AsyncResponseWrapper(gen()))
+            else:
+                log_response = _try_to_dict(raw_response)
+                event_data = ResponseWrapper._parse_event_from_result(log_response)
+                if "metrics" not in event_data:
+                    event_data["metrics"] = {}
+                event_data["metrics"]["time_to_first_token"] = time.time() - start
+                span.log(**event_data)
+                return create_response
+        finally:
+            if should_end:
+                span.end()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__with_raw_response, name)
+
+
 class AsyncResponsesV1Wrapper(NamedWrapper):
     def __init__(self, responses: Any):
         self.__responses = responses
         super().__init__(responses)
+
+    @property
+    def with_raw_response(self) -> AsyncWithRawResponseResponsesWrapper:
+        return AsyncWithRawResponseResponsesWrapper(self.__responses.with_raw_response)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
         response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
