@@ -143,11 +143,6 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        run: |
-          npm run install-build
-
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
@@ -157,8 +152,10 @@ jobs:
         run: |
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm ci
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
             npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
           fi
           npm start
@@ -177,8 +174,10 @@ jobs:
         run: |
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm ci
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
             npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
           fi
           npm start
