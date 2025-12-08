@@ -11,7 +11,7 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "braintrust": "file:../../../",
+    "braintrust": "latest",
     "nunjucks": "^3.2.4",
     "mustache": "^4.2.0"
   },
