@@ -38,18 +38,35 @@ export const lintTemplate = (
   template: string,
   context: Record<string, unknown>,
 ) => {
-  let root: NodeListNode;
-  try {
-    root = nunjucksParser.parse(template) as NodeListNode;
-  } catch {
-    throw new Error(`Invalid nunjucks template: ${template}.`);
-  }
-  const variablePaths = collectVariablePaths(root);
+  const variablePaths = analyzeNunjucksTemplate(template, {
+    throwOnParseError: true,
+  });
   for (const path of variablePaths) {
     if (!pathExists(context, path)) {
       throw new Error(`Variable '${formatPath(path)}' does not exist.`);
     }
   }
+};
+
+type AnalyzeOptions = {
+  throwOnParseError?: boolean;
+};
+
+export const analyzeNunjucksTemplate = (
+  template: string,
+  options: AnalyzeOptions = {},
+): string[][] => {
+  let root: NodeListNode;
+  try {
+    root = nunjucksParser.parse(template) as NodeListNode;
+  } catch {
+    if (options.throwOnParseError) {
+      throw new Error(`Invalid nunjucks template: ${template}.`);
+    }
+    return [];
+  }
+
+  return collectVariablePaths(root);
 };
 
 // Use the parsed AST to collect variable lookup paths that must be present in the context.
