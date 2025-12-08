@@ -209,7 +209,12 @@ export function runDevServer(
             data: evalData.data,
             scores: evaluator.scores.concat(
               scores?.map((score) =>
-                makeScorer(state, score.name, score.function_id),
+                makeScorer(
+                  state,
+                  score.name,
+                  score.function_id,
+                  req.ctx?.projectId,
+                ),
               ) ?? [],
             ),
             task,
@@ -351,6 +356,7 @@ function makeScorer(
   state: BraintrustState,
   name: string,
   score: FunctionId,
+  projectId: string | undefined,
 ): EvalScorer<unknown, unknown, unknown, BaseMetadata> {
   const ret = async (input: EvalCase<unknown, unknown, BaseMetadata>) => {
     const request: InvokeFunctionRequest = {
@@ -361,10 +367,14 @@ function makeScorer(
       mode: "auto",
       strict: true,
     };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (projectId) {
+      headers["x-bt-project-id"] = projectId;
+    }
     const result = await state.proxyConn().post(`function/invoke`, request, {
-      headers: {
-        Accept: "application/json",
-      },
+      headers,
     });
     const data = await result.json();
     // NOTE: Ideally we can parse this value with a zod schema.

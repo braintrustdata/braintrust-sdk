@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify"""
+"""Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -14,6 +14,8 @@ from ._generated_types import (
     BraintrustModelParams,
     CallEvent,
     ChatCompletionContentPart,
+    ChatCompletionContentPartFileFile,
+    ChatCompletionContentPartFileWithTitle,
     ChatCompletionContentPartImageWithTitle,
     ChatCompletionContentPartText,
     ChatCompletionContentPartTextWithTitle,
@@ -111,6 +113,8 @@ __all__ = [
     "BraintrustModelParams",
     "CallEvent",
     "ChatCompletionContentPart",
+    "ChatCompletionContentPartFileFile",
+    "ChatCompletionContentPartFileWithTitle",
     "ChatCompletionContentPartImageWithTitle",
     "ChatCompletionContentPartText",
     "ChatCompletionContentPartTextWithTitle",

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify
+// Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -105,10 +105,14 @@ export const AnyModelParams = z.object({
     .optional(),
   n: z.number().optional(),
   stop: z.array(z.string()).optional(),
-  reasoning_effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+  reasoning_effort: z
+    .enum(["none", "minimal", "low", "medium", "high"])
+    .optional(),
   verbosity: z.enum(["low", "medium", "high"]).optional(),
   top_k: z.number().optional(),
   stop_sequences: z.array(z.string()).optional(),
+  reasoning_enabled: z.boolean().optional(),
+  reasoning_budget: z.number().optional(),
   max_tokens_to_sample: z.number().optional(),
   maxOutputTokens: z.number().optional(),
   topP: z.number().optional(),
@@ -178,7 +182,11 @@ export const AttachmentStatus = z.object({
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
 export const BraintrustModelParams = z
-  .object({ use_cache: z.boolean() })
+  .object({
+    use_cache: z.boolean(),
+    reasoning_enabled: z.boolean(),
+    reasoning_budget: z.number(),
+  })
   .partial();
 export type BraintrustModelParamsType = z.infer<typeof BraintrustModelParams>;
 export const CallEvent = z.union([
@@ -244,9 +252,23 @@ export const ChatCompletionContentPartImageWithTitle = z.object({
 export type ChatCompletionContentPartImageWithTitleType = z.infer<
   typeof ChatCompletionContentPartImageWithTitle
 >;
+export const ChatCompletionContentPartFileFile = z
+  .object({ file_data: z.string(), filename: z.string(), file_id: z.string() })
+  .partial();
+export type ChatCompletionContentPartFileFileType = z.infer<
+  typeof ChatCompletionContentPartFileFile
+>;
+export const ChatCompletionContentPartFileWithTitle = z.object({
+  file: ChatCompletionContentPartFileFile,
+  type: z.literal("file"),
+});
+export type ChatCompletionContentPartFileWithTitleType = z.infer<
+  typeof ChatCompletionContentPartFileWithTitle
+>;
 export const ChatCompletionContentPart = z.union([
   ChatCompletionContentPartTextWithTitle,
   ChatCompletionContentPartImageWithTitle,
+  ChatCompletionContentPartFileWithTitle,
 ]);
 export type ChatCompletionContentPartType = z.infer<
   typeof ChatCompletionContentPart
@@ -372,7 +394,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python"]),
+    runtime: z.enum(["node", "python", "browser"]),
     version: z.string(),
   }),
   location: z.union([
@@ -444,6 +466,8 @@ export const DatasetEvent = z.object({
   root_span_id: z.string(),
   is_root: z.union([z.boolean(), z.null()]).optional(),
   origin: ObjectReferenceNullish.optional(),
+  comments: z.union([z.array(z.unknown()), z.null()]).optional(),
+  audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
 });
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
@@ -549,6 +573,8 @@ export const ExperimentEvent = z.object({
   span_attributes: SpanAttributes.optional(),
   is_root: z.union([z.boolean(), z.null()]).optional(),
   origin: ObjectReferenceNullish.optional(),
+  comments: z.union([z.array(z.unknown()), z.null()]).optional(),
+  audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
@@ -564,12 +590,12 @@ export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
 export const PromptBlockDataNullish = z.union([
-  z.object({ type: z.literal("completion"), content: z.string() }),
   z.object({
     type: z.literal("chat"),
     messages: z.array(ChatCompletionMessageParam),
     tools: z.string().optional(),
   }),
+  z.object({ type: z.literal("completion"), content: z.string() }),
   z.null(),
 ]);
 export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
@@ -577,6 +603,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       top_p: z.number(),
       max_tokens: z.number(),
@@ -600,7 +628,7 @@ export const ModelParams = z.union([
       ]),
       n: z.number(),
       stop: z.array(z.string()),
-      reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
+      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
       verbosity: z.enum(["low", "medium", "high"]),
     })
     .partial()
@@ -608,6 +636,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean().optional(),
+      reasoning_enabled: z.boolean().optional(),
+      reasoning_budget: z.number().optional(),
       max_tokens: z.number(),
       temperature: z.number(),
       top_p: z.number().optional(),
@@ -619,6 +649,8 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       maxOutputTokens: z.number(),
       topP: z.number(),
@@ -629,12 +661,21 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
       temperature: z.number(),
       topK: z.number(),
     })
     .partial()
     .passthrough(),
-  z.object({ use_cache: z.boolean() }).partial().passthrough(),
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+    })
+    .partial()
+    .passthrough(),
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
@@ -681,7 +722,7 @@ export const PromptDataNullish = z.union([
 ]);
 export type PromptDataNullishType = z.infer<typeof PromptDataNullish>;
 export const FunctionTypeEnumNullish = z.union([
-  z.enum(["llm", "scorer", "task", "tool"]),
+  z.enum(["llm", "scorer", "task", "tool", "custom_view"]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -690,12 +731,12 @@ export type FunctionTypeEnumNullishType = z.infer<
 export const FunctionIdRef = z.object({}).partial().passthrough();
 export type FunctionIdRefType = z.infer<typeof FunctionIdRef>;
 export const PromptBlockData = z.union([
-  z.object({ type: z.literal("completion"), content: z.string() }),
   z.object({
     type: z.literal("chat"),
     messages: z.array(ChatCompletionMessageParam),
     tools: z.string().optional(),
   }),
+  z.object({ type: z.literal("completion"), content: z.string() }),
 ]);
 export type PromptBlockDataType = z.infer<typeof PromptBlockData>;
 export const GraphNode = z.union([
@@ -783,7 +824,7 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python"]),
+          runtime: z.enum(["node", "python", "browser"]),
           version: z.string(),
         }),
         code: z.string(),
@@ -856,7 +897,13 @@ export const PromptData = z
   })
   .partial();
 export type PromptDataType = z.infer<typeof PromptData>;
-export const FunctionTypeEnum = z.enum(["llm", "scorer", "task", "tool"]);
+export const FunctionTypeEnum = z.enum([
+  "llm",
+  "scorer",
+  "task",
+  "tool",
+  "custom_view",
+]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
@@ -873,7 +920,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python"]),
+      runtime: z.enum(["node", "python", "browser"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -898,6 +945,7 @@ export const FunctionObjectType = z.enum([
   "scorer",
   "task",
   "agent",
+  "custom_view",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
@@ -1049,6 +1097,7 @@ export const ProjectSettings = z.union([
         ),
         z.null(),
       ]),
+      disable_realtime_queries: z.union([z.boolean(), z.null()]),
     })
     .partial(),
   z.null(),
@@ -1154,6 +1203,9 @@ export const ProjectLogsEvent = z.object({
   is_root: z.union([z.boolean(), z.null()]).optional(),
   span_attributes: SpanAttributes.optional(),
   origin: ObjectReferenceNullish.optional(),
+  comments: z.union([z.array(z.unknown()), z.null()]).optional(),
+  audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
+  _async_scoring_state: z.unknown().optional(),
 });
 export type ProjectLogsEventType = z.infer<typeof ProjectLogsEvent>;
 export const ProjectScoreType = z.enum([
@@ -1402,7 +1454,7 @@ export const ViewDataSearch = z.union([
 ]);
 export type ViewDataSearchType = z.infer<typeof ViewDataSearch>;
 export const ViewData = z.union([
-  z.object({ search: ViewDataSearch }).partial(),
+  z.object({ search: ViewDataSearch, custom_charts: z.unknown() }).partial(),
   z.null(),
 ]);
 export type ViewDataType = z.infer<typeof ViewData>;
@@ -1473,6 +1525,7 @@ export const ViewOptions = z.union([
         z.object({ from: z.string(), to: z.string() }),
         z.null(),
       ]),
+      queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
     })
     .partial(),
   z.null(),
@@ -1496,6 +1549,7 @@ export const View = z.object({
     "logs",
     "agents",
     "monitor",
+    "for_review",
   ]),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),

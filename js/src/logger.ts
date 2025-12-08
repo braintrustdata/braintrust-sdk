@@ -100,6 +100,12 @@ export interface ContextParentSpanIds {
   spanParents: string[];
 }
 
+export class LoginInvalidOrgError extends Error {
+  constructor(public message: string) {
+    super(message);
+  }
+}
+
 // Fields that should be passed to the masking function
 // Note: "tags" field is intentionally excluded, but can be added if needed
 const REDACTION_FIELDS = [
@@ -210,6 +216,14 @@ export interface Span extends Exportable {
    * Parent span IDs of the span.
    */
   spanParents: string[];
+
+  getParentInfo():
+    | {
+        objectType: SpanObjectTypeV3;
+        objectId: LazyValue<string>;
+        computeObjectMetadataArgs: Record<string, unknown> | undefined;
+      }
+    | undefined;
 
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -337,13 +351,6 @@ export interface Span extends Exportable {
    */
   state(): BraintrustState;
 
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined;
-
   // For type identification.
   kind: "span";
 }
@@ -383,34 +390,25 @@ class BraintrustContextManager extends ContextManager {
   }
 }
 
-function getSpanComponentsClass():
-  | typeof SpanComponentsV3
-  | typeof SpanComponentsV4 {
-  const useV4 =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-  return useV4 ? SpanComponentsV4 : SpanComponentsV3;
+// make sure to update @braintrust/otel package
+declare global {
+  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
+  var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
+  var BRAINTRUST_SPAN_COMPONENT: SpanComponent | undefined;
+}
+
+type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
+
+function getSpanComponentsClass(): SpanComponent {
+  return globalThis.BRAINTRUST_SPAN_COMPONENT
+    ? globalThis.BRAINTRUST_SPAN_COMPONENT
+    : SpanComponentsV3;
 }
 
 export function getContextManager(): ContextManager {
-  const useOtel =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-
-  if (useOtel) {
-    try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
-      return new OtelContextManager();
-    } catch {
-      console.warn(
-        "OTEL not available, falling back to Braintrust-only context manager",
-      );
-    }
-  }
-
-  return new BraintrustContextManager();
+  return globalThis.BRAINTRUST_CONTEXT_MANAGER
+    ? new globalThis.BRAINTRUST_CONTEXT_MANAGER()
+    : new BraintrustContextManager();
 }
 
 /**
@@ -440,6 +438,10 @@ export class NoopSpan implements Span {
     _1?: StartSpanArgs & SetCurrentArg,
   ): R {
     return callback(this);
+  }
+
+  public getParentInfo() {
+    return undefined;
   }
 
   public startSpan(_1?: StartSpanArgs) {
@@ -480,10 +482,6 @@ export class NoopSpan implements Span {
 
   public state() {
     return _internalGetGlobalState();
-  }
-
-  public _getOtelParent(): string | undefined {
-    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -2363,6 +2361,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+  public flushChunkSize: number = 25;
 
   private _disabled = false;
 
@@ -2400,6 +2399,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const queueDropExceedingMaxsizeEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE"),
     );
+
     if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
@@ -2411,6 +2411,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     );
     if (!isNaN(queueDropLoggingPeriodEnv)) {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
+    }
+
+    const flushChunkSizeEnv = Number(
+      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
+    );
+    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
+      this.flushChunkSize = flushChunkSizeEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2488,6 +2495,36 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     // Drain the queue.
     const wrappedItems = this.queue.drain();
 
+    if (wrappedItems.length === 0) {
+      return;
+    }
+
+    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
+
+    let index = 0;
+    while (index < wrappedItems.length) {
+      const chunk = wrappedItems.slice(index, index + chunkSize);
+      await this.flushWrappedItemsChunk(chunk, batchSize);
+      index += chunk.length;
+    }
+    // Clear the array once at the end to allow garbage collection
+    // More efficient than filling with undefined after each chunk
+    wrappedItems.length = 0;
+
+    // If more items were added while we were flushing, flush again
+    if (this.queue.length() > 0) {
+      await this.flushOnce(args);
+    }
+  }
+
+  private async flushWrappedItemsChunk(
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
+    batchSize: number,
+  ) {
+    if (!wrappedItems.length) {
+      return;
+    }
+
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
@@ -2545,11 +2582,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         attachmentErrors,
         `Encountered the following errors while uploading attachments:`,
       );
-    }
-
-    // If more items were added while we were flushing, flush again
-    if (this.queue.length() > 0) {
-      await this.flushOnce(args);
     }
   }
 
@@ -4438,7 +4470,9 @@ function _saveOrgInfo(
   org_name: string | undefined,
 ) {
   if (org_info.length === 0) {
-    throw new Error("This user is not part of any organizations.");
+    throw new LoginInvalidOrgError(
+      "This user is not part of any organizations.",
+    );
   }
 
   for (const org of org_info) {
@@ -4453,7 +4487,7 @@ function _saveOrgInfo(
   }
 
   if (state.orgId === undefined) {
-    throw new Error(
+    throw new LoginInvalidOrgError(
       `Organization ${org_name} not found. Must be one of ${org_info
         .map((x: any) => x.name)
         .join(", ")}`,
@@ -4770,9 +4804,79 @@ class ObjectFetcher<RecordType>
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
+  private async *fetchRecordsFromApi(): AsyncGenerator<
+    WithTransactionId<RecordType>
+  > {
+    const state = await this.getState();
+    const objectId = await this.id;
+    let cursor = undefined;
+    let iterations = 0;
+    while (true) {
+      const resp = await state.apiConn().post(
+        `btql`,
+        {
+          query: {
+            ...this._internal_btql,
+            select: [
+              {
+                op: "star",
+              },
+            ],
+            from: {
+              op: "function",
+              name: {
+                op: "ident",
+                name: [this.objectType],
+              },
+              args: [
+                {
+                  op: "literal",
+                  value: objectId,
+                },
+              ],
+            },
+            cursor,
+            limit: INTERNAL_BTQL_LIMIT,
+          },
+          use_columnstore: false,
+          brainstore_realtime: true,
+          query_source: `js_sdk_object_fetcher_${this.objectType}`,
+          ...(this.pinnedVersion !== undefined
+            ? {
+                version: this.pinnedVersion,
+              }
+            : {}),
+        },
+        { headers: { "Accept-Encoding": "gzip" } },
+      );
+      const respJson = await resp.json();
+      const mutate = this.mutateRecord;
+      for (const record of respJson.data ?? []) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        yield mutate
+          ? mutate(record)
+          : (record as WithTransactionId<RecordType>);
+      }
+      if (!respJson.cursor) {
+        break;
+      }
+      cursor = respJson.cursor;
+      iterations++;
+      if (iterations > MAX_BTQL_ITERATIONS) {
+        throw new Error("Too many BTQL iterations");
+      }
+    }
+  }
+
   async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
-    const records = await this.fetchedData();
-    for (const record of records) {
+    if (this._fetchedData !== undefined) {
+      for (const record of this._fetchedData) {
+        yield record;
+      }
+      return;
+    }
+
+    for await (const record of this.fetchRecordsFromApi()) {
       yield record;
     }
   }
@@ -4783,61 +4887,11 @@ class ObjectFetcher<RecordType>
 
   async fetchedData() {
     if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      let data: WithTransactionId<RecordType>[] | undefined = undefined;
-      let cursor = undefined;
-      let iterations = 0;
-      while (true) {
-        const resp = await state.apiConn().post(
-          `btql`,
-          {
-            query: {
-              ...this._internal_btql,
-              select: [
-                {
-                  op: "star",
-                },
-              ],
-              from: {
-                op: "function",
-                name: {
-                  op: "ident",
-                  name: [this.objectType],
-                },
-                args: [
-                  {
-                    op: "literal",
-                    value: await this.id,
-                  },
-                ],
-              },
-              cursor,
-              limit: INTERNAL_BTQL_LIMIT,
-            },
-            use_columnstore: false,
-            brainstore_realtime: true,
-            ...(this.pinnedVersion !== undefined
-              ? {
-                  version: this.pinnedVersion,
-                }
-              : {}),
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        const respJson = await resp.json();
-        data = (data ?? []).concat(respJson.data);
-        if (!respJson.cursor) {
-          break;
-        }
-        cursor = respJson.cursor;
-        iterations++;
-        if (iterations > MAX_BTQL_ITERATIONS) {
-          throw new Error("Too many BTQL iterations");
-        }
+      const data: WithTransactionId<RecordType>[] = [];
+      for await (const record of this.fetchRecordsFromApi()) {
+        data.push(record);
       }
-      this._fetchedData = this.mutateRecord
-        ? data?.map(this.mutateRecord)
-        : data;
+      this._fetchedData = data;
     }
     return this._fetchedData || [];
   }
@@ -4850,9 +4904,8 @@ class ObjectFetcher<RecordType>
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
-      const fetchedData = await this.fetchedData();
       let maxVersion: string | undefined = undefined;
-      for (const record of fetchedData) {
+      for await (const record of this.fetch()) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
         if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
@@ -5376,6 +5429,7 @@ export class SpanImpl implements Span {
   private parentObjectType: SpanObjectTypeV3;
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
+
   private _id: string;
   private _spanId: string;
   private _rootSpanId: string;
@@ -5464,6 +5518,16 @@ export class SpanImpl implements Span {
     this.isMerge = false;
     this.logInternal({ event, internalData });
     this.isMerge = true;
+  }
+
+  public getParentInfo() {
+    return {
+      objectType: this.parentObjectType,
+      objectId: this.parentObjectId,
+      computeObjectMetadataArgs: this.parentComputeObjectMetadataArgs && {
+        ...this.parentComputeObjectMetadataArgs,
+      },
+    };
   }
 
   public get id(): string {
@@ -5726,54 +5790,6 @@ export class SpanImpl implements Span {
 
   public state(): BraintrustState {
     return this._state;
-  }
-
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined {
-    if (!this.parentObjectType) {
-      return undefined;
-    }
-
-    try {
-      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-        const args = this.parentComputeObjectMetadataArgs;
-
-        if (id) {
-          return `project_id:${id}`;
-        }
-
-        const projectName = args?.project_name;
-        if (projectName) {
-          return `project_name:${projectName}`;
-        }
-      } else if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-
-        // If not resolved yet, trigger async resolution as a fallback
-        // This shouldn't typically happen since Eval() resolves experiment IDs early,
-        // but we keep this as a safety net for other use cases.
-        if (!syncResult.resolved) {
-          this.parentObjectId.get().catch(() => {
-            // Ignore errors, matching Python's except clause behavior
-          });
-        }
-
-        if (id) {
-          return `experiment_id:${id}`;
-        }
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-
-    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -6232,6 +6248,19 @@ export function renderMessage<T extends Message>(
                         image_url: {
                           ...c.image_url,
                           url: render(c.image_url.url),
+                        },
+                      };
+                    case "file":
+                      return {
+                        ...c,
+                        file: {
+                          file_data: render(c.file.file_data || ""),
+                          ...(c.file.file_id && {
+                            file_id: render(c.file.file_id),
+                          }),
+                          ...(c.file.filename && {
+                            filename: render(c.file.filename),
+                          }),
                         },
                       };
                     default:

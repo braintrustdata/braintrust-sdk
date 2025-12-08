@@ -40,8 +40,8 @@ const config = {
       "./vendor/**",
       // Exclude subdirectories with their own test configs
       "src/wrappers/ai-sdk/**",
-      "src/wrappers/mastra/**",
       "src/wrappers/claude-agent-sdk/**",
+      "smoke/**",
     ],
     // Additional test environment configuration
     watchExclude: [

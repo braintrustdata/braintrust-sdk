@@ -18,6 +18,7 @@ ALLOWED_HEADERS = [
     "x-bt-auth-token",
     "x-bt-parent",
     "x-bt-org-name",
+    "x-bt-project-id",
     "x-bt-stream-fmt",
     "x-bt-use-cache",
     "x-stainless-os",
