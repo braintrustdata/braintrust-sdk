@@ -12,7 +12,7 @@ except ImportError:
     _HAS_ORJSON = False
 
 
-def _default_handler(obj: Any) -> Any:
+def _to_dict(obj: Any) -> Any:
     """
     Function-based default handler for non-JSON-serializable objects.
 
@@ -53,7 +53,7 @@ class BraintrustJSONEncoder(json.JSONEncoder):
     """
 
     def default(self, o: Any):
-        return _default_handler(o)
+        return _to_dict(o)
 
 
 def bt_dumps(obj, **kwargs) -> str:
@@ -76,8 +76,8 @@ def bt_dumps(obj, **kwargs) -> str:
             # pylint: disable=no-member  # orjson is a C extension, pylint can't introspect it
             return orjson.dumps(  # type: ignore[possibly-unbound]
                 obj,
-                default=_default_handler,
-                # optiosn match json.dumps behavior for bc
+                default=_to_dict,
+                # options match json.dumps behavior for bc
                 option=orjson.OPT_SORT_KEYS | orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS,  # type: ignore[possibly-unbound]
             ).decode("utf-8")
         except Exception:

@@ -51,3 +51,7 @@ Eval(
   scores=[is_equal],
 )
 ```
+
+# Performance Optimization
+
+For 3-5x faster JSON serialization, install `orjson`. The SDK automatically detects and uses orjson if available, with seamless fallback to standard json.
