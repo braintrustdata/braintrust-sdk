@@ -274,11 +274,10 @@ class TestSpanFiltering:
         except ImportError:
             pytest.skip("OpenTelemetry SDK not fully installed, skipping AISpanProcessor tests")
 
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         self.memory_exporter = InMemorySpanExporter()
         self.provider = TracerProvider()
@@ -403,11 +402,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -435,11 +433,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -465,11 +462,10 @@ class TestSpanFiltering:
             return None  # Always defer to default logic
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -490,13 +486,39 @@ class TestSpanFiltering:
         assert "gen_ai.completion" in span_names  # kept by default LLM logic
         assert "regular_operation" not in span_names  # dropped by default logic
 
-    def test_filtering_vs_unfiltered_comparison(self):
-        # Set up two separate exporters and processors
+    def test_custom_filter_can_drop_root_spans(self):
+        def custom_filter(span):
+            if span.name == "root_to_drop":
+                return False
+            return None
+
+        # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+        memory_exporter = InMemorySpanExporter()
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
+        provider = TracerProvider()
+        provider.add_span_processor(processor)
+        tracer = provider.get_tracer(__name__)
+
+        # Root span that should be dropped by the custom filter
+        with tracer.start_as_current_span("root_to_drop"):
+            pass
+
+        spans = memory_exporter.get_finished_spans()
+        span_names = [span.name for span in spans]
+
+        assert "root_to_drop" not in span_names
+
+    def test_filtering_vs_unfiltered_comparison(self):
+        # Set up two separate exporters and processors
         from braintrust.otel import AISpanProcessor
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
         all_spans_exporter = InMemorySpanExporter()
         filtered_spans_exporter = InMemorySpanExporter()
@@ -656,9 +678,8 @@ def test_add_parent_to_baggage():
     if not _check_otel_installed():
         pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
-    from opentelemetry import baggage, context
-
     from braintrust.otel import add_parent_to_baggage
+    from opentelemetry import baggage, context
 
     # Test adding parent to baggage
     token = add_parent_to_baggage("project_name:test-project")
@@ -677,10 +698,9 @@ def test_add_span_parent_to_baggage():
     if not _check_otel_installed():
         pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
+    from braintrust.otel import add_span_parent_to_baggage
     from opentelemetry import baggage, context, trace
     from opentelemetry.sdk.trace import TracerProvider
-
-    from braintrust.otel import add_span_parent_to_baggage
 
     # Setup tracer
     provider = TracerProvider()

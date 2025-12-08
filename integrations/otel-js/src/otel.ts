@@ -109,8 +109,8 @@ export class AISpanProcessor {
    * Determine if a span should be kept based on filtering criteria.
    *
    * Keep spans if:
-   * 1. It's a root span (no parent)
-   * 2. Custom filter returns true/false (if provided)
+   * 1. Custom filter returns true/false (if provided)
+   * 2. It's a root span (no parent) when customFilter does not make a decision
    * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
    * 4. Any attribute name starts with those prefixes
    */
@@ -119,7 +119,20 @@ export class AISpanProcessor {
       return false;
     }
 
-    // Always keep root spans (no parent)
+    // Apply custom filter if provided. This runs before default logic so
+    // custom filters can override even root span behavior.
+    if (this.customFilter) {
+      const customResult = this.customFilter(span);
+      if (customResult === true) {
+        return true;
+      }
+      if (customResult === false) {
+        return false;
+      }
+      // customResult is null/undefined - continue with default logic
+    }
+
+    // Default behavior: always keep root spans (no parent)
     // Check both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x)
     const hasParent =
       ("parentSpanId" in span && span.parentSpanId) ||
@@ -127,17 +140,6 @@ export class AISpanProcessor {
 
     if (!hasParent) {
       return true;
-    }
-
-    // Apply custom filter if provided
-    if (this.customFilter) {
-      const customResult = this.customFilter(span);
-      if (customResult === true) {
-        return true;
-      } else if (customResult === false) {
-        return false;
-      }
-      // customResult is null/undefined - continue with default logic
     }
 
     // Check span name

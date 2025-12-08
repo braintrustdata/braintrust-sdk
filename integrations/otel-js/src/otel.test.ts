@@ -265,6 +265,33 @@ describe("AISpanProcessor", () => {
     customProvider.shutdown();
   });
 
+  it("should allow custom filter to drop root spans", () => {
+    const customFilter = (span: ReadableSpan) => {
+      return span.name === "root_to_drop" ? false : undefined;
+    };
+
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
+
+    const rootSpan = customTracer.startSpan("root_to_drop");
+
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).not.toContain("root_to_drop"); // dropped by custom filter
+
+    customProvider.shutdown();
+  });
+
   it("should support custom filter that defers to default logic", () => {
     const customFilter = () => {
       return undefined; // Defer to default logic

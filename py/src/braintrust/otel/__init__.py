@@ -91,17 +91,13 @@ class AISpanProcessor:
     def _should_keep_filtered_span(self, span):
         """
         Keep spans if:
-        1. It's a root span (no parent)
-        2. Custom filter returns True/False (if provided)
+        1. Custom filter returns True/False (if provided)
+        2. It's a root span (no parent) when custom_filter does not make a decision
         3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
         4. Any attribute name starts with those prefixes
         """
         if not span:
             return False
-
-        # Braintrust requires root spans, so always keep them
-        if span.parent is None:
-            return True
 
         # Apply custom filter if provided
         if self._custom_filter:
@@ -111,6 +107,10 @@ class AISpanProcessor:
             elif custom_result is False:
                 return False
             # custom_result is None - continue with default logic
+
+        # Default behavior: always keep root spans (no parent)
+        if getattr(span, "parent", None) is None:
+            return True
 
         if span.name.startswith(FILTER_PREFIXES):
             return True
@@ -405,10 +405,9 @@ def context_from_span_export(export_str: str):
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
+    from braintrust.span_identifier_v4 import SpanComponentsV4
     from opentelemetry import baggage, trace
     from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
-
-    from braintrust.span_identifier_v4 import SpanComponentsV4
 
     # Parse the export string (handles V3/V4 automatically)
     components = SpanComponentsV4.from_str(export_str)
@@ -554,10 +553,9 @@ def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
+    from braintrust.span_identifier_v4 import SpanComponentsV4
     from opentelemetry import baggage, trace
     from opentelemetry.propagate import extract
-
-    from braintrust.span_identifier_v4 import SpanComponentsV4
 
     # Extract context from headers using W3C Trace Context propagator
     ctx = extract(headers)
