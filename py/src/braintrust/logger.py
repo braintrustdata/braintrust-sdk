@@ -1187,14 +1187,6 @@ class _HTTPBackgroundLogger:
 def _internal_reset_global_state() -> None:
     global _state
     _state = BraintrustState()
-    # Reset the thread pool singleton to ensure fresh state in tests
-    try:
-        from braintrust.framework import _internal_reset_thread_pool
-
-        _internal_reset_thread_pool()
-    except ImportError:
-        # framework module might not be available in all contexts
-        pass
 
 
 def _internal_get_global_state() -> BraintrustState:
@@ -5250,21 +5242,9 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         # Capture all current context variables
         context = contextvars.copy_context()
 
-        # Capture the current thread-local background logger override
-        # This is necessary because worker threads have their own thread-local storage
-        override_logger = getattr(_state._override_bg_logger, "logger", None)
-
         def wrapped_fn(*args, **kwargs):
-            # Restore the background logger override in the worker thread
-            if override_logger is not None:
-                _state._override_bg_logger.logger = override_logger
-            try:
-                # Run the function inside the captured context
-                return context.run(fn, *args, **kwargs)
-            finally:
-                # Clean up the override in the worker thread
-                if override_logger is not None:
-                    _state._override_bg_logger.logger = None
+            # Run the function inside the captured context
+            return context.run(fn, *args, **kwargs)
 
         return super().submit(wrapped_fn, *args, **kwargs)
 
