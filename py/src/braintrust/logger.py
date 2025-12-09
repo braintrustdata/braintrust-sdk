@@ -1313,6 +1313,7 @@ def init(
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
     state: Optional[BraintrustState] = None,
+    batch_size: Optional[int] = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1337,6 +1338,7 @@ def init(
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :param state: (Optional) A BraintrustState object to use. If not specified, will use the global state. This is for advanced use only.
+    :param batch_size: (Optional) The number of records to fetch per API request when iterating over the experiment. Defaults to 1000. Reduce this value if you encounter errors with large payloads.
     :returns: The experiment object.
     """
 
@@ -1376,7 +1378,7 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state)
+        return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state, batch_size=batch_size)
 
     # pylint: disable=function-redefined
     def compute_metadata():
@@ -1447,7 +1449,7 @@ def init(
     # For experiments, disable queue size limit enforcement (unlimited queue)
     state.enforce_queue_size_limit(False)
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state, batch_size=batch_size)
     if set_current:
         state.current_experiment = ret
     return ret
@@ -1472,6 +1474,7 @@ def init_dataset(
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
     _internal_btql: Optional[Dict[str, Any]] = None,
     state: Optional[BraintrustState] = None,
+    batch_size: Optional[int] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1489,6 +1492,7 @@ def init_dataset(
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
     :param _internal_btql: (Internal) If specified, the dataset will be created with the given BTQL filters.
     :param state: (Internal) The Braintrust state to use. If not specified, will use the global state. For advanced use only.
+    :param batch_size: (Optional) The number of records to fetch per API request when iterating over the dataset. Defaults to 1000. Reduce this value if you encounter errors with large payloads.
     :returns: The dataset object.
     """
 
@@ -1516,6 +1520,7 @@ def init_dataset(
         legacy=use_output,
         _internal_btql=_internal_btql,
         state=state,
+        batch_size=batch_size,
     )
 
 
@@ -2550,6 +2555,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         pinned_version: Union[None, int, str] = None,
         mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
         _internal_btql: Optional[Dict[str, Any]] = None,
+        batch_size: Optional[int] = None,
     ):
         self.object_type = object_type
 
@@ -2565,6 +2571,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
 
         self._fetched_data: Optional[List[TMapping]] = None
         self._internal_btql = _internal_btql
+        self.batch_size = batch_size if batch_size is not None else INTERNAL_BTQL_LIMIT
 
     def fetch(self) -> Iterator[TMapping]:
         """
@@ -2626,7 +2633,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 ],
                             },
                             "cursor": cursor,
-                            "limit": INTERNAL_BTQL_LIMIT,
+                            "limit": self.batch_size,
                             **(self._internal_btql or {}),
                         },
                         "use_columnstore": False,
@@ -3421,6 +3428,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
         state: Optional[BraintrustState] = None,
+        batch_size: Optional[int] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
@@ -3434,6 +3442,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             object_type="experiment",
             pinned_version=None,
             mutate_record=_enrich_attachments,
+            batch_size=batch_size,
         )
 
     @property
@@ -3753,6 +3762,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         state: Optional[BraintrustState] = None,
+        batch_size: Optional[int] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.state = state or _state
@@ -3762,6 +3772,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
             object_type="experiment",
             pinned_version=None,
             mutate_record=_enrich_attachments,
+            batch_size=batch_size,
         )
 
     @property
@@ -4216,6 +4227,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
         _internal_btql: Optional[Dict[str, Any]] = None,
         state: Optional[BraintrustState] = None,
+        batch_size: Optional[int] = None,
     ):
         if legacy:
             eprint(
@@ -4235,6 +4247,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             pinned_version=version,
             mutate_record=mutate_record,
             _internal_btql=_internal_btql,
+            batch_size=batch_size,
         )
 
         self.state = state or _state

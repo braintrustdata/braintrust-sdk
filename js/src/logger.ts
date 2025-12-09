@@ -2875,6 +2875,11 @@ export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   repoInfo?: RepoInfo;
   setCurrent?: boolean;
   state?: BraintrustState;
+  /**
+   * The number of records to fetch per API request when iterating over the experiment.
+   * Defaults to 1000. Reduce this value if you encounter errors with large payloads.
+   */
+  batchSize?: number;
 } & InitOpenOption<IsOpen>;
 
 export type FullInitOptions<IsOpen extends boolean> = {
@@ -2961,6 +2966,7 @@ export function init<IsOpen extends boolean = false>(
     baseExperimentId,
     repoInfo,
     state: stateArg,
+    batchSize,
   } = options;
 
   if (!project && !projectId) {
@@ -3023,6 +3029,7 @@ export function init<IsOpen extends boolean = false>(
     return new ReadonlyExperiment(
       stateArg ?? _globalState,
       lazyMetadata,
+      batchSize,
     ) as InitializedExperiment<IsOpen>;
   }
 
@@ -3125,7 +3132,7 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const ret = new Experiment(state, lazyMetadata, dataset);
+  const ret = new Experiment(state, lazyMetadata, dataset, batchSize);
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
@@ -3213,6 +3220,11 @@ export type InitDatasetOptions<IsLegacyDataset extends boolean> =
     metadata?: Record<string, unknown>;
     state?: BraintrustState;
     _internal_btql?: Record<string, unknown>;
+    /**
+     * The number of records to fetch per API request when iterating over the dataset.
+     * Defaults to 1000. Reduce this value if you encounter errors with large payloads.
+     */
+    batchSize?: number;
   } & UseOutputOption<IsLegacyDataset>;
 
 export type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -3292,6 +3304,7 @@ export function initDataset<
     useOutput: legacy,
     state: stateArg,
     _internal_btql,
+    batchSize,
   } = options;
 
   const state = stateArg ?? _globalState;
@@ -3339,6 +3352,7 @@ export function initDataset<
     version,
     legacy,
     _internal_btql,
+    batchSize,
   );
 }
 
@@ -4787,6 +4801,7 @@ class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
+  private batchSize: number;
 
   constructor(
     private objectType: "dataset" | "experiment",
@@ -4794,7 +4809,10 @@ class ObjectFetcher<RecordType>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
     private _internal_btql?: Record<string, unknown>,
-  ) {}
+    batchSize?: number,
+  ) {
+    this.batchSize = batchSize ?? INTERNAL_BTQL_LIMIT;
+  }
 
   public get id(): Promise<string> {
     throw new Error("ObjectFetcher subclasses must have an 'id' attribute");
@@ -4836,7 +4854,7 @@ class ObjectFetcher<RecordType>
               ],
             },
             cursor,
-            limit: INTERNAL_BTQL_LIMIT,
+            limit: this.batchSize,
           },
           use_columnstore: false,
           brainstore_realtime: true,
@@ -4960,8 +4978,9 @@ export class Experiment
     state: BraintrustState,
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
+    batchSize?: number,
   ) {
-    super("experiment", undefined, (r) => enrichAttachments(r, state));
+    super("experiment", undefined, (r) => enrichAttachments(r, state), undefined, batchSize);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -5278,8 +5297,9 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   constructor(
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
+    batchSize?: number,
   ) {
-    super("experiment", undefined, (r) => enrichAttachments(r, state));
+    super("experiment", undefined, (r) => enrichAttachments(r, state), undefined, batchSize);
   }
 
   public get id(): Promise<string> {
@@ -5881,6 +5901,7 @@ export class Dataset<
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
+    batchSize?: number,
   ) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
@@ -5900,6 +5921,7 @@ export class Dataset<
           isLegacyDataset,
         ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
+      batchSize,
     );
     this.lazyMetadata = lazyMetadata;
   }
