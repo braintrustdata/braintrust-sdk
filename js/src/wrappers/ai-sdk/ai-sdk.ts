@@ -219,11 +219,8 @@ const wrapModel = (model: any, ai?: any): any => {
         const result = await originalDoGenerate(options);
 
         span.log({
-          output: {
-            text: result.text,
-            finishReason: result.finishReason,
-          },
-          metrics: extractTokenMetrics({ usage: result.usage }),
+          output: await processOutput(result),
+          metrics: extractTokenMetrics(result),
         });
 
         return result;
@@ -234,12 +231,14 @@ const wrapModel = (model: any, ai?: any): any => {
           type: SpanTypeAttribute.LLM,
         },
         event: {
-          input: {
-            prompt: options.prompt,
-          },
+          input: processInputAttachments(options),
           metadata: {
             model: resolvedModel.modelId,
             provider: resolvedModel.provider,
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
           },
         },
       },
@@ -253,28 +252,94 @@ const wrapModel = (model: any, ai?: any): any => {
         type: SpanTypeAttribute.LLM,
       },
       event: {
-        input: {
-          prompt: options.prompt,
-        },
+        input: processInputAttachments(options),
         metadata: {
           model: resolvedModel.modelId,
           provider: resolvedModel.provider,
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
         },
       },
     });
 
     const result = await originalDoStream(options);
 
+    // Accumulate streamed content for output logging
+    const output: Record<string, unknown> = {};
+    let text = "";
+    let reasoning = "";
+    const toolCalls: unknown[] = [];
+    let object: unknown = undefined; // For structured output / streamObject
+
+    // Helper to extract text from various chunk formats
+    const extractTextDelta = (chunk: any): string => {
+      // Try all known property names for text deltas
+      if (typeof chunk.textDelta === "string") return chunk.textDelta;
+      if (typeof chunk.delta === "string") return chunk.delta;
+      if (typeof chunk.text === "string") return chunk.text;
+      // For content property (some providers use this)
+      if (typeof chunk.content === "string") return chunk.content;
+      return "";
+    };
+
     const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        if (chunk.type === "finish") {
-          span.log({
-            output: {
-              finishReason: chunk.finishReason,
-            },
-            metrics: extractTokenMetrics({ usage: chunk.usage }),
-          });
-          span.end();
+      async transform(chunk, controller) {
+        switch (chunk.type) {
+          case "text-delta":
+            text += extractTextDelta(chunk);
+            break;
+          case "reasoning-delta":
+            // Reasoning chunks use delta or text property
+            if (chunk.delta) {
+              reasoning += chunk.delta;
+            } else if (chunk.text) {
+              reasoning += chunk.text;
+            }
+            break;
+          case "tool-call":
+            toolCalls.push(chunk);
+            break;
+          case "object":
+            // Structured output - capture the final object
+            object = chunk.object;
+            break;
+          case "raw":
+            // Raw chunks may contain text content for structured output / JSON mode
+            // The rawValue often contains the delta text from the provider
+            if (chunk.rawValue) {
+              const rawVal = chunk.rawValue as any;
+              // OpenAI format: rawValue.delta.content or rawValue.choices[0].delta.content
+              if (rawVal.delta?.content) {
+                text += rawVal.delta.content;
+              } else if (rawVal.choices?.[0]?.delta?.content) {
+                text += rawVal.choices[0].delta.content;
+              } else if (typeof rawVal.text === "string") {
+                text += rawVal.text;
+              } else if (typeof rawVal.content === "string") {
+                text += rawVal.content;
+              }
+            }
+            break;
+          case "finish":
+            output.text = text;
+            output.reasoning = reasoning;
+            output.toolCalls = toolCalls;
+            output.finishReason = chunk.finishReason;
+            output.usage = chunk.usage;
+
+            // Include object for structured output if captured
+            if (object !== undefined) {
+              output.object = object;
+            }
+
+            span.log({
+              output: await processOutput(output),
+              metrics: extractTokenMetrics(output),
+            });
+            span.end();
+            break;
         }
         controller.enqueue(chunk);
       },
@@ -798,13 +863,15 @@ const processInputAttachments = (input: any) => {
     processed.messages = input.messages.map(processMessage);
   }
 
-  // Process prompt if it's an object with potential attachments
-  if (
-    input.prompt &&
-    typeof input.prompt === "object" &&
-    !Array.isArray(input.prompt)
-  ) {
-    processed.prompt = processPromptContent(input.prompt);
+  // Process prompt - can be an array of messages (provider-level format) or an object
+  if (input.prompt && typeof input.prompt === "object") {
+    if (Array.isArray(input.prompt)) {
+      // Provider-level format: prompt is an array of messages
+      processed.prompt = input.prompt.map(processMessage);
+    } else {
+      // High-level format: prompt is an object with potential attachments
+      processed.prompt = processPromptContent(input.prompt);
+    }
   }
 
   // Process tools to convert Zod schemas to JSON Schema

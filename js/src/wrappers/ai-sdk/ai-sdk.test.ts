@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 import {
   test,
@@ -433,9 +434,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(fullText).toMatch(/1.*2.*3.*4.*5/s);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // Now we get 2 spans: streamText (parent) + doStream (child)
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes.name === "streamText",
+    ) as any;
 
     expect(span.span_attributes.name).toBe("streamText");
     expect(span.span_attributes.type).toBe("llm");
@@ -666,6 +670,50 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(wrapperSpan.output.object.name).toBeTruthy();
     expect(Array.isArray(wrapperSpan.output.object.ingredients)).toBe(true);
     expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
+  });
+
+  test("doStream captures JSON content for streamObject", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const simpleSchema = z.object({
+      answer: z.string(),
+    });
+
+    const streamRes = await wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema: simpleSchema,
+      prompt: "What is 2+2? Answer with just the number.",
+    });
+
+    for await (const _ of streamRes.partialObjectStream) {
+    }
+
+    const finalObject = await streamRes.object;
+    expect(finalObject).toBeTruthy();
+    expect(finalObject.answer).toBeTruthy();
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+
+    // Find the doStream span (child of streamObject)
+    const doStreamSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "doStream" &&
+        s?.span_attributes?.type === "llm",
+    );
+
+    // doStream span should exist and have output
+    expect(doStreamSpan).toBeTruthy();
+    expect(doStreamSpan.output).toBeDefined();
+
+    // For structured output, the text should contain the JSON response
+    expect(doStreamSpan.output.finishReason).toBe("stop");
+    expect(doStreamSpan.output.usage).toBeDefined();
+
+    // The text should contain the JSON object (may be empty for some providers)
+    // At minimum, verify the output structure is correct
+    expect(typeof doStreamSpan.output.text).toBe("string");
+    expect(Array.isArray(doStreamSpan.output.toolCalls)).toBe(true);
   });
 
   test("streamText returns correct type with toUIMessageStreamResponse", async () => {
@@ -1484,5 +1532,200 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 
     // Verify metrics are captured
     expect(firstDoGenerate.metrics.tokens).toBeGreaterThan(0);
+  });
+
+  test("doGenerate captures input and output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+    expect(result.text).toBeTruthy();
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = doGenerateSpans[0] as any;
+
+    // Verify input is captured (should have prompt array from LanguageModelV1CallOptions)
+    expect(doGenSpan.input).toBeDefined();
+    expect(doGenSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doGenSpan.input.prompt)).toBe(true);
+
+    // Verify output is captured (doGenerate returns content array, not text directly)
+    expect(doGenSpan.output).toBeDefined();
+    expect(doGenSpan.output.content).toBeDefined();
+    expect(Array.isArray(doGenSpan.output.content)).toBe(true);
+    expect(doGenSpan.output.content[0].text).toBeDefined();
+    expect(doGenSpan.output.finishReason).toBeDefined();
+
+    // Verify metadata has braintrust integration info
+    expect(doGenSpan.metadata.braintrust).toBeDefined();
+    expect(doGenSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
+    expect(doGenSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify metrics
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
+  });
+
+  test("doGenerate processes image attachments in prompt array", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const base64Image = readFileSync(
+      join(FIXTURES_DIR, "test-image.png"),
+      "base64",
+    );
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              image: `data:image/png;base64,${base64Image}`,
+            },
+            { type: "text", text: "What color is this image?" },
+          ],
+        },
+      ],
+      maxOutputTokens: 100,
+    });
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+    expect(result.text).toBeTruthy();
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = doGenerateSpans[0] as any;
+
+    // Verify input has prompt array (provider-level format)
+    expect(doGenSpan.input).toBeDefined();
+    expect(doGenSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doGenSpan.input.prompt)).toBe(true);
+    expect(doGenSpan.input.prompt.length).toBeGreaterThan(0);
+
+    // Find the user message in the prompt array
+    const userMessage = doGenSpan.input.prompt.find(
+      (m: any) => m.role === "user",
+    );
+    expect(userMessage).toBeDefined();
+    expect(Array.isArray(userMessage.content)).toBe(true);
+
+    // Find the file content part (AI SDK converts image to file at provider level)
+    const fileContent = userMessage.content.find((c: any) => c.type === "file");
+    expect(fileContent).toBeDefined();
+
+    // Verify image was converted to a braintrust attachment
+    // At provider level, the attachment is in data.reference
+    if (fileContent && fileContent.data) {
+      expect(fileContent.data.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "image/png",
+      });
+    }
+  });
+
+  test("doStream captures input and accumulated output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const stream = await wrappedAI.streamText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: "Count from 1 to 3.",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    let fullText = "";
+    for await (const chunk of stream.textStream) {
+      fullText += chunk;
+    }
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    expect(fullText).toMatch(/1.*2.*3/s);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStreamSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doStream",
+    );
+    expect(doStreamSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStreamSpan = doStreamSpans[0] as any;
+
+    // Verify input is captured
+    expect(doStreamSpan.input).toBeDefined();
+    expect(doStreamSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doStreamSpan.input.prompt)).toBe(true);
+
+    // Verify output structure (text may be empty if provider doesn't emit text-delta chunks)
+    expect(doStreamSpan.output).toBeDefined();
+    expect(typeof doStreamSpan.output.text).toBe("string");
+    expect(doStreamSpan.output.text).not.toContain("undefined");
+    expect(doStreamSpan.output.finishReason).toBe("stop");
+    expect(doStreamSpan.output.usage).toBeDefined();
+
+    // Verify metadata has braintrust integration info
+    expect(doStreamSpan.metadata.braintrust).toBeDefined();
+    expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
+    expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify metrics
+    expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
   });
 });

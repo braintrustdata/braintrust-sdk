@@ -118,7 +118,7 @@ async function testStreaming() {
         openai("gpt-5-mini"),
         anthropic("claude-sonnet-4-5"),
       ]) {
-        const result = await streamText({
+        const result = streamText({
           model: model as LanguageModel,
           prompt: "Count from 1 to 10 slowly.",
         });
@@ -126,7 +126,7 @@ async function testStreaming() {
         for await (const _ of result.textStream) {
         }
 
-        const agentResult = await new Agent({
+        const agentResult = new Agent({
           model: model as LanguageModel,
         }).stream({
           prompt: "Count from 1 to 10 slowly.",
