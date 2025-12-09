@@ -71,11 +71,7 @@ else:
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
-# dspy latest depends on litellm which requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    DSPY_VERSIONS = (LATEST,)
-else:
-    DSPY_VERSIONS = ()  # skip dspy tests on Python 3.9
+DSPY_VERSIONS = (LATEST,)
 # temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
 
