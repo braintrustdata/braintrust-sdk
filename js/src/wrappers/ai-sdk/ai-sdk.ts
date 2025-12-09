@@ -61,11 +61,11 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
         case "generateText":
           return wrapGenerateText(original, options, aiSDK);
         case "streamText":
-          return wrapStreamText(original, options);
+          return wrapStreamText(original, options, aiSDK);
         case "generateObject":
           return wrapGenerateObject(original, options, aiSDK);
         case "streamObject":
-          return wrapStreamObject(original, options);
+          return wrapStreamObject(original, options, aiSDK);
         case "Agent":
         case "Experimental_Agent":
         case "ToolLoopAgent":
@@ -123,7 +123,7 @@ const wrapAgentStream = (
       "Agent.stream",
       options,
       stream.bind(instance), // as of v5 this is just streamText under the hood
-      // Follows what the AI SDK does under the hood when calling streamText
+      undefined, // aiSDK not needed since model is already on instance
     )({ ...instance.settings, ...params });
 };
 
@@ -213,91 +213,93 @@ const wrapModel = (model: any, ai?: any): any => {
   const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
   const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
 
-  const wrappedModel = {
-    ...model,
-    _braintrustWrapped: true,
-    doGenerate: async (options: any) => {
-      return traced(
-        async (span) => {
-          const result = await originalDoGenerate(options);
+  const wrappedDoGenerate = async (options: any) => {
+    return traced(
+      async (span) => {
+        const result = await originalDoGenerate(options);
 
-          span.log({
-            output: {
-              content: result.content,
-              finishReason: result.finishReason,
-            },
-            metrics: extractTokenMetricsFromUsage(result.usage),
-          });
-
-          return result;
-        },
-        {
-          name: "doGenerate",
-          spanAttributes: {
-            type: SpanTypeAttribute.LLM,
+        span.log({
+          output: {
+            text: result.text,
+            finishReason: result.finishReason,
           },
-          event: {
-            input: {
-              prompt: options.prompt,
-            },
-            metadata: {
-              model: resolvedModel.modelId,
-              provider: resolvedModel.provider,
-            },
+          metrics: extractTokenMetrics({ usage: result.usage }),
+        });
+
+        return result;
+      },
+      {
+        name: "doGenerate",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input: {
+            prompt: options.prompt,
+          },
+          metadata: {
+            model: resolvedModel.modelId,
+            provider: resolvedModel.provider,
           },
         },
-      );
-    },
-    doStream: originalDoStream
-      ? async (options: any) => {
-          // For streaming, we don't wrap doStream itself since streamText handles that
-          return originalDoStream(options);
-        }
-      : undefined,
+      },
+    );
   };
 
-  // Copy over any other properties/methods from the original model
-  for (const key of Object.keys(resolvedModel)) {
-    if (!(key in wrappedModel)) {
-      wrappedModel[key] = resolvedModel[key];
-    }
-  }
+  const wrappedDoStream = async (options: any) => {
+    const span = startSpan({
+      name: "doStream",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
+      event: {
+        input: {
+          prompt: options.prompt,
+        },
+        metadata: {
+          model: resolvedModel.modelId,
+          provider: resolvedModel.provider,
+        },
+      },
+    });
 
-  // Preserve prototype chain for instanceof checks
-  Object.setPrototypeOf(wrappedModel, Object.getPrototypeOf(resolvedModel));
+    const result = await originalDoStream(options);
 
-  return wrappedModel;
-};
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        if (chunk.type === "finish") {
+          span.log({
+            output: {
+              finishReason: chunk.finishReason,
+            },
+            metrics: extractTokenMetrics({ usage: chunk.usage }),
+          });
+          span.end();
+        }
+        controller.enqueue(chunk);
+      },
+    });
 
-/**
- * Extracts token metrics directly from usage object (for doGenerate results).
- */
-const extractTokenMetricsFromUsage = (usage: any): Record<string, number> => {
-  const metrics: Record<string, number> = {};
-  if (!usage) return metrics;
+    return {
+      ...result,
+      stream: result.stream.pipeThrough(transformStream),
+    };
+  };
 
-  if (usage.inputTokens !== undefined) {
-    metrics.prompt_tokens = usage.inputTokens;
-  }
-  if (usage.outputTokens !== undefined) {
-    metrics.completion_tokens = usage.outputTokens;
-  }
-  if (usage.totalTokens !== undefined) {
-    metrics.tokens = usage.totalTokens;
-  } else if (
-    metrics.prompt_tokens !== undefined &&
-    metrics.completion_tokens !== undefined
-  ) {
-    metrics.tokens = metrics.prompt_tokens + metrics.completion_tokens;
-  }
-  if (usage.reasoningTokens !== undefined) {
-    metrics.reasoning_tokens = usage.reasoningTokens;
-  }
-  if (usage.cachedInputTokens !== undefined) {
-    metrics.prompt_cached_tokens = usage.cachedInputTokens;
-  }
-
-  return metrics;
+  return new Proxy(resolvedModel, {
+    get(target, prop, receiver) {
+      if (prop === "_braintrustWrapped") {
+        return true;
+      }
+      if (prop === "doGenerate") {
+        return wrappedDoGenerate;
+      }
+      if (prop === "doStream" && originalDoStream) {
+        return wrappedDoStream;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 };
 
 const wrapGenerateText = (
@@ -355,6 +357,7 @@ const makeStreamTextWrapper = (
   name: string,
   options: WrapAISDKOptions,
   streamText: any,
+  aiSDK?: any,
 ) => {
   const wrapper = function (params: any) {
     const span = startSpan({
@@ -380,6 +383,7 @@ const makeStreamTextWrapper = (
       const result = withCurrent(span, () =>
         streamText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -465,13 +469,18 @@ const makeStreamTextWrapper = (
   return wrapper;
 };
 
-const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return makeStreamTextWrapper("streamText", options, streamText);
+const wrapStreamText = (
+  streamText: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return makeStreamTextWrapper("streamText", options, streamText, aiSDK);
 };
 
 const wrapStreamObject = (
   streamObject: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
   return function wrappedStreamObject(params: any) {
     const span = startSpan({
@@ -498,6 +507,7 @@ const wrapStreamObject = (
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
