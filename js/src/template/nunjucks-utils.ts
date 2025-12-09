@@ -1,544 +1,648 @@
-import { nunjucks } from "./nunjucks";
+import * as nunjucks from "nunjucks";
+
 const nunjucksParser = (nunjucks as any).parser;
-const nunjucksNodes = (nunjucks as any).nodes;
+const nunjucksLexer = (nunjucks as any).lexer;
 
-type NodesModule = typeof nunjucksNodes;
-type NunjucksNode = InstanceType<NodesModule["Node"]>;
-type SymbolNode = InstanceType<NodesModule["Symbol"]>;
-type LookupValNode = InstanceType<NodesModule["LookupVal"]>;
-type NodeListNode = InstanceType<NodesModule["NodeList"]>;
-type ForNode = InstanceType<NodesModule["For"]>;
-type SetNode = InstanceType<NodesModule["Set"]>;
-type MacroNode = InstanceType<NodesModule["Macro"]>;
-type BlockNode = InstanceType<NodesModule["Block"]>;
-type ImportNode = InstanceType<NodesModule["Import"]>;
-type FromImportNode = InstanceType<NodesModule["FromImport"]>;
-type FilterNode = InstanceType<NodesModule["Filter"]>;
-type FunCallNode = InstanceType<NodesModule["FunCall"]>;
-type CallExtensionNode = InstanceType<NodesModule["CallExtension"]>;
-type PairNode = InstanceType<NodesModule["Pair"]>;
-type KeywordArgsNode = InstanceType<NodesModule["KeywordArgs"]>;
-type LiteralNode = InstanceType<NodesModule["Literal"]>;
-
-type ScopeStack = Array<Set<string>>;
-
-const BUILTIN_GLOBALS = new Set<string>([
-  "range",
-  "cycler",
-  "joiner",
-  "namespace",
-  "super",
-  "caller",
-]);
-
-// Test to format missing numeric index in nunjucks array
-const NUMERIC_SEGMENT = /^\d+$/;
-
-export const lintTemplate = (
-  template: string,
-  context: Record<string, unknown>,
-) => {
-  const variablePaths = analyzeNunjucksTemplate(template, {
-    throwOnParseError: true,
-  });
-  for (const path of variablePaths) {
-    if (!pathExists(context, path)) {
-      throw new Error(`Variable '${formatPath(path)}' does not exist.`);
-    }
-  }
-};
-
-type AnalyzeOptions = {
-  throwOnParseError?: boolean;
-};
-
-export const analyzeNunjucksTemplate = (
-  template: string,
-  options: AnalyzeOptions = {},
-): string[][] => {
-  let root: NodeListNode;
-  try {
-    root = nunjucksParser.parse(template) as NodeListNode;
-  } catch {
-    if (options.throwOnParseError) {
-      throw new Error(`Invalid nunjucks template: ${template}.`);
-    }
-    return [];
-  }
-
-  return collectVariablePaths(root);
-};
-
-// Use the parsed AST to collect variable lookup paths that must be present in the context.
-function collectVariablePaths(root: NodeListNode): string[][] {
-  const seen = new Map<string, string[]>();
-  const scopeStack: ScopeStack = [new Set(BUILTIN_GLOBALS)];
-  let optionalDepth = 0;
-
-  type Frame =
-    | { type: "visit"; node: NunjucksNode | null }
-    | { type: "restore"; action: () => void }
-    | { type: "add"; names: string[] }
-    | {
-        type: "forBody";
-        body: NunjucksNode | null;
-        elseBody: NunjucksNode | null;
-        loopNames: string[];
-      }
-    | { type: "optionalVisit"; node: NunjucksNode | null };
-
-  const stack: Frame[] = [{ type: "visit", node: root }];
-
-  const record = (path: string[]) => {
-    if (path.length === 0 || optionalDepth > 0) {
-      return;
-    }
-    const key = path.join("\u0001");
-    if (!seen.has(key)) {
-      seen.set(key, path);
-    }
-  };
-
-  const isDefined = (name: string) => {
-    for (let i = scopeStack.length - 1; i >= 0; i--) {
-      if (scopeStack[i].has(name)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const addToCurrentScope = (names: string[]) => {
-    if (names.length === 0) {
-      return;
-    }
-    const current = scopeStack[scopeStack.length - 1];
-    for (const name of names) {
-      if (name) {
-        current.add(name);
-      }
-    }
-  };
-
-  while (stack.length > 0) {
-    const frame = stack.pop()!;
-    switch (frame.type) {
-      case "restore": {
-        frame.action();
-        continue;
-      }
-      case "add": {
-        addToCurrentScope(frame.names);
-        continue;
-      }
-      case "forBody": {
-        const scope = new Set<string>();
-        for (const name of frame.loopNames) {
-          if (name) {
-            scope.add(name);
-          }
-        }
-        scopeStack.push(scope);
-        stack.push({
-          type: "restore",
-          action: () => {
-            scopeStack.pop();
-          },
-        });
-        if (frame.elseBody) {
-          stack.push({ type: "visit", node: frame.elseBody });
-        }
-        if (frame.body) {
-          stack.push({ type: "visit", node: frame.body });
-        }
-        continue;
-      }
-      case "optionalVisit": {
-        const node = frame.node;
-        if (!node) {
-          continue;
-        }
-        optionalDepth++;
-        stack.push({
-          type: "restore",
-          action: () => {
-            optionalDepth--;
-          },
-        });
-        stack.push({ type: "visit", node });
-        continue;
-      }
-      case "visit":
-        break;
-      default:
-        continue;
-    }
-
-    const node = frame.node;
-    if (!node) {
-      continue;
-    }
-
-    if (isSymbolNode(node)) {
-      if (!isDefined(node.value)) {
-        record([node.value]);
-      }
-      continue;
-    }
-
-    if (isNodeList(node)) {
-      const children = (node as any).children as unknown[];
-      for (let i = children.length - 1; i >= 0; i--) {
-        stack.push({ type: "visit", node: asNode(children[i]) });
-      }
-      continue;
-    }
-
-    if (isForNode(node)) {
-      const loopNames = collectBindingNames(asNode((node as any).name));
-      loopNames.push("loop");
-      stack.push({
-        type: "forBody",
-        body: asNode((node as any).body),
-        elseBody: asNode((node as any).else_),
-        loopNames,
-      });
-      stack.push({ type: "optionalVisit", node: asNode((node as any).arr) });
-      continue;
-    }
-
-    if (isSetNode(node)) {
-      stack.push({
-        type: "add",
-        names: collectSetTargets((node as any).targets as NunjucksNode[]),
-      });
-      stack.push({ type: "visit", node: asNode((node as any).body) });
-      stack.push({ type: "visit", node: asNode((node as any).value) });
-      continue;
-    }
-
-    if (isMacroNode(node)) {
-      const { names, defaults } = collectMacroArgs(
-        (node as any).args as NodeListNode,
-      );
-      stack.push({
-        type: "add",
-        names: [((node as any).name as SymbolNode).value],
-      });
-      const scope = new Set<string>();
-      for (const name of names) {
-        if (name) {
-          scope.add(name);
-        }
-      }
-      scopeStack.push(scope);
-      stack.push({
-        type: "restore",
-        action: () => {
-          scopeStack.pop();
-        },
-      });
-      const bodyNode = asNode((node as any).body);
-      if (bodyNode) {
-        stack.push({ type: "visit", node: bodyNode });
-      }
-      for (let i = defaults.length - 1; i >= 0; i--) {
-        const defNode = asNode(defaults[i]);
-        if (defNode) {
-          stack.push({ type: "visit", node: defNode });
-        }
-      }
-      continue;
-    }
-
-    if (isBlockNode(node)) {
-      stack.push({ type: "visit", node: asNode((node as any).body) });
-      continue;
-    }
-
-    if (isImportNode(node)) {
-      stack.push({
-        type: "add",
-        names: collectBindingNames(asNode((node as any).target)),
-      });
-      stack.push({ type: "visit", node: asNode((node as any).template) });
-      continue;
-    }
-
-    if (isFromImportNode(node)) {
-      stack.push({
-        type: "add",
-        names: collectImportedNames((node as any).names as NodeListNode),
-      });
-      stack.push({ type: "visit", node: asNode((node as any).template) });
-      continue;
-    }
-
-    if (isLookupValNode(node)) {
-      const path = resolveLookupPath(node);
-      if (path && !isDefined(path[0])) {
-        record(path);
-      }
-      stack.push({ type: "visit", node: asNode((node as any).val) });
-      stack.push({ type: "visit", node: asNode((node as any).target) });
-      continue;
-    }
-
-    if (isFilterNode(node)) {
-      stack.push({ type: "visit", node: asNode((node as any).args) });
-      continue;
-    }
-
-    if (isFunCallNode(node)) {
-      const argsNode = asNode((node as any).args);
-      if (argsNode) {
-        stack.push({ type: "optionalVisit", node: argsNode });
-      }
-      stack.push({ type: "visit", node: asNode((node as any).name) });
-      continue;
-    }
-
-    if (isCallExtensionNode(node)) {
-      const contentArgs = (node as any).contentArgs as unknown[];
-      for (let i = contentArgs.length - 1; i >= 0; i--) {
-        stack.push({ type: "visit", node: asNode(contentArgs[i]) });
-      }
-      stack.push({ type: "visit", node: asNode((node as any).args) });
-      continue;
-    }
-
-    (node as any).iterFields((value: unknown) => {
-      if (isNode(value)) {
-        stack.push({ type: "visit", node: value });
-      } else if (Array.isArray(value)) {
-        const elements = value as unknown[];
-        for (let i = elements.length - 1; i >= 0; i--) {
-          const element = elements[i];
-          if (isNode(element)) {
-            stack.push({ type: "visit", node: element });
-          }
-        }
-      }
-    });
-  }
-
-  return Array.from(seen.values());
-}
-
-// Find lookup variable names.
-function collectBindingNames(node: NunjucksNode | null | undefined): string[] {
-  if (!node) {
-    return [];
-  }
-  if (isSymbolNode(node)) {
-    return [node.value];
-  }
-  if (isNodeList(node)) {
-    const out: string[] = [];
-    for (const child of (node as any).children as unknown[]) {
-      out.push(...collectBindingNames(asNode(child)));
-    }
-    return out;
-  }
-  if (isPairNode(node)) {
-    return collectBindingNames(asNode((node as any).value));
-  }
-  return [];
-}
-
-function collectSetTargets(targets: NunjucksNode[]): string[] {
-  const names: string[] = [];
-  for (const target of targets) {
-    if (isSymbolNode(target)) {
-      names.push(target.value);
-    } else if (isNodeList(target)) {
-      names.push(...collectBindingNames(target));
-    }
-  }
-  return names;
-}
-
-// Extract macro argument names and their default expressions.
-function collectMacroArgs(args: NodeListNode): {
-  names: string[];
-  defaults: NunjucksNode[];
-} {
-  const names: string[] = [];
-  const defaults: NunjucksNode[] = [];
-  for (const child of (args as any).children as unknown[]) {
-    const node = asNode(child);
-    if (!node) continue;
-    if (isSymbolNode(node)) {
-      names.push(node.value);
-      continue;
-    }
-    if (isPairNode(node)) {
-      collectPair(node);
-      continue;
-    }
-    if (isKeywordArgsNode(node)) {
-      for (const pairNode of (node as any).children as unknown[]) {
-        const pair = asNode(pairNode);
-        if (pair && isPairNode(pair)) {
-          collectPair(pair);
-        }
-      }
-    }
-  }
-  return { names, defaults };
-
-  function collectPair(pair: PairNode) {
-    const keyNode = asNode((pair as any).key);
-    if (keyNode && isSymbolNode(keyNode)) {
-      names.push(keyNode.value);
-    }
-    const valueNode = asNode((pair as any).value);
-    if (valueNode) {
-      defaults.push(valueNode);
-    }
-  }
-}
-
-// Resolve imported symbol names (with aliases) that enter scope.
-function collectImportedNames(names: NodeListNode): string[] {
-  const out: string[] = [];
-  for (const child of (names as any).children as unknown[]) {
-    const node = asNode(child);
-    if (!node) continue;
-    if (isPairNode(node)) {
-      const alias = asNode((node as any).value);
-      if (alias && isSymbolNode(alias)) {
-        out.push(alias.value);
-      }
-    } else if (isSymbolNode(node)) {
-      out.push((node as SymbolNode).value);
-    }
-  }
-  return out;
-}
-
-// Build the full lookup path (e.g., user.profile.name) represented by a LookupVal node.
-function resolveLookupPath(node: LookupValNode): string[] | null {
-  const target = asNode((node as any).target);
-  if (!target) {
-    return null;
-  }
-  const base = resolveBasePath(target);
-  if (!base) {
-    return null;
-  }
-  const keyNode = asNode((node as any).val);
-  if (!keyNode) {
-    return base;
-  }
-  const key = resolveLookupKey(keyNode);
-  if (key === null) {
-    return base;
-  }
-  return [...base, key];
-}
-
-// Resolve the base portion of a lookup (prior to trailing property/index access).
-function resolveBasePath(node: NunjucksNode): string[] | null {
-  if (isLookupValNode(node)) {
-    return resolveLookupPath(node);
-  }
-  if (isSymbolNode(node)) {
-    return [(node as SymbolNode).value];
-  }
-  return null;
-}
-
-// Determine the literal key/index from a lookup tail node, if statically known.
-function resolveLookupKey(node: NunjucksNode): string | null {
-  if (isLiteralNode(node)) {
-    const literalValue = (node as any).value;
-    if (typeof literalValue === "string") {
-      return literalValue;
-    }
-    if (typeof literalValue === "number") {
-      return String(literalValue);
-    }
-  }
-  if (isSymbolNode(node)) {
-    return null;
-  }
-  return null;
+export interface VariableUsage {
+  path: string[]; // full path of the variable (nested)
+  from: number; // start index in template string
+  to: number; // end index in template string
+  lineno: number; // line number (1-based)
+  colno: number; // column number (1-based)
 }
 
 function formatPath(path: string[]): string {
-  let formattedPath = "";
-  path.forEach((segment, index) => {
-    if (NUMERIC_SEGMENT.test(segment)) {
-      formattedPath += `[${segment}]`;
-    } else if (index === 0) {
-      formattedPath += segment;
+  let result = path[0] || "";
+  for (let i = 1; i < path.length; i++) {
+    const part = path[i];
+    if (/^\d+$/.test(part)) {
+      result += `[${part}]`;
     } else {
-      formattedPath += `.${segment}`;
+      result += `.${part}`;
     }
-  });
-  return formattedPath;
-}
-
-// Verify that the given lookup path has a valid variable
-function pathExists(root: Record<string, unknown>, path: string[]): boolean {
-  let current: unknown = root;
-  for (const segment of path) {
-    if (current === null || current === undefined) {
-      return false;
-    }
-    if (Array.isArray(current)) {
-      const index = Number(segment);
-      if (!Number.isInteger(index) || !(index in current)) {
-        return false;
-      }
-      current = current[index];
-      continue;
-    }
-    if (typeof current === "object") {
-      const obj = current as Record<string, unknown>;
-      if (!(segment in obj)) {
-        return false;
-      }
-      current = obj[segment];
-      continue;
-    }
-    return false;
   }
-  return true;
+  return result;
 }
 
-const isNode = (v: unknown): v is NunjucksNode =>
-  v instanceof nunjucksNodes.Node;
-const asNode = (v: unknown): NunjucksNode | null => (isNode(v) ? v : null);
+export function getEnv() {
+  return new nunjucks.Environment(null, {
+    autoescape: false,
+    throwOnUndefined: false,
+  });
+}
 
-const isNodeList = (n: NunjucksNode): n is NodeListNode =>
-  n instanceof nunjucksNodes.NodeList;
-const isSymbolNode = (n: NunjucksNode): n is SymbolNode =>
-  n instanceof nunjucksNodes.Symbol;
-const isLookupValNode = (n: NunjucksNode): n is LookupValNode =>
-  n instanceof nunjucksNodes.LookupVal;
-const isForNode = (n: NunjucksNode): n is ForNode =>
-  n instanceof nunjucksNodes.For;
-const isSetNode = (n: NunjucksNode): n is SetNode =>
-  n instanceof nunjucksNodes.Set;
-const isMacroNode = (n: NunjucksNode): n is MacroNode =>
-  n instanceof nunjucksNodes.Macro;
-const isBlockNode = (n: NunjucksNode): n is BlockNode =>
-  n instanceof nunjucksNodes.Block;
-const isImportNode = (n: NunjucksNode): n is ImportNode =>
-  n instanceof nunjucksNodes.Import;
-const isFromImportNode = (n: NunjucksNode): n is FromImportNode =>
-  n instanceof nunjucksNodes.FromImport;
-const isFilterNode = (n: NunjucksNode): n is FilterNode =>
-  n instanceof nunjucksNodes.Filter;
-const isFunCallNode = (n: NunjucksNode): n is FunCallNode =>
-  n instanceof nunjucksNodes.FunCall;
-const isCallExtensionNode = (n: NunjucksNode): n is CallExtensionNode =>
-  n instanceof nunjucksNodes.CallExtension;
-const isPairNode = (n: NunjucksNode): n is PairNode =>
-  n instanceof nunjucksNodes.Pair;
-const isKeywordArgsNode = (n: NunjucksNode): n is KeywordArgsNode =>
-  n instanceof nunjucksNodes.KeywordArgs;
-const isLiteralNode = (n: NunjucksNode): n is LiteralNode =>
-  n instanceof nunjucksNodes.Literal;
+export function getStrictEnv() {
+  return new nunjucks.Environment(null, {
+    autoescape: false,
+    throwOnUndefined: true,
+  });
+}
+
+export function lintTemplate(template: string, context: any): void {
+  const usages = analyzeNunjucksTemplateWithLocations(template);
+
+  for (const usage of usages) {
+    let current: any = context;
+
+    for (let i = 0; i < usage.path.length; i++) {
+      const part = usage.path[i];
+
+      if (current === null || current === undefined) {
+        throw new Error(`Variable '${formatPath(usage.path)}' does not exist.`);
+      }
+
+      if (/^\d+$/.test(part)) {
+        // Numeric index access
+        const idx = parseInt(part, 10);
+        if (!Array.isArray(current)) {
+          throw new Error(
+            `Variable '${formatPath(usage.path)}' does not exist.`,
+          );
+        }
+        if (idx >= current.length) {
+          throw new Error(
+            `Variable '${formatPath(usage.path)}' does not exist.`,
+          );
+        }
+        current = current[idx];
+      } else {
+        // Property access
+        if (!(part in current)) {
+          throw new Error(
+            `Variable '${formatPath(usage.path)}' does not exist.`,
+          );
+        }
+        current = current[part];
+      }
+    }
+  }
+}
+
+type Scope = Record<string, true>;
+
+interface LoopContext {
+  alias: string;
+  iterablePath: string[];
+}
+
+// Common Nunjucks built-in filters that should not be tracked as variables
+const BUILTIN_FILTERS = new Set([
+  "abs",
+  "batch",
+  "capitalize",
+  "center",
+  "default",
+  "dictsort",
+  "dump",
+  "escape",
+  "first",
+  "float",
+  "forceescape",
+  "groupby",
+  "indent",
+  "int",
+  "join",
+  "last",
+  "length",
+  "list",
+  "lower",
+  "nl2br",
+  "random",
+  "reject",
+  "rejectattr",
+  "replace",
+  "reverse",
+  "round",
+  "safe",
+  "select",
+  "selectattr",
+  "slice",
+  "sort",
+  "string",
+  "striptags",
+  "sum",
+  "title",
+  "trim",
+  "truncate",
+  "upper",
+  "urlencode",
+  "urlize",
+  "wordcount",
+  "wordwrap",
+  "e",
+  "d",
+]);
+
+// Nunjucks built-in test functions that should not be tracked as variables
+const BUILTIN_TESTS = new Set([
+  "boolean",
+  "callable",
+  "defined",
+  "divisibleby",
+  "equalto",
+  "escaped",
+  "even",
+  "false",
+  "falsy",
+  "float",
+  "ge",
+  "greaterthan",
+  "gt",
+  "in",
+  "integer",
+  "iterable",
+  "le",
+  "lessthan",
+  "lower",
+  "lt",
+  "mapping",
+  "ne",
+  "none",
+  "null",
+  "number",
+  "odd",
+  "sameas",
+  "sequence",
+  "string",
+  "true",
+  "truthy",
+  "undefined",
+  "upper",
+]);
+
+export function analyzeNunjucksTemplate(
+  template: string,
+  envOptions: any = {},
+): string[][] {
+  const usages = analyzeNunjucksTemplateWithLocations(template, envOptions);
+  return usages.map((u) => u.path);
+}
+
+export function analyzeNunjucksTemplateWithLocations(
+  template: string,
+  envOptions: any = {},
+): VariableUsage[] {
+  const env = new nunjucks.Environment(null, envOptions);
+  let ast;
+  try {
+    ast = nunjucksParser.parse(template, env);
+  } catch (err: any) {
+    if (envOptions?.throwOnParseError) throw err;
+    return [];
+  }
+
+  let tokens: any[] = [];
+  try {
+    let lexerResult: any;
+    if (typeof nunjucksLexer === "function") {
+      const Lexer = nunjucksLexer;
+      const lexer = new Lexer(env);
+      lexerResult = lexer.lex(template);
+    } else if (nunjucksLexer && typeof nunjucksLexer.lex === "function") {
+      lexerResult = nunjucksLexer.lex(template, env);
+    } else if (nunjucksLexer && typeof nunjucksLexer === "function") {
+      lexerResult = nunjucksLexer(template);
+    }
+
+    if (Array.isArray(lexerResult)) {
+      tokens = lexerResult;
+    } else if (
+      lexerResult &&
+      typeof lexerResult[Symbol.iterator] === "function"
+    ) {
+      tokens = Array.from(lexerResult);
+    } else if (lexerResult && lexerResult.tokens) {
+      tokens = Array.isArray(lexerResult.tokens) ? lexerResult.tokens : [];
+    } else if (lexerResult && typeof lexerResult.next === "function") {
+      tokens = Array.from(lexerResult);
+    }
+  } catch {
+    tokens = [];
+  }
+
+  const tokenOffsets = tokens.map((t: any) => {
+    const from = getCharIndex(t.lineno, t.colno, template);
+    return { ...t, from, to: from + t.value.length };
+  });
+
+  function getCharIndex(line: number, col: number, template: string) {
+    const lines = template.split("\n");
+    let index = 0;
+    // Nunjucks uses 0-based line and column numbers
+    for (let i = 0; i < line; i++) index += lines[i].length + 1;
+    index += col;
+    return index;
+  }
+
+  function findTokenPosition(name: string, lineno: number, colno: number) {
+    // First try exact match in tokenized data
+    const exactMatch = tokenOffsets.find(
+      (t: any) => t.value === name && t.lineno === lineno && t.colno === colno,
+    );
+    if (exactMatch) {
+      return { from: exactMatch.from, to: exactMatch.to, lineno, colno };
+    }
+
+    // If exact match fails, search for any token with this value on the same line
+    const lineMatch = tokenOffsets.find(
+      (t: any) => t.value === name && t.lineno === lineno,
+    );
+    if (lineMatch) {
+      return {
+        from: lineMatch.from,
+        to: lineMatch.to,
+        lineno: lineMatch.lineno,
+        colno: lineMatch.colno,
+      };
+    }
+
+    // Fallback: search for the name in the template string near the given position
+    // This is needed because the lexer doesn't tokenize property names in paths like "user.name"
+    const lines = template.split("\n");
+    const line = lines[lineno] || "";
+
+    // Search for the name in the current line, starting from the given column
+    const searchStart = Math.max(0, colno);
+    const foundInLine = line.indexOf(name, searchStart);
+
+    if (foundInLine !== -1) {
+      // Found it in the line, calculate absolute position
+      const from = getCharIndex(lineno, foundInLine, template);
+      return { from, to: from + name.length, lineno, colno: foundInLine };
+    }
+
+    // Last resort: use the provided position
+    const from = getCharIndex(lineno, colno, template);
+    return { from, to: from + name.length, lineno, colno };
+  }
+
+  const results: VariableUsage[] = [];
+  const globalScope: Scope = {};
+  const loopStack: LoopContext[] = [];
+
+  function extractPath(expr: any, path: string[]): void {
+    if (!expr) return;
+    if (expr.typename === "Symbol") {
+      path.push(expr.value);
+    } else if (expr.typename === "LookupVal") {
+      // LookupVal represents target[val] or target.val
+      // First get the target path
+      if (expr.target) {
+        extractPath(expr.target, path);
+      }
+      // Then add the property/index being accessed
+      if (expr.val) {
+        if (expr.val.typename === "Literal") {
+          path.push(String(expr.val.value));
+        } else if (expr.val.typename === "Symbol") {
+          path.push(expr.val.value);
+        } else {
+          extractPath(expr.val, path);
+        }
+      }
+    }
+  }
+
+  function resolveLoopAliases(
+    path: string[],
+    availableLoops: typeof loopStack,
+  ): string[] {
+    if (path.length === 0) return path;
+    const first = path[0];
+    const matchingLoop = availableLoops.find((l) => l.alias === first);
+    if (matchingLoop) {
+      const resolvedIterable = resolveLoopAliases(
+        matchingLoop.iterablePath,
+        availableLoops.filter((l) => l !== matchingLoop),
+      );
+      return [
+        ...resolvedIterable,
+        "0",
+        ...resolveLoopAliases(path.slice(1), availableLoops),
+      ];
+    }
+    return path;
+  }
+
+  function processVariable(pathParts: string[], node: any, scope: Scope) {
+    if (pathParts.length === 0) return;
+    const baseVar = pathParts[0];
+
+    // Skip loop.* - these are Nunjucks built-ins
+    if (baseVar === "loop") {
+      return;
+    }
+
+    // Find the node for the last part of the path
+    // For LookupVal, the last part is in node.val
+    function getLastPartNode(n: any): any {
+      if (!n) return n;
+      if (n.typename === "LookupVal" && n.val) {
+        return n.val;
+      }
+      return n;
+    }
+
+    const lastPartNode = getLastPartNode(node);
+    const lastPart = pathParts[pathParts.length - 1];
+    const tok =
+      lastPartNode && lastPartNode.lineno !== undefined
+        ? findTokenPosition(lastPart, lastPartNode.lineno, lastPartNode.colno)
+        : findTokenPosition(lastPart, node.lineno, node.colno);
+
+    // Check if it's a loop alias
+    const baseLoop = loopStack.find((l) => l.alias === baseVar);
+    if (baseLoop) {
+      const resolvedPath = resolveLoopAliases(
+        [...baseLoop.iterablePath, "0", ...pathParts.slice(1)],
+        loopStack.filter((l) => l !== baseLoop),
+      );
+      results.push({
+        path: resolvedPath,
+        from: tok.from,
+        to: tok.to,
+        lineno: tok.lineno,
+        colno: tok.colno,
+      });
+      return;
+    }
+
+    // Track if not in scope
+    if (!(baseVar in scope)) {
+      results.push({
+        path: pathParts,
+        from: tok.from,
+        to: tok.to,
+        lineno: tok.lineno,
+        colno: tok.colno,
+      });
+    }
+  }
+
+  function traverse(node: any, scope: Scope = {}, localScope: Scope = {}) {
+    if (!node) return;
+    const combinedScope: Scope = { ...scope, ...localScope, ...globalScope };
+
+    switch (node.typename) {
+      case "Symbol":
+        {
+          const matchingLoop = loopStack.find((l) => l.alias === node.value);
+          if (matchingLoop) {
+            const resolvedPath = resolveLoopAliases(
+              [...matchingLoop.iterablePath, "0"],
+              loopStack.filter((l) => l !== matchingLoop),
+            );
+            const tok = findTokenPosition(node.value, node.lineno, node.colno);
+            results.push({
+              path: resolvedPath,
+              from: tok.from,
+              to: tok.to,
+              lineno: tok.lineno,
+              colno: tok.colno,
+            });
+          } else if (node.value !== "loop" && !(node.value in combinedScope)) {
+            const tok = findTokenPosition(node.value, node.lineno, node.colno);
+            results.push({
+              path: [node.value],
+              from: tok.from,
+              to: tok.to,
+              lineno: tok.lineno,
+              colno: tok.colno,
+            });
+          }
+        }
+        break;
+
+      case "LookupVal": {
+        const pathParts: string[] = [];
+        extractPath(node, pathParts);
+        if (pathParts.length > 0) {
+          processVariable(pathParts, node, combinedScope);
+        }
+        // Don't traverse children - we've already processed the full path
+        return;
+      }
+
+      case "For":
+        {
+          const loopVar = node.name.value;
+          const iterablePath: string[] = [];
+          extractPath(node.arr, iterablePath);
+
+          loopStack.push({ alias: loopVar, iterablePath });
+          const newLocalScope: Scope = {
+            ...localScope,
+            [loopVar]: true,
+            loop: true as true,
+          };
+
+          // Track the iterable
+          if (iterablePath.length > 0) {
+            const baseVar = iterablePath[0];
+            const baseLoop = loopStack
+              .slice(0, -1)
+              .find((l) => l.alias === baseVar);
+
+            // Resolve any loop aliases in the path
+            const basePath = baseLoop
+              ? resolveLoopAliases(
+                  [baseVar, ...iterablePath.slice(1)],
+                  loopStack.slice(0, -1),
+                )
+              : iterablePath;
+
+            // For LookupVal, the last part is in node.val
+            let lastPartNode: any = node.arr;
+            if (
+              lastPartNode &&
+              lastPartNode.typename === "LookupVal" &&
+              lastPartNode.val
+            ) {
+              lastPartNode = lastPartNode.val;
+            }
+            const lastPart = basePath[basePath.length - 1];
+            const tok =
+              lastPartNode && lastPartNode.lineno !== undefined
+                ? findTokenPosition(
+                    lastPart,
+                    lastPartNode.lineno,
+                    lastPartNode.colno,
+                  )
+                : findTokenPosition(lastPart, node.arr.lineno, node.arr.colno);
+
+            // Track with [0] to verify it's an array
+            results.push({
+              path: [...basePath, "0"],
+              from: tok.from,
+              to: tok.to,
+              lineno: tok.lineno,
+              colno: tok.colno,
+            });
+          }
+
+          traverse(node.body, combinedScope, newLocalScope);
+          if (node.else_) traverse(node.else_, combinedScope, localScope);
+
+          loopStack.pop();
+        }
+        break;
+
+      case "Set":
+        // Set blocks define new variables - add them to global scope
+        if (node.targets && Array.isArray(node.targets)) {
+          for (const target of node.targets) {
+            if (target.typename === "Symbol") {
+              globalScope[target.value] = true;
+            }
+          }
+        }
+        // Traverse the value/body to track any variables used in the assignment
+        if (node.value) traverse(node.value, combinedScope, localScope);
+        if (node.body) traverse(node.body, combinedScope, localScope);
+        break;
+
+      case "Capture":
+        // Capture wraps the body of a set block
+        if (node.body) traverse(node.body, combinedScope, localScope);
+        break;
+
+      case "If":
+        traverse(node.cond, combinedScope, localScope);
+        traverse(node.body, combinedScope, localScope);
+        if (node.else_) traverse(node.else_, combinedScope, localScope);
+        break;
+
+      case "Macro":
+        // Macro definitions add the macro name to global scope
+        if (node.name && node.name.value) {
+          globalScope[node.name.value] = true;
+        }
+
+        const macroScope: Scope = { ...combinedScope };
+        if (node.args && node.args.children) {
+          for (const arg of node.args.children) {
+            if (arg.typename === "Symbol") {
+              macroScope[arg.value] = true;
+            } else if (arg.typename === "KeywordArgs" && arg.children) {
+              // KeywordArgs contains Pair nodes for default parameters
+              for (const pair of arg.children) {
+                if (
+                  pair.typename === "Pair" &&
+                  pair.key &&
+                  pair.key.typename === "Symbol"
+                ) {
+                  macroScope[pair.key.value] = true;
+                }
+              }
+            }
+          }
+        }
+        traverse(node.body, macroScope, {});
+        break;
+
+      case "Output":
+        if (node.children) {
+          for (const child of node.children)
+            traverse(child, combinedScope, localScope);
+        }
+        break;
+
+      case "Call":
+        if (node.args) traverse(node.args, combinedScope, localScope);
+        if (node.name) traverse(node.name, combinedScope, localScope);
+        break;
+
+      case "Filter":
+        // Traverse the value being filtered (not the filter name)
+        // Filter structure: name (filter name), args (filter arguments)
+        if (node.name && node.name.typename === "Symbol") {
+          // Skip filter name - it's a built-in function, not a variable
+          // But if it's a complex expression, traverse it
+          if (!BUILTIN_FILTERS.has(node.name.value)) {
+            traverse(node.name, combinedScope, localScope);
+          }
+        } else if (node.name) {
+          traverse(node.name, combinedScope, localScope);
+        }
+        if (node.args) traverse(node.args, combinedScope, localScope);
+        break;
+
+      case "Is":
+        // Is operator tests a value (e.g., "value is defined")
+        // Only traverse the left side (the value being tested)
+        // The right side is the test name (built-in function)
+        if (node.left) traverse(node.left, combinedScope, localScope);
+        if (node.right && node.right.typename === "Symbol") {
+          // Skip if it's a built-in test name
+          if (!BUILTIN_TESTS.has(node.right.value)) {
+            traverse(node.right, combinedScope, localScope);
+          }
+        } else if (node.right) {
+          traverse(node.right, combinedScope, localScope);
+        }
+        break;
+
+      case "Not":
+      case "Neg":
+      case "Pos":
+        // Unary operators use 'target'
+        if (node.target) traverse(node.target, combinedScope, localScope);
+        break;
+
+      case "Compare":
+        // Compare uses 'expr' and 'ops' (array of CompareOperand)
+        if (node.expr) traverse(node.expr, combinedScope, localScope);
+        if (node.ops && Array.isArray(node.ops)) {
+          for (const op of node.ops) {
+            if (op.expr) traverse(op.expr, combinedScope, localScope);
+          }
+        }
+        break;
+
+      case "Or":
+      case "And":
+      case "Add":
+      case "Sub":
+      case "Mul":
+      case "Div":
+      case "FloorDiv":
+      case "Mod":
+      case "Pow":
+        // Binary operators use 'left' and 'right'
+        if (node.left) traverse(node.left, combinedScope, localScope);
+        if (node.right) traverse(node.right, combinedScope, localScope);
+        break;
+
+      case "Group":
+        // Group wraps a single expression
+        if (node.children) {
+          for (const child of node.children)
+            traverse(child, combinedScope, localScope);
+        }
+        break;
+
+      default:
+        // Don't traverse children of nodes we've already fully processed
+        if (
+          node.typename === "LookupVal" ||
+          node.typename === "Symbol" ||
+          node.typename === "Literal"
+        ) {
+          return;
+        }
+        for (const key in node) {
+          if (key === "typename" || key === "lineno" || key === "colno")
+            continue;
+          const child = node[key];
+          if (Array.isArray(child)) {
+            child.forEach((c) => traverse(c, combinedScope, localScope));
+          } else if (child && typeof child === "object" && child.typename) {
+            traverse(child, combinedScope, localScope);
+          }
+        }
+    }
+  }
+
+  traverse(ast);
+  return results;
+}

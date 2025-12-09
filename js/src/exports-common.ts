@@ -11,4 +11,4 @@ export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export * as graph from "./graph-framework";
-export { analyzeNunjucksTemplate } from "./template/nunjucks-utils";
+export { analyzeNunjucksTemplateWithLocations } from "./template/nunjucks-utils";
