@@ -550,6 +550,44 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     });
   });
 
+  test("generateObject logs output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const recipeSchema = z.object({
+      name: z.string(),
+      ingredients: z.array(
+        z.object({
+          name: z.string(),
+          amount: z.string(),
+        }),
+      ),
+      steps: z.array(z.string()),
+    });
+
+    const result = await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema: recipeSchema,
+      prompt: "Generate a simple recipe for toast with butter.",
+    });
+
+    expect(result.object).toBeTruthy();
+    expect(result.object.name).toBeTruthy();
+    expect(Array.isArray(result.object.ingredients)).toBe(true);
+    expect(Array.isArray(result.object.steps)).toBe(true);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateObject",
+    );
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.output).toBeTruthy();
+    expect(wrapperSpan.output.object).toBeTruthy();
+    expect(wrapperSpan.output.object.name).toBeTruthy();
+    expect(Array.isArray(wrapperSpan.output.object.ingredients)).toBe(true);
+    expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
+  });
+
   test("streamObject toTextStreamResponse", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -586,6 +624,48 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
     expect(wrapperSpan).toBeTruthy();
     expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+  });
+
+  test("streamObject logs object in output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const recipeSchema = z.object({
+      name: z.string(),
+      ingredients: z.array(
+        z.object({
+          name: z.string(),
+          amount: z.string(),
+        }),
+      ),
+      steps: z.array(z.string()),
+    });
+
+    const streamRes = await wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema: recipeSchema,
+      prompt: "Generate a simple recipe for toast with butter.",
+    });
+
+    for await (const _ of streamRes.partialObjectStream) {
+    }
+
+    const finalObject = await streamRes.object;
+    expect(finalObject).toBeTruthy();
+    expect(finalObject.name).toBeTruthy();
+    expect(Array.isArray(finalObject.ingredients)).toBe(true);
+    expect(Array.isArray(finalObject.steps)).toBe(true);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) => s?.span_attributes?.name === "streamObject",
+    );
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.output).toBeTruthy();
+    expect(wrapperSpan.output.object).toBeTruthy();
+    expect(wrapperSpan.output.object.name).toBeTruthy();
+    expect(Array.isArray(wrapperSpan.output.object.ingredients)).toBe(true);
+    expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
   });
 
   test("streamText returns correct type with toUIMessageStreamResponse", async () => {

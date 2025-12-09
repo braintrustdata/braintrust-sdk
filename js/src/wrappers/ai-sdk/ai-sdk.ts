@@ -322,8 +322,10 @@ const wrapGenerateObject = (
           tools: wrapTools(params.tools),
         });
 
+        const output = await processOutput(result, options.denyOutputPaths);
+
         span.log({
-          output: processOutput(result, options.denyOutputPaths),
+          output,
           metrics: extractTokenMetrics(result),
         });
 
@@ -1025,6 +1027,7 @@ const extractGetterValues = (obj: any): any => {
   // List of known getters from AI SDK result objects
   const getterNames = [
     "text",
+    "object",
     "finishReason",
     "usage",
     "toolCalls",
