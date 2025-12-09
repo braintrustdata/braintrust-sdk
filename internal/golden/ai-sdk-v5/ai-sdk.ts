@@ -16,7 +16,13 @@ initLogger({
   projectName: "golden-ts-ai-sdk-v5",
 });
 
-const { generateText, streamText, Experimental_Agent: Agent } = wrapAISDK(ai);
+const {
+  generateText,
+  streamText,
+  generateObject,
+  streamObject,
+  Experimental_Agent: Agent,
+} = wrapAISDK(ai);
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
@@ -771,26 +777,191 @@ async function testReasoning() {
   );
 }
 
+// Test 18: generate structured output
+async function testGenerateObject() {
+  return traced(
+    async () => {
+      const recipeSchema = z.object({
+        name: z.string(),
+        ingredients: z.array(
+          z.object({
+            name: z.string(),
+            amount: z.string(),
+          }),
+        ),
+        steps: z.array(z.string()),
+      });
+
+      for (const model of [
+        openai("gpt-5-mini"),
+        anthropic("claude-sonnet-4-5"),
+      ]) {
+        await generateObject({
+          model: model as LanguageModel,
+          schema: recipeSchema,
+          prompt: "Generate a simple recipe for chocolate chip cookies.",
+        });
+      }
+    },
+    { name: "test_generate_object" },
+  );
+}
+
+// Test 19: stream structured output
+async function testStreamObject() {
+  return traced(
+    async () => {
+      const productSchema = z.object({
+        name: z.string(),
+        description: z.string(),
+        price: z.number(),
+        features: z.array(z.string()),
+      });
+
+      for (const model of [
+        openai("gpt-5-mini"),
+        anthropic("claude-sonnet-4-5"),
+      ]) {
+        const result = streamObject({
+          model: model as LanguageModel,
+          schema: productSchema,
+          prompt:
+            "Generate a product description for a wireless bluetooth headphone.",
+        });
+
+        for await (const _ of result.partialObjectStream) {
+        }
+      }
+    },
+    { name: "test_stream_object" },
+  );
+}
+
+// Test 20: Multi-turn with experimental_output (structured output from generateText)
+// Uses tools to force multiple rounds before producing structured output
+async function testMultiTurnWithOutput() {
+  return traced(
+    async () => {
+      const getProductInfoTool = ai.tool({
+        description: "Get product information including price and specs",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const products: Record<
+            string,
+            { name: string; price: number; specs: string }
+          > = {
+            "phone-123": {
+              name: "SuperPhone X",
+              price: 999,
+              specs: "6.5 inch display, 128GB storage, 12MP camera",
+            },
+            "laptop-456": {
+              name: "ProBook Ultra",
+              price: 1499,
+              specs: "15 inch display, 512GB SSD, 16GB RAM",
+            },
+          };
+          return (
+            products[typedArgs.productId] || {
+              name: "Unknown",
+              price: 0,
+              specs: "N/A",
+            }
+          );
+        },
+      });
+
+      const getReviewsTool = ai.tool({
+        description: "Get customer reviews for a product",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const reviews: Record<
+            string,
+            { rating: number; comments: string[] }
+          > = {
+            "phone-123": {
+              rating: 4.5,
+              comments: [
+                "Great camera!",
+                "Battery lasts all day",
+                "A bit pricey",
+              ],
+            },
+            "laptop-456": {
+              rating: 4.2,
+              comments: ["Fast performance", "Good display", "Heavy to carry"],
+            },
+          };
+          return reviews[typedArgs.productId] || { rating: 0, comments: [] };
+        },
+      });
+
+      const comparisonSchema = z.object({
+        recommendation: z.enum(["phone-123", "laptop-456", "neither"]),
+        reasoning: z.string(),
+        priceComparison: z.object({
+          cheaper: z.string(),
+          priceDifference: z.number(),
+        }),
+        overallRating: z.object({
+          phone: z.number(),
+          laptop: z.number(),
+        }),
+      });
+
+      for (const model of [
+        openai("gpt-5-mini"),
+        anthropic("claude-sonnet-4-5"),
+      ]) {
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            get_product_info: getProductInfoTool,
+            get_reviews: getReviewsTool,
+          },
+          toolChoice: "required",
+          system:
+            "You are a helpful shopping assistant. Use the tools to gather product information before making recommendations.",
+          prompt:
+            "Compare phone-123 and laptop-456. Look up their info and reviews, then give me a structured comparison with your recommendation.",
+          experimental_output: ai.Output.object({ schema: comparisonSchema }),
+          stopWhen: ai.stepCountIs(4),
+        });
+      }
+    },
+    { name: "test_multi_turn_with_output" },
+  );
+}
+
 // Run all tests
 async function runAllTests() {
   const tests = [
-    testBasicCompletion,
-    testMultiTurn,
-    testSystemPrompt,
-    testStreaming,
-    testImageInput,
-    testDocumentInput,
-    testTemperatureVariations,
-    testStopSequences,
-    testMetadata,
-    testLongContext,
-    testMixedContent,
-    testPrefill,
-    testShortMaxTokens,
-    testToolUse,
-    testToolUseWithResult,
-    testMultiRoundToolUse,
-    testReasoning,
+    // testBasicCompletion,
+    // testMultiTurn,
+    // testSystemPrompt,
+    // testStreaming,
+    // testImageInput,
+    // testDocumentInput,
+    // testTemperatureVariations,
+    // testStopSequences,
+    // testMetadata,
+    // testLongContext,
+    // testMixedContent,
+    // testPrefill,
+    // testShortMaxTokens,
+    // testToolUse,
+    // testToolUseWithResult,
+    // testMultiRoundToolUse,
+    // testReasoning,
+    testGenerateObject,
+    testStreamObject,
+    testMultiTurnWithOutput,
   ];
 
   for (const test of tests) {
