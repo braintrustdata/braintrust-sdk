@@ -12,6 +12,20 @@ Install the library with pip.
 pip install braintrust
 ```
 
+**Performance tip**: For 3-5x faster JSON serialization, install with the optional `performance` extra:
+
+```bash
+pip install braintrust[performance]
+```
+
+Or install `orjson` separately:
+
+```bash
+pip install orjson
+```
+
+The SDK automatically detects and uses orjson if available, with seamless fallback to standard json. See [ORJSON_OPTIMIZATION.md](ORJSON_OPTIMIZATION.md) for details.
+
 Then, run a simple experiment with the following code (replace `YOUR_API_KEY` with
 your Braintrust API key):
 
@@ -37,3 +51,7 @@ Eval(
   scores=[is_equal],
 )
 ```
+
+# Performance Optimization
+
+For 3-5x faster JSON serialization, install `orjson`. The SDK automatically detects and uses orjson if available, with seamless fallback to standard json.
