@@ -716,6 +716,107 @@ def test_span_log_with_large_document_many_pages(with_memory_logger):
     assert logged_output["pages"][0]["lines"][0]["words"][0]["content"] == "word_0"
 
 
+def test_span_log_handles_nan_gracefully(with_memory_logger):
+    """Test that span.log() handles NaN values by converting them to "NaN" string."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle NaN gracefully
+        span.log(
+            input={"test": "input"},
+            output={"value": float("nan")},
+        )
+
+    # Verify the log was recorded with NaN handled appropriately
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # NaN should be converted to "NaN" string for JSON compatibility
+    output_value = logs[0]["output"]["value"]
+    assert output_value == "NaN"
+
+
+def test_span_log_handles_infinity_gracefully(with_memory_logger):
+    """Test that span.log() handles Infinity values by converting them to "Infinity"/"-Infinity" strings."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle Infinity gracefully
+        span.log(
+            input={"test": "input"},
+            output={"value": float("inf"), "neg": float("-inf")},
+        )
+
+    # Verify the log was recorded with Infinity handled appropriately
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # Infinity should be converted to string representations for JSON compatibility
+    assert logs[0]["output"]["value"] == "Infinity"
+    assert logs[0]["output"]["neg"] == "-Infinity"
+
+
+def test_span_log_handles_unstringifiable_object_gracefully(with_memory_logger):
+    """Test that span.log() should handle objects with bad __str__ gracefully without raising.
+
+    This test currently FAILS - it demonstrates the desired behavior after the fix.
+    """
+    logger = init_test_logger(__name__)
+
+    class BadStrObject:
+        def __str__(self):
+            raise RuntimeError("Cannot convert to string!")
+
+        def __repr__(self):
+            raise RuntimeError("Cannot convert to repr!")
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle gracefully
+        span.log(
+            input={"test": "input"},
+            output={"result": BadStrObject()},
+        )
+
+    # Verify the log was recorded with a fallback representation
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # The bad object should have been replaced with some error placeholder
+    assert "result" in logs[0]["output"]
+    output_str = str(logs[0]["output"]["result"])
+    # Should contain some indication of serialization failure
+    assert "error" in output_str.lower() or "serializ" in output_str.lower()
+
+
+def test_span_log_handles_bad_dict_keys_gracefully(with_memory_logger):
+    """Test that span.log() should handle non-stringifiable dict keys gracefully.
+
+    This test currently FAILS - it demonstrates the desired behavior after the fix.
+    """
+    logger = init_test_logger(__name__)
+
+    class BadKey:
+        def __str__(self):
+            raise ValueError("Key cannot be stringified!")
+
+        def __repr__(self):
+            raise ValueError("Key cannot be stringified!")
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle gracefully
+        span.log(
+            input={"test": "input"},
+            output={BadKey(): "value"},
+        )
+
+    # Verify the log was recorded with the problematic key handled
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # The output should exist but the bad key should be replaced
+    assert "output" in logs[0]
+
+
 def test_span_link_logged_out(with_memory_logger):
     simulate_logout()
     assert_logged_out()
