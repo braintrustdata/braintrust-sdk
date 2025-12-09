@@ -777,8 +777,8 @@ async function testReasoning() {
   );
 }
 
-// Test 18: generate structured output
-async function testGenerateObject() {
+// Test 18: Structured output
+async function testStructuredOutput() {
   return traced(
     async () => {
       const recipeSchema = z.object({
@@ -803,12 +803,12 @@ async function testGenerateObject() {
         });
       }
     },
-    { name: "test_generate_object" },
+    { name: "test_structured_output" },
   );
 }
 
-// Test 19: stream structured output
-async function testStreamObject() {
+// Test 19: Streaming structured output
+async function testStreamingStructuredOutput() {
   return traced(
     async () => {
       const productSchema = z.object({
@@ -833,13 +833,13 @@ async function testStreamObject() {
         }
       }
     },
-    { name: "test_stream_object" },
+    { name: "test_streaming_structured_output" },
   );
 }
 
-// Test 20: Multi-turn with experimental_output (structured output from generateText)
+// Test 20: Structured output with context (multi-turn with tools)
 // Uses tools to force multiple rounds before producing structured output
-async function testMultiTurnWithOutput() {
+async function testStructuredOutputWithContext() {
   return traced(
     async () => {
       const getProductInfoTool = ai.tool({
@@ -935,33 +935,33 @@ async function testMultiTurnWithOutput() {
         });
       }
     },
-    { name: "test_multi_turn_with_output" },
+    { name: "test_structured_output_with_context" },
   );
 }
 
 // Run all tests
 async function runAllTests() {
   const tests = [
-    // testBasicCompletion,
-    // testMultiTurn,
-    // testSystemPrompt,
-    // testStreaming,
-    // testImageInput,
-    // testDocumentInput,
-    // testTemperatureVariations,
-    // testStopSequences,
-    // testMetadata,
-    // testLongContext,
-    // testMixedContent,
-    // testPrefill,
-    // testShortMaxTokens,
-    // testToolUse,
-    // testToolUseWithResult,
-    // testMultiRoundToolUse,
-    // testReasoning,
-    testGenerateObject,
-    testStreamObject,
-    testMultiTurnWithOutput,
+    testBasicCompletion,
+    testMultiTurn,
+    testSystemPrompt,
+    testStreaming,
+    testImageInput,
+    testDocumentInput,
+    testTemperatureVariations,
+    testStopSequences,
+    testMetadata,
+    testLongContext,
+    testMixedContent,
+    testPrefill,
+    testShortMaxTokens,
+    testToolUse,
+    testToolUseWithResult,
+    testMultiRoundToolUse,
+    testReasoning,
+    testStructuredOutput,
+    testStreamingStructuredOutput,
+    testStructuredOutputWithContext,
   ];
 
   for (const test of tests) {
