@@ -17,6 +17,7 @@ from typing import (
 from uuid import UUID
 
 import braintrust
+import braintrust.logger
 from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
 from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
@@ -30,6 +31,12 @@ from typing_extensions import NotRequired
 from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")
+
+# Module-level storage for background logger to support cross-thread scenarios.
+# When set by test infrastructure, handlers created in worker threads will use
+# this logger for proper span routing. This is internal and set automatically
+# by the test fixtures - users should not need to manage this directly.
+_module_bg_logger: Optional[Any] = None
 
 
 class LogEvent(TypedDict):
@@ -53,6 +60,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         logger: Optional[Union[Logger, Span]] = None,
         debug: bool = False,
         exclude_metadata_props: Optional[Pattern[str]] = None,
+        _bg_logger: Optional[Any] = None,
     ):
         self.logger = logger
         self.spans: Dict[UUID, Span] = {}
@@ -70,6 +78,21 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._first_token_times: Dict[UUID, float] = {}
         self._ttft_ms: Dict[UUID, float] = {}
 
+        # Capture background logger override for cross-thread propagation.
+        # The SDK uses thread-local storage for the background logger override,
+        # but Eval tasks run in a thread pool. We capture the override at init
+        # time and re-apply it before span operations.
+        # Priority order:
+        # 1. Explicit _bg_logger parameter (for direct testing)
+        # 2. Module-level _module_bg_logger (set by test fixtures)
+        # 3. Current thread's _override_bg_logger
+        if _bg_logger is not None:
+            self._captured_bg_logger = _bg_logger
+        elif _module_bg_logger is not None:
+            self._captured_bg_logger = _module_bg_logger
+        else:
+            self._captured_bg_logger = getattr(braintrust.logger._state._override_bg_logger, "logger", None)
+
         # Capture the current span context at construction time if no explicit
         # logger is provided. This ensures correct context in concurrent scenarios
         # when handlers are created inside eval tasks.
@@ -80,6 +103,17 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
             current = current_span()
             if current is not NOOP_SPAN:
                 self.captured_context = current
+
+    def _ensure_bg_logger_override(self) -> None:
+        """Re-apply background logger override in current thread.
+
+        This is needed because the SDK's background logger override is thread-local,
+        but Eval tasks run in a thread pool. We capture the override at init time
+        and re-apply it before span operations to ensure spans are logged to the
+        correct background logger (e.g., memory logger in tests).
+        """
+        if self._captured_bg_logger is not None:
+            braintrust.logger._state._override_bg_logger.logger = self._captured_bg_logger
 
     def _start_span(
         self,
@@ -93,6 +127,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent: Optional[str] = None,
         event: Optional[LogEvent] = None,
     ) -> Any:
+        # Re-apply background logger override for cross-thread scenarios
+        self._ensure_bg_logger_override()
+
         if run_id in self.spans:
             # XXX: See graph test case of an example where this _may_ be intended.
             _logger.warning(f"Span already exists for run_id {run_id} (this is likely a bug)")
@@ -192,6 +229,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         metrics: Optional[Mapping[str, Union[int, float]]] = None,
         dataset_record_id: Optional[str] = None,
     ) -> Any:
+        # Re-apply background logger override for cross-thread scenarios
+        self._ensure_bg_logger_override()
+
         if run_id not in self.spans:
             return
 
@@ -619,13 +659,17 @@ def last_item(items: List[Any]) -> Any:
     return items[-1] if items else None
 
 
-def _walk_generations(response: LLMResult):
-    for generations in response.generations or []:
+def _walk_generations(response: Union[LLMResult, Dict[str, Any]]):
+    if isinstance(response, dict):
+        generations_list = response.get("generations") or []
+    else:
+        generations_list = response.generations or []
+    for generations in generations_list:
         for generation in generations or []:
             yield generation
 
 
-def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
+def _get_model_name_from_response(response: Union[LLMResult, Dict[str, Any]]) -> Optional[str]:
     model_name = None
     for generation in _walk_generations(response):
         message = getattr(generation, "message", None)
@@ -640,13 +684,16 @@ def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
             break
 
     if not model_name:
-        llm_output: Dict[str, Any] = response.llm_output or {}
+        if isinstance(response, dict):
+            llm_output: Dict[str, Any] = response.get("llm_output") or {}
+        else:
+            llm_output = response.llm_output or {}
         model_name = llm_output.get("model_name") or llm_output.get("model") or ""
 
     return model_name
 
 
-def _get_metrics_from_response(response: LLMResult):
+def _get_metrics_from_response(response: Union[LLMResult, Dict[str, Any]]):
     metrics = {}
 
     for generation in _walk_generations(response):
@@ -668,7 +715,10 @@ def _get_metrics_from_response(response: LLMResult):
             )
 
     if not metrics or not any(metrics.values()):
-        llm_output: Dict[str, Any] = response.llm_output or {}
+        if isinstance(response, dict):
+            llm_output: Dict[str, Any] = response.get("llm_output") or {}
+        else:
+            llm_output = response.llm_output or {}
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
 
     return clean_object(metrics)
