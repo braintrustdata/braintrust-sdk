@@ -71,7 +71,11 @@ else:
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
-DSPY_VERSIONS = (LATEST,)
+# dspy latest depends on litellm which requires Python >= 3.10
+if sys.version_info >= (3, 10):
+    DSPY_VERSIONS = (LATEST,)
+else:
+    DSPY_VERSIONS = ()  # skip dspy tests on Python 3.9
 # temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
 
@@ -157,6 +161,9 @@ def test_openrouter(session):
 @nox.session()
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
+    # litellm latest requires Python >= 3.10
+    if version == LATEST and sys.version_info < (3, 10):
+        session.skip("litellm latest requires Python >= 3.10")
     _install_test_deps(session)
     # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
     # https://github.com/BerriAI/litellm/issues/13711
@@ -169,6 +176,9 @@ def test_litellm(session, version):
 @nox.session()
 @nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
 def test_dspy(session, version):
+    # dspy latest depends on litellm which requires Python >= 3.10
+    if sys.version_info < (3, 10):
+        session.skip("dspy latest requires Python >= 3.10 (litellm dependency)")
     _install_test_deps(session)
     _install(session, "dspy", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_dspy.py")
