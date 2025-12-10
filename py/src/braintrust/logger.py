@@ -47,9 +47,11 @@ from urllib.parse import urlencode
 
 import chevron
 import exceptiongroup
+import jinja2
 import requests
 import urllib3
 from braintrust.functions.stream import BraintrustStream
+from jinja2.sandbox import SandboxedEnvironment, SecurityError
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -4572,19 +4574,155 @@ def _create_custom_render():
 
 _custom_render = _create_custom_render()
 
+TemplateFormat = Literal["mustache", "jinja", "none"]
 
-def render_templated_object(obj: Any, args: Any) -> Any:
+
+class _JinjaSafeDict:
+    """
+    A wrapper around dict that only exposes data values as attributes,
+    preventing jinja2 from accessing dict methods like .keys(), .values(), etc.
+    This ensures jinja only sees the actual data, not builtin methods.
+    """
+
+    def __init__(self, data: Dict[str, Any]):
+        self._wrapped = {}
+        for key, value in data.items():
+            self._wrapped[str(key)] = self.wrap(value)
+
+    @classmethod
+    def wrap(cls, value: Any) -> Any:
+        """Recursively wrap dicts and lists to prevent method access."""
+        if isinstance(value, dict):
+            return cls(value)
+        elif isinstance(value, list):
+            return [cls.wrap(item) for item in value]
+        else:
+            return value
+
+    def __getitem__(self, key: str) -> Any:
+        """Allow dict-style access."""
+        return self._wrapped[key]
+
+    def __getattr__(self, name: str) -> Any:
+        """Allow attribute-style access, but only for data keys."""
+        # Never expose any methods only data values
+        if hasattr(self, '_wrapped') and name in self._wrapped:
+            return self._wrapped[name]
+        # Prevents jinja2 from falling back to accessing object methods
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def __dir__(self):
+        """Only expose data keys in dir(), not methods."""
+        # Only return the wrapped keys, not any methods
+        return list(self._wrapped.keys()) if hasattr(self, '_wrapped') else []
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator."""
+        return key in self._wrapped
+
+    def __iter__(self):
+        """Support iteration over keys."""
+        return iter(self._wrapped)
+
+    def __len__(self) -> int:
+        """Support len() function."""
+        return len(self._wrapped)
+
+
+def _escape_data(value: Any) -> str:
+    """Escape data for template rendering, similar to JS SDK."""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
+def render_template(
+    template: str,
+    data: Any,
+    template_format: TemplateFormat = "mustache",
+    *,
+    strict: bool = False,
+) -> str:
+    """
+    Render a template using the specified format.
+
+    :param template: The template string to render
+    :param data: The data to use for rendering
+    :param template_format: The template format to use ("mustache", "jinja", or "none")
+    :param strict: Whether to enable strict mode validation
+    :returns: The rendered template string
+    """
+    if template_format == "none":
+        return template
+
+    if template_format == "mustache":
+        return render_mustache(template, data, strict=strict)
+
+    if template_format == "jinja":
+        return render_jinja(template, data, strict=strict)
+
+    raise ValueError(f"Unknown template format: {template_format}")
+
+
+def render_jinja(template: str, data: Any, *, strict: bool = False) -> str:
+    """
+    Render a template using Jinja2 with sandboxed environment.
+
+    :param template: The template string to render
+    :param data: The data to use for rendering
+    :param strict: Whether to enable strict mode validation
+    :returns: The rendered template string
+    """
+    env = SandboxedEnvironment(
+        autoescape=False,
+        undefined=jinja2.StrictUndefined if strict else jinja2.Undefined,
+    )
+
+    def json_escape(value: Any) -> str:
+        return _escape_data(value)
+
+    env.filters["json"] = json_escape
+
+    try:
+        template_obj = env.from_string(template)
+        if isinstance(data, dict):
+            wrapped_data = {k: _JinjaSafeDict.wrap(v) for k, v in data.items()}
+            variables = {"input": _JinjaSafeDict(data), **wrapped_data}
+        else:
+            variables = {"input": data}
+        return template_obj.render(**variables)
+    except jinja2.UndefinedError as e:
+        raise ValueError(f"Template rendering failed: {str(e)}") from e
+    except SecurityError as e:
+        raise ValueError(f"Template rendering blocked by sandbox (unsafe operation detected): {str(e)}") from e
+    except jinja2.TemplateError as e:
+        raise ValueError(f"Template rendering failed: {str(e)}") from e
+
+
+def render_templated_object(
+    obj: Any,
+    args: Any,
+    template_format: TemplateFormat = "mustache",
+) -> Any:
     strict = args.get("strict", False) if isinstance(args, dict) else False
     if isinstance(obj, str):
-        return render_mustache(obj, data=args, renderer=_custom_render, strict=strict)
+        # For mustache, use the custom renderer so non-string values (like dicts)
+        # are JSON-encoded, matching the JS SDK semantics.
+        if template_format == "mustache":
+            return render_mustache(obj, data=args, renderer=_custom_render, strict=strict)
+        return render_template(obj, args, template_format, strict=strict)
     elif isinstance(obj, list):
-        return [render_templated_object(item, args) for item in obj]  # type: ignore
+        return [render_templated_object(item, args, template_format) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
-        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
+        return {str(k): render_templated_object(v, args, template_format) for k, v in obj.items()}  # type: ignore
     return obj
 
 
-def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+def render_prompt_params(
+    params: Dict[str, Any],
+    args: Any,
+    template_format: TemplateFormat = "mustache",
+) -> Dict[str, Any]:
     if not params:
         return params
 
@@ -4603,7 +4741,7 @@ def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     if raw_schema is None:
         return params
 
-    templated_schema = render_templated_object(raw_schema, args)
+    templated_schema = render_templated_object(raw_schema, args, template_format)
     parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
 
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
@@ -4701,12 +4839,18 @@ class Prompt:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def build(self, **build_args: Any) -> Mapping[str, Any]:
+    def build(
+        self,
+        *,
+        template_format: TemplateFormat = "mustache",
+        **build_args: Any,
+    ) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
-        be forwarded to the mustache template that defines the prompt and rendered with
-        the `chevron` library.
+        be forwarded to the template that defines the prompt and rendered with the
+        specified template engine (mustache, jinja, or none).
 
+        :param template_format: The template format to use ("mustache", "jinja", or "none"). Defaults to "mustache".
         :param build_args: Arguments to forward to the prompt template. Can include 'strict=True' to enable strict mode validation.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
@@ -4719,7 +4863,7 @@ class Prompt:
 
         ret = {
             **self.defaults,
-            **render_prompt_params(params, build_args),
+            **render_prompt_params(params, build_args, template_format),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -4742,16 +4886,16 @@ class Prompt:
             raise ValueError("Empty prompt")
 
         if self.prompt.type == "completion":
-            ret["prompt"] = render_mustache(self.prompt.content, data=build_args, strict=strict)
+            ret["prompt"] = render_template(self.prompt.content, build_args, template_format, strict=strict)
         elif self.prompt.type == "chat":
 
             def render(template: str):
-                return render_mustache(template, data=build_args, strict=strict)
+                return render_template(template, build_args, template_format, strict=strict)
 
             ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
 
             if self.prompt.tools and self.prompt.tools.strip():
-                ret["tools"] = json.loads(render_mustache(self.prompt.tools, data=build_args, strict=strict))
+                ret["tools"] = json.loads(render_template(self.prompt.tools, build_args, template_format, strict=strict))
 
         return ret
 
