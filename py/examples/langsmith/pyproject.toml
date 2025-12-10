@@ -11,3 +11,8 @@ dependencies = [
 
 [tool.uv.sources]
 braintrust = { path = "../..", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

@@ -10,12 +10,20 @@ This example demonstrates:
 
 import os
 
-# IMPORTANT: Call setup_langsmith BEFORE importing from langsmith
-from braintrust.wrappers.langsmith import setup_langsmith
+# Enable LangSmith tracing (required for traces to be sent to LangSmith)
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+os.environ.setdefault("LANGCHAIN_PROJECT", "examples-wrappers-langsmith-eval")
 
+# IMPORTANT: Call setup_langsmith BEFORE importing from langsmith
+from braintrust.wrappers.langsmith_wrapper import setup_langsmith
+
+# Set BRAINTRUST_STANDALONE=1 to completely replace LangSmith with Braintrust
+standalone = os.environ.get("BRAINTRUST_STANDALONE", "").lower() in ("1", "true", "yes")
+
+# project_name is automatically read from LANGCHAIN_PROJECT env var
 setup_langsmith(
-    project="langsmith-eval-example",
     api_key=os.environ.get("BRAINTRUST_API_KEY"),
+    standalone=standalone,
 )
 
 # Now import from langsmith - these are patched to use Braintrust
@@ -23,13 +31,21 @@ from langsmith import Client, traceable
 
 
 # Define a target function (the function being evaluated)
+# LangSmith requires the parameter to be named 'inputs' (or 'attachments'/'metadata')
 @traceable(name="multiply")
-def multiply(x: int, y: int) -> int:
+def multiply(inputs: dict) -> int:
     """Multiply two numbers."""
-    return x * y
+    return inputs["x"] * inputs["y"]
 
 
 # Define LangSmith-style evaluators
+def _unwrap_output(value):
+    """Unwrap output from dict format if needed (LangSmith requires dict outputs)."""
+    if isinstance(value, dict) and "output" in value:
+        return value["output"]
+    return value
+
+
 def exact_match_evaluator(run, example):
     """
     LangSmith-style evaluator that checks for exact match.
@@ -38,8 +54,8 @@ def exact_match_evaluator(run, example):
         run: Has .outputs attribute with the function's return value
         example: Has .inputs and .outputs attributes from the dataset
     """
-    expected = example.outputs
-    actual = run.outputs
+    expected = _unwrap_output(example.outputs)
+    actual = _unwrap_output(run.outputs)
     return {
         "key": "exact_match",
         "score": 1.0 if actual == expected else 0.0,
@@ -50,8 +66,8 @@ def range_evaluator(run, example):
     """
     LangSmith-style evaluator that checks if result is in expected range.
     """
-    actual = run.outputs
-    expected = example.outputs
+    actual = _unwrap_output(run.outputs)
+    expected = _unwrap_output(example.outputs)
     # Check if within 10% of expected
     if expected == 0:
         score = 1.0 if actual == 0 else 0.0
@@ -86,7 +102,7 @@ def main():
     print()
 
     # Run evaluation using LangSmith's API (redirects to Braintrust)
-    results = client.evaluate(
+    client.evaluate(
         multiply,  # Target function
         data=test_data,  # Test dataset
         evaluators=[exact_match_evaluator, range_evaluator],

@@ -10,12 +10,20 @@ This example demonstrates:
 
 import os
 
-# IMPORTANT: Call setup_langsmith BEFORE importing from langsmith
-from braintrust.wrappers.langsmith import setup_langsmith
+# Enable LangSmith tracing (required for traces to be sent to LangSmith)
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+os.environ.setdefault("LANGCHAIN_PROJECT", "examples-wrappers-langsmith-tracing")
 
+# IMPORTANT: Call setup_langsmith BEFORE importing from langsmith
+from braintrust.wrappers.langsmith_wrapper import setup_langsmith
+
+# Set BRAINTRUST_STANDALONE=1 to completely replace LangSmith with Braintrust
+standalone = os.environ.get("BRAINTRUST_STANDALONE", "").lower() in ("1", "true", "yes")
+
+# project_name is automatically read from LANGCHAIN_PROJECT env var
 setup_langsmith(
-    project="langsmith-migration-example",
     api_key=os.environ.get("BRAINTRUST_API_KEY"),
+    standalone=standalone,
 )
 
 # Now import from langsmith - these are patched to use Braintrust

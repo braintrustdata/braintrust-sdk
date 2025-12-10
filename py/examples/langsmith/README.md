@@ -25,7 +25,7 @@ Both LangSmith and Braintrust tracing are active. Use this during migration to v
 ```python
 from braintrust.wrappers.langsmith import setup_langsmith
 
-setup_langsmith(project="my-project")  # standalone=False by default
+setup_langsmith(project_name="my-project")
 ```
 
 ### 2. Standalone Mode
@@ -35,7 +35,7 @@ Only Braintrust runs - LangSmith code is completely replaced. Use this when you'
 ```python
 from braintrust.wrappers.langsmith import setup_langsmith
 
-setup_langsmith(project="my-project", standalone=True)
+setup_langsmith(project_name="my-project", standalone=True)
 ```
 
 ## Running the Examples
@@ -45,7 +45,11 @@ setup_langsmith(project="my-project", standalone=True)
 Shows how `@traceable` decorated functions work with Braintrust:
 
 ```bash
+# Wrapping mode (both LangSmith and Braintrust tracing)
 python tracing_example.py
+
+# Standalone mode (Braintrust only)
+BRAINTRUST_STANDALONE=1 python tracing_example.py
 ```
 
 ### Evaluation Example
@@ -53,7 +57,11 @@ python tracing_example.py
 Shows how to migrate `client.evaluate()` calls to use Braintrust's evaluation framework:
 
 ```bash
+# Wrapping mode
 python eval_example.py
+
+# Standalone mode
+BRAINTRUST_STANDALONE=1 python eval_example.py
 ```
 
 ## What Gets Migrated
