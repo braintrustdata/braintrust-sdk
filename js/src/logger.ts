@@ -4910,12 +4910,12 @@ class ObjectFetcher<RecordType>
     this._fetchedData = undefined;
   }
 
-  public async version() {
+  public async version(options?: { batchSize?: number }) {
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
       let maxVersion: string | undefined = undefined;
-      for await (const record of this.fetch()) {
+      for await (const record of this.fetch(options)) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
         if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
@@ -5318,8 +5318,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     Input,
     Expected,
     Metadata = DefaultMetadataType,
-  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
-    const records = this.fetch();
+  >(options?: {
+    batchSize?: number;
+  }): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
+    const records = this.fetch(options);
 
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
