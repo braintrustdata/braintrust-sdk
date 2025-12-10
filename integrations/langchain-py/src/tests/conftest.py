@@ -1,9 +1,9 @@
 # pyright: reportPrivateUsage=none
 import os
+from contextlib import contextmanager
 
 import pytest
 from braintrust import Tuple
-from braintrust.framework import _internal_reset_thread_pool
 from braintrust.logger import (
     TEST_API_KEY,
     Logger,
@@ -13,7 +13,25 @@ from braintrust.logger import (
 )
 from braintrust.test_helpers import init_test_logger
 
+from braintrust_langchain import callbacks as langchain_callbacks
 from braintrust_langchain.context import clear_global_handler
+
+
+@contextmanager
+def _memory_logger_with_langchain_support():
+    """Wrapper around _internal_with_memory_background_logger that automatically
+    configures the langchain integration for cross-thread support.
+
+    This ensures that BraintrustCallbackHandler instances created in worker threads
+    (e.g., inside Eval tasks) properly route spans to the memory logger.
+    """
+    with _internal_with_memory_background_logger() as bgl:
+        # Store in module-level variable for cross-thread access
+        langchain_callbacks._module_bg_logger = bgl
+        try:
+            yield bgl
+        finally:
+            langchain_callbacks._module_bg_logger = None
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +45,6 @@ def setup_braintrust():
         os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
 
     _internal_reset_global_state()
-    _internal_reset_thread_pool()
     clear_global_handler()
     yield
 
@@ -92,7 +109,7 @@ def vcr_config():
 @pytest.fixture
 def logger_memory_logger():
     logger = init_test_logger("langchain-py")
-    with _internal_with_memory_background_logger() as bgl:
+    with _memory_logger_with_langchain_support() as bgl:
         yield (logger, bgl)
 
 

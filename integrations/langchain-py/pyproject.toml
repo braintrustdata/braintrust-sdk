@@ -39,6 +39,7 @@ where = ["src"]
 [tool.uv.workspace]
 members = [
     ".",
+    "examples",
 ]
 
 [tool.uv.sources]
