@@ -4,14 +4,14 @@ import { nunjucks } from "./nunjucks";
 
 function getEnv() {
   return new nunjucks.Environment(null, {
-    autoescape: false,
+    autoescape: true,
     throwOnUndefined: false,
   });
 }
 
 function getStrictEnv() {
   return new nunjucks.Environment(null, {
-    autoescape: false,
+    autoescape: true,
     throwOnUndefined: true,
   });
 }

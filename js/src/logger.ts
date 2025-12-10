@@ -77,7 +77,7 @@ import type { Environment as NunjucksEnvironment } from "nunjucks";
 
 const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
   return new nunjucks.Environment(null, {
-    autoescape: false,
+    autoescape: true,
     throwOnUndefined,
   });
 };
