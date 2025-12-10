@@ -30,8 +30,8 @@ interface WrapAISDKOptions {
 
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
- * of generateText, streamText, generateObject, and streamObject that automatically
- * create spans and log inputs, outputs, and metrics.
+ * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
+ * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns Object with AI SDK methods with Braintrust tracing
@@ -41,43 +41,104 @@ interface WrapAISDKOptions {
  * import { wrapAISDK } from "braintrust";
  * import * as ai from "ai";
  *
- * const { generateText, streamText, generateObject, streamObject } = wrapAISDK(ai);
+ * const { generateText, streamText, generateObject, streamObject, Agent } = wrapAISDK(ai);
  *
  * const result = await generateText({
  *   model: openai("gpt-4"),
  *   prompt: "Hello world"
  * });
+ *
+ * const agent = new Agent({ model: openai("gpt-4") });
+ * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
 export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(aiSDK as any, {
+  return new Proxy(aiSDK as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
-          return wrapGenerateText(original, options);
+          return wrapGenerateText(original, options, aiSDK);
         case "streamText":
-          return wrapStreamText(original, options);
+          return wrapStreamText(original, options, aiSDK);
         case "generateObject":
-          return wrapGenerateObject(original, options);
+          return wrapGenerateObject(original, options, aiSDK);
         case "streamObject":
-          return wrapStreamObject(original, options);
+          return wrapStreamObject(original, options, aiSDK);
+        case "Agent":
+        case "Experimental_Agent":
+        case "ToolLoopAgent":
+          return original ? wrapAgentClass(original, options) : original;
       }
       return original;
     },
   }) as T;
 }
 
-const wrapGenerateText = (
-  generateText: any,
+const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
+  return new Proxy(AgentClass, {
+    construct(target, args) {
+      const instance = new target(...args);
+      return new Proxy(instance, {
+        get(instanceTarget, prop, instanceReceiver) {
+          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+
+          if (prop === "generate") {
+            return wrapAgentGenerate(original, instanceTarget, options);
+          }
+
+          if (prop === "stream") {
+            return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          return original;
+        },
+      });
+    },
+  });
+};
+
+const wrapAgentGenerate = (
+  generate: any,
+  instance: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async function wrappedGenerateText(params: any) {
+  return async (params: any) =>
+    makeGenerateTextWrapper(
+      "Agent.generate",
+      options,
+      generate.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling generateText
+    )({ ...instance.settings, ...params });
+};
+
+const wrapAgentStream = (
+  stream: any,
+  instance: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return (params: any) =>
+    makeStreamTextWrapper(
+      "Agent.stream",
+      options,
+      stream.bind(instance), // as of v5 this is just streamText under the hood
+      undefined, // aiSDK not needed since model is already on instance
+    )({ ...instance.settings, ...params });
+};
+
+const makeGenerateTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  generateText: any,
+  aiSDK?: any,
+) => {
+  const wrapper = async function (params: any) {
     return traced(
       async (span) => {
         const result = await generateText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
         });
 
@@ -89,7 +150,7 @@ const wrapGenerateText = (
         return result;
       },
       {
-        name: "generateText",
+        name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
@@ -106,22 +167,232 @@ const wrapGenerateText = (
       },
     );
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
+};
+
+/**
+ * Resolves a model string ID to a model instance using AI SDK's global provider.
+ * This mirrors the internal resolveLanguageModel function in AI SDK.
+ */
+const resolveModel = (model: any, ai: any): any => {
+  if (typeof model !== "string") {
+    return model;
+  }
+  // Use AI SDK's global provider if set, otherwise fall back to gateway
+  const provider =
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER ?? ai?.gateway ?? null;
+  if (provider && typeof provider.languageModel === "function") {
+    return provider.languageModel(model);
+  }
+  // If no provider available, return as-is (AI SDK will resolve it)
+  return model;
+};
+
+/**
+ * Wraps a model's doGenerate method to create a span for each LLM call.
+ * This allows visibility into each step of a multi-round tool interaction.
+ */
+const wrapModel = (model: any, ai?: any): any => {
+  // Resolve string model IDs to model instances
+  const resolvedModel = resolveModel(model, ai);
+
+  if (
+    !resolvedModel ||
+    typeof resolvedModel !== "object" ||
+    typeof resolvedModel.doGenerate !== "function"
+  ) {
+    return model; // Return original if we can't wrap
+  }
+
+  // Already wrapped - avoid double wrapping
+  if (resolvedModel._braintrustWrapped) {
+    return resolvedModel;
+  }
+
+  const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
+  const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
+
+  const wrappedDoGenerate = async (options: any) => {
+    return traced(
+      async (span) => {
+        const result = await originalDoGenerate(options);
+
+        span.log({
+          output: await processOutput(result),
+          metrics: extractTokenMetrics(result),
+        });
+
+        return result;
+      },
+      {
+        name: "doGenerate",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input: processInputAttachments(options),
+          metadata: {
+            model: resolvedModel.modelId,
+            provider: resolvedModel.provider,
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
+          },
+        },
+      },
+    );
+  };
+
+  const wrappedDoStream = async (options: any) => {
+    const span = startSpan({
+      name: "doStream",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
+      event: {
+        input: processInputAttachments(options),
+        metadata: {
+          model: resolvedModel.modelId,
+          provider: resolvedModel.provider,
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
+        },
+      },
+    });
+
+    const result = await originalDoStream(options);
+
+    // Accumulate streamed content for output logging
+    const output: Record<string, unknown> = {};
+    let text = "";
+    let reasoning = "";
+    const toolCalls: unknown[] = [];
+    let object: unknown = undefined; // For structured output / streamObject
+
+    // Helper to extract text from various chunk formats
+    const extractTextDelta = (chunk: any): string => {
+      // Try all known property names for text deltas
+      if (typeof chunk.textDelta === "string") return chunk.textDelta;
+      if (typeof chunk.delta === "string") return chunk.delta;
+      if (typeof chunk.text === "string") return chunk.text;
+      // For content property (some providers use this)
+      if (typeof chunk.content === "string") return chunk.content;
+      return "";
+    };
+
+    const transformStream = new TransformStream({
+      async transform(chunk, controller) {
+        switch (chunk.type) {
+          case "text-delta":
+            text += extractTextDelta(chunk);
+            break;
+          case "reasoning-delta":
+            // Reasoning chunks use delta or text property
+            if (chunk.delta) {
+              reasoning += chunk.delta;
+            } else if (chunk.text) {
+              reasoning += chunk.text;
+            }
+            break;
+          case "tool-call":
+            toolCalls.push(chunk);
+            break;
+          case "object":
+            // Structured output - capture the final object
+            object = chunk.object;
+            break;
+          case "raw":
+            // Raw chunks may contain text content for structured output / JSON mode
+            // The rawValue often contains the delta text from the provider
+            if (chunk.rawValue) {
+              const rawVal = chunk.rawValue as any;
+              // OpenAI format: rawValue.delta.content or rawValue.choices[0].delta.content
+              if (rawVal.delta?.content) {
+                text += rawVal.delta.content;
+              } else if (rawVal.choices?.[0]?.delta?.content) {
+                text += rawVal.choices[0].delta.content;
+              } else if (typeof rawVal.text === "string") {
+                text += rawVal.text;
+              } else if (typeof rawVal.content === "string") {
+                text += rawVal.content;
+              }
+            }
+            break;
+          case "finish":
+            output.text = text;
+            output.reasoning = reasoning;
+            output.toolCalls = toolCalls;
+            output.finishReason = chunk.finishReason;
+            output.usage = chunk.usage;
+
+            // Include object for structured output if captured
+            if (object !== undefined) {
+              output.object = object;
+            }
+
+            span.log({
+              output: await processOutput(output),
+              metrics: extractTokenMetrics(output),
+            });
+            span.end();
+            break;
+        }
+        controller.enqueue(chunk);
+      },
+    });
+
+    return {
+      ...result,
+      stream: result.stream.pipeThrough(transformStream),
+    };
+  };
+
+  return new Proxy(resolvedModel, {
+    get(target, prop, receiver) {
+      if (prop === "_braintrustWrapped") {
+        return true;
+      }
+      if (prop === "doGenerate") {
+        return wrappedDoGenerate;
+      }
+      if (prop === "doStream" && originalDoStream) {
+        return wrappedDoStream;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+};
+
+const wrapGenerateText = (
+  generateText: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return makeGenerateTextWrapper("generateText", options, generateText, aiSDK);
 };
 
 const wrapGenerateObject = (
   generateObject: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
   return async function wrappedGenerateObject(params: any) {
     return traced(
       async (span) => {
         const result = await generateObject({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
         });
 
+        const output = await processOutput(result, options.denyOutputPaths);
+
         span.log({
-          output: processOutput(result, options.denyOutputPaths),
+          output,
           metrics: extractTokenMetrics(result),
         });
 
@@ -147,10 +418,15 @@ const wrapGenerateObject = (
   };
 };
 
-const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return function wrappedStreamText(params: any) {
+const makeStreamTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  streamText: any,
+  aiSDK?: any,
+) => {
+  const wrapper = function (params: any) {
     const span = startSpan({
-      name: "streamText",
+      name,
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
@@ -172,6 +448,7 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       const result = withCurrent(span, () =>
         streamText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -253,11 +530,22 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       throw error;
     }
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
+};
+
+const wrapStreamText = (
+  streamText: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return makeStreamTextWrapper("streamText", options, streamText, aiSDK);
 };
 
 const wrapStreamObject = (
   streamObject: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
   return function wrappedStreamObject(params: any) {
     const span = startSpan({
@@ -284,6 +572,7 @@ const wrapStreamObject = (
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -574,13 +863,15 @@ const processInputAttachments = (input: any) => {
     processed.messages = input.messages.map(processMessage);
   }
 
-  // Process prompt if it's an object with potential attachments
-  if (
-    input.prompt &&
-    typeof input.prompt === "object" &&
-    !Array.isArray(input.prompt)
-  ) {
-    processed.prompt = processPromptContent(input.prompt);
+  // Process prompt - can be an array of messages (provider-level format) or an object
+  if (input.prompt && typeof input.prompt === "object") {
+    if (Array.isArray(input.prompt)) {
+      // Provider-level format: prompt is an array of messages
+      processed.prompt = input.prompt.map(processMessage);
+    } else {
+      // High-level format: prompt is an object with potential attachments
+      processed.prompt = processPromptContent(input.prompt);
+    }
   }
 
   // Process tools to convert Zod schemas to JSON Schema
@@ -813,6 +1104,7 @@ const extractGetterValues = (obj: any): any => {
   // List of known getters from AI SDK result objects
   const getterNames = [
     "text",
+    "object",
     "finishReason",
     "usage",
     "toolCalls",
