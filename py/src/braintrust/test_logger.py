@@ -20,7 +20,17 @@ from braintrust import (
     logger,
 )
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
-from braintrust.logger import _deep_copy_event, _extract_attachments, parent_context, render_message, render_mustache
+from braintrust.logger import (
+    _deep_copy_event,
+    _extract_attachments,
+    parent_context,
+    render_jinja,
+    render_message,
+    render_mustache,
+    render_prompt_params,
+    render_template,
+    render_templated_object,
+)
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
@@ -484,6 +494,353 @@ class TestLogger(TestCase):
         # Array too short should fail in strict mode
         with self.assertRaises(ValueError):
             prompt.build(items=["only_one"], strict=True)
+
+    def test_render_template_mustache(self):
+        """Test render_template with mustache format."""
+        template = "Hello {{name}}, you are {{age}} years old"
+        data = {"name": "John", "age": 30}
+
+        result = render_template(template, data, template_format="mustache")
+        self.assertEqual(result, "Hello John, you are 30 years old")
+
+    def test_render_template_jinja(self):
+        """Test render_template with jinja format."""
+        template = "Hello {{ name }}, you are {{ age }} years old"
+        data = {"name": "John", "age": 30}
+
+        result = render_template(template, data, template_format="jinja")
+        self.assertEqual(result, "Hello John, you are 30 years old")
+
+    def test_render_template_none(self):
+        """Test render_template with none format (no templating)."""
+        template = "Hello {{name}}, you are {{age}} years old"
+        data = {"name": "John", "age": 30}
+
+        result = render_template(template, data, template_format="none")
+        self.assertEqual(result, template)  # Should return template unchanged
+
+    def test_render_template_default_mustache(self):
+        """Test render_template defaults to mustache format."""
+        template = "Hello {{name}}"
+        data = {"name": "John"}
+
+        result = render_template(template, data)
+        self.assertEqual(result, "Hello John")
+
+    def test_render_template_invalid_format(self):
+        """Test render_template raises error for invalid format."""
+        template = "Hello {{name}}"
+        data = {"name": "John"}
+
+        with self.assertRaises(ValueError) as context:
+            render_template(template, data, template_format="invalid")  # type: ignore
+
+        self.assertIn("Unknown template format", str(context.exception))
+
+    def test_render_jinja_basic(self):
+        """Test render_jinja with basic variables."""
+        template = "Hello {{ name }}, you are {{ age }} years old"
+        data = {"name": "John", "age": 30}
+
+        result = render_jinja(template, data)
+        self.assertEqual(result, "Hello John, you are 30 years old")
+
+    def test_render_jinja_with_filters(self):
+        """Test render_jinja with jinja filters."""
+        template = "Items: {{ items | join(', ') }}"
+        data = {"items": ["apple", "banana", "cherry"]}
+
+        result = render_jinja(template, data)
+        self.assertEqual(result, "Items: apple, banana, cherry")
+
+    def test_render_jinja_with_conditionals(self):
+        """Test render_jinja with jinja conditionals."""
+        template = "{% if age >= 18 %}Adult{% else %}Minor{% endif %}"
+        data = {"age": 25}
+
+        result = render_jinja(template, data)
+        self.assertEqual(result, "Adult")
+
+        data = {"age": 15}
+        result = render_jinja(template, data)
+        self.assertEqual(result, "Minor")
+
+    def test_render_jinja_strict_mode(self):
+        """Test render_jinja with strict mode enabled."""
+        template = "Hello {{ name }}, you are {{ age }} years old"
+        data = {"name": "John"}  # Missing 'age'
+
+        # Without strict mode, missing variables render as empty
+        result = render_jinja(template, data, strict=False)
+        self.assertIn("Hello John", result)
+
+        # With strict mode, missing variables raise error
+        with self.assertRaises(ValueError) as context:
+            render_jinja(template, data, strict=True)
+
+        self.assertIn("Template rendering failed", str(context.exception))
+
+    def test_render_jinja_with_input_key(self):
+        """Test render_jinja handles input key similar to JS SDK."""
+        template = "Hello {{ input.name }}, value: {{ name }}"
+        data = {"name": "John"}
+
+        result = render_jinja(template, data)
+        # Should have both input.name and name available
+        self.assertIn("John", result)
+
+    def test_render_jinja_with_for_loop(self):
+        """Test render_jinja with for loops."""
+        template = "Items: {% for item in items %}{{ item }}{% if not loop.last %}, {% endif %}{% endfor %}"
+        data = {"items": ["apple", "banana", "cherry"]}
+
+        result = render_jinja(template, data)
+        self.assertEqual(result, "Items: apple, banana, cherry")
+
+    def test_render_jinja_with_nested_for_loops(self):
+        """Test render_jinja with nested for loops."""
+        template = "{% for category in categories %}{{ category.name }}: {% for item in category.items %}{{ item }}{% if not loop.last %}, {% endif %}{% endfor %}\n{% endfor %}"
+        data = {
+            "categories": [
+                {"name": "Fruits", "items": ["apple", "banana"]},
+                {"name": "Vegetables", "items": ["carrot", "lettuce"]},
+            ]
+        }
+
+        result = render_jinja(template, data)
+        self.assertIn("Fruits: apple, banana", result)
+        self.assertIn("Vegetables: carrot, lettuce", result)
+
+    def test_render_jinja_with_dict_method_name_conflicts(self):
+        """Test render_jinja with variable names that conflict with dict methods.
+
+        This test would fail if dicts weren't wrapped, because jinja2 would
+        try to access dict methods (like .keys(), .values(), .items(), .get())
+        instead of the actual data values.
+        """
+        template = "Name: {{ name }}, Keys: {{ keys }}, Values: {{ values }}, Items: {{ items }}, Get: {{ get }}"
+        data = {
+            "name": "John",
+            "keys": "test_keys",
+            "values": "test_values",
+            "items": "test_items",
+            "get": "test_get",
+        }
+
+        result = render_jinja(template, data)
+        self.assertIn("Name: John", result)
+        self.assertIn("Keys: test_keys", result)
+        self.assertIn("Values: test_values", result)
+        self.assertIn("Items: test_items", result)
+        self.assertIn("Get: test_get", result)
+
+    def test_render_jinja_with_dict_method_name_in_nested_dict(self):
+        """Test render_jinja with dict method names in nested dicts.
+
+        This ensures the wrapper works recursively for nested structures.
+        """
+        template = "User: {{ user.name }}, Keys: {{ user.keys }}, Items: {{ user.items }}"
+        data = {
+            "user": {
+                "name": "John",
+                "keys": "user_keys",
+                "items": "user_items",
+            }
+        }
+
+        result = render_jinja(template, data)
+        self.assertIn("User: John", result)
+        self.assertIn("Keys: user_keys", result)
+        self.assertIn("Items: user_items", result)
+
+    def test_render_jinja_with_dict_method_name_in_list(self):
+        """Test render_jinja with dict method names in dicts inside lists.
+
+        This ensures dicts inside lists are also properly wrapped.
+        """
+        template = "{% for item in items %}{{ item.name }}: {{ item.keys }}, {{ item.values }}{% endfor %}"
+        data = {
+            "items": [
+                {"name": "first", "keys": "keys_one", "values": "values_one"},
+                {"name": "second", "keys": "keys_two", "values": "values_two"},
+            ]
+        }
+
+        result = render_jinja(template, data)
+        self.assertIn("first: keys_one, values_one", result)
+        self.assertIn("second: keys_two, values_two", result)
+
+    def test_render_templated_object_mustache(self):
+        """Test render_templated_object with mustache format."""
+        obj = {
+            "message": "Hello {{name}}",
+            "items": ["{{item1}}", "{{item2}}"],
+            "nested": {"value": "{{value}}"},
+        }
+        args = {"name": "John", "item1": "apple", "item2": "banana", "value": "test"}
+
+        result = render_templated_object(obj, args, template_format="mustache")
+        self.assertEqual(result["message"], "Hello John")
+        self.assertEqual(result["items"], ["apple", "banana"])
+        self.assertEqual(result["nested"]["value"], "test")
+
+    def test_render_templated_object_jinja(self):
+        """Test render_templated_object with jinja format."""
+        obj = {
+            "message": "Hello {{ name }}",
+            "items": ["{{ item1 }}", "{{ item2 }}"],
+            "nested": {"value": "{{ value }}"},
+        }
+        args = {"name": "John", "item1": "apple", "item2": "banana", "value": "test"}
+
+        result = render_templated_object(obj, args, template_format="jinja")
+        self.assertEqual(result["message"], "Hello John")
+        self.assertEqual(result["items"], ["apple", "banana"])
+        self.assertEqual(result["nested"]["value"], "test")
+
+    def test_render_templated_object_none(self):
+        """Test render_templated_object with none format."""
+        obj = {
+            "message": "Hello {{name}}",
+            "items": ["{{item1}}", "{{item2}}"],
+        }
+        args = {"name": "John"}
+
+        result = render_templated_object(obj, args, template_format="none")
+        # Should return unchanged
+        self.assertEqual(result["message"], "Hello {{name}}")
+        self.assertEqual(result["items"], ["{{item1}}", "{{item2}}"])
+
+    def test_render_prompt_params_with_mustache(self):
+        """Test render_prompt_params with mustache templating in schema."""
+        params = {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "schema",
+                    "schema": '{"type": "object", "properties": {"{{field_name}}": {"type": "string"}}}',
+                },
+            }
+        }
+        args = {"field_name": "user_name"}
+
+        result = render_prompt_params(params, args, template_format="mustache")
+        schema = result["response_format"]["json_schema"]["schema"]
+        if isinstance(schema, str):
+            schema = json.loads(schema)
+        self.assertEqual(schema["properties"]["user_name"]["type"], "string")
+
+    def test_render_prompt_params_with_jinja(self):
+        """Test render_prompt_params with jinja templating in schema."""
+        params = {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "schema",
+                    "schema": '{"type": "object", "properties": {"{{ field_name }}": {"type": "string"}}}',
+                },
+            }
+        }
+        args = {"field_name": "user_name"}
+
+        result = render_prompt_params(params, args, template_format="jinja")
+        schema = result["response_format"]["json_schema"]["schema"]
+        if isinstance(schema, str):
+            schema = json.loads(schema)
+        self.assertEqual(schema["properties"]["user_name"]["type"], "string")
+
+    def test_render_prompt_params_no_response_format(self):
+        """Test render_prompt_params with no response_format."""
+        params = {"temperature": 0.7}
+        args = {"name": "John"}
+
+        result = render_prompt_params(params, args, template_format="mustache")
+        self.assertEqual(result, params)
+
+    def test_prompt_build_with_jinja_format(self):
+        """Test Prompt.build with jinja template format."""
+        prompt = self._create_test_prompt("Hello {{ name }}, you are {{ age }} years old")
+
+        result = prompt.build(template_format="jinja", name="John", age=30)
+        self.assertEqual(result["messages"][0]["content"], "Hello John, you are 30 years old")
+
+    def test_prompt_build_with_none_format(self):
+        """Test Prompt.build with none template format (no templating)."""
+        prompt = self._create_test_prompt("Hello {{name}}, you are {{age}} years old")
+
+        result = prompt.build(template_format="none", name="John", age=30)
+        # Should return template unchanged
+        self.assertEqual(result["messages"][0]["content"], "Hello {{name}}, you are {{age}} years old")
+
+    def test_prompt_build_defaults_to_mustache(self):
+        """Test Prompt.build defaults to mustache format."""
+        prompt = self._create_test_prompt("Hello {{name}}")
+
+        result = prompt.build(name="John")
+        self.assertEqual(result["messages"][0]["content"], "Hello John")
+
+    def test_prompt_build_completion_with_jinja(self):
+        """Test Prompt.build with completion prompt and jinja format."""
+        from braintrust.prompt import PromptCompletionBlock, PromptData, PromptSchema
+
+        prompt_schema = PromptSchema(
+            id="test-id",
+            project_id="test-project",
+            _xact_id="test-xact",
+            name="test-prompt",
+            slug="test-prompt",
+            description="test",
+            prompt_data=PromptData(
+                prompt=PromptCompletionBlock(content="Hello {{ name }}, age {{ age }}"),
+                options={"model": "gpt-4o"},
+            ),
+            tags=None,
+        )
+        lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
+        prompt = Prompt(lazy_prompt, {}, False)
+
+        result = prompt.build(template_format="jinja", name="John", age=30)
+        self.assertEqual(result["prompt"], "Hello John, age 30")
+
+    def test_prompt_build_chat_with_tools_jinja(self):
+        """Test Prompt.build with chat prompt, tools, and jinja format."""
+        from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+
+        prompt_schema = PromptSchema(
+            id="test-id",
+            project_id="test-project",
+            _xact_id="test-xact",
+            name="test-prompt",
+            slug="test-prompt",
+            description="test",
+            prompt_data=PromptData(
+                prompt=PromptChatBlock(
+                    messages=[PromptMessage(role="user", content="Hello {{ name }}")],
+                    tools='{"type": "function", "function": {"name": "{{ function_name }}"}}',
+                ),
+                options={"model": "gpt-4o"},
+            ),
+            tags=None,
+        )
+        lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
+        prompt = Prompt(lazy_prompt, {}, False)
+
+        result = prompt.build(template_format="jinja", name="John", function_name="test_func")
+        self.assertEqual(result["messages"][0]["content"], "Hello John")
+        tools = result["tools"]
+        self.assertEqual(tools["function"]["name"], "test_func")
+
+    def test_prompt_build_jinja_strict_mode(self):
+        """Test Prompt.build with jinja format and strict mode."""
+        prompt = self._create_test_prompt("Hello {{ name }}, task {{ task }}")
+
+        # Valid build
+        result = prompt.build(template_format="jinja", strict=True, name="John", task="coding")
+        self.assertEqual(result["messages"][0]["content"], "Hello John, task coding")
+
+        # Missing variable should raise error in strict mode
+        with self.assertRaises(ValueError):
+            prompt.build(template_format="jinja", strict=True, name="John")  # Missing 'task'
 
     def test_render_message_with_file_content_parts(self):
         """Test render_message with mixed text, image, and file content parts including all file fields."""
