@@ -53,9 +53,17 @@ export async function runSpanSmokeTest(
     projectName,
     projectId: PROJECT_ID,
   });
-
   const span = logger.startSpan({ name: SPAN_NAME });
   span.log(SPAN_PAYLOAD);
+  span.log({
+    input: {
+      type: "chat_completion",
+      transcript: new JSONAttachment(transcript, {
+        filename: "conversation_transcript.json",
+        pretty: true,
+      }),
+    },
+  });
   span.end();
 
   await logger.flush();
