@@ -20,8 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        node-version: [22]
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
@@ -115,7 +115,7 @@ jobs:
       fail-fast: false
       matrix:
         integration: [otel-v1, span]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     steps:
@@ -196,7 +196,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     steps:
@@ -250,7 +250,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     steps:
@@ -352,7 +352,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
     steps:
