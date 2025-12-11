@@ -1,5 +1,6 @@
 import nodeModulesPaths from "../jest/nodeModulesPaths";
 import path, { dirname } from "path";
+import { pathToFileURL } from "url";
 import { _internalGetGlobalState } from "../logger";
 import { EvaluatorFile } from "../framework";
 
@@ -41,7 +42,7 @@ export function loadModule({
   });
 }
 
-// Use dynamic import with a data URL to execute ESM output (e.g., for top-level await)
+// Use dynamic import to execute ESM output (e.g., for top-level await)
 // while keeping the caller in CJS. This avoids TypeScript downleveling of `import()`.
 async function dynamicImport(specifier: string): Promise<unknown> {
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
@@ -51,12 +52,12 @@ async function dynamicImport(specifier: string): Promise<unknown> {
   return await importer(specifier);
 }
 
-export async function loadModuleEsm({
+export async function loadModuleEsmFromFile({
   inFile,
-  moduleText,
+  modulePath,
 }: {
   inFile: string;
-  moduleText: string;
+  modulePath: string;
 }): Promise<EvaluatorFile> {
   return await evalWithModuleContext(inFile, async () => {
     globalThis._evals = {
@@ -68,8 +69,7 @@ export async function loadModuleEsm({
     globalThis._lazy_load = true;
     globalThis.__inherited_braintrust_state = _internalGetGlobalState();
 
-    const base64 = Buffer.from(moduleText, "utf8").toString("base64");
-    const url = `data:text/javascript;base64,${base64}`;
+    const url = pathToFileURL(modulePath).href;
     await dynamicImport(url);
     return { ...globalThis._evals };
   });

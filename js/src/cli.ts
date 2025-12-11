@@ -45,7 +45,7 @@ import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { uploadHandleBundles } from "./functions/upload";
-import { loadModule, loadModuleEsm } from "./functions/load-module";
+import { loadModule, loadModuleEsmFromFile } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs, type BundleFormat } from "./cli-util/types";
 import { pullCommand } from "./cli-util/pull";
@@ -104,7 +104,11 @@ async function evaluateBuildResults(
   }
   const moduleText = buildResult.outputFiles[0].text;
   if (bundleFormat === "esm") {
-    return await loadModuleEsm({ inFile, moduleText });
+    const srcDir = path.dirname(inFile);
+    const srcBase = path.basename(inFile, path.extname(inFile));
+    const runtimePath = path.join(srcDir, `.braintrust-eval-${srcBase}.mjs`);
+    await fs.promises.writeFile(runtimePath, moduleText, "utf8");
+    return await loadModuleEsmFromFile({ inFile, modulePath: runtimePath });
   }
   return loadModule({ inFile, moduleText });
 }
@@ -823,17 +827,11 @@ function buildOpts({
   bundleFormat?: BundleFormat;
 }): esbuild.BuildOptions {
   const effectiveFormat = bundleFormat ?? DEFAULT_BUNDLE_FORMAT;
-  const plugins =
-    effectiveFormat === "esm"
-      ? [
-          nativeNodeModulesPlugin,
-          ...(argPlugins || []).map((fn) => fn(fileName)),
-        ]
-      : [
-          nativeNodeModulesPlugin,
-          createMarkKnownPackagesExternalPlugin(externalPackages),
-          ...(argPlugins || []).map((fn) => fn(fileName)),
-        ];
+  const plugins = [
+    nativeNodeModulesPlugin,
+    createMarkKnownPackagesExternalPlugin(externalPackages),
+    ...(argPlugins || []).map((fn) => fn(fileName)),
+  ];
   return {
     entryPoints: [fileName],
     bundle: true,
@@ -844,8 +842,7 @@ function buildOpts({
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
     tsconfig,
-    external:
-      effectiveFormat === "esm" ? ["fsevents"] : ["node_modules/*", "fsevents"],
+    external: ["node_modules/*", "fsevents"],
     plugins,
     format: effectiveFormat,
   };
@@ -889,8 +886,12 @@ export async function initializeHandles({
     process.exit(0);
   }
 
-  const tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
-  // fs.mkdirSync(tmpDir, { recursive: true });
+  const tmpDir = path.join(
+    process.cwd(),
+    ".braintrust-evals",
+    `btevals-${uuidv4().slice(0, 8)}`,
+  );
+  fs.mkdirSync(tmpDir, { recursive: true });
 
   const initPromises = [];
   for (const file of Object.keys(files)) {
