@@ -4803,7 +4803,7 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-export const INTERNAL_BTQL_LIMIT = 1000;
+export const DEFAULT_FETCH_BATCH_SIZE = 1000;
 const MAX_BTQL_ITERATIONS = 10000;
 
 class ObjectFetcher<RecordType>
@@ -4827,11 +4827,12 @@ class ObjectFetcher<RecordType>
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
-  private async *fetchRecordsFromApi(): AsyncGenerator<
-    WithTransactionId<RecordType>
-  > {
+  private async *fetchRecordsFromApi(
+    batchSize: number | undefined,
+  ): AsyncGenerator<WithTransactionId<RecordType>> {
     const state = await this.getState();
     const objectId = await this.id;
+    const limit = batchSize ?? DEFAULT_FETCH_BATCH_SIZE;
     let cursor = undefined;
     let iterations = 0;
     while (true) {
@@ -4859,7 +4860,7 @@ class ObjectFetcher<RecordType>
               ],
             },
             cursor,
-            limit: INTERNAL_BTQL_LIMIT,
+            limit,
           },
           use_columnstore: false,
           brainstore_realtime: true,
@@ -4891,7 +4892,16 @@ class ObjectFetcher<RecordType>
     }
   }
 
-  async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
+  /**
+   * Fetch all records from the object.
+   *
+   * @param options Optional parameters for fetching.
+   * @param options.batchSize The number of records to fetch per request. Defaults to 1000.
+   * @returns An async generator of records.
+   */
+  async *fetch(options?: {
+    batchSize?: number;
+  }): AsyncGenerator<WithTransactionId<RecordType>> {
     if (this._fetchedData !== undefined) {
       for (const record of this._fetchedData) {
         yield record;
@@ -4899,7 +4909,7 @@ class ObjectFetcher<RecordType>
       return;
     }
 
-    for await (const record of this.fetchRecordsFromApi()) {
+    for await (const record of this.fetchRecordsFromApi(options?.batchSize)) {
       yield record;
     }
   }
@@ -4908,10 +4918,10 @@ class ObjectFetcher<RecordType>
     return this.fetch();
   }
 
-  async fetchedData() {
+  async fetchedData(options?: { batchSize?: number }) {
     if (this._fetchedData === undefined) {
       const data: WithTransactionId<RecordType>[] = [];
-      for await (const record of this.fetchRecordsFromApi()) {
+      for await (const record of this.fetchRecordsFromApi(options?.batchSize)) {
         data.push(record);
       }
       this._fetchedData = data;
@@ -4923,12 +4933,12 @@ class ObjectFetcher<RecordType>
     this._fetchedData = undefined;
   }
 
-  public async version() {
+  public async version(options?: { batchSize?: number }) {
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
       let maxVersion: string | undefined = undefined;
-      for await (const record of this.fetch()) {
+      for await (const record of this.fetch(options)) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
         if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
@@ -5331,8 +5341,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     Input,
     Expected,
     Metadata = DefaultMetadataType,
-  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
-    const records = this.fetch();
+  >(options?: {
+    batchSize?: number;
+  }): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
+    const records = this.fetch(options);
 
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {

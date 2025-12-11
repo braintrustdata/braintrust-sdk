@@ -157,6 +157,9 @@ importers:
       openai:
         specifier: ^6.3.0
         version: 6.4.0(zod@3.25.76)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
 
   js:
     dependencies:

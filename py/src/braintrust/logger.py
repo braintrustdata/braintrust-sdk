@@ -2539,7 +2539,7 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-INTERNAL_BTQL_LIMIT = 1000
+DEFAULT_FETCH_BATCH_SIZE = 1000
 MAX_BTQL_ITERATIONS = 10000
 
 
@@ -2566,7 +2566,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         self._fetched_data: Optional[List[TMapping]] = None
         self._internal_btql = _internal_btql
 
-    def fetch(self) -> Iterator[TMapping]:
+    def fetch(self, batch_size: Optional[int] = None) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -2579,9 +2579,10 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             print(record)
         ```
 
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
         :returns: An iterator over the records.
         """
-        return ObjectIterator(self._refetch)
+        return ObjectIterator(lambda: self._refetch(batch_size=batch_size))
 
     def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
@@ -2600,8 +2601,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     @abstractmethod
     def id(self) -> str: ...
 
-    def _refetch(self) -> List[TMapping]:
+    def _refetch(self, batch_size: Optional[int] = None) -> List[TMapping]:
         state = self._get_state()
+        limit = batch_size if batch_size is not None else DEFAULT_FETCH_BATCH_SIZE
         if self._fetched_data is None:
             cursor = None
             data = None
@@ -2626,7 +2628,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 ],
                             },
                             "cursor": cursor,
-                            "limit": INTERNAL_BTQL_LIMIT,
+                            "limit": limit,
                             **(self._internal_btql or {}),
                         },
                         "use_columnstore": False,
@@ -3777,8 +3779,14 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         self._lazy_metadata.get()
         return self.state
 
-    def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
-        return ExperimentDatasetIterator(self.fetch())
+    def as_dataset(self, batch_size: Optional[int] = None) -> Iterator[_ExperimentDatasetEvent]:
+        """
+        Return the experiment's data as a dataset iterator.
+
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
+        :returns: An iterator over the experiment data as dataset records.
+        """
+        return ExperimentDatasetIterator(self.fetch(batch_size=batch_size))
 
 
 _EXEC_COUNTER_LOCK = threading.Lock()
