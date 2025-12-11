@@ -1,6 +1,11 @@
-import { initLogger, JSONAttachment } from "braintrust";
+import { initLogger, JSONAttachment, _exportsForTestingOnly } from "braintrust";
 
 test("simple_span_example runs successfully via Jest", async () => {
+  _exportsForTestingOnly.setInitialTestState();
+  await _exportsForTestingOnly.simulateLoginForTests();
+
+  const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
   const logger = initLogger({
     projectName: "otel-simple-example",
     projectId: "otel-simple-example",
@@ -38,4 +43,19 @@ test("simple_span_example runs successfully via Jest", async () => {
   span.end();
 
   await logger.flush();
+
+  const spans = await backgroundLogger.drain();
+
+  if (spans.length === 0) {
+    throw new Error("No spans were captured by the background logger");
+  }
+
+  const spanEvent = spans[0];
+
+  expect(spanEvent.input).toEqual("What is the capital of France?");
+  expect(spanEvent.output).toEqual("Paris");
+  expect(spanEvent.expected).toEqual("Paris");
+
+  await _exportsForTestingOnly.clearTestBackgroundLogger();
+  await _exportsForTestingOnly.simulateLogoutForTests();
 });
