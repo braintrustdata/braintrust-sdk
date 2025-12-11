@@ -77,6 +77,8 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
         return wrapChatCompletion(baseVal.bind(target));
       } else if (name === "parse") {
         return wrapBetaChatCompletionParse(baseVal.bind(target));
+      } else if (name === "stream") {
+        return wrapBetaChatCompletionStream(baseVal.bind(target));
       }
       return baseVal;
     },

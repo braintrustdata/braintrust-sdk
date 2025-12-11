@@ -941,7 +941,7 @@ async function testStreamingStructuredOutput() {
         features: z.array(z.string()),
       });
 
-      const stream = client.beta.chat.completions.stream({
+      const stream = client.chat.completions.stream({
         model: "gpt-4o",
         max_tokens: 500,
         messages: [
