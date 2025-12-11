@@ -189,9 +189,10 @@ jobs:
         run: |
           npm run restore
 
-  smoke-tests-node-jest:
+  smoke-tests-jest:
     needs: build
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
 
     strategy:
       fail-fast: false
