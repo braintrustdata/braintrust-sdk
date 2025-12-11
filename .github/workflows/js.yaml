@@ -192,7 +192,6 @@ jobs:
   smoke-tests-jest:
     needs: build
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
 
     strategy:
       fail-fast: false
@@ -234,6 +233,7 @@ jobs:
 
       - name: Run Jest span smoke test
         working-directory: js/smoke/tests/span-jest
+        continue-on-error: true
         shell: bash
         run: |
           npm test
