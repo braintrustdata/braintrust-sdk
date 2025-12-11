@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# type: ignore
 """
 Example showing how to migrate LangSmith evaluate() to Braintrust.
 
@@ -33,41 +34,37 @@ from langsmith import Client, traceable
 # Define a target function (the function being evaluated)
 # LangSmith requires the parameter to be named 'inputs' (or 'attachments'/'metadata')
 @traceable(name="multiply")
-def multiply(inputs: dict) -> int:
-    """Multiply two numbers."""
+def multiply(inputs: dict, **kwargs) -> int:
+    """Multiply two numbers.
+
+    Args:
+        inputs: Dictionary with 'x' and 'y' keys
+        **kwargs: Additional arguments (e.g., langsmith_extra from LangSmith)
+    """
     return inputs["x"] * inputs["y"]
 
 
 # Define LangSmith-style evaluators
-def _unwrap_output(value):
-    """Unwrap output from dict format if needed (LangSmith requires dict outputs)."""
-    if isinstance(value, dict) and "output" in value:
-        return value["output"]
-    return value
-
-
-def exact_match_evaluator(run, example):
+# LangSmith evaluators use signature: (inputs, outputs, reference_outputs) -> bool | dict
+# When target returns a plain value, LangSmith wraps it as {"output": value}
+def exact_match_evaluator(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
     """
     LangSmith-style evaluator that checks for exact match.
-
-    Args:
-        run: Has .outputs attribute with the function's return value
-        example: Has .inputs and .outputs attributes from the dataset
     """
-    expected = _unwrap_output(example.outputs)
-    actual = _unwrap_output(run.outputs)
+    expected = reference_outputs["output"]
+    actual = outputs["output"]
     return {
         "key": "exact_match",
         "score": 1.0 if actual == expected else 0.0,
     }
 
 
-def range_evaluator(run, example):
+def range_evaluator(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
     """
     LangSmith-style evaluator that checks if result is in expected range.
     """
-    actual = _unwrap_output(run.outputs)
-    expected = _unwrap_output(example.outputs)
+    actual = outputs["output"]
+    expected = reference_outputs["output"]
     # Check if within 10% of expected
     if expected == 0:
         score = 1.0 if actual == 0 else 0.0
@@ -89,22 +86,39 @@ def main():
     # Create a LangSmith client (patched to use Braintrust)
     client = Client()
 
-    # Define test data in LangSmith format
-    test_data = [
-        {"inputs": {"x": 2, "y": 3}, "outputs": 6},
-        {"inputs": {"x": 5, "y": 5}, "outputs": 25},
-        {"inputs": {"x": 10, "y": 0}, "outputs": 0},
-        {"inputs": {"x": 7, "y": 8}, "outputs": 56},
-    ]
+    # Create a dataset in LangSmith (proper LangSmith API usage)
+    dataset_name = "multiply-dataset-example"
 
+    # Try to get or create the dataset
+    try:
+        dataset = client.read_dataset(dataset_name=dataset_name)
+        print(f"Using existing dataset: {dataset_name}")
+    except Exception:
+        # Create new dataset if it doesn't exist
+        dataset = client.create_dataset(dataset_name=dataset_name, description="Multiplication test dataset")
+        print(f"Created new dataset: {dataset_name}")
+
+        # Create examples in the dataset (proper LangSmith API)
+        client.create_examples(
+            dataset_id=dataset.id,
+            examples=[
+                {"inputs": {"x": 2, "y": 3}, "outputs": {"output": 6}},
+                {"inputs": {"x": 5, "y": 5}, "outputs": {"output": 25}},
+                {"inputs": {"x": 10, "y": 0}, "outputs": {"output": 0}},
+                {"inputs": {"x": 7, "y": 8}, "outputs": {"output": 56}},
+            ],
+        )
+        print(f"Created {4} examples in dataset")
+
+    print()
     print("Running evaluation...")
-    print(f"Test cases: {len(test_data)}")
     print()
 
     # Run evaluation using LangSmith's API (redirects to Braintrust)
+    # Pass the dataset name - this is valid LangSmith API usage
     client.evaluate(
         multiply,  # Target function
-        data=test_data,  # Test dataset
+        data=dataset_name,  # Dataset name (valid LangSmith API)
         evaluators=[exact_match_evaluator, range_evaluator],
         experiment_prefix="multiply-test",
         description="Testing multiplication function",
