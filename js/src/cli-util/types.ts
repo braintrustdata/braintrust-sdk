@@ -1,5 +1,7 @@
 import { type IfExistsType as IfExists } from "../generated_types";
 
+export type BundleFormat = "cjs" | "esm";
+
 export interface CommonArgs {
   verbose: boolean;
 }
@@ -15,6 +17,7 @@ export interface CompileArgs {
   tsconfig?: string;
   terminate_on_failure: boolean;
   external_packages?: string[];
+  bundle_format?: BundleFormat;
 }
 
 export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {

@@ -40,3 +40,37 @@ export function loadModule({
     return { ...globalThis._evals };
   });
 }
+
+// Use dynamic import with a data URL to execute ESM output (e.g., for top-level await)
+// while keeping the caller in CJS. This avoids TypeScript downleveling of `import()`.
+async function dynamicImport(specifier: string): Promise<unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const importer = new Function("specifier", "return import(specifier);") as (
+    specifier: string,
+  ) => Promise<unknown>;
+  return await importer(specifier);
+}
+
+export async function loadModuleEsm({
+  inFile,
+  moduleText,
+}: {
+  inFile: string;
+  moduleText: string;
+}): Promise<EvaluatorFile> {
+  return await evalWithModuleContext(inFile, async () => {
+    globalThis._evals = {
+      functions: [],
+      prompts: [],
+      evaluators: {},
+      reporters: {},
+    };
+    globalThis._lazy_load = true;
+    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
+
+    const base64 = Buffer.from(moduleText, "utf8").toString("base64");
+    const url = `data:text/javascript;base64,${base64}`;
+    await dynamicImport(url);
+    return { ...globalThis._evals };
+  });
+}

@@ -45,9 +45,9 @@ import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { uploadHandleBundles } from "./functions/upload";
-import { loadModule } from "./functions/load-module";
+import { loadModule, loadModuleEsm } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
-import { RunArgs } from "./cli-util/types";
+import { RunArgs, type BundleFormat } from "./cli-util/types";
 import { pullCommand } from "./cli-util/pull";
 import { runDevServer } from "../dev/server";
 
@@ -65,6 +65,8 @@ const INCLUDE_EVAL = [
 const INCLUDE_BUNDLE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"];
 const EXCLUDE = ["**/node_modules/**", "**/dist/**", "**/build/**"];
 const OUT_EXT = "js";
+
+const DEFAULT_BUNDLE_FORMAT: BundleFormat = "cjs";
 
 configureNode();
 
@@ -92,14 +94,18 @@ export interface FileHandle {
   destroy: () => Promise<void>;
 }
 
-function evaluateBuildResults(
+async function evaluateBuildResults(
   inFile: string,
   buildResult: esbuild.BuildResult,
-): EvaluatorFile | null {
-  if (!buildResult.outputFiles) {
+  bundleFormat: BundleFormat,
+): Promise<EvaluatorFile | null> {
+  if (!buildResult.outputFiles || buildResult.outputFiles.length === 0) {
     return null;
   }
   const moduleText = buildResult.outputFiles[0].text;
+  if (bundleFormat === "esm") {
+    return await loadModuleEsm({ inFile, moduleText });
+  }
   return loadModule({ inFile, moduleText });
 }
 
@@ -212,7 +218,11 @@ function buildWatchPluginForEvaluator(
           return;
         }
 
-        const evalResult = evaluateBuildResults(inFile, result);
+        const evalResult = await evaluateBuildResults(
+          inFile,
+          result,
+          opts.bundleFormat ?? DEFAULT_BUNDLE_FORMAT,
+        );
         if (!evalResult) {
           return;
         }
@@ -304,6 +314,7 @@ async function initFile({
   tsconfig,
   plugins,
   externalPackages,
+  bundleFormat,
 }: {
   inFile: string;
   outFile: string;
@@ -311,6 +322,7 @@ async function initFile({
   tsconfig?: string;
   plugins?: PluginMaker[];
   externalPackages?: string[];
+  bundleFormat: BundleFormat;
 }): Promise<FileHandle> {
   const buildOptions = buildOpts({
     fileName: inFile,
@@ -318,6 +330,7 @@ async function initFile({
     tsconfig,
     plugins,
     externalPackages,
+    bundleFormat,
   });
   const ctx = await esbuild.context(buildOptions);
 
@@ -335,7 +348,11 @@ async function initFile({
             sourceFile: inFile,
           };
         }
-        const evaluator = evaluateBuildResults(inFile, result) || {
+        const evaluator = (await evaluateBuildResults(
+          inFile,
+          result,
+          bundleFormat,
+        )) || {
           functions: [],
           prompts: [],
           evaluators: {},
@@ -355,6 +372,7 @@ async function initFile({
           tsconfig,
           plugins,
           externalPackages,
+          bundleFormat,
         }),
         external: [],
         write: true,
@@ -398,6 +416,7 @@ interface EvaluatorOpts {
   jsonl: boolean;
   filters: Filter[];
   progressReporter: ProgressReporter;
+  bundleFormat: BundleFormat;
 }
 
 export function handleBuildFailure({
@@ -794,18 +813,27 @@ function buildOpts({
   tsconfig,
   plugins: argPlugins,
   externalPackages,
+  bundleFormat,
 }: {
   fileName: string;
   outFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
   externalPackages?: string[];
+  bundleFormat?: BundleFormat;
 }): esbuild.BuildOptions {
-  const plugins = [
-    nativeNodeModulesPlugin,
-    createMarkKnownPackagesExternalPlugin(externalPackages),
-    ...(argPlugins || []).map((fn) => fn(fileName)),
-  ];
+  const effectiveFormat = bundleFormat ?? DEFAULT_BUNDLE_FORMAT;
+  const plugins =
+    effectiveFormat === "esm"
+      ? [
+          nativeNodeModulesPlugin,
+          ...(argPlugins || []).map((fn) => fn(fileName)),
+        ]
+      : [
+          nativeNodeModulesPlugin,
+          createMarkKnownPackagesExternalPlugin(externalPackages),
+          ...(argPlugins || []).map((fn) => fn(fileName)),
+        ];
   return {
     entryPoints: [fileName],
     bundle: true,
@@ -816,8 +844,10 @@ function buildOpts({
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
     tsconfig,
-    external: ["node_modules/*", "fsevents"],
-    plugins: plugins,
+    external:
+      effectiveFormat === "esm" ? ["fsevents"] : ["node_modules/*", "fsevents"],
+    plugins,
+    format: effectiveFormat,
   };
 }
 
@@ -827,12 +857,14 @@ export async function initializeHandles({
   plugins,
   tsconfig,
   externalPackages,
+  bundleFormat,
 }: {
   files: string[];
   mode: "eval" | "bundle";
   plugins?: PluginMaker[];
   tsconfig?: string;
   externalPackages?: string[];
+  bundleFormat?: BundleFormat;
 }): Promise<Record<string, FileHandle>> {
   const files: Record<string, boolean> = {};
   const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
@@ -876,6 +908,7 @@ export async function initializeHandles({
         plugins,
         tsconfig,
         externalPackages,
+        bundleFormat: bundleFormat ?? DEFAULT_BUNDLE_FORMAT,
       }),
     );
   }
@@ -901,6 +934,9 @@ async function run(args: RunArgs) {
     }
   }
 
+  const bundleFormat: BundleFormat =
+    args.bundle_format ?? DEFAULT_BUNDLE_FORMAT;
+
   const evaluatorOpts: EvaluatorOpts = {
     verbose: args.verbose,
     apiKey: args.api_key,
@@ -917,6 +953,7 @@ async function run(args: RunArgs) {
       : new BarProgressReporter(),
     filters: args.filter ? parseFilters(args.filter) : [],
     list: !!args.list,
+    bundleFormat,
   };
 
   if (args.list && args.watch) {
@@ -937,6 +974,7 @@ async function run(args: RunArgs) {
     tsconfig: args.tsconfig,
     plugins,
     externalPackages: args.external_packages,
+    bundleFormat,
   });
 
   if (args.dev) {
@@ -1011,6 +1049,10 @@ function addCompileArgs(parser: ArgumentParser) {
   parser.add_argument("--external-packages", {
     nargs: "*",
     help: "Additional packages to mark as external during bundling. These packages will not be included in the bundle and must be available at runtime. Use this to resolve bundling errors with native modules or problematic dependencies. Example: --external-packages sqlite3 fsevents @mapbox/node-pre-gyp",
+  });
+  parser.add_argument("--bundle-format", {
+    choices: ["cjs", "esm"],
+    help: "Module format to use when bundling code. Defaults to cjs.",
   });
 }
 
