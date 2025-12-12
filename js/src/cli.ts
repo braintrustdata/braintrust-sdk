@@ -388,6 +388,11 @@ async function initFile({
         external: isEsmBundle ? baseOptions.external : [],
         write: true,
         plugins: isEsmBundle ? baseOptions.plugins : [],
+        banner: isEsmBundle
+          ? {
+              js: "// @bt-esm\n",
+            }
+          : baseOptions.banner,
         minify: true,
         sourcemap: true,
       };
