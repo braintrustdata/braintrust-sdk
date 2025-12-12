@@ -1317,7 +1317,56 @@ export function extractTokenMetrics(result: any): Record<string, number> {
       usage.completionAudioTokens || usage.completion_audio_tokens;
   }
 
+  // Extract cost from providerMetadata.gateway.cost (e.g., from Vercel AI Gateway)
+  // For multi-step results, sum up costs from all steps
+  const cost = extractCostFromResult(result);
+  if (cost !== undefined) {
+    metrics.estimated_cost = cost;
+  }
+
   return metrics;
+}
+
+function extractCostFromResult(result: any): number | undefined {
+  // Check for cost in steps (multi-step results like generateText with tools)
+  if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
+    let totalCost = 0;
+    let foundCost = false;
+    for (const step of result.steps) {
+      const stepCost = parseGatewayCost(step?.providerMetadata?.gateway?.cost);
+      if (stepCost !== undefined) {
+        totalCost += stepCost;
+        foundCost = true;
+      }
+    }
+    if (foundCost) {
+      return totalCost;
+    }
+  }
+
+  // Check for cost directly on result.providerMetadata (single-step results)
+  const directCost = parseGatewayCost(result?.providerMetadata?.gateway?.cost);
+  if (directCost !== undefined) {
+    return directCost;
+  }
+
+  return undefined;
+}
+
+function parseGatewayCost(cost: unknown): number | undefined {
+  if (cost === undefined || cost === null) {
+    return undefined;
+  }
+  if (typeof cost === "number") {
+    return cost;
+  }
+  if (typeof cost === "string") {
+    const parsed = parseFloat(cost);
+    if (!isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
 }
 
 const deepCopy = (obj: Record<string, unknown>) => {
