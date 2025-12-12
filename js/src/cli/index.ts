@@ -17,7 +17,8 @@ import {
   Experiment,
   BaseMetadata,
   Dataset,
-} from "./logger";
+  ExperimentSummary,
+} from "../logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -39,21 +40,36 @@ import {
   logError,
   parseFilters,
   runEvaluator,
-  warning,
-} from "./framework";
-import { configureNode } from "./node";
-import { isEmpty } from "./util";
+  EvalResultWithSummary,
+} from "../framework";
+import { fancyReporter, warning } from "./reporters";
+import { configureNode } from "../node";
+import { isEmpty } from "../util";
 import { loadEnvConfig } from "@next/env";
+export {
+  BuildSuccess,
+  BuildFailure,
+  BtBuildResult,
+  FileHandle,
+  EvaluatorState,
+} from "./types";
+import type {
+  BuildSuccess,
+  BuildFailure,
+  BtBuildResult,
+  FileHandle,
+  EvaluatorState,
+} from "./types";
 import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
-import { bundleCommand } from "./cli-util/bundle";
-import { RunArgs } from "./cli-util/types";
-import { pullCommand } from "./cli-util/pull";
-import { runDevServer } from "../dev/server";
+import { bundleCommand } from "./util/bundle";
+import { RunArgs } from "./util/types";
+import { pullCommand } from "./util/pull";
+import { runDevServer } from "../../dev/server";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
-const { version } = require("../package.json");
+const { version } = require("../../package.json");
 
 // TODO: This could be loaded from configuration
 const INCLUDE_EVAL = [
@@ -67,30 +83,6 @@ const EXCLUDE = ["**/node_modules/**", "**/dist/**", "**/build/**"];
 const OUT_EXT = "js";
 
 configureNode();
-
-export interface BuildSuccess {
-  type: "success";
-  result: esbuild.BuildResult;
-  evaluator: EvaluatorFile;
-  sourceFile: string;
-}
-
-export interface BuildFailure {
-  type: "failure";
-  error: Error;
-  sourceFile: string;
-}
-
-export type BtBuildResult = BuildSuccess | BuildFailure;
-export interface FileHandle {
-  inFile: string;
-  outFile: string;
-  bundleFile?: string;
-  rebuild: () => Promise<BtBuildResult>;
-  bundle: () => Promise<esbuild.BuildResult>;
-  watch: () => void;
-  destroy: () => Promise<void>;
-}
 
 function evaluateBuildResults(
   inFile: string,
@@ -155,7 +147,7 @@ function resolveReporter(
   } else if (!isEmpty(reporter)) {
     return reporter;
   } else if (Object.keys(reporters).length === 0) {
-    return defaultReporter;
+    return fancyReporter;
   } else if (Object.keys(reporters).length === 1) {
     return reporters[Object.keys(reporters)[0]];
   } else {
@@ -370,17 +362,6 @@ async function initFile({
     destroy: async () => {
       await ctx.dispose();
     },
-  };
-}
-
-export interface EvaluatorState {
-  evaluators: {
-    sourceFile: string;
-    evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
-    reporter: string | ReporterDef<unknown> | undefined;
-  }[];
-  reporters: {
-    [reporter: string]: ReporterDef<unknown>;
   };
 }
 
@@ -721,7 +702,7 @@ async function collectFiles(
   return files;
 }
 
-import { createMarkKnownPackagesExternalPlugin } from "./cli-util/external-packages-plugin";
+import { createMarkKnownPackagesExternalPlugin } from "./util/external-packages-plugin";
 
 // Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
 const nativeNodeModulesPlugin = {

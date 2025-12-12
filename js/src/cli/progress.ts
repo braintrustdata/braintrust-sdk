@@ -1,6 +1,11 @@
 import chalk from "chalk";
 import * as cliProgress from "cli-progress";
 
+import type { ProgressReporter } from "../progress/types";
+
+export type { ProgressReporter } from "../progress/types";
+export { SimpleProgressReporter } from "../progress/simple";
+
 const MAX_NAME_LENGTH = 40;
 
 function fitNameToSpaces(name: string, length: number) {
@@ -9,22 +14,6 @@ function fitNameToSpaces(name: string, length: number) {
     return padded;
   }
   return padded.substring(0, length - 3) + "...";
-}
-
-export interface ProgressReporter {
-  start: (name: string, total: number) => void;
-  stop: () => void;
-  increment: (name: string) => void;
-  setTotal?: (name: string, total: number) => void;
-}
-
-export class SimpleProgressReporter implements ProgressReporter {
-  public start(name: string, _total: number) {
-    console.log(`Running evaluator ${name}`);
-  }
-  public stop() {}
-  public increment(_name: string) {}
-  public setTotal(_name: string, _total: number) {}
 }
 
 export class BarProgressReporter implements ProgressReporter {

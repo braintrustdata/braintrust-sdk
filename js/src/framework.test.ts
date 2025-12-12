@@ -15,7 +15,7 @@ import {
 } from "./framework";
 import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
-import { BarProgressReporter, type ProgressReporter } from "./progress";
+import type { ProgressReporter } from "./progress/types";
 import { InternalAbortError } from "./util";
 
 beforeAll(() => {
@@ -294,7 +294,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: () => ({ error_score: 1 }),
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
             true,
