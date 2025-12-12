@@ -17,6 +17,7 @@ export {
   ReporterBody,
   Reporter,
   SpanContext,
+  Trace,
   buildLocalSummary,
   reportFailures,
   runEvaluator,
