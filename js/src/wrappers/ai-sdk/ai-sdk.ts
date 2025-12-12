@@ -134,6 +134,9 @@ const makeGenerateTextWrapper = (
   aiSDK?: any,
 ) => {
   const wrapper = async function (params: any) {
+    const { model: initialModel, provider: initialProvider } =
+      serializeModelWithProvider(params.model);
+
     return traced(
       async (span) => {
         const result = await generateText({
@@ -142,9 +145,22 @@ const makeGenerateTextWrapper = (
           tools: wrapTools(params.tools),
         });
 
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
+
         span.log({
           output: await processOutput(result, options.denyOutputPaths),
           metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
         });
 
         return result;
@@ -157,7 +173,8 @@ const makeGenerateTextWrapper = (
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: serializeModel(params.model),
+            model: initialModel,
+            ...(initialProvider ? { provider: initialProvider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -213,14 +230,31 @@ const wrapModel = (model: any, ai?: any): any => {
   const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
   const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
 
+  const { model: initialModel, provider: initialProvider } =
+    serializeModelWithProvider(resolvedModel.modelId);
+  const effectiveProvider = resolvedModel.provider || initialProvider;
+
   const wrappedDoGenerate = async (options: any) => {
     return traced(
       async (span) => {
         const result = await originalDoGenerate(options);
 
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
+
         span.log({
           output: await processOutput(result),
           metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
         });
 
         return result;
@@ -233,8 +267,8 @@ const wrapModel = (model: any, ai?: any): any => {
         event: {
           input: processInputAttachments(options),
           metadata: {
-            model: resolvedModel.modelId,
-            provider: resolvedModel.provider,
+            model: initialModel,
+            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -254,8 +288,8 @@ const wrapModel = (model: any, ai?: any): any => {
       event: {
         input: processInputAttachments(options),
         metadata: {
-          model: resolvedModel.modelId,
-          provider: resolvedModel.provider,
+          model: initialModel,
+          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -334,9 +368,22 @@ const wrapModel = (model: any, ai?: any): any => {
               output.object = object;
             }
 
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(output);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+
             span.log({
               output: await processOutput(output),
               metrics: extractTokenMetrics(output),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
             });
             span.end();
             break;
@@ -380,7 +427,10 @@ const wrapGenerateObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return async function wrappedGenerateObject(params: any) {
+  return async function generateObjectWrapper(params: any) {
+    const { model: initialModel, provider: initialProvider } =
+      serializeModelWithProvider(params.model);
+
     return traced(
       async (span) => {
         const result = await generateObject({
@@ -391,9 +441,22 @@ const wrapGenerateObject = (
 
         const output = await processOutput(result, options.denyOutputPaths);
 
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
+
         span.log({
           output,
           metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
         });
 
         return result;
@@ -406,7 +469,8 @@ const wrapGenerateObject = (
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: serializeModel(params.model),
+            model: initialModel,
+            ...(initialProvider ? { provider: initialProvider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -424,7 +488,10 @@ const makeStreamTextWrapper = (
   streamText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = function (params: any) {
+  const wrapper = async function (params: any) {
+    const { model: initialModel, provider: initialProvider } =
+      serializeModelWithProvider(params.model);
+
     const span = startSpan({
       name,
       spanAttributes: {
@@ -433,7 +500,8 @@ const makeStreamTextWrapper = (
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: serializeModel(params.model),
+          model: initialModel,
+          ...(initialProvider ? { provider: initialProvider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -465,9 +533,22 @@ const makeStreamTextWrapper = (
           onFinish: async (event: any) => {
             params.onFinish?.(event);
 
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(event);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
             });
 
             span.end();
@@ -547,7 +628,10 @@ const wrapStreamObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return function wrappedStreamObject(params: any) {
+  return async function streamObjectWrapper(params: any) {
+    const { model: initialModel, provider: initialProvider } =
+      serializeModelWithProvider(params.model);
+
     const span = startSpan({
       name: "streamObject",
       spanAttributes: {
@@ -556,7 +640,8 @@ const wrapStreamObject = (
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: serializeModel(params.model),
+          model: initialModel,
+          ...(initialProvider ? { provider: initialProvider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -588,9 +673,22 @@ const wrapStreamObject = (
           onFinish: async (event: any) => {
             params.onFinish?.(event);
 
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(event);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
             });
 
             span.end();
@@ -777,6 +875,72 @@ const serializeError = (error: unknown) => {
 const serializeModel = (model: any) => {
   return typeof model === "string" ? model : model?.modelId;
 };
+
+/**
+ * Parses a gateway model string like "openai/gpt-5-mini" into provider and model.
+ * Returns { provider, model } if parseable, otherwise { model } only.
+ */
+function parseGatewayModelString(modelString: string): {
+  model: string;
+  provider?: string;
+} {
+  if (!modelString || typeof modelString !== "string") {
+    return { model: modelString };
+  }
+  const slashIndex = modelString.indexOf("/");
+  if (slashIndex > 0 && slashIndex < modelString.length - 1) {
+    return {
+      provider: modelString.substring(0, slashIndex),
+      model: modelString.substring(slashIndex + 1),
+    };
+  }
+  return { model: modelString };
+}
+
+/**
+ * Extracts model and provider info from a model, parsing gateway-style strings.
+ */
+function serializeModelWithProvider(model: any): {
+  model: string;
+  provider?: string;
+} {
+  const modelId = typeof model === "string" ? model : model?.modelId;
+  if (!modelId) {
+    return { model: modelId };
+  }
+  return parseGatewayModelString(modelId);
+}
+
+/**
+ * Extracts gateway routing info from the result's providerMetadata.
+ * This provides the actual resolved provider and model used by the gateway.
+ */
+function extractGatewayRoutingInfo(result: any): {
+  model?: string;
+  provider?: string;
+} | null {
+  // Check steps for gateway routing info (multi-step results)
+  if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
+    const routing = result.steps[0]?.providerMetadata?.gateway?.routing;
+    if (routing) {
+      return {
+        provider: routing.resolvedProvider || routing.finalProvider,
+        model: routing.resolvedProviderApiModelId,
+      };
+    }
+  }
+
+  // Check direct providerMetadata (single-step results)
+  const routing = result?.providerMetadata?.gateway?.routing;
+  if (routing) {
+    return {
+      provider: routing.resolvedProvider || routing.finalProvider,
+      model: routing.resolvedProviderApiModelId,
+    };
+  }
+
+  return null;
+}
 
 /**
  * Detects if an object is a Zod schema

@@ -1728,4 +1728,139 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
   });
+
+  test("model/provider separation from gateway-style model string", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const model = openai(TEST_MODEL);
+
+    await wrappedAI.generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const generateTextSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
+
+    expect(generateTextSpan).toBeDefined();
+    expect(generateTextSpan.metadata.model).toBe(TEST_MODEL);
+  });
 });
+
+const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY;
+
+describe.skipIf(!AI_GATEWAY_API_KEY)(
+  "ai sdk gateway integration tests",
+  TEST_SUITE_OPTIONS,
+  () => {
+    let wrappedAI: typeof ai;
+    let backgroundLogger: TestBackgroundLogger;
+
+    beforeAll(async () => {
+      await _exportsForTestingOnly.simulateLoginForTests();
+    });
+
+    beforeEach(() => {
+      backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+      wrappedAI = wrapAISDK(ai);
+      initLogger({
+        projectName: "ai-sdk-gateway.test.ts",
+        projectId: "test-project-id",
+      });
+    });
+
+    afterEach(() => {
+      _exportsForTestingOnly.clearTestBackgroundLogger();
+    });
+
+    test("gateway cost extraction and model/provider separation", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      const gateway = createOpenAI({
+        baseURL: "https://api.braintrust.dev/v1/proxy",
+        apiKey: AI_GATEWAY_API_KEY,
+      });
+
+      const result = await wrappedAI.generateText({
+        model: gateway("openai/gpt-4o-mini"),
+        messages: [
+          {
+            role: "user",
+            content: "Say hello in one word.",
+          },
+        ],
+        maxOutputTokens: 10,
+      });
+
+      expect(result.text).toBeTruthy();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Verify model/provider separation - initial parsing from gateway string
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+
+      // Verify cost is extracted from gateway providerMetadata
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+    });
+
+    test("gateway multi-step tool use extracts total cost", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      const gateway = createOpenAI({
+        baseURL: "https://api.braintrust.dev/v1/proxy",
+        apiKey: AI_GATEWAY_API_KEY,
+      });
+
+      const simpleTool = ai.tool({
+        description: "Echo a message back",
+        inputSchema: z.object({ message: z.string() }),
+        execute: async (args: { message: string }) => `Echo: ${args.message}`,
+      });
+
+      const result = await wrappedAI.generateText({
+        model: gateway("openai/gpt-4o-mini"),
+        tools: { echo: simpleTool },
+        toolChoice: "required",
+        prompt: "Echo the message 'hello'",
+        stopWhen: ai.stepCountIs(2),
+      });
+
+      expect(result).toBeDefined();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Cost should be sum of all steps
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+
+      // Verify model/provider in metadata
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+    });
+  },
+);
