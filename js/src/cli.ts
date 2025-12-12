@@ -104,9 +104,10 @@ async function evaluateBuildResults(
   }
   const moduleText = buildResult.outputFiles[0].text;
   if (bundleFormat === "esm") {
-    const srcDir = path.dirname(inFile);
-    const srcBase = path.basename(inFile, path.extname(inFile));
-    const runtimePath = path.join(srcDir, `.braintrust-eval-${srcBase}.mjs`);
+    const runtimePath = path.join(
+      os.tmpdir(),
+      `.braintrust-eval-${uuidv4().slice(0, 8)}.mjs`,
+    );
     await fs.promises.writeFile(runtimePath, moduleText, "utf8");
     return await loadModuleEsmFromFile({ inFile, modulePath: runtimePath });
   }
@@ -886,12 +887,7 @@ export async function initializeHandles({
     process.exit(0);
   }
 
-  const tmpDir = path.join(
-    process.cwd(),
-    ".braintrust-evals",
-    `btevals-${uuidv4().slice(0, 8)}`,
-  );
-  fs.mkdirSync(tmpDir, { recursive: true });
+  const tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
 
   const initPromises = [];
   for (const file of Object.keys(files)) {
@@ -936,7 +932,7 @@ async function run(args: RunArgs) {
   }
 
   const bundleFormat: BundleFormat =
-    args.bundle_format ?? DEFAULT_BUNDLE_FORMAT;
+    args.experimental_bundle_format ?? DEFAULT_BUNDLE_FORMAT;
 
   const evaluatorOpts: EvaluatorOpts = {
     verbose: args.verbose,
@@ -1051,9 +1047,9 @@ function addCompileArgs(parser: ArgumentParser) {
     nargs: "*",
     help: "Additional packages to mark as external during bundling. These packages will not be included in the bundle and must be available at runtime. Use this to resolve bundling errors with native modules or problematic dependencies. Example: --external-packages sqlite3 fsevents @mapbox/node-pre-gyp",
   });
-  parser.add_argument("--bundle-format", {
+  parser.add_argument("--experimental-bundle-format", {
     choices: ["cjs", "esm"],
-    help: "Module format to use when bundling code. Defaults to cjs.",
+    help: "Experimental: module format to use when bundling code. Defaults to cjs.",
   });
 }
 

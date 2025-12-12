@@ -34,7 +34,7 @@ export async function bundleCommand(args: BundleArgs) {
     files: args.files,
     tsconfig: args.tsconfig,
     externalPackages: args.external_packages,
-    bundleFormat: args.bundle_format,
+    bundleFormat: args.experimental_bundle_format,
   });
 
   try {

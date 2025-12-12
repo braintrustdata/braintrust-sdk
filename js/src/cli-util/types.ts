@@ -17,7 +17,7 @@ export interface CompileArgs {
   tsconfig?: string;
   terminate_on_failure: boolean;
   external_packages?: string[];
-  bundle_format?: BundleFormat;
+  experimental_bundle_format?: BundleFormat;
 }
 
 export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
