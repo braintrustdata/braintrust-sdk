@@ -34,6 +34,7 @@ export async function bundleCommand(args: BundleArgs) {
     files: args.files,
     tsconfig: args.tsconfig,
     externalPackages: args.external_packages,
+    bundleFormat: args.experimental_bundle_format,
   });
 
   try {
@@ -69,6 +70,7 @@ export async function bundleCommand(args: BundleArgs) {
       setCurrent: true,
       verbose: args.verbose,
       defaultIfExists: args.if_exists,
+      bundleFormat: args.experimental_bundle_format,
     });
 
     if (numFailed > 0) {

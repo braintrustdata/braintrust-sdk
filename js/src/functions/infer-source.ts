@@ -1,7 +1,7 @@
 import { SourceMapConsumer } from "source-map";
 import * as fs from "fs/promises";
 import { EvaluatorFile, warning } from "../framework";
-import { loadModule } from "./load-module";
+import { loadModule, loadModuleEsmFromFile } from "./load-module";
 import { type CodeBundleType as CodeBundle } from "../generated_types";
 import path from "path";
 import type { Node } from "typescript";
@@ -14,27 +14,78 @@ interface SourceMapContext {
   sourceMap: SourceMapConsumer;
 }
 
+type BundleFormat = "cjs" | "esm";
+
+async function findNearestNodeModules(
+  startDir: string,
+): Promise<string | null> {
+  let dir = startDir;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const candidate = path.join(dir, "node_modules");
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const stat = await fs.stat(candidate);
+      if (stat.isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
 export async function makeSourceMapContext({
   inFile,
   outFile,
   sourceMapFile,
+  bundleFormat = "cjs",
 }: {
   inFile: string;
   outFile: string;
   sourceMapFile: string;
+  bundleFormat?: BundleFormat;
 }): Promise<SourceMapContext> {
   const [inFileContents, outFileContents, sourceMap] = await Promise.all([
     fs.readFile(inFile, "utf8"),
     fs.readFile(outFile, "utf8"),
     (async () => {
-      const sourceMap = await fs.readFile(sourceMapFile, "utf8");
-      const sourceMapJSON = JSON.parse(sourceMap);
+      const sourceMapText = await fs.readFile(sourceMapFile, "utf8");
+      const sourceMapJSON = JSON.parse(sourceMapText);
       return new SourceMapConsumer(sourceMapJSON);
     })(),
   ]);
+
+  let outFileModule: EvaluatorFile;
+  if (bundleFormat === "esm") {
+    const runtimeDir = path.dirname(outFile);
+    const nodeModulesSrc = await findNearestNodeModules(path.dirname(inFile));
+    if (nodeModulesSrc) {
+      const nodeModulesDest = path.join(runtimeDir, "node_modules");
+      try {
+        await fs.mkdir(runtimeDir, { recursive: true });
+        // Best-effort: create a symlink to the real node_modules so ESM imports like "braintrust" resolve.
+        await fs.symlink(nodeModulesSrc, nodeModulesDest, "junction");
+      } catch {
+        // Ignore symlink errors; resolution may still work via global paths.
+      }
+    }
+    outFileModule = await loadModuleEsmFromFile({
+      inFile,
+      modulePath: outFile,
+    });
+  } else {
+    outFileModule = loadModule({ inFile, moduleText: outFileContents });
+  }
+
   return {
     inFiles: { [inFile]: inFileContents.split("\n") },
-    outFileModule: loadModule({ inFile, moduleText: outFileContents }),
+    outFileModule,
     outFileLines: outFileContents.split("\n"),
     sourceMapDir: path.dirname(sourceMapFile),
     sourceMap,
