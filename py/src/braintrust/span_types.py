@@ -13,6 +13,7 @@ class SpanTypeAttribute(str, Enum):
     EVAL = "eval"
     TASK = "task"
     TOOL = "tool"
+    REVIEW = "review"
 
 
 class SpanPurpose(str, Enum):
