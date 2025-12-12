@@ -70,6 +70,7 @@ export async function bundleCommand(args: BundleArgs) {
       setCurrent: true,
       verbose: args.verbose,
       defaultIfExists: args.if_exists,
+      bundleFormat: args.experimental_bundle_format,
     });
 
     if (numFailed > 0) {

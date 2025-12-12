@@ -104,9 +104,11 @@ async function evaluateBuildResults(
   }
   const moduleText = buildResult.outputFiles[0].text;
   if (bundleFormat === "esm") {
+    const srcDir = path.dirname(inFile);
+    const srcBase = path.basename(inFile, path.extname(inFile));
     const runtimePath = path.join(
-      os.tmpdir(),
-      `.braintrust-eval-${uuidv4().slice(0, 8)}.mjs`,
+      srcDir,
+      `.braintrust-eval-${srcBase}-${uuidv4().slice(0, 8)}.mjs`,
     );
     await fs.promises.writeFile(runtimePath, moduleText, "utf8");
     return await loadModuleEsmFromFile({ inFile, modulePath: runtimePath });
@@ -370,18 +372,22 @@ async function initFile({
       }
     },
     bundle: async () => {
+      const isEsmBundle = bundleFormat === "esm";
+      const baseOptions = buildOpts({
+        fileName: inFile,
+        outFile: bundleFile,
+        tsconfig,
+        plugins,
+        externalPackages,
+        bundleFormat: isEsmBundle ? "esm" : "cjs",
+      });
       const buildOptions: esbuild.BuildOptions = {
-        ...buildOpts({
-          fileName: inFile,
-          outFile: bundleFile,
-          tsconfig,
-          plugins,
-          externalPackages,
-          bundleFormat,
-        }),
-        external: [],
+        ...baseOptions,
+        // For CJS bundles, we historically inlined everything. For ESM bundles,
+        // keep externals so CJS deps (node_modules) are not inlined.
+        external: isEsmBundle ? baseOptions.external : [],
         write: true,
-        plugins: [],
+        plugins: isEsmBundle ? baseOptions.plugins : [],
         minify: true,
         sourcemap: true,
       };
@@ -644,6 +650,7 @@ async function runOnce(
       setCurrent: opts.setCurrent,
       defaultIfExists: "replace",
       verbose: opts.verbose,
+      bundleFormat: opts.bundleFormat,
     });
   }
 

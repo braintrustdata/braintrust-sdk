@@ -62,6 +62,7 @@ export async function uploadHandleBundles({
   setCurrent,
   verbose,
   defaultIfExists,
+  bundleFormat = "cjs",
 }: {
   buildResults: BuildSuccess[];
   evalToExperiment?: Record<string, Record<string, Experiment>>;
@@ -72,6 +73,7 @@ export async function uploadHandleBundles({
   verbose: boolean;
   setCurrent: boolean;
   defaultIfExists: IfExists;
+  bundleFormat?: "cjs" | "esm";
 }) {
   console.error(
     `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
@@ -208,6 +210,7 @@ export async function uploadHandleBundles({
       handles,
       defaultIfExists,
       verbose,
+      bundleFormat,
     });
   });
 
@@ -238,6 +241,7 @@ async function uploadBundles({
   handles,
   defaultIfExists,
   verbose,
+  bundleFormat = "cjs",
 }: {
   sourceFile: string;
   prompts: FunctionEvent[];
@@ -248,6 +252,7 @@ async function uploadBundles({
   handles: Record<string, FileHandle>;
   defaultIfExists: IfExists;
   verbose: boolean;
+  bundleFormat?: "cjs" | "esm";
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
@@ -270,6 +275,7 @@ async function uploadBundles({
     inFile: sourceFile,
     outFile: bundleFileName,
     sourceMapFile: bundleFileName + ".map",
+    bundleFormat,
   });
 
   let pathInfo: z.infer<typeof pathInfoSchema> | undefined = undefined;
