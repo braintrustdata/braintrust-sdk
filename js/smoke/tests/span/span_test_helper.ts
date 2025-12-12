@@ -72,3 +72,84 @@ export async function runSpanSmokeTest(
     }
   }
 }
+
+export interface MustacheTemplateTestResult {
+  messages: Array<{ content: string }>;
+}
+
+export function runMustacheTemplateTest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Prompt: any,
+): MustacheTemplateTestResult {
+  const mustachePrompt = new Prompt(
+    {
+      name: "mustache-test",
+      slug: "mustache-test",
+      prompt_data: {
+        prompt: {
+          type: "chat",
+          messages: [
+            {
+              role: "user",
+              content: "Hello, {{name}}!",
+            },
+          ],
+        },
+        options: {
+          model: "gpt-4",
+        },
+      },
+    },
+    {},
+    false,
+  );
+
+  const mustacheResult = mustachePrompt.build(
+    { name: "World" },
+    { templateFormat: "mustache" },
+  );
+
+  return mustacheResult;
+}
+
+export interface NunjucksTemplateTestResult {
+  messages: Array<{ content: string }>;
+}
+
+export function runNunjucksTemplateTest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Prompt: any,
+): NunjucksTemplateTestResult {
+  const nunjucksPrompt = new Prompt(
+    {
+      name: "nunjucks-test",
+      slug: "nunjucks-test",
+      prompt_data: {
+        prompt: {
+          type: "chat",
+          messages: [
+            {
+              role: "user",
+              content:
+                "Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
+            },
+          ],
+        },
+        options: {
+          model: "gpt-4",
+        },
+      },
+    },
+    {},
+    false,
+  );
+
+  const nunjucksResult = nunjucksPrompt.build(
+    {
+      items: [{ name: "apple" }, { name: "banana" }, { name: "cherry" }],
+    },
+    { templateFormat: "nunjucks" },
+  );
+
+  return nunjucksResult;
+}
