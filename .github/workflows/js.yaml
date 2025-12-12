@@ -143,11 +143,6 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        run: |
-          npm run install-build
-
       - name: Run integration test (CJS) for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
@@ -157,10 +152,13 @@ jobs:
         run: |
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm ci
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
             npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
           fi
+
           npm start
 
       - name: Enable ESM for integrations tests
@@ -177,8 +175,10 @@ jobs:
         run: |
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm ci
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
             npm ci --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
           fi
           npm start
@@ -186,6 +186,61 @@ jobs:
       - name: Restore original package.json files
         if: always()
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run restore
+
+  smoke-tests-jest:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original span-jest package manifests
+        working-directory: js/smoke/tests/span-jest
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build for Jest span smoke test
+        working-directory: js/smoke/tests/span-jest
+        shell: bash
+        run: |
+          npm ci
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Run Jest span smoke test
+        working-directory: js/smoke/tests/span-jest
+        continue-on-error: true
+        shell: bash
+        run: |
+          npm test
+
+      - name: Restore original span-jest package.json files
+        if: always()
+        working-directory: js/smoke/tests/span-jest
         run: |
           npm run restore
 
