@@ -284,6 +284,176 @@ def test_openai_responses_metadata_preservation(memory_logger):
 
 
 @pytest.mark.vcr
+def test_openai_responses_with_raw_response(memory_logger):
+    """Test that with_raw_response.create() is traced and returns raw response object."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    start = time.time()
+    raw_response = client.responses.with_raw_response.create(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+    )
+    end = time.time()
+
+    # Verify we get the raw response object with HTTP metadata
+    assert hasattr(raw_response, "status_code"), "Should have status_code"
+    assert hasattr(raw_response, "headers"), "Should have headers"
+    assert raw_response.status_code == 200
+
+    # Verify we can parse the response
+    parsed = raw_response.parse()
+    assert parsed.output
+    assert len(parsed.output) > 0
+    content = parsed.output[0].content[0].text
+    assert "24" in content or "twenty-four" in content.lower()
+
+    # Verify span was logged
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["span_attributes"]["name"] == "openai.responses.create"
+    assert span["span_attributes"]["type"] == "llm"
+
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert TEST_MODEL in span["metadata"]["model"]
+    assert span["metadata"]["provider"] == "openai"
+    assert TEST_PROMPT in str(span["input"])
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_openai_responses_with_raw_response_async(memory_logger):
+    """Test that async with_raw_response.create() is traced and returns raw response object."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.AsyncOpenAI())
+
+    start = time.time()
+    raw_response = await client.responses.with_raw_response.create(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+    )
+    end = time.time()
+
+    # Verify we get the raw response object with HTTP metadata
+    assert hasattr(raw_response, "status_code"), "Should have status_code"
+    assert hasattr(raw_response, "headers"), "Should have headers"
+    assert raw_response.status_code == 200
+
+    # Verify we can parse the response
+    parsed = raw_response.parse()
+    assert parsed.output
+    assert len(parsed.output) > 0
+    content = parsed.output[0].content[0].text
+    assert "24" in content or "twenty-four" in content.lower()
+
+    # Verify span was logged
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["span_attributes"]["name"] == "openai.responses.create"
+    assert span["span_attributes"]["type"] == "llm"
+
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert TEST_MODEL in span["metadata"]["model"]
+    assert span["metadata"]["provider"] == "openai"
+    assert TEST_PROMPT in str(span["input"])
+
+
+@pytest.mark.vcr
+def test_openai_responses_with_raw_response_streaming(memory_logger):
+    """Test that streaming with_raw_response.create() is traced and returns raw response object."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    start = time.time()
+    raw_response = client.responses.with_raw_response.create(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+        stream=True,
+    )
+    end_call = time.time()
+
+    # Verify we get the raw response object with HTTP metadata
+    assert hasattr(raw_response, "status_code"), "Should have status_code"
+    assert hasattr(raw_response, "headers"), "Should have headers"
+    assert raw_response.status_code == 200
+
+    # Verify we can parse and iterate the stream
+    parsed = raw_response.parse()
+    chunks = list(parsed)
+    end = time.time()
+
+    assert len(chunks) > 0
+
+    # Verify span was logged
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["span_attributes"]["name"] == "openai.responses.create"
+    assert span["span_attributes"]["type"] == "llm"
+
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert "time_to_first_token" in metrics
+    assert TEST_MODEL in span["metadata"]["model"]
+    assert span["metadata"]["provider"] == "openai"
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_openai_responses_with_raw_response_streaming_async(memory_logger):
+    """Test that async streaming with_raw_response.create() is traced and returns raw response object."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.AsyncOpenAI())
+
+    start = time.time()
+    raw_response = await client.responses.with_raw_response.create(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+        stream=True,
+    )
+    end_call = time.time()
+
+    # Verify we get the raw response object with HTTP metadata
+    assert hasattr(raw_response, "status_code"), "Should have status_code"
+    assert hasattr(raw_response, "headers"), "Should have headers"
+    assert raw_response.status_code == 200
+
+    # Verify we can parse and iterate the stream
+    parsed = raw_response.parse()
+    chunks = []
+    async for chunk in parsed:
+        chunks.append(chunk)
+    end = time.time()
+
+    assert len(chunks) > 0
+
+    # Verify span was logged
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["span_attributes"]["name"] == "openai.responses.create"
+    assert span["span_attributes"]["type"] == "llm"
+
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert "time_to_first_token" in metrics
+    assert TEST_MODEL in span["metadata"]["model"]
+    assert span["metadata"]["provider"] == "openai"
+
+
+@pytest.mark.vcr
 def test_openai_responses_sparse_indices(memory_logger):
     """Test that streaming responses with sparse/out-of-order indices are handled correctly."""
     assert not memory_logger.pop()
