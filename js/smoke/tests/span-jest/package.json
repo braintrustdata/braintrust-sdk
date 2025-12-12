@@ -1,0 +1,22 @@
+{
+  "name": "braintrust-span-jest-smoke-test",
+  "version": "1.0.0",
+  "description": "Jest smoke test for the Braintrust span simple_span_example script",
+  "main": "simple_span_example.jest.test.js",
+  "scripts": {
+    "test": "jest simple_span_example.jest.test.js",
+    "backup": "npx tsx ../../backup-and-restore.ts backup",
+    "restore": "npx tsx ../../backup-and-restore.ts restore",
+    "enable-esm": "npx tsx ../../enable-esm.ts",
+    "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
+  },
+  "dependencies": {
+    "braintrust": "latest"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/node": "^20.10.5",
+    "typescript": "^5.4.4",
+    "jest": "^29.7.0"
+  }
+}
