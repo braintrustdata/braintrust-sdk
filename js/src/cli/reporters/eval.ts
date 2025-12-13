@@ -4,11 +4,13 @@ import boxen from "boxen";
 import Table from "cli-table3";
 import pluralize from "pluralize";
 
-import { ExperimentSummary, ScoreSummary, MetricSummary } from "../logger";
-
-import { ReporterDef, EvaluatorDef, EvalResultWithSummary } from "../framework";
-
-import { isEmpty } from "../util";
+import { ExperimentSummary, ScoreSummary, MetricSummary } from "../../logger";
+import {
+  ReporterDef,
+  EvaluatorDef,
+  EvalResultWithSummary,
+} from "../../framework";
+import { isEmpty } from "../../util";
 
 function formatExperimentSummaryFancy(summary: ExperimentSummary) {
   let comparisonLine = "";
@@ -154,7 +156,6 @@ function formatExperimentSummaryFancy(summary: ExperimentSummary) {
       })
     );
   } catch (error) {
-    // Fallback if boxen fails (e.g., RangeError with invalid array length)
     return "\n" + chalk.gray("Experiment summary") + "\n" + boxContent + "\n";
   }
 }

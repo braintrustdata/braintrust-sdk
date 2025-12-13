@@ -17,13 +17,12 @@ import {
   Experiment,
   BaseMetadata,
   Dataset,
-  ExperimentSummary,
 } from "../logger";
+import type { ProgressReporter } from "./reporters/types";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
-  ProgressReporter,
-} from "./progress";
+} from "./reporters/progress";
 import chalk from "chalk";
 import { terminalLink } from "termi-link";
 
@@ -35,14 +34,12 @@ import {
   Filter,
   ReporterDef,
   callEvaluatorData,
-  defaultReporter,
   error,
   logError,
   parseFilters,
   runEvaluator,
-  EvalResultWithSummary,
 } from "../framework";
-import { fancyReporter, warning } from "./reporters";
+import { fancyReporter, warning } from "./reporters/eval";
 import { configureNode } from "../node";
 import { isEmpty } from "../util";
 import { loadEnvConfig } from "@next/env";

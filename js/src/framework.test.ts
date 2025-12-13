@@ -15,7 +15,7 @@ import {
 } from "./framework";
 import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
-import type { ProgressReporter } from "./progress/types";
+import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
 
 beforeAll(() => {

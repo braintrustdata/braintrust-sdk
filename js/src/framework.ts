@@ -30,8 +30,8 @@ import {
   withCurrent,
   withParent,
 } from "./logger";
-import type { ProgressReporter } from "./progress/types";
-import { SimpleProgressReporter } from "./progress/simple";
+import type { ProgressReporter } from "./reporters/types";
+import { SimpleProgressReporter } from "./reporters/progress";
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
@@ -321,6 +321,9 @@ export class EvalResultWithSummary<
     public results: EvalResult<Input, Output, Expected, Metadata>[],
   ) {}
 
+  /**
+   * @deprecated Use `summary` instead.
+   */
   toString(): string {
     return JSON.stringify(this.summary);
   }
