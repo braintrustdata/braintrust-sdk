@@ -146,4 +146,69 @@ describe("CLI import restrictions", () => {
       expect.fail(message);
     }
   });
+
+  it("should not allow require() or dynamic import() statements", () => {
+    const srcDir = path.join(__dirname);
+    const violations: string[] = [];
+
+    function walkDirectory(dir: string) {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = path.relative(srcDir, fullPath);
+
+        if (entry.isDirectory()) {
+          walkDirectory(fullPath);
+        } else if (
+          entry.isFile() &&
+          (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) &&
+          !entry.name.endsWith(".test.ts") &&
+          !entry.name.endsWith(".test.tsx")
+        ) {
+          checkFileForDynamicImports(fullPath, relativePath);
+        }
+      }
+    }
+
+    function checkFileForDynamicImports(
+      filePath: string,
+      relativePath: string,
+    ) {
+      const content = fs.readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+
+      lines.forEach((line, index) => {
+        // Check for require() calls
+        if (/\brequire\s*\(/.test(line)) {
+          violations.push(
+            `${relativePath}:${index + 1} - Found require() statement: "${line.trim()}"`,
+          );
+        }
+
+        // Check for dynamic import() statements
+        // Match import(...) but not static import statements
+        if (/\bimport\s*\(/.test(line) && !/^import\s+/.test(line.trim())) {
+          violations.push(
+            `${relativePath}:${index + 1} - Found dynamic import() statement: "${line.trim()}"`,
+          );
+        }
+      });
+    }
+
+    walkDirectory(srcDir);
+
+    if (violations.length > 0) {
+      const message = [
+        "Found require() or dynamic import() statements in SDK code:",
+        "",
+        ...violations,
+        "",
+        "require() and dynamic import() are not allowed.",
+        "Use static ES module imports instead.",
+      ].join("\n");
+
+      expect.fail(message);
+    }
+  });
 });
