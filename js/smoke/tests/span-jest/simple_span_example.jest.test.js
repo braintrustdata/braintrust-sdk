@@ -1,4 +1,8 @@
-import { initLogger, JSONAttachment, _exportsForTestingOnly } from "braintrust";
+const {
+  initLogger,
+  JSONAttachment,
+  _exportsForTestingOnly,
+} = require("braintrust");
 
 test("simple_span_example runs successfully via Jest", async () => {
   _exportsForTestingOnly.setInitialTestState();
@@ -50,7 +54,7 @@ test("simple_span_example runs successfully via Jest", async () => {
     throw new Error("No spans were captured by the background logger");
   }
 
-  const spanEvent = spans[0];
+  const spanEvent = spans.slice(-1)[0];
 
   expect(spanEvent.input).toEqual("What is the capital of France?");
   expect(spanEvent.output).toEqual("Paris");
