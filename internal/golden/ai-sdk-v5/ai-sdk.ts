@@ -12,6 +12,22 @@ console.log("Running ai sdk version:", require("ai/package.json").version);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
+const gpt5mini = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-5-mini"
+  : openai("gpt-5-mini");
+
+const gpt4o = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-4o"
+  : openai("gpt-4o");
+
+const claudeSonnet45 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-sonnet-45"
+  : anthropic("claude-sonnet-45");
+
+const claudeSonnet37 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-3-7-sonnet-latest"
+  : anthropic("claude-3-7-sonnet-latest");
+
 initLogger({
   projectName: "golden-ts-ai-sdk-v5",
 });
@@ -28,10 +44,7 @@ const {
 async function testBasicCompletion() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "What is the capital of France?",
@@ -52,10 +65,7 @@ async function testBasicCompletion() {
 async function testMultiTurn() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           { role: "user" as const, content: "Hi, my name is Alice." },
           {
@@ -88,10 +98,7 @@ async function testMultiTurn() {
 async function testSystemPrompt() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           system: "You are a pirate. Always respond in pirate speak.",
@@ -114,10 +121,7 @@ async function testSystemPrompt() {
 async function testStreaming() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const result = streamText({
           model: model as LanguageModel,
           prompt: "Count from 1 to 10 slowly.",
@@ -149,10 +153,7 @@ async function testImageInput() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -191,10 +192,7 @@ async function testDocumentInput() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -247,8 +245,8 @@ async function testTemperatureVariations() {
       ];
 
       for (const [model, configs] of [
-        [openai("gpt-5-mini"), openaiConfigs],
-        [anthropic("claude-sonnet-4-5"), anthropicConfigs],
+        [gpt5mini, openaiConfigs],
+        [claudeSonnet45, anthropicConfigs],
       ]) {
         // @ts-ignore
         for (const config of configs) {
@@ -276,8 +274,8 @@ async function testStopSequences() {
   return traced(
     async () => {
       for (const [model, stopSequences] of [
-        [openai("gpt-5-mini"), ["END", "\n\n"]],
-        [anthropic("claude-sonnet-4-5"), ["END"]],
+        [gpt5mini, ["END", "\n\n"]],
+        [claudeSonnet45, ["END"]],
       ] satisfies [LanguageModel, string[]][]) {
         await generateText({
           model: model as LanguageModel,
@@ -301,10 +299,7 @@ async function testStopSequences() {
 async function testMetadata() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "Hello!",
@@ -329,10 +324,7 @@ async function testLongContext() {
         100,
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -365,10 +357,7 @@ async function testMixedContent() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -406,10 +395,7 @@ async function testMixedContent() {
 async function testPrefill() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           { role: "user" as const, content: "Write a haiku about coding." },
           { role: "assistant" as const, content: "Here is a haiku:" },
@@ -435,7 +421,7 @@ async function testPrefill() {
 async function testShortMaxTokens() {
   return traced(
     async () => {
-      for (const model of [openai("gpt-4o"), anthropic("claude-sonnet-4-5")]) {
+      for (const model of [gpt4o, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "What is AI?",
@@ -494,10 +480,7 @@ async function testToolUse() {
         },
       });
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           tools: {
@@ -550,10 +533,7 @@ async function testToolUseWithResult() {
         },
       };
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           tools: {
@@ -635,8 +615,8 @@ async function testMultiRoundToolUse() {
       });
 
       for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
+        ["openai", gpt5mini],
+        ["anthropic", claudeSonnet45],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -697,7 +677,7 @@ async function testReasoning() {
     async () => {
       for (const [model, options] of [
         [
-          openai("gpt-5-mini"),
+          gpt5mini,
           {
             providerOptions: {
               openai: {
@@ -708,7 +688,7 @@ async function testReasoning() {
           },
         ],
         [
-          anthropic("claude-3-7-sonnet-latest"),
+          claudeSonnet37,
           {
             providerOptions: {
               anthropic: {
@@ -792,10 +772,7 @@ async function testStructuredOutput() {
         steps: z.array(z.string()),
       });
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateObject({
           model: model as LanguageModel,
           schema: recipeSchema,
@@ -818,10 +795,7 @@ async function testStreamingStructuredOutput() {
         features: z.array(z.string()),
       });
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const result = streamObject({
           model: model as LanguageModel,
           schema: productSchema,
@@ -915,10 +889,7 @@ async function testStructuredOutputWithContext() {
         }),
       });
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           tools: {
