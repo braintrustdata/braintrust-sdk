@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import * as esbuild from "esbuild";
-import { createMarkKnownPackagesExternalPlugin } from "./cli-util/external-packages-plugin";
+import { createMarkKnownPackagesExternalPlugin } from "./external-packages-plugin";
 
 describe("External Packages Plugin", () => {
   describe("createMarkKnownPackagesExternalPlugin", () => {

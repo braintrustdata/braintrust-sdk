@@ -12,7 +12,7 @@
 
 import { formatExperimentSummary } from "../src/framework";
 import type { ExperimentSummary } from "../src/logger";
-import { BarProgressReporter } from "../src/progress";
+import { BarProgressReporter } from "../src/cli/progress";
 
 function createSampleSummary(options: {
   withComparison?: boolean;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CompileArgs, RunArgs, BundleArgs } from "./cli-util/types";
+import { CompileArgs, RunArgs, BundleArgs } from "./util/types";
 
 // Test the type definitions for external packages
 describe("External Packages Type Definitions", () => {

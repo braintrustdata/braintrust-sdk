@@ -29,7 +29,7 @@ export default defineConfig([
     clean: false,
   },
   {
-    entry: ["src/cli.ts"],
+    entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
     outDir: "dist",
     external: ["esbuild", "prettier", "typescript"],
