@@ -1867,6 +1867,30 @@
             ],
             "format": "date-time",
             "description": "Date the environment variable was last used"
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Optional metadata associated with the environment variable when managed via the function secrets API"
+          },
+          "secret_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional classification for the secret (for example, the AI provider name)"
+          },
+          "secret_category": {
+            "type": "string",
+            "enum": [
+              "env_var",
+              "ai_provider"
+            ],
+            "default": "env_var",
+            "description": "The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys"
           }
         },
         "required": [
@@ -2316,6 +2340,54 @@
           "url"
         ]
       },
+      "FacetData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "facet"
+            ]
+          },
+          "preprocessor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SavedFunctionId"
+              },
+              {
+                "description": "The preprocessor function to apply before LLM extraction"
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt to use for LLM extraction. The preprocessed text will be provided as context."
+          },
+          "model": {
+            "type": "string",
+            "description": "The model to use for facet extraction"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/FacetScope"
+          }
+        },
+        "required": [
+          "type",
+          "preprocessor",
+          "prompt",
+          "model"
+        ],
+        "title": "facet"
+      },
+      "FacetScope": {
+        "type": "string",
+        "enum": [
+          "span",
+          "trace"
+        ],
+        "default": "trace",
+        "description": "The scope at which the facet operates"
+      },
       "Function": {
         "type": "object",
         "properties": {
@@ -2594,6 +2666,14 @@
               },
               "name": {
                 "type": "string"
+              },
+              "config": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {},
+                "description": "Configuration options to pass to the global function (e.g., for preprocessor customization)"
               }
             },
             "required": [
@@ -2601,6 +2681,9 @@
               "name"
             ],
             "title": "global"
+          },
+          {
+            "$ref": "#/components/schemas/FacetData"
           }
         ]
       },
@@ -2802,7 +2885,9 @@
           "scorer",
           "task",
           "agent",
-          "custom_view"
+          "custom_view",
+          "preprocessor",
+          "facet"
         ]
       },
       "FunctionOutputType": {
@@ -2821,7 +2906,8 @@
           "task",
           "tool",
           "custom_view",
-          "preprocessor"
+          "preprocessor",
+          "facet"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2835,7 +2921,8 @@
           "task",
           "tool",
           "custom_view",
-          "preprocessor"
+          "preprocessor",
+          "facet"
         ]
       },
       "GitMetadataSettings": {
@@ -3464,6 +3551,19 @@
                   "null"
                 ],
                 "description": "If true, throw an error if one of the variables in the prompt is not present in the input"
+              },
+              "mcp_auth": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "oauth_token": {
+                      "type": "string",
+                      "description": "The OAuth token to use"
+                    }
+                  }
+                },
+                "description": "Map of MCP server URL to auth credentials"
               }
             }
           }
@@ -3535,6 +3635,66 @@
           }
         ],
         "description": "Options for tracing the function call"
+      },
+      "MCPServer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the MCP server"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the project that the MCP server belongs under"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Identifies the user who created the MCP server"
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of MCP server creation"
+          },
+          "deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of MCP server deletion, or null if the MCP server is still active"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the MCP server. Within a project, MCP server names are unique"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the MCP server"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL of the MCP server endpoint"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "url"
+        ]
       },
       "MessageRole": {
         "type": "string",
@@ -4155,6 +4315,35 @@
                         "required": [
                           "type",
                           "url"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "slack"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "workspace_id": {
+                            "type": "string",
+                            "description": "The Slack workspace ID to post to"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "description": "The Slack channel ID to post to"
+                          },
+                          "message_template": {
+                            "type": "string",
+                            "description": "Custom message template for the alert"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "workspace_id",
+                          "channel"
                         ]
                       }
                     ],
@@ -5088,6 +5277,81 @@
               "$ref": "#/components/schemas/SavedFunctionId"
             }
           },
+          "mcp": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "id"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "title": "MCP server id. This is used for project-level MCP server definitions."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "title": "MCP server url. This is used for inline definitions of MCP servers."
+                }
+              ]
+            }
+          },
           "origin": {
             "type": [
               "object",
@@ -5129,6 +5393,81 @@
             ],
             "items": {
               "$ref": "#/components/schemas/SavedFunctionId"
+            }
+          },
+          "mcp": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "id"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "title": "MCP server id. This is used for project-level MCP server definitions."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "title": "MCP server url. This is used for inline definitions of MCP servers."
+                }
+              ]
             }
           },
           "origin": {
@@ -5796,6 +6135,18 @@
               "type": "string"
             },
             "description": "Optional tags that will be added to the experiment."
+          },
+          "mcp_auth": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "oauth_token": {
+                  "type": "string",
+                  "description": "The OAuth token to use"
+                }
+              }
+            }
           }
         },
         "required": [
@@ -6406,6 +6757,12 @@
                     ]
                   }
                 }
+              },
+              "freezeColumns": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -6635,6 +6992,12 @@
                   "traces",
                   "spans"
                 ]
+              },
+              "freezeColumns": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               }
             },
             "title": "TableViewOptions"
@@ -6656,7 +7019,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "8e9c0a96b3cf291360978c17580f72f6817bd6c8"
+    "x-internal-git-sha": "9798e4e2030273d26a5c9595f313fa6be8c9480f"
   },
   "paths": {},
   "webhooks": {}
