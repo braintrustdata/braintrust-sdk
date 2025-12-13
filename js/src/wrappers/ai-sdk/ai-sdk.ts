@@ -488,7 +488,7 @@ const makeStreamTextWrapper = (
   streamText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = async function (params: any) {
+  const wrapper = function (params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
 
@@ -628,7 +628,7 @@ const wrapStreamObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return async function streamObjectWrapper(params: any) {
+  return function streamObjectWrapper(params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
 
@@ -1497,8 +1497,12 @@ function extractCostFromResult(result: any): number | undefined {
     let totalCost = 0;
     let foundCost = false;
     for (const step of result.steps) {
-      const stepCost = parseGatewayCost(step?.providerMetadata?.gateway?.cost);
-      if (stepCost !== undefined) {
+      const gateway = step?.providerMetadata?.gateway;
+      // Check cost first, then fall back to marketCost (Vercel AI Gateway)
+      const stepCost =
+        parseGatewayCost(gateway?.cost) ||
+        parseGatewayCost(gateway?.marketCost);
+      if (stepCost !== undefined && stepCost > 0) {
         totalCost += stepCost;
         foundCost = true;
       }
@@ -1509,8 +1513,11 @@ function extractCostFromResult(result: any): number | undefined {
   }
 
   // Check for cost directly on result.providerMetadata (single-step results)
-  const directCost = parseGatewayCost(result?.providerMetadata?.gateway?.cost);
-  if (directCost !== undefined) {
+  const gateway = result?.providerMetadata?.gateway;
+  // Check cost first, then fall back to marketCost (Vercel AI Gateway)
+  const directCost =
+    parseGatewayCost(gateway?.cost) || parseGatewayCost(gateway?.marketCost);
+  if (directCost !== undefined && directCost > 0) {
     return directCost;
   }
 

@@ -1759,7 +1759,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY;
 
 describe.skipIf(!AI_GATEWAY_API_KEY)(
-  "ai sdk gateway integration tests",
+  "ai sdk cost extraction tests",
   TEST_SUITE_OPTIONS,
   () => {
     let wrappedAI: typeof ai;
@@ -1773,7 +1773,7 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
       backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
       wrappedAI = wrapAISDK(ai);
       initLogger({
-        projectName: "ai-sdk-gateway.test.ts",
+        projectName: "ai-sdk-cost.test.ts",
         projectId: "test-project-id",
       });
     });
@@ -1782,24 +1782,17 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
       _exportsForTestingOnly.clearTestBackgroundLogger();
     });
 
-    test("gateway cost extraction and model/provider separation", async () => {
+    test("cost extraction and model/provider separation", async () => {
       expect(await backgroundLogger.drain()).toHaveLength(0);
 
-      const { createOpenAI } = await import("@ai-sdk/openai");
-      const gateway = createOpenAI({
-        baseURL: "https://api.braintrust.dev/v1/proxy",
-        apiKey: AI_GATEWAY_API_KEY,
-      });
-
       const result = await wrappedAI.generateText({
-        model: gateway("openai/gpt-4o-mini"),
+        model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "user",
             content: "Say hello in one word.",
           },
         ],
-        maxOutputTokens: 10,
       });
 
       expect(result.text).toBeTruthy();
@@ -1813,22 +1806,16 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
 
       expect(generateTextSpan).toBeDefined();
 
-      // Verify model/provider separation - initial parsing from gateway string
+      // Verify model/provider separation
       expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
       expect(generateTextSpan.metadata.provider).toBe("openai");
 
-      // Verify cost is extracted from gateway providerMetadata
+      // Verify cost is extracted from gateway marketCost
       expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
     });
 
-    test("gateway multi-step tool use extracts total cost", async () => {
+    test("multi-step tool use extracts total cost", async () => {
       expect(await backgroundLogger.drain()).toHaveLength(0);
-
-      const { createOpenAI } = await import("@ai-sdk/openai");
-      const gateway = createOpenAI({
-        baseURL: "https://api.braintrust.dev/v1/proxy",
-        apiKey: AI_GATEWAY_API_KEY,
-      });
 
       const simpleTool = ai.tool({
         description: "Echo a message back",
@@ -1837,7 +1824,7 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
       });
 
       const result = await wrappedAI.generateText({
-        model: gateway("openai/gpt-4o-mini"),
+        model: "openai/gpt-4o-mini",
         tools: { echo: simpleTool },
         toolChoice: "required",
         prompt: "Echo the message 'hello'",
