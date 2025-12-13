@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import * as cliProgress from "cli-progress";
 
-import type { ProgressReporter } from "./types";
+import type { ProgressReporter } from "../../reporters/types";
 
 export { SimpleProgressReporter } from "../../reporters/progress";
 

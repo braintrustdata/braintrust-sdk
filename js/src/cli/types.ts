@@ -1,6 +1,7 @@
 import type * as esbuild from "esbuild";
 import type { BaseMetadata } from "../logger";
-import type { EvaluatorDef, EvaluatorFile, ReporterDef } from "../framework";
+import type { EvaluatorDef, EvaluatorFile } from "../framework";
+import type { ReporterDef } from "../reporters/types";
 
 export interface BuildSuccess {
   type: "success";

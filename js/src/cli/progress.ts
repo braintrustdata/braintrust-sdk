@@ -1,4 +1,4 @@
-export type { ProgressReporter } from "./reporters/types";
+export type { ProgressReporter } from "../reporters/types";
 export {
   SimpleProgressReporter,
   BarProgressReporter,

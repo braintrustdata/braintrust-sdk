@@ -18,7 +18,7 @@ import {
   BaseMetadata,
   Dataset,
 } from "../logger";
-import type { ProgressReporter } from "./reporters/types";
+import type { ProgressReporter } from "../reporters/types";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -27,12 +27,12 @@ import chalk from "chalk";
 import { terminalLink } from "termi-link";
 
 // Re-use the module resolution logic from Jest
+import type { ReporterDef } from "../reporters/types";
 import {
   EvalData,
   EvaluatorDef,
   EvaluatorFile,
   Filter,
-  ReporterDef,
   callEvaluatorData,
   error,
   logError,

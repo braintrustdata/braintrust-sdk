@@ -5,11 +5,8 @@ import Table from "cli-table3";
 import pluralize from "pluralize";
 
 import { ExperimentSummary, ScoreSummary, MetricSummary } from "../../logger";
-import {
-  ReporterDef,
-  EvaluatorDef,
-  EvalResultWithSummary,
-} from "../../framework";
+import type { ReporterDef } from "../../reporters/types";
+import { EvaluatorDef, EvalResultWithSummary } from "../../framework";
 import { isEmpty } from "../../util";
 
 function formatExperimentSummaryFancy(summary: ExperimentSummary) {
