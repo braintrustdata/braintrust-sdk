@@ -43,13 +43,6 @@ import { fancyReporter, warning } from "./reporters/eval";
 import { configureNode } from "../node";
 import { isEmpty } from "../util";
 import { loadEnvConfig } from "@next/env";
-export {
-  BuildSuccess,
-  BuildFailure,
-  BtBuildResult,
-  FileHandle,
-  EvaluatorState,
-} from "./types";
 import type {
   BuildSuccess,
   BuildFailure,
