@@ -132,7 +132,7 @@ importers:
         version: 5.3.3
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
+        version: 2.1.9(@types/node@20.10.5)
 
   internal/golden:
     dependencies:
@@ -320,9 +320,6 @@ importers:
       ts-jest:
         specifier: ^29.1.4
         version: 29.1.4(@babel/core@7.28.0)(esbuild@0.27.0)(jest@29.7.0)(typescript@5.4.4)
-      ts-morph:
-        specifier: ^27.0.2
-        version: 27.0.2
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(tsx@3.14.0)(typescript@5.4.4)
@@ -343,7 +340,7 @@ importers:
         version: 4.3.2(typescript@5.4.4)
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
+        version: 2.1.9(@types/node@20.10.5)
 
   js/src/wrappers/ai-sdk:
     devDependencies:
@@ -2528,18 +2525,6 @@ packages:
       '@types/node': 20.10.5
     dev: true
 
-  /@isaacs/balanced-match@4.0.1:
-    resolution: {integrity: sha512-yzMTt9lEb8Gv7zRioUilSglI0c0smZ9k5D65677DLWLtWJaXIS3CqcGyUFByYKlnUj6TkjLVs54fBl6+TiGQDQ==}
-    engines: {node: 20 || >=22}
-    dev: true
-
-  /@isaacs/brace-expansion@5.0.0:
-    resolution: {integrity: sha512-ZT55BDLV0yv0RBm2czMiZ+SqCGO7AvmOM3G/w2xhVPH+te0aKgFjmBvGlL1dH+ql2tgGO3MVrbb3jCKyvpgnxA==}
-    engines: {node: 20 || >=22}
-    dependencies:
-      '@isaacs/balanced-match': 4.0.1
-    dev: true
-
   /@isaacs/cliui@8.0.2:
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -3548,14 +3533,6 @@ packages:
       acorn: 8.15.0
     dev: false
 
-  /@ts-morph/common@0.28.1:
-    resolution: {integrity: sha512-W74iWf7ILp1ZKNYXY5qbddNaml7e9Sedv5lvU1V8lftlitkc9Pq1A+jlH23ltDgWYeZFFEqGCD1Ies9hqu3O+g==}
-    dependencies:
-      minimatch: 10.1.1
-      path-browserify: 1.0.1
-      tinyglobby: 0.2.15
-    dev: true
-
   /@types/argparse@2.0.14:
     resolution: {integrity: sha512-jJ6NMs9rXQ0rsqNt3TL4Elcwhd6wygo3lJOVoiHzURD34vsCcAlw443uGu4PXTtEmMF7sYKoadTCLXNmuJuQGw==}
     dev: true
@@ -3908,6 +3885,23 @@ packages:
       magic-string: 0.30.19
       msw: 2.6.6(@types/node@20.10.5)(typescript@5.3.3)
       vite: 5.4.14(@types/node@20.10.5)
+    dev: true
+
+  /@vitest/mocker@2.1.9(vite@5.4.14):
+    resolution: {integrity: sha512-tVL6uJgoUdi6icpxmdrn5YNo3g3Dxv+IHJBr0GXHaEdTcw3F+cPKnsXFhli6nO+f/6SDKPHEK1UN+k+TQv0Ehg==}
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^5.0.0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
+    dependencies:
+      '@vitest/spy': 2.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.19
+      vite: 5.4.14(@types/node@20.19.9)
     dev: true
 
   /@vitest/pretty-format@2.1.9:
@@ -4741,10 +4735,6 @@ packages:
   /co@4.6.0:
     resolution: {integrity: sha512-QVb0dM5HvG+uaxitm8wONl7jltx8dqhfU33DcqtOZcLSVIKSDDLDi7+0LbAKiyI8hD9u42m2YxXSkMGWThaecQ==}
     engines: {iojs: '>= 1.0.0', node: '>= 0.12.0'}
-    dev: true
-
-  /code-block-writer@13.0.3:
-    resolution: {integrity: sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg==}
     dev: true
 
   /collect-v8-coverage@1.0.2:
@@ -7357,13 +7347,6 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
-  /minimatch@10.1.1:
-    resolution: {integrity: sha512-enIvLvRAFZYXJzkCYG5RKmPfrFArdLv+R+lbQ53BmIMLIry74bjKzX6iHAm8WYamJkhSSEabrWN5D97XnKObjQ==}
-    engines: {node: 20 || >=22}
-    dependencies:
-      '@isaacs/brace-expansion': 5.0.0
-    dev: true
-
   /minimatch@3.1.2:
     resolution: {integrity: sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw==}
     dependencies:
@@ -7882,10 +7865,6 @@ packages:
       type-fest: 3.13.1
     transitivePeerDependencies:
       - supports-color
-    dev: true
-
-  /path-browserify@1.0.1:
-    resolution: {integrity: sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==}
     dev: true
 
   /path-exists@4.0.0:
@@ -9082,13 +9061,6 @@ packages:
       yargs-parser: 21.1.1
     dev: true
 
-  /ts-morph@27.0.2:
-    resolution: {integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==}
-    dependencies:
-      '@ts-morph/common': 0.28.1
-      code-block-writer: 13.0.3
-    dev: true
-
   /ts-pattern@5.8.0:
     resolution: {integrity: sha512-kIjN2qmWiHnhgr5DAkAafF9fwb0T5OhMVSWrm8XEdTFnX6+wfXwYOFjeF86UZ54vduqiR7BfqScFmXSzSaH8oA==}
     dev: true
@@ -9823,6 +9795,64 @@ packages:
       fsevents: 2.3.3
     dev: true
 
+  /vitest@2.1.9(@types/node@20.10.5):
+    resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@types/node': ^18.0.0 || >=20.0.0
+      '@vitest/browser': 2.1.9
+      '@vitest/ui': 2.1.9
+      happy-dom: '*'
+      jsdom: '*'
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+    dependencies:
+      '@types/node': 20.10.5
+      '@vitest/expect': 2.1.9
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
+      '@vitest/pretty-format': 2.1.9
+      '@vitest/runner': 2.1.9
+      '@vitest/snapshot': 2.1.9
+      '@vitest/spy': 2.1.9
+      '@vitest/utils': 2.1.9
+      chai: 5.2.0
+      debug: 4.4.3
+      expect-type: 1.2.0
+      magic-string: 0.30.19
+      pathe: 1.1.2
+      std-env: 3.8.1
+      tinybench: 2.9.0
+      tinyexec: 0.3.2
+      tinypool: 1.0.2
+      tinyrainbow: 1.2.0
+      vite: 5.4.14(@types/node@20.10.5)
+      vite-node: 2.1.9(@types/node@20.10.5)
+      why-is-node-running: 2.3.0
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+    dev: true
+
   /vitest@2.1.9(@types/node@20.10.5)(msw@2.6.6):
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -9908,7 +9938,7 @@ packages:
     dependencies:
       '@types/node': 20.19.16
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -9966,7 +9996,7 @@ packages:
     dependencies:
       '@types/node': 20.19.9
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
