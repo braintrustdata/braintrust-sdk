@@ -125,10 +125,64 @@ export {
   wrapOpenAIv4,
 } from "./wrappers/oai";
 
-export { wrapAISDK, BraintrustMiddleware } from "./wrappers/ai-sdk";
+export {
+  wrapAISDK,
+  BraintrustMiddleware,
+  wrapAISDKModel,
+} from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
 export * as graph from "./graph-framework";
+
+// framework includes a dependency on process.stdout.write which is node only
+export {
+  BaseExperiment,
+  Evaluator,
+  EvalTask,
+  Eval,
+  EvalHooks,
+  EvalResult,
+  EvalResultWithSummary,
+  EvalScorerArgs,
+  EvalScorer,
+  EvaluatorDef,
+  EvaluatorFile,
+  ReporterBody,
+  Reporter,
+  SpanContext,
+  buildLocalSummary,
+  reportFailures,
+  runEvaluator,
+  defaultErrorScoreHandler,
+} from "./framework";
+
+// framework2 includes a dependency __filename which is node only
+export type {
+  CodeOpts,
+  CreateProjectOpts,
+  FunctionEvent,
+  PromptContents,
+  PromptDefinition,
+  PromptDefinitionWithTools,
+  PromptOpts,
+  ScorerOpts,
+} from "./framework2";
+
+export {
+  CodeFunction,
+  CodePrompt,
+  Project,
+  ProjectNameIdMap,
+  PromptBuilder,
+  ScorerBuilder,
+  ToolBuilder,
+  projects,
+  promptContentsSchema,
+  promptDefinitionSchema,
+  promptDefinitionToPromptData,
+  promptDefinitionWithToolsSchema,
+  toolFunctionDefinitionSchema,
+} from "./framework2";
