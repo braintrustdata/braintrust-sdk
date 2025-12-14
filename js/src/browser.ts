@@ -2,7 +2,6 @@ import { configureBrowser } from "./browser-config";
 
 configureBrowser();
 
-import * as braintrust from "./exports-browser";
+// eslint-disable-next-line no-restricted-syntax -- already enforced in exports-browser
 export * from "./exports-browser";
-
-export default braintrust;
+export * as default from "./exports-browser";
