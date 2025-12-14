@@ -158,6 +158,11 @@ describe("CLI import restrictions", () => {
         const fullPath = path.join(dir, entry.name);
         const relativePath = path.relative(srcDir, fullPath);
 
+        // Skip the cli directory - CLI code is allowed to use require() and dynamic imports
+        if (entry.isDirectory() && entry.name === "cli") {
+          continue;
+        }
+
         if (entry.isDirectory()) {
           walkDirectory(fullPath);
         } else if (
