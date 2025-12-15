@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as ts from "typescript";
+import * as tar from "tar";
 import type { Options } from "tsup";
 
 /**
@@ -347,8 +348,11 @@ describe("API Compatibility", () => {
 
     const tarballPath = path.join(tempDir, packOutput);
 
-    // Extract tarball
-    execSync(`tar -xzf "${tarballPath}" -C "${tempDir}"`, { stdio: "pipe" });
+    // Extract tarball using tar package (cross-platform)
+    await tar.x({
+      file: tarballPath,
+      cwd: tempDir,
+    });
   }, 30000); // 30 second timeout for downloading
 
   afterAll(() => {
