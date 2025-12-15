@@ -1,6 +1,3 @@
-// Isomorphic exports for all JavaScript runtimes (Node.js, browsers, edge, Deno)
-export { LazyValue } from "./util";
-
 export type {
   AnyDataset,
   AttachmentParams,
@@ -185,7 +182,6 @@ export {
   toolFunctionDefinitionSchema,
 } from "./framework2";
 
-// Re-export types explicitly
 export type {
   ParentExperimentIds,
   ParentProjectLogIds,
@@ -198,13 +194,20 @@ export type {
   LogCommentFullArgs,
   CommentEvent,
   DatasetRecord,
-  AttachmentReference,
+} from "../util";
+
+export { LazyValue } from "./util";
+
+export type { AttachmentReference } from "./generated_types";
+
+export type {
   EvaluatorManifest,
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
-  EvalParameters,
 } from "../dev/types";
+
+export type { EvalParameters } from "./eval-parameters";
 
 export {
   evaluatorDefinitionSchema,

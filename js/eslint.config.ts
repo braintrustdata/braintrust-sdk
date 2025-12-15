@@ -102,7 +102,6 @@ export default [
       ...entryFiles,
       // Also include exports files which are imported by entry points
       "src/exports.ts",
-      "src/types.ts",
     ],
     ignores: ["**/*.test.ts", "**/*.test.tsx"],
     languageOptions: {
