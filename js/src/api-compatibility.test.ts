@@ -150,6 +150,11 @@ function getVersionBumpType(
   return "none";
 }
 
+/**
+ * Extracts exports and their signatures from a .d.ts file.
+ * For bulk exports (export { A, B, C }), looks up the actual declaration
+ * of each symbol to get its true signature, rather than using the export statement.
+ */
 function extractExportsFromDts(filePath: string): Map<string, ExportedSymbol> {
   const exports = new Map<string, ExportedSymbol>();
 
@@ -165,18 +170,57 @@ function extractExportsFromDts(filePath: string): Map<string, ExportedSymbol> {
     true,
   );
 
+  // First pass: collect all declarations by name
+  const declarations = new Map<string, ts.Node>();
+
+  function collectDeclarations(node: ts.Node) {
+    let name: string | undefined;
+
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      name = node.name.text;
+    } else if (ts.isClassDeclaration(node) && node.name) {
+      name = node.name.text;
+    } else if (ts.isInterfaceDeclaration(node)) {
+      name = node.name.text;
+    } else if (ts.isTypeAliasDeclaration(node)) {
+      name = node.name.text;
+    } else if (ts.isEnumDeclaration(node)) {
+      name = node.name.text;
+    } else if (ts.isVariableStatement(node)) {
+      node.declarationList.declarations.forEach((decl) => {
+        if (ts.isIdentifier(decl.name)) {
+          declarations.set(decl.name.text, node);
+        }
+      });
+    } else if (ts.isModuleDeclaration(node) && node.name) {
+      name = node.name.text;
+    }
+
+    if (name) {
+      declarations.set(name, node);
+    }
+
+    ts.forEachChild(node, collectDeclarations);
+  }
+
+  collectDeclarations(sourceFile);
+
+  // Second pass: process exports
   function visit(node: ts.Node) {
-    // Check if this is an export declaration
+    // Handle: export { foo, bar } or export { foo, bar } from './module'
     if (ts.isExportDeclaration(node)) {
-      // Handle: export { foo, bar } from './module'
-      // These are re-exports and should be included
       if (node.exportClause && ts.isNamedExports(node.exportClause)) {
         node.exportClause.elements.forEach((element) => {
           const name = element.name.text;
+          const declaration = declarations.get(name);
+
           exports.set(name, {
             name,
-            kind: "export",
-            signature: node.getText(sourceFile),
+            kind: declaration ? getNodeKind(declaration) : "re-export",
+            // Use the actual declaration's signature if found, otherwise just the name
+            signature: declaration
+              ? declaration.getText(sourceFile)
+              : `export { ${name} }`,
           });
         });
       }
@@ -234,13 +278,29 @@ function extractExportsFromDts(filePath: string): Map<string, ExportedSymbol> {
   return exports;
 }
 
+function getNodeKind(node: ts.Node): string {
+  if (ts.isFunctionDeclaration(node)) return "function";
+  if (ts.isClassDeclaration(node)) return "class";
+  if (ts.isInterfaceDeclaration(node)) return "interface";
+  if (ts.isTypeAliasDeclaration(node)) return "type";
+  if (ts.isEnumDeclaration(node)) return "enum";
+  if (ts.isVariableStatement(node)) return "variable";
+  if (ts.isModuleDeclaration(node)) return "namespace";
+  return "unknown";
+}
+
 function compareExports(
   publishedExports: Map<string, ExportedSymbol>,
   currentExports: Map<string, ExportedSymbol>,
 ): {
   removed: ExportedSymbol[];
   added: ExportedSymbol[];
-  modified: Array<{ name: string; before: string; after: string }>;
+  modified: Array<{
+    name: string;
+    before: string;
+    after: string;
+    kind: string;
+  }>;
 } {
   const removed: ExportedSymbol[] = [];
   const added: ExportedSymbol[] = [];
@@ -261,6 +321,7 @@ function compareExports(
         name,
         before: publishedSymbol.signature,
         after: currentSymbol.signature,
+        kind: publishedSymbol.kind,
       });
     }
   }
@@ -275,12 +336,25 @@ function compareExports(
   return { removed, added, modified };
 }
 
+/**
+ * Strips JSDoc comments from a signature.
+ * JSDoc comments are documentation only and don't affect the API surface.
+ */
+function stripJSDocComments(sig: string): string {
+  // Remove /** ... */ style comments (including multiline)
+  return sig.replace(/\/\*\*[\s\S]*?\*\//g, "").trim();
+}
+
 function areSignaturesCompatible(oldSig: string, newSig: string): boolean {
+  // Strip JSDoc comments first - they're documentation only
+  const oldStripped = stripJSDocComments(oldSig);
+  const newStripped = stripJSDocComments(newSig);
+
   // Normalize whitespace for comparison
   const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
 
-  const oldNorm = normalize(oldSig);
-  const newNorm = normalize(newSig);
+  const oldNorm = normalize(oldStripped);
+  const newNorm = normalize(newStripped);
 
   // If they're exactly the same, they're compatible
   if (oldNorm === newNorm) {
@@ -291,6 +365,48 @@ function areSignaturesCompatible(oldSig: string, newSig: string): boolean {
   // This is a simplified heuristic - in practice, you might want more sophisticated analysis
   // For now, we'll be conservative and consider any change as potentially breaking
   return false;
+}
+
+/**
+ * Truncates a signature for display, showing first N chars and
+ * handling multiline signatures better
+ */
+function truncateSignature(sig: string, maxLength: number = 150): string {
+  // Normalize whitespace
+  const normalized = sig.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return normalized.substring(0, maxLength) + "...";
+}
+
+/**
+ * Finds the first difference between two strings
+ */
+function findDifference(before: string, after: string): string {
+  const maxLen = Math.max(before.length, after.length);
+  let diffStart = -1;
+
+  for (let i = 0; i < maxLen; i++) {
+    if (before[i] !== after[i]) {
+      diffStart = i;
+      break;
+    }
+  }
+
+  if (diffStart === -1) {
+    return "Strings are identical after normalization";
+  }
+
+  const contextStart = Math.max(0, diffStart - 50);
+  const contextEnd = Math.min(maxLen, diffStart + 200);
+
+  const beforeContext = before.substring(contextStart, contextEnd);
+  const afterContext = after.substring(contextStart, contextEnd);
+
+  return `First difference at position ${diffStart}:\n    Before: ...${beforeContext}...\n    After:  ...${afterContext}...`;
 }
 
 describe("API Compatibility", () => {
@@ -443,10 +559,17 @@ describe("API Compatibility", () => {
           errors.push(
             `Modified exports (${comparison.modified.length}):\n` +
               comparison.modified
-                .map(
-                  (m) =>
-                    `  - ${m.name}\n    Before: ${m.before.substring(0, 100)}...\n    After: ${m.after.substring(0, 100)}...`,
-                )
+                .map((m) => {
+                  // For modified exports, show more context and find the actual difference
+                  const beforeNorm = m.before.replace(/\s+/g, " ").trim();
+                  const afterNorm = m.after.replace(/\s+/g, " ").trim();
+
+                  if (beforeNorm === afterNorm) {
+                    return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization (possible whitespace-only change)`;
+                  }
+
+                  return `  - ${m.name} (${m.kind})\n    ${findDifference(beforeNorm, afterNorm)}`;
+                })
                 .join("\n"),
           );
         }
