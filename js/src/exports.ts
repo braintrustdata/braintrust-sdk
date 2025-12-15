@@ -184,6 +184,29 @@ export {
   promptDefinitionWithToolsSchema,
   toolFunctionDefinitionSchema,
 } from "./framework2";
--e;
-// Re-export all types
-export * from "./types";
+
+// Re-export types explicitly
+export type {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+  AttachmentReference,
+  EvaluatorManifest,
+  EvalParameterSerializedSchema,
+  EvaluatorDefinition,
+  EvaluatorDefinitions,
+  EvalParameters,
+} from "../dev/types";
+
+export {
+  evaluatorDefinitionSchema,
+  evaluatorDefinitionsSchema,
+} from "../dev/types";
