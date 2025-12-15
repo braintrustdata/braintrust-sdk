@@ -165,8 +165,9 @@ def test_litellm(session, version):
     # https://github.com/BerriAI/litellm/issues/13711
     session.install("openai<=1.99.9", "--force-reinstall")
     _install(session, "litellm", version)
-    # Install fastapi as it's required by litellm for some operations
+    # Install fastapi and orjson as they're required by litellm for proxy/responses operations
     session.install("fastapi")
+    session.install("orjson")
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
 
