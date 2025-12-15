@@ -1,6 +1,6 @@
-import path from "path";
 import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
+import iso from "./isomorph";
 import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
@@ -40,6 +40,10 @@ interface BaseFnOpts {
 
 export { toolFunctionDefinitionSchema };
 // ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
+
+// Safe access to __filename (only exists in Node.js CJS)
+const currentFilename =
+  typeof __filename !== "undefined" ? __filename : "unknown";
 
 type NameOrId = { name: string } | { id: string };
 
@@ -176,7 +180,7 @@ export class ToolBuilder {
     let resolvedName = name ?? handler.name;
 
     if (resolvedName.trim().length === 0) {
-      resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
+      resolvedName = `Tool ${iso.basename(currentFilename)} ${this.taskCounter}`;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -218,7 +222,7 @@ export class ScorerBuilder {
       resolvedName = opts.handler.name;
     }
     if (!resolvedName || resolvedName.trim().length === 0) {
-      resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
+      resolvedName = `Scorer ${iso.basename(currentFilename)} ${this.taskCounter}`;
     }
     const slug =
       opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });

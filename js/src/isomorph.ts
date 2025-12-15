@@ -42,6 +42,10 @@ export interface Common {
   // hash a string. not guaranteed to be crypto safe.
   hash?: (data: string) => string;
 
+  // Cross-platform utilities.
+  basename: (filepath: string) => string;
+  writeln: (text: string) => void;
+
   // Filesystem operations.
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
@@ -70,5 +74,7 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
+  basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
+  writeln: (text: string) => console.log(text),
 };
 export default iso;
