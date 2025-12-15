@@ -716,6 +716,107 @@ def test_span_log_with_large_document_many_pages(with_memory_logger):
     assert logged_output["pages"][0]["lines"][0]["words"][0]["content"] == "word_0"
 
 
+def test_span_log_handles_nan_gracefully(with_memory_logger):
+    """Test that span.log() handles NaN values by converting them to "NaN" string."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle NaN gracefully
+        span.log(
+            input={"test": "input"},
+            output={"value": float("nan")},
+        )
+
+    # Verify the log was recorded with NaN handled appropriately
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # NaN should be converted to "NaN" string for JSON compatibility
+    output_value = logs[0]["output"]["value"]
+    assert output_value == "NaN"
+
+
+def test_span_log_handles_infinity_gracefully(with_memory_logger):
+    """Test that span.log() handles Infinity values by converting them to "Infinity"/"-Infinity" strings."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle Infinity gracefully
+        span.log(
+            input={"test": "input"},
+            output={"value": float("inf"), "neg": float("-inf")},
+        )
+
+    # Verify the log was recorded with Infinity handled appropriately
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # Infinity should be converted to string representations for JSON compatibility
+    assert logs[0]["output"]["value"] == "Infinity"
+    assert logs[0]["output"]["neg"] == "-Infinity"
+
+
+def test_span_log_handles_unstringifiable_object_gracefully(with_memory_logger):
+    """Test that span.log() should handle objects with bad __str__ gracefully without raising.
+
+    This test currently FAILS - it demonstrates the desired behavior after the fix.
+    """
+    logger = init_test_logger(__name__)
+
+    class BadStrObject:
+        def __str__(self):
+            raise RuntimeError("Cannot convert to string!")
+
+        def __repr__(self):
+            raise RuntimeError("Cannot convert to repr!")
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle gracefully
+        span.log(
+            input={"test": "input"},
+            output={"result": BadStrObject()},
+        )
+
+    # Verify the log was recorded with a fallback representation
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # The bad object should have been replaced with some error placeholder
+    assert "result" in logs[0]["output"]
+    output_str = str(logs[0]["output"]["result"])
+    # Should contain some indication of serialization failure
+    assert "error" in output_str.lower() or "serializ" in output_str.lower()
+
+
+def test_span_log_handles_bad_dict_keys_gracefully(with_memory_logger):
+    """Test that span.log() should handle non-stringifiable dict keys gracefully.
+
+    This test currently FAILS - it demonstrates the desired behavior after the fix.
+    """
+    logger = init_test_logger(__name__)
+
+    class BadKey:
+        def __str__(self):
+            raise ValueError("Key cannot be stringified!")
+
+        def __repr__(self):
+            raise ValueError("Key cannot be stringified!")
+
+    with logger.start_span(name="test_span") as span:
+        # Should NOT raise - should handle gracefully
+        span.log(
+            input={"test": "input"},
+            output={BadKey(): "value"},
+        )
+
+    # Verify the log was recorded with the problematic key handled
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    assert logs[0]["input"]["test"] == "input"
+    # The output should exist but the bad key should be replaced
+    assert "output" in logs[0]
+
+
 def test_span_link_logged_out(with_memory_logger):
     simulate_logout()
     assert_logged_out()
@@ -2034,11 +2135,13 @@ def test_parent_precedence_explicit_parent_overrides(with_memory_logger, with_si
 def reset_id_generator_state():
     """Reset ID generator state and environment variables before each test"""
     logger._state._reset_id_generator()
+    logger._state._reset_context_manager()
     original_env = os.getenv("BRAINTRUST_OTEL_COMPAT")
     try:
         yield
     finally:
         logger._state._reset_id_generator()
+        logger._state._reset_context_manager()
         if "BRAINTRUST_OTEL_COMPAT" in os.environ:
             del os.environ["BRAINTRUST_OTEL_COMPAT"]
         if original_env:
@@ -2489,7 +2592,7 @@ class TestDatasetInternalBtql(TestCase):
 
     @patch("braintrust.logger.BraintrustState")
     def test_dataset_internal_btql_limit_not_overwritten(self, mock_state_class):
-        """Test that custom limit in _internal_btql is not overwritten by INTERNAL_BTQL_LIMIT."""
+        """Test that custom limit in _internal_btql is not overwritten by DEFAULT_FETCH_BATCH_SIZE."""
         # Set up mock state
         mock_state = MagicMock()
         mock_state_class.return_value = mock_state
@@ -2536,7 +2639,7 @@ class TestDatasetInternalBtql(TestCase):
         call_args = mock_api_conn.post.call_args
         query_json = call_args[1]["json"]["query"]
 
-        # Verify that the custom limit is present (not overwritten by INTERNAL_BTQL_LIMIT)
+        # Verify that the custom limit is present (not overwritten by DEFAULT_FETCH_BATCH_SIZE)
         self.assertEqual(query_json["limit"], custom_limit)
 
         # Verify that other _internal_btql fields are also present
@@ -2544,8 +2647,14 @@ class TestDatasetInternalBtql(TestCase):
 
     @patch("braintrust.logger.BraintrustState")
     def test_dataset_default_limit_when_not_specified(self, mock_state_class):
-        """Test that INTERNAL_BTQL_LIMIT is used when no custom limit is specified."""
-        from braintrust.logger import INTERNAL_BTQL_LIMIT, Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+        """Test that DEFAULT_FETCH_BATCH_SIZE is used when no custom limit is specified."""
+        from braintrust.logger import (
+            DEFAULT_FETCH_BATCH_SIZE,
+            Dataset,
+            LazyValue,
+            ObjectMetadata,
+            ProjectDatasetMetadata,
+        )
 
         # Set up mock state
         mock_state = MagicMock()
@@ -2588,4 +2697,52 @@ class TestDatasetInternalBtql(TestCase):
         query_json = call_args[1]["json"]["query"]
 
         # Verify that the default limit is used
-        self.assertEqual(query_json["limit"], INTERNAL_BTQL_LIMIT)
+        self.assertEqual(query_json["limit"], DEFAULT_FETCH_BATCH_SIZE)
+
+    @patch("braintrust.logger.BraintrustState")
+    def test_dataset_custom_batch_size_in_fetch(self, mock_state_class):
+        """Test that custom batch_size in fetch() is properly passed to BTQL query."""
+        from braintrust.logger import Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+
+        # Set up mock state
+        mock_state = MagicMock()
+        mock_state_class.return_value = mock_state
+
+        # Mock the API connection and response
+        mock_api_conn = MagicMock()
+        mock_state.api_conn.return_value = mock_api_conn
+
+        # Mock response object
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [{"id": "1", "input": "test1", "expected": "output1"}],
+            "cursor": None,
+        }
+        mock_api_conn.post.return_value = mock_response
+
+        # Create dataset
+        project_metadata = ObjectMetadata(id="test-project", name="test-project", full_info={})
+        dataset_metadata = ObjectMetadata(id="test-dataset", name="test-dataset", full_info={})
+        lazy_metadata = LazyValue(
+            lambda: ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata),
+            use_mutex=False,
+        )
+
+        dataset = Dataset(
+            lazy_metadata=lazy_metadata,
+            state=mock_state,
+        )
+
+        # Trigger a fetch with custom batch_size
+        custom_batch_size = 250
+        list(dataset.fetch(batch_size=custom_batch_size))
+
+        # Verify the API was called
+        mock_api_conn.post.assert_called_once()
+
+        # Get the actual call arguments
+        call_args = mock_api_conn.post.call_args
+        query_json = call_args[1]["json"]["query"]
+
+        # Verify that the custom batch_size is used
+        self.assertEqual(query_json["limit"], custom_batch_size)

@@ -1,0 +1,54 @@
+# Dockerfile for running otel-js tests in isolation from pnpm workspace
+# Build context: SDK repository root
+# Usage:
+#   docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22 --build-arg TEST_DIR=otel-v1 -t otel-js-test-v1 .
+#   docker run --rm otel-js-test-v1
+
+# NODE_VERSION must be provided via --build-arg (e.g., --build-arg NODE_VERSION=20)
+# Using placeholder default to avoid Docker warning - build will fail if not overridden
+ARG NODE_VERSION=REQUIRED
+ARG TEST_DIR
+FROM node:${NODE_VERSION}-bookworm-slim
+
+# Redeclare ARGs after FROM (ARGs are scoped to build stage)
+ARG NODE_VERSION
+ARG TEST_DIR
+
+# Validate that required build arguments are provided
+RUN if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" = "REQUIRED" ]; then echo "Error: NODE_VERSION build arg is required (e.g., --build-arg NODE_VERSION=20)" && exit 1; fi
+RUN if [ -z "$TEST_DIR" ]; then echo "Error: TEST_DIR build arg is required (e.g., --build-arg TEST_DIR=otel-v1)" && exit 1; fi
+RUN if [ "$TEST_DIR" != "otel-v1" ] && [ "$TEST_DIR" != "otel-v2" ]; then echo "Error: TEST_DIR must be either 'otel-v1' or 'otel-v2', got: '$TEST_DIR'" && exit 1; fi
+
+# Enable pnpm
+RUN corepack enable
+RUN corepack prepare pnpm@10 --activate
+
+# Install build dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+    git \
+    python3 \
+    build-essential
+
+WORKDIR /workspace
+
+# Copy the entire SDK repository (build context is SDK repo root)
+COPY . .
+
+# Build braintrust SDK first (required peer dependency)
+WORKDIR /workspace/js
+RUN pnpm install --ignore-workspace
+RUN pnpm run build
+
+# Build @braintrust/otel package
+WORKDIR /workspace/integrations/otel-js
+# Replace workspace:* with file: path for braintrust dependency
+RUN sed -i.bak 's/"braintrust": "workspace:\*"/"braintrust": "file:..\/..\/js"/' package.json && rm -f package.json.bak
+RUN pnpm install --ignore-workspace
+RUN pnpm run build
+
+# Set the test directory as environment variable (available at runtime)
+ENV TEST_DIR=${TEST_DIR}
+
+# Run tests for the specified test directory only
+WORKDIR /workspace/integrations/otel-js/${TEST_DIR}
+CMD ["sh", "../run-tests.sh"]

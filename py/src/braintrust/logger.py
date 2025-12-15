@@ -9,6 +9,7 @@ import inspect
 import io
 import json
 import logging
+import math
 import os
 import sys
 import textwrap
@@ -53,7 +54,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps
+from .bt_json import bt_dumps, bt_loads
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -360,7 +361,6 @@ class BraintrustState:
 
         # Context manager is dynamically selected based on current environment
         self._context_manager = None
-        self._last_otel_setting = None
         self._context_manager_lock = threading.Lock()
 
         def default_get_api_conn():
@@ -429,6 +429,11 @@ class BraintrustState:
         # which are controlled by env vars.
         self._id_generator = None
 
+    def _reset_context_manager(self):
+        # used in tests when we want to test with a different context manager
+        # which is controlled by BRAINTRUST_OTEL_COMPAT env var.
+        self._context_manager = None
+
     @property
     def id_generator(self):
         """Return the active id generator."""
@@ -441,19 +446,14 @@ class BraintrustState:
     @property
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
-        import os
-
-        current_otel_setting = os.environ.get("BRAINTRUST_OTEL_COMPAT", "")
-
-        # Cache the context manager unless the environment variable changed
-        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+        # Cache the context manager on first access
+        if self._context_manager is None:
             with self._context_manager_lock:
                 # Double-check after acquiring lock
-                if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+                if self._context_manager is None:
                     from braintrust.context import get_context_manager
 
                     self._context_manager = get_context_manager()
-                    self._last_otel_setting = current_otel_setting
 
         return self._context_manager
 
@@ -2472,7 +2472,15 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
                     # `json.dumps`. However, that runs at log upload time, while we want to
                     # cut out all the references to user objects synchronously in this
                     # function.
-                    return {str(k): _deep_copy_object(v[k], depth + 1) for k in v}
+                    result = {}
+                    for k in v:
+                        try:
+                            key_str = str(k)
+                        except Exception:
+                            # If str() fails on the key, use a fallback representation
+                            key_str = f"<non-stringifiable-key: {type(k).__name__}>"
+                        result[key_str] = _deep_copy_object(v[k], depth + 1)
+                    return result
                 elif isinstance(v, (List, Tuple, Set)):
                     return [_deep_copy_object(x, depth + 1) for x in v]
             finally:
@@ -2492,7 +2500,14 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
-        elif isinstance(v, (int, float, str, bool)) or v is None:
+        elif isinstance(v, float):
+            # Handle NaN and Infinity for JSON compatibility
+            if math.isnan(v):
+                return "NaN"
+            elif math.isinf(v):
+                return "Infinity" if v > 0 else "-Infinity"
+            return v
+        elif isinstance(v, (int, str, bool)) or v is None:
             # Skip roundtrip for primitive types.
             return v
         else:
@@ -2501,7 +2516,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             # E.g. the original type could have a `__del__` method that alters
             # some shared internal state, and we need this deep copy to be
             # fully-independent from the original.
-            return json.loads(bt_dumps(v))
+            return bt_loads(bt_dumps(v))
 
     return _deep_copy_object(event)
 
@@ -2524,7 +2539,7 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-INTERNAL_BTQL_LIMIT = 1000
+DEFAULT_FETCH_BATCH_SIZE = 1000
 MAX_BTQL_ITERATIONS = 10000
 
 
@@ -2551,7 +2566,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         self._fetched_data: Optional[List[TMapping]] = None
         self._internal_btql = _internal_btql
 
-    def fetch(self) -> Iterator[TMapping]:
+    def fetch(self, batch_size: Optional[int] = None) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -2564,9 +2579,10 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             print(record)
         ```
 
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
         :returns: An iterator over the records.
         """
-        return ObjectIterator(self._refetch)
+        return ObjectIterator(lambda: self._refetch(batch_size=batch_size))
 
     def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
@@ -2585,8 +2601,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     @abstractmethod
     def id(self) -> str: ...
 
-    def _refetch(self) -> List[TMapping]:
+    def _refetch(self, batch_size: Optional[int] = None) -> List[TMapping]:
         state = self._get_state()
+        limit = batch_size if batch_size is not None else DEFAULT_FETCH_BATCH_SIZE
         if self._fetched_data is None:
             cursor = None
             data = None
@@ -2611,7 +2628,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 ],
                             },
                             "cursor": cursor,
-                            "limit": INTERNAL_BTQL_LIMIT,
+                            "limit": limit,
                             **(self._internal_btql or {}),
                         },
                         "use_columnstore": False,
@@ -3762,8 +3779,14 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         self._lazy_metadata.get()
         return self.state
 
-    def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
-        return ExperimentDatasetIterator(self.fetch())
+    def as_dataset(self, batch_size: Optional[int] = None) -> Iterator[_ExperimentDatasetEvent]:
+        """
+        Return the experiment's data as a dataset iterator.
+
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
+        :returns: An iterator over the experiment data as dataset records.
+        """
+        return ExperimentDatasetIterator(self.fetch(batch_size=batch_size))
 
 
 _EXEC_COUNTER_LOCK = threading.Lock()
