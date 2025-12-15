@@ -1,6 +1,3 @@
-// Common exports shared between browser and node builds
-export { LazyValue } from "./util";
-
 export type {
   AnyDataset,
   AttachmentParams,
@@ -125,10 +122,94 @@ export {
   wrapOpenAIv4,
 } from "./wrappers/oai";
 
-export { wrapAISDK, BraintrustMiddleware } from "./wrappers/ai-sdk";
+export {
+  wrapAISDK,
+  BraintrustMiddleware,
+  wrapAISDKModel,
+} from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
 export * as graph from "./graph-framework";
+
+export {
+  BaseExperiment,
+  Evaluator,
+  EvalTask,
+  Eval,
+  EvalHooks,
+  EvalResult,
+  EvalResultWithSummary,
+  EvalScorerArgs,
+  EvalScorer,
+  EvaluatorDef,
+  EvaluatorFile,
+  ReporterBody,
+  Reporter,
+  SpanContext,
+  buildLocalSummary,
+  reportFailures,
+  runEvaluator,
+  defaultErrorScoreHandler,
+} from "./framework";
+
+export type {
+  CodeOpts,
+  CreateProjectOpts,
+  FunctionEvent,
+  PromptContents,
+  PromptDefinition,
+  PromptDefinitionWithTools,
+  PromptOpts,
+  ScorerOpts,
+} from "./framework2";
+
+export {
+  CodeFunction,
+  CodePrompt,
+  Project,
+  ProjectNameIdMap,
+  PromptBuilder,
+  ScorerBuilder,
+  ToolBuilder,
+  projects,
+  promptContentsSchema,
+  promptDefinitionSchema,
+  promptDefinitionToPromptData,
+  promptDefinitionWithToolsSchema,
+  toolFunctionDefinitionSchema,
+} from "./framework2";
+
+export type {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+} from "../util";
+
+export { LazyValue } from "./util";
+
+export type { AttachmentReference } from "./generated_types";
+
+export type {
+  EvaluatorManifest,
+  EvalParameterSerializedSchema,
+  EvaluatorDefinition,
+  EvaluatorDefinitions,
+} from "../dev/types";
+
+export type { EvalParameters } from "./eval-parameters";
+
+export {
+  evaluatorDefinitionSchema,
+  evaluatorDefinitionsSchema,
+} from "../dev/types";

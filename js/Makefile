@@ -14,6 +14,7 @@ help:
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
 	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
+	@echo "  make test-api-compat    - Run API compatibility tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
@@ -82,7 +83,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
@@ -94,6 +95,10 @@ install-optional-deps:
 test-core:
 	pnpm prune
 	pnpm test
+
+# Test API compatibility
+test-api-compat:
+	pnpm test:api-compat
 
 # Test everything
 test: test-core test-openai test-anthropic test-google-genai
