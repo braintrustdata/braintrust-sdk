@@ -1,6 +1,6 @@
-import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
 import iso from "./isomorph";
+import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
@@ -187,7 +187,7 @@ export class ToolBuilder {
     const tool: CodeFunction<any, any, any> = new CodeFunction(this.project, {
       handler,
       name: resolvedName,
-      slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+      slug: slug ?? slugify(resolvedName, { lower: true, strict: true }),
       type: "tool",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
       parameters: parameters as any,
@@ -225,7 +225,7 @@ export class ScorerBuilder {
       resolvedName = `Scorer ${iso.basename(currentFilename)} ${this.taskCounter}`;
     }
     const slug =
-      opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });
+      opts.slug ?? slugify(resolvedName, { lower: true, strict: true });
 
     if ("handler" in opts) {
       const scorer: CodeFunction<
@@ -552,8 +552,7 @@ export class PromptBuilder {
       }
     }
 
-    const slug =
-      opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
+    const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
 
     const promptData: PromptData = promptDefinitionToPromptData(opts, rawTools);
 

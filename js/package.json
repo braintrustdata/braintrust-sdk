@@ -128,7 +128,6 @@
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
-    "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
     "uuid": "^9.0.1",

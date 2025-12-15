@@ -21,7 +21,7 @@ import { addAzureBlobHeaders, isEmpty } from "../../util";
 import { z } from "zod/v3";
 import { capitalize } from "../../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
-import slugifyLib from "slugify";
+import { slugify } from "../../../util/string_util";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import pluralize from "pluralize";
 import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
@@ -401,6 +401,6 @@ function formatNameAndSlug(pieces: string[]) {
   const nonEmptyPieces = pieces.filter((piece) => piece.trim() !== "");
   return {
     name: capitalize(nonEmptyPieces.join(" ")),
-    slug: slugifyLib(nonEmptyPieces.join("-")),
+    slug: slugify(nonEmptyPieces.join("-")),
   };
 }
