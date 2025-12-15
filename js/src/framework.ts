@@ -7,6 +7,7 @@ import {
 } from "./generated_types";
 import { queue } from "async";
 
+import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
 import {
@@ -1262,7 +1263,7 @@ async function runEvaluatorInternal(
 
     if (e instanceof InternalAbortError) {
       // Log cancellation for debugging
-      if (process.env.BRAINTRUST_VERBOSE) {
+      if (iso.getEnv("BRAINTRUST_VERBOSE")) {
         console.warn("Evaluator cancelled:", (e as Error).message);
       }
     }
@@ -1423,17 +1424,17 @@ export const defaultReporter: ReporterDef<boolean> = {
     }
 
     if (jsonl) {
-      process.stdout.write(JSON.stringify(summary));
+      iso.writeln(JSON.stringify(summary));
     } else {
       // Simple plain-text output without fancy formatting
-      process.stdout.write("\n");
-      process.stdout.write("Experiment summary\n");
-      process.stdout.write("==================\n");
+      iso.writeln("Experiment summary");
+      iso.writeln("==================");
 
       if (summary.comparisonExperimentName) {
-        process.stdout.write(
-          `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)\n\n`,
+        iso.writeln(
+          `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)`,
         );
+        iso.writeln("");
       }
 
       const hasScores = Object.keys(summary.scores).length > 0;
@@ -1442,11 +1443,11 @@ export const defaultReporter: ReporterDef<boolean> = {
 
       if (hasScores || hasMetrics) {
         if (hasComparison) {
-          process.stdout.write(
-            "Name                Value      Change     Improvements Regressions\n",
+          iso.writeln(
+            "Name                Value      Change     Improvements Regressions",
           );
-          process.stdout.write(
-            "----------------------------------------------------------------\n",
+          iso.writeln(
+            "----------------------------------------------------------------",
           );
         }
 
@@ -1468,13 +1469,11 @@ export const defaultReporter: ReporterDef<boolean> = {
             const regressions =
               score.regressions > 0 ? score.regressions.toString() : "-";
 
-            process.stdout.write(
-              `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}\n`,
+            iso.writeln(
+              `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
             );
           } else {
-            process.stdout.write(
-              `${score.name.padEnd(20)} ${scoreValue.padStart(15)}\n`,
-            );
+            iso.writeln(`${score.name.padEnd(20)} ${scoreValue.padStart(15)}`);
           }
         }
 
@@ -1500,24 +1499,24 @@ export const defaultReporter: ReporterDef<boolean> = {
             const regressions =
               metric.regressions > 0 ? metric.regressions.toString() : "-";
 
-            process.stdout.write(
-              `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}\n`,
+            iso.writeln(
+              `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
             );
           } else {
-            process.stdout.write(
-              `${metric.name.padEnd(20)} ${metricValue.padStart(15)}\n`,
+            iso.writeln(
+              `${metric.name.padEnd(20)} ${metricValue.padStart(15)}`,
             );
           }
         }
       }
 
       if (summary.experimentUrl) {
-        process.stdout.write("\n");
-        process.stdout.write(`View results for ${summary.experimentName}\n`);
-        process.stdout.write(`See results at ${summary.experimentUrl}\n`);
+        iso.writeln("");
+        iso.writeln(`View results for ${summary.experimentName}`);
+        iso.writeln(`See results at ${summary.experimentUrl}`);
       }
     }
-    process.stdout.write("\n");
+    iso.writeln("");
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {

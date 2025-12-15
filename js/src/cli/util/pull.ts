@@ -13,7 +13,7 @@ import { warning } from "../../framework";
 import { z } from "zod/v3";
 import fs from "fs/promises";
 import util from "util";
-import slugify from "slugify";
+import { slugify } from "../../../util/string_util";
 import path from "path";
 import { currentRepo } from "../../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "../../../util/index";
