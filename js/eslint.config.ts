@@ -75,10 +75,34 @@ export default [
     },
   },
   {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: [...entryFiles, "**/*.test.ts", "**/*.test.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "./exports",
+                "./exports.ts",
+                "../exports",
+                "../exports.ts",
+              ],
+              message:
+                "Direct imports from 'exports.ts' are not allowed. Import from the specific module instead. Only entry points (index.ts, browser.ts) should import from exports.ts.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       ...entryFiles,
       // Also include exports files which are imported by entry points
-      "src/exports-*.ts",
+      "src/exports.ts",
+      "src/types.ts",
     ],
     ignores: ["**/*.test.ts", "**/*.test.tsx"],
     languageOptions: {

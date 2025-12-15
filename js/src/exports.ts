@@ -1,4 +1,4 @@
-// Common exports shared between browser and node builds
+// Isomorphic exports for all JavaScript runtimes (Node.js, browsers, edge, Deno)
 export { LazyValue } from "./util";
 
 export type {
@@ -137,7 +137,6 @@ export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
 export * as graph from "./graph-framework";
 
-// framework includes a dependency on process.stdout.write which is node only
 export {
   BaseExperiment,
   Evaluator,
@@ -159,7 +158,6 @@ export {
   defaultErrorScoreHandler,
 } from "./framework";
 
-// framework2 includes a dependency __filename which is node only
 export type {
   CodeOpts,
   CreateProjectOpts,
@@ -186,3 +184,6 @@ export {
   promptDefinitionWithToolsSchema,
   toolFunctionDefinitionSchema,
 } from "./framework2";
+-e;
+// Re-export all types
+export * from "./types";
