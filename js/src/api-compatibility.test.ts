@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as ts from "typescript";
+import type { Options } from "tsup";
 
 /**
  * API Compatibility Test
@@ -45,13 +46,74 @@ import * as ts from "typescript";
  * and handles complex TypeScript syntax correctly.
  */
 
-// Entrypoints to check based on package.json exports
-const ENTRYPOINTS = [
-  { name: "main", typesPath: "dist/index.d.ts" },
-  { name: "browser", typesPath: "dist/browser.d.ts" },
-  { name: "dev", typesPath: "dev/dist/index.d.ts" },
-  { name: "util", typesPath: "util/dist/index.d.ts" },
-];
+/**
+ * Extracts entrypoints from tsup.config.ts
+ * Reads the config and identifies all builds that generate .d.ts files
+ */
+async function getEntrypointsFromTsupConfig(): Promise<
+  Array<{ name: string; typesPath: string }>
+> {
+  const configPath = path.join(__dirname, "..", "tsup.config.ts");
+
+  // Dynamically import the tsup config
+  const configModule = await import(configPath);
+  const config: Options | Options[] = configModule.default;
+
+  const configs = Array.isArray(config) ? config : [config];
+  const entrypoints: Array<{ name: string; typesPath: string }> = [];
+
+  for (const cfg of configs) {
+    // Skip configs without dts enabled
+    if (!cfg.dts) continue;
+
+    const entry = cfg.entry;
+    const outDir = cfg.outDir || "dist";
+
+    if (Array.isArray(entry)) {
+      for (const entryFile of entry) {
+        const name = getEntrypointName(entryFile, outDir);
+        const typesPath = getTypesPath(entryFile, outDir);
+        entrypoints.push({ name, typesPath });
+      }
+    } else if (typeof entry === "object") {
+      // entry is a record like { main: 'src/index.ts' }
+      for (const [key, entryFile] of Object.entries(entry)) {
+        const name = key;
+        const typesPath = getTypesPath(String(entryFile), outDir);
+        entrypoints.push({ name, typesPath });
+      }
+    }
+  }
+
+  return entrypoints;
+}
+
+/**
+ * Determines the entrypoint name from the entry file path
+ */
+function getEntrypointName(entryFile: string, outDir: string): string {
+  const basename = path.basename(entryFile, path.extname(entryFile));
+
+  // Map common patterns to friendly names
+  if (entryFile.includes("src/index.ts")) return "main";
+  if (entryFile.includes("src/browser.ts")) return "browser";
+  if (entryFile.includes("dev/index.ts")) return "dev";
+  if (entryFile.includes("util/index.ts")) return "util";
+
+  // Default to basename
+  return basename;
+}
+
+/**
+ * Constructs the .d.ts path from entry file and output directory
+ */
+function getTypesPath(entryFile: string, outDir: string): string {
+  const basename = path.basename(entryFile, path.extname(entryFile));
+  return path.join(outDir, `${basename}.d.ts`);
+}
+
+// Will be populated in beforeAll
+let ENTRYPOINTS: Array<{ name: string; typesPath: string }> = [];
 
 interface VersionInfo {
   major: number;
@@ -237,6 +299,13 @@ describe("API Compatibility", () => {
   let versionBumpType: "major" | "minor" | "patch" | "none";
 
   beforeAll(async () => {
+    // Load entrypoints from tsup config
+    ENTRYPOINTS = await getEntrypointsFromTsupConfig();
+    console.log(
+      `Loaded ${ENTRYPOINTS.length} entrypoints from tsup.config.ts:`,
+      ENTRYPOINTS.map((e) => e.name).join(", "),
+    );
+
     // Get current version from package.json
     const packageJsonPath = path.join(__dirname, "..", "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
@@ -300,113 +369,118 @@ describe("API Compatibility", () => {
     expect(fs.existsSync(path.join(tempDir, "package"))).toBe(true);
   });
 
-  for (const entrypoint of ENTRYPOINTS) {
-    describe(`Entrypoint: ${entrypoint.name}`, () => {
-      test(`should not regress public API surface (${entrypoint.typesPath})`, () => {
-        if (!publishedVersion) {
-          console.log("Skipping test: No published version available");
-          return;
-        }
+  test("should not regress public API surface for all entrypoints", () => {
+    if (!publishedVersion) {
+      console.log("Skipping test: No published version available");
+      return;
+    }
 
-        const publishedTypesPath = path.join(
-          tempDir,
-          "package",
-          entrypoint.typesPath,
+    // Track any failures to report them all at once
+    const failures: string[] = [];
+
+    for (const entrypoint of ENTRYPOINTS) {
+      const publishedTypesPath = path.join(
+        tempDir,
+        "package",
+        entrypoint.typesPath,
+      );
+      const currentTypesPath = path.join(__dirname, "..", entrypoint.typesPath);
+
+      // Check if both files exist
+      if (!fs.existsSync(publishedTypesPath)) {
+        console.warn(
+          `Published types not found: ${publishedTypesPath}. Skipping ${entrypoint.name}.`,
         );
-        const currentTypesPath = path.join(
-          __dirname,
-          "..",
-          entrypoint.typesPath,
+        continue;
+      }
+
+      if (!fs.existsSync(currentTypesPath)) {
+        throw new Error(
+          `Current types not found: ${currentTypesPath}. Build the package first with: pnpm build`,
         );
+      }
 
-        // Check if both files exist
-        if (!fs.existsSync(publishedTypesPath)) {
-          console.warn(
-            `Published types not found: ${publishedTypesPath}. Skipping.`,
-          );
-          return;
-        }
+      // Extract exports from both versions
+      const publishedExports = extractExportsFromDts(publishedTypesPath);
+      const currentExports = extractExportsFromDts(currentTypesPath);
 
-        if (!fs.existsSync(currentTypesPath)) {
-          throw new Error(
-            `Current types not found: ${currentTypesPath}. Build the package first with: pnpm build`,
-          );
-        }
+      console.log(
+        `${entrypoint.name}: Published exports: ${publishedExports.size}, Current exports: ${currentExports.size}`,
+      );
 
-        // Extract exports from both versions
-        const publishedExports = extractExportsFromDts(publishedTypesPath);
-        const currentExports = extractExportsFromDts(currentTypesPath);
+      // Compare the exports
+      const comparison = compareExports(publishedExports, currentExports);
 
+      // Log additions
+      if (comparison.added.length > 0) {
         console.log(
-          `${entrypoint.name}: Published exports: ${publishedExports.size}, Current exports: ${currentExports.size}`,
+          `${entrypoint.name}: Added ${comparison.added.length} exports:`,
+          comparison.added.map((e) => e.name).join(", "),
         );
+      }
 
-        // Compare the exports
-        const comparison = compareExports(publishedExports, currentExports);
+      // Check for breaking changes
+      const hasBreakingChanges =
+        comparison.removed.length > 0 || comparison.modified.length > 0;
 
-        // Log additions
-        if (comparison.added.length > 0) {
+      if (hasBreakingChanges && versionBumpType !== "major") {
+        const errors: string[] = [];
+
+        if (comparison.removed.length > 0) {
+          errors.push(
+            `Removed exports (${comparison.removed.length}):\n` +
+              comparison.removed
+                .map((e) => `  - ${e.name} (${e.kind})`)
+                .join("\n"),
+          );
+        }
+
+        if (comparison.modified.length > 0) {
+          errors.push(
+            `Modified exports (${comparison.modified.length}):\n` +
+              comparison.modified
+                .map(
+                  (m) =>
+                    `  - ${m.name}\n    Before: ${m.before.substring(0, 100)}...\n    After: ${m.after.substring(0, 100)}...`,
+                )
+                .join("\n"),
+          );
+        }
+
+        failures.push(
+          `[${entrypoint.name}] Breaking changes detected, but version bump is only ${versionBumpType}:\n` +
+            errors.join("\n\n"),
+        );
+      }
+
+      // For major version bumps, just log the changes but don't fail
+      if (versionBumpType === "major" && hasBreakingChanges) {
+        console.log(
+          `${entrypoint.name}: Breaking changes detected (allowed for major version):`,
+        );
+        if (comparison.removed.length > 0) {
           console.log(
-            `${entrypoint.name}: Added ${comparison.added.length} exports:`,
-            comparison.added.map((e) => e.name).join(", "),
+            `  Removed: ${comparison.removed.map((e) => e.name).join(", ")}`,
           );
         }
-
-        // Check for breaking changes
-        const hasBreakingChanges =
-          comparison.removed.length > 0 || comparison.modified.length > 0;
-
-        if (hasBreakingChanges && versionBumpType !== "major") {
-          const errors: string[] = [];
-
-          if (comparison.removed.length > 0) {
-            errors.push(
-              `Removed exports (${comparison.removed.length}):\n` +
-                comparison.removed
-                  .map((e) => `  - ${e.name} (${e.kind})`)
-                  .join("\n"),
-            );
-          }
-
-          if (comparison.modified.length > 0) {
-            errors.push(
-              `Modified exports (${comparison.modified.length}):\n` +
-                comparison.modified
-                  .map(
-                    (m) =>
-                      `  - ${m.name}\n    Before: ${m.before.substring(0, 100)}...\n    After: ${m.after.substring(0, 100)}...`,
-                  )
-                  .join("\n"),
-            );
-          }
-
-          throw new Error(
-            `Breaking changes detected in ${entrypoint.name} entrypoint, but version bump is only ${versionBumpType}.\n\n` +
-              errors.join("\n\n") +
-              `\n\nFor a ${versionBumpType} version bump, only additions are allowed, not removals or modifications.\n` +
-              `Either:\n` +
-              `  1. Bump to a major version if these breaking changes are intentional\n` +
-              `  2. Restore the removed/modified APIs to maintain backward compatibility`,
-          );
-        }
-
-        // For major version bumps, just log the changes but don't fail
-        if (versionBumpType === "major" && hasBreakingChanges) {
+        if (comparison.modified.length > 0) {
           console.log(
-            `${entrypoint.name}: Breaking changes detected (allowed for major version):`,
+            `  Modified: ${comparison.modified.map((m) => m.name).join(", ")}`,
           );
-          if (comparison.removed.length > 0) {
-            console.log(
-              `  Removed: ${comparison.removed.map((e) => e.name).join(", ")}`,
-            );
-          }
-          if (comparison.modified.length > 0) {
-            console.log(
-              `  Modified: ${comparison.modified.map((m) => m.name).join(", ")}`,
-            );
-          }
         }
-      });
-    });
-  }
+      }
+    }
+
+    // If there were any failures, throw them all at once
+    if (failures.length > 0) {
+      throw new Error(
+        `Breaking changes detected in ${failures.length} entrypoint(s):\n\n` +
+          failures.join("\n\n") +
+          `\n\nFor a ${versionBumpType} version bump, only additions are allowed, not removals or modifications.\n` +
+          `Either:\n` +
+          `  1. Bump to a major version if these breaking changes are intentional\n` +
+          `  2. Restore the removed/modified APIs to maintain backward compatibility`,
+      );
+    }
+  });
 });
