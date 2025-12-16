@@ -298,6 +298,8 @@ jobs:
       - name: Run Next.js smoke test
         working-directory: js/smoke
         shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
         run: |
           ./run-tests.sh nextjs-instrumentation
 
