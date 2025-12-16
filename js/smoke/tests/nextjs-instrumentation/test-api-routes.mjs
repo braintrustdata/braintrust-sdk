@@ -5,7 +5,7 @@
  */
 
 import { spawn } from "child_process";
-import { setTimeout } from "timers/promises";
+import { setTimeout as sleep } from "timers/promises";
 
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -61,7 +61,7 @@ async function waitForServer(maxTime = MAX_STARTUP_TIME) {
       // Server not ready yet
     }
 
-    await setTimeout(POLL_INTERVAL);
+    await sleep(POLL_INTERVAL);
     process.stdout.write(".");
   }
 
