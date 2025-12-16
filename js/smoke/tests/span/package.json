@@ -14,7 +14,7 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "braintrust": "file:../../../artifacts/braintrust-1.0.2.tgz"
+    "braintrust": "latest"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
