@@ -166,12 +166,12 @@ jobs:
           rm -f package-lock.json
 
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
             npm install
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
+            npm install --legacy-peer-deps
             npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
-            npm install --legacy-peer-deps
           fi
 
       - name: Build shared test package
@@ -233,8 +233,8 @@ jobs:
         run: |
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
           rm -f package-lock.json
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
           npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
 
       - name: Build shared test package
         working-directory: js/smoke/shared
@@ -292,9 +292,9 @@ jobs:
         run: |
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
           rm -f package-lock.json
+          npm install --legacy-peer-deps
           npx tsx ../../install-build.ts ../../../artifacts braintrust
           npx tsx ../../install-build.ts ../../../artifacts otel
-          npm install --legacy-peer-deps
 
       - name: Build shared test package
         working-directory: js/smoke/shared
@@ -353,8 +353,8 @@ jobs:
         run: |
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
           rm -f package-lock.json
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
           npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
 
       - name: Build shared test package
         working-directory: js/smoke/shared
