@@ -161,12 +161,9 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run integration test (CJS) for ${{ matrix.integration }}
+      - name: Install SDK artifacts for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
-        env:
-          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
-          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm ci
@@ -177,29 +174,20 @@ jobs:
             npx tsx ../../install-build.ts ../../../artifacts otel
           fi
 
-          npm start
-
-      - name: Enable ESM for integrations tests
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+      - name: Build shared test package
+        working-directory: js/smoke/shared
         run: |
-          npm run enable-esm
+          npm ci
+          npm run build
 
-      - name: Run integration test (ESM) for ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+      - name: Run smoke test for ${{ matrix.integration }}
+        working-directory: js/smoke
         shell: bash
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm ci
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
-          else
-            npm ci --legacy-peer-deps
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
-            npx tsx ../../install-build.ts ../../../artifacts otel
-          fi
-          npm start
+          ./run-tests.sh ${{ matrix.integration }}
 
       - name: Restore original package.json files
         if: always()
@@ -249,11 +237,17 @@ jobs:
           npm ci
           npx tsx ../../install-build.ts ../../../artifacts braintrust
 
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
       - name: Run Jest span smoke test
-        working-directory: js/smoke/tests/span-jest
+        working-directory: js/smoke
         shell: bash
         run: |
-          npm test
+          ./run-tests.sh span-jest
 
       - name: Restore original span-jest package.json files
         if: always()
@@ -301,11 +295,17 @@ jobs:
           npx tsx ../../install-build.ts ../../../artifacts braintrust
           npx tsx ../../install-build.ts ../../../artifacts otel
 
-      - name: Run Next.js build test
-        working-directory: js/smoke/tests/nextjs-instrumentation
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Next.js smoke test
+        working-directory: js/smoke
         shell: bash
         run: |
-          npm test
+          ./run-tests.sh nextjs-instrumentation
 
       - name: Restore original package.json files
         if: always()
@@ -351,11 +351,17 @@ jobs:
           npm ci
           npx tsx ../../install-build.ts ../../../artifacts braintrust
 
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
       - name: Run Cloudflare Worker smoke test
-        working-directory: js/smoke/tests/cloudflare-worker
+        working-directory: js/smoke
         shell: bash
         run: |
-          npm test
+          ./run-tests.sh cloudflare-worker
 
       - name: Restore original package.json files
         if: always()
@@ -404,9 +410,15 @@ jobs:
           tar -xzf "$TARBALL" -C build
           [ -d build/package ] && mv build/package build/braintrust
 
-      - name: Run logger test
-        working-directory: js/smoke/tests/deno
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Deno smoke test
+        working-directory: js/smoke
         env:
           BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
         run: |
-          deno task test
+          ./run-tests.sh deno
