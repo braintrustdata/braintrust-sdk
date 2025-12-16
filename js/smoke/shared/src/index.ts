@@ -44,3 +44,21 @@ export {
   testDirectLogging,
   runBasicLoggingTests,
 } from "./suites/basic-logging";
+
+export type { BraintrustModule } from "./suites/import-verification";
+export {
+  testCoreLoggingExports,
+  testDatasetExports,
+  testPromptExports,
+  testExperimentExports,
+  testEvalExports,
+  testTracingExports,
+  testClientWrapperExports,
+  testUtilityExports,
+  testFunctionExports,
+  testFramework2Exports,
+  testIDGeneratorExports,
+  testTestingExports,
+  testStateManagementExports,
+  runImportVerificationTests,
+} from "./suites/import-verification";

@@ -9,6 +9,7 @@ import {
   setupTestEnvironment,
   cleanupTestEnvironment,
   runBasicLoggingTests,
+  runImportVerificationTests,
   type TestResult,
 } from "../../shared/dist/index.mjs";
 
@@ -22,9 +23,9 @@ export async function runSharedTestSuites() {
   }
 
   // Dynamically import Braintrust from the build directory
-  const { initLogger, _exportsForTestingOnly } = await import(
-    `file://${buildDir}`
-  );
+  // Import as namespace to get all exports for verification
+  const braintrust = await import(`file://${buildDir}`);
+  const { initLogger, _exportsForTestingOnly } = braintrust;
 
   // Setup test environment
   const adapters = await setupTestEnvironment({
@@ -36,8 +37,14 @@ export async function runSharedTestSuites() {
   });
 
   try {
-    // Run all basic logging tests
-    const results = await runBasicLoggingTests(adapters);
+    // Run import verification tests first (forces bundler to process all exports)
+    const importResults = await runImportVerificationTests(braintrust);
+
+    // Run functional tests
+    const functionalResults = await runBasicLoggingTests(adapters);
+
+    // Combine results
+    const results = [...importResults, ...functionalResults];
 
     // Verify all tests passed
     const failures = results.filter((r) => !r.success);
@@ -50,9 +57,14 @@ export async function runSharedTestSuites() {
       throw new Error(`${failures.length} test(s) failed`);
     }
 
-    // Log results
+    // Log results by category
     console.log("✅ All shared test suites passed:");
-    for (const result of results) {
+    console.log("\nImport Verification:");
+    for (const result of importResults) {
+      console.log(`  ✓ ${result.testName}: ${result.message}`);
+    }
+    console.log("\nFunctional Tests:");
+    for (const result of functionalResults) {
       console.log(`  ✓ ${result.testName}: ${result.message}`);
     }
 
@@ -73,10 +85,10 @@ Deno.test("Run shared test suites", async () => {
     "All tests should pass",
   );
 
-  // Assert we ran at least 3 tests (from basic-logging suite)
+  // Assert we ran at least 16 tests (13 import verification + 3 functional)
   assertEquals(
-    results.length >= 3,
+    results.length >= 16,
     true,
-    `Expected at least 3 tests, got ${results.length}`,
+    `Expected at least 16 tests, got ${results.length}`,
   );
 });
