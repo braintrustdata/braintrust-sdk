@@ -1,11 +1,16 @@
-import { describe, expect, test, beforeEach, vi } from "vitest";
+import { describe, expect, test, beforeEach, afterEach } from "vitest";
 import { SpanCache } from "./span-cache";
 
-describe("SpanCache", () => {
+describe("SpanCache (disk-based)", () => {
   let cache: SpanCache;
 
   beforeEach(() => {
     cache = new SpanCache();
+  });
+
+  afterEach(() => {
+    // Clean up temp file after each test
+    cache.dispose();
   });
 
   describe("write and read", () => {
@@ -22,8 +27,8 @@ describe("SpanCache", () => {
         output: { response: "bar" },
       };
 
-      cache.write(rootSpanId, span1.span_id, span1);
-      cache.write(rootSpanId, span2.span_id, span2);
+      cache.writeSync(rootSpanId, span1.span_id, span1);
+      cache.writeSync(rootSpanId, span2.span_id, span2);
 
       const spans = cache.getByRootSpanId(rootSpanId);
       expect(spans).toHaveLength(2);
@@ -40,12 +45,12 @@ describe("SpanCache", () => {
       const rootSpanId = "root-123";
       const spanId = "span-1";
 
-      cache.write(rootSpanId, spanId, {
+      cache.writeSync(rootSpanId, spanId, {
         span_id: spanId,
         input: { text: "hello" },
       });
 
-      cache.write(rootSpanId, spanId, {
+      cache.writeSync(rootSpanId, spanId, {
         span_id: spanId,
         output: { response: "world" },
       });
@@ -63,12 +68,12 @@ describe("SpanCache", () => {
       const rootSpanId = "root-123";
       const spanId = "span-1";
 
-      cache.write(rootSpanId, spanId, {
+      cache.writeSync(rootSpanId, spanId, {
         span_id: spanId,
         metadata: { key1: "value1" },
       });
 
-      cache.write(rootSpanId, spanId, {
+      cache.writeSync(rootSpanId, spanId, {
         span_id: spanId,
         metadata: { key2: "value2" },
       });
@@ -83,7 +88,7 @@ describe("SpanCache", () => {
 
   describe("has", () => {
     test("should return true when rootSpanId exists", () => {
-      cache.write("root-123", "span-1", { span_id: "span-1" });
+      cache.writeSync("root-123", "span-1", { span_id: "span-1" });
       expect(cache.has("root-123")).toBe(true);
     });
 
@@ -93,9 +98,9 @@ describe("SpanCache", () => {
   });
 
   describe("clear", () => {
-    test("should remove spans for a specific rootSpanId", () => {
-      cache.write("root-1", "span-1", { span_id: "span-1" });
-      cache.write("root-2", "span-2", { span_id: "span-2" });
+    test("should remove spans for a specific rootSpanId from index", () => {
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
 
       cache.clear("root-1");
 
@@ -106,8 +111,8 @@ describe("SpanCache", () => {
 
   describe("clearAll", () => {
     test("should remove all cached spans", () => {
-      cache.write("root-1", "span-1", { span_id: "span-1" });
-      cache.write("root-2", "span-2", { span_id: "span-2" });
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
 
       cache.clearAll();
 
@@ -115,52 +120,34 @@ describe("SpanCache", () => {
     });
   });
 
-  describe("eviction", () => {
-    test("should evict oldest entries when maxRootSpans is exceeded", () => {
-      const smallCache = new SpanCache({ maxRootSpans: 2 });
-
-      smallCache.write("root-1", "span-1", { span_id: "span-1" });
-      smallCache.write("root-2", "span-2", { span_id: "span-2" });
-      smallCache.write("root-3", "span-3", { span_id: "span-3" });
-
-      expect(smallCache.size).toBe(2);
-      expect(smallCache.has("root-1")).toBe(false); // Oldest evicted
-      expect(smallCache.has("root-2")).toBe(true);
-      expect(smallCache.has("root-3")).toBe(true);
-    });
-  });
-
-  describe("TTL expiration", () => {
-    test("should return undefined for expired entries", () => {
-      vi.useFakeTimers();
-
-      const shortTtlCache = new SpanCache({ ttlMs: 1000 }); // 1 second TTL
-      shortTtlCache.write("root-1", "span-1", { span_id: "span-1" });
-
-      expect(shortTtlCache.has("root-1")).toBe(true);
-
-      // Advance time past TTL
-      vi.advanceTimersByTime(2000);
-
-      expect(shortTtlCache.has("root-1")).toBe(false);
-      expect(shortTtlCache.getByRootSpanId("root-1")).toBeUndefined();
-
-      vi.useRealTimers();
-    });
-  });
-
   describe("size", () => {
-    test("should return the number of root spans", () => {
+    test("should return the number of root spans tracked", () => {
       expect(cache.size).toBe(0);
 
-      cache.write("root-1", "span-1", { span_id: "span-1" });
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
       expect(cache.size).toBe(1);
 
-      cache.write("root-1", "span-2", { span_id: "span-2" }); // Same root
+      cache.writeSync("root-1", "span-2", { span_id: "span-2" }); // Same root
       expect(cache.size).toBe(1);
 
-      cache.write("root-2", "span-3", { span_id: "span-3" }); // Different root
+      cache.writeSync("root-2", "span-3", { span_id: "span-3" }); // Different root
       expect(cache.size).toBe(2);
+    });
+  });
+
+  describe("dispose", () => {
+    test("should clean up and allow reuse", () => {
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(cache.size).toBe(1);
+
+      cache.dispose();
+
+      expect(cache.size).toBe(0);
+      expect(cache.has("root-1")).toBe(false);
+
+      // Should be able to write again after dispose
+      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      expect(cache.size).toBe(1);
     });
   });
 });

@@ -5615,7 +5615,7 @@ export class SpanImpl implements Span {
       span_attributes:
         partialRecord.span_attributes as CachedSpan["span_attributes"],
     };
-    this._state.spanCache.write(this._rootSpanId, this._spanId, cachedSpan);
+    this._state.spanCache.writeSync(this._rootSpanId, this._spanId, cachedSpan);
 
     const computeRecord = async () => ({
       ...partialRecord,

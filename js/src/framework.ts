@@ -36,6 +36,7 @@ import {
   traced,
   withCurrent,
   withParent,
+  _internalGetGlobalState,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty, InternalAbortError } from "./util";
@@ -729,6 +730,8 @@ export async function Eval<
     }
   } finally {
     progressReporter.stop();
+    // Clean up disk-based span cache after eval completes
+    _internalGetGlobalState()?.spanCache?.dispose();
   }
 }
 

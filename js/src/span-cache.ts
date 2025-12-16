@@ -1,10 +1,14 @@
 /**
- * SpanCache provides a local in-memory cache for span data, allowing
+ * SpanCache provides a disk-based cache for span data, allowing
  * scorers to read spans without making server round-trips when possible.
  *
- * Spans are indexed by rootSpanId, matching the query pattern used by
- * Trace.getSpans().
+ * Spans are stored on disk to minimize memory usage during evaluations.
+ * The cache file is automatically cleaned up when dispose() is called.
  */
+
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 export interface CachedSpan {
   input?: unknown;
@@ -19,42 +23,54 @@ export interface CachedSpan {
   };
 }
 
-export interface SpanCacheOptions {
-  /**
-   * Maximum number of root spans to cache. When exceeded, oldest entries
-   * are evicted. Defaults to 1000.
-   */
-  maxRootSpans?: number;
-
-  /**
-   * Time-to-live in milliseconds. Cached spans older than this are
-   * considered stale. Defaults to 300000 (5 minutes).
-   */
-  ttlMs?: number;
+interface DiskSpanRecord {
+  rootSpanId: string;
+  spanId: string;
+  data: CachedSpan;
 }
-
-interface CacheEntry {
-  spans: Map<string, CachedSpan>;
-  createdAt: number;
-}
-
-const DEFAULT_MAX_ROOT_SPANS = 1000;
-const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Local cache for span data, keyed by rootSpanId.
+ * Disk-based cache for span data, keyed by rootSpanId.
  *
- * This cache is used by Trace.getSpans() to avoid server round-trips
- * when fetching span data that was just logged locally.
+ * This cache writes spans to a temporary file to minimize memory usage.
+ * It uses append-only writes and reads the full file when querying.
  */
 export class SpanCache {
-  private cache: Map<string, CacheEntry> = new Map();
-  private readonly maxRootSpans: number;
-  private readonly ttlMs: number;
+  private cacheFilePath: string | null = null;
+  private fileHandle: fs.promises.FileHandle | null = null;
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
-  constructor(options?: SpanCacheOptions) {
-    this.maxRootSpans = options?.maxRootSpans ?? DEFAULT_MAX_ROOT_SPANS;
-    this.ttlMs = options?.ttlMs ?? DEFAULT_TTL_MS;
+  // Small in-memory index tracking which rootSpanIds have data
+  private rootSpanIndex: Set<string> = new Set();
+
+  constructor() {
+    // Initialization is lazy - file is created on first write
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = (async () => {
+      const tmpDir = os.tmpdir();
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      this.cacheFilePath = path.join(
+        tmpDir,
+        `braintrust-span-cache-${uniqueId}.jsonl`,
+      );
+
+      // Open file for append+read
+      this.fileHandle = await fs.promises.open(this.cacheFilePath, "a+");
+      this.initialized = true;
+    })();
+
+    return this.initPromise;
   }
 
   /**
@@ -64,108 +80,153 @@ export class SpanCache {
    * @param spanId The unique ID of this span
    * @param data The span data to cache
    */
-  write(rootSpanId: string, spanId: string, data: CachedSpan): void {
-    let entry = this.cache.get(rootSpanId);
+  async write(
+    rootSpanId: string,
+    spanId: string,
+    data: CachedSpan,
+  ): Promise<void> {
+    await this.ensureInitialized();
 
-    if (!entry) {
-      // Evict oldest entries if at capacity
-      this.evictIfNeeded();
+    const record: DiskSpanRecord = { rootSpanId, spanId, data };
+    const line = JSON.stringify(record) + "\n";
 
-      entry = {
-        spans: new Map(),
-        createdAt: Date.now(),
-      };
-      this.cache.set(rootSpanId, entry);
+    await this.fileHandle!.appendFile(line, "utf8");
+    this.rootSpanIndex.add(rootSpanId);
+  }
+
+  /**
+   * Synchronous write - fire and forget.
+   * Uses sync file operations to avoid blocking the caller.
+   */
+  writeSync(rootSpanId: string, spanId: string, data: CachedSpan): void {
+    // Lazy init - create file synchronously if needed
+    if (!this.initialized) {
+      const tmpDir = os.tmpdir();
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      this.cacheFilePath = path.join(
+        tmpDir,
+        `braintrust-span-cache-${uniqueId}.jsonl`,
+      );
+      // Touch the file
+      fs.writeFileSync(this.cacheFilePath, "");
+      this.initialized = true;
     }
 
-    // Merge with existing span data if present
-    const existing = entry.spans.get(spanId);
-    if (existing) {
-      entry.spans.set(spanId, this.mergeSpanData(existing, data));
-    } else {
-      entry.spans.set(spanId, data);
-    }
+    const record: DiskSpanRecord = { rootSpanId, spanId, data };
+    const line = JSON.stringify(record) + "\n";
+
+    fs.appendFileSync(this.cacheFilePath!, line, "utf8");
+    this.rootSpanIndex.add(rootSpanId);
   }
 
   /**
    * Get all cached spans for a given rootSpanId.
    *
+   * This reads the file and merges all records for the given rootSpanId.
+   *
    * @param rootSpanId The root span ID to look up
-   * @returns Array of cached spans, or undefined if not in cache or expired
+   * @returns Array of cached spans, or undefined if not in cache
    */
   getByRootSpanId(rootSpanId: string): CachedSpan[] | undefined {
-    const entry = this.cache.get(rootSpanId);
-
-    if (!entry) {
+    if (!this.initialized || !this.cacheFilePath) {
       return undefined;
     }
 
-    // Check TTL
-    if (Date.now() - entry.createdAt > this.ttlMs) {
-      this.cache.delete(rootSpanId);
+    // Quick check using in-memory index
+    if (!this.rootSpanIndex.has(rootSpanId)) {
       return undefined;
     }
 
-    return Array.from(entry.spans.values());
+    try {
+      const content = fs.readFileSync(this.cacheFilePath, "utf8");
+      const lines = content.trim().split("\n").filter(Boolean);
+
+      // Accumulate spans by spanId, merging updates
+      const spanMap = new Map<string, CachedSpan>();
+
+      for (const line of lines) {
+        try {
+          const record = JSON.parse(line) as DiskSpanRecord;
+          if (record.rootSpanId !== rootSpanId) {
+            continue;
+          }
+
+          const existing = spanMap.get(record.spanId);
+          if (existing) {
+            spanMap.set(
+              record.spanId,
+              this.mergeSpanData(existing, record.data),
+            );
+          } else {
+            spanMap.set(record.spanId, record.data);
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+
+      if (spanMap.size === 0) {
+        return undefined;
+      }
+
+      return Array.from(spanMap.values());
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Check if a rootSpanId has cached data.
    */
   has(rootSpanId: string): boolean {
-    const entry = this.cache.get(rootSpanId);
-    if (!entry) return false;
-
-    // Check TTL
-    if (Date.now() - entry.createdAt > this.ttlMs) {
-      this.cache.delete(rootSpanId);
-      return false;
-    }
-
-    return true;
+    return this.rootSpanIndex.has(rootSpanId);
   }
 
   /**
    * Clear all cached spans for a given rootSpanId.
-   * Useful for explicit cleanup after scoring completes.
+   * Note: This only removes from the index. The data remains in the file
+   * but will be ignored on reads.
    */
   clear(rootSpanId: string): void {
-    this.cache.delete(rootSpanId);
+    this.rootSpanIndex.delete(rootSpanId);
   }
 
   /**
-   * Clear all cached data.
+   * Clear all cached data and remove the cache file.
    */
   clearAll(): void {
-    this.cache.clear();
+    this.rootSpanIndex.clear();
+    this.dispose();
   }
 
   /**
-   * Get the number of root spans currently cached.
+   * Get the number of root spans currently tracked.
    */
   get size(): number {
-    return this.cache.size;
+    return this.rootSpanIndex.size;
   }
 
-  private evictIfNeeded(): void {
-    if (this.cache.size < this.maxRootSpans) {
-      return;
+  /**
+   * Clean up the cache file. Call this when the eval is complete.
+   */
+  dispose(): void {
+    if (this.fileHandle) {
+      this.fileHandle.close().catch(() => {});
+      this.fileHandle = null;
     }
 
-    // Find and remove the oldest entry
-    let oldestKey: string | undefined;
-    let oldestTime = Infinity;
-
-    for (const [key, entry] of this.cache) {
-      if (entry.createdAt < oldestTime) {
-        oldestTime = entry.createdAt;
-        oldestKey = key;
+    if (this.cacheFilePath) {
+      try {
+        fs.unlinkSync(this.cacheFilePath);
+      } catch {
+        // Ignore cleanup errors
       }
+      this.cacheFilePath = null;
     }
 
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
-    }
+    this.initialized = false;
+    this.initPromise = null;
+    this.rootSpanIndex.clear();
   }
 
   private mergeSpanData(
