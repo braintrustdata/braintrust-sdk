@@ -1,10 +1,7 @@
 import {
   FunctionId as functionIdSchema,
-  InvokeFunction as InvokeFunctionRequestSchema,
   type InvokeFunctionType as InvokeFunctionRequest,
-  ChatCompletionMessageParam as MessageSchema,
   type ChatCompletionMessageParamType as Message,
-  StreamingMode as StreamingModeSchema,
   type StreamingModeType as StreamingMode,
 } from "../generated_types";
 import {
@@ -68,6 +65,12 @@ export interface InvokeFunctionArgs<
    * Additional OpenAI-style messages to add to the prompt (only works for llm functions).
    */
   messages?: Message[];
+
+  /**
+   * Context for functions that operate on spans/traces (e.g., facets). Should contain
+   * `object_type`, `object_id`, and `scope` fields.
+   */
+  context?: InvokeFunctionRequest["context"];
 
   /**
    * Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
@@ -144,6 +147,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     fetch,
     input,
     messages,
+    context,
     parent: parentArg,
     metadata,
     tags,
@@ -189,6 +193,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     ...functionId.data,
     input,
     messages,
+    context,
     parent,
     metadata,
     tags,
