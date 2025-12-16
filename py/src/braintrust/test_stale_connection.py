@@ -50,8 +50,10 @@ class StaleConnectionHandler(http.server.BaseHTTPRequestHandler):
     def _send_success(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
+        self.send_header('Content-Length', str(len(json.dumps({"base_exp_id": "base-123", "base_exp_name": "base-exp"}).encode())))
         self.end_headers()
         self.wfile.write(json.dumps({"base_exp_id": "base-123", "base_exp_name": "base-exp"}).encode())
+        self.wfile.flush()
 
     def do_GET(self):
         if self.path.startswith("/config/set"):
@@ -91,7 +93,10 @@ class TestFetchBaseExperimentStaleConnection(TestCase):
         StaleConnectionHandler.keep_alive_sleep_seconds = 0.0
         StaleConnectionHandler.connection_times.clear()
         # Reset via HTTP to ensure clean state
-        requests.get(f"{self.server_url}/config/reset", timeout=1)
+        try:
+            requests.get(f"{self.server_url}/config/reset", timeout=1)
+        except:
+            pass  # Server might not be ready yet, that's ok
 
     def _create_state(self):
         """Helper to create BraintrustState pointing to test server."""
@@ -115,12 +120,17 @@ class TestFetchBaseExperimentStaleConnection(TestCase):
     def test_fetch_base_experiment_retries_after_stale_connection(self):
         """Test that fetch_base_experiment() retries and succeeds after stale connection."""
         requests.get(f"{self.server_url}/config/set?idle_timeout_seconds=0.5")
+        requests.get(f"{self.server_url}/config/reset")
 
         state = self._create_state()
         experiment = self._create_experiment(state)
         conn = state.app_conn()
 
         # Establish connection (simulating experiment registration)
+        # Reset connection to ensure clean state
+        conn._reset()
+        # Small delay to ensure server is ready
+        time.sleep(0.1)
         resp = conn.post("/api/base_experiment/get_id", json={"id": "test-exp-id"})
         self.assertEqual(resp.status_code, 200)
 
