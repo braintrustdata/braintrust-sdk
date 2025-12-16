@@ -1,9 +1,6 @@
 import { describe, test } from "vitest";
 import { Prompt } from "./logger";
-import {
-  PromptData as PromptDataSchema,
-  type PromptDataType as PromptData,
-} from "./generated_types";
+import { type PromptDataType as PromptData } from "./generated_types";
 
 describe("prompt strict mode", () => {
   test("strict mode", () => {
