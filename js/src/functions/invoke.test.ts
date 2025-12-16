@@ -46,3 +46,37 @@ describe("initFunction", () => {
     expect(fn.name).toBe("initFunction-my-project-my-scorer-latest");
   });
 });
+
+describe("registerOtelFlush", () => {
+  beforeEach(() => {
+    _exportsForTestingOnly.setInitialTestState();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("should register OTEL flush callback", async () => {
+    const { registerOtelFlush } = await import("../logger");
+    const state = _internalGetGlobalState();
+
+    let flushed = false;
+    const mockFlush = async () => {
+      flushed = true;
+    };
+
+    registerOtelFlush(mockFlush);
+
+    // Calling flushOtel should invoke the registered callback
+    await state.flushOtel();
+
+    expect(flushed).toBe(true);
+  });
+
+  test("flushOtel should be no-op when no callback registered", async () => {
+    const state = _internalGetGlobalState();
+
+    // Should not throw
+    await state.flushOtel();
+  });
+});

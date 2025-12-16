@@ -561,6 +561,7 @@ export class BraintrustState {
   public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
+  private _otelFlushCallback: (() => Promise<void>) | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -633,6 +634,24 @@ export class BraintrustState {
       this._contextManager = getContextManager();
     }
     return this._contextManager;
+  }
+
+  /**
+   * Register an OTEL flush callback. This is called by @braintrust/otel
+   * when it initializes a BraintrustSpanProcessor/Exporter.
+   */
+  public registerOtelFlush(callback: () => Promise<void>): void {
+    this._otelFlushCallback = callback;
+  }
+
+  /**
+   * Flush OTEL spans if a callback is registered.
+   * Called during ensureSpansFlushed to ensure OTEL spans are visible in BTQL.
+   */
+  public async flushOtel(): Promise<void> {
+    if (this._otelFlushCallback) {
+      await this._otelFlushCallback();
+    }
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -905,6 +924,17 @@ export function _internalSetInitialState() {
  * @internal
  */
 export const _internalGetGlobalState = () => _globalState;
+
+/**
+ * Register a callback to flush OTEL spans. This is called by @braintrust/otel
+ * when it initializes a BraintrustSpanProcessor/Exporter.
+ *
+ * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
+ * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ */
+export function registerOtelFlush(callback: () => Promise<void>): void {
+  _globalState?.registerOtelFlush(callback);
+}
 
 export class FailedHTTPResponse extends Error {
   public status: number;

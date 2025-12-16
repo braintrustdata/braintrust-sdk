@@ -982,15 +982,20 @@ async function runEvaluatorInternal(
 
       const callback = async (rootSpan: Span) => {
         const ensureSpansFlushed = async () => {
+          // Flush native Braintrust spans
           if (experiment) {
             await flush({ state: experiment.loggingState });
-            return;
-          }
-          if (evaluator.state) {
+          } else if (evaluator.state) {
             await flush({ state: evaluator.state });
-            return;
+          } else {
+            await flush();
           }
-          await flush();
+
+          // Also flush OTEL spans if registered
+          const state = _internalGetGlobalState();
+          if (state) {
+            await state.flushOtel();
+          }
         };
 
         const trace = new Trace({
