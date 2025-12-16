@@ -3,6 +3,7 @@ import time
 from contextlib import AbstractAsyncContextManager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
+from pydantic import BaseModel
 from wrapt import wrap_function_wrapper
 
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
@@ -515,6 +516,10 @@ def _serialize_part(part: Any) -> Any:
 
 
 def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
+    # Handle Pydantic CLASSES (not instances)
+    if isinstance(obj, type) and issubclass(obj, BaseModel):
+        return obj.model_fields
+
     if hasattr(obj, "model_dump"):
         try:
             obj = obj.model_dump(exclude_none=True)
