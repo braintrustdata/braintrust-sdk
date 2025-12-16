@@ -29,9 +29,14 @@ function startDevServer() {
 
   devServer.stdout.on("data", (data) => {
     const output = data.toString();
+    process.stdout.write(output);
     if (output.includes("Ready") || output.includes("started server")) {
       console.log("✓ Dev server ready\n");
     }
+  });
+
+  devServer.stderr.on("data", (data) => {
+    process.stderr.write(data.toString());
   });
 
   devServer.on("error", (error) => {
