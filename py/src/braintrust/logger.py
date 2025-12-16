@@ -3586,17 +3586,35 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         state = self._get_state()
         conn = state.app_conn()
 
-        resp = conn.post("/api/base_experiment/get_id", json={"id": self.id})
-        if resp.status_code == 400:
-            # No base experiment
-            return None
+        max_retries = 3
+        timeout = (5.0, 10.0)  # (connect timeout, read timeout) in seconds
+        backoff_factor = 0.5
 
-        response_raise_for_status(resp)
-        base = resp.json()
-        if base:
-            return ExperimentIdentifier(id=base["base_exp_id"], name=base["base_exp_name"])
-        else:
-            return None
+        for attempt in range(max_retries):
+            try:
+                resp = conn.post("/api/base_experiment/get_id", json={"id": self.id}, timeout=timeout)
+                if resp.status_code == 400:
+                    return None
+
+                response_raise_for_status(resp)
+                base = resp.json()
+                if base:
+                    return ExperimentIdentifier(id=base["base_exp_id"], name=base["base_exp_name"])
+                else:
+                    return None
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
+                if attempt < max_retries - 1:
+                    # Recreate connection on retry to handle stale connections (e.g., NAT gateway timeouts
+                    # after long idle periods). Only resets when needed, not on every call.
+                    conn._reset()
+                    sleep_time = backoff_factor * (2 ** attempt)
+                    _logger.warning(f"Retrying fetch_base_experiment after error: {e}. Sleeping for {sleep_time} seconds")
+                    time.sleep(sleep_time)
+                else:
+                    _logger.warning(f"Failed to fetch base experiment after {max_retries} attempts: {e}")
+                    return None
+
+        return None
 
     def summarize(
         self, summarize_scores: bool = True, comparison_experiment_id: Optional[str] = None
