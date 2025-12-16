@@ -162,13 +162,16 @@ jobs:
         working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
         run: |
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+
           if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm ci
             npx tsx ../../install-build.ts ../../../artifacts braintrust
+            npm install
           else
-            npm ci --legacy-peer-deps
             npx tsx ../../install-build.ts ../../../artifacts braintrust
             npx tsx ../../install-build.ts ../../../artifacts otel
+            npm install --legacy-peer-deps
           fi
 
       - name: Build shared test package
@@ -228,8 +231,10 @@ jobs:
         working-directory: js/smoke/tests/span-jest
         shell: bash
         run: |
-          npm ci
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
           npx tsx ../../install-build.ts ../../../artifacts braintrust
+          npm install
 
       - name: Build shared test package
         working-directory: js/smoke/shared
@@ -285,9 +290,11 @@ jobs:
         working-directory: js/smoke/tests/nextjs-instrumentation
         shell: bash
         run: |
-          npm ci --legacy-peer-deps
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
           npx tsx ../../install-build.ts ../../../artifacts braintrust
           npx tsx ../../install-build.ts ../../../artifacts otel
+          npm install --legacy-peer-deps
 
       - name: Build shared test package
         working-directory: js/smoke/shared
@@ -344,8 +351,10 @@ jobs:
         working-directory: js/smoke/tests/cloudflare-worker
         shell: bash
         run: |
-          npm ci
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
           npx tsx ../../install-build.ts ../../../artifacts braintrust
+          npm install
 
       - name: Build shared test package
         working-directory: js/smoke/shared
