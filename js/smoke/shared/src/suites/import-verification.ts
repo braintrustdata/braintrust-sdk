@@ -3,14 +3,17 @@
  *
  * Based on actual exports from src/exports.ts
  *
- * This suite explicitly checks that major Braintrust exports exist.
+ * This suite explicitly checks that major Braintrust runtime exports exist.
  * By importing and verifying these exports, we force bundlers to process
  * the full export graph, preventing tree-shaking false positives where
  * "unused" exports might be removed even though they should be available.
  *
+ * Note: This only tests RUNTIME VALUE exports (functions, classes, objects).
+ * TypeScript type-only exports (interfaces, types) don't exist at runtime
+ * and are not tested here.
+ *
  * Tests are categorized as:
  * - Required: Must exist in ALL builds (browser and node)
- * - Node-only: Only expected in node builds (not browser)
  * - Optional: May not exist depending on build configuration
  */
 
@@ -36,7 +39,7 @@ export interface BraintrustModule {
   initDataset?: unknown;
   Dataset?: unknown;
 
-  // Experiments (NODE-ONLY)
+  // Experiments (REQUIRED)
   initExperiment?: unknown;
   Experiment?: unknown;
   currentExperiment?: unknown;
@@ -47,11 +50,14 @@ export interface BraintrustModule {
   Prompt?: unknown;
   getPromptVersions?: unknown;
 
-  // Evaluations (NODE-ONLY)
+  // Evaluations (REQUIRED - runtime values only)
   Eval?: unknown;
-  Evaluator?: unknown;
-  BaseExperiment?: unknown;
+  EvalResultWithSummary?: unknown;
+  Reporter?: unknown;
   runEvaluator?: unknown;
+  buildLocalSummary?: unknown;
+  reportFailures?: unknown;
+  defaultErrorScoreHandler?: unknown;
 
   // Tracing (REQUIRED)
   traced?: unknown;
@@ -218,7 +224,7 @@ export async function testPromptExports(
 }
 
 /**
- * Test experiment exports
+ * Test experiment exports (all browser-compatible now)
  */
 export async function testExperimentExports(
   module: BraintrustModule,
@@ -262,7 +268,7 @@ export async function testExperimentExports(
 }
 
 /**
- * Test evaluation exports
+ * Test evaluation exports (runtime values only - types like Evaluator, BaseExperiment, EvalTask are type-only)
  */
 export async function testEvalExports(
   module: BraintrustModule,
@@ -273,20 +279,54 @@ export async function testEvalExports(
     assertDefined(module.Eval, "Eval must exist");
     assertType(module.Eval, "function", "Eval must be a function");
 
-    assertDefined(module.Evaluator, "Evaluator must exist");
-    assertType(module.Evaluator, "function", "Evaluator must be a function");
-
-    assertDefined(module.BaseExperiment, "BaseExperiment must exist");
+    assertDefined(
+      module.EvalResultWithSummary,
+      "EvalResultWithSummary must exist",
+    );
     assertType(
-      module.BaseExperiment,
+      module.EvalResultWithSummary,
       "function",
-      "BaseExperiment must be a function/class",
+      "EvalResultWithSummary must be a function/class",
+    );
+
+    assertDefined(module.Reporter, "Reporter must exist");
+    assertType(module.Reporter, "function", "Reporter must be a function");
+
+    assertDefined(module.runEvaluator, "runEvaluator must exist");
+    assertType(
+      module.runEvaluator,
+      "function",
+      "runEvaluator must be a function",
+    );
+
+    assertDefined(module.buildLocalSummary, "buildLocalSummary must exist");
+    assertType(
+      module.buildLocalSummary,
+      "function",
+      "buildLocalSummary must be a function",
+    );
+
+    assertDefined(module.reportFailures, "reportFailures must exist");
+    assertType(
+      module.reportFailures,
+      "function",
+      "reportFailures must be a function",
+    );
+
+    assertDefined(
+      module.defaultErrorScoreHandler,
+      "defaultErrorScoreHandler must exist",
+    );
+    assertType(
+      module.defaultErrorScoreHandler,
+      "function",
+      "defaultErrorScoreHandler must be a function",
     );
 
     return {
       success: true,
       testName,
-      message: "Eval exports verified (3 exports)",
+      message: "Eval exports verified (7 runtime exports)",
     };
   } catch (error) {
     return {
@@ -602,6 +642,9 @@ export async function testStateManagementExports(
  * This forces bundlers to process the full Braintrust export graph,
  * preventing tree-shaking false positives.
  *
+ * Note: Only tests runtime value exports (functions, classes, objects).
+ * TypeScript type-only exports are not tested as they don't exist at runtime.
+ *
  * @param module - The Braintrust module to test
  */
 export async function runImportVerificationTests(
@@ -609,7 +652,7 @@ export async function runImportVerificationTests(
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
-  // All exports must exist in all builds
+  // All runtime value exports must exist in all builds
   results.push(await testCoreLoggingExports(module));
   results.push(await testDatasetExports(module));
   results.push(await testPromptExports(module));

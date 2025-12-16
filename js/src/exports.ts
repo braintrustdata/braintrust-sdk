@@ -134,21 +134,24 @@ export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
 export * as graph from "./graph-framework";
 
-export {
+export type {
   BaseExperiment,
   Evaluator,
   EvalTask,
-  Eval,
   EvalHooks,
   EvalResult,
-  EvalResultWithSummary,
   EvalScorerArgs,
   EvalScorer,
   EvaluatorDef,
   EvaluatorFile,
   ReporterBody,
-  Reporter,
   SpanContext,
+} from "./framework";
+
+export {
+  Eval,
+  EvalResultWithSummary,
+  Reporter,
   buildLocalSummary,
   reportFailures,
   runEvaluator,
