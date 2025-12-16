@@ -410,6 +410,11 @@ jobs:
           tar -xzf "$TARBALL" -C build
           [ -d build/package ] && mv build/package build/braintrust
 
+      - name: Install Deno dependencies
+        working-directory: js/smoke/tests/deno
+        run: |
+          deno install
+
       - name: Build shared test package
         working-directory: js/smoke/shared
         run: |
