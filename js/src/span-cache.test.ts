@@ -150,4 +150,45 @@ describe("SpanCache (disk-based)", () => {
       expect(cache.size).toBe(1);
     });
   });
+
+  describe("disable", () => {
+    test("should prevent writes after disable() is called", () => {
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(cache.size).toBe(1);
+
+      cache.disable();
+
+      // Writes after disable should be no-ops
+      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      expect(cache.size).toBe(1); // Still 1, not 2
+    });
+
+    test("should return undefined from getByRootSpanId after disable()", () => {
+      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(cache.getByRootSpanId("root-1")).toBeDefined();
+
+      cache.disable();
+
+      // Reads after disable return undefined
+      expect(cache.getByRootSpanId("root-1")).toBeUndefined();
+    });
+
+    test("disabled getter should reflect disabled state", () => {
+      expect(cache.disabled).toBe(false);
+      cache.disable();
+      expect(cache.disabled).toBe(true);
+    });
+
+    test("should be disabled from constructor option", () => {
+      const disabledCache = new SpanCache({ disabled: true });
+      expect(disabledCache.disabled).toBe(true);
+
+      // Writes should be no-ops
+      disabledCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(disabledCache.size).toBe(0);
+      expect(disabledCache.getByRootSpanId("root-1")).toBeUndefined();
+
+      disabledCache.dispose();
+    });
+  });
 });

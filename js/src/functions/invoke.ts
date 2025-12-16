@@ -255,6 +255,9 @@ export function initFunction({
   slug: string;
   version?: string;
 }) {
+  // Disable span cache since remote function spans won't be in the local cache
+  _internalGetGlobalState()?.spanCache?.disable();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
     return await invoke({

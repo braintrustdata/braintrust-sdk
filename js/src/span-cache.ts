@@ -40,14 +40,26 @@ export class SpanCache {
   private fileHandle: fs.promises.FileHandle | null = null;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
-  private readonly disabled: boolean;
+  private _disabled: boolean;
 
   // Small in-memory index tracking which rootSpanIds have data
   private rootSpanIndex: Set<string> = new Set();
 
   constructor(options?: { disabled?: boolean }) {
-    this.disabled = options?.disabled ?? false;
+    this._disabled = options?.disabled ?? false;
     // Initialization is lazy - file is created on first write
+  }
+
+  /**
+   * Disable the cache at runtime. This is called automatically when
+   * initFunction is used, since remote function spans won't be in the cache.
+   */
+  disable(): void {
+    this._disabled = true;
+  }
+
+  get disabled(): boolean {
+    return this._disabled;
   }
 
   private async ensureInitialized(): Promise<void> {
