@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "next build",
+    "test:shared": "node test-api-routes.mjs",
     "backup": "npx tsx ../../backup-and-restore.ts backup",
     "restore": "npx tsx ../../backup-and-restore.ts restore",
     "enable-esm": "npx tsx ../../enable-esm.ts",
