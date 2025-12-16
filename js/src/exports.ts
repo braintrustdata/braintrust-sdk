@@ -135,7 +135,6 @@ export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export * as graph from "./graph-framework";
 
 export type {
-  BaseExperiment,
   Evaluator,
   EvalTask,
   EvalHooks,
@@ -149,6 +148,7 @@ export type {
 } from "./framework";
 
 export {
+  BaseExperiment,
   Eval,
   EvalResultWithSummary,
   Reporter,
@@ -201,7 +201,7 @@ export type {
 
 export { LazyValue } from "./util";
 
-export type { AttachmentReference } from "./generated_types";
+export { AttachmentReference } from "./generated_types";
 
 export type {
   EvaluatorManifest,

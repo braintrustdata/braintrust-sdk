@@ -205,8 +205,26 @@ function extractExportsFromDts(filePath: string): Map<string, ExportedSymbol> {
 
   collectDeclarations(sourceFile);
 
+  // Helper to check if a node is inside a namespace
+  function isInsideNamespace(node: ts.Node): boolean {
+    let parent = node.parent;
+    while (parent) {
+      if (ts.isModuleDeclaration(parent)) {
+        return true;
+      }
+      parent = parent.parent;
+    }
+    return false;
+  }
+
   // Second pass: process exports
   function visit(node: ts.Node) {
+    // Skip exports inside namespaces - they're not top-level exports
+    if (isInsideNamespace(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
     // Handle: export { foo, bar } or export { foo, bar } from './module'
     if (ts.isExportDeclaration(node)) {
       if (node.exportClause && ts.isNamedExports(node.exportClause)) {
@@ -287,6 +305,64 @@ function getNodeKind(node: ts.Node): string {
   if (ts.isVariableStatement(node)) return "variable";
   if (ts.isModuleDeclaration(node)) return "namespace";
   return "unknown";
+}
+
+/**
+ * Extracts actual runtime exports from a JavaScript module file
+ */
+async function extractRuntimeExports(mjsPath: string): Promise<Set<string>> {
+  const exports = new Set<string>();
+
+  if (!fs.existsSync(mjsPath)) {
+    return exports;
+  }
+
+  try {
+    // Dynamically import the module
+    const module = await import(mjsPath);
+
+    // Get all exported names
+    for (const key of Object.keys(module)) {
+      exports.add(key);
+    }
+  } catch (error) {
+    console.warn(`Failed to load runtime exports from ${mjsPath}:`, error);
+  }
+
+  return exports;
+}
+
+/**
+ * Verifies that runtime exports match TypeScript declarations
+ * Only checks value exports (functions, classes, variables), not pure types
+ */
+function verifyRuntimeMatchesTypes(
+  dtsExports: Map<string, ExportedSymbol>,
+  runtimeExports: Set<string>,
+  entrypointName: string,
+): string[] {
+  const errors: string[] = [];
+
+  // Check that non-type exports in .d.ts actually exist at runtime
+  for (const [name, symbol] of dtsExports) {
+    // Skip pure types (they don't exist at runtime)
+    if (
+      symbol.kind === "type" ||
+      symbol.kind === "interface" ||
+      name === "default"
+    ) {
+      continue;
+    }
+
+    // This should be a runtime value - verify it exists
+    if (!runtimeExports.has(name)) {
+      errors.push(
+        `${name} is declared in ${entrypointName}.d.ts as a ${symbol.kind} but is NOT exported in the runtime JavaScript`,
+      );
+    }
+  }
+
+  return errors;
 }
 
 function compareExports(
@@ -489,7 +565,7 @@ describe("API Compatibility", () => {
     expect(fs.existsSync(path.join(tempDir, "package"))).toBe(true);
   });
 
-  test("should not regress public API surface for all entrypoints", () => {
+  test("should not regress public API surface for all entrypoints", async () => {
     if (!publishedVersion) {
       console.log("Skipping test: No published version available");
       return;
@@ -527,6 +603,25 @@ describe("API Compatibility", () => {
       console.log(
         `${entrypoint.name}: Published exports: ${publishedExports.size}, Current exports: ${currentExports.size}`,
       );
+
+      // Verify that current runtime exports match .d.ts declarations
+      const currentMjsPath = path
+        .join(__dirname, "..", entrypoint.typesPath)
+        .replace(/\.d\.ts$/, ".mjs");
+      if (fs.existsSync(currentMjsPath)) {
+        const runtimeExports = await extractRuntimeExports(currentMjsPath);
+        const runtimeErrors = verifyRuntimeMatchesTypes(
+          currentExports,
+          runtimeExports,
+          entrypoint.name,
+        );
+        if (runtimeErrors.length > 0) {
+          failures.push(
+            `[${entrypoint.name}] Runtime exports don't match TypeScript declarations:\n` +
+              runtimeErrors.map((e) => `  - ${e}`).join("\n"),
+          );
+        }
+      }
 
       // Compare the exports
       const comparison = compareExports(publishedExports, currentExports);
