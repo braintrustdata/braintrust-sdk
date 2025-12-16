@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 9798e4e2030273d26a5c9595f313fa6be8c9480f) -- do not modify
+// Auto-generated file (internal git SHA 437eb5379a737f70dec98033fccf81de43e8e177) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -394,7 +394,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python", "browser"]),
+    runtime: z.enum(["node", "python", "browser", "quickjs"]),
     version: z.string(),
   }),
   location: z.union([
@@ -597,19 +597,20 @@ export const ExtendedSavedFunctionId = z.union([
 export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
-export const SavedFunctionId = z.union([
+export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
   z.object({ type: z.literal("global"), name: z.string() }),
+  z.null(),
 ]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
-export const FacetScope = z.enum(["span", "trace"]);
-export type FacetScopeType = z.infer<typeof FacetScope>;
+export type NullableSavedFunctionIdType = z.infer<
+  typeof NullableSavedFunctionId
+>;
 export const FacetData = z.object({
   type: z.literal("facet"),
-  preprocessor: SavedFunctionId.and(z.unknown()),
+  preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
   prompt: z.string(),
-  model: z.string(),
-  scope: FacetScope.optional().default("trace"),
+  model: z.string().optional(),
+  no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
 export const PromptBlockDataNullish = z.union([
@@ -717,6 +718,11 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
+export const SavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({ type: z.literal("global"), name: z.string() }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -873,10 +879,11 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python", "browser"]),
+          runtime: z.enum(["node", "python", "browser", "quickjs"]),
           version: z.string(),
         }),
         code: z.string(),
+        code_hash: z.string().optional(),
       }),
     ]),
   }),
@@ -997,7 +1004,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python", "browser"]),
+      runtime: z.enum(["node", "python", "browser", "quickjs"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -1062,6 +1069,33 @@ export const Group = z.object({
 export type GroupType = z.infer<typeof Group>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
+export const SpanScope = z.object({
+  type: z.literal("span"),
+  root_span_id: z.string(),
+  id: z.string(),
+});
+export type SpanScopeType = z.infer<typeof SpanScope>;
+export const TraceScope = z.object({
+  type: z.literal("trace"),
+  root_span_id: z.string(),
+});
+export type TraceScopeType = z.infer<typeof TraceScope>;
+export const InvokeScope = z.union([SpanScope, TraceScope]);
+export type InvokeScopeType = z.infer<typeof InvokeScope>;
+export const InvokeContext = z.union([
+  z.object({
+    object_type: z.enum([
+      "project_logs",
+      "experiment",
+      "dataset",
+      "playground_logs",
+    ]),
+    object_id: z.string(),
+    scope: InvokeScope,
+  }),
+  z.null(),
+]);
+export type InvokeContextType = z.infer<typeof InvokeContext>;
 export const InvokeParent = z.union([
   z.object({
     object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
@@ -1093,11 +1127,13 @@ export const InvokeFunction = FunctionId.and(
       metadata: z.union([z.object({}).partial().passthrough(), z.null()]),
       tags: z.union([z.array(z.string()), z.null()]),
       messages: z.array(ChatCompletionMessageParam),
+      context: InvokeContext,
       parent: InvokeParent,
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
       strict: z.union([z.boolean(), z.null()]),
       mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
+      overrides: z.union([z.object({}).partial().passthrough(), z.null()]),
     })
     .partial(),
 );
@@ -1189,6 +1225,7 @@ export const ProjectSettings = z.union([
         z.null(),
       ]),
       disable_realtime_queries: z.union([z.boolean(), z.null()]),
+      default_preprocessor: NullableSavedFunctionId,
     })
     .partial(),
   z.null(),

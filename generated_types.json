@@ -1541,7 +1541,8 @@
                 "enum": [
                   "node",
                   "python",
-                  "browser"
+                  "browser",
+                  "quickjs"
                 ]
               },
               "version": {
@@ -2352,10 +2353,10 @@
           "preprocessor": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SavedFunctionId"
+                "$ref": "#/components/schemas/NullableSavedFunctionId"
               },
               {
-                "description": "The preprocessor function to apply before LLM extraction"
+                "description": "The preprocessor function to use for facet extraction. If not provided, the project default preprocessor will be used, falling back to the global 'thread' preprocessor."
               }
             ]
           },
@@ -2367,26 +2368,16 @@
             "type": "string",
             "description": "The model to use for facet extraction"
           },
-          "scope": {
-            "$ref": "#/components/schemas/FacetScope"
+          "no_match_pattern": {
+            "type": "string",
+            "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
           }
         },
         "required": [
           "type",
-          "preprocessor",
-          "prompt",
-          "model"
+          "prompt"
         ],
         "title": "facet"
-      },
-      "FacetScope": {
-        "type": "string",
-        "enum": [
-          "span",
-          "trace"
-        ],
-        "default": "trace",
-        "description": "The scope at which the facet operates"
       },
       "Function": {
         "type": "object",
@@ -2591,7 +2582,8 @@
                             "enum": [
                               "node",
                               "python",
-                              "browser"
+                              "browser",
+                              "quickjs"
                             ]
                           },
                           "version": {
@@ -2605,6 +2597,10 @@
                       },
                       "code": {
                         "type": "string"
+                      },
+                      "code_hash": {
+                        "type": "string",
+                        "description": "SHA256 hash of the code, computed at save time"
                       }
                     },
                     "required": [
@@ -2787,7 +2783,8 @@
                     "enum": [
                       "node",
                       "python",
-                      "browser"
+                      "browser",
+                      "quickjs"
                     ]
                   },
                   "version": {
@@ -3493,6 +3490,37 @@
           "replace"
         ]
       },
+      "InvokeContext": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "project_logs",
+              "experiment",
+              "dataset",
+              "playground_logs"
+            ],
+            "description": "The type of object containing the span data"
+          },
+          "object_id": {
+            "type": "string",
+            "description": "The ID of the object containing the span data"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/InvokeScope"
+          }
+        },
+        "required": [
+          "object_type",
+          "object_id",
+          "scope"
+        ],
+        "description": "Context for functions that operate on spans/traces"
+      },
       "InvokeFunction": {
         "allOf": [
           {
@@ -3532,6 +3560,9 @@
                 },
                 "description": "If the function is an LLM, additional messages to pass along to it"
               },
+              "context": {
+                "$ref": "#/components/schemas/InvokeContext"
+              },
               "parent": {
                 "$ref": "#/components/schemas/InvokeParent"
               },
@@ -3564,6 +3595,14 @@
                   }
                 },
                 "description": "Map of MCP server URL to auth credentials"
+              },
+              "overrides": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {},
+                "description": "Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }."
               }
             }
           }
@@ -3635,6 +3674,17 @@
           }
         ],
         "description": "Options for tracing the function call"
+      },
+      "InvokeScope": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SpanScope"
+          },
+          {
+            "$ref": "#/components/schemas/TraceScope"
+          }
+        ],
+        "description": "The scope at which to operate (span or trace)"
       },
       "MCPServer": {
         "type": "object",
@@ -3966,6 +4016,52 @@
             "title": "JsCompletionParams"
           }
         ]
+      },
+      "NullableSavedFunctionId": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "function"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "title": "function"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "global"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "name"
+            ],
+            "title": "global"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default."
       },
       "ObjectReference": {
         "type": "object",
@@ -5008,6 +5104,9 @@
               "null"
             ],
             "description": "If true, disable real-time queries for this project. This can improve query performance for high-volume logs."
+          },
+          "default_preprocessor": {
+            "$ref": "#/components/schemas/NullableSavedFunctionId"
           }
         }
       },
@@ -6345,6 +6444,31 @@
           "url"
         ]
       },
+      "SpanScope": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "span"
+            ]
+          },
+          "root_span_id": {
+            "type": "string",
+            "description": "The root span id is a unique identifier for the trace."
+          },
+          "id": {
+            "type": "string",
+            "description": "A unique identifier for the span."
+          }
+        },
+        "required": [
+          "type",
+          "root_span_id",
+          "id"
+        ],
+        "description": "Scope for operating on a single span"
+      },
       "SpanType": {
         "type": [
           "string",
@@ -6484,6 +6608,26 @@
           "type",
           "function"
         ]
+      },
+      "TraceScope": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "trace"
+            ]
+          },
+          "root_span_id": {
+            "type": "string",
+            "description": "The root span id is a unique identifier for the trace."
+          }
+        },
+        "required": [
+          "type",
+          "root_span_id"
+        ],
+        "description": "Scope for operating on an entire trace"
       },
       "UploadStatus": {
         "type": "string",
@@ -7019,7 +7163,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "9798e4e2030273d26a5c9595f313fa6be8c9480f"
+    "x-internal-git-sha": "437eb5379a737f70dec98033fccf81de43e8e177"
   },
   "paths": {},
   "webhooks": {}
