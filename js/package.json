@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -91,6 +91,8 @@
     "@types/pluralize": "^0.0.30",
     "@types/tar": "^6.1.13",
     "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
     "ai": "^4.3.16",
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
@@ -129,7 +131,6 @@
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
-    "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
     "uuid": "^9.0.1",

@@ -1,7 +1,7 @@
 import nodeModulesPaths from "../jest/nodeModulesPaths";
 import path, { dirname } from "path";
-import { _internalGetGlobalState } from "../logger";
-import { EvaluatorFile } from "../framework";
+import { _internalGetGlobalState } from "../../logger";
+import { EvaluatorFile } from "../../framework";
 
 function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
   const modulePaths = [...module.paths];
