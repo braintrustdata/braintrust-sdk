@@ -69,18 +69,49 @@ export class Trace {
   /**
    * Fetch all rows for this root span from its parent experiment.
    * Returns an empty array when no experiment is associated with the context.
+   *
+   * First checks the local span cache for recently logged spans, then falls
+   * back to BTQL API if not found in cache.
    */
   async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<any[]> {
     if (!this.experimentId) {
       return [];
     }
 
-    await this.ensureSpansReady();
-
     const state = _internalGetGlobalState();
     if (!state) {
       return [];
     }
+
+    // Try local cache first
+    const cachedSpans = state.spanCache.getByRootSpanId(this.rootSpanId);
+    cachedSpans && cachedSpans.forEach((span) => console.log(span));
+    if (cachedSpans && cachedSpans.length > 0) {
+      let spans = cachedSpans.filter(
+        (span) => span.span_attributes?.type !== "score",
+      );
+
+      // Apply spanType filter if specified
+      if (spanType && spanType.length > 0) {
+        spans = spans.filter((span) =>
+          spanType.includes(span.span_attributes?.type ?? ""),
+        );
+      }
+
+      return spans.map((span) => ({
+        input: span.input,
+        output: span.output,
+        metadata: span.metadata,
+        span_id: span.span_id,
+        span_parents: span.span_parents,
+        span_attributes: span.span_attributes,
+      }));
+    }
+
+    console.log("Cache miss - falling back to BTQL");
+
+    // Cache miss - fall back to BTQL
+    await this.ensureSpansReady();
 
     await state.login({});
 

@@ -93,6 +93,7 @@ import {
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "../util/index";
+import { SpanCache, CachedSpan } from "./span-cache";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -557,6 +558,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
 
@@ -595,6 +597,7 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+    this.spanCache = new SpanCache();
   }
 
   public resetLoginInfo() {
@@ -5601,6 +5604,18 @@ export class SpanImpl implements Span {
     if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
       throw new Error("Tags can only be logged to the root span");
     }
+
+    // Write to local span cache for scorer access
+    const cachedSpan: CachedSpan = {
+      input: partialRecord.input,
+      output: partialRecord.output,
+      metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+      span_id: this._spanId,
+      span_parents: this._spanParents,
+      span_attributes:
+        partialRecord.span_attributes as CachedSpan["span_attributes"],
+    };
+    this._state.spanCache.write(this._rootSpanId, this._spanId, cachedSpan);
 
     const computeRecord = async () => ({
       ...partialRecord,
