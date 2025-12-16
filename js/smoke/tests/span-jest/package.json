@@ -4,7 +4,9 @@
   "description": "Jest smoke test for the Braintrust span simple_span_example script",
   "main": "simple_span_example.jest.test.js",
   "scripts": {
-    "test": "jest simple_span_example.jest.test.js",
+    "test": "npm run test:shared && npm run test:legacy",
+    "test:shared": "jest shared_suite_test.jest.test.js",
+    "test:legacy": "jest simple_span_example.jest.test.js",
     "backup": "npx tsx ../../backup-and-restore.ts backup",
     "restore": "npx tsx ../../backup-and-restore.ts restore",
     "enable-esm": "npx tsx ../../enable-esm.ts",
