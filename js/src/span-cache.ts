@@ -40,11 +40,13 @@ export class SpanCache {
   private fileHandle: fs.promises.FileHandle | null = null;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private readonly disabled: boolean;
 
   // Small in-memory index tracking which rootSpanIds have data
   private rootSpanIndex: Set<string> = new Set();
 
-  constructor() {
+  constructor(options?: { disabled?: boolean }) {
+    this.disabled = options?.disabled ?? false;
     // Initialization is lazy - file is created on first write
   }
 
@@ -99,6 +101,10 @@ export class SpanCache {
    * Uses sync file operations to avoid blocking the caller.
    */
   writeSync(rootSpanId: string, spanId: string, data: CachedSpan): void {
+    if (this.disabled) {
+      return;
+    }
+
     // Lazy init - create file synchronously if needed
     if (!this.initialized) {
       const tmpDir = os.tmpdir();
@@ -128,6 +134,10 @@ export class SpanCache {
    * @returns Array of cached spans, or undefined if not in cache
    */
   getByRootSpanId(rootSpanId: string): CachedSpan[] | undefined {
+    if (this.disabled) {
+      return undefined;
+    }
+
     if (!this.initialized || !this.cacheFilePath) {
       return undefined;
     }

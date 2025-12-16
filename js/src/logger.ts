@@ -597,7 +597,7 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
-    this.spanCache = new SpanCache();
+    this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
   public resetLoginInfo() {
@@ -3691,6 +3691,12 @@ export interface LoginOptions {
    * Calls this function if there's an error in the background flusher.
    */
   onFlushError?: (error: unknown) => void;
+  /**
+   * If true, disables the local span cache used to optimize scorer access
+   * to trace data. When disabled, scorers will always fetch spans from the
+   * server. Defaults to false.
+   */
+  disableSpanCache?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
