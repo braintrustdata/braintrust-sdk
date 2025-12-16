@@ -931,9 +931,14 @@ export const _internalGetGlobalState = () => _globalState;
  *
  * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
  * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ *
+ * Also disables the span cache, since OTEL spans aren't in the local cache
+ * and we need BTQL to see the complete span tree (both native + OTEL spans).
  */
 export function registerOtelFlush(callback: () => Promise<void>): void {
   _globalState?.registerOtelFlush(callback);
+  // Disable span cache since OTEL spans aren't in the local cache
+  _globalState?.spanCache?.disable();
 }
 
 export class FailedHTTPResponse extends Error {
