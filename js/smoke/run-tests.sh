@@ -244,14 +244,20 @@ print_summary() {
     log_header "Summary"
     echo ""
 
-    local total=$((${#PASSED_TESTS[@]} + ${#FAILED_TESTS[@]}))
+    # Temporarily disable unbound variable check for safe array access
+    set +u
+    local passed_count=${#PASSED_TESTS[@]}
+    local failed_count=${#FAILED_TESTS[@]}
+    set -u
+
+    local total=$((passed_count + failed_count))
 
     echo "Total:  $total tests"
-    echo -e "Passed: ${GREEN}${#PASSED_TESTS[@]}${NC}"
-    echo -e "Failed: ${RED}${#FAILED_TESTS[@]}${NC}"
+    echo -e "Passed: ${GREEN}${passed_count}${NC}"
+    echo -e "Failed: ${RED}${failed_count}${NC}"
     echo ""
 
-    if [ ${#PASSED_TESTS[@]} -gt 0 ]; then
+    if [ $passed_count -gt 0 ]; then
         echo -e "${GREEN}Passed:${NC}"
         for test in "${PASSED_TESTS[@]}"; do
             echo "  ✓ $test"
@@ -259,7 +265,7 @@ print_summary() {
         echo ""
     fi
 
-    if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+    if [ $failed_count -gt 0 ]; then
         echo -e "${RED}Failed:${NC}"
         for test in "${FAILED_TESTS[@]}"; do
             echo "  ✗ $test"
