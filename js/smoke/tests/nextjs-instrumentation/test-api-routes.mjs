@@ -59,7 +59,7 @@ async function waitForServer(maxTime = MAX_STARTUP_TIME) {
       const response = await fetch(`${BASE_URL}/`, { method: "HEAD" });
       if (response.ok || response.status === 404) {
         console.log("✓ Server is responding\n");
-        await setTimeout(2000); // Buffer time
+        await sleep(2000); // Buffer time
         return true;
       }
     } catch (error) {
