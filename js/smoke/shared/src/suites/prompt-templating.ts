@@ -85,7 +85,8 @@ export async function testMustacheTemplate(
             name: error.name,
             message: error.message,
             stack: error.stack,
-            cause: error.cause,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            cause: "cause" in error ? (error as any).cause : undefined,
           }
         : {
             name: "UnknownError",
@@ -146,7 +147,11 @@ export async function testNunjucksTemplate(
               name: constructorError.name,
               message: constructorError.message,
               stack: constructorError.stack,
-              cause: constructorError.cause,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              cause:
+                "cause" in constructorError
+                  ? (constructorError as any).cause
+                  : undefined,
               step: "Prompt constructor",
             }
           : {
@@ -180,7 +185,9 @@ export async function testNunjucksTemplate(
               name: buildError.name,
               message: buildError.message,
               stack: buildError.stack,
-              cause: buildError.cause,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              cause:
+                "cause" in buildError ? (buildError as any).cause : undefined,
               step: "build() call",
               templateFormat: "nunjucks",
               variables: {
@@ -221,7 +228,9 @@ export async function testNunjucksTemplate(
               name: assertError.name,
               message: assertError.message,
               stack: assertError.stack,
-              cause: assertError.cause,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              cause:
+                "cause" in assertError ? (assertError as any).cause : undefined,
               step: "assertion",
               actualContent: nunjucksResult.messages[0]?.content,
               expectedContent: "Items: apple, banana, cherry",
@@ -254,7 +263,8 @@ export async function testNunjucksTemplate(
             name: error.name,
             message: error.message,
             stack: error.stack,
-            cause: error.cause,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            cause: "cause" in error ? (error as any).cause : undefined,
             step: "unknown",
           }
         : {
