@@ -61,13 +61,34 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
     const queryResult = wrappedSDK.query({ prompt: "test" });
 
-    // Start iteration to populate the original generator reference
-    const iterator = queryResult[Symbol.asyncIterator]();
-    await iterator.next();
-
     // Verify interrupt() is accessible and forwards to the original
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(typeof (queryResult as any).interrupt).toBe("function");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (queryResult as any).interrupt();
+    expect(interruptMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("interrupt() works before iteration starts (eager initialization)", async () => {
+    const interruptMock = vi.fn().mockResolvedValue(undefined);
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          yield { type: "assistant", message: { content: "Hello" } };
+          yield { type: "result", result: "done" };
+        })();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (generator as any).interrupt = interruptMock;
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    const queryResult = wrappedSDK.query({ prompt: "test" });
+
+    // Call interrupt() BEFORE starting iteration - this should work
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (queryResult as any).interrupt();
     expect(interruptMock).toHaveBeenCalledTimes(1);

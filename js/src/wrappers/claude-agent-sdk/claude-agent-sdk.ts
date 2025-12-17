@@ -141,24 +141,23 @@ function wrapClaudeAgentQuery<
         currentMessages.length = 0;
       };
 
-      // Store reference to original generator for property forwarding (e.g., interrupt())
+      // Eagerly create the original generator so methods like interrupt() work immediately
+      // (before iteration starts). This is important because callers may want to call
+      // interrupt() right after query() without consuming any messages first.
+      const invocationTarget: unknown =
+        thisArg === proxy || thisArg === undefined
+          ? (defaultThis ?? thisArg)
+          : thisArg;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let originalGenerator: any = null;
+      const originalGenerator: any = withCurrent(span, () =>
+        Reflect.apply(target, invocationTarget, argArray),
+      );
 
       // Create wrapped async generator that maintains span context
       const wrappedGenerator: AsyncGenerator<SDKMessage, void, unknown> =
         (async function* () {
           try {
-            const invocationTarget: unknown =
-              thisArg === proxy || thisArg === undefined
-                ? defaultThis ?? thisArg
-                : thisArg;
-
-            // Store the original generator (Query object) so we can forward methods like interrupt()
-            originalGenerator = withCurrent(span, () =>
-              Reflect.apply(target, invocationTarget, argArray),
-            );
-
             for await (const message of originalGenerator) {
               const currentTime = getCurrentUnixTimestamp();
 
