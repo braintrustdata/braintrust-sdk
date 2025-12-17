@@ -76,27 +76,11 @@ export async function testMustacheTemplate(
       message: "Mustache template test passed",
     };
   } catch (error) {
-    const errorDetails =
-      error instanceof Error
-        ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            cause: "cause" in error ? (error as any).cause : undefined,
-          }
-        : {
-            name: "UnknownError",
-            message: String(error),
-            rawError: error,
-          };
-
     return {
       success: false,
       testName,
       error: error as Error,
-      message: `Test failed: ${errorDetails.message}`,
-      errorDetails,
+      message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
@@ -157,32 +141,11 @@ export async function testNunjucksTemplate(
         };
       }
 
-      const errorDetails =
-        constructorError instanceof Error
-          ? {
-              name: constructorError.name,
-              message: constructorError.message,
-              stack: constructorError.stack,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              cause:
-                "cause" in constructorError
-                  ? (constructorError as any).cause
-                  : undefined,
-              step: "Prompt constructor",
-            }
-          : {
-              name: "UnknownError",
-              message: String(constructorError),
-              rawError: constructorError,
-              step: "Prompt constructor",
-            };
-
       return {
         success: false,
         testName,
         error: constructorError as Error,
-        message: `Failed to create Prompt: ${errorDetails.message}`,
-        errorDetails,
+        message: `Failed to create Prompt: ${errorMessage}`,
       };
     }
 
@@ -197,6 +160,8 @@ export async function testNunjucksTemplate(
     } catch (buildError) {
       const errorMessage =
         buildError instanceof Error ? buildError.message : String(buildError);
+
+      // Special handling for Cloudflare Workers environment, they disallow code generation
       if (
         environment === "cloudflare-worker" &&
         errorMessage.includes(
@@ -211,39 +176,11 @@ export async function testNunjucksTemplate(
         };
       }
 
-      const errorDetails =
-        buildError instanceof Error
-          ? {
-              name: buildError.name,
-              message: buildError.message,
-              stack: buildError.stack,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              cause:
-                "cause" in buildError ? (buildError as any).cause : undefined,
-              step: "build() call",
-              templateFormat: "nunjucks",
-              variables: {
-                items: [
-                  { name: "apple" },
-                  { name: "banana" },
-                  { name: "cherry" },
-                ],
-              },
-            }
-          : {
-              name: "UnknownError",
-              message: String(buildError),
-              rawError: buildError,
-              step: "build() call",
-              templateFormat: "nunjucks",
-            };
-
       return {
         success: false,
         testName,
         error: buildError as Error,
-        message: `Failed to build prompt: ${errorDetails.message}`,
-        errorDetails,
+        message: `Failed to build prompt: ${errorMessage}`,
       };
     }
 
@@ -254,32 +191,11 @@ export async function testNunjucksTemplate(
         "Nunjucks template should render loop correctly",
       );
     } catch (assertError) {
-      const errorDetails =
-        assertError instanceof Error
-          ? {
-              name: assertError.name,
-              message: assertError.message,
-              stack: assertError.stack,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              cause:
-                "cause" in assertError ? (assertError as any).cause : undefined,
-              step: "assertion",
-              actualContent: nunjucksResult.messages[0]?.content,
-              expectedContent: "Items: apple, banana, cherry",
-            }
-          : {
-              name: "UnknownError",
-              message: String(assertError),
-              rawError: assertError,
-              step: "assertion",
-            };
-
       return {
         success: false,
         testName,
         error: assertError as Error,
-        message: `Assertion failed: ${errorDetails.message}`,
-        errorDetails,
+        message: `Assertion failed: ${assertError instanceof Error ? assertError.message : String(assertError)}`,
       };
     }
 
@@ -289,29 +205,11 @@ export async function testNunjucksTemplate(
       message: "Nunjucks template test passed",
     };
   } catch (error) {
-    const errorDetails =
-      error instanceof Error
-        ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            cause: "cause" in error ? (error as any).cause : undefined,
-            step: "unknown",
-          }
-        : {
-            name: "UnknownError",
-            message: String(error),
-            rawError: error,
-            step: "unknown",
-          };
-
     return {
       success: false,
       testName,
       error: error as Error,
-      message: `Test failed: ${errorDetails.message}`,
-      errorDetails,
+      message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

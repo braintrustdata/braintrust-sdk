@@ -19,11 +19,7 @@ async function main() {
     throw new Error("No spans were captured by the background logger");
   }
 
-  const spanEvent = spans[0] as {
-    input: unknown;
-    output: unknown;
-    expected: unknown;
-  };
+  const spanEvent = spans[0]!;
 
   assert.equal(spanEvent.input, "What is the capital of France?");
   assert.equal(spanEvent.output, "Paris");
