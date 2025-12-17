@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SpanTypeAttribute } from "../../util/index";
+import { SpanTypeAttribute, isObject } from "../../util/index";
 import {
+  Attachment,
   CompiledPrompt,
   Span,
   StartSpanArgs,
@@ -369,7 +370,6 @@ function wrapChatCompletion<
               logHeaders(response, span);
               const { messages, ...rest } = params;
               span.log({
-                input: messages,
                 metadata: {
                   ...rest,
                 },
@@ -429,9 +429,104 @@ function parseBaseParams<T extends Record<string, any>>(
     },
   };
   const input = params[inputField];
+  // Process attachments in input (convert data URLs to Attachment objects)
+  const processedInput = processAttachmentsInInput(input);
   const paramsRest = { ...params, provider: "openai" };
   delete paramsRest[inputField];
-  return mergeDicts(ret, { event: { input, metadata: paramsRest } });
+  return mergeDicts(ret, {
+    event: { input: processedInput, metadata: paramsRest },
+  });
+}
+
+// Helper function to convert data URL to an Attachment
+function convertDataUrlToAttachment(dataUrl: string): Attachment | string {
+  // Check if this is a data URL
+  const dataUrlMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!dataUrlMatch) {
+    return dataUrl; // Not a data URL, return as-is
+  }
+
+  const [, mimeType, base64Data] = dataUrlMatch;
+
+  try {
+    // Convert base64 string to Blob
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+
+    // Determine file extension and prefix from MIME type
+    const extension = mimeType.split("/")[1] || "bin";
+    const prefix = mimeType.startsWith("image/") ? "image" : "document";
+    const filename = `${prefix}.${extension}`;
+
+    const attachment = new Attachment({
+      data: blob,
+      filename: filename,
+      contentType: mimeType,
+    });
+
+    return attachment;
+  } catch (error) {
+    // If conversion fails, return the original data URL
+    return dataUrl;
+  }
+}
+
+// Process input to convert data URL images and base64 documents to Attachment objects
+function processAttachmentsInInput(input: any): any {
+  if (Array.isArray(input)) {
+    return input.map(processAttachmentsInInput);
+  }
+
+  if (isObject(input)) {
+    // Check for OpenAI's image_url format with data URLs
+    if (
+      input.type === "image_url" &&
+      isObject(input.image_url) &&
+      typeof input.image_url.url === "string"
+    ) {
+      const processedUrl = convertDataUrlToAttachment(input.image_url.url);
+      const result = {
+        ...input,
+        image_url: {
+          ...input.image_url,
+          url: processedUrl,
+        },
+      };
+      return result;
+    }
+
+    // Check for OpenAI's file format with data URL (e.g., PDFs)
+    if (
+      input.type === "file" &&
+      isObject(input.file) &&
+      typeof input.file.file_data === "string"
+    ) {
+      const processedFileData = convertDataUrlToAttachment(
+        input.file.file_data,
+      );
+      const result = {
+        ...input,
+        file: {
+          ...input.file,
+          file_data: processedFileData,
+        },
+      };
+      return result;
+    }
+
+    // Recursively process nested objects
+    const processed: any = {};
+    for (const [key, value] of Object.entries(input)) {
+      processed[key] = processAttachmentsInInput(value);
+    }
+    return processed;
+  }
+
+  return input;
 }
 
 function createApiWrapper<T, R>(
