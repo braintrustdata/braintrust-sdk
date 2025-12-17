@@ -35,6 +35,7 @@ export type {
   SetCurrentArg,
   Span,
   StartSpanArgs,
+  TemplateFormat,
   WithTransactionId,
 } from "./logger";
 
@@ -76,12 +77,14 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  isTemplateFormat,
   loadPrompt,
   log,
   logError,
   login,
   loginToState,
   newId,
+  parseTemplateFormat,
   permalink,
   renderMessage,
   renderPromptParams,

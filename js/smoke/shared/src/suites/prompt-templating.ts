@@ -12,11 +12,11 @@ import { assertEqual } from "../helpers/assertions";
 export interface PromptModule {
   Prompt: new (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    promptData: any,
+    metadata: any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    metadata?: any,
+    defaults: any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    isReadonly?: boolean,
+    noTrace: boolean,
   ) => {
     build: (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
