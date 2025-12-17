@@ -99,6 +99,7 @@ export {
   withLogger,
   withParent,
   wrapTraced,
+  registerOtelFlush,
 } from "./logger";
 
 export type { InvokeFunctionArgs, InvokeReturn } from "./functions/invoke";
