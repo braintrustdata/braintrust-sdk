@@ -1,83 +1,100 @@
-import { initLogger, _exportsForTestingOnly } from "braintrust";
+/**
+ * Cloudflare Worker smoke test using shared test suites
+ * This test demonstrates using the shared test package in Cloudflare Workers
+ */
 
+import {
+  setupTestEnvironment,
+  cleanupTestEnvironment,
+  runBasicLoggingTests,
+  runImportVerificationTests,
+  runPromptTemplatingTests,
+  type TestResult,
+} from "../../../shared/dist/index.mjs";
+
+import * as braintrust from "braintrust";
+const { initLogger, _exportsForTestingOnly } = braintrust;
+
+// Cloudflare Worker environment bindings (empty for this test)
 interface Env {}
 
-interface TestResult {
+interface TestResponse {
   success: boolean;
   message: string;
-  details?: unknown;
+  totalTests?: number;
+  passedTests?: number;
+  failedTests?: number;
+  results?: TestResult[];
+  failures?: TestResult[];
 }
 
-async function runSmokeTest(): Promise<TestResult> {
+/**
+ * Run the shared test suites in Cloudflare Worker environment
+ */
+async function runSharedTestSuites(): Promise<TestResponse> {
   try {
-    _exportsForTestingOnly.setInitialTestState();
-    await _exportsForTestingOnly.simulateLoginForTests();
-
-    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
-
-    const logger = initLogger({
-      projectName: "cloudflare-worker-smoke-test",
-      projectId: "test-project-id",
+    // Setup test environment
+    const adapters = await setupTestEnvironment({
+      initLogger,
+      testingExports: _exportsForTestingOnly,
+      canUseFileSystem: false, // No filesystem in Workers
+      canUseCLI: false, // No CLI in Workers
+      environment: "cloudflare-worker",
     });
 
-    const span = logger.startSpan({ name: "cloudflare.smoke" });
-    span.log({
-      input: "What is the capital of France?",
-      output: "Paris",
-      expected: "Paris",
-      metadata: { transport: "cloudflare-worker-smoke-test" },
-    });
-    span.end();
+    try {
+      // Run import verification tests first (forces all exports to be processed)
+      const importResults = await runImportVerificationTests(braintrust);
 
-    await logger.flush();
+      // Run functional tests
+      const functionalResults = await runBasicLoggingTests(adapters);
 
-    const events = await backgroundLogger.drain();
+      // Run prompt templating tests
+      const promptTemplatingResults = await runPromptTemplatingTests({
+        Prompt: braintrust.Prompt,
+      });
 
-    _exportsForTestingOnly.clearTestBackgroundLogger();
+      // Combine results
+      const results = [
+        ...importResults,
+        ...functionalResults,
+        ...promptTemplatingResults,
+      ];
 
-    if (events.length === 0) {
+      // Verify all tests passed
+      const failures = results.filter((r) => !r.success);
+
+      if (failures.length > 0) {
+        return {
+          success: false,
+          message: `${failures.length} test(s) failed`,
+          totalTests: results.length,
+          passedTests: results.length - failures.length,
+          failedTests: failures.length,
+          results,
+          failures,
+        };
+      }
+
       return {
-        success: false,
-        message: "No spans were captured by the background logger",
+        success: true,
+        message: "All shared test suites passed",
+        totalTests: results.length,
+        passedTests: results.length,
+        failedTests: 0,
+        results,
       };
+    } finally {
+      // Clean up test environment
+      await cleanupTestEnvironment(adapters);
     }
-
-    const spanEvent = events[0] as Record<string, unknown>;
-
-    if (spanEvent.input !== "What is the capital of France?") {
-      return {
-        success: false,
-        message: `Expected input "What is the capital of France?", got "${spanEvent.input}"`,
-        details: spanEvent,
-      };
-    }
-
-    if (spanEvent.output !== "Paris") {
-      return {
-        success: false,
-        message: `Expected output "Paris", got "${spanEvent.output}"`,
-        details: spanEvent,
-      };
-    }
-
-    if (spanEvent.expected !== "Paris") {
-      return {
-        success: false,
-        message: `Expected expected "Paris", got "${spanEvent.expected}"`,
-        details: spanEvent,
-      };
-    }
-
-    return {
-      success: true,
-      message: "Cloudflare Worker smoke test passed",
-      details: { spanCount: events.length },
-    };
   } catch (error) {
     return {
       success: false,
       message: `Error during smoke test: ${error instanceof Error ? error.message : String(error)}`,
-      details: error instanceof Error ? error.stack : undefined,
+      totalTests: 0,
+      passedTests: 0,
+      failedTests: 0,
     };
   }
 }
@@ -87,7 +104,8 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/test") {
-      const result = await runSmokeTest();
+      const result = await runSharedTestSuites();
+
       return new Response(JSON.stringify(result, null, 2), {
         headers: { "Content-Type": "application/json" },
         status: result.success ? 200 : 500,
@@ -95,7 +113,12 @@ export default {
     }
 
     return new Response(
-      "Braintrust Cloudflare Worker Smoke Test\n\nGET /test - Run smoke test",
+      `Braintrust Cloudflare Worker Smoke Test
+
+GET /test - Run shared test suites
+
+This worker tests the Braintrust SDK in a Cloudflare Workers environment
+using shared test suites for consistency across runtime environments.`,
       {
         headers: { "Content-Type": "text/plain" },
       },

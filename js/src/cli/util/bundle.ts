@@ -1,9 +1,10 @@
 import { loadEnvConfig } from "@next/env";
 import * as dotenv from "dotenv";
 import { AuthArgs, BundleArgs } from "./types";
-import { error } from "../framework";
-import { BtBuildResult, handleBuildFailure, initializeHandles } from "../cli";
-import { login } from "../logger";
+import { error } from "../../framework";
+import type { BtBuildResult } from "../types";
+import { handleBuildFailure, initializeHandles } from "../index";
+import { login } from "../../logger";
 import { uploadHandleBundles } from "../functions/upload";
 
 export async function loadCLIEnv(args: AuthArgs) {
