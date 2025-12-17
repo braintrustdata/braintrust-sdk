@@ -85,7 +85,6 @@ export class Trace {
 
     // Try local cache first
     const cachedSpans = state.spanCache.getByRootSpanId(this.rootSpanId);
-    cachedSpans && cachedSpans.forEach((span) => console.log(span));
     if (cachedSpans && cachedSpans.length > 0) {
       let spans = cachedSpans.filter(
         (span) => span.span_attributes?.type !== "score",
@@ -107,8 +106,6 @@ export class Trace {
         span_attributes: span.span_attributes,
       }));
     }
-
-    console.log("Cache miss - falling back to BTQL");
 
     // Cache miss - fall back to BTQL
     await this.ensureSpansReady();
