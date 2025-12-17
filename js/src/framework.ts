@@ -1123,12 +1123,15 @@ async function runEvaluatorInternal(
                   return results;
                 };
 
+                // Exclude trace from logged input since it contains internal state
+                // that shouldn't be serialized (spansFlushPromise, spansFlushed, etc.)
+                const { trace: _trace, ...scoringArgsForLogging } = scoringArgs;
                 const results = await rootSpan.traced(runScorer, {
                   name: scorerNames[score_idx],
                   spanAttributes: {
                     type: SpanTypeAttribute.SCORE,
                   },
-                  event: { input: scoringArgs },
+                  event: { input: scoringArgsForLogging },
                 });
                 return { kind: "score", value: results } as const;
               } catch (e) {
