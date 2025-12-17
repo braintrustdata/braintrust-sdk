@@ -79,10 +79,26 @@ export async function testMustacheTemplate(
       message: "Mustache template test passed",
     };
   } catch (error) {
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause,
+          }
+        : {
+            name: "UnknownError",
+            message: String(error),
+            rawError: error,
+          };
+
     return {
       success: false,
       testName,
       error: error as Error,
+      message: `Test failed: ${errorDetails.message}`,
+      errorDetails,
     };
   }
 }
@@ -98,42 +114,133 @@ export async function testNunjucksTemplate(
   try {
     const { Prompt } = module;
 
-    const nunjucksPrompt = new Prompt(
-      {
-        name: "nunjucks-test",
-        slug: "nunjucks-test",
-        prompt_data: {
-          prompt: {
-            type: "chat",
-            messages: [
-              {
-                role: "user",
-                content:
-                  "Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
-              },
-            ],
-          },
-          options: {
-            model: "gpt-4",
+    let nunjucksPrompt;
+    try {
+      nunjucksPrompt = new Prompt(
+        {
+          name: "nunjucks-test",
+          slug: "nunjucks-test",
+          prompt_data: {
+            prompt: {
+              type: "chat",
+              messages: [
+                {
+                  role: "user",
+                  content:
+                    "Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
+                },
+              ],
+            },
+            options: {
+              model: "gpt-4",
+            },
           },
         },
-      },
-      {},
-      false,
-    );
+        {},
+        false,
+      );
+    } catch (constructorError) {
+      const errorDetails =
+        constructorError instanceof Error
+          ? {
+              name: constructorError.name,
+              message: constructorError.message,
+              stack: constructorError.stack,
+              cause: constructorError.cause,
+              step: "Prompt constructor",
+            }
+          : {
+              name: "UnknownError",
+              message: String(constructorError),
+              rawError: constructorError,
+              step: "Prompt constructor",
+            };
 
-    const nunjucksResult = nunjucksPrompt.build(
-      {
-        items: [{ name: "apple" }, { name: "banana" }, { name: "cherry" }],
-      },
-      { templateFormat: "nunjucks" },
-    );
+      return {
+        success: false,
+        testName,
+        error: constructorError as Error,
+        message: `Failed to create Prompt: ${errorDetails.message}`,
+        errorDetails,
+      };
+    }
 
-    assertEqual(
-      nunjucksResult.messages[0]?.content,
-      "Items: apple, banana, cherry",
-      "Nunjucks template should render loop correctly",
-    );
+    let nunjucksResult;
+    try {
+      nunjucksResult = nunjucksPrompt.build(
+        {
+          items: [{ name: "apple" }, { name: "banana" }, { name: "cherry" }],
+        },
+        { templateFormat: "nunjucks" },
+      );
+    } catch (buildError) {
+      const errorDetails =
+        buildError instanceof Error
+          ? {
+              name: buildError.name,
+              message: buildError.message,
+              stack: buildError.stack,
+              cause: buildError.cause,
+              step: "build() call",
+              templateFormat: "nunjucks",
+              variables: {
+                items: [
+                  { name: "apple" },
+                  { name: "banana" },
+                  { name: "cherry" },
+                ],
+              },
+            }
+          : {
+              name: "UnknownError",
+              message: String(buildError),
+              rawError: buildError,
+              step: "build() call",
+              templateFormat: "nunjucks",
+            };
+
+      return {
+        success: false,
+        testName,
+        error: buildError as Error,
+        message: `Failed to build prompt: ${errorDetails.message}`,
+        errorDetails,
+      };
+    }
+
+    try {
+      assertEqual(
+        nunjucksResult.messages[0]?.content,
+        "Items: apple, banana, cherry",
+        "Nunjucks template should render loop correctly",
+      );
+    } catch (assertError) {
+      const errorDetails =
+        assertError instanceof Error
+          ? {
+              name: assertError.name,
+              message: assertError.message,
+              stack: assertError.stack,
+              cause: assertError.cause,
+              step: "assertion",
+              actualContent: nunjucksResult.messages[0]?.content,
+              expectedContent: "Items: apple, banana, cherry",
+            }
+          : {
+              name: "UnknownError",
+              message: String(assertError),
+              rawError: assertError,
+              step: "assertion",
+            };
+
+      return {
+        success: false,
+        testName,
+        error: assertError as Error,
+        message: `Assertion failed: ${errorDetails.message}`,
+        errorDetails,
+      };
+    }
 
     return {
       success: true,
@@ -141,10 +248,28 @@ export async function testNunjucksTemplate(
       message: "Nunjucks template test passed",
     };
   } catch (error) {
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause,
+            step: "unknown",
+          }
+        : {
+            name: "UnknownError",
+            message: String(error),
+            rawError: error,
+            step: "unknown",
+          };
+
     return {
       success: false,
       testName,
       error: error as Error,
+      message: `Test failed: ${errorDetails.message}`,
+      errorDetails,
     };
   }
 }

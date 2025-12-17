@@ -43,4 +43,11 @@ export interface TestResult {
   testName: string;
   message?: string;
   error?: Error;
+  errorDetails?: {
+    name: string;
+    message: string;
+    stack?: string;
+    cause?: unknown;
+    rawError?: unknown;
+  };
 }
