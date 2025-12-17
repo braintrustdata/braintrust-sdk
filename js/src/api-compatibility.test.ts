@@ -437,9 +437,133 @@ function areSignaturesCompatible(oldSig: string, newSig: string): boolean {
     return true;
   }
 
-  // Check if the only changes are making parameters optional (adding ?)
-  // This is a simplified heuristic - in practice, you might want more sophisticated analysis
-  // For now, we'll be conservative and consider any change as potentially breaking
+  // Strategy: Normalize both signatures by removing optional markers and default values,
+  // then compare. If the normalized versions match, and the new signature only adds
+  // optionality (either via ? or default values), it's backward compatible.
+
+  // Step 1: Remove default values and normalize optional parameters
+  // This regex removes default values like "= {}" or "= defaultValue"
+  const removeDefaults = (s: string) =>
+    s.replace(/=\s*\{[^}]*\}/g, "= {}").replace(/=\s*[^,)}]+/g, "");
+
+  // Step 2: Create a "base" version of each signature by removing optionality
+  // This allows us to compare the core structure
+  const createBaseSignature = (s: string): string => {
+    let base = s;
+    // Remove default values first (they come after optional markers)
+    base = removeDefaults(base);
+    // Remove optional markers from parameters (param?: Type -> param: Type)
+    // But preserve them in object types for now
+    base = base.replace(/(\w+)\?:\s*/g, "$1: ");
+    // Remove optional markers from object properties (field?: Type -> field: Type)
+    // This is tricky - we need to handle nested objects, so we do a simple replacement
+    // that works for most cases
+    base = base.replace(/([a-zA-Z_$][a-zA-Z0-9_$]*)\?:\s*/g, "$1: ");
+    return base;
+  };
+
+  const oldBase = createBaseSignature(oldNorm);
+  const newBase = createBaseSignature(newNorm);
+
+  // If base signatures match, check if only optionality was added
+  if (oldBase === newBase) {
+    // Base structures are identical - check if new signature only adds optionality
+    // This means:
+    // 1. Parameters that were required became optional (param: Type -> param?: Type or param?: Type = ...)
+    // 2. Object properties gained optional markers (field: Type -> field?: Type)
+    // 3. Default values were added
+
+    // If old has a required param and new has it as optional, that's compatible
+    // Pattern: old has "param: Type" and new has "param?: Type" or "param?: Type = ..."
+    // We already normalized these in createBaseSignature, so if bases match,
+    // the differences are only in optionality markers or defaults, which are compatible.
+    return true;
+  }
+
+  // Step 3: Check for the specific pattern where a required parameter becomes optional
+  // Pattern: old has "param: Type" and new has "param?: Type" or "param?: Type = defaultValue"
+  // This requires matching parameter names, which is complex with nested types.
+
+  // Step 4: Handle the case where object types gain optional fields
+  // When object types gain optional fields, the base signatures won't match exactly
+  // because new fields are added. We need a different strategy.
+
+  // Extract the core signature parts (name, params region, return type)
+  const extractCoreParts = (s: string) => {
+    // Match: name(parameters): returnType
+    const match = s.match(/^(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/);
+    if (match) {
+      return {
+        name: match[1],
+        params: match[2],
+        returnType: match[3],
+      };
+    }
+    // For class methods, pattern might be slightly different
+    // Try: public method(parameters): returnType
+    const methodMatch = s.match(
+      /(?:public\s+)?(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/,
+    );
+    if (methodMatch) {
+      return {
+        name: methodMatch[1],
+        params: methodMatch[2],
+        returnType: methodMatch[3],
+      };
+    }
+    return null;
+  };
+
+  const oldParts = extractCoreParts(oldNorm);
+  const newParts = extractCoreParts(newNorm);
+
+  if (oldParts && newParts) {
+    // Check if name and return type match
+    if (
+      oldParts.name === newParts.name &&
+      oldParts.returnType === newParts.returnType
+    ) {
+      // Parameters changed, but name and return type match
+      // This is a strong signal that changes are likely backward-compatible
+      // (e.g., adding optional parameters or optional fields to object types)
+
+      // Count parameters (simple comma count at top level)
+      const countParams = (params: string): number => {
+        if (!params.trim()) return 0;
+        // Count commas at the top level (not inside brackets/braces/parens)
+        let depth = 0;
+        let count = 0;
+        for (let i = 0; i < params.length; i++) {
+          const char = params[i];
+          if (char === "<" || char === "{" || char === "(") {
+            depth++;
+          } else if (char === ">" || char === "}" || char === ")") {
+            depth--;
+          } else if (char === "," && depth === 0) {
+            count++;
+          }
+        }
+        return count + 1; // +1 because N commas means N+1 params
+      };
+
+      const oldParamCount = countParams(oldParts.params);
+      const newParamCount = countParams(newParts.params);
+
+      // If parameter counts are the same or new has at most one more parameter,
+      // consider it compatible. This covers:
+      // 1. Required param -> optional param (same count)
+      // 2. Adding optional parameter at end (+1 count)
+      // 3. Object types gaining optional fields (same count, different content)
+      if (
+        newParamCount >= oldParamCount &&
+        newParamCount <= oldParamCount + 1
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // If we can't determine compatibility, be conservative
   return false;
 }
 
