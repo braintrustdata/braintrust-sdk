@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
-import { trace } from "@opentelemetry/api";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { context, trace } from "@opentelemetry/api";
+import { NodeSDK } from "@opentelemetry/sdk-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
@@ -16,24 +16,24 @@ console.log("Running ai sdk version:", require("ai/package.json").version);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
+let exporter: BraintrustExporter;
+let sdk: NodeSDK;
+
 function setupTracer() {
   if (!process.env.BRAINTRUST_API_KEY) {
     throw new Error("BRAINTRUST_API_KEY is required");
   }
 
-  // Remove the current tracer provider if it exists
-  trace.disable();
-  const exporter = new BraintrustExporter({
+  exporter = new BraintrustExporter({
     filterAISpans: true,
   });
-  const provider = new NodeTracerProvider({
+
+  sdk = new NodeSDK({
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
-  trace.setGlobalTracerProvider(provider);
-}
 
-// Setup tracer
-setupTracer();
+  sdk.start();
+}
 
 async function initialize() {
   const logger = initLogger({
@@ -974,6 +974,7 @@ async function testStructuredOutputWithContext() {
 
 // Run all tests
 async function runAllTests() {
+  setupTracer();
   await initialize();
 
   const tests = [
@@ -999,14 +1000,31 @@ async function runAllTests() {
     testStructuredOutputWithContext,
   ];
 
+  const tracer = trace.getTracer("ai-sdk-v6-otel-golden");
+
   for (const test of tests) {
     try {
-      await test();
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Rate limiting
+      // Create a parent span for each test to group all operations
+      const parentSpan = tracer.startSpan(test.name);
+      // Start the span to ensure it's active
+      parentSpan.setAttribute("test.name", test.name);
+      const ctx = trace.setSpan(context.active(), parentSpan);
+
+      await context.with(ctx, async () => {
+        await test();
+      });
+
+      parentSpan.end();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
       console.error(`Test ${test.name} failed:`, error);
     }
   }
+
+  await exporter.forceFlush();
+  await sdk.shutdown();
+
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 }
 
 runAllTests().catch(console.error);

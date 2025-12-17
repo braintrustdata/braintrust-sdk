@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
-import { trace } from "@opentelemetry/api";
+import { context, trace } from "@opentelemetry/api";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { openai } from "@ai-sdk/openai";
@@ -9,110 +9,26 @@ import * as ai from "ai";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { BraintrustExporter } from "@braintrust/otel";
-import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 import type { LanguageModel } from "ai";
-
-console.log("Running ai sdk version:", require("ai/package.json").version);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
-// ExportResult type for exporter callbacks
-interface ExportResult {
-  code: number;
-  error?: Error;
-}
+console.log("Running ai sdk version:", require("ai/package.json").version);
 
-// Wrapper to log what's being exported
-class LoggingBraintrustExporter implements SpanExporter {
-  private exporter: BraintrustExporter;
-
-  constructor(options: any) {
-    this.exporter = new BraintrustExporter(options);
-  }
-
-  export(
-    spans: ReadableSpan[],
-    resultCallback: (result: ExportResult) => void,
-  ): void {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[BraintrustExporter] Received ${spans.length} span(s) to export`,
-    );
-
-    spans.forEach((span, index) => {
-      // Cast to any to avoid deep type instantiation issues
-      // @ts-ignore - Type instantiation is excessively deep
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const spanAny = span as any;
-
-      // eslint-disable-next-line no-console
-      // @ts-ignore - Type instantiation is excessively deep
-      console.log(
-        `[BraintrustExporter] Span ${index + 1}:`,
-        JSON.stringify(
-          {
-            name: spanAny.name,
-            attributes: spanAny.attributes,
-            duration: spanAny.duration,
-            status: spanAny.status,
-          },
-          null,
-          2,
-        ),
-      );
-    });
-
-    // Call wrapped exporter with error logging
-    this.exporter.export(spans, (result) => {
-      if (result.code === 1) {
-        // eslint-disable-next-line no-console
-        console.error("[BraintrustExporter] Export failed:", result.error);
-      } else {
-        // eslint-disable-next-line no-console
-        console.log("[BraintrustExporter] Export succeeded");
-      }
-      resultCallback(result);
-    });
-  }
-
-  shutdown(): Promise<void> {
-    return this.exporter.shutdown();
-  }
-
-  forceFlush(): Promise<void> {
-    return this.exporter.forceFlush();
-  }
-}
-
-let exporter: LoggingBraintrustExporter;
+let exporter: BraintrustExporter;
 let sdk: NodeSDK;
 
 function setupTracer() {
-  // Check environment variables
-  const apiUrl = process.env.BRAINTRUST_API_URL || "https://api.braintrust.dev";
-  const apiKey = process.env.BRAINTRUST_API_KEY;
-
-  // eslint-disable-next-line no-console
-  console.log("[setupTracer] Configuration:", {
-    apiUrl,
-    hasApiKey: !!apiKey,
-    parent: "project_name:golden-ts-ai-sdk-v5-otel",
-  });
-
-  exporter = new LoggingBraintrustExporter({
+  exporter = new BraintrustExporter({
     parent: "project_name:golden-ts-ai-sdk-v5-otel",
     filterAISpans: true,
-    apiUrl, // Explicitly pass API URL
   });
 
-  // Use NodeSDK which automatically handles resource detection in 2.x
   sdk = new NodeSDK({
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
   sdk.start();
-  // eslint-disable-next-line no-console
-  console.log("[setupTracer] NodeSDK started");
 }
 
 // Test 1: Basic completion
@@ -125,7 +41,6 @@ async function testBasicCompletion() {
         isEnabled: true,
         functionId: "test_basic_completion",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -137,7 +52,6 @@ async function testBasicCompletion() {
         isEnabled: true,
         functionId: "test_basic_completion",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -165,7 +79,6 @@ async function testMultiTurn() {
         isEnabled: true,
         functionId: "test_multi_turn",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -177,7 +90,6 @@ async function testMultiTurn() {
         isEnabled: true,
         functionId: "test_multi_turn",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -194,7 +106,6 @@ async function testSystemPrompt() {
         isEnabled: true,
         functionId: "test_system_prompt",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -207,7 +118,6 @@ async function testSystemPrompt() {
         isEnabled: true,
         functionId: "test_system_prompt",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -223,7 +133,6 @@ async function testStreaming() {
         isEnabled: true,
         functionId: "test_streaming",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -238,7 +147,6 @@ async function testStreaming() {
         isEnabled: true,
         functionId: "test_streaming",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -272,7 +180,6 @@ async function testImageInput() {
         isEnabled: true,
         functionId: "test_image_input",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -284,7 +191,6 @@ async function testImageInput() {
         isEnabled: true,
         functionId: "test_image_input",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -320,7 +226,6 @@ async function testDocumentInput() {
         isEnabled: true,
         functionId: "test_document_input",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -332,7 +237,6 @@ async function testDocumentInput() {
         isEnabled: true,
         functionId: "test_document_input",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -367,7 +271,6 @@ async function testTemperatureVariations() {
           isEnabled: true,
           functionId: "test_temperature_variations",
           metadata: { golden: true, sdkVersion: "v5" },
-          tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
         },
       });
 
@@ -380,7 +283,6 @@ async function testTemperatureVariations() {
           isEnabled: true,
           functionId: "test_temperature_variations",
           metadata: { golden: true, sdkVersion: "v5" },
-          tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
         },
       });
     }
@@ -401,7 +303,6 @@ async function testStopSequences() {
         isEnabled: true,
         functionId: "test_stop_sequences",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -414,7 +315,6 @@ async function testStopSequences() {
         isEnabled: true,
         functionId: "test_stop_sequences",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -430,7 +330,6 @@ async function testMetadata() {
         isEnabled: true,
         functionId: "test_metadata",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -442,7 +341,6 @@ async function testMetadata() {
         isEnabled: true,
         functionId: "test_metadata",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -467,7 +365,6 @@ async function testLongContext() {
         isEnabled: true,
         functionId: "test_long_context",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -479,7 +376,6 @@ async function testLongContext() {
         isEnabled: true,
         functionId: "test_long_context",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -514,7 +410,6 @@ async function testMixedContent() {
         isEnabled: true,
         functionId: "test_mixed_content",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -526,7 +421,6 @@ async function testMixedContent() {
         isEnabled: true,
         functionId: "test_mixed_content",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -547,7 +441,6 @@ async function testPrefill() {
         isEnabled: true,
         functionId: "test_prefill",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -559,7 +452,6 @@ async function testPrefill() {
         isEnabled: true,
         functionId: "test_prefill",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -576,7 +468,6 @@ async function testShortMaxTokens() {
         isEnabled: true,
         functionId: "test_short_max_tokens",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -589,7 +480,6 @@ async function testShortMaxTokens() {
         isEnabled: true,
         functionId: "test_short_max_tokens",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -644,7 +534,6 @@ async function testToolUse() {
         isEnabled: true,
         functionId: "test_tool_use",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -659,7 +548,6 @@ async function testToolUse() {
         isEnabled: true,
         functionId: "test_tool_use",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -703,7 +591,6 @@ async function testToolUseWithResult() {
         isEnabled: true,
         functionId: "test_tool_use_with_result",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -718,7 +605,6 @@ async function testToolUseWithResult() {
         isEnabled: true,
         functionId: "test_tool_use_with_result",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -726,8 +612,6 @@ async function testToolUseWithResult() {
 
 // Test 16: Multi-round tool use (to see LLM ↔ tool roundtrips)
 async function testMultiRoundToolUse() {
-  console.log("\n=== Test 16: Multi-Round Tool Use ===");
-
   const getStorePriceTool = ai.tool({
     description: "Get the price of an item from a specific store",
     inputSchema: z.object({
@@ -781,10 +665,8 @@ async function testMultiRoundToolUse() {
     ["openai", openai("gpt-5-mini")],
     ["anthropic", anthropic("claude-sonnet-4-5")],
   ] as const) {
-    console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
     // @ts-ignore - Type instantiation depth issue with tools
-    const result = await ai.generateText({
+    await ai.generateText({
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       model: model as LanguageModel,
       system:
@@ -801,37 +683,8 @@ async function testMultiRoundToolUse() {
         isEnabled: true,
         functionId: "test_multi_round_tool_use",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
-
-    console.log("\nRoundtrip summary:");
-    console.log(`Total tool calls: ${result.toolCalls?.length ?? 0}`);
-    console.log(`Total tool results: ${result.toolResults?.length ?? 0}`);
-
-    if (result.toolCalls && result.toolCalls.length > 0) {
-      result.toolCalls.forEach((call, i) => {
-        console.log(`  Tool call ${i + 1}: ${call.toolName}`);
-        if ("args" in call) {
-          console.log(`    Args: ${JSON.stringify(call.args)}`);
-        }
-      });
-    }
-
-    if (result.toolResults && result.toolResults.length > 0) {
-      result.toolResults.forEach((res, i) => {
-        console.log(`  Tool result ${i + 1}: ${res.toolName}`);
-        console.log(`    Result: ${JSON.stringify(res.result)}`);
-      });
-    }
-
-    console.log("\nFinal response:");
-    console.log(result.text);
-    console.log(`Steps count: ${result.steps?.length ?? 0}`);
-    result.steps?.forEach((step, i) => {
-      console.log(`  Step ${i + 1}: ${step.toolCalls?.length ?? 0} tool calls`);
-    });
-    console.log();
   }
 }
 
@@ -879,7 +732,6 @@ async function testReasoning() {
         isEnabled: true,
         functionId: "test_reasoning",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -899,7 +751,6 @@ async function testReasoning() {
         isEnabled: true,
         functionId: "test_reasoning",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -914,7 +765,6 @@ async function testReasoning() {
         isEnabled: true,
         functionId: "test_reasoning",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -932,7 +782,6 @@ async function testReasoning() {
         isEnabled: true,
         functionId: "test_reasoning",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -960,7 +809,6 @@ async function testStructuredOutput() {
         isEnabled: true,
         functionId: "test_structured_output",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -985,7 +833,6 @@ async function testStreamingStructuredOutput() {
         isEnabled: true,
         functionId: "test_streaming_structured_output",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
 
@@ -1081,7 +928,6 @@ async function testStructuredOutputWithContext() {
         isEnabled: true,
         functionId: "test_structured_output_with_context",
         metadata: { golden: true, sdkVersion: "v5" },
-        tracer: trace.getTracer("ai-sdk-v5-otel-golden"),
       },
     });
   }
@@ -1089,7 +935,6 @@ async function testStructuredOutputWithContext() {
 
 // Run all tests
 async function runAllTests() {
-  // Setup tracer first, before any other operations
   setupTracer();
 
   const tests = [
@@ -1115,54 +960,32 @@ async function runAllTests() {
     testStructuredOutputWithContext,
   ];
 
+  const tracer = trace.getTracer("ai-sdk-v5-otel-golden");
+
   for (const test of tests) {
     try {
-      await test();
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Rate limiting
+      // Create a parent span for each test to group all operations
+      const parentSpan = tracer.startSpan(test.name);
+      const ctx = trace.setSpan(context.active(), parentSpan);
+
+      await context.with(ctx, async () => {
+        await test();
+      });
+
+      parentSpan.end();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
-      console.error(`Test ${test.name} failed:`, error);
+      console.error(error);
     }
   }
 
-  // Give time for spans to be exported and force flush
-  // eslint-disable-next-line no-console
-  console.log("[runAllTests] Waiting for spans to be exported...");
+  await exporter.forceFlush();
+  await sdk.shutdown();
 
-  // Force flush the exporter to ensure spans are sent
-  try {
-    // eslint-disable-next-line no-console
-    console.log("[runAllTests] Force flushing exporter...");
-    await exporter.forceFlush();
-    // eslint-disable-next-line no-console
-    console.log("[runAllTests] Exporter flush completed");
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[runAllTests] Error flushing exporter:", error);
-  }
-
-  // Shutdown the SDK
-  if (sdk) {
-    // eslint-disable-next-line no-console
-    console.log("[runAllTests] Shutting down NodeSDK...");
-    try {
-      await sdk.shutdown();
-      // eslint-disable-next-line no-console
-      console.log("[runAllTests] NodeSDK shutdown completed");
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[runAllTests] Error shutting down NodeSDK:", error);
-    }
-  }
-
-  // Also wait a bit for async operations
   await new Promise((resolve) => setTimeout(resolve, 2000));
-
-  // eslint-disable-next-line no-console
-  console.log("[runAllTests] All tests completed");
 }
 
-runAllTests().catch((error: any) => {
-  // eslint-disable-next-line no-console
-  console.error("ai-sdk v5 OTEL golden test failed:", error);
+runAllTests().catch((error) => {
+  console.error(error);
   process.exit(1);
 });
