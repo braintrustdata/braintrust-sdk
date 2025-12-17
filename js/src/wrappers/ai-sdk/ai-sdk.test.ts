@@ -19,7 +19,7 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../../logger";
-import { wrapAISDK, omit } from "./ai-sdk";
+import { wrapAISDK, omit, extractTokenMetrics } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -1727,5 +1727,54 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Verify metrics
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
+  });
+});
+
+describe("extractTokenMetrics", () => {
+  test("handles null values in usage without including them in metrics", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: null,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // null should not be included - it should be undefined or not present
+    expect(result.prompt_cached_tokens).toBeUndefined();
+  });
+
+  test("preserves zero values in usage", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: 0,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // Zero should be preserved, not treated as falsy
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("all metric values are numbers or undefined", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedInputTokens: null,
+        reasoningTokens: null,
+        completionAudioTokens: null,
+      },
+    });
+
+    // Every value should be a number or not present (undefined)
+    for (const [key, value] of Object.entries(result)) {
+      expect(typeof value === "number" || value === undefined).toBe(true);
+    }
   });
 });

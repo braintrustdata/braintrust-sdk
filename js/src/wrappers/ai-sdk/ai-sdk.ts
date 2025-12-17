@@ -1209,6 +1209,15 @@ const convertFileToAttachment = (file: any, index: number): any => {
   }
 };
 
+function firstNumber(...values: unknown[]): number | undefined {
+  for (const v of values) {
+    if (typeof v === "number") {
+      return v;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Extracts all token metrics from usage data.
  * Handles various provider formats and naming conventions for token counts.
@@ -1222,99 +1231,93 @@ export function extractTokenMetrics(result: any): Record<string, number> {
   }
 
   // Prompt tokens (AI SDK v5 uses inputTokens)
-  if (usage.inputTokens !== undefined) {
-    metrics.prompt_tokens = usage.inputTokens;
-  } else if (usage.promptTokens !== undefined) {
-    metrics.prompt_tokens = usage.promptTokens;
-  } else if (usage.prompt_tokens !== undefined) {
-    metrics.prompt_tokens = usage.prompt_tokens;
+  const promptTokens = firstNumber(
+    usage.inputTokens,
+    usage.promptTokens,
+    usage.prompt_tokens,
+  );
+  if (promptTokens !== undefined) {
+    metrics.prompt_tokens = promptTokens;
   }
 
   // Completion tokens (AI SDK v5 uses outputTokens)
-  if (usage.outputTokens !== undefined) {
-    metrics.completion_tokens = usage.outputTokens;
-  } else if (usage.completionTokens !== undefined) {
-    metrics.completion_tokens = usage.completionTokens;
-  } else if (usage.completion_tokens !== undefined) {
-    metrics.completion_tokens = usage.completion_tokens;
+  const completionTokens = firstNumber(
+    usage.outputTokens,
+    usage.completionTokens,
+    usage.completion_tokens,
+  );
+  if (completionTokens !== undefined) {
+    metrics.completion_tokens = completionTokens;
   }
 
   // Total tokens
-  if (usage.totalTokens !== undefined) {
-    metrics.tokens = usage.totalTokens;
-  } else if (usage.tokens !== undefined) {
-    metrics.tokens = usage.tokens;
-  } else if (usage.total_tokens !== undefined) {
-    metrics.tokens = usage.total_tokens;
+  const totalTokens = firstNumber(
+    usage.totalTokens,
+    usage.tokens,
+    usage.total_tokens,
+  );
+  if (totalTokens !== undefined) {
+    metrics.tokens = totalTokens;
   }
 
   // Prompt cached tokens (AI SDK v5 uses cachedInputTokens)
-  if (
-    usage.cachedInputTokens !== undefined ||
-    usage.promptCachedTokens !== undefined ||
-    usage.prompt_cached_tokens !== undefined
-  ) {
-    metrics.prompt_cached_tokens =
-      usage.cachedInputTokens ||
-      usage.promptCachedTokens ||
-      usage.prompt_cached_tokens;
+  const promptCachedTokens = firstNumber(
+    usage.cachedInputTokens,
+    usage.promptCachedTokens,
+    usage.prompt_cached_tokens,
+  );
+  if (promptCachedTokens !== undefined) {
+    metrics.prompt_cached_tokens = promptCachedTokens;
   }
 
   // Prompt cache creation tokens
-  if (
-    usage.promptCacheCreationTokens !== undefined ||
-    usage.prompt_cache_creation_tokens !== undefined
-  ) {
-    metrics.prompt_cache_creation_tokens =
-      usage.promptCacheCreationTokens || usage.prompt_cache_creation_tokens;
+  const promptCacheCreationTokens = firstNumber(
+    usage.promptCacheCreationTokens,
+    usage.prompt_cache_creation_tokens,
+  );
+  if (promptCacheCreationTokens !== undefined) {
+    metrics.prompt_cache_creation_tokens = promptCacheCreationTokens;
   }
 
   // Prompt reasoning tokens
-  if (
-    usage.promptReasoningTokens !== undefined ||
-    usage.prompt_reasoning_tokens !== undefined
-  ) {
-    metrics.prompt_reasoning_tokens =
-      usage.promptReasoningTokens || usage.prompt_reasoning_tokens;
+  const promptReasoningTokens = firstNumber(
+    usage.promptReasoningTokens,
+    usage.prompt_reasoning_tokens,
+  );
+  if (promptReasoningTokens !== undefined) {
+    metrics.prompt_reasoning_tokens = promptReasoningTokens;
   }
 
   // Completion cached tokens
-  if (
-    usage.completionCachedTokens !== undefined ||
-    usage.completion_cached_tokens !== undefined
-  ) {
-    metrics.completion_cached_tokens =
-      usage.completionCachedTokens || usage.completion_cached_tokens;
+  const completionCachedTokens = firstNumber(
+    usage.completionCachedTokens,
+    usage.completion_cached_tokens,
+  );
+  if (completionCachedTokens !== undefined) {
+    metrics.completion_cached_tokens = completionCachedTokens;
   }
 
   // Completion reasoning tokens
-  if (
-    usage.reasoningTokens !== undefined ||
-    usage.completionReasoningTokens !== undefined ||
-    usage.completion_reasoning_tokens !== undefined ||
-    usage.reasoning_tokens !== undefined ||
-    usage.thinkingTokens !== undefined ||
-    usage.thinking_tokens !== undefined
-  ) {
-    const reasoningTokenCount =
-      usage.reasoningTokens ||
-      usage.completionReasoningTokens ||
-      usage.completion_reasoning_tokens ||
-      usage.reasoning_tokens ||
-      usage.thinkingTokens ||
-      usage.thinking_tokens;
-
+  const reasoningTokenCount = firstNumber(
+    usage.reasoningTokens,
+    usage.completionReasoningTokens,
+    usage.completion_reasoning_tokens,
+    usage.reasoning_tokens,
+    usage.thinkingTokens,
+    usage.thinking_tokens,
+  );
+  if (reasoningTokenCount !== undefined) {
     metrics.completion_reasoning_tokens = reasoningTokenCount;
     metrics.reasoning_tokens = reasoningTokenCount;
   }
 
   // Completion audio tokens
-  if (
-    usage.completionAudioTokens !== undefined ||
-    usage.completion_audio_tokens !== undefined
-  ) {
-    metrics.completion_audio_tokens =
-      usage.completionAudioTokens || usage.completion_audio_tokens;
+  const completionAudioTokens = firstNumber(
+    usage.completionAudioTokens,
+    usage.completion_audio_tokens,
+  );
+  if (completionAudioTokens !== undefined) {
+    metrics.completion_audio_tokens = completionAudioTokens;
   }
 
   return metrics;
