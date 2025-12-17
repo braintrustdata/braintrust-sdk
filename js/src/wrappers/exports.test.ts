@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BraintrustMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "./ai-sdk";
 
 describe("ai-sdk exports", () => {
   it("should always export BraintrustMiddleware as a function", () => {
