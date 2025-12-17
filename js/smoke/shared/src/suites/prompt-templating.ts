@@ -130,14 +130,14 @@ export async function testNunjucksTemplate(
       if (
         environment === "cloudflare-worker" &&
         errorMessage.includes(
-          "Code generation from strings disallowed for this context",
+          "Evals are not supported in this environment (Cloudflare Workers)",
         )
       ) {
         return {
           success: true,
           testName,
           message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support code generation from strings",
+            "Nunjucks template test skipped - Cloudflare Workers does not support evals",
         };
       }
 
@@ -165,14 +165,14 @@ export async function testNunjucksTemplate(
       if (
         environment === "cloudflare-worker" &&
         errorMessage.includes(
-          "Code generation from strings disallowed for this context",
+          "Evals are not supported in this environment (Cloudflare Workers)",
         )
       ) {
         return {
           success: true,
           testName,
           message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support code generation from strings",
+            "Nunjucks template test skipped - Cloudflare Workers does not support evals",
         };
       }
 

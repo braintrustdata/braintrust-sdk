@@ -6366,6 +6366,20 @@ export function deserializePlainStringAsJSON(s: string) {
   }
 }
 
+// Handle Cloudflare Workers eval restriction error
+function handleCloudflareError(error: unknown) {
+  if (
+    error instanceof Error &&
+    error.message.includes(
+      "Code generation from strings disallowed for this context",
+    )
+  ) {
+    throw new Error(
+      `Evals are not supported in this environment (Cloudflare Workers). Original error: ${error.message}`,
+    );
+  }
+}
+
 function renderTemplatedObject(
   obj: unknown,
   args: Record<string, unknown>,
@@ -6377,7 +6391,12 @@ function renderTemplatedObject(
       if (strict) {
         lintNunjucksTemplate(obj, args);
       }
-      return getNunjucksEnv(strict).renderString(obj, args);
+      try {
+        return getNunjucksEnv(strict).renderString(obj, args);
+      } catch (error) {
+        handleCloudflareError(error);
+        throw error;
+      }
     }
     if (options.templateFormat === "mustache") {
       if (strict) {
@@ -6464,8 +6483,13 @@ export function renderTemplateContent(
     if (strict) {
       lintNunjucksTemplate(template, variables);
     }
-    const rendered = getNunjucksEnv(strict).renderString(template, variables);
-    return rendered;
+    try {
+      const rendered = getNunjucksEnv(strict).renderString(template, variables);
+      return rendered;
+    } catch (error) {
+      handleCloudflareError(error);
+      throw error;
+    }
   } else if (templateFormat === "mustache") {
     if (strict) {
       lintMustacheTemplate(template, variables);
