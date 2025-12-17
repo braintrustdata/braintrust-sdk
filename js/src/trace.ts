@@ -1,5 +1,5 @@
 import { _internalGetGlobalState } from "./logger";
-import { createHash } from "node:crypto";
+import iso from "./isomorph";
 
 const MAX_FETCH_RETRIES = 8;
 const INITIAL_RETRY_DELAY_MS = 250;
@@ -25,7 +25,13 @@ const getMessageHash = (
   hashCache: Map<string, string>,
 ): string => {
   const messageString = JSON.stringify(message);
-  const hashString = createHash("md5").update(messageString).digest("hex");
+
+  // In browser without hash support, return unique string to force cache miss
+  if (!iso.hash) {
+    return `no-hash-${Date.now()}-${Math.random()}`;
+  }
+
+  const hashString = iso.hash(messageString);
 
   // Cache the result
   hashCache.set(messageString, hashString);

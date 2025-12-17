@@ -1,8 +1,20 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  expect,
+  test,
+  beforeEach,
+  afterEach,
+  beforeAll,
+} from "vitest";
 import { SpanCache } from "./span-cache";
+import { configureNode } from "./node";
 
 describe("SpanCache (disk-based)", () => {
   let cache: SpanCache;
+
+  beforeAll(() => {
+    configureNode();
+  });
 
   beforeEach(() => {
     cache = new SpanCache();

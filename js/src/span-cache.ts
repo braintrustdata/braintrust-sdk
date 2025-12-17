@@ -4,11 +4,29 @@
  *
  * Spans are stored on disk to minimize memory usage during evaluations.
  * The cache file is automatically cleaned up when dispose() is called.
+ *
+ * In browser environments where filesystem access isn't available,
+ * the cache becomes a no-op (all lookups return undefined).
  */
 
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import iso from "./isomorph";
+
+/**
+ * Check if the span cache can be used (requires filesystem APIs).
+ * This is called at runtime, not at module load time, to allow
+ * configureNode() to set up the isomorph functions first.
+ */
+function canUseSpanCache(): boolean {
+  return !!(
+    iso.pathJoin &&
+    iso.tmpdir &&
+    iso.writeFileSync &&
+    iso.appendFileSync &&
+    iso.readFileSync &&
+    iso.unlinkSync &&
+    iso.openFile
+  );
+}
 
 export interface CachedSpan {
   input?: unknown;
@@ -34,19 +52,23 @@ interface DiskSpanRecord {
  *
  * This cache writes spans to a temporary file to minimize memory usage.
  * It uses append-only writes and reads the full file when querying.
+ *
+ * In browser environments, this cache is automatically disabled and
+ * all operations become no-ops.
  */
 export class SpanCache {
   private cacheFilePath: string | null = null;
-  private fileHandle: fs.promises.FileHandle | null = null;
+  private fileHandle: any | null = null; // type-erased fs.promises.FileHandle
   private initialized = false;
   private initPromise: Promise<void> | null = null;
-  private _disabled: boolean;
+  private _explicitlyDisabled: boolean;
 
   // Small in-memory index tracking which rootSpanIds have data
   private rootSpanIndex: Set<string> = new Set();
 
   constructor(options?: { disabled?: boolean }) {
-    this._disabled = options?.disabled ?? false;
+    // Only track explicit disable from constructor - platform check is done at runtime
+    this._explicitlyDisabled = options?.disabled ?? false;
     // Initialization is lazy - file is created on first write
   }
 
@@ -55,14 +77,18 @@ export class SpanCache {
    * initFunction is used, since remote function spans won't be in the cache.
    */
   disable(): void {
-    this._disabled = true;
+    this._explicitlyDisabled = true;
   }
 
   get disabled(): boolean {
-    return this._disabled;
+    return this._explicitlyDisabled || !canUseSpanCache();
   }
 
   private async ensureInitialized(): Promise<void> {
+    if (this.disabled) {
+      return;
+    }
+
     if (this.initialized) {
       return;
     }
@@ -72,15 +98,15 @@ export class SpanCache {
     }
 
     this.initPromise = (async () => {
-      const tmpDir = os.tmpdir();
+      const tmpDir = iso.tmpdir!();
       const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      this.cacheFilePath = path.join(
+      this.cacheFilePath = iso.pathJoin!(
         tmpDir,
         `braintrust-span-cache-${uniqueId}.jsonl`,
       );
 
       // Open file for append+read
-      this.fileHandle = await fs.promises.open(this.cacheFilePath, "a+");
+      this.fileHandle = await iso.openFile!(this.cacheFilePath, "a+");
       this.initialized = true;
     })();
 
@@ -99,6 +125,10 @@ export class SpanCache {
     spanId: string,
     data: CachedSpan,
   ): Promise<void> {
+    if (this.disabled) {
+      return;
+    }
+
     await this.ensureInitialized();
 
     const record: DiskSpanRecord = { rootSpanId, spanId, data };
@@ -119,21 +149,21 @@ export class SpanCache {
 
     // Lazy init - create file synchronously if needed
     if (!this.initialized) {
-      const tmpDir = os.tmpdir();
+      const tmpDir = iso.tmpdir!();
       const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      this.cacheFilePath = path.join(
+      this.cacheFilePath = iso.pathJoin!(
         tmpDir,
         `braintrust-span-cache-${uniqueId}.jsonl`,
       );
       // Touch the file
-      fs.writeFileSync(this.cacheFilePath, "");
+      iso.writeFileSync!(this.cacheFilePath, "");
       this.initialized = true;
     }
 
     const record: DiskSpanRecord = { rootSpanId, spanId, data };
     const line = JSON.stringify(record) + "\n";
 
-    fs.appendFileSync(this.cacheFilePath!, line, "utf8");
+    iso.appendFileSync!(this.cacheFilePath!, line);
     this.rootSpanIndex.add(rootSpanId);
   }
 
@@ -160,7 +190,7 @@ export class SpanCache {
     }
 
     try {
-      const content = fs.readFileSync(this.cacheFilePath, "utf8");
+      const content = iso.readFileSync!(this.cacheFilePath, "utf8");
       const lines = content.trim().split("\n").filter(Boolean);
 
       // Accumulate spans by spanId, merging updates
@@ -201,6 +231,9 @@ export class SpanCache {
    * Check if a rootSpanId has cached data.
    */
   has(rootSpanId: string): boolean {
+    if (this.disabled) {
+      return false;
+    }
     return this.rootSpanIndex.has(rootSpanId);
   }
 
@@ -237,9 +270,9 @@ export class SpanCache {
       this.fileHandle = null;
     }
 
-    if (this.cacheFilePath) {
+    if (this.cacheFilePath && canUseSpanCache()) {
       try {
-        fs.unlinkSync(this.cacheFilePath);
+        iso.unlinkSync!(this.cacheFilePath);
       } catch {
         // Ignore cleanup errors
       }
