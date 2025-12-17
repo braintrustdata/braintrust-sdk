@@ -1,0 +1,6 @@
+# Extracted Braintrust SDK package from build artifacts
+# This is created by the install-build script and should not be committed
+package/
+
+# Deno cache and generated files
+.deno/

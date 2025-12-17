@@ -15,7 +15,7 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../logger";
-import { wrapGoogleGenAI } from "../exports-node";
+import { wrapGoogleGenAI } from "./google-genai";
 import { getCurrentUnixTimestamp } from "../util";
 
 const TEST_MODEL = "gemini-2.0-flash-001";
