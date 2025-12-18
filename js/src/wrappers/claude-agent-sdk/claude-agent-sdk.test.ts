@@ -9,7 +9,7 @@ import {
 import { wrapClaudeAgentSDK } from "./claude-agent-sdk";
 import { initLogger, _exportsForTestingOnly } from "../../logger";
 import { configureNode } from "../../node";
-import { z } from "zod/v3";
+import { z } from "../../zod-compat";
 
 debugger;
 

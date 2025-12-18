@@ -23,7 +23,7 @@ import { wrapAISDK, omit } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { z } from "zod";
+import { z } from "../../zod-compat";
 
 const TEST_MODEL = "gpt-4o-mini";
 const TEST_SUITE_OPTIONS = { timeout: 30000, retry: 3 };

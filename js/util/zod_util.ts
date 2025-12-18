@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z } from "../src/zod-compat";
 import { forEachMissingKey } from "./object_util";
 
 export class ExtraFieldsError extends Error {

@@ -1,5 +1,5 @@
 import { type IfExistsType as IfExists } from "./generated_types";
-import { z } from "zod/v3";
+import { z } from "./zod-compat";
 
 // Type to accept both regular Zod schemas and OpenAPI-extended ones
 type ZodSchema<T = any> =

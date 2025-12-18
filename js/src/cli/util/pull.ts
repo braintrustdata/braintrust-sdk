@@ -10,7 +10,7 @@ import { _internalGetGlobalState } from "../../logger";
 import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../../framework";
-import { z } from "zod/v3";
+import { z } from "../../zod-compat";
 import fs from "fs/promises";
 import util from "util";
 import { slugify } from "../../../util/string_util";

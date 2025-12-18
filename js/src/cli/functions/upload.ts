@@ -18,11 +18,11 @@ import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { addAzureBlobHeaders, isEmpty } from "../../util";
-import { z } from "zod/v3";
+import { z } from "../../zod-compat";
 import { capitalize } from "../../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { zodToJsonSchema } from "../../zod-to-json-compat";
 import pluralize from "pluralize";
 import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
 
