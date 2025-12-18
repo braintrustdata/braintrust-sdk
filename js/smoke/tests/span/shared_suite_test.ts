@@ -8,6 +8,7 @@ import {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
   type TestResult,
 } from "../../shared/dist/index.js";
 
@@ -40,8 +41,18 @@ async function runSharedTestSuites() {
     console.log("\nRunning functional tests...");
     const functionalResults = await runBasicLoggingTests(adapters);
 
+    // Run prompt templating tests
+    console.log("\nRunning prompt templating tests...");
+    const promptTemplatingResults = await runPromptTemplatingTests({
+      Prompt: braintrust.Prompt,
+    });
+
     // Combine results
-    const results = [...importResults, ...functionalResults];
+    const results = [
+      ...importResults,
+      ...functionalResults,
+      ...promptTemplatingResults,
+    ];
 
     // Verify all tests passed
     const failures = results.filter((r) => !r.success);
@@ -65,6 +76,10 @@ async function runSharedTestSuites() {
     }
     console.log("\nFunctional Tests:");
     for (const result of functionalResults) {
+      console.log(`  ✓ ${result.testName}: ${result.message}`);
+    }
+    console.log("\nPrompt Templating Tests:");
+    for (const result of promptTemplatingResults) {
       console.log(`  ✓ ${result.testName}: ${result.message}`);
     }
 

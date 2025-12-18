@@ -8,6 +8,7 @@ const {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
 } = require("../../shared/dist/index.js");
 
 const braintrust = require("braintrust");
@@ -33,8 +34,17 @@ async function runSharedTestSuites() {
     // Run functional tests
     const functionalResults = await runBasicLoggingTests(adapters);
 
+    // Run prompt templating tests
+    const promptTemplatingResults = await runPromptTemplatingTests({
+      Prompt: braintrust.Prompt,
+    });
+
     // Combine results
-    const results = [...importResults, ...functionalResults];
+    const results = [
+      ...importResults,
+      ...functionalResults,
+      ...promptTemplatingResults,
+    ];
 
     return results;
   } finally {
@@ -59,8 +69,8 @@ test("shared test suites pass in Jest", async () => {
   // Jest assertions
   expect(failures).toHaveLength(0);
 
-  // Verify we ran at least 16 tests (13 import verification + 3 functional)
-  expect(results.length).toBeGreaterThanOrEqual(16);
+  // Verify we ran at least 18 tests (13 import verification + 3 functional + 2 prompt templating)
+  expect(results.length).toBeGreaterThanOrEqual(18);
 
   // Log success summary
   console.log(`\n✅ All ${results.length} shared test suites passed!\n`);
@@ -70,8 +80,13 @@ test("shared test suites pass in Jest", async () => {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
   console.log("\nFunctional Tests:");
-  const functionalResults = results.slice(13);
+  const functionalResults = results.slice(13, 16);
   for (const result of functionalResults) {
+    console.log(`  ✓ ${result.testName}: ${result.message}`);
+  }
+  console.log("\nPrompt Templating Tests:");
+  const promptTemplatingResults = results.slice(16);
+  for (const result of promptTemplatingResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
 });

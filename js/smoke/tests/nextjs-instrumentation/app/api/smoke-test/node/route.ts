@@ -9,6 +9,7 @@ import {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
 } from "../../../../../../shared/dist/index.mjs";
 
 import * as braintrust from "braintrust";
@@ -54,8 +55,17 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       // Run functional tests
       const functionalResults = await runBasicLoggingTests(adapters);
 
+      // Run prompt templating tests
+      const promptTemplatingResults = await runPromptTemplatingTests({
+        Prompt: braintrust.Prompt,
+      });
+
       // Combine results
-      const results = [...importResults, ...functionalResults];
+      const results = [
+        ...importResults,
+        ...functionalResults,
+        ...promptTemplatingResults,
+      ];
 
       // Check for failures
       const failures = results.filter((r) => !r.success);
