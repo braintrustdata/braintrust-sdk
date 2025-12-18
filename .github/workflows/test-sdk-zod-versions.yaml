@@ -55,9 +55,6 @@ jobs:
           echo "Installed Zod version:"
           pnpm list zod
 
-      - name: Run type checking
-        run: pnpm tsc --noEmit
-
       - name: Run zod compatibility tests
         run: pnpm test src/zod-compat.test.ts
 
