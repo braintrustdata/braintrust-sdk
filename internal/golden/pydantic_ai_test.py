@@ -4,15 +4,23 @@
 # pyright: reportUnknownArgumentType=none
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 from braintrust.otel import BraintrustSpanProcessor
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel
 from pydantic_ai import Agent, BinaryContent, ModelSettings
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
-from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
+from pydantic_ai.direct import model_request, model_request_stream
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    ModelResponseStreamEvent,
+    TextPart,
+    UserPromptPart,
+)
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel, OpenAIResponsesModelSettings
 
 # Configure the global OTel tracer provider
 provider = TracerProvider()
@@ -29,10 +37,31 @@ tracer = trace.get_tracer(__name__)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
+async def stream_with_async_generator(
+    prompt: str,
+) -> AsyncIterator[ModelResponseStreamEvent | ModelResponse]:
+    model = OpenAIChatModel("gpt-4o-mini")
+    messages: list[ModelMessage] = [
+        ModelRequest(parts=[UserPromptPart(content=prompt)])
+    ]
+
+    async with model_request_stream(model=model, messages=messages) as stream:
+        # Yield streaming chunks
+        async for chunk in stream:
+            yield chunk
+
+        # Get and yield the final response
+        response = stream.get()
+        yield response
+
+
 # Test 1: Basic completion
 async def test_basic_completion():
     with tracer.start_as_current_span("test_basic_completion"):
         print("\n=== Test 1: Basic Completion ===")
+
+        # High-level Agent API
+        print("\n--- Agent completion ---")
         agent = Agent(
             "openai:gpt-4o",
             model_settings=ModelSettings(max_tokens=100),
@@ -40,7 +69,17 @@ async def test_basic_completion():
 
         result = await agent.run("What is the capital of France?")
         print(result.output)
-        return result
+
+        # Low-level Direct API
+        print("\n--- Direct API completion ---")
+        model = OpenAIChatModel("gpt-4o")
+        messages: list[ModelMessage] = [
+            ModelRequest(parts=[UserPromptPart(content="What is the capital of France?")])
+        ]
+        direct_result = await model_request(model=model, messages=messages)
+        print(direct_result.parts[0].content)
+
+        return {"agent": result, "direct": direct_result}
 
 
 # Test 2: Multi-turn conversation
@@ -57,7 +96,6 @@ async def test_multi_turn():
             ModelRequest(parts=[UserPromptPart(content="Hi, my name is Alice.")]),
             ModelResponse(parts=[TextPart(content="Hello Alice! Nice to meet you.")]),
         ]
-
         result = await agent.run(
             "What did I just tell you my name was?",
             message_history=message_history,
@@ -85,6 +123,9 @@ async def test_system_prompt():
 async def test_streaming():
     with tracer.start_as_current_span("test_streaming"):
         print("\n=== Test 4: Streaming ===")
+
+        # High-level Agent API
+        print("\n--- Agent streaming ---")
         agent = Agent(
             "openai:gpt-4o",
             model_settings=ModelSettings(max_tokens=200),
@@ -97,7 +138,77 @@ async def test_streaming():
                 full_text += text
 
         print("\n")
-        return full_text
+
+        # Low-level Direct API
+        print("\n--- Direct API streaming (complete) ---")
+        model = OpenAIChatModel("gpt-4o")
+        messages: list[ModelMessage] = [
+            ModelRequest(parts=[UserPromptPart(content="Count from 1 to 5.")])
+        ]
+
+        direct_text = ""
+        async with model_request_stream(model=model, messages=messages) as stream:
+            async for chunk in stream:
+                if hasattr(chunk, 'parts') and chunk.parts:
+                    text = chunk.parts[0].content if chunk.parts[0].content else ""
+                    print(text, end="", flush=True)
+                    direct_text += text
+
+        print("\n")
+
+        # Low-level Direct API with early break (same context - usually works)
+        print("\n--- Direct API streaming with early break (same context) ---")
+        early_break_model = OpenAIChatModel("gpt-4o-mini")
+        early_break_messages: list[ModelMessage] = [
+            ModelRequest(parts=[UserPromptPart(content="Count from 1 to 100.")])
+        ]
+
+        early_break_status = "unknown"
+        try:
+            async with model_request_stream(model=early_break_model, messages=early_break_messages) as stream:
+                i = 0
+                async for chunk in stream:
+                    print(f"Chunk {i}: {type(chunk).__name__}")
+                    i += 1
+
+                    # Early break - within same context, usually OK
+                    if i >= 3:
+                        print("⚠️  Breaking early from stream...")
+                        break
+
+            print("✓ Completed without error")
+            early_break_status = "success"
+        except Exception as e:
+            print(f"✗ Error occurred: {type(e).__name__}: {e}")
+            early_break_status = f"error: {type(e).__name__}"
+
+        # Customer's pattern: Async generator with early break (triggers context error!)
+        print("\n--- CUSTOMER PATTERN: Async generator with early break (may fail) ---")
+        print("(This reproduces: 'Token was created in a different Context' error)")
+        generator_status = "unknown"
+        try:
+            i = 0
+            async for event in stream_with_async_generator("Count from 1 to 100"):
+                print(f"Event {i}: {type(event).__name__}")
+                i += 1
+
+                # Early break - generator closed in different context → ERROR!
+                if i >= 3:
+                    print("⚠️  Breaking early from async generator...")
+                    break
+
+            print("✓ Completed without error")
+            generator_status = "success"
+        except Exception as e:
+            print(f"✗ Error occurred: {type(e).__name__}: {e}")
+            generator_status = f"error: {type(e).__name__}"
+
+        return {
+            "agent_stream": full_text,
+            "direct_stream": direct_text,
+            "early_break_status": early_break_status,
+            "generator_early_break_status": generator_status,
+        }
 
 
 # Test 5: Image input
@@ -379,27 +490,26 @@ async def test_reasoning():
 
         return {"first_result": first_result, "follow_up_result": follow_up_result}
 
-
-# Test 17: Embeddings
+# Test 18: Embeddings
 # Skipped - Pydantic AI focuses on agent/chat interactions and doesn't wrap the embeddings API.
 # The OpenAI test includes embeddings because it tests the full OpenAI client wrapper.
 
 
-# Test 18: Response format (JSON schema)
+# Test 19: Response format (JSON schema)
 # Skipped - Pydantic AI handles structured output through result_type with Pydantic models,
 # which is more type-safe than the OpenAI response_format parameter. We test this approach
-# in Tests 18-20 (structured output tests).
+# in Tests 21-23 (structured output tests).
 
 
-# Test 19: Multiple completions (n > 1)
+# Test 20: Multiple completions (n > 1)
 # Skipped - Pydantic AI is designed for agent-based workflows and doesn't support the OpenAI
 # 'n' parameter for generating multiple completions in a single request.
 
 
-# Test 20: Structured output
+# Test 21: Structured output
 async def test_structured_output():
     with tracer.start_as_current_span("test_structured_output"):
-        print("\n=== Test 20: Structured Output ===")
+        print("\n=== Test 21: Structured Output ===")
 
         class Recipe(BaseModel):
             name: str
@@ -422,10 +532,10 @@ async def test_structured_output():
         return result
 
 
-# Test 21: Streaming structured output
+# Test 22: Streaming structured output
 async def test_streaming_structured_output():
     with tracer.start_as_current_span("test_streaming_structured_output"):
-        print("\n=== Test 21: Streaming Structured Output ===")
+        print("\n=== Test 22: Streaming Structured Output ===")
 
         class Product(BaseModel):
             name: str
@@ -450,10 +560,10 @@ async def test_streaming_structured_output():
         return full_text
 
 
-# Test 22: Structured output with context
+# Test 23: Structured output with context
 async def test_structured_output_with_context():
     with tracer.start_as_current_span("test_structured_output_with_context"):
-        print("\n=== Test 22: Structured Output with Context ===")
+        print("\n=== Test 23: Structured Output with Context ===")
 
         class Comparison(BaseModel):
             recommendation: str
@@ -513,10 +623,10 @@ Give me a structured comparison with your recommendation."""
         return result
 
 
-# Test 23: Error handling
+# Test 24: Error handling
 async def test_error_handling():
     with tracer.start_as_current_span("test_error_handling"):
-        print("\n=== Test 23: Error Handling ===")
+        print("\n=== Test 24: Error Handling ===")
 
         # Test 1: Invalid image URL (404)
         with tracer.start_as_current_span("test_error_invalid_image_url"):
