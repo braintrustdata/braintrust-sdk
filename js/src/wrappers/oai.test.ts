@@ -17,7 +17,7 @@ import {
   TestBackgroundLogger,
   Attachment,
 } from "../logger";
-import { wrapOpenAI } from "../exports-node";
+import { wrapOpenAI } from "./oai";
 import { getCurrentUnixTimestamp } from "../util";
 import { parseMetricsFromUsage } from "./oai_responses";
 
