@@ -44,13 +44,12 @@ jobs:
           echo "Using Zod v3 from package.json dependencies"
           pnpm list zod
 
-      - name: Setup Zod v4 (remove v3, install v4 without adding to package.json)
+      - name: Setup Zod v4 (install v4 without modifying lockfile)
         if: matrix.zod-version == '4.2.1'
         working-directory: ./js
         run: |
-          echo "Removing Zod v3 and installing Zod v4"
-          pnpm remove zod
-          pnpm add zod@${{ matrix.zod-version }} --save-dev --no-save
+          echo "Installing Zod v4 (overriding v3)"
+          pnpm add -D zod@${{ matrix.zod-version }}
 
       - name: Verify Zod version
         working-directory: ./js
