@@ -16,6 +16,7 @@
     "install-build": "npm install --legacy-peer-deps && npx tsx ../../install-build.ts ../../../artifacts braintrust && npx tsx ../../install-build.ts ../../../artifacts otel"
   },
   "dependencies": {
+    "@braintrust/otel": "latest",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/api-logs": "^0.200.0",
     "@opentelemetry/core": "^2.0.0",
@@ -26,7 +27,6 @@
     "@opentelemetry/sdk-metrics": "^2.0.0",
     "@opentelemetry/sdk-trace-base": "^2.0.0",
     "@vercel/otel": "^2.1.0",
-    "@braintrust/otel": "latest",
     "braintrust": "latest",
     "next": "14.2.34",
     "react": "^18",
