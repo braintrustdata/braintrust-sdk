@@ -123,29 +123,11 @@ export async function testNunjucksTemplate(
         false,
       );
     } catch (constructorError) {
-      const errorMessage =
-        constructorError instanceof Error
-          ? constructorError.message
-          : String(constructorError);
-      if (
-        environment === "cloudflare-worker" &&
-        errorMessage.includes(
-          "Evals are not supported in this environment (Cloudflare Workers)",
-        )
-      ) {
-        return {
-          success: true,
-          testName,
-          message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support evals",
-        };
-      }
-
       return {
         success: false,
         testName,
         error: constructorError as Error,
-        message: `Failed to create Prompt: ${errorMessage}`,
+        message: `Failed to create Prompt: ${constructorError instanceof Error ? constructorError.message : String(constructorError)}`,
       };
     }
 
@@ -165,14 +147,14 @@ export async function testNunjucksTemplate(
       if (
         environment === "cloudflare-worker" &&
         errorMessage.includes(
-          "Evals are not supported in this environment (Cloudflare Workers)",
+          "String template rendering. Disallowed in this environment for security reasons",
         )
       ) {
         return {
           success: true,
           testName,
           message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support evals",
+            "Nunjucks template test skipped - Cloudflare Workers does not support string template rendering",
         };
       }
 
