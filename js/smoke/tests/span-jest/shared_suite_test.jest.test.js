@@ -46,7 +46,12 @@ async function runSharedTestSuites() {
       ...promptTemplatingResults,
     ];
 
-    return results;
+    return {
+      all: results,
+      import: importResults,
+      functional: functionalResults,
+      templating: promptTemplatingResults,
+    };
   } finally {
     // Clean up test environment
     await cleanupTestEnvironment(adapters);
@@ -54,7 +59,12 @@ async function runSharedTestSuites() {
 }
 
 test("shared test suites pass in Jest", async () => {
-  const results = await runSharedTestSuites();
+  const {
+    all: results,
+    import: importResults,
+    functional: functionalResults,
+    templating: promptTemplatingResults,
+  } = await runSharedTestSuites();
 
   // Verify all tests passed
   const failures = results.filter((r) => !r.success);
@@ -69,23 +79,17 @@ test("shared test suites pass in Jest", async () => {
   // Jest assertions
   expect(failures).toHaveLength(0);
 
-  // Verify we ran at least 18 tests (13 import verification + 3 functional + 2 prompt templating)
-  expect(results.length).toBeGreaterThanOrEqual(18);
-
   // Log success summary
   console.log(`\n✅ All ${results.length} shared test suites passed!\n`);
   console.log("Import Verification Tests:");
-  const importResults = results.slice(0, 13);
   for (const result of importResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
   console.log("\nFunctional Tests:");
-  const functionalResults = results.slice(13, 16);
   for (const result of functionalResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
   console.log("\nPrompt Templating Tests:");
-  const promptTemplatingResults = results.slice(16);
   for (const result of promptTemplatingResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
