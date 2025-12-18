@@ -431,7 +431,7 @@ function makeScorer(
   return ret;
 }
 
-function makeEvalParametersSchema(
+export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
   return Object.fromEntries(

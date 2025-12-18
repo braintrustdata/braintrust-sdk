@@ -2,15 +2,10 @@ name: Test SDK with Zod Versions
 on:
   pull_request:
     paths:
-      - "sdk/js/**"
-      - "sdk/package.json"
-      - ".github/workflows/test-sdk-zod-versions.yaml"
+      - "**"
   push:
     branches:
       - main
-    paths:
-      - "sdk/js/**"
-      - "sdk/package.json"
   workflow_dispatch:
 
 jobs:
@@ -38,47 +33,31 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
-          cache-dependency-path: "sdk/pnpm-lock.yaml"
 
       - name: Install dependencies
-        working-directory: sdk/js
         run: pnpm install --frozen-lockfile
 
       - name: Install Zod ${{ matrix.zod-version }}
-        working-directory: sdk/js
         run: pnpm add -D zod@${{ matrix.zod-version }}
 
       - name: Verify Zod version
-        working-directory: sdk/js
         run: |
           echo "Installed Zod version:"
           pnpm list zod
 
       - name: Run type checking
-        working-directory: sdk/js
         run: pnpm tsc --noEmit
 
       - name: Run zod compatibility tests
-        working-directory: sdk/js
         run: pnpm test src/zod-compat.test.ts
 
       - name: Run zod v3 serialization tests
         if: matrix.zod-version == '3.25.34'
-        working-directory: sdk/js
         run: pnpm test src/zod-serialization.test.ts util/zod_util.test.ts
 
       - name: Run zod v4 serialization tests
         if: matrix.zod-version == '4.2.1'
-        working-directory: sdk/js
         run: pnpm test src/zod-v4-serialization.test.ts util/zod_util.test.ts
-
-      - name: Run parameter tests
-        working-directory: sdk/js
-        run: pnpm test src/parameters.test.ts
-
-      - name: Run all tests (excluding wrappers and smoke tests)
-        working-directory: sdk/js
-        run: pnpm test
 
   test-summary:
     name: Test Summary

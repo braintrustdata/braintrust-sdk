@@ -8,8 +8,7 @@
  */
 
 import type { ZodType } from "./zod-compat";
-
-let zodToJsonSchemaV3: ((schema: ZodType) => unknown) | null = null;
+import { zodToJsonSchema as zodToJsonSchemaLib } from "zod-to-json-schema";
 
 /**
  * Converts a zod schema to JSON Schema format.
@@ -23,15 +22,5 @@ let zodToJsonSchemaV3: ((schema: ZodType) => unknown) | null = null;
  * @returns JSON Schema representation
  */
 export function zodToJsonSchema(schema: ZodType): unknown {
-  // Lazy load converter on first use
-  if (!zodToJsonSchemaV3) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const zodToJsonSchemaLib = require("zod-to-json-schema");
-    zodToJsonSchemaV3 = zodToJsonSchemaLib.zodToJsonSchema;
-  }
-
-  if (!zodToJsonSchemaV3) {
-    throw new Error("zod-to-json-schema library is not loaded");
-  }
-  return zodToJsonSchemaV3(schema);
+  return zodToJsonSchemaLib(schema);
 }
