@@ -1,0 +1,212 @@
+/**
+ * Prompt templating test suite
+ * Tests Mustache and Nunjucks template rendering in Prompt class
+ */
+
+import type { TestResult } from "../helpers/types";
+import { assertEqual } from "../helpers/assertions";
+
+/**
+ * Interface for accessing Prompt class from braintrust module
+ * Uses a flexible type to accommodate the actual Prompt class structure
+ * which has generics and complex return types
+ */
+export interface PromptModule {
+  Prompt: {
+    new (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      metadata: any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      defaults: any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      noTrace: boolean,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ): any;
+  };
+}
+
+/**
+ * Test Mustache template rendering
+ */
+export async function testMustacheTemplate(
+  module: PromptModule,
+): Promise<TestResult> {
+  const testName = "testMustacheTemplate";
+
+  try {
+    const { Prompt } = module;
+
+    const mustachePrompt = new Prompt(
+      {
+        name: "mustache-test",
+        slug: "mustache-test",
+        prompt_data: {
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: "Hello, {{name}}!",
+              },
+            ],
+          },
+          options: {
+            model: "gpt-4",
+          },
+        },
+      },
+      {},
+      false,
+    );
+
+    const mustacheResult = mustachePrompt.build(
+      { name: "World" },
+      { templateFormat: "mustache" },
+    );
+
+    assertEqual(
+      mustacheResult.messages[0]?.content,
+      "Hello, World!",
+      "Mustache template should render simple variable",
+    );
+
+    return {
+      success: true,
+      testName,
+      message: "Mustache template test passed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      testName,
+      error: error as Error,
+      message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Test Nunjucks template rendering
+ */
+export async function testNunjucksTemplate(
+  module: PromptModule,
+  environment?: string,
+): Promise<TestResult> {
+  const testName = "testNunjucksTemplate";
+
+  try {
+    const { Prompt } = module;
+
+    let nunjucksPrompt;
+    try {
+      nunjucksPrompt = new Prompt(
+        {
+          name: "nunjucks-test",
+          slug: "nunjucks-test",
+          prompt_data: {
+            prompt: {
+              type: "chat",
+              messages: [
+                {
+                  role: "user",
+                  content:
+                    "Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
+                },
+              ],
+            },
+            options: {
+              model: "gpt-4",
+            },
+          },
+        },
+        {},
+        false,
+      );
+    } catch (constructorError) {
+      return {
+        success: false,
+        testName,
+        error: constructorError as Error,
+        message: `Failed to create Prompt: ${constructorError instanceof Error ? constructorError.message : String(constructorError)}`,
+      };
+    }
+
+    let nunjucksResult;
+    try {
+      nunjucksResult = nunjucksPrompt.build(
+        {
+          items: [{ name: "apple" }, { name: "banana" }, { name: "cherry" }],
+        },
+        { templateFormat: "nunjucks" },
+      );
+    } catch (buildError) {
+      const errorMessage =
+        buildError instanceof Error ? buildError.message : String(buildError);
+
+      // Special handling for Cloudflare Workers environment, they disallow code generation
+      if (
+        environment === "cloudflare-worker" &&
+        errorMessage.includes(
+          "String template rendering. Disallowed in this environment for security reasons",
+        )
+      ) {
+        return {
+          success: true,
+          testName,
+          message:
+            "Nunjucks template test skipped - Cloudflare Workers does not support string template rendering",
+        };
+      }
+
+      return {
+        success: false,
+        testName,
+        error: buildError as Error,
+        message: `Failed to build prompt: ${errorMessage}`,
+      };
+    }
+
+    try {
+      assertEqual(
+        nunjucksResult.messages[0]?.content,
+        "Items: apple, banana, cherry",
+        "Nunjucks template should render loop correctly",
+      );
+    } catch (assertError) {
+      return {
+        success: false,
+        testName,
+        error: assertError as Error,
+        message: `Assertion failed: ${assertError instanceof Error ? assertError.message : String(assertError)}`,
+      };
+    }
+
+    return {
+      success: true,
+      testName,
+      message: "Nunjucks template test passed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      testName,
+      error: error as Error,
+      message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Run all prompt templating tests
+ */
+export async function runPromptTemplatingTests(
+  module: PromptModule,
+  environment?: string,
+): Promise<TestResult[]> {
+  const results: TestResult[] = [];
+
+  results.push(await testMustacheTemplate(module));
+  results.push(await testNunjucksTemplate(module, environment));
+
+  return results;
+}

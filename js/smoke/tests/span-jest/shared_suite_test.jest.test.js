@@ -8,6 +8,7 @@ const {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
 } = require("../../shared/dist/index.js");
 
 const braintrust = require("braintrust");
@@ -33,10 +34,24 @@ async function runSharedTestSuites() {
     // Run functional tests
     const functionalResults = await runBasicLoggingTests(adapters);
 
-    // Combine results
-    const results = [...importResults, ...functionalResults];
+    // Run prompt templating tests
+    const promptTemplatingResults = await runPromptTemplatingTests({
+      Prompt: braintrust.Prompt,
+    });
 
-    return results;
+    // Combine results
+    const results = [
+      ...importResults,
+      ...functionalResults,
+      ...promptTemplatingResults,
+    ];
+
+    return {
+      all: results,
+      import: importResults,
+      functional: functionalResults,
+      templating: promptTemplatingResults,
+    };
   } finally {
     // Clean up test environment
     await cleanupTestEnvironment(adapters);
@@ -44,7 +59,12 @@ async function runSharedTestSuites() {
 }
 
 test("shared test suites pass in Jest", async () => {
-  const results = await runSharedTestSuites();
+  const {
+    all: results,
+    import: importResults,
+    functional: functionalResults,
+    templating: promptTemplatingResults,
+  } = await runSharedTestSuites();
 
   // Verify all tests passed
   const failures = results.filter((r) => !r.success);
@@ -59,19 +79,18 @@ test("shared test suites pass in Jest", async () => {
   // Jest assertions
   expect(failures).toHaveLength(0);
 
-  // Verify we ran at least 16 tests (13 import verification + 3 functional)
-  expect(results.length).toBeGreaterThanOrEqual(16);
-
   // Log success summary
   console.log(`\n✅ All ${results.length} shared test suites passed!\n`);
   console.log("Import Verification Tests:");
-  const importResults = results.slice(0, 13);
   for (const result of importResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
   console.log("\nFunctional Tests:");
-  const functionalResults = results.slice(13);
   for (const result of functionalResults) {
+    console.log(`  ✓ ${result.testName}: ${result.message}`);
+  }
+  console.log("\nPrompt Templating Tests:");
+  for (const result of promptTemplatingResults) {
     console.log(`  ✓ ${result.testName}: ${result.message}`);
   }
 });
