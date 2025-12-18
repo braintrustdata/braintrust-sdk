@@ -19,6 +19,7 @@
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.0"
   },
   "tasks": {
-    "test": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net span_test.ts"
+    "test:shared": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net shared_suite_test.ts",
+    "test:legacy": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net span_test.ts"
   }
 }
