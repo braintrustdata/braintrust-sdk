@@ -37,8 +37,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Zod ${{ matrix.zod-version }}
-        run: pnpm add -D zod@${{ matrix.zod-version }}
+      - name: Setup Zod v3 (already installed)
+        if: matrix.zod-version == '3.25.34'
+        run: |
+          echo "Using Zod v3 from package.json dependencies"
+          pnpm list zod
+
+      - name: Setup Zod v4 (remove v3, install v4 without adding to package.json)
+        if: matrix.zod-version == '4.2.1'
+        run: |
+          echo "Removing Zod v3 and installing Zod v4"
+          pnpm remove zod
+          pnpm install zod@${{ matrix.zod-version }} --save-dev --no-save
 
       - name: Verify Zod version
         run: |
