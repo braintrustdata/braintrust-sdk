@@ -1,7 +1,7 @@
 import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
 import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
-import { END, START, StateGraph, StateGraphArgs } from "@langchain/langgraph";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush, initLogger, NOOP_SPAN } from "braintrust";
 import { http, HttpResponse } from "msw";
@@ -701,28 +701,34 @@ it("should handle LangGraph state management", async () => {
   );
 
   // derived from: https://techcommunity.microsoft.com/blog/educatordeveloperblog/an-absolute-beginners-guide-to-langgraph-js/4212496
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type HelloWorldGraphState = Record<string, any>;
-
-  const graphStateChannels: StateGraphArgs<HelloWorldGraphState>["channels"] =
-    {};
+  // Updated for LangGraph 1.x API using Annotation
+  const GraphState = Annotation.Root({
+    message: Annotation<string>({
+      reducer: (_, y) => y,
+      default: () => "",
+    }),
+  });
 
   const model = new ChatOpenAI({
     model: "gpt-4o-mini-2024-07-18",
     callbacks: [handler],
   });
 
-  async function sayHello(state: HelloWorldGraphState) {
+  async function sayHello(
+    state: typeof GraphState.State,
+  ): Promise<typeof GraphState.Update> {
     const res = await model.invoke("Say hello");
-    return res.content;
+    return { message: typeof res.content === "string" ? res.content : "" };
   }
 
-  function sayBye(state: HelloWorldGraphState) {
+  function sayBye(
+    state: typeof GraphState.State,
+  ): typeof GraphState.Update {
     console.log(`From the 'sayBye' node: Bye world!`);
     return {};
   }
 
-  const graphBuilder = new StateGraph({ channels: graphStateChannels }) // Add our nodes to the Graph
+  const graphBuilder = new StateGraph(GraphState) // Add our nodes to the Graph
     .addNode("sayHello", sayHello)
     .addNode("sayBye", sayBye) // Add the edges between nodes
     .addEdge(START, "sayHello")
