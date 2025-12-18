@@ -665,7 +665,7 @@ it("should handle parallel runnable execution", async () => {
       span_id: root_span_id,
       root_span_id,
     },
-    {
+    { // Updated for LangGraph 1.x API using Annotation
       span_attributes: { name: "RunnableSequence", type: "task" },
       input: { topic: "bear" },
       root_span_id,
@@ -700,8 +700,6 @@ it("should handle LangGraph state management", async () => {
     }),
   );
 
-  // derived from: https://techcommunity.microsoft.com/blog/educatordeveloperblog/an-absolute-beginners-guide-to-langgraph-js/4212496
-  // Updated for LangGraph 1.x API using Annotation
   const GraphState = Annotation.Root({
     message: Annotation<string>({
       reducer: (_, y) => y,
@@ -709,21 +707,20 @@ it("should handle LangGraph state management", async () => {
     }),
   });
 
+  type State = typeof GraphState.State;
+  type StateUpdate = typeof GraphState.Update;
+
   const model = new ChatOpenAI({
     model: "gpt-4o-mini-2024-07-18",
     callbacks: [handler],
   });
 
-  async function sayHello(
-    state: typeof GraphState.State,
-  ): Promise<typeof GraphState.Update> {
+  async function sayHello(_: State): Promise<StateUpdate> {
     const res = await model.invoke("Say hello");
     return { message: typeof res.content === "string" ? res.content : "" };
   }
 
-  function sayBye(
-    state: typeof GraphState.State,
-  ): typeof GraphState.Update {
+  function sayBye(_: State): StateUpdate {
     console.log(`From the 'sayBye' node: Bye world!`);
     return {};
   }
