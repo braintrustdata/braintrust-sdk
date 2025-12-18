@@ -900,7 +900,6 @@ async def test_adk_input_schema_serialization(memory_logger):
 
     # Assert complete output structure
     assert llm_span["output"] == {
-        "model_version": "gemini-2.0-flash",
         "content": {
             "role": "model",
             "parts": ANY,  # Response text varies
@@ -1041,7 +1040,6 @@ async def test_adk_complex_nested_schema(memory_logger):
 
     # Assert complete output structure
     assert llm_span["output"] == {
-        "model_version": "gemini-2.0-flash",
         "content": {
             "role": "model",
             "parts": ANY,  # Response text varies
@@ -1287,7 +1285,6 @@ async def test_adk_response_json_schema_dict(memory_logger):
 
     # Assert complete output structure
     assert llm_span["output"] == {
-        "model_version": "gemini-2.0-flash",
         "content": {
             "role": "model",
             "parts": ANY,  # Response contains Tokyo info in JSON
