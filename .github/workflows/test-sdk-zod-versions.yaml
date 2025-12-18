@@ -39,32 +39,42 @@ jobs:
 
       - name: Setup Zod v3 (already installed)
         if: matrix.zod-version == '3.25.34'
+        working-directory: ./js
         run: |
           echo "Using Zod v3 from package.json dependencies"
           pnpm list zod
 
       - name: Setup Zod v4 (remove v3, install v4 without adding to package.json)
         if: matrix.zod-version == '4.2.1'
+        working-directory: ./js
         run: |
           echo "Removing Zod v3 and installing Zod v4"
           pnpm remove zod
-          pnpm install zod@${{ matrix.zod-version }} --save-dev --no-save
+          pnpm add zod@${{ matrix.zod-version }} --save-dev --no-save
 
       - name: Verify Zod version
+        working-directory: ./js
         run: |
           echo "Installed Zod version:"
           pnpm list zod
 
+      - name: Run type checking
+        working-directory: ./js
+        run: pnpm tsc --noEmit
+
       - name: Run zod compatibility tests
-        run: pnpm test src/zod-compat.test.ts
+        working-directory: ./js
+        run: pnpm vitest run src/zod-compat.test.ts
 
       - name: Run zod v3 serialization tests
         if: matrix.zod-version == '3.25.34'
-        run: pnpm test src/zod-serialization.test.ts util/zod_util.test.ts
+        working-directory: ./js
+        run: pnpm vitest run src/zod-serialization.test.ts util/zod_util.test.ts
 
       - name: Run zod v4 serialization tests
         if: matrix.zod-version == '4.2.1'
-        run: pnpm test src/zod-v4-serialization.test.ts util/zod_util.test.ts
+        working-directory: ./js
+        run: pnpm vitest run src/zod-v4-serialization.test.ts util/zod_util.test.ts
 
   test-summary:
     name: Test Summary
