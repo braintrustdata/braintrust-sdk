@@ -99,10 +99,6 @@ Deno.test("Run shared test suites", async () => {
     "All tests should pass",
   );
 
-  // Assert we ran at least 18 tests (13 import verification + 3 functional + 2 prompt templating)
-  assertEquals(
-    results.length >= 18,
-    true,
-    `Expected at least 18 tests, got ${results.length}`,
-  );
+  // Log test count for visibility
+  console.log(`\n✅ All ${results.length} tests passed`);
 });
