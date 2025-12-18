@@ -88,8 +88,12 @@ def get_past_n_ancestors(n=1000, remote=None):
         if ancestor_output is None:
             return
         ancestor = repo.commit(ancestor_output)
+        count = 0
         for _ in range(n):
+            if count >= n:
+                break
             yield ancestor.hexsha
+            count += 1
             try:
                 if ancestor.parents:
                     ancestor = ancestor.parents[0]

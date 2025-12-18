@@ -1,7 +1,7 @@
 import { expect, test, beforeAll } from "vitest";
 import { runEvaluator } from "./framework";
 import { z } from "zod/v3";
-import { type ProgressReporter } from "./progress";
+import { type ProgressReporter } from "./reporters/types";
 import { configureNode } from "./node";
 
 beforeAll(() => {

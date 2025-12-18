@@ -1,10 +1,13 @@
+import json
 from pathlib import Path
 
 import pytest
 from google.adk import Agent
+from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from pydantic import BaseModel, Field
 
 from braintrust import logger
 from braintrust.logger import Attachment
@@ -626,7 +629,7 @@ async def test_llm_call_span_wraps_child_spans(memory_logger):
     2. Child spans (like mcp_tool) created during execution have proper parent
     3. Span is updated with correct call_type after response is received
     """
-    from unittest.mock import MagicMock
+    from unittest.mock import ANY, MagicMock
 
     from braintrust import current_span, start_span
     from braintrust_adk import wrap_flow
@@ -755,3 +758,564 @@ async def test_async_context_preservation_across_yields():
     assert events[2]["event"] == 3
 
     # If we get here, the context error suppression in aclosing.__aexit__ worked correctly
+
+
+class CapitalOutput(BaseModel):
+    capital: str = Field(description="The capital of the country.")
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_adk_structured_output_pydantic(memory_logger):
+    """Test that structured output with Pydantic models is properly captured."""
+    from unittest.mock import ANY
+
+    assert not memory_logger.pop()
+
+    structured_capital_agent = LlmAgent(
+        name="capital_agent",
+        model="gemini-2.0-flash",
+        instruction="""You are a Capital Information Agent. Given a country, respond ONLY with a JSON object containing the capital. Format: {"capital": "capital_name"}""",
+        output_schema=CapitalOutput,
+        output_key="found_capital",
+    )
+
+    APP_NAME = "capital_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-structured"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=structured_capital_agent, app_name=APP_NAME, session_service=session_service)
+
+    user_msg = types.Content(role="user", parts=[types.Part(text="What is the capital of France?")])
+
+    responses = []
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+        if event.is_final_response():
+            responses.append(event)
+
+    assert len(responses) > 0
+
+    spans = memory_logger.pop()
+
+    # Find the LLM span that has response_schema in the config
+    llm_spans_with_schema = [
+        span
+        for span in spans
+        if span["span_attributes"]["type"] == "llm"
+        and "input" in span
+        and "config" in span["input"]
+        and span["input"]["config"].get("response_schema") is not None
+    ]
+
+    assert len(llm_spans_with_schema) > 0, "Should have at least one LLM call with response_schema"
+
+    llm_span = llm_spans_with_schema[0]
+
+    # Assert the complete input structure - use ANY for values we don't care about
+    assert llm_span["input"] == {
+        "model": ANY,
+        "contents": ANY,
+        "config": {
+            "system_instruction": ANY,
+            "response_mime_type": ANY,
+            "response_schema": {
+                "properties": {
+                    "capital": {"description": "The capital of the country.", "title": "Capital", "type": "string"}
+                },
+                "required": ["capital"],
+                "title": "CapitalOutput",
+                "type": "object",
+            },
+        },
+        "live_connect_config": ANY,
+    }
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_adk_input_schema_serialization(memory_logger):
+    """Test that input_schema with Pydantic models is properly serialized."""
+    from unittest.mock import ANY
+
+    class UserInput(BaseModel):
+        name: str = Field(description="User's name")
+        age: int = Field(description="User's age", ge=0)
+
+    assert not memory_logger.pop()
+
+    agent = LlmAgent(
+        name="input_schema_agent",
+        model="gemini-2.0-flash",
+        instruction="You are a test agent with input schema.",
+        input_schema=UserInput,
+    )
+
+    APP_NAME = "input_schema_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-input-schema"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
+
+    user_msg = types.Content(role="user", parts=[types.Part(text="Hello")])
+
+    responses = []
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+        if event.is_final_response():
+            responses.append(event)
+
+    assert len(responses) > 0
+
+    spans = memory_logger.pop()
+
+    # Find LLM span - input_schema is on the agent, but we verify serialization doesn't break
+    llm_spans = [span for span in spans if span["span_attributes"]["type"] == "llm"]
+
+    assert len(llm_spans) > 0, "Should have at least one LLM call"
+
+    llm_span = llm_spans[0]
+
+    # Assert complete input structure
+    assert llm_span["input"] == {
+        "model": "gemini-2.0-flash",
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": "Hello"}],
+            }
+        ],
+        "config": {
+            "system_instruction": ANY,  # Contains agent name
+        },
+        "live_connect_config": {
+            "input_audio_transcription": {},
+            "output_audio_transcription": {},
+        },
+    }
+
+    # Assert complete output structure
+    assert llm_span["output"] == {
+        "content": {
+            "role": "model",
+            "parts": ANY,  # Response text varies
+        },
+        "finish_reason": ANY,
+        "usage_metadata": ANY,  # Token counts vary
+        "avg_logprobs": ANY,
+    }
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_adk_complex_nested_schema(memory_logger):
+    """Test that complex nested Pydantic schemas are properly serialized."""
+    from unittest.mock import ANY
+
+    class Address(BaseModel):
+        street: str = Field(description="Street address")
+        city: str = Field(description="City name")
+        country: str = Field(description="Country name")
+
+    class Person(BaseModel):
+        name: str = Field(description="Person's name")
+        age: int = Field(description="Person's age", ge=0, le=150)
+        address: Address = Field(description="Person's address")
+
+    assert not memory_logger.pop()
+
+    nested_agent = LlmAgent(
+        name="nested_agent",
+        model="gemini-2.0-flash",
+        instruction="Return a person with their address.",
+        output_schema=Person,
+        output_key="person_data",
+    )
+
+    APP_NAME = "nested_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-nested"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=nested_agent, app_name=APP_NAME, session_service=session_service)
+
+    user_msg = types.Content(
+        role="user", parts=[types.Part(text="Give me info about Alice who lives in Paris, France.")]
+    )
+
+    responses = []
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+        if event.is_final_response():
+            responses.append(event)
+
+    assert len(responses) > 0
+
+    spans = memory_logger.pop()
+
+    # Find LLM span with response_schema
+    llm_spans_with_schema = [
+        span
+        for span in spans
+        if span["span_attributes"]["type"] == "llm"
+        and "input" in span
+        and "config" in span["input"]
+        and span["input"]["config"].get("response_schema") is not None
+    ]
+
+    assert len(llm_spans_with_schema) > 0, "Should have at least one LLM call with response_schema"
+
+    llm_span = llm_spans_with_schema[0]
+
+    # Assert complete input structure with nested schema
+    assert llm_span["input"] == {
+        "model": "gemini-2.0-flash",
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": "Give me info about Alice who lives in Paris, France."}],
+            }
+        ],
+        "config": {
+            "system_instruction": ANY,  # Contains agent name
+            "response_mime_type": "application/json",
+            "response_schema": {
+                "properties": {
+                    "name": {
+                        "description": "Person's name",
+                        "title": "Name",
+                        "type": "string",
+                    },
+                    "age": {
+                        "description": "Person's age",
+                        "maximum": 150,
+                        "minimum": 0,
+                        "title": "Age",
+                        "type": "integer",
+                    },
+                    "address": {
+                        "$ref": "#/$defs/Address",
+                        "description": "Person's address",
+                    },
+                },
+                "$defs": {
+                    "Address": {
+                        "properties": {
+                            "street": {
+                                "description": "Street address",
+                                "title": "Street",
+                                "type": "string",
+                            },
+                            "city": {
+                                "description": "City name",
+                                "title": "City",
+                                "type": "string",
+                            },
+                            "country": {
+                                "description": "Country name",
+                                "title": "Country",
+                                "type": "string",
+                            },
+                        },
+                        "required": ["street", "city", "country"],
+                        "title": "Address",
+                        "type": "object",
+                    },
+                },
+                "required": ["name", "age", "address"],
+                "title": "Person",
+                "type": "object",
+            },
+        },
+        "live_connect_config": {
+            "input_audio_transcription": {},
+            "output_audio_transcription": {},
+        },
+    }
+
+    # Assert complete output structure
+    assert llm_span["output"] == {
+        "content": {
+            "role": "model",
+            "parts": ANY,  # Response text varies
+        },
+        "finish_reason": ANY,
+        "usage_metadata": ANY,  # Token counts vary
+        "avg_logprobs": ANY,
+    }
+
+
+@pytest.mark.asyncio
+async def test_serialize_config_handles_all_schema_fields():
+    """Test that _serialize_config handles all 4 schema fields."""
+    from braintrust_adk import _serialize_config
+
+    class TestSchema(BaseModel):
+        value: str = Field(description="Test value")
+
+    # Test with a dict config that has all schema fields
+    config = {
+        "response_schema": TestSchema,
+        "response_json_schema": TestSchema,
+        "input_schema": TestSchema,
+        "output_schema": TestSchema,
+        "other_field": "keep me",
+    }
+
+    serialized = _serialize_config(config)
+
+    assert isinstance(serialized, dict)
+
+    # All schema fields should be serialized to JSON Schema format
+    for field in ["response_schema", "response_json_schema", "input_schema", "output_schema"]:
+        assert field in serialized, f"Missing {field}"
+        schema = serialized[field]
+        assert isinstance(schema, dict)
+        assert "properties" in schema
+        assert "value" in schema["properties"]
+        assert schema["properties"]["value"]["description"] == "Test value"
+
+    # Other fields should be preserved
+    assert "other_field" in serialized
+
+
+@pytest.mark.asyncio
+async def test_serialize_config_handles_non_pydantic():
+    """Test that _serialize_config handles non-Pydantic values gracefully."""
+    from braintrust_adk import _serialize_config
+
+    # Test with non-Pydantic values
+    config = {"response_schema": "not a pydantic model", "other_field": {"key": "value"}}
+
+    serialized = _serialize_config(config)
+
+    assert isinstance(serialized, dict)
+    # Non-Pydantic schema should remain as-is
+    assert "response_schema" in serialized
+    assert serialized["response_schema"] == "not a pydantic model"
+
+
+@pytest.mark.asyncio
+async def test_serialize_pydantic_schema_direct():
+    """Test _serialize_pydantic_schema directly with various inputs."""
+    from braintrust_adk import _serialize_pydantic_schema
+
+    class SimpleSchema(BaseModel):
+        name: str = Field(description="A name")
+        count: int = Field(description="A count", ge=0)
+
+    # Test with Pydantic class
+    result = _serialize_pydantic_schema(SimpleSchema)
+    assert isinstance(result, dict)
+    assert result["type"] == "object"
+    assert "properties" in result
+    assert "name" in result["properties"]
+    assert result["properties"]["name"]["description"] == "A name"
+    assert "count" in result["properties"]
+
+    # Test with non-Pydantic class
+    class NotPydantic:
+        pass
+
+    result = _serialize_pydantic_schema(NotPydantic)
+    assert isinstance(result, dict)
+    assert "__class__" in result
+    assert result["__class__"] == "NotPydantic"
+
+    # Test with non-class object
+    result = _serialize_pydantic_schema("not a class")
+    assert isinstance(result, dict)
+    assert "__class__" in result
+
+
+@pytest.mark.asyncio
+async def test_try_dict_never_raises():
+    """Test that _try_dict never raises exceptions."""
+    from braintrust_adk import _try_dict
+
+    class BrokenModel:
+        def model_dump(self):
+            raise ValueError("I'm broken!")
+
+    # Should not raise
+    result = _try_dict(BrokenModel())
+    assert result is not None
+
+    # Test with various types
+    assert _try_dict({"key": "value"}) == {"key": "value"}
+    assert _try_dict([1, 2, 3]) == [1, 2, 3]
+    assert _try_dict("string") == "string"
+    assert _try_dict(123) == 123
+    assert _try_dict(None) is None
+
+    # Test with Pydantic model instance
+    class WorkingModel(BaseModel):
+        value: str = "test"
+
+    instance = WorkingModel()
+    result = _try_dict(instance)
+    assert isinstance(result, dict)
+    assert result["value"] == "test"
+
+    # Test with Pydantic model class (not instance)
+    result = _try_dict(WorkingModel)
+    assert isinstance(result, dict)
+    assert "__class__" in result
+    assert result["__class__"] == "WorkingModel"
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_adk_response_json_schema_dict(memory_logger):
+    """Test that Google ADK with response_json_schema (plain dict) is properly captured."""
+    from unittest.mock import ANY
+
+    # Use a plain JSON schema dict (not Pydantic)
+    json_schema_dict = {
+        "type": "object",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "Name of the city",
+            },
+            "population": {
+                "type": "integer",
+                "description": "Population of the city",
+                "minimum": 0,
+            },
+            "country": {
+                "type": "string",
+                "description": "Country where the city is located",
+            },
+        },
+        "required": ["city", "country"],
+    }
+
+    assert not memory_logger.pop()
+
+    # Pass JSON schema via generate_content_config
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_json_schema=json_schema_dict,
+    )
+
+    json_schema_agent = LlmAgent(
+        name="city_agent",
+        model="gemini-2.0-flash",
+        instruction="You are a City Information Agent. Provide city information.",
+        generate_content_config=config,
+    )
+
+    APP_NAME = "city_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-json-dict"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=json_schema_agent, app_name=APP_NAME, session_service=session_service)
+
+    user_msg = types.Content(role="user", parts=[types.Part(text="Tell me about Tokyo")])
+
+    responses = []
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+        if event.is_final_response():
+            responses.append(event)
+
+    assert len(responses) > 0
+
+    spans = memory_logger.pop()
+
+    # Find LLM span with response_json_schema
+    llm_spans_with_schema = [
+        span
+        for span in spans
+        if span["span_attributes"]["type"] == "llm"
+        and "input" in span
+        and "config" in span["input"]
+        and span["input"]["config"].get("response_json_schema") is not None
+    ]
+
+    assert len(llm_spans_with_schema) > 0, "Should have at least one LLM call with response_json_schema"
+
+    llm_span = llm_spans_with_schema[0]
+
+    # Assert complete input structure - plain JSON schema dict should be preserved
+    assert llm_span["input"] == {
+        "model": "gemini-2.0-flash",
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": "Tell me about Tokyo"}],
+            }
+        ],
+        "config": {
+            "system_instruction": ANY,  # Contains agent name
+            "response_mime_type": "application/json",
+            "response_json_schema": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "Name of the city",
+                    },
+                    "population": {
+                        "type": "integer",
+                        "description": "Population of the city",
+                        "minimum": 0,
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country where the city is located",
+                    },
+                },
+                "required": ["city", "country"],
+            },
+        },
+        "live_connect_config": {
+            "input_audio_transcription": {},
+            "output_audio_transcription": {},
+        },
+    }
+
+    # Assert complete output structure
+    assert llm_span["output"] == {
+        "content": {
+            "role": "model",
+            "parts": ANY,  # Response contains Tokyo info in JSON
+        },
+        "finish_reason": ANY,
+        "usage_metadata": ANY,
+        "avg_logprobs": ANY,
+    }
+
+
+@pytest.mark.asyncio
+async def test_serialize_config_preserves_none():
+    """Test that _serialize_config returns None when config is None (not empty dict)."""
+    from braintrust_adk import _serialize_config
+
+    # None should be preserved as None, not converted to {}
+    result = _serialize_config(None)
+    assert result is None, f"Expected None, got {result}"
+
+    # Empty dict should remain empty dict
+    result = _serialize_config({})
+    assert result == {}
+
+    # False should be preserved as False
+    result = _serialize_config(False)
+    assert result is False
+
+    # 0 should be preserved as 0
+    result = _serialize_config(0)
+    assert result == 0
+
+    # Empty string should be preserved
+    result = _serialize_config("")
+    assert result == ""
