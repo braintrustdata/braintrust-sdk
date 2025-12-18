@@ -35,7 +35,6 @@ export type {
   SetCurrentArg,
   Span,
   StartSpanArgs,
-  TemplateFormat,
   WithTransactionId,
 } from "./logger";
 
@@ -77,14 +76,12 @@ export {
   initDataset,
   initExperiment,
   initLogger,
-  isTemplateFormat,
   loadPrompt,
   log,
   logError,
   login,
   loginToState,
   newId,
-  parseTemplateFormat,
   permalink,
   renderMessage,
   renderPromptParams,
@@ -103,6 +100,13 @@ export {
   withParent,
   wrapTraced,
 } from "./logger";
+
+export {
+  isTemplateFormat,
+  parseTemplateFormat,
+  renderTemplateContent,
+} from "./template/renderer";
+export type { TemplateFormat } from "./template/renderer";
 
 export type { InvokeFunctionArgs, InvokeReturn } from "./functions/invoke";
 export { initFunction, invoke } from "./functions/invoke";

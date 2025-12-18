@@ -72,27 +72,12 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { nunjucks } from "./template/nunjucks";
-import type { Environment as NunjucksEnvironment } from "nunjucks";
-
-const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
-  return new nunjucks.Environment(null, {
-    autoescape: true,
-    throwOnUndefined,
-  });
-};
-
-const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
-  createNunjucksEnv(false),
-);
-
-const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
-  createNunjucksEnv(true),
-);
-
-function getNunjucksEnv(strict = false): NunjucksEnvironment {
-  return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
-}
+import {
+  parseTemplateFormat,
+  renderTemplateContent,
+  type TemplateFormat,
+} from "./template/renderer";
+import { renderNunjucksString } from "./template/nunjucks-env";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -6341,19 +6326,6 @@ export type PromptRowWithId<
     ? Pick<PromptRow, "_xact_id">
     : Partial<Pick<PromptRow, "_xact_id">>);
 
-export type TemplateFormat = "mustache" | "nunjucks" | "none";
-
-export function isTemplateFormat(v: unknown): v is TemplateFormat {
-  return v === "mustache" || v === "nunjucks" || v === "none";
-}
-
-export function parseTemplateFormat(
-  value: unknown,
-  defaultFormat: TemplateFormat = "mustache",
-): TemplateFormat {
-  return isTemplateFormat(value) ? value : defaultFormat;
-}
-
 export function deserializePlainStringAsJSON(s: string) {
   if (s.trim() === "") {
     return { value: null, error: undefined };
@@ -6363,20 +6335,6 @@ export function deserializePlainStringAsJSON(s: string) {
     return { value: JSON.parse(s), error: undefined };
   } catch (e) {
     return { value: s, error: e };
-  }
-}
-
-// Handle Cloudflare Workers eval restriction error
-function handleCloudflareError(error: unknown) {
-  if (
-    error instanceof Error &&
-    error.message.includes(
-      "Code generation from strings disallowed for this context",
-    )
-  ) {
-    throw new Error(
-      `Evals are not supported in this environment (Cloudflare Workers). Original error: ${error.message}`,
-    );
   }
 }
 
@@ -6391,12 +6349,7 @@ function renderTemplatedObject(
       if (strict) {
         lintNunjucksTemplate(obj, args);
       }
-      try {
-        return getNunjucksEnv(strict).renderString(obj, args);
-      } catch (error) {
-        handleCloudflareError(error);
-        throw error;
-      }
+      return renderNunjucksString(obj, args, strict);
     }
     if (options.templateFormat === "mustache") {
       if (strict) {
@@ -6469,38 +6422,6 @@ export function renderPromptParams(
     };
   }
   return params;
-}
-
-export function renderTemplateContent(
-  template: string,
-  variables: Record<string, unknown>,
-  escape: (v: unknown) => string,
-  options: { strict?: boolean; templateFormat?: TemplateFormat },
-): string {
-  const strict = !!options.strict;
-  const templateFormat = parseTemplateFormat(options.templateFormat);
-  if (templateFormat === "nunjucks") {
-    if (strict) {
-      lintNunjucksTemplate(template, variables);
-    }
-    try {
-      const rendered = getNunjucksEnv(strict).renderString(template, variables);
-      return rendered;
-    } catch (error) {
-      handleCloudflareError(error);
-      throw error;
-    }
-  } else if (templateFormat === "mustache") {
-    if (strict) {
-      lintMustacheTemplate(template, variables);
-    }
-    const rendered = Mustache.render(template, variables, undefined, {
-      escape,
-    });
-    return rendered;
-  } else {
-    return template;
-  }
 }
 
 export class Prompt<
