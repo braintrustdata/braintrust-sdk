@@ -68,7 +68,7 @@ jobs:
       - name: Run zod v3 serialization tests
         if: matrix.zod-version == '3.25.34'
         working-directory: ./js
-        run: pnpm vitest run src/zod-serialization.test.ts util/zod_util.test.ts
+        run: pnpm vitest run src/zod-v3-serialization.test.ts util/zod_util.test.ts
 
       - name: Run zod v4 serialization tests
         if: matrix.zod-version == '4.2.1'

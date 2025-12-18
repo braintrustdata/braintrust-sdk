@@ -1,8 +1,8 @@
 /**
- * Tests for zod v4 compatibility with makeEvalParametersSchema
+ * Tests for zod v3 compatibility with makeEvalParametersSchema
  *
- * This file tests makeEvalParametersSchema specifically with zod v4.
- * See zod-v3-serialization.test.ts for zod v3 specific tests.
+ * This file tests makeEvalParametersSchema specifically with zod v3.
+ * See zod-v4-serialization.test.ts for zod v4 specific tests.
  */
 
 import { test, describe, beforeEach, expect } from "vitest";
@@ -22,10 +22,10 @@ function getInstalledZodVersion(): 3 | 4 {
   return "_zod" in (testSchema as any) ? 4 : 3;
 }
 
-describe("makeEvalParametersSchema with Zod v4", () => {
+describe("makeEvalParametersSchema with Zod v3", () => {
   beforeEach(() => {
     const version = getInstalledZodVersion();
-    expect(version).toBe(4);
+    expect(version).toBe(3);
   });
 
   test("string schema serializes correctly", testStringSchema);
