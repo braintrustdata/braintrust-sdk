@@ -692,7 +692,7 @@ export const PromptOptionsNullish = z.union([
       model: z.string(),
       params: ModelParams,
       position: z.string(),
-      template_format: z.enum(["mustache", "nunjucks", "none"]),
+      templateFormat: z.enum(["mustache", "nunjucks", "none"]),
     })
     .partial(),
   z.null(),
@@ -1376,7 +1376,7 @@ export const PromptOptions = z
     model: z.string(),
     params: ModelParams,
     position: z.string(),
-    template_format: z.enum(["mustache", "nunjucks", "none"]),
+    templateFormat: z.enum(["mustache", "nunjucks", "none"]),
   })
   .partial();
 export type PromptOptionsType = z.infer<typeof PromptOptions>;

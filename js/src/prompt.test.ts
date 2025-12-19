@@ -135,8 +135,8 @@ function testPromptBuild({
   }
 }
 
-describe("prompt template_format", () => {
-  test("uses template_format from options when building", () => {
+describe("prompt templateFormat", () => {
+  test("uses templateFormat from options when building", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -149,7 +149,7 @@ describe("prompt template_format", () => {
         prompt_data: {
           options: {
             model: "gpt-4o",
-            template_format: "nunjucks",
+            templateFormat: "nunjucks",
           },
           prompt: {
             type: "chat",
@@ -170,7 +170,7 @@ describe("prompt template_format", () => {
     expect(result.messages[0].content).toBe("Hello World");
   });
 
-  test("defaults to mustache when no template_format specified", () => {
+  test("defaults to mustache when no templateFormat specified", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -198,7 +198,7 @@ describe("prompt template_format", () => {
     expect(result.messages[0].content).toBe("Hello World");
   });
 
-  test("explicit templateFormat option overrides saved template_format", () => {
+  test("explicit templateFormat option overrides saved templateFormat", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -211,7 +211,7 @@ describe("prompt template_format", () => {
         prompt_data: {
           options: {
             model: "gpt-4o",
-            template_format: "nunjucks",
+            templateFormat: "nunjucks",
           },
           prompt: {
             type: "chat",
@@ -231,7 +231,7 @@ describe("prompt template_format", () => {
     expect(result.messages[0].content).toBe("Hello World");
   });
 
-  test("template_format applies to completion prompts", () => {
+  test("templateFormat applies to completion prompts", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -244,7 +244,7 @@ describe("prompt template_format", () => {
         prompt_data: {
           options: {
             model: "gpt-4o",
-            template_format: "nunjucks",
+            templateFormat: "nunjucks",
           },
           prompt: {
             type: "completion",

@@ -6598,10 +6598,10 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
-    // Use template_format from prompt options if available, otherwise fall back to the option or default to mustache
-    const promptDataTemplateFormat = this.options?.template_format;
+    // Use templateFormat from prompt options if available, otherwise fall back to the option or default to mustache
+    const promptDataTemplateFormat = this.options?.templateFormat;
     const resolvedTemplateFormat = parseTemplateFormat(
-      options.templateFormat ?? promptDataTemplateFormat ?? undefined,
+      options.templateFormat ?? promptDataTemplateFormat,
     );
 
     const renderedPrompt = Prompt.renderPrompt({
