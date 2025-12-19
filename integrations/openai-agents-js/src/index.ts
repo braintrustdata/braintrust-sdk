@@ -381,6 +381,8 @@ export class OpenAIAgentsTraceProcessor {
         data.metrics.completion_tokens = usage.outputTokens;
       if (!data.metrics.completion_tokens && usage.completionTokens)
         data.metrics.completion_tokens = usage.completionTokens;
+      if (usage.input_tokens_details?.cached_tokens != null)
+        data.metrics.prompt_cached_tokens = usage.input_tokens_details.cached_tokens;
     }
 
     return data;
@@ -452,6 +454,9 @@ export class OpenAIAgentsTraceProcessor {
     else if (usage.input_tokens && usage.output_tokens) {
       metrics.tokens = usage.input_tokens + usage.output_tokens;
     }
+
+    if (usage.input_tokens_details?.cached_tokens != null)
+      metrics.prompt_cached_tokens = usage.input_tokens_details.cached_tokens;
 
     return {
       input: spanData.input,
