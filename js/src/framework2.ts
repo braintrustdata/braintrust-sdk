@@ -503,6 +503,7 @@ export const promptDefinitionSchema = promptContentsSchema.and(
   z.object({
     model: z.string(),
     params: modelParamsSchema.optional(),
+    template_format: z.enum(["mustache", "nunjucks", "none"]).optional(),
   }),
 );
 
@@ -606,6 +607,9 @@ export function promptDefinitionToPromptData(
     options: {
       model: promptDefinition.model,
       params: promptDefinition.params,
+      ...(promptDefinition.template_format
+        ? { template_format: promptDefinition.template_format }
+        : {}),
     },
   };
 }
