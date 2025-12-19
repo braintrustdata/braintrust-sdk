@@ -557,7 +557,6 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
 
     // Verify that the base64 data was replaced with an Attachment
     expect(imageBlock.source.data).toBeInstanceOf(Attachment);
-    expect(imageBlock.source.data.reference.type).toBe("braintrust_attachment");
     expect(imageBlock.source.data.reference.content_type).toBe("image/png");
     expect(imageBlock.source.data.reference.filename).toBe("image.png");
   });

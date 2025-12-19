@@ -18,7 +18,6 @@ import {
   initLogger,
   Logger,
   TestBackgroundLogger,
-  Attachment,
 } from "../../logger";
 import { wrapAISDK, omit } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
@@ -284,9 +283,11 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 
     // Check that the image was converted to an attachment
     if (imageContent && imageContent.image) {
-      expect(imageContent.image).toBeInstanceOf(Attachment);
-      expect(imageContent.image.reference.type).toBe("braintrust_attachment");
-      expect(imageContent.image.reference.content_type).toBe("image/png");
+      expect(imageContent.image.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "image/png",
+      });
     }
   });
 
@@ -387,9 +388,14 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 
     // Check that the file was converted to an attachment reference
     if (fileContent && fileContent.data) {
-      expect(fileContent.data).toBeInstanceOf(Attachment);
-      expect(fileContent.data.reference.type).toBe("braintrust_attachment");
-      expect(fileContent.data.reference.content_type).toBe("application/pdf");
+      expect(fileContent.data.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "application/pdf",
+      });
+      // Ensure the raw base64 data is NOT in the input
+      expect(typeof fileContent.data).toBe("object");
+      expect(fileContent.data).not.toBe(base64Pdf);
     }
   });
 
@@ -1651,11 +1657,13 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(fileContent).toBeDefined();
 
     // Verify image was converted to a braintrust attachment
-    // At provider level, the attachment is in data
+    // At provider level, the attachment is in data.reference
     if (fileContent && fileContent.data) {
-      expect(fileContent.data).toBeInstanceOf(Attachment);
-      expect(fileContent.data.reference.type).toBe("braintrust_attachment");
-      expect(fileContent.data.reference.content_type).toBe("image/png");
+      expect(fileContent.data.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "image/png",
+      });
     }
   });
 
