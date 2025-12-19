@@ -1,3 +1,4 @@
+import inspect
 import logging
 import time
 from contextlib import AbstractAsyncContextManager
@@ -159,8 +160,11 @@ def wrap_flow(Flow: Any):
 
             # Replace contents with our serialized version that has Attachments
             if serialized_contents is not None and isinstance(serialized_request, dict):
-                serialized_request = dict(serialized_request)
                 serialized_request["contents"] = serialized_contents
+
+            # Handle config specifically to serialize Pydantic schema classes
+            if isinstance(serialized_request, dict) and "config" in serialized_request:
+                serialized_request["config"] = _serialize_config(serialized_request["config"])
 
             # Extract model name from request or instance
             model_name = _extract_model_name(None, llm_request, instance)
@@ -514,23 +518,103 @@ def _serialize_part(part: Any) -> Any:
     return _try_dict(part)
 
 
-def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
-    if hasattr(obj, "model_dump"):
-        try:
-            obj = obj.model_dump(exclude_none=True)
-        except ValueError as e:
-            if "Circular reference" in str(e):
-                # Circular reference detected: ADK reuses objects (e.g., agent) in multiple locations
-                # Return empty dict as fallback - non-critical for logging/tracing purposes
-                return {}
-            raise
+def _serialize_pydantic_schema(schema_class: Any) -> Dict[str, Any]:
+    """
+    Serialize a Pydantic model class to its full JSON schema.
 
-    if isinstance(obj, dict):
-        return {k: _try_dict(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [_try_dict(item) for item in obj]
+    Returns the complete schema including descriptions, constraints, and nested definitions
+    so engineers can see exactly what structured output schema was used.
+    """
+    try:
+        from pydantic import BaseModel
 
-    return obj
+        if inspect.isclass(schema_class) and issubclass(schema_class, BaseModel):
+            # Return the full JSON schema - includes all field info, descriptions, constraints, etc.
+            return schema_class.model_json_schema()
+    except (ImportError, AttributeError, TypeError):
+        pass
+    # If not a Pydantic model, return class name
+    return {"__class__": schema_class.__name__ if inspect.isclass(schema_class) else str(type(schema_class).__name__)}
+
+
+def _serialize_config(config: Any) -> Union[Dict[str, Any], Any]:
+    """
+    Serialize a config object, specifically handling schema fields that may contain Pydantic classes.
+
+    Google ADK uses these fields for schemas:
+    - response_schema, response_json_schema (in GenerateContentConfig for LLM requests)
+    - input_schema, output_schema (in agent config)
+    """
+    if config is None:
+        return None
+    if not config:
+        return config
+
+    # Extract schema fields BEFORE calling _try_dict (which converts Pydantic classes to dicts)
+    schema_fields = ["response_schema", "response_json_schema", "input_schema", "output_schema"]
+    serialized_schemas: Dict[str, Any] = {}
+
+    for field in schema_fields:
+        schema_value = None
+
+        # Try to get the field value
+        if hasattr(config, field):
+            schema_value = getattr(config, field)
+        elif isinstance(config, dict) and field in config:
+            schema_value = config[field]
+
+        # If it's a Pydantic class, serialize it
+        if schema_value is not None and inspect.isclass(schema_value):
+            try:
+                from pydantic import BaseModel
+
+                if issubclass(schema_value, BaseModel):
+                    serialized_schemas[field] = _serialize_pydantic_schema(schema_value)
+            except (TypeError, ImportError):
+                pass
+
+    # Serialize the config
+    config_dict = _try_dict(config)
+    if not isinstance(config_dict, dict):
+        return config_dict  # type: ignore
+
+    # Replace schema fields with serialized versions
+    config_dict.update(serialized_schemas)
+
+    return config_dict
+
+
+def _try_dict(obj: Any) -> Any:
+    """
+    Convert an object to a dict representation if possible.
+
+    This function should NEVER raise - it's used for logging/tracing.
+    Falls back to returning the original object, which Braintrust's
+    serialization will handle (via bt_json module).
+    """
+    try:
+        if hasattr(obj, "model_dump"):
+            # Check if it's a class (not an instance)
+            if inspect.isclass(obj):
+                # For classes, return class name - schema conversion handled in _serialize_config
+                return {"__class__": obj.__name__}
+            # Try to serialize Pydantic instances
+            try:
+                return obj.model_dump(exclude_none=True)
+            except Exception:
+                # Return original object - Braintrust will handle it
+                return obj
+
+        if isinstance(obj, dict):
+            return {k: _try_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_try_dict(item) for item in obj]
+
+        # Return original object - Braintrust serialization handles primitives and complex types
+        return obj
+    except Exception:
+        # Last resort: return original object
+        return obj
 
 
 def _omit(obj: Any, keys: Iterable[str]):
