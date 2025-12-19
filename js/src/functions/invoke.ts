@@ -34,6 +34,11 @@ export interface InvokeFunctionArgs<
    */
   projectName?: string;
   /**
+   * The ID of the project to use for execution context (API keys, project defaults, etc.).
+   * This is not the project the function belongs to, but the project context for the invocation.
+   */
+  projectId?: string;
+  /**
    * The slug of the function to invoke.
    */
   slug?: string;
@@ -156,6 +161,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     mode,
     schema,
     strict,
+    projectId,
     ...functionIdArgs
   } = args;
 
@@ -202,10 +208,18 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     strict,
   };
 
+  const headers: Record<string, string> = {
+    Accept: stream ? "text/event-stream" : "application/json",
+  };
+  if (projectId) {
+    headers["x-bt-project-id"] = projectId;
+  }
+  if (orgName) {
+    headers["x-bt-org-name"] = orgName;
+  }
+
   const resp = await state.proxyConn().post(`function/invoke`, request, {
-    headers: {
-      Accept: stream ? "text/event-stream" : "application/json",
-    },
+    headers,
   });
 
   if (stream) {
