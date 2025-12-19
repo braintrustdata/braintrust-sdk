@@ -449,6 +449,16 @@ function areSignaturesCompatible(
     return areClassSignaturesCompatible(oldNorm, newNorm);
   }
 
+  // Special handling for Zod schemas: adding optional fields is backwards compatible
+  // Pattern: adding "fieldName: z.ZodOptional<...>" to object schemas
+  if (
+    kind === "variable" &&
+    oldNorm.includes("ZodObject") &&
+    newNorm.includes("ZodObject")
+  ) {
+    return areZodSchemaSignaturesCompatible(oldNorm, newNorm);
+  }
+
   // Strategy: Normalize both signatures by removing optional markers and default values,
   // then compare. If the normalized versions match, and the new signature only adds
   // optionality (either via ? or default values), it's backward compatible.
@@ -577,6 +587,59 @@ function areSignaturesCompatible(
 
   // If we can't determine compatibility, be conservative
   return false;
+}
+
+/**
+ * Compares Zod schema signatures to determine if changes are backwards compatible.
+ * Adding optional fields (z.ZodOptional) to object schemas is backwards compatible.
+ */
+function areZodSchemaSignaturesCompatible(
+  oldSchema: string,
+  newSchema: string,
+): boolean {
+  // Extract the fields from ZodObject definitions
+  // Pattern: { field1: z.ZodType, field2: z.ZodOptional<z.ZodType>, ... }
+
+  // Remove all ZodOptional wrappers to get base structure
+  const removeOptionalWrappers = (s: string): string => {
+    // Replace z.ZodOptional<Type> with Type
+    return s.replace(/z\.ZodOptional<([^>]+)>/g, "$1");
+  };
+
+  const oldBase = removeOptionalWrappers(oldSchema);
+  const newBase = removeOptionalWrappers(newSchema);
+
+  // If removing optional wrappers makes them similar, the change is just adding optionality
+  if (oldBase === newBase) {
+    return true;
+  }
+
+  // Check if the only difference is new optional fields being added
+  // Extract field names from object types
+  const extractFieldNames = (s: string): Set<string> => {
+    const fields = new Set<string>();
+    // Match: fieldName: z.Zod...
+    const matches = s.matchAll(/(\w+):\s*z\.Zod/g);
+    for (const match of matches) {
+      fields.add(match[1]);
+    }
+    return fields;
+  };
+
+  const oldFields = extractFieldNames(oldSchema);
+  const newFields = extractFieldNames(newSchema);
+
+  // Check if all old fields are present in new schema
+  for (const field of oldFields) {
+    if (!newFields.has(field)) {
+      // A field was removed - breaking change
+      return false;
+    }
+  }
+
+  // All old fields are present, and potentially new optional fields were added
+  // This is backwards compatible
+  return true;
 }
 
 /**

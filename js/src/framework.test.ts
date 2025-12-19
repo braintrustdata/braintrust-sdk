@@ -1004,5 +1004,25 @@ describe("framework2 metadata support", () => {
       expect(prompts).toHaveLength(1);
       expect(prompts[0].metadata).toEqual(metadata);
     });
+
+    test("prompt with templateFormat stores it in options", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const prompt = project.prompts.create({
+        name: "nunjucks-prompt",
+        messages: [
+          { role: "user", content: "Hello {% if name %}{{name}}{% endif %}" },
+        ],
+        model: "gpt-4",
+        templateFormat: "nunjucks",
+      });
+
+      // Check that templateFormat is stored in the prompt options
+      expect(prompt.options.templateFormat).toBe("nunjucks");
+
+      // Verify it renders correctly
+      const result = prompt.build({ name: "World" });
+      expect(result.messages[0].content).toBe("Hello World");
+    });
   });
 });
