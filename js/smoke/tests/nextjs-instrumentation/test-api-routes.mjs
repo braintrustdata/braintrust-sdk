@@ -7,7 +7,7 @@
 import { spawn } from "child_process";
 import { setTimeout as sleep } from "timers/promises";
 
-const PORT = 3000;
+const PORT = 5555;
 const BASE_URL = `http://localhost:${PORT}`;
 const EDGE_URL = `${BASE_URL}/api/smoke-test/edge`;
 const NODE_URL = `${BASE_URL}/api/smoke-test/node`;
@@ -20,11 +20,12 @@ let devServer = null;
  * Start the Next.js dev server
  */
 function startDevServer() {
-  console.log("Starting Next.js dev server...\n");
+  console.log(`Starting Next.js dev server on port ${PORT}...\n`);
 
   devServer = spawn("npm", ["run", "dev"], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: true,
+    env: { ...process.env, PORT: String(PORT) },
   });
 
   devServer.stdout.on("data", (data) => {

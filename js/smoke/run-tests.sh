@@ -163,6 +163,17 @@ run_test() {
 
     log_info "Running: npm test"
 
+    # Set BRAINTRUST_BUILD_DIR for Deno tests if not already set
+    if [ "$test_name" = "deno" ] && [ -z "${BRAINTRUST_BUILD_DIR:-}" ]; then
+        local deno_build_file="$TESTS_DIR/deno/build/braintrust/dist/browser.mjs"
+        if [ -f "$deno_build_file" ]; then
+            # Convert to absolute path for Deno file:// imports
+            local abs_dir="$(cd "$(dirname "$deno_build_file")" && pwd)"
+            export BRAINTRUST_BUILD_DIR="$abs_dir/$(basename "$deno_build_file")"
+            log_info "Set BRAINTRUST_BUILD_DIR=$BRAINTRUST_BUILD_DIR"
+        fi
+    fi
+
     # Run test and capture output
     local test_output
     local test_exit_code
@@ -232,7 +243,8 @@ run_tests() {
         echo "Test $test_num/${#tests_to_run[@]}: $test_name"
         echo "------------------------------------------------------------"
 
-        run_test "$test_name"
+        # Run test and continue even if it fails
+        run_test "$test_name" || true
 
         echo ""
         ((test_num++))

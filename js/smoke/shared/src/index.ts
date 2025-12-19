@@ -62,3 +62,10 @@ export {
   testStateManagementExports,
   runImportVerificationTests,
 } from "./suites/import-verification";
+
+export type { PromptModule } from "./suites/prompt-templating";
+export {
+  testMustacheTemplate,
+  testNunjucksTemplate,
+  runPromptTemplatingTests,
+} from "./suites/prompt-templating";
