@@ -2302,11 +2302,6 @@ export class TestBackgroundLogger implements BackgroundLogger {
     const batch = mergeRowBatch(events);
     let flatBatch = batch.flat();
 
-    // Extract attachments and replace with references AFTER merging
-    // This ensures we process the final merged events, not the intermediate ones
-    const attachments: Attachment[] = [];
-    flatBatch.forEach((item) => extractAttachments(item, attachments));
-
     // Apply masking after merge, similar to HTTPBackgroundLogger
     if (this.maskingFunction) {
       flatBatch = flatBatch.map((item) => {

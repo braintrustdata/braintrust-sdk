@@ -10,7 +10,7 @@ import {
 } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import { initLogger, _exportsForTestingOnly } from "../logger";
+import { initLogger, _exportsForTestingOnly, Attachment } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 
@@ -555,9 +555,8 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     expect(imageBlock).toBeDefined();
     expect(imageBlock.source).toBeDefined();
 
-    // Verify that the base64 data was replaced with an Attachment reference
-    expect(imageBlock.source.data).toBeDefined();
-    expect(imageBlock.source.data.reference).toBeDefined();
+    // Verify that the base64 data was replaced with an Attachment
+    expect(imageBlock.source.data).toBeInstanceOf(Attachment);
     expect(imageBlock.source.data.reference.type).toBe("braintrust_attachment");
     expect(imageBlock.source.data.reference.content_type).toBe("image/png");
     expect(imageBlock.source.data.reference.filename).toBe("image.png");

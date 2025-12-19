@@ -1104,9 +1104,7 @@ const processContentPart = (part: any): any => {
       if (imageAttachment) {
         return {
           ...part,
-          image: {
-            reference: imageAttachment,
-          },
+          image: imageAttachment,
         };
       }
     }
@@ -1125,9 +1123,7 @@ const processContentPart = (part: any): any => {
       if (fileAttachment) {
         return {
           ...part,
-          data: {
-            reference: fileAttachment,
-          },
+          data: fileAttachment,
         };
       }
     }
@@ -1141,9 +1137,7 @@ const processContentPart = (part: any): any => {
             ...part,
             image_url: {
               ...part.image_url,
-              url: {
-                reference: imageAttachment,
-              },
+              url: imageAttachment,
             },
           };
         }

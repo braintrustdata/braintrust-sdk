@@ -412,9 +412,7 @@ function convertBase64ToAttachment(
 
     return {
       ...source,
-      data: {
-        reference: attachment,
-      },
+      data: attachment,
     };
   }
 
