@@ -42,13 +42,6 @@ const config = {
       "src/wrappers/ai-sdk/**",
       "src/wrappers/claude-agent-sdk/**",
       "smoke/**",
-      // Exclude wrapper tests (run separately)
-      "src/wrappers/**/*.test.ts",
-      // Exclude Zod version-specific tests (run separately in CI)
-      "src/zod-v3-serialization.test.ts",
-      "src/zod-v4-serialization.test.ts",
-      "src/zod-compat.test.ts",
-      "util/zod_util.test.ts",
     ],
     // Additional test environment configuration
     watchExclude: [
