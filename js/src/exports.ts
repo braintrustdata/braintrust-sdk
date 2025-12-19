@@ -102,6 +102,13 @@ export {
   registerOtelFlush,
 } from "./logger";
 
+export {
+  isTemplateFormat,
+  parseTemplateFormat,
+  renderTemplateContent,
+} from "./template/renderer";
+export type { TemplateFormat } from "./template/renderer";
+
 export type { InvokeFunctionArgs, InvokeReturn } from "./functions/invoke";
 export { initFunction, invoke } from "./functions/invoke";
 

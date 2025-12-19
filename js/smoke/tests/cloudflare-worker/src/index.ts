@@ -8,6 +8,7 @@ import {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
   type TestResult,
 } from "../../../shared/dist/index.mjs";
 
@@ -48,8 +49,20 @@ async function runSharedTestSuites(): Promise<TestResponse> {
       // Run functional tests
       const functionalResults = await runBasicLoggingTests(adapters);
 
+      // Run prompt templating tests
+      const promptTemplatingResults = await runPromptTemplatingTests(
+        {
+          Prompt: braintrust.Prompt,
+        },
+        adapters.environment,
+      );
+
       // Combine results
-      const results = [...importResults, ...functionalResults];
+      const results = [
+        ...importResults,
+        ...functionalResults,
+        ...promptTemplatingResults,
+      ];
 
       // Verify all tests passed
       const failures = results.filter((r) => !r.success);

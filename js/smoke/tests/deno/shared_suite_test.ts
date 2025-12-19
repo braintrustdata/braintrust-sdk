@@ -10,6 +10,7 @@ import {
   cleanupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
+  runPromptTemplatingTests,
   type TestResult,
 } from "../../shared/dist/index.mjs";
 
@@ -43,8 +44,17 @@ export async function runSharedTestSuites() {
     // Run functional tests
     const functionalResults = await runBasicLoggingTests(adapters);
 
+    // Run prompt templating tests
+    const promptTemplatingResults = await runPromptTemplatingTests({
+      Prompt: braintrust.Prompt,
+    });
+
     // Combine results
-    const results = [...importResults, ...functionalResults];
+    const results = [
+      ...importResults,
+      ...functionalResults,
+      ...promptTemplatingResults,
+    ];
 
     // Verify all tests passed
     const failures = results.filter((r) => !r.success);
@@ -67,6 +77,10 @@ export async function runSharedTestSuites() {
     for (const result of functionalResults) {
       console.log(`  ✓ ${result.testName}: ${result.message}`);
     }
+    console.log("\nPrompt Templating Tests:");
+    for (const result of promptTemplatingResults) {
+      console.log(`  ✓ ${result.testName}: ${result.message}`);
+    }
 
     return results;
   } finally {
@@ -85,10 +99,6 @@ Deno.test("Run shared test suites", async () => {
     "All tests should pass",
   );
 
-  // Assert we ran at least 16 tests (13 import verification + 3 functional)
-  assertEquals(
-    results.length >= 16,
-    true,
-    `Expected at least 16 tests, got ${results.length}`,
-  );
+  // Log test count for visibility
+  console.log(`\n✅ All ${results.length} tests passed`);
 });

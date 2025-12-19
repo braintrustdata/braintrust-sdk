@@ -1104,7 +1104,7 @@ class _HTTPBackgroundLogger:
             _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataStr)
+            resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
             if resp.ok:
                 return
             resp_errmsg = f"{resp.status_code}: {resp.text}"

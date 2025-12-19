@@ -6,6 +6,7 @@
     "npm:@vercel/functions@^3.3.0": "3.3.4",
     "npm:eventsource-parser@^3.0.6": "3.0.6",
     "npm:mustache@^4.2.0": "4.2.0",
+    "npm:nunjucks@^3.2.4": "3.2.4",
     "npm:uuid@13": "13.0.0",
     "npm:zod-to-json-schema@^3.25.0": "3.25.0_zod@4.1.13",
     "npm:zod@^4.1.12": "4.1.13"
@@ -31,11 +32,29 @@
     "@vercel/oidc@3.0.5": {
       "integrity": "sha512-fnYhv671l+eTTp48gB4zEsTW/YtRgRPnkI2nT7x6qw5rkI1Lq2hTmQIpHPgyThI0znLK+vX2n9XxKdXZ7BUbbw=="
     },
+    "a-sync-waterfall@1.0.1": {
+      "integrity": "sha512-RYTOHHdWipFUliRFMCS4X2Yn2X8M87V/OpSqWzKKOGhzqyUxzyVmhHDH9sAvG+ZuQf/TAOFsLCpMw09I1ufUnA=="
+    },
+    "asap@2.0.6": {
+      "integrity": "sha512-BSHWgDSAiKs50o2Re8ppvp3seVHXSRM44cdSsT9FfNEUUZLOGWVCsiWaRPWM1Znn+mqZ1OfVZ3z3DWEzSp7hRA=="
+    },
+    "commander@5.1.0": {
+      "integrity": "sha512-P0CysNDQ7rtVw4QIQtm+MRxV66vKFSvlsQvGYXZWR3qFU0jlMKHZZZgw8e+8DSah4UDKMqnknRDQz+xuQXQ/Zg=="
+    },
     "eventsource-parser@3.0.6": {
       "integrity": "sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg=="
     },
     "mustache@4.2.0": {
       "integrity": "sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ=="
+    },
+    "nunjucks@3.2.4": {
+      "integrity": "sha512-26XRV6BhkgK0VOxfbU5cQI+ICFUtMLixv1noZn1tGU38kQH5A5nmmbk/O45xdyBhD1esk47nKrY0mvQpZIhRjQ==",
+      "dependencies": [
+        "a-sync-waterfall",
+        "asap",
+        "commander"
+      ],
+      "bin": true
     },
     "uuid@13.0.0": {
       "integrity": "sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w=="
@@ -50,11 +69,15 @@
       "integrity": "sha512-AvvthqfqrAhNH9dnfmrfKzX5upOdjUVJYFqNSlkmGf64gRaTzlPwz99IHYnVs28qYAybvAlBV+H7pn0saFY4Ig=="
     }
   },
+  "remote": {
+    "https://mozilla.github.io/nunjucks/files/nunjucks.min.js": "36b31fabed0b7d923a840f963d9c7465ce390d3a6e71a2fe29b8287fad35dbd6"
+  },
   "workspace": {
     "dependencies": [
       "npm:@vercel/functions@^3.3.0",
       "npm:eventsource-parser@^3.0.6",
       "npm:mustache@^4.2.0",
+      "npm:nunjucks@^3.2.4",
       "npm:uuid@13",
       "npm:zod-to-json-schema@^3.25.0",
       "npm:zod@^4.1.12"
