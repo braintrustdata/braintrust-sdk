@@ -607,10 +607,10 @@ export function promptDefinitionToPromptData(
     options: {
       model: promptDefinition.model,
       params: promptDefinition.params,
-      ...(promptDefinition.templateFormat
-        ? { templateFormat: promptDefinition.templateFormat }
-        : {}),
     },
+    ...(promptDefinition.templateFormat
+      ? { template_format: promptDefinition.templateFormat }
+      : {}),
   };
 }
 

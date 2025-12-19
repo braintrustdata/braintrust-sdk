@@ -688,12 +688,7 @@ export const ModelParams = z.union([
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
   z
-    .object({
-      model: z.string(),
-      params: ModelParams,
-      position: z.string(),
-      templateFormat: z.enum(["mustache", "nunjucks", "none"]),
-    })
+    .object({ model: z.string(), params: ModelParams, position: z.string() })
     .partial(),
   z.null(),
 ]);
@@ -719,6 +714,10 @@ export const PromptDataNullish = z.union([
       options: PromptOptionsNullish,
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+      template_format: z.union([
+        z.enum(["mustache", "nunjucks", "none"]),
+        z.null(),
+      ]),
       mcp: z.union([
         z.record(
           z.union([
@@ -920,6 +919,10 @@ export const PromptData = z
     options: PromptOptionsNullish,
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
     mcp: z.union([
       z.record(
         z.union([
@@ -1372,12 +1375,7 @@ export const Prompt = z.object({
 });
 export type PromptType = z.infer<typeof Prompt>;
 export const PromptOptions = z
-  .object({
-    model: z.string(),
-    params: ModelParams,
-    position: z.string(),
-    templateFormat: z.enum(["mustache", "nunjucks", "none"]),
-  })
+  .object({ model: z.string(), params: ModelParams, position: z.string() })
   .partial();
 export type PromptOptionsType = z.infer<typeof PromptOptions>;
 export const PromptSessionEvent = z.object({

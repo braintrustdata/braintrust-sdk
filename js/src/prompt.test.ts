@@ -135,8 +135,8 @@ function testPromptBuild({
   }
 }
 
-describe("prompt templateFormat", () => {
-  test("uses templateFormat from options when building", () => {
+describe("prompt template_format", () => {
+  test("uses template_format when building", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -147,9 +147,9 @@ describe("prompt templateFormat", () => {
         name: "test",
         slug: "test",
         prompt_data: {
+          template_format: "nunjucks",
           options: {
             model: "gpt-4o",
-            templateFormat: "nunjucks",
           },
           prompt: {
             type: "chat",
@@ -198,7 +198,7 @@ describe("prompt templateFormat", () => {
     expect(result.messages[0].content).toBe("Hello World");
   });
 
-  test("explicit templateFormat option overrides saved templateFormat", () => {
+  test("explicit templateFormat option overrides saved template_format", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -209,9 +209,9 @@ describe("prompt templateFormat", () => {
         name: "test",
         slug: "test",
         prompt_data: {
+          template_format: "nunjucks",
           options: {
             model: "gpt-4o",
-            templateFormat: "nunjucks",
           },
           prompt: {
             type: "chat",
@@ -231,7 +231,7 @@ describe("prompt templateFormat", () => {
     expect(result.messages[0].content).toBe("Hello World");
   });
 
-  test("templateFormat applies to completion prompts", () => {
+  test("template_format applies to completion prompts", () => {
     const prompt = new Prompt(
       {
         id: "1",
@@ -242,9 +242,9 @@ describe("prompt templateFormat", () => {
         name: "test",
         slug: "test",
         prompt_data: {
+          template_format: "nunjucks",
           options: {
             model: "gpt-4o",
-            templateFormat: "nunjucks",
           },
           prompt: {
             type: "completion",

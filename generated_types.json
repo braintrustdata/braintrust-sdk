@@ -5289,6 +5289,17 @@
               "$ref": "#/components/schemas/SavedFunctionId"
             }
           },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
+          },
           "mcp": {
             "type": [
               "object",
@@ -5407,6 +5418,17 @@
               "$ref": "#/components/schemas/SavedFunctionId"
             }
           },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
+          },
           "mcp": {
             "type": [
               "object",
@@ -5513,14 +5535,6 @@
           },
           "position": {
             "type": "string"
-          },
-          "templateFormat": {
-            "type": "string",
-            "enum": [
-              "mustache",
-              "nunjucks",
-              "none"
-            ]
           }
         }
       },
@@ -5538,14 +5552,6 @@
           },
           "position": {
             "type": "string"
-          },
-          "templateFormat": {
-            "type": "string",
-            "enum": [
-              "mustache",
-              "nunjucks",
-              "none"
-            ]
           }
         }
       },

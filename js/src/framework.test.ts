@@ -1005,7 +1005,7 @@ describe("framework2 metadata support", () => {
       expect(prompts[0].metadata).toEqual(metadata);
     });
 
-    test("prompt with templateFormat stores it in options", () => {
+    test("prompt with templateFormat stores it at top level", () => {
       const project = projects.create({ name: "test-project" });
 
       const prompt = project.prompts.create({
@@ -1017,8 +1017,8 @@ describe("framework2 metadata support", () => {
         templateFormat: "nunjucks",
       });
 
-      // Check that templateFormat is stored in the prompt options
-      expect(prompt.options.templateFormat).toBe("nunjucks");
+      // Check that template_format is stored at the top level of prompt data
+      expect(prompt.templateFormat).toBe("nunjucks");
 
       // Verify it renders correctly
       const result = prompt.build({ name: "World" });
