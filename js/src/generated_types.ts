@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 437eb5379a737f70dec98033fccf81de43e8e177) -- do not modify
+// Auto-generated file (internal git SHA 30a8c72229401ad220ad9dec57ad8f7ab3f06bfd) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -1117,7 +1117,10 @@ export const InvokeParent = z.union([
   z.string(),
 ]);
 export type InvokeParentType = z.infer<typeof InvokeParent>;
-export const StreamingMode = z.union([z.enum(["auto", "parallel"]), z.null()]);
+export const StreamingMode = z.union([
+  z.enum(["auto", "parallel", "json", "text"]),
+  z.null(),
+]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
 export const InvokeFunction = FunctionId.and(
   z

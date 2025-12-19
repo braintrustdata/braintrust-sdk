@@ -9,7 +9,7 @@ from .constants import INVOKE_API_VERSION
 from .stream import BraintrustInvokeError, BraintrustStream
 
 T = TypeVar("T")
-ModeType = Literal["auto", "parallel"]
+ModeType = Literal["auto", "parallel", "json", "text"]
 ObjectType = Literal["project_logs", "experiment", "dataset", "playground_logs"]
 
 
