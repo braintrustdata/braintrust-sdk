@@ -73,3 +73,7 @@ from .wrappers.anthropic import (
 from .wrappers.litellm import (
     wrap_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
+from .wrappers.pydantic_ai import (
+    setup_pydantic_ai,  # noqa: F401 # type: ignore[reportUnusedImport]
+    wrap_pydantic_ai,  # noqa: F401 # type: ignore[reportUnusedImport]
+)
