@@ -56,7 +56,7 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
-    "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel/**/*.test.ts\" --exclude \"smoke/**/*.test.ts\" --exclude \"src/zod-*.test.ts\" --exclude \"util/zod_util.test.ts\"",
+    "test": "vitest run",
     "test:api-compat": "vitest run src/api-compatibility.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
@@ -68,6 +68,9 @@
     "test:ai-sdk-v3": "vitest run src/wrappers/ai-sdk-v3.test.ts",
     "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
+    "test:zod": "vitest run src/zod-compat.test.ts src/zod-v3-serialization.test.ts src/zod-v4-serialization.test.ts util/zod_util.test.ts --config vitest.config.zod.js",
+    "test:zod-v3": "vitest run src/zod-compat.test.ts src/zod-v3-serialization.test.ts util/zod_util.test.ts --config vitest.config.zod.js",
+    "test:zod-v4": "vitest run src/zod-compat.test.ts src/zod-v4-serialization.test.ts util/zod_util.test.ts --config vitest.config.zod.js",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
   },
   "author": "",

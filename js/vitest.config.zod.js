@@ -4,22 +4,18 @@ import path from "path";
 const config = {
   plugins: [
     tsconfigPaths({
-      // Explicitly specify the root tsconfig to prevent scanning vendor folders
       root: ".",
       projects: ["./tsconfig.json"],
     }),
   ],
-  // Prefer TypeScript over JavaScript for extension-less imports in sdk/js tests
   resolve: {
     extensions: [".ts", ".tsx", ".mts", ".js", ".mjs", ".jsx", ".json"],
     alias: {
-      // Prevent resolution into vendor directories
       vendor: false,
     },
   },
   server: {
     fs: {
-      // Deny access to vendor folder
       deny: [path.resolve(__dirname, "vendor")],
     },
   },
@@ -27,30 +23,17 @@ const config = {
     exclude: ["vendor/**"],
   },
   test: {
+    // Don't exclude Zod tests - this config is specifically for running them
     exclude: [
-      // Default vitest exclusions
       "**/node_modules/**",
       "**/dist/**",
       "**/cypress/**",
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
-      // Exclude vendor folder and all its contents
       "**/vendor/**",
       "vendor/**",
       "./vendor/**",
-      // Exclude subdirectories with their own test configs
-      "src/wrappers/ai-sdk/**",
-      "src/wrappers/claude-agent-sdk/**",
-      "smoke/**",
-      // Exclude wrapper tests (run separately)
-      "src/wrappers/**/*.test.ts",
-      // Exclude Zod version-specific tests (run separately in CI)
-      "src/zod-v3-serialization.test.ts",
-      "src/zod-v4-serialization.test.ts",
-      "src/zod-compat.test.ts",
-      "util/zod_util.test.ts",
     ],
-    // Additional test environment configuration
     watchExclude: [
       "**/node_modules/**",
       "**/dist/**",

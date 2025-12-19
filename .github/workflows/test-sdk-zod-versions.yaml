@@ -1,4 +1,4 @@
-name: Test SDK with Zod Versions
+name: Test sdk with multiple zod versions
 on:
   pull_request:
     paths:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   test-zod-versions:
-    name: Test with Zod ${{ matrix.zod-version }}
+    name: Test with zod ${{ matrix.zod-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,19 +61,15 @@ jobs:
         working-directory: ./js
         run: pnpm tsc --noEmit
 
-      - name: Run zod compatibility tests
-        working-directory: ./js
-        run: pnpm vitest run src/zod-compat.test.ts
-
-      - name: Run zod v3 serialization tests
+      - name: Run zod v3 tests
         if: matrix.zod-version == '3.25.34'
         working-directory: ./js
-        run: pnpm vitest run src/zod-v3-serialization.test.ts util/zod_util.test.ts
+        run: pnpm test:zod-v3
 
-      - name: Run zod v4 serialization tests
+      - name: Run zod v4 tests
         if: matrix.zod-version == '4.2.1'
         working-directory: ./js
-        run: pnpm vitest run src/zod-v4-serialization.test.ts util/zod_util.test.ts
+        run: pnpm test:zod-v4
 
   test-summary:
     name: Test Summary

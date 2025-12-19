@@ -42,3 +42,24 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+## Dependencies
+
+### Zod
+
+The Braintrust SDK works with [Zod](https://github.com/colinhacks/zod) for schema validation. Both Zod v3 and v4 are supported.
+
+If you don't already have Zod installed, you'll need to install it alongside the SDK:
+
+```bash
+# Install both packages together
+npm install braintrust zod
+
+# Or with a specific Zod version
+npm install braintrust zod@^4
+```
+
+The SDK is tested and compatible with both:
+
+- Zod v3 (^3.25)
+- Zod v4 (^4.0)
