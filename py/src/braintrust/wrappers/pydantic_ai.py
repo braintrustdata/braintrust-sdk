@@ -942,6 +942,11 @@ def _extract_response_metrics(
         if hasattr(usage, "cache_write_tokens") and usage.cache_write_tokens is not None:
             metrics["prompt_cache_creation_tokens"] = float(usage.cache_write_tokens)
 
+        # Extract reasoning tokens for reasoning models (o1/o3)
+        if hasattr(usage, "details") and usage.details is not None:
+            if hasattr(usage.details, "reasoning_tokens") and usage.details.reasoning_tokens is not None:
+                metrics["completion_reasoning_tokens"] = float(usage.details.reasoning_tokens)
+
     return metrics if metrics else None
 
 

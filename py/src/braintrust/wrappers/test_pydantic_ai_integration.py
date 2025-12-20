@@ -1,26 +1,28 @@
-"""
-Tests for Braintrust Pydantic AI integration.
-
-Tests real use cases with VCR cassettes to ensure proper tracing.
-"""
+# pyright: reportUntypedFunctionDecorator=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownParameterType=false
+# pyright: reportPrivateUsage=false
 import time
 
 import pytest
 from braintrust import logger, setup_pydantic_ai, traced
 from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import init_test_logger
-
-# Setup integration BEFORE importing pydantic_ai modules
-PROJECT_NAME = "test-pydantic-ai-integration"
-setup_pydantic_ai(project_name=PROJECT_NAME)
-
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.direct import model_request, model_request_stream, model_request_stream_sync, model_request_sync
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 
+PROJECT_NAME = "test-pydantic-ai-integration"
 MODEL = "openai:gpt-4o-mini"  # Use cheaper model for tests
 TEST_PROMPT = "What is 2+2? Answer with just the number."
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_wrapper():
+    """Setup pydantic_ai wrapper before any tests run."""
+    setup_pydantic_ai(project_name=PROJECT_NAME)
+    yield
 
 
 @pytest.fixture(scope="module")
@@ -1100,7 +1102,7 @@ def test_agent_run_stream_sync(memory_logger):
 
     start = time.time()
     full_text = ""
-    result = agent.run_stream_sync("Count from 1 to 3")  # pylint: disable=no-member
+    result = agent.run_stream_sync("Count from 1 to 3")
     for text in result.stream_text(delta=True):
         full_text += text
     end = time.time()
@@ -1844,6 +1846,7 @@ def test_reasoning_tokens_extraction(memory_logger):
 
     # Verify all metrics are present
     assert metrics is not None, "Should extract metrics"
+    # pylint: disable=unsupported-membership-test,unsubscriptable-object
     assert "prompt_tokens" in metrics, "Should have prompt_tokens"
     assert metrics["prompt_tokens"] == 10.0
     assert "completion_tokens" in metrics, "Should have completion_tokens"
@@ -1855,6 +1858,7 @@ def test_reasoning_tokens_extraction(memory_logger):
     assert "duration" in metrics
     assert "start" in metrics
     assert "end" in metrics
+    # pylint: enable=unsupported-membership-test,unsubscriptable-object
 
 
 @pytest.mark.vcr
