@@ -17,6 +17,8 @@
     "node_modules/**",
     "**/smoke/**",
     "scripts/**",
-    "vendor/**"
+    "vendor/**",
+    "eslint.config.ts",
+    "tsup.config.ts"
   ]
 }

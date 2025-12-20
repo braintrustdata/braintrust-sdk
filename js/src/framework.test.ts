@@ -15,7 +15,7 @@ import {
 } from "./framework";
 import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
-import { BarProgressReporter, type ProgressReporter } from "./progress";
+import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
 
 beforeAll(() => {
@@ -294,7 +294,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: () => ({ error_score: 1 }),
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
             true,
@@ -1003,6 +1003,26 @@ describe("framework2 metadata support", () => {
       const prompts = (project as any)._publishablePrompts;
       expect(prompts).toHaveLength(1);
       expect(prompts[0].metadata).toEqual(metadata);
+    });
+
+    test("prompt with templateFormat stores it at top level", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const prompt = project.prompts.create({
+        name: "nunjucks-prompt",
+        messages: [
+          { role: "user", content: "Hello {% if name %}{{name}}{% endif %}" },
+        ],
+        model: "gpt-4",
+        templateFormat: "nunjucks",
+      });
+
+      // Check that template_format is stored at the top level of prompt data
+      expect(prompt.templateFormat).toBe("nunjucks");
+
+      // Verify it renders correctly
+      const result = prompt.build({ name: "World" });
+      expect(result.messages[0].content).toBe("Hello World");
     });
   });
 });

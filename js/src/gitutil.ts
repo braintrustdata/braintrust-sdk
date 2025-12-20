@@ -127,7 +127,7 @@ export async function getPastNAncestors(
     return [];
   }
   const commits = await git.log({ from: ancestor, to: "HEAD", maxCount: n });
-  return commits.all.map((c) => c.hash);
+  return commits.all.slice(0, n).map((c) => c.hash);
 }
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {

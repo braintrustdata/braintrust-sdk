@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify
+// Auto-generated file (internal git SHA 558d326bcaa10daa7feef653615c5a1a240afcec) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -477,6 +477,14 @@ export const EnvVar = z.object({
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
   used: z.union([z.string(), z.null()]).optional(),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+  secret_type: z.union([z.string(), z.null()]).optional(),
+  secret_category: z
+    .enum(["env_var", "ai_provider"])
+    .optional()
+    .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
 export const RepoInfo = z.union([
@@ -706,6 +714,33 @@ export const PromptDataNullish = z.union([
       options: PromptOptionsNullish,
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+      template_format: z.union([
+        z.enum(["mustache", "nunjucks", "none"]),
+        z.null(),
+      ]),
+      mcp: z.union([
+        z.record(
+          z.union([
+            z.object({
+              type: z.literal("id"),
+              id: z.string().uuid(),
+              is_disabled: z.boolean().optional(),
+              enabled_tools: z
+                .union([z.array(z.string()), z.null()])
+                .optional(),
+            }),
+            z.object({
+              type: z.literal("url"),
+              url: z.string(),
+              is_disabled: z.boolean().optional(),
+              enabled_tools: z
+                .union([z.array(z.string()), z.null()])
+                .optional(),
+            }),
+          ]),
+        ),
+        z.null(),
+      ]),
       origin: z.union([
         z
           .object({
@@ -884,6 +919,29 @@ export const PromptData = z
     options: PromptOptionsNullish,
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
+    mcp: z.union([
+      z.record(
+        z.union([
+          z.object({
+            type: z.literal("id"),
+            id: z.string().uuid(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+          z.object({
+            type: z.literal("url"),
+            url: z.string(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+        ]),
+      ),
+      z.null(),
+    ]),
     origin: z.union([
       z
         .object({
@@ -1018,10 +1076,22 @@ export const InvokeFunction = FunctionId.and(
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
       strict: z.union([z.boolean(), z.null()]),
+      mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
     })
     .partial(),
 );
 export type InvokeFunctionType = z.infer<typeof InvokeFunction>;
+export const MCPServer = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  url: z.string(),
+});
+export type MCPServerType = z.infer<typeof MCPServer>;
 export const MessageRole = z.enum([
   "system",
   "user",
@@ -1131,7 +1201,15 @@ export const ProjectAutomation = z.object({
       event_type: z.literal("logs"),
       btql_filter: z.string(),
       interval_seconds: z.number().gte(1).lte(2592000),
-      action: z.object({ type: z.literal("webhook"), url: z.string() }),
+      action: z.union([
+        z.object({ type: z.literal("webhook"), url: z.string() }),
+        z.object({
+          type: z.literal("slack"),
+          workspace_id: z.string(),
+          channel: z.string(),
+          message_template: z.string().optional(),
+        }),
+      ]),
     }),
     z.object({
       event_type: z.literal("btql_export"),
@@ -1154,6 +1232,19 @@ export const ProjectAutomation = z.object({
       event_type: z.literal("retention"),
       object_type: RetentionObjectType,
       retention_days: z.number().gte(0),
+    }),
+    z.object({
+      event_type: z.literal("environment_update"),
+      environment_filter: z.array(z.string()).optional(),
+      action: z.union([
+        z.object({ type: z.literal("webhook"), url: z.string() }),
+        z.object({
+          type: z.literal("slack"),
+          workspace_id: z.string(),
+          channel: z.string(),
+          message_template: z.string().optional(),
+        }),
+      ]),
     }),
   ]),
 });
@@ -1372,6 +1463,9 @@ export const RunEval = z.object({
   stop_token: z.union([z.string(), z.null()]).optional(),
   extra_messages: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  mcp_auth: z
+    .record(z.object({ oauth_token: z.string() }).partial())
+    .optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
 export const ServiceToken = z.object({
@@ -1474,6 +1568,7 @@ export const ViewOptions = z.union([
         groupBy: z.union([z.string(), z.null()]),
       })
       .partial(),
+    freezeColumns: z.union([z.boolean(), z.null()]).optional(),
   }),
   z
     .object({
@@ -1526,6 +1621,7 @@ export const ViewOptions = z.union([
         z.null(),
       ]),
       queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
+      freezeColumns: z.union([z.boolean(), z.null()]),
     })
     .partial(),
   z.null(),
