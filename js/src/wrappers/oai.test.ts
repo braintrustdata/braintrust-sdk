@@ -211,13 +211,13 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     // Now check the span input for image handling
     const imageUrlValue = imageContent.image_url.url;
 
-    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment reference object
-    // This validates that images are properly converted to attachment references before sending to Braintrust
-    expect(imageUrlValue).toBeTypeOf("object");
-    expect(imageUrlValue.type).toBe("braintrust_attachment");
-    expect(imageUrlValue.key).toBeTruthy(); // UUID key
-    expect(imageUrlValue.content_type).toBe("image/png");
-    expect(imageUrlValue.filename).toBeTruthy(); // Should have a filename
+    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment
+    // This validates that images are properly converted to attachments before sending to Braintrust
+    expect(imageUrlValue).toBeInstanceOf(Attachment);
+    expect(imageUrlValue.reference.type).toBe("braintrust_attachment");
+    expect(imageUrlValue.reference.key).toBeTruthy(); // UUID key
+    expect(imageUrlValue.reference.content_type).toBe("image/png");
+    expect(imageUrlValue.reference.filename).toBeTruthy(); // Should have a filename
 
     const m = span.metrics;
     expect(start <= m.start && m.start < m.end && m.end <= end).toBe(true);
@@ -294,13 +294,13 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     // Now check the span input for PDF/document handling
     const fileDataValue = fileContent.file.file_data;
 
-    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment reference object
-    // This validates that PDFs/documents are properly converted to attachment references before sending to Braintrust
-    expect(fileDataValue).toBeTypeOf("object");
-    expect(fileDataValue.type).toBe("braintrust_attachment");
-    expect(fileDataValue.key).toBeTruthy(); // UUID key
-    expect(fileDataValue.content_type).toBe("application/pdf");
-    expect(fileDataValue.filename).toBeTruthy(); // Should have a filename
+    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment
+    // This validates that PDFs/documents are properly converted to attachments before sending to Braintrust
+    expect(fileDataValue).toBeInstanceOf(Attachment);
+    expect(fileDataValue.reference.type).toBe("braintrust_attachment");
+    expect(fileDataValue.reference.key).toBeTruthy(); // UUID key
+    expect(fileDataValue.reference.content_type).toBe("application/pdf");
+    expect(fileDataValue.reference.filename).toBeTruthy(); // Should have a filename
 
     const m = span.metrics;
     expect(start <= m.start && m.start < m.end && m.end <= end).toBe(true);
@@ -830,11 +830,14 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
       const outputItem = span.output[0];
       assert.equal(outputItem.type, "image_generation_call");
 
-      // Verify that the base64 string was replaced with a braintrust attachment reference
-      assert.equal(outputItem.result.type, "braintrust_attachment");
-      assert.ok(outputItem.result.key); // Should have a UUID key
-      assert.equal(outputItem.result.content_type, "image/png");
-      assert.ok(outputItem.result.filename.includes("A_simple_test_image"));
+      // Verify that the base64 string was replaced with a braintrust attachment
+      assert.instanceOf(outputItem.result, Attachment);
+      assert.equal(outputItem.result.reference.type, "braintrust_attachment");
+      assert.ok(outputItem.result.reference.key); // Should have a UUID key
+      assert.equal(outputItem.result.reference.content_type, "image/png");
+      assert.ok(
+        outputItem.result.reference.filename.includes("A_simple_test_image"),
+      );
       const m = span.metrics;
       assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     } finally {
