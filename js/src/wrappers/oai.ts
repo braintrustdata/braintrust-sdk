@@ -370,6 +370,7 @@ function wrapChatCompletion<
               logHeaders(response, span);
               const { messages, ...rest } = params;
               span.log({
+                input: messages,
                 metadata: {
                   ...rest,
                 },
