@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -104,7 +104,7 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.3.6"
+version = "0.3.14"
 source = { editable = "../../py" }
 dependencies = [
     { name = "chevron" },
@@ -144,6 +144,8 @@ requires-dist = [
     { name = "sseclient-py" },
     { name = "starlette", marker = "extra == 'all'" },
     { name = "starlette", marker = "extra == 'cli'" },
+    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'all'", specifier = ">=1.19.0" },
+    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'temporal'", specifier = ">=1.19.0" },
     { name = "tqdm" },
     { name = "typing-extensions", specifier = ">=4.1.0" },
     { name = "uv", marker = "extra == 'all'" },
@@ -152,11 +154,11 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'cli'" },
     { name = "wrapt" },
 ]
-provides-extras = ["cli", "doc", "openai-agents", "otel", "all"]
+provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "../../integrations/adk-py" }
 dependencies = [
     { name = "braintrust" },
@@ -182,7 +184,7 @@ dev = [
 
 [[package]]
 name = "braintrust-langchain"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "../../integrations/langchain-py" }
 dependencies = [
     { name = "braintrust" },
@@ -205,7 +207,7 @@ dev = [
     { name = "isort", specifier = "==5.12.0" },
     { name = "langchain-anthropic", specifier = ">=0.3.20" },
     { name = "langchain-openai" },
-    { name = "langgraph", marker = "python_full_version >= '3.9'", specifier = ">=0.2.1,<0.4.0" },
+    { name = "langgraph", specifier = ">=0.2.1,<0.4.0" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },

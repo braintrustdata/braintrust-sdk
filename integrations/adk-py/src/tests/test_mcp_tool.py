@@ -174,7 +174,7 @@ async def test_setup_adk_graceful_fallback_when_mcp_unavailable():
     """Test that setup_adk gracefully handles MCP not being installed."""
     with patch("braintrust_adk.init_logger"):
         # This test is tricky - we need MCP import to fail but not break other imports
-        # The actual behavior is tested in integration: when Python 3.9 tries to import MCP,
+        # The actual behavior is tested in integration: when MCP is not available,
         # it gets ImportError from the google.adk.tools.mcp_tool module itself
         # For this test, we just verify setup_adk succeeds even when MCP module raises ImportError
 
@@ -183,7 +183,7 @@ async def test_setup_adk_graceful_fallback_when_mcp_unavailable():
         # Should succeed - MCP is optional
         assert result is True
 
-        # In Python 3.9 environment, MCP import fails but setup_adk continues
+        # When MCP is not available, MCP import fails but setup_adk continues
         # This is the actual graceful fallback in action
 
 

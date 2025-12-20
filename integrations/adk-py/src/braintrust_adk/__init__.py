@@ -1,7 +1,7 @@
 import inspect
 import logging
 import time
-from contextlib import AbstractAsyncContextManager
+from contextlib import aclosing
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
 
 from wrapt import wrap_function_wrapper
@@ -678,29 +678,3 @@ def _extract_model_name(response: Any, llm_request: Any, instance: Any) -> Optio
             return str(instance.model)
 
     return None
-
-
-G = TypeVar("G", bound=AsyncGenerator[Any, None])
-
-
-# until we drop support for Python 3.9
-class aclosing(AbstractAsyncContextManager[G]):
-    def __init__(self, async_generator: G):
-        self.async_generator = async_generator
-
-    async def __aenter__(self):
-        return self.async_generator
-
-    async def __aexit__(self, *exc_info: Any):
-        try:
-            await self.async_generator.aclose()
-        except ValueError as e:
-            # Suppress ContextVar errors during async cleanup
-            # These occur when spans are created in one context and cleaned up in another during shutdown
-            if "was created in a different Context" not in str(e):
-                raise
-            else:
-                logger.debug(
-                    f"Suppressed ContextVar error during async cleanup: {e}. "
-                    "This is expected when async generators yield across context boundaries."
-                )

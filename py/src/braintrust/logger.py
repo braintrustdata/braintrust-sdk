@@ -5245,7 +5245,8 @@ class DatasetSummary(SerializableDataClass):
 
 
 class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
-    # Returns Any because Future is not generic in Python 3.8.
+    # Returns Any because Future[T] generic typing was stabilized in Python 3.9,
+    # but we maintain compatibility with older type checkers.
     def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         # Capture all current context variables
         context = contextvars.copy_context()

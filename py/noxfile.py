@@ -56,23 +56,13 @@ VENDOR_PACKAGES = (
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
-# litellm latest requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    LITELLM_VERSIONS = (LATEST, "1.74.0")
-else:
-    LITELLM_VERSIONS = ("1.74.0",)  # latest litellm requires Python 3.10+
+LITELLM_VERSIONS = (LATEST, "1.74.0")
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 AGNO_VERSIONS = (LATEST, "2.1.0")
-# pydantic_ai 1.x requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
-else:
-    PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
-
+PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
 DSPY_VERSIONS = (LATEST,)
-# temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
 
 
@@ -97,14 +87,12 @@ def test_pydantic_ai(session, version):
 @nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
-    # claude_agent_sdk requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install_test_deps(session)
-        npm_bin = _install_npm_in_session(session)
-        session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
-        _install(session, "claude_agent_sdk", version)
-        _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
-        _run_core_tests(session)
+    _install_test_deps(session)
+    npm_bin = _install_npm_in_session(session)
+    session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
+    _install(session, "claude_agent_sdk", version)
+    _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -139,9 +127,7 @@ def test_google_genai(session, version):
 def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
-    # openai-agents requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install(session, "openai-agents")
+    _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
@@ -157,9 +143,6 @@ def test_openrouter(session):
 @nox.session()
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
-    # litellm latest requires Python >= 3.10
-    if version == LATEST and sys.version_info < (3, 10):
-        session.skip("litellm latest requires Python >= 3.10")
     _install_test_deps(session)
     # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
     # https://github.com/BerriAI/litellm/issues/13711
@@ -175,9 +158,6 @@ def test_litellm(session, version):
 @nox.session()
 @nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
 def test_dspy(session, version):
-    # dspy latest depends on litellm which requires Python >= 3.10
-    if sys.version_info < (3, 10):
-        session.skip("dspy latest requires Python >= 3.10 (litellm dependency)")
     _install_test_deps(session)
     _install(session, "dspy", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_dspy.py")
@@ -225,9 +205,6 @@ def test_otel(session):
 @nox.parametrize("version", TEMPORAL_VERSIONS, ids=TEMPORAL_VERSIONS)
 def test_temporal(session, version):
     """Test Temporal integration with temporalio installed."""
-    # temporalio 1.19.0+ requires Python >= 3.10
-    if sys.version_info < (3, 10):
-        session.skip("temporalio 1.19.0+ requires Python >= 3.10")
     _install_test_deps(session)
     _install(session, "temporalio", version)
     _run_tests(session, "braintrust/contrib/temporal")
@@ -244,10 +221,6 @@ def test_otel_not_installed(session):
 
 @nox.session()
 def pylint(session):
-    # pylint needs everything so we don't trigger missing import errors
-    # Skip on Python < 3.10 because some deps (like temporalio 1.19+) require 3.10+
-    if sys.version_info < (3, 10):
-        session.skip("pylint requires Python >= 3.10 for full dependency support")
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
