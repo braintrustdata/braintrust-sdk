@@ -42,7 +42,7 @@ VENDOR_PACKAGES = (
     "dspy",
     "openai",
     "openai-agents",
-    "pydantic_ai",
+    # pydantic_ai is NOT included here - it has dedicated test sessions with version-specific handling
     "autoevals",
     "braintrust_core",
     "litellm",
@@ -270,6 +270,9 @@ def pylint(session):
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
+    # pydantic_ai is not in VENDOR_PACKAGES (has dedicated test sessions),
+    # but pylint needs it with minimum version constraint for proper API checking
+    session.install("pydantic_ai>=1.10.0")
     session.install("opentelemetry.instrumentation.openai")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
