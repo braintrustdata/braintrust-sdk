@@ -1,7 +1,6 @@
 """LRU cache implementation for the dev server."""
 
 import json
-from typing import Dict, Optional
 
 from ..logger import BraintrustState, login_to_state
 
@@ -11,10 +10,10 @@ class LRUCache:
 
     def __init__(self, max_size: int = 32):
         self.max_size = max_size
-        self.cache: Dict[str, BraintrustState] = {}
+        self.cache: dict[str, BraintrustState] = {}
         self.access_order: list[str] = []
 
-    def get(self, key: str) -> Optional[BraintrustState]:
+    def get(self, key: str) -> BraintrustState | None:
         """Get a value from the cache, updating access order."""
         if key in self.cache:
             # Move to end to mark as recently used
@@ -41,7 +40,7 @@ class LRUCache:
 _login_cache = LRUCache(max_size=32)  # TODO: Make this configurable
 
 
-async def cached_login(api_key: str, app_url: str, org_name: Optional[str] = None) -> BraintrustState:
+async def cached_login(api_key: str, app_url: str, org_name: str | None = None) -> BraintrustState:
     """Login with caching to avoid repeated API calls."""
     cache_key = json.dumps({"api_key": api_key, "app_url": app_url, "org_name": org_name})
 

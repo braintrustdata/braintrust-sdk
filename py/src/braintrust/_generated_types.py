@@ -11,17 +11,17 @@ from typing import Any, Literal, Mapping, Optional, Sequence, TypedDict, Union
 from typing_extensions import NotRequired
 
 AclObjectType = Literal[
-    'organization',
-    'project',
-    'experiment',
-    'dataset',
-    'prompt',
-    'prompt_session',
-    'group',
-    'role',
-    'org_member',
-    'project_log',
-    'org_project',
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "group",
+    "role",
+    "org_member",
+    "project_log",
+    "org_project",
 ]
 
 
@@ -56,7 +56,7 @@ class AnyModelParamsToolChoiceFunction(TypedDict):
 
 
 class AnyModelParamsToolChoice(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     function: AnyModelParamsToolChoiceFunction
 
 
@@ -101,34 +101,34 @@ class ApiKey(TypedDict):
 
 
 class AsyncScoringControlAsyncScoringControl(TypedDict):
-    kind: Literal['score_update']
+    kind: Literal["score_update"]
     token: str
 
 
 class AsyncScoringControlAsyncScoringControl2(TypedDict):
-    kind: Literal['state_force_reselect']
+    kind: Literal["state_force_reselect"]
 
 
 class AsyncScoringControlAsyncScoringControl3(TypedDict):
-    kind: Literal['state_enabled_force_rescore']
+    kind: Literal["state_enabled_force_rescore"]
 
 
 class AsyncScoringStateAsyncScoringState(TypedDict):
-    status: Literal['enabled']
+    status: Literal["enabled"]
     token: str
     function_ids: Sequence
     skip_logging: NotRequired[Optional[bool]]
 
 
 class AsyncScoringStateAsyncScoringState1(TypedDict):
-    status: Literal['disabled']
+    status: Literal["disabled"]
 
 
 AsyncScoringState = Optional[Union[AsyncScoringStateAsyncScoringState, AsyncScoringStateAsyncScoringState1]]
 
 
 class BraintrustAttachmentReference(TypedDict):
-    type: Literal['braintrust_attachment']
+    type: Literal["braintrust_attachment"]
     """
     An identifier to help disambiguate parsing.
     """
@@ -155,49 +155,49 @@ class BraintrustModelParams(TypedDict):
 class CallEventCallEvent(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['text_delta']
+    event: Literal["text_delta"]
 
 
 class CallEventCallEvent1(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['reasoning_delta']
+    event: Literal["reasoning_delta"]
 
 
 class CallEventCallEvent2(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['json_delta']
+    event: Literal["json_delta"]
 
 
 class CallEventCallEvent3(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['progress']
+    event: Literal["progress"]
 
 
 class CallEventCallEvent4(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['error']
+    event: Literal["error"]
 
 
 class CallEventCallEvent5(TypedDict):
     id: NotRequired[Optional[str]]
     data: str
-    event: Literal['console']
+    event: Literal["console"]
 
 
 class CallEventCallEvent6(TypedDict):
     id: NotRequired[Optional[str]]
-    event: Literal['start']
-    data: Literal['']
+    event: Literal["start"]
+    data: Literal[""]
 
 
 class CallEventCallEvent7(TypedDict):
     id: NotRequired[Optional[str]]
-    event: Literal['done']
-    data: Literal['']
+    event: Literal["done"]
+    data: Literal[""]
 
 
 CallEvent = Union[
@@ -220,42 +220,42 @@ class ChatCompletionContentPartFileFile(TypedDict):
 
 class ChatCompletionContentPartFileWithTitle(TypedDict):
     file: ChatCompletionContentPartFileFile
-    type: Literal['file']
+    type: Literal["file"]
 
 
 class ChatCompletionContentPartImageWithTitleImageUrl(TypedDict):
     url: str
-    detail: NotRequired[Optional[Union[Literal['auto'], Literal['low'], Literal['high']]]]
+    detail: NotRequired[Optional[Union[Literal["auto"], Literal["low"], Literal["high"]]]]
 
 
 class ChatCompletionContentPartImageWithTitle(TypedDict):
     image_url: ChatCompletionContentPartImageWithTitleImageUrl
-    type: Literal['image_url']
+    type: Literal["image_url"]
 
 
 class ChatCompletionContentPartTextCacheControl(TypedDict):
-    type: Literal['ephemeral']
+    type: Literal["ephemeral"]
 
 
 class ChatCompletionContentPartText(TypedDict):
     text: str
-    type: Literal['text']
+    type: Literal["text"]
     cache_control: NotRequired[Optional[ChatCompletionContentPartTextCacheControl]]
 
 
 class ChatCompletionContentPartTextWithTitleCacheControl(TypedDict):
-    type: Literal['ephemeral']
+    type: Literal["ephemeral"]
 
 
 class ChatCompletionContentPartTextWithTitle(TypedDict):
     text: str
-    type: Literal['text']
+    type: Literal["text"]
     cache_control: NotRequired[Optional[ChatCompletionContentPartTextWithTitleCacheControl]]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['system']
+    role: Literal["system"]
     name: NotRequired[Optional[str]]
 
 
@@ -266,24 +266,24 @@ class ChatCompletionMessageParamChatCompletionMessageParam2FunctionCall(TypedDic
 
 class ChatCompletionMessageParamChatCompletionMessageParam3(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['tool']
+    role: Literal["tool"]
     tool_call_id: str
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam4(TypedDict):
     content: Optional[str]
     name: str
-    role: Literal['function']
+    role: Literal["function"]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam5(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['developer']
+    role: Literal["developer"]
     name: NotRequired[Optional[str]]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam6(TypedDict):
-    role: Literal['model']
+    role: Literal["model"]
     content: NotRequired[Optional[str]]
 
 
@@ -300,12 +300,12 @@ class ChatCompletionMessageToolCallFunction(TypedDict):
 class ChatCompletionMessageToolCall(TypedDict):
     id: str
     function: ChatCompletionMessageToolCallFunction
-    type: Literal['function']
+    type: Literal["function"]
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['system']
+    role: Literal["system"]
     name: NotRequired[Optional[str]]
 
 
@@ -315,7 +315,7 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionC
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2(TypedDict):
-    role: Literal['assistant']
+    role: Literal["assistant"]
     content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     function_call: NotRequired[Optional[ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall]]
     name: NotRequired[Optional[str]]
@@ -325,19 +325,19 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2(TypedDic
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['tool']
+    role: Literal["tool"]
     tool_call_id: str
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4(TypedDict):
     content: Optional[str]
     name: str
-    role: Literal['function']
+    role: Literal["function"]
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPartText]]
-    role: Literal['developer']
+    role: Literal["developer"]
     name: NotRequired[Optional[str]]
 
 
@@ -349,31 +349,31 @@ class ChatCompletionToolFunction(TypedDict):
 
 class ChatCompletionTool(TypedDict):
     function: ChatCompletionToolFunction
-    type: Literal['function']
+    type: Literal["function"]
 
 
 class CodeBundleRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal["node", "python", "browser"]
     version: str
 
 
 class CodeBundleLocationPosition(TypedDict):
-    type: Literal['task']
+    type: Literal["task"]
 
 
 class CodeBundleLocationPosition1(TypedDict):
-    type: Literal['scorer']
+    type: Literal["scorer"]
     index: int
 
 
 class CodeBundleLocation(TypedDict):
-    type: Literal['experiment']
+    type: Literal["experiment"]
     eval_name: str
     position: Union[CodeBundleLocationPosition, CodeBundleLocationPosition1]
 
 
 class CodeBundleLocation1(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     index: int
 
 
@@ -434,7 +434,7 @@ class EnvVar(TypedDict):
     """
     Unique identifier for the environment variable
     """
-    object_type: Literal['organization', 'project', 'function']
+    object_type: Literal["organization", "project", "function"]
     """
     The type of the object the environment variable is scoped for
     """
@@ -514,17 +514,17 @@ class ExperimentEventContext(TypedDict):
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     id: str
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
-    type: Literal['global']
+    type: Literal["global"]
     name: str
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
-    type: Literal['slug']
+    type: Literal["slug"]
     project_id: str
     slug: str
 
@@ -537,7 +537,7 @@ ExtendedSavedFunctionId = Union[
 
 
 class ExternalAttachmentReference(TypedDict):
-    type: Literal['external_attachment']
+    type: Literal["external_attachment"]
     """
     An identifier to help disambiguate parsing.
     """
@@ -573,42 +573,42 @@ class FunctionFunctionSchema(TypedDict):
 
 
 class FunctionDataFunctionData(TypedDict):
-    type: Literal['prompt']
+    type: Literal["prompt"]
 
 
 class Data(CodeBundle):
-    type: Literal['bundle']
+    type: Literal["bundle"]
 
 
 class FunctionDataFunctionData1DataRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal["node", "python", "browser"]
     version: str
 
 
 class FunctionDataFunctionData1Data(TypedDict):
-    type: Literal['inline']
+    type: Literal["inline"]
     runtime_context: FunctionDataFunctionData1DataRuntimeContext
     code: str
 
 
 class FunctionDataFunctionData1(TypedDict):
-    type: Literal['code']
+    type: Literal["code"]
     data: Union[Data, FunctionDataFunctionData1Data]
 
 
 class FunctionDataFunctionData2(TypedDict):
-    type: Literal['remote_eval']
+    type: Literal["remote_eval"]
     endpoint: str
     eval_name: str
     parameters: Mapping[str, Any]
 
 
 class FunctionDataFunctionData3(TypedDict):
-    type: Literal['global']
+    type: Literal["global"]
     name: str
 
 
-FunctionFormat = Literal['llm', 'code', 'global', 'graph']
+FunctionFormat = Literal["llm", "code", "global", "graph"]
 
 
 class FunctionIdFunctionId(TypedDict):
@@ -660,7 +660,7 @@ class FunctionIdFunctionId3(TypedDict):
 
 
 class FunctionIdFunctionId4InlineContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal["node", "python", "browser"]
     version: str
 
 
@@ -679,32 +679,32 @@ class FunctionIdFunctionId4(TypedDict):
 FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view']
+FunctionObjectType = Literal["prompt", "tool", "scorer", "task", "agent", "custom_view"]
 
 
-FunctionOutputType = Literal['completion', 'score', 'any']
+FunctionOutputType = Literal["completion", "score", "any"]
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
+FunctionTypeEnum = Literal["llm", "scorer", "task", "tool", "custom_view"]
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
+FunctionTypeEnumNullish = Literal["llm", "scorer", "task", "tool", "custom_view"]
 
 
 class GitMetadataSettings(TypedDict):
-    collect: Literal['all', 'none', 'some']
+    collect: Literal["all", "none", "some"]
     fields: NotRequired[
         Sequence[
             Literal[
-                'commit',
-                'branch',
-                'tag',
-                'dirty',
-                'author_name',
-                'author_email',
-                'commit_message',
-                'commit_time',
-                'git_diff',
+                "commit",
+                "branch",
+                "tag",
+                "dirty",
+                "author_name",
+                "author_email",
+                "commit_message",
+                "commit_time",
+                "git_diff",
             ]
         ]
     ]
@@ -729,7 +729,7 @@ class GraphEdgeTarget(TypedDict):
 class GraphEdge(TypedDict):
     source: GraphEdgeSource
     target: GraphEdgeTarget
-    purpose: Literal['control', 'data', 'messages']
+    purpose: Literal["control", "data", "messages"]
     """
     The purpose of the edge
     """
@@ -755,7 +755,7 @@ class GraphNodeGraphNode(TypedDict):
     """
     The position of the node
     """
-    type: Literal['function']
+    type: Literal["function"]
     function: FunctionIdRef
 
 
@@ -779,7 +779,7 @@ class GraphNodeGraphNode1(TypedDict):
     """
     The position of the node
     """
-    type: Literal['input']
+    type: Literal["input"]
     """
     The input to the graph
     """
@@ -805,7 +805,7 @@ class GraphNodeGraphNode2(TypedDict):
     """
     The position of the node
     """
-    type: Literal['output']
+    type: Literal["output"]
     """
     The output of the graph
     """
@@ -831,7 +831,7 @@ class GraphNodeGraphNode3(TypedDict):
     """
     The position of the node
     """
-    type: Literal['literal']
+    type: Literal["literal"]
     value: NotRequired[Optional[Any]]
     """
     A literal value to be returned
@@ -858,7 +858,7 @@ class GraphNodeGraphNode4(TypedDict):
     """
     The position of the node
     """
-    type: Literal['btql']
+    type: Literal["btql"]
     expr: str
     """
     A BTQL expression to be evaluated
@@ -885,7 +885,7 @@ class GraphNodeGraphNode5(TypedDict):
     """
     The position of the node
     """
-    type: Literal['gate']
+    type: Literal["gate"]
     condition: NotRequired[Optional[str]]
     """
     A BTQL expression to be evaluated
@@ -912,7 +912,7 @@ class GraphNodeGraphNode6(TypedDict):
     """
     The position of the node
     """
-    type: Literal['aggregator']
+    type: Literal["aggregator"]
 
 
 class GraphNodeGraphNode7Position(TypedDict):
@@ -969,7 +969,7 @@ class Group(TypedDict):
     """
 
 
-IfExists = Literal['error', 'ignore', 'replace']
+IfExists = Literal["error", "ignore", "replace"]
 
 
 class InvokeParentInvokeParentRowIds(TypedDict):
@@ -988,7 +988,7 @@ class InvokeParentInvokeParentRowIds(TypedDict):
 
 
 class InvokeParentInvokeParent(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'playground_logs']
+    object_type: Literal["project_logs", "experiment", "playground_logs"]
     object_id: str
     """
     The id of the container object you are logging to
@@ -1006,7 +1006,7 @@ class InvokeParentInvokeParent(TypedDict):
 InvokeParent = Union[InvokeParentInvokeParent, str]
 
 
-MessageRole = Literal['system', 'user', 'assistant', 'function', 'tool', 'model', 'developer']
+MessageRole = Literal["system", "user", "assistant", "function", "tool", "model", "developer"]
 
 
 class ModelParamsModelParamsToolChoiceFunction(TypedDict):
@@ -1014,7 +1014,7 @@ class ModelParamsModelParamsToolChoiceFunction(TypedDict):
 
 
 class ModelParamsModelParamsToolChoice(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     function: ModelParamsModelParamsToolChoiceFunction
 
 
@@ -1062,7 +1062,7 @@ class ModelParamsModelParams4(TypedDict):
 
 
 class ObjectReference(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'dataset', 'prompt', 'function', 'prompt_session']
+    object_type: Literal["project_logs", "experiment", "dataset", "prompt", "function", "prompt_session"]
     """
     Type of the object the event is originating from.
     """
@@ -1085,7 +1085,7 @@ class ObjectReference(TypedDict):
 
 
 class ObjectReferenceNullish(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'dataset', 'prompt', 'function', 'prompt_session']
+    object_type: Literal["project_logs", "experiment", "dataset", "prompt", "function", "prompt_session"]
     """
     Type of the object the event is originating from.
     """
@@ -1126,11 +1126,11 @@ class Organization(TypedDict):
     """
 
 
-Permission = Literal['create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls']
+Permission = Literal["create", "read", "update", "delete", "create_acls", "read_acls", "update_acls", "delete_acls"]
 
 
 class ProjectAutomationConfigAction(TypedDict):
-    type: Literal['webhook']
+    type: Literal["webhook"]
     """
     The type of action to take
     """
@@ -1141,7 +1141,7 @@ class ProjectAutomationConfigAction(TypedDict):
 
 
 class ProjectAutomationConfig(TypedDict):
-    event_type: Literal['logs']
+    event_type: Literal["logs"]
     """
     The type of automation.
     """
@@ -1160,15 +1160,15 @@ class ProjectAutomationConfig(TypedDict):
 
 
 class ProjectAutomationConfig1ExportDefinition(TypedDict):
-    type: Literal['log_traces']
+    type: Literal["log_traces"]
 
 
 class ProjectAutomationConfig1ExportDefinition1(TypedDict):
-    type: Literal['log_spans']
+    type: Literal["log_spans"]
 
 
 class ProjectAutomationConfig1ExportDefinition2(TypedDict):
-    type: Literal['btql_query']
+    type: Literal["btql_query"]
     btql_query: str
     """
     The BTQL query to export
@@ -1176,7 +1176,7 @@ class ProjectAutomationConfig1ExportDefinition2(TypedDict):
 
 
 class ProjectAutomationConfig1Credentials(TypedDict):
-    type: Literal['aws_iam']
+    type: Literal["aws_iam"]
     role_arn: str
     """
     The ARN of the IAM role to use
@@ -1188,7 +1188,7 @@ class ProjectAutomationConfig1Credentials(TypedDict):
 
 
 class ProjectAutomationConfig1(TypedDict):
-    event_type: Literal['btql_export']
+    event_type: Literal["btql_export"]
     """
     The type of automation.
     """
@@ -1204,7 +1204,7 @@ class ProjectAutomationConfig1(TypedDict):
     """
     The path to export the results to. It should include the storage protocol and prefix, e.g. s3://bucket-name/path/to/export
     """
-    format: Literal['jsonl', 'parquet']
+    format: Literal["jsonl", "parquet"]
     """
     The format to export the results in
     """
@@ -1287,14 +1287,14 @@ class ProjectScoreCategory(TypedDict):
     """
 
 
-ProjectScoreType = Literal['slider', 'categorical', 'weighted', 'minimum', 'maximum', 'online', 'free-form']
+ProjectScoreType = Literal["slider", "categorical", "weighted", "minimum", "maximum", "online", "free-form"]
 
 
 class ProjectSettingsSpanFieldOrderItem(TypedDict):
     object_type: str
     column_id: str
     position: str
-    layout: NotRequired[Optional[Union[Literal['full'], Literal['two_column']]]]
+    layout: NotRequired[Optional[Union[Literal["full"], Literal["two_column"]]]]
 
 
 class ProjectSettingsRemoteEvalSource(TypedDict):
@@ -1359,12 +1359,12 @@ class ProjectTag(TypedDict):
 
 
 class PromptBlockDataPromptBlockData1(TypedDict):
-    type: Literal['completion']
+    type: Literal["completion"]
     content: str
 
 
 class PromptBlockDataNullishPromptBlockDataNullish1(TypedDict):
-    type: Literal['completion']
+    type: Literal["completion"]
     content: str
 
 
@@ -1381,7 +1381,7 @@ class PromptDataNullishOrigin(TypedDict):
 
 
 class PromptParserNullish(TypedDict):
-    type: Literal['llm_classifier']
+    type: Literal["llm_classifier"]
     use_cot: bool
     choice_scores: Mapping[str, float]
 
@@ -1478,11 +1478,11 @@ class RepoInfo(TypedDict):
 
 
 class ResponseFormatResponseFormat(TypedDict):
-    type: Literal['json_object']
+    type: Literal["json_object"]
 
 
 class ResponseFormatResponseFormat2(TypedDict):
-    type: Literal['text']
+    type: Literal["text"]
 
 
 class ResponseFormatJsonSchema(TypedDict):
@@ -1493,16 +1493,16 @@ class ResponseFormatJsonSchema(TypedDict):
 
 
 class ResponseFormatNullishResponseFormatNullish(TypedDict):
-    type: Literal['json_object']
+    type: Literal["json_object"]
 
 
 class ResponseFormatNullishResponseFormatNullish1(TypedDict):
-    type: Literal['json_schema']
+    type: Literal["json_schema"]
     json_schema: ResponseFormatJsonSchema
 
 
 class ResponseFormatNullishResponseFormatNullish2(TypedDict):
-    type: Literal['text']
+    type: Literal["text"]
 
 
 ResponseFormatNullish = Optional[
@@ -1514,7 +1514,7 @@ ResponseFormatNullish = Optional[
 ]
 
 
-RetentionObjectType = Literal['project_logs', 'experiment', 'dataset']
+RetentionObjectType = Literal["project_logs", "experiment", "dataset"]
 
 
 class RoleMemberPermission(TypedDict):
@@ -1583,12 +1583,12 @@ class RunEvalData2(TypedDict):
 
 
 class SavedFunctionIdSavedFunctionId(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     id: str
 
 
 class SavedFunctionIdSavedFunctionId1(TypedDict):
-    type: Literal['global']
+    type: Literal["global"]
     name: str
 
 
@@ -1666,11 +1666,11 @@ class SpanIFrame(TypedDict):
     """
 
 
-SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
+SpanType = Literal["llm", "score", "function", "eval", "task", "tool"]
 
 
 class SSEConsoleEventData(TypedDict):
-    stream: Literal['stderr', 'stdout']
+    stream: Literal["stderr", "stdout"]
     message: str
 
 
@@ -1684,11 +1684,11 @@ class SSEProgressEventData(TypedDict):
     format: FunctionFormat
     output_type: FunctionOutputType
     name: str
-    event: Literal['reasoning_delta', 'text_delta', 'json_delta', 'error', 'console', 'start', 'done', 'progress']
+    event: Literal["reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"]
     data: str
 
 
-StreamingMode = Literal['auto', 'parallel']
+StreamingMode = Literal["auto", "parallel"]
 
 
 class ToolFunctionDefinitionFunction(TypedDict):
@@ -1699,11 +1699,11 @@ class ToolFunctionDefinitionFunction(TypedDict):
 
 
 class ToolFunctionDefinition(TypedDict):
-    type: Literal['function']
+    type: Literal["function"]
     function: ToolFunctionDefinitionFunction
 
 
-UploadStatus = Literal['uploading', 'done', 'error']
+UploadStatus = Literal["uploading", "done", "error"]
 
 
 class User(TypedDict):
@@ -1741,39 +1741,39 @@ class ViewDataSearch(TypedDict):
 
 
 class ViewOptionsViewOptionsOptions(TypedDict):
-    spanType: NotRequired[Optional[Literal['range', 'frame']]]
+    spanType: NotRequired[Optional[Literal["range", "frame"]]]
     rangeValue: NotRequired[Optional[str]]
     frameStart: NotRequired[Optional[str]]
     frameEnd: NotRequired[Optional[str]]
     tzUTC: NotRequired[Optional[bool]]
     chartVisibility: NotRequired[Optional[Mapping[str, Any]]]
     projectId: NotRequired[Optional[str]]
-    type: NotRequired[Optional[Literal['project', 'experiment']]]
+    type: NotRequired[Optional[Literal["project", "experiment"]]]
     groupBy: NotRequired[Optional[str]]
 
 
 class ViewOptionsViewOptions(TypedDict):
-    viewType: Literal['monitor']
+    viewType: Literal["monitor"]
     options: ViewOptionsViewOptionsOptions
 
 
 class ViewOptionsViewOptions1ExcludedMeasure(TypedDict):
-    type: Literal['none', 'score', 'metric', 'metadata']
+    type: Literal["none", "score", "metric", "metadata"]
     value: str
 
 
 class ViewOptionsViewOptions1YMetric(TypedDict):
-    type: Literal['none', 'score', 'metric', 'metadata']
+    type: Literal["none", "score", "metric", "metadata"]
     value: str
 
 
 class ViewOptionsViewOptions1XAxis(TypedDict):
-    type: Literal['none', 'score', 'metric', 'metadata']
+    type: Literal["none", "score", "metric", "metadata"]
     value: str
 
 
 class ViewOptionsViewOptions1SymbolGrouping(TypedDict):
-    type: Literal['none', 'score', 'metric', 'metadata']
+    type: Literal["none", "score", "metric", "metadata"]
     value: str
 
 
@@ -1783,10 +1783,10 @@ class ViewOptionsViewOptions1ChartAnnotation(TypedDict):
 
 
 ViewOptionsViewOptions1TimeRangeFilter = TypedDict(
-    'ViewOptionsViewOptions1TimeRangeFilter',
+    "ViewOptionsViewOptions1TimeRangeFilter",
     {
-        'from': str,
-        'to': str,
+        "from": str,
+        "to": str,
     },
 )
 
@@ -1810,7 +1810,7 @@ class ViewOptionsViewOptions1(TypedDict):
     """
     chartAnnotations: NotRequired[Optional[Sequence[ViewOptionsViewOptions1ChartAnnotation]]]
     timeRangeFilter: NotRequired[Optional[Union[str, ViewOptionsViewOptions1TimeRangeFilter]]]
-    queryShape: NotRequired[Optional[Literal['traces', 'spans']]]
+    queryShape: NotRequired[Optional[Literal["traces", "spans"]]]
 
 
 ViewOptions = Optional[Union[ViewOptionsViewOptions, ViewOptionsViewOptions1]]
@@ -1861,12 +1861,14 @@ class AnyModelParams(TypedDict):
     frequency_penalty: NotRequired[Optional[float]]
     presence_penalty: NotRequired[Optional[float]]
     response_format: NotRequired[Optional[ResponseFormatNullish]]
-    tool_choice: NotRequired[Optional[Union[Literal['auto'], Literal['none'], Literal['required'], AnyModelParamsToolChoice]]]
-    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], AnyModelParamsFunctionCall]]]
+    tool_choice: NotRequired[
+        Optional[Union[Literal["auto"], Literal["none"], Literal["required"], AnyModelParamsToolChoice]]
+    ]
+    function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], AnyModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal["none", "minimal", "low", "medium", "high"]]]
+    verbosity: NotRequired[Optional[Literal["low", "medium", "high"]]]
     top_k: NotRequired[Optional[float]]
     stop_sequences: NotRequired[Optional[Sequence[str]]]
     reasoning_enabled: NotRequired[Optional[bool]]
@@ -1882,7 +1884,7 @@ class AnyModelParams(TypedDict):
 
 
 class AsyncScoringControlAsyncScoringControl1(TypedDict):
-    kind: Literal['state_override']
+    kind: Literal["state_override"]
     state: AsyncScoringState
 
 
@@ -1914,12 +1916,12 @@ ChatCompletionContentPart = Union[
 
 class ChatCompletionMessageParamChatCompletionMessageParam1(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPart]]
-    role: Literal['user']
+    role: Literal["user"]
     name: NotRequired[Optional[str]]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam2(TypedDict):
-    role: Literal['assistant']
+    role: Literal["assistant"]
     content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     function_call: NotRequired[Optional[ChatCompletionMessageParamChatCompletionMessageParam2FunctionCall]]
     name: NotRequired[Optional[str]]
@@ -1940,7 +1942,7 @@ ChatCompletionMessageParam = Union[
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDict):
     content: Union[str, Sequence[ChatCompletionContentPart]]
-    role: Literal['user']
+    role: Literal["user"]
     name: NotRequired[Optional[str]]
 
 
@@ -2093,13 +2095,13 @@ class ModelParamsModelParams(TypedDict):
     presence_penalty: NotRequired[Optional[float]]
     response_format: NotRequired[Optional[ResponseFormatNullish]]
     tool_choice: NotRequired[
-        Union[Literal['auto'], Literal['none'], Literal['required'], ModelParamsModelParamsToolChoice]
+        Union[Literal["auto"], Literal["none"], Literal["required"], ModelParamsModelParamsToolChoice]
     ]
-    function_call: NotRequired[Optional[Union[Literal['auto'], Literal['none'], ModelParamsModelParamsFunctionCall]]]
+    function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], ModelParamsModelParamsFunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
+    reasoning_effort: NotRequired[Optional[Literal["none", "minimal", "low", "medium", "high"]]]
+    verbosity: NotRequired[Optional[Literal["low", "medium", "high"]]]
 
 
 ModelParams = Union[
@@ -2167,7 +2169,7 @@ class Project(TypedDict):
 
 
 class ProjectAutomationConfig2(TypedDict):
-    event_type: Literal['retention']
+    event_type: Literal["retention"]
     """
     The type of automation.
     """
@@ -2219,7 +2221,7 @@ class ProjectScoreConfig(TypedDict):
 
 
 class PromptBlockDataPromptBlockData(TypedDict):
-    type: Literal['chat']
+    type: Literal["chat"]
     messages: Sequence[ChatCompletionMessageParam]
     tools: NotRequired[Optional[str]]
 
@@ -2228,7 +2230,7 @@ PromptBlockData = Union[PromptBlockDataPromptBlockData, PromptBlockDataPromptBlo
 
 
 class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
-    type: Literal['chat']
+    type: Literal["chat"]
     messages: Sequence[ChatCompletionMessageParam]
     tools: NotRequired[Optional[str]]
 
@@ -2251,7 +2253,7 @@ class PromptOptionsNullish(TypedDict):
 
 
 class ResponseFormatResponseFormat1(TypedDict):
-    type: Literal['json_schema']
+    type: Literal["json_schema"]
     json_schema: ResponseFormatJsonSchema
 
 
@@ -2369,7 +2371,7 @@ class GraphNodeGraphNode7(TypedDict):
     """
     The position of the node
     """
-    type: Literal['prompt_template']
+    type: Literal["prompt_template"]
     prompt: PromptBlockData
 
 
@@ -2410,7 +2412,7 @@ class ProjectLogsEvent(TypedDict):
     """
     Unique identifier for the project
     """
-    log_id: Literal['g']
+    log_id: Literal["g"]
     """
     A literal 'g' which identifies the log as a project log
     """
@@ -2540,20 +2542,20 @@ class View(TypedDict):
     The id of the object the view applies to
     """
     view_type: Literal[
-        'projects',
-        'experiments',
-        'experiment',
-        'playgrounds',
-        'playground',
-        'datasets',
-        'dataset',
-        'prompts',
-        'tools',
-        'scorers',
-        'logs',
-        'agents',
-        'monitor',
-        'for_review',
+        "projects",
+        "experiments",
+        "experiment",
+        "playgrounds",
+        "playground",
+        "datasets",
+        "dataset",
+        "prompts",
+        "tools",
+        "scorers",
+        "logs",
+        "agents",
+        "monitor",
+        "for_review",
     ]
     """
     Type of object that the view corresponds to.
@@ -2609,7 +2611,7 @@ FunctionId = Union[
 
 
 class GraphData(TypedDict):
-    type: Literal['graph']
+    type: Literal["graph"]
     nodes: Mapping[str, GraphNode]
     edges: Mapping[str, GraphEdge]
 
@@ -2660,7 +2662,7 @@ class Prompt(TypedDict):
     """
     Unique identifier for the project that the prompt belongs under
     """
-    log_id: Literal['p']
+    log_id: Literal["p"]
     """
     A literal 'p' which identifies the object as a project prompt
     """
@@ -2789,7 +2791,7 @@ class Function(TypedDict):
     """
     Unique identifier for the project that the prompt belongs under
     """
-    log_id: Literal['p']
+    log_id: Literal["p"]
     """
     A literal 'p' which identifies the object as a project prompt
     """
@@ -2829,5 +2831,6 @@ class Function(TypedDict):
     """
     JSON schema for the function's parameters and return type
     """
+
 
 __all__ = []

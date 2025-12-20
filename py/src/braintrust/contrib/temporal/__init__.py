@@ -80,7 +80,8 @@ The integration will automatically:
 """
 
 import dataclasses
-from typing import Any, Dict, Mapping, Optional, Type
+from collections.abc import Mapping
+from typing import Any
 
 import braintrust
 import temporalio.activity
@@ -129,7 +130,7 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
     - Ensures replay safety (no duplicate spans during workflow replay)
     """
 
-    def __init__(self, logger: Optional[Any] = None) -> None:
+    def __init__(self, logger: Any | None = None) -> None:
         """Initialize interceptor.
 
         Args:
@@ -142,7 +143,7 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
             braintrust.logger._state._override_bg_logger.logger = logger
         self._logger = braintrust.current_logger()
 
-    def _get_logger(self) -> Optional[Any]:
+    def _get_logger(self) -> Any | None:
         """Get logger for creating spans.
 
         Sets thread-local override if background logger provided (for testing),
@@ -152,9 +153,7 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
             braintrust.logger._state._override_bg_logger.logger = self._bg_logger
         return self._logger
 
-    def intercept_client(
-        self, next: temporalio.client.OutboundInterceptor
-    ) -> temporalio.client.OutboundInterceptor:
+    def intercept_client(self, next: temporalio.client.OutboundInterceptor) -> temporalio.client.OutboundInterceptor:
         """Intercept client calls to propagate span context to workflows."""
         return _BraintrustClientOutboundInterceptor(next, self)
 
@@ -166,14 +165,14 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
 
     def workflow_interceptor_class(
         self, input: temporalio.worker.WorkflowInterceptorClassInput
-    ) -> Optional[Type["BraintrustWorkflowInboundInterceptor"]]:
+    ) -> type["BraintrustWorkflowInboundInterceptor"] | None:
         """Return workflow interceptor class to propagate context to activities."""
         input.unsafe_extern_functions["__braintrust_get_logger"] = self._get_logger
         return BraintrustWorkflowInboundInterceptor
 
     def _span_context_to_headers(
         self,
-        span_context: Dict[str, Any],
+        span_context: dict[str, Any],
         headers: Mapping[str, temporalio.api.common.v1.Payload],
     ) -> Mapping[str, temporalio.api.common.v1.Payload]:
         """Add span context to headers."""
@@ -188,7 +187,7 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
 
     def _span_context_from_headers(
         self, headers: Mapping[str, temporalio.api.common.v1.Payload]
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Extract span context from headers."""
         if _HEADER_KEY not in headers:
             return None
@@ -204,9 +203,7 @@ class BraintrustInterceptor(temporalio.client.Interceptor, temporalio.worker.Int
 class _BraintrustClientOutboundInterceptor(temporalio.client.OutboundInterceptor):
     """Client interceptor that propagates span context to workflows."""
 
-    def __init__(
-        self, next: temporalio.client.OutboundInterceptor, root: BraintrustInterceptor
-    ) -> None:
+    def __init__(self, next: temporalio.client.OutboundInterceptor, root: BraintrustInterceptor) -> None:
         super().__init__(next)
         self.root = root
 
@@ -233,9 +230,7 @@ class _BraintrustActivityInboundInterceptor(temporalio.worker.ActivityInboundInt
         super().__init__(next)
         self.root = root
 
-    async def execute_activity(
-        self, input: temporalio.worker.ExecuteActivityInput
-    ) -> Any:
+    async def execute_activity(self, input: temporalio.worker.ExecuteActivityInput) -> Any:
         info = temporalio.activity.info()
 
         # Extract parent span context from headers
@@ -281,14 +276,12 @@ class BraintrustWorkflowInboundInterceptor(temporalio.worker.WorkflowInboundInte
     def __init__(self, next: temporalio.worker.WorkflowInboundInterceptor) -> None:
         super().__init__(next)
         self.payload_converter = temporalio.converter.PayloadConverter.default
-        self._parent_span_context: Optional[Dict[str, Any]] = None
+        self._parent_span_context: dict[str, Any] | None = None
 
     def init(self, outbound: temporalio.worker.WorkflowOutboundInterceptor) -> None:
         super().init(_BraintrustWorkflowOutboundInterceptor(outbound, self))
 
-    async def execute_workflow(
-        self, input: temporalio.worker.ExecuteWorkflowInput
-    ) -> Any:
+    async def execute_workflow(self, input: temporalio.worker.ExecuteWorkflowInput) -> Any:
         # Extract parent span context from workflow headers (set by client)
         parent_span_context = None
         if _HEADER_KEY in input.headers:
@@ -342,9 +335,7 @@ class BraintrustWorkflowInboundInterceptor(temporalio.worker.WorkflowInboundInte
                     span.end()
 
 
-class _BraintrustWorkflowOutboundInterceptor(
-    temporalio.worker.WorkflowOutboundInterceptor
-):
+class _BraintrustWorkflowOutboundInterceptor(temporalio.worker.WorkflowOutboundInterceptor):
     """Outbound workflow interceptor that propagates span context to activities."""
 
     def __init__(
@@ -371,9 +362,7 @@ class _BraintrustWorkflowOutboundInterceptor(
                 return {**headers, _HEADER_KEY: payloads[0]}
         return headers
 
-    def start_activity(
-        self, input: temporalio.worker.StartActivityInput
-    ) -> temporalio.workflow.ActivityHandle:
+    def start_activity(self, input: temporalio.worker.StartActivityInput) -> temporalio.workflow.ActivityHandle:
         input.headers = self._add_span_context_to_headers(input.headers)
         return super().start_activity(input)
 
@@ -390,7 +379,7 @@ class _BraintrustWorkflowOutboundInterceptor(
         return super().start_child_workflow(input)
 
 
-def _modify_workflow_runner(existing: Optional[WorkflowRunner]) -> Optional[WorkflowRunner]:
+def _modify_workflow_runner(existing: WorkflowRunner | None) -> WorkflowRunner | None:
     """Add braintrust to sandbox passthrough modules."""
     if isinstance(existing, SandboxedWorkflowRunner):
         new_restrictions = existing.restrictions.with_passthrough_modules("braintrust")
@@ -420,7 +409,7 @@ class BraintrustPlugin(SimplePlugin):
     Requires temporalio >= 1.19.0.
     """
 
-    def __init__(self, logger: Optional[Any] = None) -> None:
+    def __init__(self, logger: Any | None = None) -> None:
         """Initialize the Braintrust plugin.
 
         Args:
