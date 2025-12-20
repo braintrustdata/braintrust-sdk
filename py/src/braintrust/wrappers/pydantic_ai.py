@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 from contextlib import AbstractAsyncContextManager
 from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union
@@ -131,12 +132,29 @@ def wrap_agent(Agent: Any) -> Any:
         agent_name = instance.name if hasattr(instance, "name") else None
         span_name = f"agent_run_stream_sync [{agent_name}]" if agent_name else "agent_run_stream_sync"
 
-        return _AgentStreamWrapperSync(
-            wrapped(*args, **kwargs),
-            span_name,
-            input_data,
-            metadata,
+        # Create span context BEFORE calling wrapped function so internal spans nest under it
+        span_cm = start_span(
+            name=span_name,
+            type=SpanTypeAttribute.LLM,
+            input=input_data if input_data else None,
+            metadata=_try_dict(metadata),
         )
+        span = span_cm.__enter__()
+        start_time = time.time()
+
+        try:
+            # Call the original function within the span context
+            stream_result = wrapped(*args, **kwargs)
+            return _AgentStreamResultSyncProxy(
+                stream_result,
+                span,
+                span_cm,
+                start_time,
+            )
+        except Exception:
+            # Clean up span on error
+            span_cm.__exit__(*sys.exc_info())
+            raise
 
     wrap_function_wrapper(Agent, "run_stream_sync", agent_run_stream_sync_wrapper)
 
@@ -523,50 +541,62 @@ class _DirectStreamWrapper(AbstractAsyncContextManager):
         return False
 
 
-class _AgentStreamWrapperSync:
-    """Wrapper for agent.run_stream_sync() that adds tracing while passing through the stream result."""
+class _AgentStreamResultSyncProxy:
+    """Proxy for agent.run_stream_sync() result that adds tracing while delegating to actual stream result."""
 
-    def __init__(self, stream_cm: Any, span_name: str, input_data: Any, metadata: Any):
-        self.stream_cm = stream_cm
-        self.span_name = span_name
-        self.input_data = input_data
-        self.metadata = metadata
-        self.span_cm = None
-        self.start_time = None
-        self.stream_result = None
+    def __init__(self, stream_result: Any, span: Any, span_cm: Any, start_time: float):
+        self._stream_result = stream_result
+        self._span = span
+        self._span_cm = span_cm
+        self._start_time = start_time
+        self._logged = False
+        self._finalize_on_del = True
 
-    def __enter__(self):
-        # Use context manager properly so span stays current
-        # DON'T pass start_time here - we'll set it via metrics in __exit__
-        self.span_cm = start_span(
-            name=self.span_name,
-            type=SpanTypeAttribute.LLM,
-            input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
-        )
-        span = self.span_cm.__enter__()
+    def __getattr__(self, name: str):
+        """Delegate all attribute access to the wrapped stream result."""
+        attr = getattr(self._stream_result, name)
 
-        # Capture start time right before entering the stream (API call initiation)
-        self.start_time = time.time()
-        self.stream_result = self.stream_cm.__enter__()
-        return self.stream_result  # Return actual stream result object
+        # Wrap any method that returns an iterator to auto-finalize when exhausted
+        if callable(attr) and name in ('stream_text', 'stream_output', '__iter__'):
+            def wrapped_method(*args, **kwargs):
+                try:
+                    iterator = attr(*args, **kwargs)
+                    # If it's an iterator, wrap it
+                    if hasattr(iterator, '__iter__') or hasattr(iterator, '__next__'):
+                        try:
+                            yield from iterator
+                        finally:
+                            self._finalize()
+                            self._finalize_on_del = False  # Don't finalize again in __del__
+                    else:
+                        return iterator
+                except Exception:
+                    self._finalize()
+                    self._finalize_on_del = False
+                    raise
+            return wrapped_method
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            self.stream_cm.__exit__(exc_type, exc_val, exc_tb)
-        finally:
-            if self.span_cm and self.start_time and self.stream_result:
+        return attr
+
+    def _finalize(self):
+        """Log metrics and close span."""
+        if self._span and not self._logged and self._stream_result:
+            try:
                 end_time = time.time()
+                output = _serialize_stream_output(self._stream_result)
+                metrics = _extract_stream_usage_metrics(self._stream_result, self._start_time, end_time, None)
+                self._span.log(output=output, metrics=metrics)
+                self._logged = True
+            finally:
+                try:
+                    self._span_cm.__exit__(None, None, None)
+                except Exception:
+                    pass
 
-                output = _serialize_stream_output(self.stream_result)
-                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, None)
-                self.span_cm.log(output=output, metrics=metrics)
-
-            # Always clean up span context
-            if self.span_cm:
-                self.span_cm.__exit__(None, None, None)
-
-        return False
+    def __del__(self):
+        """Ensure span is closed when proxy is destroyed."""
+        if self._finalize_on_del:
+            self._finalize()
 
 
 class _DirectStreamWrapperSync:
@@ -1064,6 +1094,9 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
         elif key in ("output_type", "toolsets"):
             # These often contain types/classes, use special serialization
             input_data[key] = _serialize_type(value) if value is not None else None
+        elif key == "model_settings":
+            # model_settings passed to run() goes in INPUT (it's a run() parameter)
+            input_data[key] = _try_dict(value) if value is not None else None
         else:
             input_data[key] = _try_dict(value) if value is not None else None
 
@@ -1096,22 +1129,37 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
             logger.debug(f"Failed to extract output_type from agent: {e}")
 
     # Extract toolsets if set on agent and not passed as kwarg
+    # Toolsets go in INPUT (not metadata) because agent.run() accepts toolsets parameter
     if "toolsets" not in kwargs and hasattr(instance, "toolsets"):
         try:
             toolsets = instance.toolsets
             if toolsets:
-                # Convert toolsets to a list with summary info (not full schemas to keep it compact)
+                # Convert toolsets to a list with FULL tool schemas for input
                 serialized_toolsets = []
                 for ts in toolsets:
                     ts_info = {
                         "id": getattr(ts, "id", str(type(ts).__name__)),
                         "label": getattr(ts, "label", None),
                     }
-                    # Add tool names if available (without full schemas to keep it compact)
+                    # Add full tool schemas (not just names) since toolsets can be passed to agent.run()
                     if hasattr(ts, "tools") and ts.tools:
-                        ts_info["tools"] = [getattr(tool, "name", str(type(tool).__name__)) for tool in ts.tools]
+                        tools_list = []
+                        tools_dict = ts.tools
+                        # tools is a dict mapping tool name -> Tool object
+                        for tool_name, tool_obj in tools_dict.items():
+                            tool_dict = {
+                                "name": tool_name,
+                            }
+                            # Extract description
+                            if hasattr(tool_obj, "description") and tool_obj.description:
+                                tool_dict["description"] = tool_obj.description
+                            # Extract JSON schema for parameters
+                            if hasattr(tool_obj, "function_schema") and hasattr(tool_obj.function_schema, "json_schema"):
+                                tool_dict["parameters"] = tool_obj.function_schema.json_schema
+                            tools_list.append(tool_dict)
+                        ts_info["tools"] = tools_list
                     serialized_toolsets.append(ts_info)
-                metadata["toolsets"] = serialized_toolsets
+                input_data["toolsets"] = serialized_toolsets
         except Exception as e:
             logger.debug(f"Failed to extract toolsets from agent: {e}")
 
