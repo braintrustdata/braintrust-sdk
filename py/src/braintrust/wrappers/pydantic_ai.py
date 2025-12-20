@@ -1,8 +1,3 @@
-"""Braintrust integration for Pydantic AI.
-
-This module provides automatic tracing for Pydantic AI agents and direct API calls.
-"""
-
 import logging
 import time
 from contextlib import AbstractAsyncContextManager
@@ -14,7 +9,7 @@ from wrapt import wrap_function_wrapper
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["setup_pydantic_ai", "wrap_pydantic_ai"]
+__all__ = ["setup_pydantic_ai"]
 
 
 def setup_pydantic_ai(
@@ -57,9 +52,6 @@ def setup_pydantic_ai(
         logger.error(f"Failed to import Pydantic AI: {e}")
         logger.error("Pydantic AI is not installed. Please install it with: pip install pydantic-ai-slim")
         return False
-
-
-wrap_pydantic_ai = setup_pydantic_ai
 
 
 def wrap_agent(Agent: Any) -> Any:

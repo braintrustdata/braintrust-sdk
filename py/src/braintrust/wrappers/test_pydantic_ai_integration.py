@@ -1049,8 +1049,8 @@ async def test_agent_with_message_history(memory_logger):
 
     assert agent_span is not None, "agent_run span not found"
     assert "message_history" in str(agent_span["input"])
-    assert "Alice" in str(span["output"])
-    _assert_metrics_are_valid(span["metrics"], start, end)
+    assert "Alice" in str(agent_span["output"])
+    _assert_metrics_are_valid(agent_span["metrics"], start, end)
 
 
 @pytest.mark.vcr
@@ -1100,9 +1100,9 @@ def test_agent_run_stream_sync(memory_logger):
 
     start = time.time()
     full_text = ""
-    with agent.run_stream_sync("Count from 1 to 3") as result:
-        for text in result.stream_text(delta=True):
-            full_text += text
+    result = agent.run_stream_sync("Count from 1 to 3")  # pylint: disable=no-member
+    for text in result.stream_text(delta=True):
+        full_text += text
     end = time.time()
 
     # Verify we got streaming content
