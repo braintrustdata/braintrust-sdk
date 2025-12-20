@@ -4602,6 +4602,83 @@
                   "object_type",
                   "retention_days"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "environment_update"
+                    ],
+                    "description": "The type of automation."
+                  },
+                  "environment_filter": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional list of environment slugs to filter by"
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "webhook"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "url": {
+                            "type": "string",
+                            "description": "The webhook URL to send the request to"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "slack"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "workspace_id": {
+                            "type": "string",
+                            "description": "The Slack workspace ID to post to"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "description": "The Slack channel ID to post to"
+                          },
+                          "message_template": {
+                            "type": "string",
+                            "description": "Custom message template for the alert"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "workspace_id",
+                          "channel"
+                        ]
+                      }
+                    ],
+                    "description": "The action to take when the automation rule is triggered"
+                  }
+                },
+                "required": [
+                  "event_type",
+                  "action"
+                ]
               }
             ],
             "description": "The configuration for the automation rule"
@@ -5376,6 +5453,17 @@
               "$ref": "#/components/schemas/SavedFunctionId"
             }
           },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
+          },
           "mcp": {
             "type": [
               "object",
@@ -5493,6 +5581,17 @@
             "items": {
               "$ref": "#/components/schemas/SavedFunctionId"
             }
+          },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
           },
           "mcp": {
             "type": [
@@ -7165,7 +7264,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "30a8c72229401ad220ad9dec57ad8f7ab3f06bfd"
+    "x-internal-git-sha": "d2eca897666af49c11b326a9dcc6643824279cf8"
   },
   "paths": {},
   "webhooks": {}

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 30a8c72229401ad220ad9dec57ad8f7ab3f06bfd) -- do not modify
+// Auto-generated file (internal git SHA d2eca897666af49c11b326a9dcc6643824279cf8) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -730,6 +730,10 @@ export const PromptDataNullish = z.union([
       options: PromptOptionsNullish,
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+      template_format: z.union([
+        z.enum(["mustache", "nunjucks", "none"]),
+        z.null(),
+      ]),
       mcp: z.union([
         z.record(
           z.union([
@@ -947,6 +951,10 @@ export const PromptData = z
     options: PromptOptionsNullish,
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
     mcp: z.union([
       z.record(
         z.union([
@@ -1293,6 +1301,19 @@ export const ProjectAutomation = z.object({
       event_type: z.literal("retention"),
       object_type: RetentionObjectType,
       retention_days: z.number().gte(0),
+    }),
+    z.object({
+      event_type: z.literal("environment_update"),
+      environment_filter: z.array(z.string()).optional(),
+      action: z.union([
+        z.object({ type: z.literal("webhook"), url: z.string() }),
+        z.object({
+          type: z.literal("slack"),
+          workspace_id: z.string(),
+          channel: z.string(),
+          message_template: z.string().optional(),
+        }),
+      ]),
     }),
   ]),
 });
