@@ -104,6 +104,9 @@ def test_pydantic_ai_wrap_openai(session, version):
 @nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
 def test_pydantic_ai_integration(session, version):
     """Test pydantic_ai with setup_pydantic_ai() wrapper - requires 1.10.0+."""
+    # Skip on Python 3.9 - pydantic_ai 1.10.0+ requires Python 3.10+
+    if sys.version_info < (3, 10):
+        session.skip("pydantic_ai integration tests require Python >= 3.10 (pydantic_ai 1.10.0+)")
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_integration.py")
