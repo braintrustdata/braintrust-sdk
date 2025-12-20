@@ -216,7 +216,7 @@ provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "../../integrations/adk-py" }
 dependencies = [
     { name = "braintrust" },

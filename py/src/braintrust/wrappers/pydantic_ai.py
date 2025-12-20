@@ -2,6 +2,7 @@
 
 This module provides automatic tracing for Pydantic AI agents and direct API calls.
 """
+
 import logging
 import time
 from contextlib import AbstractAsyncContextManager
@@ -37,14 +38,17 @@ def setup_pydantic_ai(
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
 
     try:
-        from pydantic_ai import Agent, direct
+        import pydantic_ai.direct as direct_module
+        from pydantic_ai import Agent
 
         Agent = wrap_agent(Agent)
 
-        direct.model_request = wrap_model_request(direct.model_request)
-        direct.model_request_sync = wrap_model_request_sync(direct.model_request_sync)
-        direct.model_request_stream = wrap_model_request_stream(direct.model_request_stream)
-        direct.model_request_stream_sync = wrap_model_request_stream_sync(direct.model_request_stream_sync)
+        wrap_function_wrapper(direct_module, "model_request", _create_direct_model_request_wrapper())
+        wrap_function_wrapper(direct_module, "model_request_sync", _create_direct_model_request_sync_wrapper())
+        wrap_function_wrapper(direct_module, "model_request_stream", _create_direct_model_request_stream_wrapper())
+        wrap_function_wrapper(
+            direct_module, "model_request_stream_sync", _create_direct_model_request_stream_sync_wrapper()
+        )
 
         wrap_model_classes()
 
@@ -62,7 +66,14 @@ def wrap_agent(Agent: Any) -> Any:
     if _is_patched(Agent):
         return Agent
 
+    def _ensure_model_wrapped(instance: Any):
+        """Ensure the agent's model class is wrapped (lazy wrapping)."""
+        if hasattr(instance, "_model"):
+            model_class = type(instance._model)
+            _wrap_concrete_model_class(model_class)
+
     async def agent_run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        _ensure_model_wrapped(instance)
         input_data, metadata = _build_agent_input_and_metadata(args, kwargs, instance)
 
         with start_span(
@@ -83,12 +94,14 @@ def wrap_agent(Agent: Any) -> Any:
 
     wrap_function_wrapper(Agent, "run", agent_run_wrapper)
 
-
     def agent_run_sync_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        _ensure_model_wrapped(instance)
         input_data, metadata = _build_agent_input_and_metadata(args, kwargs, instance)
 
         with start_span(
-            name=f"agent_run_sync [{instance.name}]" if hasattr(instance, "name") and instance.name else "agent_run_sync",
+            name=f"agent_run_sync [{instance.name}]"
+            if hasattr(instance, "name") and instance.name
+            else "agent_run_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
             metadata=_try_dict(metadata),
@@ -105,32 +118,38 @@ def wrap_agent(Agent: Any) -> Any:
 
     wrap_function_wrapper(Agent, "run_sync", agent_run_sync_wrapper)
 
-    async def agent_run_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def agent_run_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        _ensure_model_wrapped(instance)
         input_data, metadata = _build_agent_input_and_metadata(args, kwargs, instance)
         agent_name = instance.name if hasattr(instance, "name") else None
-        return _StreamedRunContextWrapper(
+        span_name = f"agent_run_stream [{agent_name}]" if agent_name else "agent_run_stream"
+
+        return _AgentStreamWrapper(
             wrapped(*args, **kwargs),
-            input_data if input_data else None,
+            span_name,
+            input_data,
             metadata,
-            agent_name
         )
 
     wrap_function_wrapper(Agent, "run_stream", agent_run_stream_wrapper)
 
     def agent_run_stream_sync_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        _ensure_model_wrapped(instance)
         input_data, metadata = _build_agent_input_and_metadata(args, kwargs, instance)
         agent_name = instance.name if hasattr(instance, "name") else None
-        return _StreamedRunContextWrapperSync(
+        span_name = f"agent_run_stream_sync [{agent_name}]" if agent_name else "agent_run_stream_sync"
+
+        return _AgentStreamWrapperSync(
             wrapped(*args, **kwargs),
-            input_data if input_data else None,
+            span_name,
+            input_data,
             metadata,
-            agent_name
         )
 
     wrap_function_wrapper(Agent, "run_stream_sync", agent_run_stream_sync_wrapper)
 
-
     async def agent_run_stream_events_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        _ensure_model_wrapped(instance)
         input_data, metadata = _build_agent_input_and_metadata(args, kwargs, instance)
 
         agent_name = instance.name if hasattr(instance, "name") else None
@@ -155,7 +174,12 @@ def wrap_agent(Agent: Any) -> Any:
             end_time = time.time()
 
             output = None
-            metrics = {"start": start_time, "end": end_time, "duration": end_time - start_time, "event_count": event_count}
+            metrics = {
+                "start": start_time,
+                "end": end_time,
+                "duration": end_time - start_time,
+                "event_count": event_count,
+            }
 
             if final_result:
                 output = _serialize_result_output(final_result)
@@ -170,6 +194,87 @@ def wrap_agent(Agent: Any) -> Any:
 
     return Agent
 
+
+def _create_direct_model_request_wrapper():
+    """Create wrapper for direct.model_request()."""
+
+    async def wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
+
+        with start_span(
+            name="model_request",
+            type=SpanTypeAttribute.LLM,
+            input=input_data,
+            metadata=_try_dict(metadata),
+        ) as span:
+            start_time = time.time()
+            result = await wrapped(*args, **kwargs)
+            end_time = time.time()
+
+            output = _serialize_model_response(result)
+            metrics = _extract_response_metrics(result, start_time, end_time)
+
+            span.log(output=output, metrics=metrics)
+            return result
+
+    return wrapper
+
+
+def _create_direct_model_request_sync_wrapper():
+    """Create wrapper for direct.model_request_sync()."""
+
+    def wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
+
+        with start_span(
+            name="model_request_sync",
+            type=SpanTypeAttribute.LLM,
+            input=input_data,
+            metadata=_try_dict(metadata),
+        ) as span:
+            start_time = time.time()
+            result = wrapped(*args, **kwargs)
+            end_time = time.time()
+
+            output = _serialize_model_response(result)
+            metrics = _extract_response_metrics(result, start_time, end_time)
+
+            span.log(output=output, metrics=metrics)
+            return result
+
+    return wrapper
+
+
+def _create_direct_model_request_stream_wrapper():
+    """Create wrapper for direct.model_request_stream()."""
+
+    def wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
+
+        return _DirectStreamWrapper(
+            wrapped(*args, **kwargs),
+            "model_request_stream",
+            input_data,
+            metadata,
+        )
+
+    return wrapper
+
+
+def _create_direct_model_request_stream_sync_wrapper():
+    """Create wrapper for direct.model_request_stream_sync()."""
+
+    def wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
+
+        return _DirectStreamWrapperSync(
+            wrapped(*args, **kwargs),
+            "model_request_stream_sync",
+            input_data,
+            metadata,
+        )
+
+    return wrapper
 
 
 def wrap_model_request(original_func: Any) -> Any:
@@ -221,8 +326,10 @@ def wrap_model_request_sync(original_func: Any) -> Any:
 def wrap_model_request_stream(original_func: Any) -> Any:
     def wrapper(*args, **kwargs):
         input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
-        return _StreamContextWrapper(
+
+        return _DirectStreamWrapper(
             original_func(*args, **kwargs),
+            "model_request_stream",
             input_data,
             metadata,
         )
@@ -233,8 +340,10 @@ def wrap_model_request_stream(original_func: Any) -> Any:
 def wrap_model_request_stream_sync(original_func: Any) -> Any:
     def wrapper(*args, **kwargs):
         input_data, metadata = _build_direct_model_input_and_metadata(args, kwargs)
-        return _StreamContextWrapperSync(
+
+        return _DirectStreamWrapperSync(
             original_func(*args, **kwargs),
+            "model_request_stream_sync",
             input_data,
             metadata,
         )
@@ -314,10 +423,9 @@ def _wrap_concrete_model_class(model_class: Any):
     def model_request_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         model_name, display_name, input_data, metadata = _build_model_class_input_and_metadata(instance, args, kwargs)
 
-        return _ModelStreamWrapper(
+        return _DirectStreamWrapper(
             wrapped(*args, **kwargs),
-            model_name,
-            display_name,
+            f"chat {display_name}",
             input_data,
             metadata,
         )
@@ -327,208 +435,194 @@ def _wrap_concrete_model_class(model_class: Any):
     model_class._braintrust_patched = True
 
 
-class _ModelStreamWrapper(AbstractAsyncContextManager):
-    """Wrapper for Model.request_stream() that adds nested tracing."""
+class _AgentStreamWrapper(AbstractAsyncContextManager):
+    """Wrapper for agent.run_stream() that adds tracing while passing through the stream result."""
 
-    def __init__(self, stream_result: Any, model_name: str, display_name: str, input_data: Any, metadata: Any):
-        self.stream_result = stream_result
-        self.model_name = model_name
-        self.display_name = display_name
+    def __init__(self, stream_cm: Any, span_name: str, input_data: Any, metadata: Any):
+        self.stream_cm = stream_cm
+        self.span_name = span_name
         self.input_data = input_data
         self.metadata = metadata
-        self.span = None
+        self.span_cm = None
         self.start_time = None
+        self.stream_result = None
 
     async def __aenter__(self):
-        self.span = start_span(
-            name=f"chat {self.display_name}",
+        # Use context manager properly so span stays current
+        # DON'T pass start_time here - we'll set it via metrics in __aexit__
+        self.span_cm = start_span(
+            name=self.span_name,
             type=SpanTypeAttribute.LLM,
-            input=self.input_data,
+            input=self.input_data if self.input_data else None,
             metadata=_try_dict(self.metadata),
-        ).__enter__()
+        )
+        span = self.span_cm.__enter__()
 
+        # Capture start time right before entering the stream (API call initiation)
         self.start_time = time.time()
-        self.stream = await self.stream_result.__aenter__()
-        return self.stream
+        self.stream_result = await self.stream_cm.__aenter__()
+        return self.stream_result  # Return actual stream result object
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         try:
-            await self.stream_result.__aexit__(exc_type, exc_val, exc_tb)
+            await self.stream_cm.__aexit__(exc_type, exc_val, exc_tb)
         finally:
-            if self.span and self.start_time:
+            if self.span_cm and self.start_time and self.stream_result:
+                end_time = time.time()
+
+                output = _serialize_stream_output(self.stream_result)
+                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, None)
+                self.span_cm.log(output=output, metrics=metrics)
+
+            # Always clean up span context
+            if self.span_cm:
+                self.span_cm.__exit__(None, None, None)
+
+        return False
+
+
+class _DirectStreamWrapper(AbstractAsyncContextManager):
+    """Wrapper for model_request_stream() that adds tracing while passing through the stream."""
+
+    def __init__(self, stream_cm: Any, span_name: str, input_data: Any, metadata: Any):
+        self.stream_cm = stream_cm
+        self.span_name = span_name
+        self.input_data = input_data
+        self.metadata = metadata
+        self.span_cm = None
+        self.start_time = None
+        self.stream = None
+
+    async def __aenter__(self):
+        # Use context manager properly so span stays current
+        # DON'T pass start_time here - we'll set it via metrics in __aexit__
+        self.span_cm = start_span(
+            name=self.span_name,
+            type=SpanTypeAttribute.LLM,
+            input=self.input_data if self.input_data else None,
+            metadata=_try_dict(self.metadata),
+        )
+        span = self.span_cm.__enter__()
+
+        # Capture start time right before entering the stream (API call initiation)
+        self.start_time = time.time()
+        self.stream = await self.stream_cm.__aenter__()
+        return self.stream  # Return actual stream object
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        try:
+            await self.stream_cm.__aexit__(exc_type, exc_val, exc_tb)
+        finally:
+            if self.span_cm and self.start_time and self.stream:
                 end_time = time.time()
 
                 try:
                     final_response = self.stream.get()
                     output = _serialize_model_response(final_response)
-                    metrics = _extract_response_metrics(final_response, self.start_time, end_time)
-                    self.span.log(output=output, metrics=metrics)
+                    metrics = _extract_response_metrics(final_response, self.start_time, end_time, None)
+                    self.span_cm.log(output=output, metrics=metrics)
                 except Exception as e:
                     logger.debug(f"Failed to extract stream output/metrics: {e}")
 
-                self.span.__exit__(None, None, None)
+            # Always clean up span context
+            if self.span_cm:
+                self.span_cm.__exit__(None, None, None)
 
         return False
 
 
-class _StreamContextWrapper(AbstractAsyncContextManager):
-    """Wrapper for direct API stream context manager that adds tracing."""
+class _AgentStreamWrapperSync:
+    """Wrapper for agent.run_stream_sync() that adds tracing while passing through the stream result."""
 
-    def __init__(self, stream_cm: Any, input_data: Any, metadata: Any):
+    def __init__(self, stream_cm: Any, span_name: str, input_data: Any, metadata: Any):
         self.stream_cm = stream_cm
+        self.span_name = span_name
         self.input_data = input_data
         self.metadata = metadata
-        self.span = None
+        self.span_cm = None
         self.start_time = None
-        self.first_token_time = None
-
-    async def __aenter__(self):
-        self.span = start_span(
-            name="model_request_stream",
-            type=SpanTypeAttribute.LLM,
-            input=self.input_data,
-            metadata=_try_dict(self.metadata),
-        ).__enter__()
-
-        self.start_time = time.time()
-        self.stream = await self.stream_cm.__aenter__()
-        return self.stream
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        try:
-            await self.stream_cm.__aexit__(exc_type, exc_val, exc_tb)
-        finally:
-            if self.span and self.start_time:
-                end_time = time.time()
-
-                output = _serialize_model_response(self.stream.get())
-                metrics = _extract_response_metrics(self.stream.get(), self.start_time, end_time, self.first_token_time)
-
-                self.span.log(output=output, metrics=metrics)
-                self.span.__exit__(None, None, None)
-
-        return False
-
-
-class _StreamedRunContextWrapper(AbstractAsyncContextManager):
-    """Wrapper for Agent stream context manager that adds tracing."""
-
-    def __init__(self, stream_cm: Any, input_data: Any, metadata: Any, agent_name: Optional[str]):
-        self.stream_cm = stream_cm
-        self.input_data = input_data
-        self.metadata = metadata
-        self.agent_name = agent_name
-        self.span = None
-        self.start_time = None
-        self.first_token_time = None
-        self.stream_result = None
-
-    async def __aenter__(self):
-        span_name = f"agent_run_stream [{self.agent_name}]" if self.agent_name else "agent_run_stream"
-        self.span = start_span(
-            name=span_name,
-            type=SpanTypeAttribute.LLM,
-            input=self.input_data,
-            metadata=_try_dict(self.metadata),
-        ).__enter__()
-
-        self.start_time = time.time()
-        self.stream_result = await self.stream_cm.__aenter__()
-        return self.stream_result
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        try:
-            await self.stream_cm.__aexit__(exc_type, exc_val, exc_tb)
-        finally:
-            if self.span and self.start_time and self.stream_result:
-                end_time = time.time()
-
-                output = _serialize_stream_output(self.stream_result)
-                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, self.first_token_time)
-
-                self.span.log(output=output, metrics=metrics)
-                self.span.__exit__(None, None, None)
-
-        return False
-
-
-class _StreamContextWrapperSync:
-    """Wrapper for direct API sync stream context manager that adds tracing."""
-
-    def __init__(self, stream_cm: Any, input_data: Any, metadata: Any):
-        self.stream_cm = stream_cm
-        self.input_data = input_data
-        self.metadata = metadata
-        self.span = None
-        self.start_time = None
-        self.first_token_time = None
-
-    def __enter__(self):
-        self.span = start_span(
-            name="model_request_stream_sync",
-            type=SpanTypeAttribute.LLM,
-            input=self.input_data,
-            metadata=_try_dict(self.metadata),
-        ).__enter__()
-
-        self.start_time = time.time()
-        self.stream = self.stream_cm.__enter__()
-        return self.stream
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            self.stream_cm.__exit__(exc_type, exc_val, exc_tb)
-        finally:
-            if self.span and self.start_time:
-                end_time = time.time()
-
-                output = _serialize_model_response(self.stream.get())
-                metrics = _extract_response_metrics(self.stream.get(), self.start_time, end_time, self.first_token_time)
-
-                self.span.log(output=output, metrics=metrics)
-                self.span.__exit__(None, None, None)
-
-        return False
-
-
-class _StreamedRunContextWrapperSync:
-    """Wrapper for Agent sync stream context manager that adds tracing."""
-
-    def __init__(self, stream_cm: Any, input_data: Any, metadata: Any, agent_name: Optional[str]):
-        self.stream_cm = stream_cm
-        self.input_data = input_data
-        self.metadata = metadata
-        self.agent_name = agent_name
-        self.span = None
-        self.start_time = None
-        self.first_token_time = None
         self.stream_result = None
 
     def __enter__(self):
-        span_name = f"agent_run_stream_sync [{self.agent_name}]" if self.agent_name else "agent_run_stream_sync"
-        self.span = start_span(
-            name=span_name,
+        # Use context manager properly so span stays current
+        # DON'T pass start_time here - we'll set it via metrics in __exit__
+        self.span_cm = start_span(
+            name=self.span_name,
             type=SpanTypeAttribute.LLM,
-            input=self.input_data,
+            input=self.input_data if self.input_data else None,
             metadata=_try_dict(self.metadata),
-        ).__enter__()
+        )
+        span = self.span_cm.__enter__()
 
+        # Capture start time right before entering the stream (API call initiation)
         self.start_time = time.time()
         self.stream_result = self.stream_cm.__enter__()
-        return self.stream_result
+        return self.stream_result  # Return actual stream result object
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             self.stream_cm.__exit__(exc_type, exc_val, exc_tb)
         finally:
-            if self.span and self.start_time and self.stream_result:
+            if self.span_cm and self.start_time and self.stream_result:
                 end_time = time.time()
 
                 output = _serialize_stream_output(self.stream_result)
-                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, self.first_token_time)
+                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, None)
+                self.span_cm.log(output=output, metrics=metrics)
 
-                self.span.log(output=output, metrics=metrics)
-                self.span.__exit__(None, None, None)
+            # Always clean up span context
+            if self.span_cm:
+                self.span_cm.__exit__(None, None, None)
+
+        return False
+
+
+class _DirectStreamWrapperSync:
+    """Wrapper for model_request_stream_sync() that adds tracing while passing through the stream."""
+
+    def __init__(self, stream_cm: Any, span_name: str, input_data: Any, metadata: Any):
+        self.stream_cm = stream_cm
+        self.span_name = span_name
+        self.input_data = input_data
+        self.metadata = metadata
+        self.span_cm = None
+        self.start_time = None
+        self.stream = None
+
+    def __enter__(self):
+        # Use context manager properly so span stays current
+        # DON'T pass start_time here - we'll set it via metrics in __exit__
+        self.span_cm = start_span(
+            name=self.span_name,
+            type=SpanTypeAttribute.LLM,
+            input=self.input_data if self.input_data else None,
+            metadata=_try_dict(self.metadata),
+        )
+        span = self.span_cm.__enter__()
+
+        # Capture start time right before entering the stream (API call initiation)
+        self.start_time = time.time()
+        self.stream = self.stream_cm.__enter__()
+        return self.stream  # Return actual stream object
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            self.stream_cm.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            if self.span_cm and self.start_time and self.stream:
+                end_time = time.time()
+
+                try:
+                    final_response = self.stream.get()
+                    output = _serialize_model_response(final_response)
+                    metrics = _extract_response_metrics(final_response, self.start_time, end_time, None)
+                    self.span_cm.log(output=output, metrics=metrics)
+                except Exception as e:
+                    logger.debug(f"Failed to extract stream output/metrics: {e}")
+
+            # Always clean up span context
+            if self.span_cm:
+                self.span_cm.__exit__(None, None, None)
 
         return False
 
@@ -684,7 +778,9 @@ def _extract_model_info(agent: Any) -> tuple[Optional[str], Optional[str]]:
     return _extract_model_info_from_model_instance(agent.model)
 
 
-def _build_model_metadata(model_name: Optional[str], provider: Optional[str], model_settings: Any = None) -> Dict[str, Any]:
+def _build_model_metadata(
+    model_name: Optional[str], provider: Optional[str], model_settings: Any = None
+) -> Dict[str, Any]:
     """Build metadata dictionary with model info.
 
     Args:
@@ -884,18 +980,43 @@ def _serialize_type(obj: Any) -> Any:
     """Serialize a type/class for logging, handling Pydantic models and other types.
 
     This is useful for output_type, toolsets, and similar type parameters.
+    Returns full JSON schema for Pydantic models so engineers can see exactly
+    what structured output schema was used.
     """
-    # If it's a class/type, return its name
-    if isinstance(obj, type):
-        return obj.__name__
-
-    # If it has a __name__ attribute (like functions, classes), use that
-    if hasattr(obj, "__name__"):
-        return obj.__name__
+    import inspect
 
     # For sequences of types (like Union types or list of models)
     if isinstance(obj, (list, tuple)):
         return [_serialize_type(item) for item in obj]
+
+    # Handle Pydantic AI's output wrappers (ToolOutput, NativeOutput, PromptedOutput, TextOutput)
+    if hasattr(obj, "output"):
+        # These are wrapper classes with an 'output' field containing the actual type
+        wrapper_info = {"wrapper": type(obj).__name__}
+        if hasattr(obj, "name") and obj.name:
+            wrapper_info["name"] = obj.name
+        if hasattr(obj, "description") and obj.description:
+            wrapper_info["description"] = obj.description
+        wrapper_info["output"] = _serialize_type(obj.output)
+        return wrapper_info
+
+    # If it's a Pydantic model class, return its full JSON schema
+    if inspect.isclass(obj):
+        try:
+            from pydantic import BaseModel
+
+            if issubclass(obj, BaseModel):
+                # Return the full JSON schema - includes all field info, descriptions, constraints, etc.
+                return obj.model_json_schema()
+        except (ImportError, AttributeError, TypeError):
+            pass
+
+        # Not a Pydantic model, return class name
+        return obj.__name__
+
+    # If it has a __name__ attribute (like functions), use that
+    if hasattr(obj, "__name__"):
+        return obj.__name__
 
     # Try standard serialization
     return _try_dict(obj)
@@ -982,25 +1103,34 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
         try:
             toolsets = instance.toolsets
             if toolsets:
-                # Convert toolsets to a list of tool names/ids for brevity
-                metadata["toolsets"] = [
-                    {"id": getattr(ts, "id", str(type(ts).__name__)), "label": getattr(ts, "label", None)}
-                    for ts in toolsets
-                ]
+                # Convert toolsets to a list with summary info (not full schemas to keep it compact)
+                serialized_toolsets = []
+                for ts in toolsets:
+                    ts_info = {
+                        "id": getattr(ts, "id", str(type(ts).__name__)),
+                        "label": getattr(ts, "label", None),
+                    }
+                    # Add tool names if available (without full schemas to keep it compact)
+                    if hasattr(ts, "tools") and ts.tools:
+                        ts_info["tools"] = [getattr(tool, "name", str(type(tool).__name__)) for tool in ts.tools]
+                    serialized_toolsets.append(ts_info)
+                metadata["toolsets"] = serialized_toolsets
         except Exception as e:
             logger.debug(f"Failed to extract toolsets from agent: {e}")
 
     # Extract system_prompt from agent if not passed as kwarg
-    # Note: Pydantic AI doesn't expose a public API for this, so we access the private _system_prompts
+    # Note: system_prompt goes in input (not metadata) because it's semantically part of the LLM input
+    # Pydantic AI doesn't expose a public API for this, so we access the private _system_prompts
     # attribute. This is wrapped in try/except to gracefully handle if the internal structure changes.
     if "system_prompt" not in kwargs:
         try:
             if hasattr(instance, "_system_prompts") and instance._system_prompts:
-                metadata["system_prompt"] = "\n\n".join(instance._system_prompts)
+                input_data["system_prompt"] = "\n\n".join(instance._system_prompts)
         except Exception as e:
             logger.debug(f"Failed to extract system_prompt from agent: {e}")
 
     return input_data, metadata
+
 
 def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Build input data and metadata for direct model request wrappers.
