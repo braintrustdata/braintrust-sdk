@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { describe, test, expect } from "vitest";
 import { Prompt } from "./logger";
 import {
   PromptData as PromptDataSchema,
@@ -134,3 +134,129 @@ function testPromptBuild({
     throw new Error("Expected prompt to fail");
   }
 }
+
+describe("prompt template_format", () => {
+  test("uses template_format when building", () => {
+    const prompt = new Prompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: "Hello {% if name %}{{name}}{% endif %}",
+              },
+            ],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    const result = prompt.build({ name: "World" });
+    expect(result.messages[0].content).toBe("Hello World");
+  });
+
+  test("defaults to mustache when no templateFormat specified", () => {
+    const prompt = new Prompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [{ role: "user", content: "Hello {{name}}" }],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    const result = prompt.build({ name: "World" });
+    expect(result.messages[0].content).toBe("Hello World");
+  });
+
+  test("explicit templateFormat option overrides saved template_format", () => {
+    const prompt = new Prompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [{ role: "user", content: "Hello {{name}}" }],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    // Override with mustache
+    const result = prompt.build(
+      { name: "World" },
+      { templateFormat: "mustache" },
+    );
+    expect(result.messages[0].content).toBe("Hello World");
+  });
+
+  test("template_format applies to completion prompts", () => {
+    const prompt = new Prompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "completion",
+            content: "Complete this: {% if text %}{{text}}{% endif %}",
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    const result = prompt.build({ text: "Hello" }, { flavor: "completion" });
+    expect(result.prompt).toBe("Complete this: Hello");
+  });
+});

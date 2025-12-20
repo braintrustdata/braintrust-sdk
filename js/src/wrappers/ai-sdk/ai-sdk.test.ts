@@ -1728,7 +1728,129 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
   });
+
+  test("model/provider separation from gateway-style model string", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const model = openai(TEST_MODEL);
+
+    await wrappedAI.generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const generateTextSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
+
+    expect(generateTextSpan).toBeDefined();
+    expect(generateTextSpan.metadata.model).toBe(TEST_MODEL);
+  });
 });
+
+const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY;
+
+describe.skipIf(!AI_GATEWAY_API_KEY)(
+  "ai sdk cost extraction tests",
+  TEST_SUITE_OPTIONS,
+  () => {
+    let wrappedAI: typeof ai;
+    let backgroundLogger: TestBackgroundLogger;
+
+    beforeAll(async () => {
+      await _exportsForTestingOnly.simulateLoginForTests();
+    });
+
+    beforeEach(() => {
+      backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+      wrappedAI = wrapAISDK(ai);
+      initLogger({
+        projectName: "ai-sdk-cost.test.ts",
+        projectId: "test-project-id",
+      });
+    });
+
+    afterEach(() => {
+      _exportsForTestingOnly.clearTestBackgroundLogger();
+    });
+
+    test("cost extraction and model/provider separation", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const result = await wrappedAI.generateText({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: "Say hello in one word.",
+          },
+        ],
+      });
+
+      expect(result.text).toBeTruthy();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Verify model/provider separation
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+
+      // Verify cost is extracted from gateway marketCost
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+    });
+
+    test("multi-step tool use extracts total cost", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const simpleTool = ai.tool({
+        description: "Echo a message back",
+        inputSchema: z.object({ message: z.string() }),
+        execute: async (args: { message: string }) => `Echo: ${args.message}`,
+      });
+
+      const result = await wrappedAI.generateText({
+        model: "openai/gpt-4o-mini",
+        tools: { echo: simpleTool },
+        toolChoice: "required",
+        prompt: "Echo the message 'hello'",
+        stopWhen: ai.stepCountIs(2),
+      });
+
+      expect(result).toBeDefined();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Cost should be sum of all steps
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+
+      // Verify model/provider in metadata
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+    });
+  },
+);
 
 describe("extractTokenMetrics", () => {
   test("handles null values in usage without including them in metrics", () => {
