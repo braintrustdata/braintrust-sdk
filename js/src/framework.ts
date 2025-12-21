@@ -44,6 +44,7 @@ import {
   InferParameters,
   validateParameters,
 } from "./eval-parameters";
+import { ReadonlyTrace } from "./trace";
 
 export type BaseExperiment<
   Input,
@@ -160,6 +161,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
+  trace: ReadonlyTrace;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -181,6 +183,7 @@ export type EvalResult<
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
   scores: Record<string, number | null>;
+  metrics: Record<string, number | null>;
   error: unknown;
   origin?: ObjectReference;
 };
