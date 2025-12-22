@@ -1,4 +1,4 @@
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import { Request, Response, ErrorRequestHandler, NextFunction } from "express";
 import { HttpError } from "http-errors";
 

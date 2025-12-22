@@ -7,7 +7,7 @@
 
 import { test, describe, beforeEach, expect } from "vitest";
 import * as zodModule from "zod";
-import { z } from "./zod-compat";
+import { z } from "zod";
 import { makeEvalParametersSchema } from "../dev/server";
 import {
   EXPECTED_STRING_SCHEMA,

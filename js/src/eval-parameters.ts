@@ -1,4 +1,4 @@
-import { z } from "./zod-compat";
+import { z } from "zod";
 import { Prompt } from "./logger";
 import {
   promptDefinitionWithToolsSchema,

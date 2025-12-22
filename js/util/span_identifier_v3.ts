@@ -7,7 +7,7 @@ import {
   ParentPlaygroundLogIds,
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 import {
   base64ToUint8Array,

@@ -3,7 +3,7 @@
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
 import { SpanComponentsV1 } from "./span_identifier_v1";
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 
 function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
   try {

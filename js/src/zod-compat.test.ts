@@ -6,7 +6,7 @@
  */
 
 import { expect, test, describe } from "vitest";
-import { z, ZodError } from "./zod-compat";
+import { z, ZodError } from "zod";
 import { zodToJsonSchema } from "./zod-to-json-compat";
 
 describe("zod-compat", () => {

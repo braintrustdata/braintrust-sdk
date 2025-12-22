@@ -1,6 +1,6 @@
 import { expect, test, beforeAll } from "vitest";
 import { runEvaluator } from "./framework";
-import { z } from "./zod-compat";
+import { z } from "zod";
 import { type ProgressReporter } from "./reporters/types";
 import { configureNode } from "./node";
 

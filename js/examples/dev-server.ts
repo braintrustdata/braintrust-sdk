@@ -1,5 +1,5 @@
 import { EvaluatorDef, login } from "braintrust";
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import { runDevServer } from "../dev/server";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -18,7 +18,7 @@ import {
   uint8ArrayToBase64,
   uint8ArrayToString,
 } from "./bytes";
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 
 const ENCODING_VERSION_NUMBER_V4 = 4;

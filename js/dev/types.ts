@@ -4,7 +4,7 @@ import {
   RunEval as runEvalSchema,
   PromptData as promptDataSchema,
 } from "../src/generated_types";
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import { EvaluatorDef } from "../src/framework";
 import { BaseMetadata } from "../src/logger";
 

@@ -15,7 +15,7 @@ import {
   getSpanParentObject,
 } from "../logger";
 import { BraintrustStream } from "./stream";
-import { z } from "../zod-compat";
+import { z } from "zod";
 
 /**
  * Arguments for the `invoke` function.

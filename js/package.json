@@ -68,8 +68,8 @@
     "test:ai-sdk-v3": "vitest run src/wrappers/ai-sdk-v3.test.ts",
     "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
-    "test:zod-v3": "vitest run src/zod-compat.test.ts src/zod-v3-serialization.test.ts util/zod_util.test.ts",
-    "test:zod-v4": "vitest run src/zod-compat.test.ts src/zod-v4-serialization.test.ts util/zod_util.test.ts",
+    "test:zod-v3": "vitest run src/zod-v3-serialization.test.ts util/zod_util.test.ts",
+    "test:zod-v4": "vitest run src/zod-v4-serialization.test.ts util/zod_util.test.ts",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
   },
   "author": "",
@@ -111,8 +111,8 @@
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^2.1.9",
-    "zod": "^3.25.34"
+    "vitest": "^2.1.9"
+
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",

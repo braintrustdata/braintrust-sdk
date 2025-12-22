@@ -1,4 +1,4 @@
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 import {
   AsyncScoringControlType as AsyncScoringControl,
   ObjectReference as objectReferenceSchema,

@@ -7,7 +7,7 @@
  * @module zod-to-json-compat
  */
 
-import type { ZodType } from "./zod-compat";
+import type { ZodType } from "zod";
 import { zodToJsonSchema as zodToJsonSchemaLib } from "zod-to-json-schema";
 
 /**
