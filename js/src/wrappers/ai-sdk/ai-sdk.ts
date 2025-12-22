@@ -1423,13 +1423,17 @@ function firstNumber(...values: unknown[]): number | undefined {
  */
 export function extractTokenMetrics(result: any): Record<string, number> {
   const metrics: Record<string, number> = {};
-  // Try to access usage as both property and getter
-  let usage = result?.usage;
+
+  // Agent results use totalUsage, other results use usage
+  // Try totalUsage first (for Agent calls), then fall back to usage
+  let usage = result?.totalUsage || result?.usage;
 
   // If usage is not directly accessible, try as a getter
   if (!usage && result) {
     try {
-      if ("usage" in result && typeof result.usage !== "function") {
+      if ("totalUsage" in result && typeof result.totalUsage !== "function") {
+        usage = result.totalUsage;
+      } else if ("usage" in result && typeof result.usage !== "function") {
         usage = result.usage;
       }
     } catch {
