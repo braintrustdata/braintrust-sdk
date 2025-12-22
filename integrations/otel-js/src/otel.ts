@@ -56,6 +56,27 @@ export function isRootSpan(span: ReadableSpan): boolean {
 }
 
 /**
+ * Returns true if the span is an AI span (name or attribute matches AI prefixes).
+ */
+export function isAISpan(span: ReadableSpan): boolean {
+  if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
+    return true;
+  }
+  const attributes = span.attributes;
+  if (attributes) {
+    const attributeNames = Object.keys(attributes);
+    if (
+      attributeNames.some((name) =>
+        FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * A span processor that filters spans to only export filtered telemetry.
  *
  * Only filtered spans and root spans will be forwarded to the inner processor.
@@ -70,7 +91,7 @@ export function isRootSpan(span: ReadableSpan): boolean {
  */
 export class AISpanProcessor {
   private readonly processor: SpanProcessor;
-  private readonly customFilter: CustomSpanFilter | undefined;
+  private readonly customFilter: CustomSpanFilter;
 
   /**
    * Initialize the filter span processor.
@@ -82,7 +103,7 @@ export class AISpanProcessor {
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
     this.processor = processor;
-    this.customFilter = customFilter;
+    this.customFilter = customFilter || isAISpan;
   }
 
   /**
@@ -128,37 +149,12 @@ export class AISpanProcessor {
     if (!span) {
       return false;
     }
-
-    // 1. Custom filter returns true/false (if provided)
-    if (this.customFilter) {
-      const customResult = this.customFilter(span);
-      if (customResult === true) {
-        return true;
-      } else if (customResult === false) {
-        return false;
-      }
-      // customResult is null/undefined - continue with default logic
+    const result = this.customFilter(span);
+    if (typeof result === "boolean") {
+      return result;
     }
-
-    // 2. Span name starts with AI prefix
-    if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
-      return true;
-    }
-
-    // 3. Any attribute name starts with those prefixes
-    const attributes = span.attributes;
-    if (attributes) {
-      const attributeNames = Object.keys(attributes);
-      if (
-        attributeNames.some((name) =>
-          FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
-        )
-      ) {
-        return true;
-      }
-    }
-
-    return false;
+    // Fallback: if customFilter returns undefined or null, use isAISpan
+    return isAISpan(span);
   }
 }
 
@@ -242,7 +238,6 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     // If a processor is injected (for testing), use it directly
     if (options._spanProcessor) {
       this.processor = options._spanProcessor;
-      // Apply filtering if requested
       if (options.filterAISpans === true) {
         this.aiSpanProcessor = new AISpanProcessor(
           this.processor,
@@ -300,15 +295,12 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     const exporter = baseExporter;
 
     this.processor = new BatchSpanProcessor(exporter);
-    // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
-      // Only enable filtering if explicitly requested
       this.aiSpanProcessor = new AISpanProcessor(
         this.processor,
         options.customFilter,
       );
     } else {
-      // Use the batch processor directly without filtering (default behavior)
       this.aiSpanProcessor = this.processor;
     }
   }
