@@ -42,7 +42,7 @@ VENDOR_PACKAGES = (
     "dspy",
     "openai",
     "openai-agents",
-    "pydantic_ai",
+    # pydantic_ai is NOT included here - it has dedicated test sessions with version-specific handling
     "autoevals",
     "braintrust_core",
     "litellm",
@@ -64,10 +64,15 @@ else:
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 AGNO_VERSIONS = (LATEST, "2.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
+# Two test suites with different version requirements:
+# 1. wrap_openai approach: works with older versions (0.1.9+)
+# 2. Direct wrapper (setup_pydantic_ai): requires 1.10.0+ for all features
 if sys.version_info >= (3, 10):
-    PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+    PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+    PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
 else:
-    PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
+    PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "0.1.9")
+    PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST,)  # latest will resolve to 0.1.9 for Python 3.9
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
@@ -86,11 +91,25 @@ def test_core(session):
 
 
 @nox.session()
-@nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
-def test_pydantic_ai(session, version):
+@nox.parametrize("version", PYDANTIC_AI_WRAP_OPENAI_VERSIONS, ids=PYDANTIC_AI_WRAP_OPENAI_VERSIONS)
+def test_pydantic_ai_wrap_openai(session, version):
+    """Test pydantic_ai with wrap_openai() approach - supports older versions."""
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_wrap_openai.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
+def test_pydantic_ai_integration(session, version):
+    """Test pydantic_ai with setup_pydantic_ai() wrapper - requires 1.10.0+."""
+    # Skip on Python 3.9 - pydantic_ai 1.10.0+ requires Python 3.10+
+    if sys.version_info < (3, 10):
+        session.skip("pydantic_ai integration tests require Python >= 3.10 (pydantic_ai 1.10.0+)")
+    _install_test_deps(session)
+    _install(session, "pydantic_ai", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_integration.py")
     _run_core_tests(session)
 
 
@@ -251,6 +270,9 @@ def pylint(session):
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
+    # pydantic_ai is not in VENDOR_PACKAGES (has dedicated test sessions),
+    # but pylint needs it with minimum version constraint for proper API checking
+    session.install("pydantic_ai>=1.10.0")
     session.install("opentelemetry.instrumentation.openai")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
@@ -270,7 +292,8 @@ def test_latest_wrappers_novcr(session):
         args.append("--disable-vcr")
     session.notify("test_openai(latest)", posargs=args)
     session.notify("test_anthropic(latest)", posargs=args)
-    session.notify("test_pydantic_ai(latest)", posargs=args)
+    session.notify("test_pydantic_ai_wrap_openai(latest)", posargs=args)
+    session.notify("test_pydantic_ai_integration(latest)", posargs=args)
     session.notify("test_claude_agent_sdk(latest)", posargs=args)
 
 
