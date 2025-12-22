@@ -5,6 +5,7 @@ export {
   addSpanParentToBaggage,
   addParentToBaggage,
   parentFromHeaders,
+  isRootSpan,
 } from "./otel";
 
 import { OTELIDGenerator } from "./otel";

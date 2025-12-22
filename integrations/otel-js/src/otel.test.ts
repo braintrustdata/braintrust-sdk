@@ -20,6 +20,7 @@ import {
   addSpanParentToBaggage,
   addParentToBaggage,
   parentFromHeaders,
+  isRootSpan,
 } from "./otel";
 import { _exportsForTestingOnly, initLogger } from "braintrust";
 import {
@@ -54,13 +55,12 @@ describe("AISpanProcessor", () => {
     await provider.shutdown();
   });
 
-  it("should keep root spans", () => {
+  it("should filter out root spans that do not match AI prefixes", () => {
     const span = tracer.startSpan("root_operation");
     span.end();
 
     const spans = memoryExporter.getFinishedSpans();
-    expect(spans).toHaveLength(1);
-    expect(spans[0].name).toBe("root_operation");
+    expect(spans).toHaveLength(0);
   });
 
   it("should keep spans with filtered name prefixes", async () => {
@@ -99,7 +99,8 @@ describe("AISpanProcessor", () => {
     const spans = memoryExporter.getFinishedSpans();
     const spanNames = spans.map((s) => s.name);
 
-    expect(spanNames).toContain("root");
+    // root should be filtered out (not AI prefix)
+    expect(spanNames).not.toContain("root");
     expect(spanNames).toContain("gen_ai.completion");
     expect(spanNames).toContain("braintrust.eval");
     expect(spanNames).toContain("llm.generate");
@@ -116,69 +117,129 @@ describe("AISpanProcessor", () => {
       context.active(),
       rootSpan.spanContext(),
     );
+    // This span should be kept because of its attribute prefix
     const genAiAttrSpan = tracer.startSpan(
-      "gen_ai_attr_operation",
-      {},
+      "some.operation",
+      { attributes: { "gen_ai.model": "gpt-4" } },
       parentContext,
     );
-    genAiAttrSpan.setAttributes({ "gen_ai.model": "gpt-4" });
-
-    const braintrustAttrSpan = tracer.startSpan(
-      "braintrust_attr_operation",
-      {},
-      parentContext,
-    );
-    braintrustAttrSpan.setAttributes({ "braintrust.dataset": "test-data" });
-
+    // This span should be kept because of its attribute prefix
     const llmAttrSpan = tracer.startSpan(
-      "llm_attr_operation",
-      {},
+      "some.operation",
+      { attributes: { "llm.temperature": 0.7 } },
       parentContext,
     );
-    llmAttrSpan.setAttributes({ "llm.tokens": 100 });
-
-    const aiAttrSpan = tracer.startSpan("ai_attr_operation", {}, parentContext);
-    aiAttrSpan.setAttributes({ "ai.temperature": 0.7 });
-
-    const traceloopAttrSpan = tracer.startSpan(
-      "traceloop_attr_operation",
-      {},
+    // This span should NOT be kept (no matching attribute prefix)
+    const regularAttrSpan = tracer.startSpan(
+      "some.operation",
+      { attributes: { foo: "bar" } },
       parentContext,
     );
-    traceloopAttrSpan.setAttributes({ "traceloop.agent_id": "agent-123" });
-
-    const regularSpan = tracer.startSpan(
-      "regular_operation",
-      {},
-      parentContext,
-    );
-    regularSpan.setAttributes({ "database.connection": "postgres" });
 
     genAiAttrSpan.end();
-    braintrustAttrSpan.end();
     llmAttrSpan.end();
-    aiAttrSpan.end();
-    traceloopAttrSpan.end();
-    regularSpan.end();
+    regularAttrSpan.end();
     rootSpan.end();
 
-    // Force flush to ensure spans are processed
     await provider.forceFlush();
 
     const spans = memoryExporter.getFinishedSpans();
     const spanNames = spans.map((s) => s.name);
 
+    // root should be filtered out (not AI prefix)
+    expect(spanNames).not.toContain("root");
+    expect(spanNames).toContain("some.operation"); // for both AI attribute prefix spans
+    // There should be two kept (one for each AI attribute prefix)
+    const aiAttrSpans = spans.filter(
+      (s) =>
+        s.attributes["gen_ai.model"] === "gpt-4" ||
+        s.attributes["llm.temperature"] === 0.7,
+    );
+    expect(aiAttrSpans).toHaveLength(2);
+    // The regular span should be filtered out
+    expect(spans.find((s) => s.attributes["foo"] === "bar")).toBeUndefined();
+  });
+
+  it("should support custom filter that keeps root spans using isRootSpan", () => {
+    const customFilter = (span: ReadableSpan) => {
+      return isRootSpan(span) ? true : undefined;
+    };
+
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
+
+    const rootSpan = customTracer.startSpan("root");
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const childSpan = customTracer.startSpan("child", {}, parentContext);
+    childSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
     expect(spanNames).toContain("root");
-    expect(spanNames).toContain("gen_ai_attr_operation");
-    expect(spanNames).toContain("braintrust_attr_operation");
-    expect(spanNames).toContain("llm_attr_operation");
-    expect(spanNames).toContain("ai_attr_operation");
-    expect(spanNames).toContain("traceloop_attr_operation");
+    expect(spanNames).not.toContain("child");
+
+    customProvider.shutdown();
+  });
+
+  it("should support custom filter that keeps only root spans and AI spans", () => {
+    const customFilter = (span: ReadableSpan) => {
+      if (isRootSpan(span)) return true;
+      return undefined;
+    };
+
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customFilterProcessor = new AISpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = createTracerProvider(BasicTracerProvider, [
+      customFilterProcessor,
+    ]);
+    const customTracer = customProvider.getTracer("custom_test_tracer");
+
+    const rootSpan = customTracer.startSpan("root");
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const aiSpan = customTracer.startSpan(
+      "gen_ai.completion",
+      {},
+      parentContext,
+    );
+    const regularSpan = customTracer.startSpan(
+      "regular_operation",
+      {},
+      parentContext,
+    );
+    aiSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).toContain("gen_ai.completion");
     expect(spanNames).not.toContain("regular_operation");
+
+    customProvider.shutdown();
   });
 
   it("should support custom filter that keeps spans", () => {
-    const customFilter = (span) => {
+    const customFilter = (span: ReadableSpan) => {
       return span.name.includes("keep") ? true : undefined;
     };
 
@@ -212,7 +273,7 @@ describe("AISpanProcessor", () => {
     const spans = customMemoryExporter.getFinishedSpans();
     const spanNames = spans.map((s) => s.name);
 
-    expect(spanNames).toContain("root");
+    expect(spanNames).not.toContain("root");
     expect(spanNames).toContain("custom_keep"); // kept by custom filter
     expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
 
@@ -220,7 +281,7 @@ describe("AISpanProcessor", () => {
   });
 
   it("should support custom filter that drops spans", () => {
-    const customFilter = (span) => {
+    const customFilter = (span: ReadableSpan) => {
       return span.name.includes("drop") ? false : undefined;
     };
 
@@ -258,7 +319,7 @@ describe("AISpanProcessor", () => {
     const spans = customMemoryExporter.getFinishedSpans();
     const spanNames = spans.map((s) => s.name);
 
-    expect(spanNames).toContain("root");
+    expect(spanNames).not.toContain("root");
     expect(spanNames).not.toContain("gen_ai.drop_this"); // dropped by custom filter
     expect(spanNames).toContain("gen_ai.keep_this"); // kept by default filter logic
 
@@ -304,7 +365,7 @@ describe("AISpanProcessor", () => {
     const spans = customMemoryExporter.getFinishedSpans();
     const spanNames = spans.map((s) => s.name);
 
-    expect(spanNames).toContain("root");
+    expect(spanNames).not.toContain("root");
     expect(spanNames).toContain("gen_ai.completion"); // kept by default filter logic
     expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
 
@@ -313,15 +374,15 @@ describe("AISpanProcessor", () => {
 
   describe("cross-version span filtering", () => {
     it.each([
-      // Root spans (no parent) - should always be kept
+      // Root spans (no parent) - should be filtered out unless AI/custom
       {
         name: "v1 root span",
         spanName: "v1-root-span",
         parentSpanContext: undefined,
         parentSpanId: undefined,
         attributes: {},
-        expected: true,
-        reason: "root spans are always kept",
+        expected: false,
+        reason: "root spans are filtered out unless AI/custom",
       },
       {
         name: "v2 root span",
@@ -329,8 +390,8 @@ describe("AISpanProcessor", () => {
         parentSpanContext: undefined,
         parentSpanId: undefined,
         attributes: {},
-        expected: true,
-        reason: "root spans are always kept",
+        expected: false,
+        reason: "root spans are filtered out unless AI/custom",
       },
 
       // Child spans without AI prefixes - should be dropped
