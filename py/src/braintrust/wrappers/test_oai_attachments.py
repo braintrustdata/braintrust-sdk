@@ -163,6 +163,77 @@ def test_openai_pdf_data_url_converts_to_attachment(memory_logger):
     assert isinstance(file_data_value, Attachment)
     assert file_data_value.reference["type"] == "braintrust_attachment"
     assert file_data_value.reference["content_type"] == "application/pdf"
+    # Should use the provided filename, not a generic one
+    assert file_data_value.reference["filename"] == "test.pdf"
+    assert file_data_value.reference["key"]
+
+
+@pytest.mark.vcr
+def test_openai_pdf_data_url_without_filename_uses_fallback(memory_logger):
+    """Test that PDF data URLs without a filename use the generated fallback."""
+    assert not memory_logger.pop()
+
+    # Create a minimal PDF
+    base64_pdf = "JVBERi0xLjAKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1szIDAgUl0vQ291bnQgMT4+ZW5kb2JqCjMgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXT4+ZW5kb2JqCnhyZWYKMCA0CjAwMDAwMDAwMDAgNjU1MzUgZg0KMDAwMDAwMDAxMCAwMDAwMCBuDQowMDAwMDAwMDUzIDAwMDAwIG4NCjAwMDAwMDAxMDIgMDAwMDAgbg0KdHJhaWxlcgo8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNDkKJUVPRg=="
+    data_url = f"data:application/pdf;base64,{base64_pdf}"
+
+    client = wrap_openai(openai.OpenAI())
+
+    start = time.time()
+    response = client.chat.completions.create(
+        model=TEST_MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What type of document is this?"},
+                    {
+                        "type": "file",
+                        "file": {
+                            "file_data": data_url,
+                            # No filename provided - should use fallback
+                        },
+                    },
+                ],
+            }
+        ],
+    )
+    end = time.time()
+
+    # Verify we got a successful response
+    assert response
+    assert response.choices
+    assert response.choices[0].message.content
+
+    # Verify spans were created
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span
+
+    # Verify metrics
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert TEST_MODEL in span["metadata"]["model"]
+    assert span["metadata"]["provider"] == "openai"
+
+    # Verify input contains the attachment
+    assert span["input"]
+    assert len(span["input"]) == 1
+    message_content = span["input"][0]["content"]
+    assert len(message_content) == 2
+
+    # First item should be text
+    assert message_content[0]["type"] == "text"
+    assert message_content[0]["text"] == "What type of document is this?"
+
+    # Second item should have the file_data converted to Attachment
+    assert message_content[1]["type"] == "file"
+    file_data_value = message_content[1]["file"]["file_data"]
+    assert isinstance(file_data_value, Attachment)
+    assert file_data_value.reference["type"] == "braintrust_attachment"
+    assert file_data_value.reference["content_type"] == "application/pdf"
+    # Should use the fallback filename since none was provided
     assert file_data_value.reference["filename"] == "document.pdf"
     assert file_data_value.reference["key"]
 

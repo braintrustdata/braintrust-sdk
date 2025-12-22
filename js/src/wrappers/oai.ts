@@ -438,18 +438,18 @@ function parseBaseParams<T extends Record<string, any>>(
   });
 }
 
-// Helper function to convert data URL to an Attachment
-function convertDataUrlToAttachment(dataUrl: string): Attachment | string {
-  // Check if this is a data URL
+function convertDataUrlToAttachment(
+  dataUrl: string,
+  filename?: string,
+): Attachment | string {
   const dataUrlMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!dataUrlMatch) {
-    return dataUrl; // Not a data URL, return as-is
+    return dataUrl;
   }
 
   const [, mimeType, base64Data] = dataUrlMatch;
 
   try {
-    // Convert base64 string to Blob
     const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
@@ -457,20 +457,22 @@ function convertDataUrlToAttachment(dataUrl: string): Attachment | string {
     }
     const blob = new Blob([bytes], { type: mimeType });
 
-    // Determine file extension and prefix from MIME type
-    const extension = mimeType.split("/")[1] || "bin";
-    const prefix = mimeType.startsWith("image/") ? "image" : "document";
-    const filename = `${prefix}.${extension}`;
+    const finalFilename =
+      filename ||
+      (() => {
+        const extension = mimeType.split("/")[1] || "bin";
+        const prefix = mimeType.startsWith("image/") ? "image" : "document";
+        return `${prefix}.${extension}`;
+      })();
 
     const attachment = new Attachment({
       data: blob,
-      filename: filename,
+      filename: finalFilename,
       contentType: mimeType,
     });
 
     return attachment;
-  } catch (error) {
-    // If conversion fails, return the original data URL
+  } catch {
     return dataUrl;
   }
 }
@@ -507,6 +509,9 @@ function processAttachmentsInInput(input: any): any {
     ) {
       const processedFileData = convertDataUrlToAttachment(
         input.file.file_data,
+        typeof input.file.filename === "string"
+          ? input.file.filename
+          : undefined,
       );
       const result = {
         ...input,

@@ -70,29 +70,26 @@ def log_headers(response: Any, span: Span):
         )
 
 
-def _convert_data_url_to_attachment(data_url: str) -> Union[Attachment, str]:
+def _convert_data_url_to_attachment(data_url: str, filename: Optional[str] = None) -> Union[Attachment, str]:
     """Helper function to convert data URL to an Attachment."""
-    # Check if this is a data URL
     data_url_match = re.match(r"^data:([^;]+);base64,(.+)$", data_url)
     if not data_url_match:
-        return data_url  # Not a data URL, return as-is
+        return data_url
 
     mime_type, base64_data = data_url_match.groups()
 
     try:
-        # Convert base64 string to bytes
         binary_data = base64.b64decode(base64_data)
 
-        # Determine file extension and prefix from MIME type
-        extension = mime_type.split("/")[1] if "/" in mime_type else "bin"
-        prefix = "image" if mime_type.startswith("image/") else "document"
-        filename = f"{prefix}.{extension}"
+        if filename is None:
+            extension = mime_type.split("/")[1] if "/" in mime_type else "bin"
+            prefix = "image" if mime_type.startswith("image/") else "document"
+            filename = f"{prefix}.{extension}"
 
         attachment = Attachment(data=binary_data, filename=filename, content_type=mime_type)
 
         return attachment
     except Exception:
-        # If conversion fails, return the original data URL
         return data_url
 
 
@@ -123,7 +120,11 @@ def _process_attachments_in_input(input_data: Any) -> Any:
             and isinstance(input_data.get("file"), dict)
             and isinstance(input_data["file"].get("file_data"), str)
         ):
-            processed_file_data = _convert_data_url_to_attachment(input_data["file"]["file_data"])
+            file_filename = input_data["file"].get("filename")
+            processed_file_data = _convert_data_url_to_attachment(
+                input_data["file"]["file_data"],
+                filename=file_filename if isinstance(file_filename, str) else None,
+            )
             return {
                 **input_data,
                 "file": {
