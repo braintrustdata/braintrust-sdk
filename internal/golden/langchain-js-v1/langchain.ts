@@ -14,10 +14,15 @@ import { z } from "zod";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const FIXTURES_DIR = join(__dirname, "fixtures");
+console.log(
+  "Running @langchain/core version:",
+  require("@langchain/core/package.json").version,
+);
+
+const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 const logger = initLogger({
-  projectName: "golden-ts-langchain",
+  projectName: "golden-ts-langchain-v0",
 });
 
 const handler = new BraintrustCallbackHandler({ logger });
@@ -933,16 +938,502 @@ async function testAsyncStreaming() {
   );
 }
 
-// Test 18: Reasoning with o1 model
+// Test 18: Reasoning with extended thinking
 async function testReasoning() {
   return traced(
     async () => {
-      log({
-        output:
-          "Responses API not supported and chat completions do not include (reasoning) summaries",
+      console.log("\n=== Test 18: Reasoning with Extended Thinking ===");
+
+      // Anthropic supports extended thinking
+      const model = new ChatAnthropic({
+        model: "claude-sonnet-4-20250514",
+        maxTokens: 200,
+        callbacks: [handler],
+        thinkingConfig: {
+          type: "enabled",
+          budgetTokens: 5000,
+        },
       });
+
+      const prompt = ChatPromptTemplate.fromTemplate(
+        "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+      );
+      const chain = prompt.pipe(model);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const result = (await chain.invoke({})) as BaseMessage;
+      console.log(result.content);
+      console.log();
     },
     { name: "test_reasoning" },
+  );
+}
+
+// Test 19: Error handling
+async function testErrorHandling() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 19: Error Handling ===");
+
+      // Test 1: Invalid model name
+      await traced(
+        async () => {
+          console.log("\n--- Test 1: Invalid Model Name ---");
+          try {
+            const model = new ChatOpenAI({
+              model: "gpt-nonexistent-model",
+              maxTokens: 100,
+              callbacks: [handler],
+            });
+            await model.invoke("Hello");
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            console.log("Caught invalid model error:");
+            console.log(
+              `  Message: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        },
+        { name: "test_error_invalid_model" },
+      );
+
+      // Test 2: Malformed tool arguments
+      await traced(
+        async () => {
+          console.log("\n--- Test 2: Malformed Tool Result ---");
+          try {
+            const model = new ChatOpenAI({
+              model: "gpt-4o",
+              maxTokens: 100,
+              callbacks: [handler],
+            });
+
+            const messages = [
+              new HumanMessage("Calculate 5 + 3"),
+              new AIMessage({
+                content: "",
+                tool_calls: [
+                  {
+                    id: "call_abc123",
+                    name: "calculate",
+                    args: { a: 5, b: 3, operation: "add" },
+                  },
+                ],
+              }),
+              new ToolMessage({
+                content: "8",
+                tool_call_id: "call_wrong_id", // Mismatched ID
+              }),
+            ];
+
+            await model.invoke(messages);
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            console.log("Caught tool call ID mismatch error:");
+            console.log(
+              `  Message: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        },
+        { name: "test_error_malformed_tool" },
+      );
+
+      // Test 3: Invalid image URL
+      await traced(
+        async () => {
+          console.log("\n--- Test 3: Invalid Image URL ---");
+          try {
+            const model = new ChatOpenAI({
+              model: "gpt-4o",
+              maxTokens: 100,
+              callbacks: [handler],
+            });
+
+            const messages = [
+              new HumanMessage({
+                content: [
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: "https://example.com/nonexistent-image-404.jpg",
+                    },
+                  },
+                  { type: "text", text: "What's in this image?" },
+                ],
+              }),
+            ];
+
+            await model.invoke(messages);
+            throw new Error("Should have thrown an error");
+          } catch (error) {
+            console.log("Caught invalid image URL error:");
+            console.log(
+              `  Message: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        },
+        { name: "test_error_invalid_image_url" },
+      );
+
+      console.log("\nError handling tests completed");
+    },
+    { name: "test_error_handling" },
+  );
+}
+
+// Test 20: Multi-round tool use
+async function testMultiRoundToolUse() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 20: Multi-Round Tool Use ===");
+
+      const getStorePriceTool = new DynamicStructuredTool({
+        name: "get_store_price",
+        description: "Get the price of an item from a specific store",
+        schema: z.object({
+          store: z
+            .string()
+            .describe("The store name (e.g., 'StoreA', 'StoreB')"),
+          item: z.string().describe("The item to get the price for"),
+        }),
+        func: async ({ store, item }) => {
+          const prices: Record<string, Record<string, number>> = {
+            StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+            StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+          };
+          const price = prices[store]?.[item] ?? 0;
+          return JSON.stringify({
+            store,
+            item,
+            price,
+          });
+        },
+      });
+
+      const applyDiscountTool = new DynamicStructuredTool({
+        name: "apply_discount",
+        description: "Apply a discount code to a total amount",
+        schema: z.object({
+          total: z.number().describe("The total amount before discount"),
+          discountCode: z.string().describe("The discount code to apply"),
+        }),
+        func: async ({ total, discountCode }) => {
+          const discounts: Record<string, number> = {
+            SAVE10: 0.1,
+            SAVE20: 0.2,
+            HALF: 0.5,
+          };
+          const discountRate = discounts[discountCode] ?? 0;
+          const discountAmount = total * discountRate;
+          const finalTotal = total - discountAmount;
+          return JSON.stringify({
+            originalTotal: total,
+            discountCode,
+            discountRate: `${discountRate * 100}%`,
+            discountAmount,
+            finalTotal,
+          });
+        },
+      });
+
+      for (const [provider, model] of [
+        [
+          "openai",
+          new ChatOpenAI({
+            model: "gpt-4o",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+        [
+          "anthropic",
+          new ChatAnthropic({
+            model: "claude-sonnet-4-20250514",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+      ] as const) {
+        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+
+        const modelWithTools = model.bindTools([
+          getStorePriceTool,
+          applyDiscountTool,
+        ]);
+
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const result = (await modelWithTools.invoke(
+          "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+        )) as AIMessage;
+
+        console.log("Response:");
+        if (result.content) {
+          console.log(`Text: ${result.content}`);
+        }
+
+        if (result.tool_calls && result.tool_calls.length > 0) {
+          console.log(`Tool calls made: ${result.tool_calls.length}`);
+          result.tool_calls.forEach((call, i) => {
+            console.log(`  Tool call ${i + 1}: ${call.name}`);
+            console.log(`    Args: ${JSON.stringify(call.args)}`);
+          });
+        }
+        console.log();
+      }
+    },
+    { name: "test_multi_round_tool_use" },
+  );
+}
+
+// Test 21: Structured output
+async function testStructuredOutput() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 21: Structured Output ===");
+
+      const recipeSchema = z.object({
+        name: z.string(),
+        ingredients: z.array(
+          z.object({
+            name: z.string(),
+            amount: z.string(),
+          }),
+        ),
+        steps: z.array(z.string()),
+      });
+
+      for (const [provider, model] of [
+        [
+          "openai",
+          new ChatOpenAI({
+            model: "gpt-4o",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+        [
+          "anthropic",
+          new ChatAnthropic({
+            model: "claude-sonnet-4-20250514",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+      ] as const) {
+        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+
+        const structuredModel = model.withStructuredOutput(recipeSchema);
+        const result = await structuredModel.invoke(
+          "Generate a simple recipe for chocolate chip cookies.",
+        );
+
+        console.log("Parsed recipe:");
+        console.log(`Name: ${result.name}`);
+        console.log(`Ingredients: ${result.ingredients.length}`);
+        console.log(`Steps: ${result.steps.length}`);
+        console.log();
+      }
+    },
+    { name: "test_structured_output" },
+  );
+}
+
+// Test 22: Streaming structured output
+async function testStreamingStructuredOutput() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 22: Streaming Structured Output ===");
+
+      const productSchema = z.object({
+        name: z.string(),
+        description: z.string(),
+        price: z.number(),
+        features: z.array(z.string()),
+      });
+
+      for (const [provider, model] of [
+        [
+          "openai",
+          new ChatOpenAI({
+            model: "gpt-4o",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+        [
+          "anthropic",
+          new ChatAnthropic({
+            model: "claude-sonnet-4-20250514",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+      ] as const) {
+        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+
+        const structuredModel = model.withStructuredOutput(productSchema);
+        const stream = await structuredModel.stream(
+          "Generate a product description for a wireless bluetooth headphone.",
+        );
+
+        let finalResult;
+        for await (const chunk of stream) {
+          finalResult = chunk;
+        }
+
+        console.log("Final structured output:");
+        console.log(`Name: ${finalResult?.name}`);
+        console.log(`Price: ${finalResult?.price}`);
+        console.log();
+      }
+    },
+    { name: "test_streaming_structured_output" },
+  );
+}
+
+// Test 23: Structured output with context (after tool calls)
+async function testStructuredOutputWithContext() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 23: Structured Output with Context ===");
+
+      const comparisonSchema = z.object({
+        recommendation: z.enum(["phone-123", "laptop-456", "neither"]),
+        reasoning: z.string(),
+        priceComparison: z.object({
+          cheaper: z.string(),
+          priceDifference: z.number(),
+        }),
+        overallRating: z.object({
+          phone: z.number(),
+          laptop: z.number(),
+        }),
+      });
+
+      for (const [provider, model] of [
+        [
+          "openai",
+          new ChatOpenAI({
+            model: "gpt-4o",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+        [
+          "anthropic",
+          new ChatAnthropic({
+            model: "claude-sonnet-4-20250514",
+            maxTokens: 500,
+            callbacks: [handler],
+          }),
+        ],
+      ] as const) {
+        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+
+        // Simulate data that would be gathered via tools
+        const productInfo = {
+          "phone-123": {
+            name: "SuperPhone X",
+            price: 999,
+            specs: "6.5 inch display, 128GB storage, 12MP camera",
+          },
+          "laptop-456": {
+            name: "ProBook Ultra",
+            price: 1499,
+            specs: "15 inch display, 512GB SSD, 16GB RAM",
+          },
+        };
+
+        const reviews = {
+          "phone-123": {
+            rating: 4.5,
+            comments: [
+              "Great camera!",
+              "Battery lasts all day",
+              "A bit pricey",
+            ],
+          },
+          "laptop-456": {
+            rating: 4.2,
+            comments: ["Fast performance", "Good display", "Heavy to carry"],
+          },
+        };
+
+        const structuredModel = model.withStructuredOutput(comparisonSchema);
+        const result = await structuredModel.invoke(
+          `Compare phone-123 and laptop-456. Here is the product info and reviews:
+
+Product Info:
+- phone-123: ${JSON.stringify(productInfo["phone-123"])}
+- laptop-456: ${JSON.stringify(productInfo["laptop-456"])}
+
+Reviews:
+- phone-123: ${JSON.stringify(reviews["phone-123"])}
+- laptop-456: ${JSON.stringify(reviews["laptop-456"])}
+
+Give me a structured comparison with your recommendation.`,
+        );
+
+        console.log("Product comparison:");
+        console.log(`Recommendation: ${result.recommendation}`);
+        console.log(`Reasoning: ${result.reasoning.substring(0, 100)}...`);
+        console.log(`Cheaper: ${result.priceComparison.cheaper}`);
+        console.log(
+          `Price difference: $${result.priceComparison.priceDifference}`,
+        );
+        console.log();
+      }
+    },
+    { name: "test_structured_output_with_context" },
+  );
+}
+
+// Test 24: Agent with createAgent (LangChain v1 only)
+async function testCreateAgent() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 24: Create Agent (v1 API) ===");
+
+      // Note: createAgent is a v1-only feature
+      // This test will need to be conditionally enabled based on LangChain version
+      try {
+        // Try to import createAgent - will fail in v0
+        const { createAgent } = await import("langchain");
+
+        const weatherTool = new DynamicStructuredTool({
+          name: "get_weather",
+          description: "Get the current weather for a location",
+          schema: z.object({
+            location: z.string(),
+            unit: z.enum(["celsius", "fahrenheit"]).optional(),
+          }),
+          func: async ({ location, unit = "celsius" }) => {
+            return `22 degrees ${unit} and sunny in ${location}`;
+          },
+        });
+
+        const agent = createAgent({
+          model: "gpt-4o",
+          tools: [weatherTool],
+          systemPrompt: "You are a helpful weather assistant.",
+          callbacks: [handler],
+        });
+
+        const result = await agent.invoke({
+          messages: [
+            { role: "user", content: "What is the weather in Tokyo?" },
+          ],
+        });
+
+        console.log("Agent response:");
+        console.log(result.content);
+      } catch (error) {
+        console.log(
+          "createAgent not available (expected in v0):",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    },
+    { name: "test_create_agent" },
   );
 }
 
@@ -970,6 +1461,12 @@ async function runAllTests() {
     testAsyncGeneration,
     testAsyncStreaming,
     testReasoning,
+    testErrorHandling,
+    testMultiRoundToolUse,
+    testStructuredOutput,
+    testStreamingStructuredOutput,
+    testStructuredOutputWithContext,
+    testCreateAgent, // v1-specific test
   ];
 
   for (const test of tests) {
