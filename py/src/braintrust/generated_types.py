@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify"""
+"""Auto-generated file (internal git SHA 49b6de3b00a1c7d32d0f4e836f655edc90c594b5) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -49,6 +49,7 @@ from ._generated_types import (
     IfExists,
     InvokeFunction,
     InvokeParent,
+    MCPServer,
     MessageRole,
     ModelParams,
     ObjectReference,
@@ -148,6 +149,7 @@ __all__ = [
     "IfExists",
     "InvokeFunction",
     "InvokeParent",
+    "MCPServer",
     "MessageRole",
     "ModelParams",
     "ObjectReference",
