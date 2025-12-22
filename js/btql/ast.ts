@@ -1,4 +1,4 @@
-import { z } from "../src/zod-compat";
+import { z } from "zod";
 
 export const posSchema = z.strictObject({
   line: z.number(),
