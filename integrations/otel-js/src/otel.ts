@@ -238,6 +238,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     // If a processor is injected (for testing), use it directly
     if (options._spanProcessor) {
       this.processor = options._spanProcessor;
+      // Apply filtering if requested
       if (options.filterAISpans === true) {
         this.aiSpanProcessor = new AISpanProcessor(
           this.processor,
@@ -295,12 +296,15 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     const exporter = baseExporter;
 
     this.processor = new BatchSpanProcessor(exporter);
+    // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
+      // Only enable filtering if explicitly requested
       this.aiSpanProcessor = new AISpanProcessor(
         this.processor,
         options.customFilter,
       );
     } else {
+      // Use the batch processor directly without filtering (default behavior)
       this.aiSpanProcessor = this.processor;
     }
   }
