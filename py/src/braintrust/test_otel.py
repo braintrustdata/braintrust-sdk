@@ -550,13 +550,13 @@ class TestSpanFiltering:
         assert "response_formatting" in filtered_span_names  # LLM attribute
 
     def test_custom_filter_is_root_span(self):
-        from braintrust.otel import AISpanProcessor
+        from braintrust.otel import AISpanProcessor, is_root_span
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
         memory_exporter = InMemorySpanExporter()
-        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=lambda span: getattr(span, "parent", None) is None)
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=is_root_span)
         provider = TracerProvider()
         provider.add_span_processor(processor)
         tracer = provider.get_tracer("test-braintrust-root-filter")

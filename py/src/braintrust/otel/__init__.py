@@ -330,11 +330,6 @@ class BraintrustSpanProcessor:
         """Force flush the inner processor."""
         return self._processor.force_flush(timeout_millis)
 
-    @staticmethod
-    def is_root_span(span) -> bool:
-        """Returns True if the span is a root span (no parent span)."""
-        return getattr(span, "parent", None) is None
-
     @property
     def exporter(self):
         """Access to the underlying OtelExporter."""
@@ -388,6 +383,9 @@ def _get_braintrust_parent(
 
     return None
 
+def is_root_span(span) -> bool:
+    """Returns True if the span is a root span (no parent span)."""
+    return getattr(span, "parent", None) is None
 
 def context_from_span_export(export_str: str):
     """
