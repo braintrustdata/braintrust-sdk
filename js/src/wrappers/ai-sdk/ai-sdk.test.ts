@@ -1208,6 +1208,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.end).toBeLessThanOrEqual(end);
   });
 
+  // TODO: Add test for ToolLoopAgent with Output.object() schema serialization
+  // Currently the output field is not properly serialized - it shows as output: {}
+  // because the responseFormat is a Promise that needs to be awaited.
+  // Once processInputAttachments is made async and properly handles the Promise,
+  // we should verify that the schema is serialized correctly in the logs.
+
   test("ai sdk multi-round tool use with metrics", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -1724,9 +1730,11 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
 
-    // Verify metrics
+    // Verify metrics including time_to_first_token
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.time_to_first_token).toBeGreaterThan(0);
+    expect(typeof doStreamSpan.metrics.time_to_first_token).toBe("number");
   });
 
   test("model/provider separation from gateway-style model string", async () => {
@@ -1898,5 +1906,63 @@ describe("extractTokenMetrics", () => {
     for (const [key, value] of Object.entries(result)) {
       expect(typeof value === "number" || value === undefined).toBe(true);
     }
+  });
+
+  test("handles nested usage structure from OpenAI Responses API (gpt-5 models)", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          cacheRead: 0,
+          noCache: 25,
+          total: 25,
+        },
+        outputTokens: {
+          reasoning: 768,
+          text: 22,
+          total: 790,
+        },
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(790);
+    expect(result.reasoning_tokens).toBe(768);
+    expect(result.completion_reasoning_tokens).toBe(768);
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("handles mixed flat and nested usage structures", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          total: 100,
+          cacheRead: 10,
+        },
+        outputTokens: 50,
+        totalTokens: 150,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(150);
+    expect(result.prompt_cached_tokens).toBe(10);
+  });
+
+  test("handles totalUsage field from Agent results", () => {
+    const result = extractTokenMetrics({
+      totalUsage: {
+        inputTokens: 25,
+        outputTokens: 50,
+        totalTokens: 75,
+        reasoningTokens: 20,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(75);
+    expect(result.reasoning_tokens).toBe(20);
+    expect(result.completion_reasoning_tokens).toBe(20);
   });
 });

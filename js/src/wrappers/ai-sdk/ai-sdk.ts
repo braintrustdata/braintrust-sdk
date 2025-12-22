@@ -106,7 +106,7 @@ const wrapAgentGenerate = (
 ) => {
   return async (params: any) =>
     makeGenerateTextWrapper(
-      "Agent.generate",
+      `${instance.constructor.name}.generate`,
       options,
       generate.bind(instance), // as of v5 this is just streamText under the hood
       // Follows what the AI SDK does under the hood when calling generateText
@@ -120,7 +120,7 @@ const wrapAgentStream = (
 ) => {
   return (params: any) =>
     makeStreamTextWrapper(
-      "Agent.stream",
+      `${instance.constructor.name}.stream`,
       options,
       stream.bind(instance), // as of v5 this is just streamText under the hood
       undefined, // aiSDK not needed since model is already on instance
@@ -280,6 +280,9 @@ const wrapModel = (model: any, ai?: any): any => {
   };
 
   const wrappedDoStream = async (options: any) => {
+    const startTime = Date.now();
+    let receivedFirst = false;
+
     const span = startSpan({
       name: "doStream",
       spanAttributes: {
@@ -320,6 +323,16 @@ const wrapModel = (model: any, ai?: any): any => {
 
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
+        // Track time to first token on any chunk type
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+
         switch (chunk.type) {
           case "text-delta":
             text += extractTextDelta(chunk);
@@ -1043,6 +1056,28 @@ const processInputAttachments = (input: any) => {
     processed.tools = processTools(input.tools);
   }
 
+  // Process callOptionsSchema (used by ToolLoopAgent and other agents)
+  if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
+    processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  // TODO: Process output schema for ToolLoopAgent with Output.object()
+  // The output field contains an Output object with a responseFormat Promise that resolves
+  // to an object with type: "json" and schema: {...JSON Schema...}
+  // We need to:
+  // 1. Await the responseFormat Promise (requires making this function async)
+  // 2. Extract the resolved schema from responseFormat.schema
+  // 3. Log it in a useful format for users to recreate the output configuration
+  // Currently logs as output: {} which is not useful
+
+  // Remove prepareCall function from logs (not serializable and not useful)
+  if (
+    "prepareCall" in processed &&
+    typeof processed.prepareCall === "function"
+  ) {
+    processed.prepareCall = "[Function]";
+  }
+
   return processed;
 };
 
@@ -1388,14 +1423,27 @@ function firstNumber(...values: unknown[]): number | undefined {
  */
 export function extractTokenMetrics(result: any): Record<string, number> {
   const metrics: Record<string, number> = {};
-  const usage = result?.usage;
+  // Try to access usage as both property and getter
+  let usage = result?.usage;
+
+  // If usage is not directly accessible, try as a getter
+  if (!usage && result) {
+    try {
+      if ("usage" in result && typeof result.usage !== "function") {
+        usage = result.usage;
+      }
+    } catch {
+      // Ignore errors accessing getters
+    }
+  }
 
   if (!usage) {
     return metrics;
   }
 
-  // Prompt tokens (AI SDK v5 uses inputTokens)
+  // Prompt tokens (AI SDK v5 uses inputTokens, which can be a number or object with .total)
   const promptTokens = firstNumber(
+    usage.inputTokens?.total,
     usage.inputTokens,
     usage.promptTokens,
     usage.prompt_tokens,
@@ -1404,8 +1452,9 @@ export function extractTokenMetrics(result: any): Record<string, number> {
     metrics.prompt_tokens = promptTokens;
   }
 
-  // Completion tokens (AI SDK v5 uses outputTokens)
+  // Completion tokens (AI SDK v5 uses outputTokens, which can be a number or object with .total)
   const completionTokens = firstNumber(
+    usage.outputTokens?.total,
     usage.outputTokens,
     usage.completionTokens,
     usage.completion_tokens,
@@ -1424,8 +1473,9 @@ export function extractTokenMetrics(result: any): Record<string, number> {
     metrics.tokens = totalTokens;
   }
 
-  // Prompt cached tokens (AI SDK v5 uses cachedInputTokens)
+  // Prompt cached tokens (can be nested in inputTokens.cacheRead or top-level)
   const promptCachedTokens = firstNumber(
+    usage.inputTokens?.cacheRead,
     usage.cachedInputTokens,
     usage.promptCachedTokens,
     usage.prompt_cached_tokens,
@@ -1461,8 +1511,9 @@ export function extractTokenMetrics(result: any): Record<string, number> {
     metrics.completion_cached_tokens = completionCachedTokens;
   }
 
-  // Completion reasoning tokens
+  // Completion reasoning tokens (can be nested in outputTokens.reasoning)
   const reasoningTokenCount = firstNumber(
+    usage.outputTokens?.reasoning,
     usage.reasoningTokens,
     usage.completionReasoningTokens,
     usage.completion_reasoning_tokens,

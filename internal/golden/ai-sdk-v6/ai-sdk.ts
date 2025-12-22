@@ -16,7 +16,12 @@ initLogger({
   projectName: "golden-ts-ai-sdk-v6",
 });
 
-const { generateText, streamText, Experimental_Agent: Agent } = wrapAISDK(ai);
+const {
+  generateText,
+  streamText,
+  Experimental_Agent: Agent,
+  ToolLoopAgent,
+} = wrapAISDK(ai);
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
@@ -291,7 +296,7 @@ async function testStopSequences() {
   );
 }
 
-// Test 9: Metadata
+// Test 9: Metadata with callOptionsSchema
 async function testMetadata() {
   return traced(
     async () => {
@@ -308,6 +313,29 @@ async function testMetadata() {
           model: model as LanguageModel,
         }).generate({
           prompt: "Hello!",
+        });
+
+        // ToolLoopAgent with callOptionsSchema for metadata
+        const supportAgent = new ToolLoopAgent({
+          model: model as LanguageModel,
+          callOptionsSchema: z.object({
+            userId: z.string(),
+            accountType: z.enum(["free", "pro", "enterprise"]),
+          }),
+          prepareCall: ({ options, ...settings }) => ({
+            ...settings,
+            system: `You are a helpful customer support agent.
+- User Account type: ${options.accountType}
+- User ID: ${options.userId}`,
+          }),
+        });
+
+        await supportAgent.generate({
+          prompt: "How do I upgrade my account?",
+          options: {
+            userId: "user_123",
+            accountType: "free",
+          },
         });
       }
     },
@@ -460,16 +488,21 @@ interface CalculateToolArgs {
   b: number;
 }
 
-// Test 14: Tool use
+// Test 14: Tool use with inputExamples
 async function testToolUse() {
   return traced(
     async () => {
       const weatherTool = ai.tool({
         description: "Get the current weather for a location",
         inputSchema: z.object({
-          location: z.string(),
+          location: z.string().describe("The location to get the weather for"),
           unit: z.enum(["celsius", "fahrenheit"]).optional(),
         }),
+        inputExamples: [
+          { input: { location: "San Francisco" } },
+          { input: { location: "London" } },
+          { input: { location: "Tokyo", unit: "celsius" } },
+        ],
         execute: async (args: unknown) => {
           const typedArgs = args as WeatherToolArgs;
           return `22 degrees ${typedArgs.unit || "celsius"} and sunny in ${typedArgs.location}`;
@@ -489,6 +522,15 @@ async function testToolUse() {
         });
 
         await new Agent({
+          model: model as LanguageModel,
+          tools: {
+            get_weather: weatherTool,
+          },
+        }).generate({
+          prompt: "What is the weather like in Paris, France?",
+        });
+
+        await new ToolLoopAgent({
           model: model as LanguageModel,
           tools: {
             get_weather: weatherTool,
@@ -553,9 +595,58 @@ async function testToolUseWithResult() {
         }).generate({
           prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
         });
+
+        await new ToolLoopAgent({
+          model: model as LanguageModel,
+          tools: {
+            calculate: calculateTool,
+          },
+        }).generate({
+          prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+        });
       }
     },
     { name: "test_tool_use_with_result" },
+  );
+}
+
+// Test 15b: ToolLoopAgent with structured output
+async function testToolLoopAgentStructuredOutput() {
+  return traced(
+    async () => {
+      for (const model of [
+        openai("gpt-5-mini"),
+        anthropic("claude-sonnet-4-5"),
+      ]) {
+        const weatherAgent = new ToolLoopAgent({
+          model: model as LanguageModel,
+          tools: {
+            weather: ai.tool({
+              description: "Get the weather in a location",
+              inputSchema: z.object({
+                city: z.string().describe("The city to get weather for"),
+              }),
+              execute: async ({ city }: { city: string }) => {
+                return `The weather in ${city} is 72°F and sunny`;
+              },
+            }),
+          },
+          output: ai.Output.object({
+            schema: z.object({
+              summary: z.string().describe("A brief summary of the weather"),
+              temperature: z.number().describe("The temperature in Fahrenheit"),
+              recommendation: z.string().describe("What the user should wear"),
+            }),
+          }),
+        });
+
+        await weatherAgent.generate({
+          prompt:
+            "What is the weather in San Francisco and what should I wear?",
+        });
+      }
+    },
+    { name: "test_toolloop_agent_structured_output" },
   );
 }
 
@@ -664,6 +755,7 @@ async function runAllTests() {
     testToolUse,
     testToolUseWithResult,
     testReasoning,
+    testToolLoopAgentStructuredOutput,
   ];
 
   for (const test of tests) {
