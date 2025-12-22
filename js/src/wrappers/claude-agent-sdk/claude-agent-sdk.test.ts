@@ -5,6 +5,7 @@ import {
   beforeEach,
   beforeAll,
   afterEach,
+  vi,
 } from "vitest";
 import { wrapClaudeAgentSDK } from "./claude-agent-sdk";
 import { initLogger, _exportsForTestingOnly } from "../../logger";
@@ -12,6 +13,144 @@ import { configureNode } from "../../node";
 import { z } from "zod/v3";
 
 debugger;
+
+// Unit tests for property forwarding (no real SDK needed)
+describe("wrapClaudeAgentSDK property forwarding", () => {
+  beforeAll(async () => {
+    try {
+      configureNode();
+    } catch (e) {
+      // Already configured
+    }
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
+
+  beforeEach(async () => {
+    _exportsForTestingOnly.useTestBackgroundLogger();
+    initLogger({
+      projectName: "claude-agent-sdk-unit.test.ts",
+      projectId: "test-project-id",
+    });
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("forwards interrupt() method from original Query object", async () => {
+    const interruptMock = vi.fn().mockResolvedValue(undefined);
+
+    // Create a mock SDK with a query function that returns a generator with interrupt()
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        // Create an async generator that also has an interrupt method
+        const generator = (async function* () {
+          yield { type: "assistant", message: { content: "Hello" } };
+          yield { type: "result", result: "done" };
+        })();
+
+        // Attach interrupt method to the generator (like the real SDK does)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (generator as any).interrupt = interruptMock;
+
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    const queryResult = wrappedSDK.query({ prompt: "test" });
+
+    // Verify interrupt() is accessible and forwards to the original
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(typeof (queryResult as any).interrupt).toBe("function");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (queryResult as any).interrupt();
+    expect(interruptMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("interrupt() works before iteration starts (eager initialization)", async () => {
+    const interruptMock = vi.fn().mockResolvedValue(undefined);
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          yield { type: "assistant", message: { content: "Hello" } };
+          yield { type: "result", result: "done" };
+        })();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (generator as any).interrupt = interruptMock;
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    const queryResult = wrappedSDK.query({ prompt: "test" });
+
+    // Call interrupt() BEFORE starting iteration - this should work
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (queryResult as any).interrupt();
+    expect(interruptMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("forwards other custom properties from original Query object", async () => {
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+
+        // Attach custom properties (like the real SDK might have)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (generator as any).sessionId = "test-session-123";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (generator as any).customMethod = () => "custom-value";
+
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    const queryResult = wrappedSDK.query({ prompt: "test" });
+
+    // Start iteration
+    const iterator = queryResult[Symbol.asyncIterator]();
+    await iterator.next();
+
+    // Verify custom properties are forwarded
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((queryResult as any).sessionId).toBe("test-session-123");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((queryResult as any).customMethod()).toBe("custom-value");
+  });
+
+  test("async iterator protocol still works after wrapping", async () => {
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          yield { type: "assistant", message: { content: "msg1" } };
+          yield { type: "assistant", message: { content: "msg2" } };
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    const messages: unknown[] = [];
+
+    for await (const msg of wrappedSDK.query({ prompt: "test" })) {
+      messages.push(msg);
+    }
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toMatchObject({ type: "assistant" });
+    expect(messages[2]).toMatchObject({ type: "result" });
+  });
+});
 
 // Try to import the Claude Agent SDK - skip tests if not available
 let claudeSDK: unknown;
