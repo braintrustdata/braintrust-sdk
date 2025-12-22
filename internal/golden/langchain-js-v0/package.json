@@ -1,0 +1,20 @@
+{
+  "name": "langchain-js-v0",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@braintrust/langchain-js": "workspace:*",
+    "@langchain/anthropic": "^0.3.30",
+    "@langchain/core": "^0.3.78",
+    "@langchain/openai": "^0.3.17",
+    "braintrust": "file:../../../js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
