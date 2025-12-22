@@ -45,6 +45,17 @@ function isReadableSpan(span: Span | ReadableSpan): span is ReadableSpan {
 }
 
 /**
+ * Returns true if the span is a root span (no parent).
+ * Checks both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x).
+ */
+export function isRootSpan(span: ReadableSpan): boolean {
+  const hasParent =
+    ("parentSpanId" in span && (span as any).parentSpanId) ||
+    ("parentSpanContext" in span && (span as any).parentSpanContext);
+  return !hasParent;
+}
+
+/**
  * A span processor that filters spans to only export filtered telemetry.
  *
  * Only filtered spans and root spans will be forwarded to the inner processor.
@@ -109,27 +120,16 @@ export class AISpanProcessor {
    * Determine if a span should be kept based on filtering criteria.
    *
    * Keep spans if:
-   * 1. It's a root span (no parent)
-   * 2. Custom filter returns true/false (if provided)
-   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
-   * 4. Any attribute name starts with those prefixes
+   * 1. Custom filter returns true/false (if provided)
+   * 2. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
+   * 3. Any attribute name starts with those prefixes
    */
   private shouldKeepFilteredSpan(span: ReadableSpan): boolean {
     if (!span) {
       return false;
     }
 
-    // Always keep root spans (no parent)
-    // Check both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x)
-    const hasParent =
-      ("parentSpanId" in span && span.parentSpanId) ||
-      ("parentSpanContext" in span && span.parentSpanContext);
-
-    if (!hasParent) {
-      return true;
-    }
-
-    // Apply custom filter if provided
+    // 1. Custom filter returns true/false (if provided)
     if (this.customFilter) {
       const customResult = this.customFilter(span);
       if (customResult === true) {
@@ -140,12 +140,12 @@ export class AISpanProcessor {
       // customResult is null/undefined - continue with default logic
     }
 
-    // Check span name
+    // 2. Span name starts with AI prefix
     if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
       return true;
     }
 
-    // Check attribute names
+    // 3. Any attribute name starts with those prefixes
     const attributes = span.attributes;
     if (attributes) {
       const attributeNames = Object.keys(attributes);
