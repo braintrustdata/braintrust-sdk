@@ -1,6 +1,6 @@
 [project]
 name = "braintrust-langchain"
-version = "0.1.5"
+version = "0.1.6"
 description = "Integration for LangChain and Braintrust Tracing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -39,7 +39,11 @@ where = ["src"]
 [tool.uv.workspace]
 members = [
     ".",
+    "examples",
 ]
+
+[tool.uv.sources]
+braintrust = { path = "../../py", editable = true }
 
 [dependency-groups]
 dev = [
