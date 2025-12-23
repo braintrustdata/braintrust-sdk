@@ -424,7 +424,12 @@ export const DatasetEvent = z.object({
   dataset_id: z.uuid(),
   input: z.unknown().optional(),
   expected: z.unknown().optional(),
-  metadata: z.union([z.looseObject({ model: z.union([z.string(), z.null()]) }).partial(), z.null()]).optional(),
+  metadata: z
+    .union([
+      z.looseObject({ model: z.union([z.string(), z.null()]) }).partial(),
+      z.null(),
+    ])
+    .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   span_id: z.string(),
   root_span_id: z.string(),
@@ -472,9 +477,7 @@ export const Experiment = z.object({
   dataset_version: z.union([z.string(), z.null()]).optional(),
   public: z.boolean(),
   user_id: z.union([z.string(), z.null()]).optional(),
-  metadata: z
-    .union([z.looseObject({}).partial(), z.null()])
-    .optional(),
+  metadata: z.union([z.looseObject({}).partial(), z.null()]).optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
 });
 export type ExperimentType = z.infer<typeof Experiment>;
@@ -484,8 +487,9 @@ export const SpanType = z.union([
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
 export const SpanAttributes = z.union([
-  z.looseObject({ name: z.union([z.string(), z.null()]), type: SpanType })
-        .partial(),
+  z
+    .looseObject({ name: z.union([z.string(), z.null()]), type: SpanType })
+    .partial(),
   z.null(),
 ]);
 export type SpanAttributesType = z.infer<typeof SpanAttributes>;
@@ -505,14 +509,24 @@ export const ExperimentEvent = z.object({
     .optional(),
   metadata: z
     .union([
-      z.looseObject({ model: z.union([z.string(), z.null()]) })
-                .partial(),
+      z.looseObject({ model: z.union([z.string(), z.null()]) }).partial(),
       z.null(),
     ])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
-  context: z.union([z.looseObject({ caller_functionname: z.union([z.string(), z.null()]), caller_filename: z.union([z.string(), z.null()]), caller_lineno: z.union([z.number(), z.null()]) }).partial(), z.null()]).optional(),
+  context: z
+    .union([
+      z
+        .looseObject({
+          caller_functionname: z.union([z.string(), z.null()]),
+          caller_filename: z.union([z.string(), z.null()]),
+          caller_lineno: z.union([z.number(), z.null()]),
+        })
+        .partial(),
+      z.null(),
+    ])
+    .optional(),
   span_id: z.string(),
   span_parents: z.union([z.array(z.string()), z.null()]).optional(),
   root_span_id: z.string(),
@@ -544,58 +558,61 @@ export const PromptBlockDataNullish = z.union([
 ]);
 export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
 export const ModelParams = z.union([
-  z.looseObject({
-          use_cache: z.boolean(),
-          temperature: z.number(),
-          top_p: z.number(),
-          max_tokens: z.number(),
-          max_completion_tokens: z.number(),
-          frequency_penalty: z.number(),
-          presence_penalty: z.number(),
-          response_format: ResponseFormatNullish,
-          tool_choice: z.union([
-            z.literal("auto"),
-            z.literal("none"),
-            z.literal("required"),
-            z.looseObject({
-              type: z.literal("function"),
-              function: z.looseObject({ name: z.string() }),
-            }),
-          ]),
-          function_call: z.union([
-            z.literal("auto"),
-            z.literal("none"),
-            z.looseObject({ name: z.string() }),
-          ]),
-          n: z.number(),
-          stop: z.array(z.string()),
-          reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
-          verbosity: z.enum(["low", "medium", "high"]),
-        })
-        .partial(),
-  z.looseObject({
-          use_cache: z.boolean().optional(),
-          max_tokens: z.number(),
-          temperature: z.number(),
-          top_p: z.number().optional(),
-          top_k: z.number().optional(),
-          stop_sequences: z.array(z.string()).optional(),
-          max_tokens_to_sample: z.number().optional(),
+  z
+    .looseObject({
+      use_cache: z.boolean(),
+      temperature: z.number(),
+      top_p: z.number(),
+      max_tokens: z.number(),
+      max_completion_tokens: z.number(),
+      frequency_penalty: z.number(),
+      presence_penalty: z.number(),
+      response_format: ResponseFormatNullish,
+      tool_choice: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.literal("required"),
+        z.looseObject({
+          type: z.literal("function"),
+          function: z.looseObject({ name: z.string() }),
         }),
+      ]),
+      function_call: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.looseObject({ name: z.string() }),
+      ]),
+      n: z.number(),
+      stop: z.array(z.string()),
+      reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
+      verbosity: z.enum(["low", "medium", "high"]),
+    })
+    .partial(),
   z.looseObject({
-        use_cache: z.boolean(),
-        temperature: z.number(),
-        maxOutputTokens: z.number(),
-        topP: z.number(),
-        topK: z.number(),
-      })
-      .partial(),
-  z.looseObject({
-        use_cache: z.boolean(),
-        temperature: z.number(),
-        topK: z.number(),
-      })
-      .partial(),
+    use_cache: z.boolean().optional(),
+    max_tokens: z.number(),
+    temperature: z.number(),
+    top_p: z.number().optional(),
+    top_k: z.number().optional(),
+    stop_sequences: z.array(z.string()).optional(),
+    max_tokens_to_sample: z.number().optional(),
+  }),
+  z
+    .looseObject({
+      use_cache: z.boolean(),
+      temperature: z.number(),
+      maxOutputTokens: z.number(),
+      topP: z.number(),
+      topK: z.number(),
+    })
+    .partial(),
+  z
+    .looseObject({
+      use_cache: z.boolean(),
+      temperature: z.number(),
+      topK: z.number(),
+    })
+    .partial(),
   z.looseObject({ use_cache: z.boolean() }).partial(),
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
@@ -1086,8 +1103,7 @@ export const ProjectLogsEvent = z.object({
     .optional(),
   metadata: z
     .union([
-      z.looseObject({ model: z.union([z.string(), z.null()]) })
-                .partial(),
+      z.looseObject({ model: z.union([z.string(), z.null()]) }).partial(),
       z.null(),
     ])
     .optional(),
@@ -1095,12 +1111,13 @@ export const ProjectLogsEvent = z.object({
   metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
   context: z
     .union([
-      z.looseObject({
-                  caller_functionname: z.union([z.string(), z.null()]),
-                  caller_filename: z.union([z.string(), z.null()]),
-                  caller_lineno: z.union([z.number(), z.null()]),
-                })
-                .partial(),
+      z
+        .looseObject({
+          caller_functionname: z.union([z.string(), z.null()]),
+          caller_filename: z.union([z.string(), z.null()]),
+          caller_lineno: z.union([z.number(), z.null()]),
+        })
+        .partial(),
       z.null(),
     ])
     .optional(),
@@ -1181,9 +1198,7 @@ export const Prompt = z.object({
   created: z.union([z.string(), z.null()]).optional(),
   prompt_data: PromptDataNullish.optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metadata: z
-    .union([z.looseObject({}).partial(), z.null()])
-    .optional(),
+  metadata: z.union([z.looseObject({}).partial(), z.null()]).optional(),
   function_type: FunctionTypeEnumNullish.optional(),
 });
 export type PromptType = z.infer<typeof Prompt>;
