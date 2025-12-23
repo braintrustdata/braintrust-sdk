@@ -1159,7 +1159,22 @@ async function runEvaluatorInternal(
             metadata,
             scores: mergedScores,
             error,
-            origin: baseEvent.event?.origin,
+            origin: baseEvent.event?.origin as
+              | {
+                  object_type:
+                    | "function"
+                    | "experiment"
+                    | "dataset"
+                    | "prompt"
+                    | "prompt_session"
+                    | "project_logs";
+                  object_id: string;
+                  id: string;
+                  _xact_id?: string | null | undefined;
+                  created?: string | undefined;
+                }
+              | null
+              | undefined,
           });
         }
       };
@@ -1167,10 +1182,25 @@ async function runEvaluatorInternal(
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
-        return await traced(callback, {
+        return (await traced(callback, {
           ...baseEvent,
           state: evaluator.state,
-        });
+        })) as
+          | {
+              object_type:
+                | "function"
+                | "experiment"
+                | "dataset"
+                | "prompt"
+                | "prompt_session"
+                | "project_logs";
+              object_id: string;
+              id: string;
+              _xact_id?: string | null | undefined;
+              created?: string | undefined;
+            }
+          | null
+          | undefined;
       } else {
         const result = await experiment.traced(callback, baseEvent);
         // Flush logs after each task to provide backpressure and prevent memory accumulation
