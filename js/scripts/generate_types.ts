@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { patchZodRecord } from "./patch_zod_record.js";
 import {
   generateZodClientFromOpenAPI,
   getHandlebars,
@@ -32,19 +33,14 @@ async function main() {
   });
 
   let code = await fs.readFile(OUTPUT_PATH, "utf8");
-  if (zodVersion.startsWith("4")) {
-    // Patch all z.record(value) to z.record(z.string(), value) for Zod 4
-    code = code.replace(
-      /z\.record\s*\(\s*([^)\n]+?)\s*\)/g,
-      "z.record(z.string(), $1)",
-    );
-
-    // Patch all z.enum([...]) to z.enum([... as const]) for Zod 4
-    code = code.replace(/z\.enum\((\[[^\]]*\])\)/g, "z.enum($1 as const)");
-  }
   const internalGitSha = openApiDoc.info["x-internal-git-sha"] || "UNKNOWN";
   const banner = `// Auto-generated file (internal git SHA ${internalGitSha}) -- do not modify\n\n`;
   await fs.writeFile(OUTPUT_PATH, banner + code);
+
+  // Robustly patch z.record single-argument calls using codemod
+  if (zodVersion.startsWith("4")) {
+    patchZodRecord(OUTPUT_PATH);
+  }
 }
 
 main();

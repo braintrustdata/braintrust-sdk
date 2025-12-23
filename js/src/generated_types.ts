@@ -15,7 +15,7 @@ export const AclObjectType = z.union([
     "org_member",
     "project_log",
     "org_project",
-  ] as const),
+  ]),
   z.null(),
 ]);
 export type AclObjectTypeType = z.infer<typeof AclObjectType>;
@@ -28,7 +28,7 @@ export const Permission = z.enum([
   "read_acls",
   "update_acls",
   "delete_acls",
-] as const);
+]);
 export type PermissionType = z.infer<typeof Permission>;
 export const Acl = z.object({
   id: z.string().uuid(),
@@ -108,7 +108,7 @@ export const AnyModelParams = z.object({
   reasoning_effort: z
     .enum(["none", "minimal", "low", "medium", "high"])
     .optional(),
-  verbosity: z.enum(["low", "medium", "high"] as const).optional(),
+  verbosity: z.enum(["low", "medium", "high"]).optional(),
   top_k: z.number().optional(),
   stop_sequences: z.array(z.string()).optional(),
   reasoning_enabled: z.boolean().optional(),
@@ -174,7 +174,7 @@ export const AttachmentReference = z.discriminatedUnion("type", [
   ExternalAttachmentReference,
 ]);
 export type AttachmentReferenceType = z.infer<typeof AttachmentReference>;
-export const UploadStatus = z.enum(["uploading", "done", "error"] as const);
+export const UploadStatus = z.enum(["uploading", "done", "error"]);
 export type UploadStatusType = z.infer<typeof UploadStatus>;
 export const AttachmentStatus = z.object({
   upload_status: UploadStatus,
@@ -394,7 +394,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
+    runtime: z.enum(["node", "python", "browser", "quickjs"]),
     version: z.string(),
   }),
   location: z.union([
@@ -434,7 +434,7 @@ export const ObjectReferenceNullish = z.union([
       "prompt",
       "function",
       "prompt_session",
-    ] as const),
+    ]),
     object_id: z.string().uuid(),
     id: z.string(),
     _xact_id: z.union([z.string(), z.null()]).optional(),
@@ -472,7 +472,7 @@ export const DatasetEvent = z.object({
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
   id: z.string().uuid(),
-  object_type: z.enum(["organization", "project", "function"] as const),
+  object_type: z.enum(["organization", "project", "function"]),
   object_id: z.string().uuid(),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -525,7 +525,7 @@ export const Experiment = z.object({
 });
 export type ExperimentType = z.infer<typeof Experiment>;
 export const SpanType = z.union([
-  z.enum(["llm", "score", "function", "eval", "task", "tool"] as const),
+  z.enum(["llm", "score", "function", "eval", "task", "tool"]),
   z.null(),
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
@@ -652,14 +652,8 @@ export const ModelParams = z.union([
       ]),
       n: z.number(),
       stop: z.array(z.string()),
-      reasoning_effort: z.enum([
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-      ] as const),
-      verbosity: z.enum(["low", "medium", "high"] as const),
+      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
+      verbosity: z.enum(["low", "medium", "high"]),
     })
     .partial()
     .passthrough(),
@@ -737,11 +731,12 @@ export const PromptDataNullish = z.union([
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
       template_format: z.union([
-        z.enum(["mustache", "nunjucks", "none"] as const),
+        z.enum(["mustache", "nunjucks", "none"]),
         z.null(),
       ]),
       mcp: z.union([
         z.record(
+          z.string(),
           z.union([
             z.object({
               type: z.literal("id"),
@@ -787,7 +782,7 @@ export const FunctionTypeEnumNullish = z.union([
     "custom_view",
     "preprocessor",
     "facet",
-  ] as const),
+  ]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -871,7 +866,7 @@ export type GraphNodeType = z.infer<typeof GraphNode>;
 export const GraphEdge = z.object({
   source: z.object({ node: z.string().max(1024), variable: z.string() }),
   target: z.object({ node: z.string().max(1024), variable: z.string() }),
-  purpose: z.enum(["control", "data", "messages"] as const),
+  purpose: z.enum(["control", "data", "messages"]),
 });
 export type GraphEdgeType = z.infer<typeof GraphEdge>;
 export const GraphData = z.object({
@@ -889,7 +884,7 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
+          runtime: z.enum(["node", "python", "browser", "quickjs"]),
           version: z.string(),
         }),
         code: z.string(),
@@ -949,12 +944,7 @@ export const Function = z.object({
     .optional(),
 });
 export type FunctionType = z.infer<typeof Function>;
-export const FunctionFormat = z.enum([
-  "llm",
-  "code",
-  "global",
-  "graph",
-] as const);
+export const FunctionFormat = z.enum(["llm", "code", "global", "graph"]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
 export const PromptData = z
   .object({
@@ -963,11 +953,12 @@ export const PromptData = z
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
     template_format: z.union([
-      z.enum(["mustache", "nunjucks", "none"] as const),
+      z.enum(["mustache", "nunjucks", "none"]),
       z.null(),
     ]),
     mcp: z.union([
       z.record(
+        z.string(),
         z.union([
           z.object({
             type: z.literal("id"),
@@ -1006,7 +997,7 @@ export const FunctionTypeEnum = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
-] as const);
+]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
@@ -1023,7 +1014,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
+      runtime: z.enum(["node", "python", "browser", "quickjs"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -1051,16 +1042,12 @@ export const FunctionObjectType = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
-] as const);
+]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
-export const FunctionOutputType = z.enum([
-  "completion",
-  "score",
-  "any",
-] as const);
+export const FunctionOutputType = z.enum(["completion", "score", "any"]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
 export const GitMetadataSettings = z.object({
-  collect: z.enum(["all", "none", "some"] as const),
+  collect: z.enum(["all", "none", "some"]),
   fields: z
     .array(
       z.enum([
@@ -1073,7 +1060,7 @@ export const GitMetadataSettings = z.object({
         "commit_message",
         "commit_time",
         "git_diff",
-      ] as const),
+      ]),
     )
     .optional(),
 });
@@ -1090,7 +1077,7 @@ export const Group = z.object({
   member_groups: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 export type GroupType = z.infer<typeof Group>;
-export const IfExists = z.enum(["error", "ignore", "replace"] as const);
+export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
 export const SpanScope = z.object({
   type: z.literal("span"),
@@ -1112,7 +1099,7 @@ export const InvokeContext = z.union([
       "experiment",
       "dataset",
       "playground_logs",
-    ] as const),
+    ]),
     object_id: z.string(),
     scope: InvokeScope,
   }),
@@ -1121,11 +1108,7 @@ export const InvokeContext = z.union([
 export type InvokeContextType = z.infer<typeof InvokeContext>;
 export const InvokeParent = z.union([
   z.object({
-    object_type: z.enum([
-      "project_logs",
-      "experiment",
-      "playground_logs",
-    ] as const),
+    object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
     object_id: z.string(),
     row_ids: z
       .union([
@@ -1145,7 +1128,7 @@ export const InvokeParent = z.union([
 ]);
 export type InvokeParentType = z.infer<typeof InvokeParent>;
 export const StreamingMode = z.union([
-  z.enum(["auto", "parallel", "json", "text"] as const),
+  z.enum(["auto", "parallel", "json", "text"]),
   z.null(),
 ]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
@@ -1190,7 +1173,7 @@ export const MessageRole = z.enum([
   "tool",
   "model",
   "developer",
-] as const);
+]);
 export type MessageRoleType = z.infer<typeof MessageRole>;
 export const ObjectReference = z.object({
   object_type: z.enum([
@@ -1200,7 +1183,7 @@ export const ObjectReference = z.object({
     "prompt",
     "function",
     "prompt_session",
-  ] as const),
+  ]),
   object_id: z.string().uuid(),
   id: z.string(),
   _xact_id: z.union([z.string(), z.null()]).optional(),
@@ -1278,7 +1261,7 @@ export const RetentionObjectType = z.enum([
   "project_logs",
   "experiment",
   "dataset",
-] as const);
+]);
 export type RetentionObjectTypeType = z.infer<typeof RetentionObjectType>;
 export const ProjectAutomation = z.object({
   id: z.string().uuid(),
@@ -1310,7 +1293,7 @@ export const ProjectAutomation = z.object({
         z.object({ type: z.literal("btql_query"), btql_query: z.string() }),
       ]),
       export_path: z.string(),
-      format: z.enum(["jsonl", "parquet"] as const),
+      format: z.enum(["jsonl", "parquet"]),
       interval_seconds: z.number().gte(1).lte(2592000),
       credentials: z.object({
         type: z.literal("aws_iam"),
@@ -1398,7 +1381,7 @@ export const ProjectScoreType = z.enum([
   "maximum",
   "online",
   "free-form",
-] as const);
+]);
 export type ProjectScoreTypeType = z.infer<typeof ProjectScoreType>;
 export const ProjectScoreCategory = z.object({
   name: z.string(),
@@ -1555,7 +1538,7 @@ export const RunEval = z.object({
   extra_messages: z.string().optional(),
   tags: z.array(z.string()).optional(),
   mcp_auth: z
-    .record(z.object({ oauth_token: z.string() }).partial())
+    .record(z.string(), z.object({ oauth_token: z.string() }).partial())
     .optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
@@ -1583,7 +1566,7 @@ export const SpanIFrame = z.object({
 });
 export type SpanIFrameType = z.infer<typeof SpanIFrame>;
 export const SSEConsoleEventData = z.object({
-  stream: z.enum(["stderr", "stdout"] as const),
+  stream: z.enum(["stderr", "stdout"]),
   message: z.string(),
 });
 export type SSEConsoleEventDataType = z.infer<typeof SSEConsoleEventData>;
@@ -1603,7 +1586,7 @@ export const SSEProgressEventData = z.object({
     "start",
     "done",
     "progress",
-  ] as const),
+  ]),
   data: z.string(),
 });
 export type SSEProgressEventDataType = z.infer<typeof SSEProgressEventData>;
@@ -1648,14 +1631,14 @@ export const ViewOptions = z.union([
     viewType: z.literal("monitor"),
     options: z
       .object({
-        spanType: z.union([z.enum(["range", "frame"] as const), z.null()]),
+        spanType: z.union([z.enum(["range", "frame"]), z.null()]),
         rangeValue: z.union([z.string(), z.null()]),
         frameStart: z.union([z.string(), z.null()]),
         frameEnd: z.union([z.string(), z.null()]),
         tzUTC: z.union([z.boolean(), z.null()]),
         chartVisibility: z.union([z.record(z.string(), z.boolean()), z.null()]),
         projectId: z.union([z.string(), z.null()]),
-        type: z.union([z.enum(["project", "experiment"] as const), z.null()]),
+        type: z.union([z.enum(["project", "experiment"]), z.null()]),
         groupBy: z.union([z.string(), z.null()]),
       })
       .partial(),
@@ -1674,7 +1657,7 @@ export const ViewOptions = z.union([
       excludedMeasures: z.union([
         z.array(
           z.object({
-            type: z.enum(["none", "score", "metric", "metadata"] as const),
+            type: z.enum(["none", "score", "metric", "metadata"]),
             value: z.string(),
           }),
         ),
@@ -1682,21 +1665,21 @@ export const ViewOptions = z.union([
       ]),
       yMetric: z.union([
         z.object({
-          type: z.enum(["none", "score", "metric", "metadata"] as const),
+          type: z.enum(["none", "score", "metric", "metadata"]),
           value: z.string(),
         }),
         z.null(),
       ]),
       xAxis: z.union([
         z.object({
-          type: z.enum(["none", "score", "metric", "metadata"] as const),
+          type: z.enum(["none", "score", "metric", "metadata"]),
           value: z.string(),
         }),
         z.null(),
       ]),
       symbolGrouping: z.union([
         z.object({
-          type: z.enum(["none", "score", "metric", "metadata"] as const),
+          type: z.enum(["none", "score", "metric", "metadata"]),
           value: z.string(),
         }),
         z.null(),
@@ -1711,7 +1694,7 @@ export const ViewOptions = z.union([
         z.object({ from: z.string(), to: z.string() }),
         z.null(),
       ]),
-      queryShape: z.union([z.enum(["traces", "spans"] as const), z.null()]),
+      queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
       freezeColumns: z.union([z.boolean(), z.null()]),
     })
     .partial(),
@@ -1737,7 +1720,7 @@ export const View = z.object({
     "agents",
     "monitor",
     "for_review",
-  ] as const),
+  ]),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
   view_data: ViewData.optional(),
