@@ -51,20 +51,17 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
 //
 // Basically the same as `z.partial()`, except instead of marking fields just
 // optional, it marks them nullish.
-export function objectNullish<
-  T extends z.ZodRawShape,
-  UnknownKeys extends z.UnknownKeysParam,
-  Catchall extends z.ZodTypeAny,
->(object: z.ZodObject<T, UnknownKeys, Catchall>) {
+export function objectNullish<T extends z.ZodRawShape>(object: z.ZodObject<T>) {
   return new z.ZodObject({
     ...object._def,
     shape: () =>
       Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [k, v.nullish()]),
+        Object.entries(object.shape).map(([k, v]) => [
+          k,
+          (v as z.ZodTypeAny).optional().nullable(),
+        ]),
       ),
-  }) as z.ZodObject<
-    { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
-    UnknownKeys,
-    Catchall
-  >;
+  }) as unknown as z.ZodObject<{
+    [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>>;
+  }>;
 }
