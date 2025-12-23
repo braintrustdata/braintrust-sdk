@@ -1,8 +1,10 @@
 import abc
+import base64
+import re
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from .logger import Span, start_span
+from .logger import Attachment, Span, start_span
 from .span_types import SpanTypeAttribute
 from .util import merge_dicts
 
@@ -66,6 +68,75 @@ def log_headers(response: Any, span: Span):
                 "cached": 1 if cached_value.lower() in ["true", "hit"] else 0,
             }
         )
+
+
+def _convert_data_url_to_attachment(data_url: str, filename: Optional[str] = None) -> Union[Attachment, str]:
+    """Helper function to convert data URL to an Attachment."""
+    data_url_match = re.match(r"^data:([^;]+);base64,(.+)$", data_url)
+    if not data_url_match:
+        return data_url
+
+    mime_type, base64_data = data_url_match.groups()
+
+    try:
+        binary_data = base64.b64decode(base64_data)
+
+        if filename is None:
+            extension = mime_type.split("/")[1] if "/" in mime_type else "bin"
+            prefix = "image" if mime_type.startswith("image/") else "document"
+            filename = f"{prefix}.{extension}"
+
+        attachment = Attachment(data=binary_data, filename=filename, content_type=mime_type)
+
+        return attachment
+    except Exception:
+        return data_url
+
+
+def _process_attachments_in_input(input_data: Any) -> Any:
+    """Process input to convert data URL images and base64 documents to Attachment objects."""
+    if isinstance(input_data, list):
+        return [_process_attachments_in_input(item) for item in input_data]
+
+    if isinstance(input_data, dict):
+        # Check for OpenAI's image_url format with data URLs
+        if (
+            input_data.get("type") == "image_url"
+            and isinstance(input_data.get("image_url"), dict)
+            and isinstance(input_data["image_url"].get("url"), str)
+        ):
+            processed_url = _convert_data_url_to_attachment(input_data["image_url"]["url"])
+            return {
+                **input_data,
+                "image_url": {
+                    **input_data["image_url"],
+                    "url": processed_url,
+                },
+            }
+
+        # Check for OpenAI's file format with data URL (e.g., PDFs)
+        if (
+            input_data.get("type") == "file"
+            and isinstance(input_data.get("file"), dict)
+            and isinstance(input_data["file"].get("file_data"), str)
+        ):
+            file_filename = input_data["file"].get("filename")
+            processed_file_data = _convert_data_url_to_attachment(
+                input_data["file"]["file_data"],
+                filename=file_filename if isinstance(file_filename, str) else None,
+            )
+            return {
+                **input_data,
+                "file": {
+                    **input_data["file"],
+                    "file_data": processed_file_data,
+                },
+            }
+
+        # Recursively process nested objects
+        return {key: _process_attachments_in_input(value) for key, value in input_data.items()}
+
+    return input_data
 
 
 class ChatCompletionWrapper:
@@ -190,10 +261,14 @@ class ChatCompletionWrapper:
         # Then, copy the rest of the params
         params = prettify_params(params)
         messages = params.pop("messages", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(messages)
+
         return merge_dicts(
             ret,
             {
-                "input": messages,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )
@@ -379,10 +454,14 @@ class ResponseWrapper:
         # Then, copy the rest of the params
         params = prettify_params(params)
         input_data = params.pop("input", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(input_data)
+
         return merge_dicts(
             ret,
             {
-                "input": input_data,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )
@@ -540,12 +619,15 @@ class BaseWrapper(abc.ABC):
         ret = params.pop("span_info", {})
 
         params = prettify_params(params)
-        input = params.pop("input", None)
+        input_data = params.pop("input", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(input_data)
 
         return merge_dicts(
             ret,
             {
-                "input": input,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )

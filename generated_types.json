@@ -1541,7 +1541,8 @@
                 "enum": [
                   "node",
                   "python",
-                  "browser"
+                  "browser",
+                  "quickjs"
                 ]
               },
               "version": {
@@ -1867,6 +1868,30 @@
             ],
             "format": "date-time",
             "description": "Date the environment variable was last used"
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Optional metadata associated with the environment variable when managed via the function secrets API"
+          },
+          "secret_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional classification for the secret (for example, the AI provider name)"
+          },
+          "secret_category": {
+            "type": "string",
+            "enum": [
+              "env_var",
+              "ai_provider"
+            ],
+            "default": "env_var",
+            "description": "The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys"
           }
         },
         "required": [
@@ -2316,6 +2341,44 @@
           "url"
         ]
       },
+      "FacetData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "facet"
+            ]
+          },
+          "preprocessor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NullableSavedFunctionId"
+              },
+              {
+                "description": "The preprocessor function to use for facet extraction. If not provided, the project default preprocessor will be used, falling back to the global 'thread' preprocessor."
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt to use for LLM extraction. The preprocessed text will be provided as context."
+          },
+          "model": {
+            "type": "string",
+            "description": "The model to use for facet extraction"
+          },
+          "no_match_pattern": {
+            "type": "string",
+            "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
+          }
+        },
+        "required": [
+          "type",
+          "prompt"
+        ],
+        "title": "facet"
+      },
       "Function": {
         "type": "object",
         "properties": {
@@ -2519,7 +2582,8 @@
                             "enum": [
                               "node",
                               "python",
-                              "browser"
+                              "browser",
+                              "quickjs"
                             ]
                           },
                           "version": {
@@ -2533,6 +2597,10 @@
                       },
                       "code": {
                         "type": "string"
+                      },
+                      "code_hash": {
+                        "type": "string",
+                        "description": "SHA256 hash of the code, computed at save time"
                       }
                     },
                     "required": [
@@ -2594,6 +2662,14 @@
               },
               "name": {
                 "type": "string"
+              },
+              "config": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {},
+                "description": "Configuration options to pass to the global function (e.g., for preprocessor customization)"
               }
             },
             "required": [
@@ -2601,6 +2677,9 @@
               "name"
             ],
             "title": "global"
+          },
+          {
+            "$ref": "#/components/schemas/FacetData"
           }
         ]
       },
@@ -2704,7 +2783,8 @@
                     "enum": [
                       "node",
                       "python",
-                      "browser"
+                      "browser",
+                      "quickjs"
                     ]
                   },
                   "version": {
@@ -2802,7 +2882,9 @@
           "scorer",
           "task",
           "agent",
-          "custom_view"
+          "custom_view",
+          "preprocessor",
+          "facet"
         ]
       },
       "FunctionOutputType": {
@@ -2820,7 +2902,9 @@
           "scorer",
           "task",
           "tool",
-          "custom_view"
+          "custom_view",
+          "preprocessor",
+          "facet"
         ]
       },
       "FunctionTypeEnumNullish": {
@@ -2833,7 +2917,9 @@
           "scorer",
           "task",
           "tool",
-          "custom_view"
+          "custom_view",
+          "preprocessor",
+          "facet"
         ]
       },
       "GitMetadataSettings": {
@@ -3404,6 +3490,37 @@
           "replace"
         ]
       },
+      "InvokeContext": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "project_logs",
+              "experiment",
+              "dataset",
+              "playground_logs"
+            ],
+            "description": "The type of object containing the span data"
+          },
+          "object_id": {
+            "type": "string",
+            "description": "The ID of the object containing the span data"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/InvokeScope"
+          }
+        },
+        "required": [
+          "object_type",
+          "object_id",
+          "scope"
+        ],
+        "description": "Context for functions that operate on spans/traces"
+      },
       "InvokeFunction": {
         "allOf": [
           {
@@ -3443,6 +3560,9 @@
                 },
                 "description": "If the function is an LLM, additional messages to pass along to it"
               },
+              "context": {
+                "$ref": "#/components/schemas/InvokeContext"
+              },
               "parent": {
                 "$ref": "#/components/schemas/InvokeParent"
               },
@@ -3462,6 +3582,27 @@
                   "null"
                 ],
                 "description": "If true, throw an error if one of the variables in the prompt is not present in the input"
+              },
+              "mcp_auth": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "oauth_token": {
+                      "type": "string",
+                      "description": "The OAuth token to use"
+                    }
+                  }
+                },
+                "description": "Map of MCP server URL to auth credentials"
+              },
+              "overrides": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {},
+                "description": "Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }."
               }
             }
           }
@@ -3533,6 +3674,77 @@
           }
         ],
         "description": "Options for tracing the function call"
+      },
+      "InvokeScope": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SpanScope"
+          },
+          {
+            "$ref": "#/components/schemas/TraceScope"
+          }
+        ],
+        "description": "The scope at which to operate (span or trace)"
+      },
+      "MCPServer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the MCP server"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the project that the MCP server belongs under"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Identifies the user who created the MCP server"
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of MCP server creation"
+          },
+          "deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of MCP server deletion, or null if the MCP server is still active"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the MCP server. Within a project, MCP server names are unique"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the MCP server"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL of the MCP server endpoint"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "url"
+        ]
       },
       "MessageRole": {
         "type": "string",
@@ -3804,6 +4016,52 @@
             "title": "JsCompletionParams"
           }
         ]
+      },
+      "NullableSavedFunctionId": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "function"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "title": "function"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "global"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "name"
+            ],
+            "title": "global"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default."
       },
       "ObjectReference": {
         "type": "object",
@@ -4154,6 +4412,35 @@
                           "type",
                           "url"
                         ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "slack"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "workspace_id": {
+                            "type": "string",
+                            "description": "The Slack workspace ID to post to"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "description": "The Slack channel ID to post to"
+                          },
+                          "message_template": {
+                            "type": "string",
+                            "description": "Custom message template for the alert"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "workspace_id",
+                          "channel"
+                        ]
                       }
                     ],
                     "description": "The action to take when the automation rule is triggered"
@@ -4314,6 +4601,83 @@
                   "event_type",
                   "object_type",
                   "retention_days"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "environment_update"
+                    ],
+                    "description": "The type of automation."
+                  },
+                  "environment_filter": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional list of environment slugs to filter by"
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "webhook"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "url": {
+                            "type": "string",
+                            "description": "The webhook URL to send the request to"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "url"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "slack"
+                            ],
+                            "description": "The type of action to take"
+                          },
+                          "workspace_id": {
+                            "type": "string",
+                            "description": "The Slack workspace ID to post to"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "description": "The Slack channel ID to post to"
+                          },
+                          "message_template": {
+                            "type": "string",
+                            "description": "Custom message template for the alert"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "workspace_id",
+                          "channel"
+                        ]
+                      }
+                    ],
+                    "description": "The action to take when the automation rule is triggered"
+                  }
+                },
+                "required": [
+                  "event_type",
+                  "action"
                 ]
               }
             ],
@@ -4817,6 +5181,9 @@
               "null"
             ],
             "description": "If true, disable real-time queries for this project. This can improve query performance for high-volume logs."
+          },
+          "default_preprocessor": {
+            "$ref": "#/components/schemas/NullableSavedFunctionId"
           }
         }
       },
@@ -5086,6 +5453,92 @@
               "$ref": "#/components/schemas/SavedFunctionId"
             }
           },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
+          },
+          "mcp": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "id"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "title": "MCP server id. This is used for project-level MCP server definitions."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "title": "MCP server url. This is used for inline definitions of MCP servers."
+                }
+              ]
+            }
+          },
           "origin": {
             "type": [
               "object",
@@ -5127,6 +5580,92 @@
             ],
             "items": {
               "$ref": "#/components/schemas/SavedFunctionId"
+            }
+          },
+          "template_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mustache",
+              "nunjucks",
+              "none"
+            ]
+          },
+          "mcp": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "id"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "title": "MCP server id. This is used for project-level MCP server definitions."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "url"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "is_disabled": {
+                      "type": "boolean"
+                    },
+                    "enabled_tools": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "If omitted, all tools are enabled"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "title": "MCP server url. This is used for inline definitions of MCP servers."
+                }
+              ]
             }
           },
           "origin": {
@@ -5794,6 +6333,18 @@
               "type": "string"
             },
             "description": "Optional tags that will be added to the experiment."
+          },
+          "mcp_auth": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "oauth_token": {
+                  "type": "string",
+                  "description": "The OAuth token to use"
+                }
+              }
+            }
           }
         },
         "required": [
@@ -5992,6 +6543,31 @@
           "url"
         ]
       },
+      "SpanScope": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "span"
+            ]
+          },
+          "root_span_id": {
+            "type": "string",
+            "description": "The root span id is a unique identifier for the trace."
+          },
+          "id": {
+            "type": "string",
+            "description": "A unique identifier for the span."
+          }
+        },
+        "required": [
+          "type",
+          "root_span_id",
+          "id"
+        ],
+        "description": "Scope for operating on a single span"
+      },
       "SpanType": {
         "type": [
           "string",
@@ -6089,7 +6665,9 @@
         ],
         "enum": [
           "auto",
-          "parallel"
+          "parallel",
+          "json",
+          "text"
         ],
         "description": "The mode format of the returned value (defaults to 'auto')"
       },
@@ -6131,6 +6709,26 @@
           "type",
           "function"
         ]
+      },
+      "TraceScope": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "trace"
+            ]
+          },
+          "root_span_id": {
+            "type": "string",
+            "description": "The root span id is a unique identifier for the trace."
+          }
+        },
+        "required": [
+          "type",
+          "root_span_id"
+        ],
+        "description": "Scope for operating on an entire trace"
       },
       "UploadStatus": {
         "type": "string",
@@ -6404,6 +7002,12 @@
                     ]
                   }
                 }
+              },
+              "freezeColumns": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -6633,6 +7237,12 @@
                   "traces",
                   "spans"
                 ]
+              },
+              "freezeColumns": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               }
             },
             "title": "TableViewOptions"
@@ -6654,7 +7264,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "8e9c0a96b3cf291360978c17580f72f6817bd6c8"
+    "x-internal-git-sha": "d2eca897666af49c11b326a9dcc6643824279cf8"
   },
   "paths": {},
   "webhooks": {}
