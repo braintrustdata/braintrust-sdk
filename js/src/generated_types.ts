@@ -1,6 +1,6 @@
 // Auto-generated file (internal git SHA d2eca897666af49c11b326a9dcc6643824279cf8) -- do not modify
 
-import { z } from "zod/v3";
+import { z } from "zod";
 
 export const AclObjectType = z.union([
   z.enum([
@@ -549,7 +549,7 @@ export const ExperimentEvent = z.object({
   expected: z.unknown().optional(),
   error: z.unknown().optional(),
   scores: z
-    .union([z.record(z.union([z.number(), z.null()])), z.null()])
+    .union([z.record(z.string(), z.union([z.number(), z.null()])), z.null()])
     .optional(),
   metadata: z
     .union([
@@ -561,7 +561,7 @@ export const ExperimentEvent = z.object({
     ])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metrics: z.union([z.record(z.number()), z.null()]).optional(),
+  metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
   context: z
     .union([
       z
@@ -713,7 +713,7 @@ export const PromptParserNullish = z.union([
   z.object({
     type: z.literal("llm_classifier"),
     use_cot: z.boolean(),
-    choice_scores: z.record(z.number().gte(0).lte(1)),
+    choice_scores: z.record(z.string(), z.number().gte(0).lte(1)),
   }),
   z.null(),
 ]);
@@ -736,6 +736,7 @@ export const PromptDataNullish = z.union([
       ]),
       mcp: z.union([
         z.record(
+          z.string(),
           z.union([
             z.object({
               type: z.literal("id"),
@@ -870,8 +871,8 @@ export const GraphEdge = z.object({
 export type GraphEdgeType = z.infer<typeof GraphEdge>;
 export const GraphData = z.object({
   type: z.literal("graph"),
-  nodes: z.record(GraphNode),
-  edges: z.record(GraphEdge),
+  nodes: z.record(z.string(), GraphNode),
+  edges: z.record(z.string(), GraphEdge),
 });
 export type GraphDataType = z.infer<typeof GraphData>;
 export const FunctionData = z.union([
@@ -957,6 +958,7 @@ export const PromptData = z
     ]),
     mcp: z.union([
       z.record(
+        z.string(),
         z.union([
           z.object({
             type: z.literal("id"),
@@ -1143,7 +1145,10 @@ export const InvokeFunction = FunctionId.and(
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
       strict: z.union([z.boolean(), z.null()]),
-      mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
+      mcp_auth: z.record(
+        z.string(),
+        z.object({ oauth_token: z.string() }).partial(),
+      ),
       overrides: z.union([z.object({}).partial().passthrough(), z.null()]),
     })
     .partial(),
@@ -1331,7 +1336,7 @@ export const ProjectLogsEvent = z.object({
   expected: z.unknown().optional(),
   error: z.unknown().optional(),
   scores: z
-    .union([z.record(z.union([z.number(), z.null()])), z.null()])
+    .union([z.record(z.string(), z.union([z.number(), z.null()])), z.null()])
     .optional(),
   metadata: z
     .union([
@@ -1343,7 +1348,7 @@ export const ProjectLogsEvent = z.object({
     ])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metrics: z.union([z.record(z.number()), z.null()]).optional(),
+  metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
   context: z
     .union([
       z
@@ -1385,7 +1390,7 @@ export const ProjectScoreCategory = z.object({
 export type ProjectScoreCategoryType = z.infer<typeof ProjectScoreCategory>;
 export const ProjectScoreCategories = z.union([
   z.array(ProjectScoreCategory),
-  z.record(z.number()),
+  z.record(z.string(), z.number()),
   z.array(z.string()),
   z.null(),
 ]);
@@ -1533,7 +1538,7 @@ export const RunEval = z.object({
   extra_messages: z.string().optional(),
   tags: z.array(z.string()).optional(),
   mcp_auth: z
-    .record(z.object({ oauth_token: z.string() }).partial())
+    .record(z.string(), z.object({ oauth_token: z.string() }).partial())
     .optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
@@ -1631,7 +1636,7 @@ export const ViewOptions = z.union([
         frameStart: z.union([z.string(), z.null()]),
         frameEnd: z.union([z.string(), z.null()]),
         tzUTC: z.union([z.boolean(), z.null()]),
-        chartVisibility: z.union([z.record(z.boolean()), z.null()]),
+        chartVisibility: z.union([z.record(z.string(), z.boolean()), z.null()]),
         projectId: z.union([z.string(), z.null()]),
         type: z.union([z.enum(["project", "experiment"]), z.null()]),
         groupBy: z.union([z.string(), z.null()]),
@@ -1641,9 +1646,9 @@ export const ViewOptions = z.union([
   }),
   z
     .object({
-      columnVisibility: z.union([z.record(z.boolean()), z.null()]),
+      columnVisibility: z.union([z.record(z.string(), z.boolean()), z.null()]),
       columnOrder: z.union([z.array(z.string()), z.null()]),
-      columnSizing: z.union([z.record(z.number()), z.null()]),
+      columnSizing: z.union([z.record(z.string(), z.number()), z.null()]),
       grouping: z.union([z.string(), z.null()]),
       rowHeight: z.union([z.string(), z.null()]),
       tallGroupRows: z.union([z.boolean(), z.null()]),

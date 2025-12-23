@@ -43,9 +43,51 @@ import {
   evalParametersSerializedSchema,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import zodToJsonSchema from "zod-to-json-schema";
+import { zodToJsonSchema } from "../src/zod-to-json-compat";
+
+/**
+ * Extract description from a zod schema, handling both v3 and v4 structures.
+ * In v3, description is preserved even after .default().
+ * In v4, .default() wraps the schema and loses the description property.
+ */
+function extractZodDescription(schema: any): string | undefined {
+  // Try direct property first (works for v3, and v4 without .default())
+  if (schema.description) {
+    return schema.description;
+  }
+
+  // For v4 with .default(), check the inner schema
+  if (schema._def?.innerType?.description) {
+    return schema._def.innerType.description;
+  }
+
+  return undefined;
+}
+
+/**
+ * Extract default value from a zod schema, handling both v3 and v4 structures.
+ */
+function extractZodDefault(schema: any): unknown | undefined {
+  // Check for _def.defaultValue (v4 and some v3 cases)
+  if (schema._def?.defaultValue !== undefined) {
+    const defaultValue = schema._def.defaultValue;
+    // In v3, defaultValue is a function that needs to be called
+    // In v4, it's the actual value
+    if (typeof defaultValue === "function") {
+      try {
+        return defaultValue();
+      } catch {
+        return undefined;
+      }
+    }
+    return defaultValue;
+  }
+
+  return undefined;
+}
+
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -160,7 +202,10 @@ export function runDevServer(
 
           // This gets done again in the framework, but we do it here too to give a
           // better error message.
-          validateParameters(parameters ?? {}, evaluator.parameters);
+          validateParameters(
+            (parameters ?? {}) as Record<string, unknown>,
+            evaluator.parameters,
+          );
         } catch (e) {
           console.error("Error validating parameters", e);
           if (e instanceof z.ZodError || e instanceof Error) {
@@ -252,7 +297,7 @@ export function runDevServer(
               }
             },
             parent: parseParent(parent),
-            parameters: parameters ?? {},
+            parameters: (parameters ?? {}) as any,
           },
         );
 
@@ -389,7 +434,7 @@ function makeScorer(
   return ret;
 }
 
-function makeEvalParametersSchema(
+export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
   return Object.fromEntries(
@@ -418,8 +463,8 @@ function makeEvalParametersSchema(
           {
             type: "data",
             schema,
-            default: value.default,
-            description: value.description,
+            default: extractZodDefault(value),
+            description: extractZodDescription(value),
           },
         ];
       }

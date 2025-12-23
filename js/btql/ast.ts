@@ -1,4 +1,5 @@
-import { z } from "zod/v3";
+import { z } from "zod";
+import { zRecordCompat } from "../util/zod_compat";
 
 export const posSchema = z.strictObject({
   line: z.number(),
@@ -28,7 +29,8 @@ export const datetimeLiteralSchema = z.string().datetime({ offset: true });
 export type ParsedDatetime = z.infer<typeof datetimeLiteralSchema>;
 
 export type ParsedArray = LiteralValue[];
-export const arrayLiteralSchema: z.ZodType<ParsedArray> = z.array(
+
+export const arrayLiteralSchema: z.ZodArray<z.ZodTypeAny> = z.array(
   z.lazy(() => literalValueSchema),
 );
 
@@ -37,7 +39,8 @@ export const arrayLiteralSchema: z.ZodType<ParsedArray> = z.array(
 export interface ParsedObject {
   [key: string]: LiteralValue;
 }
-export const objectLiteralSchema: z.ZodType<ParsedObject> = z.record(
+
+export const parsedObjectSchema = zRecordCompat(
   z.lazy(() => literalValueSchema),
 );
 
@@ -51,7 +54,7 @@ export type LiteralValue =
   | ParsedArray
   | ParsedObject;
 
-export const literalValueSchema: z.ZodType<LiteralValue> = z.union([
+export const literalValueSchema = z.union([
   nullLiteralSchema,
   booleanLiteralSchema,
   integerLiteralSchema,
@@ -59,7 +62,7 @@ export const literalValueSchema: z.ZodType<LiteralValue> = z.union([
   stringLiteralSchema,
   datetimeLiteralSchema,
   arrayLiteralSchema,
-  z.lazy(() => objectLiteralSchema),
+  z.lazy(() => parsedObjectSchema),
 ]);
 
 export const literalSchema = z.object({
@@ -95,27 +98,24 @@ export const identSchema = z.strictObject({
   name: z.array(identPieceSchema),
   loc,
 });
-export type Ident = z.infer<typeof identSchema>;
 
+// @ts-expect-error TS7022: Recursive schema type inference
 export const starSchema = z.strictObject({
   op: z.literal("star"),
-  replace: z.record(z.lazy(() => exprSchema)).optional(),
+  replace: zRecordCompat(z.lazy(() => exprSchema)).optional(),
   loc,
 });
-
-export interface Star {
-  op: "star";
-  replace?: Record<string, Expr>;
-  loc?: NullableLoc;
-}
+export type Star = z.infer<typeof starSchema>;
 
 export interface Function {
   op: "function";
-  name: Ident;
+  name: z.infer<typeof identSchema>;
   args: (Expr | AliasExpr)[];
   loc?: NullableLoc;
 }
-export const functionSchema: z.ZodType<Function> = z.object({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const functionSchema = z.object({
   op: z.literal("function"),
   name: identSchema,
   args: z.array(z.union([z.lazy(() => exprSchema), z.lazy(() => aliasExpr)])),
@@ -142,7 +142,9 @@ export interface ComparisonExpr {
   right: Expr;
   loc?: NullableLoc;
 }
-export const comparisonExprSchema: z.ZodType<ComparisonExpr> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const comparisonExprSchema = z.strictObject({
   op: z.enum(comparisonOps),
   left: z.lazy(() => exprSchema),
   right: z.lazy(() => exprSchema),
@@ -155,7 +157,9 @@ export interface IncludesExpr {
   needle: Expr;
   loc?: NullableLoc;
 }
-export const includesExprSchema: z.ZodType<IncludesExpr> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const includesExprSchema = z.strictObject({
   op: z.literal("includes"),
   haystack: z.lazy(() => exprSchema),
   needle: z.lazy(() => exprSchema),
@@ -171,7 +175,9 @@ export interface BooleanExpr {
   children?: Expr[];
   loc?: NullableLoc;
 }
-export const booleanExprSchema: z.ZodType<BooleanExpr> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const booleanExprSchema = z.strictObject({
   op: z.enum(booleanOps),
   left: z.lazy(() => exprSchema).optional(),
   right: z.lazy(() => exprSchema).optional(),
@@ -186,7 +192,9 @@ export interface TernaryCond {
   cond: Expr;
   then: Expr;
 }
-export const ternaryCondSchema: z.ZodType<TernaryCond> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const ternaryCondSchema = z.strictObject({
   cond: z.lazy(() => exprSchema),
   then: z.lazy(() => exprSchema),
 });
@@ -200,7 +208,9 @@ export interface TernaryExpr {
 
 // This is flattened into an array so that it's easier to pass along an extended
 // expression directly.
-export const ternaryExprSchema: z.ZodType<TernaryExpr> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const ternaryExprSchema = z.strictObject({
   op: z.literal("if"),
   conds: z.array(ternaryCondSchema),
   else: z.lazy(() => exprSchema),
@@ -212,7 +222,9 @@ export interface ArithmeticExpr {
   right: Expr;
   loc?: NullableLoc;
 }
-export const arithmeticExprSchema: z.ZodType<ArithmeticExpr> = z.strictObject({
+
+// @ts-expect-error TS7022: Recursive schema type inference
+export const arithmeticExprSchema = z.strictObject({
   op: z.enum(arithmeticOps),
   left: z.lazy(() => exprSchema),
   right: z.lazy(() => exprSchema),
@@ -226,12 +238,12 @@ export interface UnaryArithmeticExpr {
   expr: Expr;
   loc?: NullableLoc;
 }
-export const unaryArithmeticExprSchema: z.ZodType<UnaryArithmeticExpr> =
-  z.strictObject({
-    op: z.enum(unaryArithmeticOps),
-    expr: z.lazy(() => exprSchema),
-    loc,
-  });
+// @ts-expect-error TS7022: Recursive schema type inference
+export const unaryArithmeticExprSchema = z.strictObject({
+  op: z.enum(unaryArithmeticOps),
+  expr: z.lazy(() => exprSchema),
+  loc,
+});
 
 export const unaryOps = ["not", "isnull", "isnotnull"] as const;
 export type UnaryOp = (typeof unaryOps)[number];
@@ -240,7 +252,8 @@ export interface UnaryExpr {
   expr: Expr;
   loc?: NullableLoc;
 }
-export const unaryExprSchema: z.ZodType<UnaryExpr> = z.strictObject({
+// @ts-expect-error TS7022: Recursive schema type inference
+export const unaryExprSchema = z.strictObject({
   op: z.enum(unaryOps),
   expr: z.lazy(() => exprSchema),
   loc,
@@ -261,18 +274,18 @@ export type SingleSpanFilter = {
   expr: Expr;
   loc?: NullableLoc;
 };
-export const singleSpanFilterSchema: z.ZodType<SingleSpanFilter> =
-  z.strictObject({
-    op: z.literal("singlespanfilter"),
-    expr: z.lazy(() => exprSchema),
-    loc,
-  });
+// @ts-expect-error TS7022: Recursive schema type inference
+export const singleSpanFilterSchema = z.strictObject({
+  op: z.literal("singlespanfilter"),
+  expr: z.lazy(() => exprSchema),
+  loc,
+});
 
 export type Expr =
-  | Literal
-  | Interval
-  | Ident
-  | Star
+  | z.infer<typeof literalSchema>
+  | z.infer<typeof intervalLiteralSchema>
+  | z.infer<typeof identSchema>
+  | z.infer<typeof starSchema>
   | Function
   | ComparisonExpr
   | IncludesExpr
@@ -284,7 +297,8 @@ export type Expr =
   | BtqlSnippet
   | SingleSpanFilter;
 
-export const exprSchema: z.ZodType<Expr> = z.union([
+// @ts-expect-error TS7022: Recursive schema type inference
+export const exprSchema = z.union([
   literalSchema,
   intervalLiteralSchema,
   identSchema,
@@ -301,10 +315,12 @@ export const exprSchema: z.ZodType<Expr> = z.union([
   singleSpanFilterSchema,
 ]);
 
+// @ts-expect-error TS7022: Recursive schema type inference
 export const aliasExpr = z.strictObject({
   expr: exprSchema,
   alias: z.string(),
 });
+//
 
 export type AliasExpr = z.infer<typeof aliasExpr>;
 

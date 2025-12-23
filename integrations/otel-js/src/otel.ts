@@ -444,8 +444,16 @@ export function contextFromSpanExport(exportStr: string): unknown {
   let ctx = trace.setSpan(context.active(), nonRecordingSpan);
 
   // Construct braintrust.parent identifier
+  // Ensure object_type is a number (SpanObjectTypeV3)
+  let objectTypeEnum: number = 0;
+  if (typeof components.data.object_type === "number") {
+    objectTypeEnum = components.data.object_type;
+  } else if (typeof components.data.object_type === "string") {
+    const mapped = (SpanObjectTypeV3 as any)[components.data.object_type];
+    objectTypeEnum = typeof mapped === "number" ? mapped : 0;
+  }
   const braintrustParent = getBraintrustParent(
-    components.data.object_type,
+    objectTypeEnum,
     components.data.object_id,
     components.data.compute_object_metadata_args,
   );

@@ -13,7 +13,8 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "latest",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
