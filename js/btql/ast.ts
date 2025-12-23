@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z } from "zod";
 
 export const posSchema = z.strictObject({
   line: z.number(),
@@ -18,13 +18,13 @@ export const nullLiteralSchema = z.null();
 export type ParsedNull = z.infer<typeof nullLiteralSchema>;
 export const booleanLiteralSchema = z.boolean();
 export type ParsedBoolean = z.infer<typeof booleanLiteralSchema>;
-export const integerLiteralSchema = z.union([z.number().int(), z.bigint()]);
+export const integerLiteralSchema = z.union([z.int(), z.bigint()]);
 export type ParsedInteger = z.infer<typeof integerLiteralSchema>;
 export const numberLiteralSchema = z.number();
 export type ParsedNumber = z.infer<typeof numberLiteralSchema>;
 export const stringLiteralSchema = z.string();
 export type ParsedString = z.infer<typeof stringLiteralSchema>;
-export const datetimeLiteralSchema = z.string().datetime({ offset: true });
+export const datetimeLiteralSchema = z.iso.datetime({ offset: true });
 export type ParsedDatetime = z.infer<typeof datetimeLiteralSchema>;
 
 export type ParsedArray = LiteralValue[];
@@ -38,7 +38,7 @@ export interface ParsedObject {
   [key: string]: LiteralValue;
 }
 export const objectLiteralSchema: z.ZodType<ParsedObject> = z.record(
-  z.lazy(() => literalValueSchema),
+  z.string(), z.lazy(() => literalValueSchema),
 );
 
 export type LiteralValue =
@@ -81,7 +81,7 @@ export const intervalUnitSchema = z.enum([
 ]);
 export const intervalLiteralSchema = z.strictObject({
   op: z.literal("interval"),
-  value: z.number().int(),
+  value: z.int(),
   unit: intervalUnitSchema,
   loc,
 });
@@ -99,7 +99,7 @@ export type Ident = z.infer<typeof identSchema>;
 
 export const starSchema = z.strictObject({
   op: z.literal("star"),
-  replace: z.record(z.lazy(() => exprSchema)).optional(),
+  replace: z.record(z.string(), z.lazy(() => exprSchema)).optional(),
   loc,
 });
 
@@ -340,13 +340,13 @@ export type RateSample = z.infer<typeof rateSampleSchema>;
 
 export const countSampleSchema = z.strictObject({
   type: z.literal("count"),
-  value: z.number().int().min(1),
+  value: z.int().min(1),
 });
 export type CountSample = z.infer<typeof countSampleSchema>;
 
 export const sampleSchema = z.object({
   method: z.union([rateSampleSchema, countSampleSchema]),
-  seed: z.number().int().nullish(),
+  seed: z.int().nullish(),
 });
 export type Sample = z.infer<typeof sampleSchema>;
 
@@ -360,13 +360,13 @@ export const parsedQuerySchema = z.strictObject({
   filter: exprSchema.nullish(),
   from: z.union([identSchema, fromFunctionSchema]).nullish(),
   sort: z.array(sortExpr).nullish(),
-  limit: z.number().int().nullish(),
+  limit: z.int().nullish(),
   cursor: z.string().nullish(),
   comparison_key: exprSchema.nullish(),
   weighted_scores: z.array(aliasExpr).nullish(),
   custom_columns: z.array(aliasExpr).nullish(),
-  preview_length: z.number().int().nullish(),
-  inference_budget: z.number().int().nullish(),
+  preview_length: z.int().nullish(),
+  inference_budget: z.int().nullish(),
   sample: sampleSchema.nullish(),
   span_filter: exprSchema.nullish(),
   trace_filter: exprSchema.nullish(),

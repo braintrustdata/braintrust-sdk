@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z } from "zod";
 import { Prompt } from "./logger";
 import {
   promptDefinitionWithToolsSchema,
@@ -59,7 +59,7 @@ export function validateParameters<
           return [name, Prompt.fromPromptData(name, promptData)];
         } else {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const schemaCasted = schema as z.ZodSchema<unknown>;
+          const schemaCasted = schema as z.ZodType<unknown>;
           return [name, schemaCasted.parse(value)];
         }
       } catch (e) {

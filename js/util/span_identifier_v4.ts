@@ -18,7 +18,7 @@ import {
   uint8ArrayToBase64,
   uint8ArrayToString,
 } from "./bytes";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 
 const ENCODING_VERSION_NUMBER_V4 = 4;
@@ -90,7 +90,7 @@ const FIELDS_ID_TO_NAME: Record<Fields, string> = {
 export const spanComponentsV4Schema = z
   .object({
     object_type: spanObjectTypeV3EnumSchema,
-    propagated_event: z.record(z.unknown()).nullish(),
+    propagated_event: z.record(z.string(), z.unknown()).nullish(),
   })
   .and(
     z.union([
@@ -101,7 +101,7 @@ export const spanComponentsV4Schema = z
       }),
       z.object({
         object_id: z.optional(z.null()),
-        compute_object_metadata_args: z.record(z.unknown()),
+        compute_object_metadata_args: z.record(z.string(), z.unknown()),
       }),
     ]),
   )

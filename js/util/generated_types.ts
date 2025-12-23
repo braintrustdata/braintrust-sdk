@@ -1,6 +1,6 @@
 // Auto-generated file (internal git SHA 10d02c4e14f09ae288e6bd5af3cebe98cf1dbf83) -- do not modify
 
-import { z } from "zod/v3";
+import { z } from "zod";
 
 export const AclObjectType = z.union([
   z.enum([
@@ -31,27 +31,27 @@ export const Permission = z.enum([
 ]);
 export type PermissionType = z.infer<typeof Permission>;
 export const Acl = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   object_type: AclObjectType.and(z.string()),
-  object_id: z.string().uuid(),
+  object_id: z.uuid(),
   user_id: z.union([z.string(), z.null()]).optional(),
   group_id: z.union([z.string(), z.null()]).optional(),
   permission: Permission.and(z.union([z.string(), z.null()])).optional(),
   restrict_object_type: AclObjectType.and(z.unknown()).optional(),
   role_id: z.union([z.string(), z.null()]).optional(),
-  _object_org_id: z.string().uuid(),
+  _object_org_id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
 });
 export type AclType = z.infer<typeof Acl>;
 export const AISecret = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
   updated_at: z.union([z.string(), z.null()]).optional(),
-  org_id: z.string().uuid(),
+  org_id: z.uuid(),
   name: z.string(),
   type: z.union([z.string(), z.null()]).optional(),
   metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
+    .union([z.looseObject({}).partial(), z.null()])
     .optional(),
   preview_secret: z.union([z.string(), z.null()]).optional(),
 });
@@ -60,7 +60,7 @@ export const ResponseFormatJsonSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   schema: z
-    .union([z.object({}).partial().passthrough(), z.string()])
+    .union([z.looseObject({}).partial(), z.string()])
     .optional(),
   strict: z.union([z.boolean(), z.null()]).optional(),
 });
@@ -117,7 +117,7 @@ export const AnyModelParams = z.object({
 });
 export type AnyModelParamsType = z.infer<typeof AnyModelParams>;
 export const ApiKey = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   preview_name: z.string(),
@@ -225,7 +225,7 @@ export const CallEvent = z.union([
 ]);
 export type CallEventType = z.infer<typeof CallEvent>;
 export const ChatCompletionContentPartTextWithTitle = z.object({
-  text: z.string().default(""),
+  text: z.string().prefault(""),
   type: z.literal("text"),
   cache_control: z.object({ type: z.literal("ephemeral") }).optional(),
 });
@@ -252,7 +252,7 @@ export type ChatCompletionContentPartType = z.infer<
   typeof ChatCompletionContentPart
 >;
 export const ChatCompletionContentPartText = z.object({
-  text: z.string().default(""),
+  text: z.string().prefault(""),
   type: z.literal("text"),
   cache_control: z.object({ type: z.literal("ephemeral") }).optional(),
 });
@@ -299,7 +299,7 @@ export const ChatCompletionMessageParam = z.union([
   z.object({
     content: z.union([z.string(), z.array(ChatCompletionContentPartText)]),
     role: z.literal("tool"),
-    tool_call_id: z.string().default(""),
+    tool_call_id: z.string().prefault(""),
   }),
   z.object({
     content: z.union([z.string(), z.null()]),
@@ -345,7 +345,7 @@ export const ChatCompletionOpenAIMessageParam = z.union([
   z.object({
     content: z.union([z.string(), z.array(ChatCompletionContentPartText)]),
     role: z.literal("tool"),
-    tool_call_id: z.string().default(""),
+    tool_call_id: z.string().prefault(""),
   }),
   z.object({
     content: z.union([z.string(), z.null()]),
@@ -365,7 +365,7 @@ export const ChatCompletionTool = z.object({
   function: z.object({
     name: z.string(),
     description: z.string().optional(),
-    parameters: z.object({}).partial().passthrough().optional(),
+    parameters: z.looseObject({}).partial().optional(),
   }),
   type: z.literal("function"),
 });
@@ -381,25 +381,25 @@ export const CodeBundle = z.object({
       eval_name: z.string(),
       position: z.union([
         z.object({ type: z.literal("task") }),
-        z.object({ type: z.literal("scorer"), index: z.number().int().gte(0) }),
+        z.object({ type: z.literal("scorer"), index: z.int().gte(0) }),
       ]),
     }),
-    z.object({ type: z.literal("function"), index: z.number().int().gte(0) }),
+    z.object({ type: z.literal("function"), index: z.int().gte(0) }),
   ]),
   bundle_id: z.string(),
   preview: z.union([z.string(), z.null()]).optional(),
 });
 export type CodeBundleType = z.infer<typeof CodeBundle>;
 export const Dataset = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
   metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
+    .union([z.looseObject({}).partial(), z.null()])
     .optional(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
@@ -413,7 +413,7 @@ export const ObjectReferenceNullish = z.union([
       "function",
       "prompt_session",
     ]),
-    object_id: z.string().uuid(),
+    object_id: z.uuid(),
     id: z.string(),
     _xact_id: z.union([z.string(), z.null()]).optional(),
     created: z.union([z.string(), z.null()]).optional(),
@@ -424,18 +424,16 @@ export type ObjectReferenceNullishType = z.infer<typeof ObjectReferenceNullish>;
 export const DatasetEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
-  created: z.string().datetime({ offset: true }),
+  created: z.iso.datetime({ offset: true }),
   _pagination_key: z.union([z.string(), z.null()]).optional(),
-  project_id: z.string().uuid(),
-  dataset_id: z.string().uuid(),
+  project_id: z.uuid(),
+  dataset_id: z.uuid(),
   input: z.unknown().optional(),
   expected: z.unknown().optional(),
   metadata: z
     .union([
-      z
-        .object({ model: z.union([z.string(), z.null()]) })
-        .partial()
-        .passthrough(),
+      z.looseObject({ model: z.union([z.string(), z.null()]) })
+                .partial(),
       z.null(),
     ])
     .optional(),
@@ -447,9 +445,9 @@ export const DatasetEvent = z.object({
 });
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   object_type: z.enum(["organization", "project", "function"]),
-  object_id: z.string().uuid(),
+  object_id: z.uuid(),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
   used: z.union([z.string(), z.null()]).optional(),
@@ -473,8 +471,8 @@ export const RepoInfo = z.union([
 ]);
 export type RepoInfoType = z.infer<typeof RepoInfo>;
 export const Experiment = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -487,7 +485,7 @@ export const Experiment = z.object({
   public: z.boolean(),
   user_id: z.union([z.string(), z.null()]).optional(),
   metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
+    .union([z.looseObject({}).partial(), z.null()])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
 });
@@ -498,48 +496,42 @@ export const SpanType = z.union([
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
 export const SpanAttributes = z.union([
-  z
-    .object({ name: z.union([z.string(), z.null()]), type: SpanType })
-    .partial()
-    .passthrough(),
+  z.looseObject({ name: z.union([z.string(), z.null()]), type: SpanType })
+        .partial(),
   z.null(),
 ]);
 export type SpanAttributesType = z.infer<typeof SpanAttributes>;
 export const ExperimentEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
-  created: z.string().datetime({ offset: true }),
+  created: z.iso.datetime({ offset: true }),
   _pagination_key: z.union([z.string(), z.null()]).optional(),
-  project_id: z.string().uuid(),
-  experiment_id: z.string().uuid(),
+  project_id: z.uuid(),
+  experiment_id: z.uuid(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
   expected: z.unknown().optional(),
   error: z.unknown().optional(),
   scores: z
-    .union([z.record(z.union([z.number(), z.null()])), z.null()])
+    .union([z.record(z.string(), z.union([z.number(), z.null()])), z.null()])
     .optional(),
   metadata: z
     .union([
-      z
-        .object({ model: z.union([z.string(), z.null()]) })
-        .partial()
-        .passthrough(),
+      z.looseObject({ model: z.union([z.string(), z.null()]) })
+                .partial(),
       z.null(),
     ])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metrics: z.union([z.record(z.number()), z.null()]).optional(),
+  metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
   context: z
     .union([
-      z
-        .object({
-          caller_functionname: z.union([z.string(), z.null()]),
-          caller_filename: z.union([z.string(), z.null()]),
-          caller_lineno: z.union([z.number(), z.null()]),
-        })
-        .partial()
-        .passthrough(),
+      z.looseObject({
+                  caller_functionname: z.union([z.string(), z.null()]),
+                  caller_filename: z.union([z.string(), z.null()]),
+                  caller_lineno: z.union([z.number(), z.null()]),
+                })
+                .partial(),
       z.null(),
     ])
     .optional(),
@@ -574,67 +566,59 @@ export const PromptBlockDataNullish = z.union([
 ]);
 export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
 export const ModelParams = z.union([
-  z
-    .object({
-      use_cache: z.boolean(),
-      temperature: z.number(),
-      top_p: z.number(),
-      max_tokens: z.number(),
-      max_completion_tokens: z.number(),
-      frequency_penalty: z.number(),
-      presence_penalty: z.number(),
-      response_format: ResponseFormatNullish,
-      tool_choice: z.union([
-        z.literal("auto"),
-        z.literal("none"),
-        z.literal("required"),
-        z.object({
-          type: z.literal("function"),
-          function: z.object({ name: z.string() }),
+  z.looseObject({
+          use_cache: z.boolean(),
+          temperature: z.number(),
+          top_p: z.number(),
+          max_tokens: z.number(),
+          max_completion_tokens: z.number(),
+          frequency_penalty: z.number(),
+          presence_penalty: z.number(),
+          response_format: ResponseFormatNullish,
+          tool_choice: z.union([
+            z.literal("auto"),
+            z.literal("none"),
+            z.literal("required"),
+            z.looseObject({
+              type: z.literal("function"),
+              function: z.looseObject({ name: z.string() }),
+            }),
+          ]),
+          function_call: z.union([
+            z.literal("auto"),
+            z.literal("none"),
+            z.looseObject({ name: z.string() }),
+          ]),
+          n: z.number(),
+          stop: z.array(z.string()),
+          reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
+          verbosity: z.enum(["low", "medium", "high"]),
+        })
+        .partial(),
+  z.looseObject({
+          use_cache: z.boolean().optional(),
+          max_tokens: z.number(),
+          temperature: z.number(),
+          top_p: z.number().optional(),
+          top_k: z.number().optional(),
+          stop_sequences: z.array(z.string()).optional(),
+          max_tokens_to_sample: z.number().optional(),
         }),
-      ]),
-      function_call: z.union([
-        z.literal("auto"),
-        z.literal("none"),
-        z.object({ name: z.string() }),
-      ]),
-      n: z.number(),
-      stop: z.array(z.string()),
-      reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
-      verbosity: z.enum(["low", "medium", "high"]),
-    })
-    .partial()
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean().optional(),
-      max_tokens: z.number(),
-      temperature: z.number(),
-      top_p: z.number().optional(),
-      top_k: z.number().optional(),
-      stop_sequences: z.array(z.string()).optional(),
-      max_tokens_to_sample: z.number().optional(),
-    })
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean(),
-      temperature: z.number(),
-      maxOutputTokens: z.number(),
-      topP: z.number(),
-      topK: z.number(),
-    })
-    .partial()
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean(),
-      temperature: z.number(),
-      topK: z.number(),
-    })
-    .partial()
-    .passthrough(),
-  z.object({ use_cache: z.boolean() }).partial().passthrough(),
+  z.looseObject({
+        use_cache: z.boolean(),
+        temperature: z.number(),
+        maxOutputTokens: z.number(),
+        topP: z.number(),
+        topK: z.number(),
+      })
+      .partial(),
+  z.looseObject({
+        use_cache: z.boolean(),
+        temperature: z.number(),
+        topK: z.number(),
+      })
+      .partial(),
+  z.looseObject({ use_cache: z.boolean() }).partial(),
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
@@ -648,7 +632,7 @@ export const PromptParserNullish = z.union([
   z.object({
     type: z.literal("llm_classifier"),
     use_cot: z.boolean(),
-    choice_scores: z.record(z.number().gte(0).lte(1)),
+    choice_scores: z.record(z.string(), z.number().gte(0).lte(1)),
   }),
   z.null(),
 ]);
@@ -687,7 +671,7 @@ export const FunctionTypeEnumNullish = z.union([
 export type FunctionTypeEnumNullishType = z.infer<
   typeof FunctionTypeEnumNullish
 >;
-export const FunctionIdRef = z.object({}).partial().passthrough();
+export const FunctionIdRef = z.looseObject({}).partial();
 export type FunctionIdRefType = z.infer<typeof FunctionIdRef>;
 export const PromptBlockData = z.union([
   z.object({ type: z.literal("completion"), content: z.string() }),
@@ -770,8 +754,8 @@ export const GraphEdge = z.object({
 export type GraphEdgeType = z.infer<typeof GraphEdge>;
 export const GraphData = z.object({
   type: z.literal("graph"),
-  nodes: z.record(GraphNode),
-  edges: z.record(GraphEdge),
+  nodes: z.record(z.string(), GraphNode),
+  edges: z.record(z.string(), GraphEdge),
 });
 export type GraphDataType = z.infer<typeof GraphData>;
 export const FunctionData = z.union([
@@ -795,17 +779,17 @@ export const FunctionData = z.union([
     type: z.literal("remote_eval"),
     endpoint: z.string(),
     eval_name: z.string(),
-    parameters: z.object({}).partial().passthrough(),
+    parameters: z.looseObject({}).partial(),
   }),
   z.object({ type: z.literal("global"), name: z.string() }),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   _xact_id: z.string(),
-  project_id: z.string().uuid(),
+  project_id: z.uuid(),
   log_id: z.literal("p"),
-  org_id: z.string().uuid(),
+  org_id: z.uuid(),
   name: z.string(),
   slug: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
@@ -813,7 +797,7 @@ export const Function = z.object({
   prompt_data: PromptDataNullish.optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
+    .union([z.looseObject({}).partial(), z.null()])
     .optional(),
   function_type: FunctionTypeEnumNullish.optional(),
   function_data: FunctionData,
@@ -821,7 +805,7 @@ export const Function = z.object({
     .union([
       z.object({
         object_type: AclObjectType.and(z.string()),
-        object_id: z.string().uuid(),
+        object_id: z.uuid(),
         internal: z.union([z.boolean(), z.null()]).optional(),
       }),
       z.null(),
@@ -881,7 +865,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_prompt: PromptData.optional(),
-    inline_function: z.object({}).partial().passthrough(),
+    inline_function: z.looseObject({}).partial(),
     function_type: FunctionTypeEnum.optional(),
     name: z.union([z.string(), z.null()]).optional(),
   }),
@@ -922,15 +906,15 @@ export const GitMetadataSettings = z.object({
 });
 export type GitMetadataSettingsType = z.infer<typeof GitMetadataSettings>;
 export const Group = z.object({
-  id: z.string().uuid(),
-  org_id: z.string().uuid(),
+  id: z.uuid(),
+  org_id: z.uuid(),
   user_id: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
-  member_users: z.union([z.array(z.string().uuid()), z.null()]).optional(),
-  member_groups: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  member_users: z.union([z.array(z.uuid()), z.null()]).optional(),
+  member_groups: z.union([z.array(z.uuid()), z.null()]).optional(),
 });
 export type GroupType = z.infer<typeof Group>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
@@ -950,7 +934,7 @@ export const InvokeParent = z.union([
       ])
       .optional(),
     propagated_event: z
-      .union([z.object({}).partial().passthrough(), z.null()])
+      .union([z.looseObject({}).partial(), z.null()])
       .optional(),
   }),
   z.string(),
@@ -963,7 +947,7 @@ export const InvokeFunction = FunctionId.and(
     .object({
       input: z.unknown(),
       expected: z.unknown(),
-      metadata: z.union([z.object({}).partial().passthrough(), z.null()]),
+      metadata: z.union([z.looseObject({}).partial(), z.null()]),
       tags: z.union([z.array(z.string()), z.null()]),
       messages: z.array(ChatCompletionMessageParam),
       parent: InvokeParent,
@@ -993,7 +977,7 @@ export const ObjectReference = z.object({
     "function",
     "prompt_session",
   ]),
-  object_id: z.string().uuid(),
+  object_id: z.uuid(),
   id: z.string(),
   _xact_id: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -1012,7 +996,7 @@ export const OnlineScoreConfig = z.union([
 ]);
 export type OnlineScoreConfigType = z.infer<typeof OnlineScoreConfig>;
 export const Organization = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string(),
   api_url: z.union([z.string(), z.null()]).optional(),
   is_universal_api: z.union([z.boolean(), z.null()]).optional(),
@@ -1055,8 +1039,8 @@ export const ProjectSettings = z.union([
 ]);
 export type ProjectSettingsType = z.infer<typeof ProjectSettings>;
 export const Project = z.object({
-  id: z.string().uuid(),
-  org_id: z.string().uuid(),
+  id: z.uuid(),
+  org_id: z.uuid(),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
@@ -1071,8 +1055,8 @@ export const RetentionObjectType = z.enum([
 ]);
 export type RetentionObjectTypeType = z.infer<typeof RetentionObjectType>;
 export const ProjectAutomation = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
   user_id: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
@@ -1113,38 +1097,34 @@ export const ProjectLogsEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
   _pagination_key: z.union([z.string(), z.null()]).optional(),
-  created: z.string().datetime({ offset: true }),
-  org_id: z.string().uuid(),
-  project_id: z.string().uuid(),
+  created: z.iso.datetime({ offset: true }),
+  org_id: z.uuid(),
+  project_id: z.uuid(),
   log_id: z.literal("g"),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
   expected: z.unknown().optional(),
   error: z.unknown().optional(),
   scores: z
-    .union([z.record(z.union([z.number(), z.null()])), z.null()])
+    .union([z.record(z.string(), z.union([z.number(), z.null()])), z.null()])
     .optional(),
   metadata: z
     .union([
-      z
-        .object({ model: z.union([z.string(), z.null()]) })
-        .partial()
-        .passthrough(),
+      z.looseObject({ model: z.union([z.string(), z.null()]) })
+                .partial(),
       z.null(),
     ])
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metrics: z.union([z.record(z.number()), z.null()]).optional(),
+  metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
   context: z
     .union([
-      z
-        .object({
-          caller_functionname: z.union([z.string(), z.null()]),
-          caller_filename: z.union([z.string(), z.null()]),
-          caller_lineno: z.union([z.number(), z.null()]),
-        })
-        .partial()
-        .passthrough(),
+      z.looseObject({
+                  caller_functionname: z.union([z.string(), z.null()]),
+                  caller_filename: z.union([z.string(), z.null()]),
+                  caller_lineno: z.union([z.number(), z.null()]),
+                })
+                .partial(),
       z.null(),
     ])
     .optional(),
@@ -1173,7 +1153,7 @@ export const ProjectScoreCategory = z.object({
 export type ProjectScoreCategoryType = z.infer<typeof ProjectScoreCategory>;
 export const ProjectScoreCategories = z.union([
   z.array(ProjectScoreCategory),
-  z.record(z.number()),
+  z.record(z.string(), z.number()),
   z.array(z.string()),
   z.null(),
 ]);
@@ -1190,9 +1170,9 @@ export const ProjectScoreConfig = z.union([
 ]);
 export type ProjectScoreConfigType = z.infer<typeof ProjectScoreConfig>;
 export const ProjectScore = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
+  user_id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
@@ -1203,9 +1183,9 @@ export const ProjectScore = z.object({
 });
 export type ProjectScoreType = z.infer<typeof ProjectScore>;
 export const ProjectTag = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
+  user_id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
@@ -1214,11 +1194,11 @@ export const ProjectTag = z.object({
 });
 export type ProjectTagType = z.infer<typeof ProjectTag>;
 export const Prompt = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   _xact_id: z.string(),
-  project_id: z.string().uuid(),
+  project_id: z.uuid(),
   log_id: z.literal("p"),
-  org_id: z.string().uuid(),
+  org_id: z.uuid(),
   name: z.string(),
   slug: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
@@ -1226,7 +1206,7 @@ export const Prompt = z.object({
   prompt_data: PromptDataNullish.optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
+    .union([z.looseObject({}).partial(), z.null()])
     .optional(),
   function_type: FunctionTypeEnumNullish.optional(),
 });
@@ -1238,10 +1218,10 @@ export type PromptOptionsType = z.infer<typeof PromptOptions>;
 export const PromptSessionEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
-  created: z.string().datetime({ offset: true }),
+  created: z.iso.datetime({ offset: true }),
   _pagination_key: z.union([z.string(), z.null()]).optional(),
-  project_id: z.string().uuid(),
-  prompt_session_id: z.string().uuid(),
+  project_id: z.uuid(),
+  prompt_session_id: z.uuid(),
   prompt_session_data: z.unknown().optional(),
   prompt_data: z.unknown().optional(),
   function_data: z.unknown().optional(),
@@ -1261,7 +1241,7 @@ export const ResponseFormat = z.union([
 ]);
 export type ResponseFormatType = z.infer<typeof ResponseFormat>;
 export const Role = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   org_id: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -1279,7 +1259,7 @@ export const Role = z.object({
       z.null(),
     ])
     .optional(),
-  member_roles: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  member_roles: z.union([z.array(z.uuid()), z.null()]).optional(),
 });
 export type RoleType = z.infer<typeof Role>;
 export const RunEval = z.object({
@@ -1288,14 +1268,14 @@ export const RunEval = z.object({
     z.object({
       dataset_id: z.string(),
       _internal_btql: z
-        .union([z.object({}).partial().passthrough(), z.null()])
+        .union([z.looseObject({}).partial(), z.null()])
         .optional(),
     }),
     z.object({
       project_name: z.string(),
       dataset_name: z.string(),
       _internal_btql: z
-        .union([z.object({}).partial().passthrough(), z.null()])
+        .union([z.looseObject({}).partial(), z.null()])
         .optional(),
     }),
     z.object({ data: z.array(z.unknown()) }),
@@ -1303,13 +1283,13 @@ export const RunEval = z.object({
   task: FunctionId.and(z.unknown()),
   scores: z.array(FunctionId),
   experiment_name: z.string().optional(),
-  metadata: z.object({}).partial().passthrough().optional(),
+  metadata: z.looseObject({}).partial().optional(),
   parent: InvokeParent.and(z.unknown()).optional(),
   stream: z.boolean().optional(),
   trial_count: z.union([z.number(), z.null()]).optional(),
   is_public: z.union([z.boolean(), z.null()]).optional(),
   timeout: z.union([z.number(), z.null()]).optional(),
-  max_concurrency: z.union([z.number(), z.null()]).optional().default(10),
+  max_concurrency: z.union([z.number(), z.null()]).optional().prefault(10),
   base_experiment_name: z.union([z.string(), z.null()]).optional(),
   base_experiment_id: z.union([z.string(), z.null()]).optional(),
   git_metadata_settings: GitMetadataSettings.and(
@@ -1323,7 +1303,7 @@ export const RunEval = z.object({
 });
 export type RunEvalType = z.infer<typeof RunEval>;
 export const ServiceToken = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   created: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   preview_name: z.string(),
@@ -1334,8 +1314,8 @@ export const ServiceToken = z.object({
 });
 export type ServiceTokenType = z.infer<typeof ServiceToken>;
 export const SpanIFrame = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
+  id: z.uuid(),
+  project_id: z.uuid(),
   user_id: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
@@ -1375,13 +1355,13 @@ export const ToolFunctionDefinition = z.object({
   function: z.object({
     name: z.string(),
     description: z.string().optional(),
-    parameters: z.object({}).partial().passthrough().optional(),
+    parameters: z.looseObject({}).partial().optional(),
     strict: z.union([z.boolean(), z.null()]).optional(),
   }),
 });
 export type ToolFunctionDefinitionType = z.infer<typeof ToolFunctionDefinition>;
 export const User = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   given_name: z.union([z.string(), z.null()]).optional(),
   family_name: z.union([z.string(), z.null()]).optional(),
   email: z.union([z.string(), z.null()]).optional(),
@@ -1416,7 +1396,7 @@ export const ViewOptions = z.union([
         frameStart: z.union([z.string(), z.null()]),
         frameEnd: z.union([z.string(), z.null()]),
         tzUTC: z.union([z.boolean(), z.null()]),
-        chartVisibility: z.union([z.record(z.boolean()), z.null()]),
+        chartVisibility: z.union([z.record(z.string(), z.boolean()), z.null()]),
         projectId: z.union([z.string(), z.null()]),
         type: z.union([z.enum(["project", "experiment"]), z.null()]),
         groupBy: z.union([z.string(), z.null()]),
@@ -1425,9 +1405,9 @@ export const ViewOptions = z.union([
   }),
   z
     .object({
-      columnVisibility: z.union([z.record(z.boolean()), z.null()]),
+      columnVisibility: z.union([z.record(z.string(), z.boolean()), z.null()]),
       columnOrder: z.union([z.array(z.string()), z.null()]),
-      columnSizing: z.union([z.record(z.number()), z.null()]),
+      columnSizing: z.union([z.record(z.string(), z.number()), z.null()]),
       grouping: z.union([z.string(), z.null()]),
       rowHeight: z.union([z.string(), z.null()]),
       tallGroupRows: z.union([z.boolean(), z.null()]),
@@ -1479,9 +1459,9 @@ export const ViewOptions = z.union([
 ]);
 export type ViewOptionsType = z.infer<typeof ViewOptions>;
 export const View = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   object_type: AclObjectType.and(z.string()),
-  object_id: z.string().uuid(),
+  object_id: z.uuid(),
   view_type: z.enum([
     "projects",
     "experiments",

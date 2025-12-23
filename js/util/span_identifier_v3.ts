@@ -7,7 +7,7 @@ import {
   ParentPlaygroundLogIds,
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 import {
   base64ToUint8Array,
@@ -41,7 +41,7 @@ export enum SpanObjectTypeV3 {
   PLAYGROUND_LOGS = 3,
 }
 
-export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
+export const spanObjectTypeV3EnumSchema = z.enum(SpanObjectTypeV3);
 
 export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
   switch (objectType) {
@@ -64,7 +64,7 @@ enum InternalSpanComponentUUIDFields {
   ROOT_SPAN_ID = 4,
 }
 
-const internalSpanComponentUUIDFieldsEnumSchema = z.nativeEnum(
+const internalSpanComponentUUIDFieldsEnumSchema = z.enum(
   InternalSpanComponentUUIDFields,
 );
 
@@ -84,7 +84,7 @@ export const spanComponentsV3Schema = z
     // TODO(manu): We should have a more elaborate zod schema for
     // `propagated_event`. This will required zod-ifying the contents of
     // sdk/js/util/object.ts.
-    propagated_event: z.record(z.unknown()).nullish(),
+    propagated_event: z.record(z.string(), z.unknown()).nullish(),
   })
   .and(
     z.union([
@@ -95,7 +95,7 @@ export const spanComponentsV3Schema = z
       }),
       z.object({
         object_id: z.optional(z.null()),
-        compute_object_metadata_args: z.record(z.unknown()),
+        compute_object_metadata_args: z.record(z.string(), z.unknown()),
       }),
     ]),
   )

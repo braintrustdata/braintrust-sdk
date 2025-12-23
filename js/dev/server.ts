@@ -43,7 +43,7 @@ import {
   evalParametersSerializedSchema,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import zodToJsonSchema from "zod-to-json-schema";
 export interface DevServerOpts {

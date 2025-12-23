@@ -18,7 +18,7 @@ import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { addAzureBlobHeaders, isEmpty } from "../../util";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { capitalize } from "../../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";

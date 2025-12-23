@@ -79,7 +79,7 @@ import {
 } from "./template/renderer";
 import { renderNunjucksString } from "./template/nunjucks-env";
 
-import { z, ZodError } from "zod/v3";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -1272,8 +1272,8 @@ export class Attachment extends BaseAttachment {
       try {
         ({ signedUrl, headers } = z
           .object({
-            signedUrl: z.string().url(),
-            headers: z.record(z.string()),
+            signedUrl: z.url(),
+            headers: z.record(z.string(), z.string()),
           })
           .parse(await metadataResponse.json()));
       } catch (error) {
@@ -6596,7 +6596,7 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z.record(z.string(), z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
@@ -6683,7 +6683,7 @@ export class Prompt<
       }
     };
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z.record(z.string(), z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),

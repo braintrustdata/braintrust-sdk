@@ -3,7 +3,7 @@
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
 import { SpanComponentsV1 } from "./span_identifier_v1";
-import { z } from "zod/v3";
+import { z } from "zod";
 
 function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
   try {
@@ -29,7 +29,7 @@ export enum SpanObjectTypeV2 {
   PROJECT_LOGS = 2,
 }
 
-const SpanObjectTypeV2EnumSchema = z.nativeEnum(SpanObjectTypeV2);
+const SpanObjectTypeV2EnumSchema = z.enum(SpanObjectTypeV2);
 
 export class SpanRowIdsV2 {
   public rowId: string;

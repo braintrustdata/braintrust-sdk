@@ -4,7 +4,7 @@ import {
   RunEval as runEvalSchema,
   PromptData as promptDataSchema,
 } from "../src/generated_types";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { EvaluatorDef } from "../src/framework";
 import { BaseMetadata } from "../src/logger";
 
@@ -41,7 +41,7 @@ export const evalParametersSerializedSchema = z.record(
     }),
     z.object({
       type: z.literal("data"),
-      schema: z.record(z.unknown()), // JSON Schema
+      schema: z.record(z.string(), z.unknown()), // JSON Schema
       default: z.unknown().optional(),
       description: z.string().optional(),
     }),
