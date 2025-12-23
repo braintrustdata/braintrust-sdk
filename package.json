@@ -22,5 +22,8 @@
   "overrides": {
     "tsup": "8.4.0"
   },
-  "packageManager": "pnpm@8.15.5"
+  "packageManager": "pnpm@8.15.5",
+  "peerDependencies": {
+    "zod": ">=3.25.0 <=4.2.1"
+  }
 }

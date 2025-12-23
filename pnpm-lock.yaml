@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      zod:
+        specifier: '>=3.25.0 <=4.2.1'
+        version: 3.25.76
     devDependencies:
       pyright:
         specifier: ^1.1.404
