@@ -8,6 +8,7 @@
  */
 
 import type { ZodType } from "zod";
+import * as zodModule from "zod";
 import { zodToJsonSchema as zodToJsonSchemaLib } from "zod-to-json-schema";
 
 /**
@@ -21,6 +22,18 @@ import { zodToJsonSchema as zodToJsonSchemaLib } from "zod-to-json-schema";
  * @param schema - The zod schema to convert
  * @returns JSON Schema representation
  */
+/**
+ * Converts a zod schema to JSON Schema format.
+ * Uses zod 4's built-in zodToJsonSchema if available, otherwise falls back to zod-to-json-schema for zod 3.
+ *
+ * @param schema - The zod schema to convert
+ * @returns JSON Schema representation
+ */
 export function zodToJsonSchema(schema: ZodType): unknown {
+  // Prefer zod 4's instance .toJSONSchema() if available
+  if (schema && typeof (schema as any).toJSONSchema === "function") {
+    return (schema as any).toJSONSchema();
+  }
+  // Fallback to zod-to-json-schema for zod 3
   return zodToJsonSchemaLib(schema);
 }

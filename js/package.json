@@ -111,8 +111,8 @@
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^2.1.9"
-
+    "vitest": "^2.1.9",
+    "zod": "3.25.76"
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",
@@ -142,6 +142,6 @@
     "zod-to-json-schema": "^3.25.0"
   },
   "peerDependencies": {
-    "zod": "^3.25 || ^4"
+    "zod": "3.25.76"
   }
 }

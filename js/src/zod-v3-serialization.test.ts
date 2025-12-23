@@ -15,6 +15,7 @@ import {
   EXPECTED_OBJECT_SCHEMA,
   EXPECTED_ENUM_SCHEMA,
   EXPECTED_ARRAY_SCHEMA,
+  expectSchemaMatch,
 } from "./zod-serialization-test-shared";
 
 // Detect which zod version is installed by checking for v4-specific properties
@@ -43,7 +44,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
     expect(result.instructions).toBeDefined();
     expect(result.instructions.type).toBe("data");
     if (result.instructions.type === "data") {
-      expect(result.instructions.schema).toMatchObject(EXPECTED_STRING_SCHEMA);
+      expectSchemaMatch(result.instructions.schema, EXPECTED_STRING_SCHEMA);
       expect(result.instructions.description).toBe(
         "The instructions for the agent",
       );
@@ -65,7 +66,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     expect(result.temperature.type).toBe("data");
     if (result.temperature.type === "data") {
-      expect(result.temperature.schema).toMatchObject(EXPECTED_NUMBER_SCHEMA);
+      expectSchemaMatch(result.temperature.schema, EXPECTED_NUMBER_SCHEMA);
       expect(result.temperature.description).toBe("Temperature for LLM");
       expect(result.temperature.default).toBe(0.7);
     }
@@ -85,7 +86,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     expect(result.config.type).toBe("data");
     if (result.config.type === "data") {
-      expect(result.config.schema).toMatchObject(EXPECTED_OBJECT_SCHEMA);
+      expectSchemaMatch(result.config.schema, EXPECTED_OBJECT_SCHEMA);
       expect(result.config.description).toBe("Configuration object");
     }
   });
@@ -102,7 +103,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     expect(result.mode.type).toBe("data");
     if (result.mode.type === "data") {
-      expect(result.mode.schema).toMatchObject(EXPECTED_ENUM_SCHEMA);
+      expectSchemaMatch(result.mode.schema, EXPECTED_ENUM_SCHEMA);
       expect(result.mode.description).toBe("Processing mode");
       expect(result.mode.default).toBe("balanced");
     }
@@ -120,7 +121,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     expect(result.tags.type).toBe("data");
     if (result.tags.type === "data") {
-      expect(result.tags.schema).toMatchObject(EXPECTED_ARRAY_SCHEMA);
+      expectSchemaMatch(result.tags.schema, EXPECTED_ARRAY_SCHEMA);
       expect(result.tags.description).toBe("Tags for filtering");
       expect(result.tags.default).toEqual(["default"]);
     }
