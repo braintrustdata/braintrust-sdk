@@ -5,12 +5,13 @@ import {
   PromptData as promptDataSchema,
 } from "../src/generated_types";
 import { z } from "zod";
+import { zRecordCompat } from "../util/zod_compat";
 import { EvaluatorDef } from "../src/framework";
 import { BaseMetadata } from "../src/logger";
 
 export const evalBodySchema = z.object({
   name: z.string(),
-  parameters: z.record(z.string(), z.unknown()).nullish(),
+  parameters: zRecordCompat(z.unknown()).nullish(),
   data: runEvalSchema.shape.data,
   scores: z
     .array(
@@ -31,8 +32,7 @@ export type EvaluatorManifest = Record<
   EvaluatorDef<unknown, unknown, unknown, BaseMetadata>
 >;
 
-export const evalParametersSerializedSchema = z.record(
-  z.string(),
+export const evalParametersSerializedSchema = zRecordCompat(
   z.union([
     z.object({
       type: z.literal("prompt"),
@@ -41,7 +41,7 @@ export const evalParametersSerializedSchema = z.record(
     }),
     z.object({
       type: z.literal("data"),
-      schema: z.record(z.unknown()), // JSON Schema
+      schema: zRecordCompat(z.unknown()), // JSON Schema
       default: z.unknown().optional(),
       description: z.string().optional(),
     }),
@@ -57,8 +57,7 @@ export const evaluatorDefinitionSchema = z.object({
 });
 export type EvaluatorDefinition = z.infer<typeof evaluatorDefinitionSchema>;
 
-export const evaluatorDefinitionsSchema = z.record(
-  z.string(),
+export const evaluatorDefinitionsSchema = zRecordCompat(
   evaluatorDefinitionSchema,
 );
 

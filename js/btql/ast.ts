@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zRecordCompat } from "../util/zod_compat";
 
 export const posSchema = z.strictObject({
   line: z.number(),
@@ -37,7 +38,8 @@ export const arrayLiteralSchema: z.ZodType<ParsedArray> = z.array(
 export interface ParsedObject {
   [key: string]: LiteralValue;
 }
-export const objectLiteralSchema: z.ZodType<ParsedObject> = z.record(
+
+export const parsedObjectSchema = zRecordCompat(
   z.lazy(() => literalValueSchema),
 );
 
@@ -59,7 +61,7 @@ export const literalValueSchema: z.ZodType<LiteralValue> = z.union([
   stringLiteralSchema,
   datetimeLiteralSchema,
   arrayLiteralSchema,
-  z.lazy(() => objectLiteralSchema),
+  z.lazy(() => parsedObjectSchema),
 ]);
 
 export const literalSchema = z.object({
@@ -95,23 +97,17 @@ export const identSchema = z.strictObject({
   name: z.array(identPieceSchema),
   loc,
 });
-export type Ident = z.infer<typeof identSchema>;
 
 export const starSchema = z.strictObject({
   op: z.literal("star"),
-  replace: z.record(z.lazy(() => exprSchema)).optional(),
+  replace: zRecordCompat(z.lazy(() => exprSchema)).optional(),
   loc,
 });
-
-export interface Star {
-  op: "star";
-  replace?: Record<string, Expr>;
-  loc?: NullableLoc;
-}
+export type Star = z.infer<typeof starSchema>;
 
 export interface Function {
   op: "function";
-  name: Ident;
+  name: z.infer<typeof identSchema>;
   args: (Expr | AliasExpr)[];
   loc?: NullableLoc;
 }
@@ -269,10 +265,10 @@ export const singleSpanFilterSchema: z.ZodType<SingleSpanFilter> =
   });
 
 export type Expr =
-  | Literal
-  | Interval
-  | Ident
-  | Star
+  | z.infer<typeof literalSchema>
+  | z.infer<typeof intervalLiteralSchema>
+  | z.infer<typeof identSchema>
+  | z.infer<typeof starSchema>
   | Function
   | ComparisonExpr
   | IncludesExpr
@@ -284,7 +280,7 @@ export type Expr =
   | BtqlSnippet
   | SingleSpanFilter;
 
-export const exprSchema: z.ZodType<Expr> = z.union([
+export const exprSchema = z.union([
   literalSchema,
   intervalLiteralSchema,
   identSchema,

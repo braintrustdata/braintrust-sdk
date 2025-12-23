@@ -3,6 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
+import { zRecordCompat } from "../util/zod_compat";
 import { IDGenerator, getIdGenerator } from "./id-gen";
 import {
   _urljoin,
@@ -1270,12 +1271,14 @@ export class Attachment extends BaseAttachment {
       let signedUrl: string | undefined;
       let headers: Record<string, string>;
       try {
-        ({ signedUrl, headers } = z
+        const parsed = z
           .object({
             signedUrl: z.string().url(),
-            headers: z.record(z.string()),
+            headers: zRecordCompat(z.string()),
           })
-          .parse(await metadataResponse.json()));
+          .parse(await metadataResponse.json());
+        signedUrl = parsed.signedUrl;
+        headers = parsed.headers as Record<string, string>;
       } catch (error) {
         if (error instanceof ZodError) {
           const errorStr = JSON.stringify(error.flatten());
@@ -1684,6 +1687,7 @@ function logFeedbackImpl(
     new SpanComponentsV3({
       object_type: parentObjectType,
       object_id: await parentObjectId.get(),
+      propagated_event: {},
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
@@ -1746,6 +1750,7 @@ function updateSpanImpl({
     new SpanComponentsV3({
       object_type: parentObjectType,
       object_id: await parentObjectId.get(),
+      propagated_event: {},
     }).objectIdFields();
 
   const record = new LazyValue(async () => ({
@@ -2217,6 +2222,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     // `_lazy_id` object specifically will also be marked as computed.
     return new (getSpanComponentsClass())({
       object_type: this.parentObjectType(),
+      propagated_event: {},
       ...(this.computeMetadataArgs && !this.lazyId.hasSucceeded
         ? { compute_object_metadata_args: this.computeMetadataArgs }
         : { object_id: await this.lazyId.get() }),
@@ -5268,6 +5274,7 @@ export class Experiment
     return new (getSpanComponentsClass())({
       object_type: this.parentObjectType(),
       object_id: await this.id,
+      propagated_event: {},
     }).toStr();
   }
 
@@ -5623,6 +5630,7 @@ export class SpanImpl implements Span {
       ...new SpanComponentsV3({
         object_type: this.parentObjectType,
         object_id: await this.parentObjectId.get(),
+        propagated_event: {},
       }).objectIdFields(),
     });
     this._state.bgLogger().log([new LazyValue(computeRecord)]);
@@ -6592,7 +6600,7 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = zRecordCompat(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
@@ -6675,7 +6683,7 @@ export class Prompt<
       }
     };
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = zRecordCompat(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
