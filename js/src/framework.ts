@@ -936,7 +936,24 @@ async function runEvaluatorInternal(
         },
       };
 
-      const callback = async (rootSpan: Span) => {
+      type OriginType =
+        | {
+            object_type:
+              | "function"
+              | "experiment"
+              | "dataset"
+              | "prompt"
+              | "prompt_session"
+              | "project_logs";
+            object_id: string;
+            id: string;
+            _xact_id?: string | null | undefined;
+            created?: string | undefined;
+          }
+        | null
+        | undefined;
+
+      const callback = async (rootSpan: Span): Promise<void> => {
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
@@ -967,7 +984,7 @@ async function runEvaluatorInternal(
                   stream?.({
                     ...event,
                     id: rootSpan.id,
-                    origin: baseEvent.event?.origin,
+                    origin: baseEvent.event?.origin as OriginType,
                     name: evaluator.evalName,
                     object_type: "task",
                   });
@@ -1159,22 +1176,10 @@ async function runEvaluatorInternal(
             metadata,
             scores: mergedScores,
             error,
-            origin: baseEvent.event?.origin as
-              | {
-                  object_type:
-                    | "function"
-                    | "experiment"
-                    | "dataset"
-                    | "prompt"
-                    | "prompt_session"
-                    | "project_logs";
-                  object_id: string;
-                  id: string;
-                  _xact_id?: string | null | undefined;
-                  created?: string | undefined;
-                }
-              | null
-              | undefined,
+            origin:
+              baseEvent.event?.origin === null
+                ? undefined
+                : (baseEvent.event?.origin as Exclude<OriginType, null>),
           });
         }
       };
@@ -1182,25 +1187,10 @@ async function runEvaluatorInternal(
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
-        return (await traced(callback, {
+        return await traced<boolean>(callback, {
           ...baseEvent,
           state: evaluator.state,
-        })) as
-          | {
-              object_type:
-                | "function"
-                | "experiment"
-                | "dataset"
-                | "prompt"
-                | "prompt_session"
-                | "project_logs";
-              object_id: string;
-              id: string;
-              _xact_id?: string | null | undefined;
-              created?: string | undefined;
-            }
-          | null
-          | undefined;
+        });
       } else {
         const result = await experiment.traced(callback, baseEvent);
         // Flush logs after each task to provide backpressure and prevent memory accumulation
