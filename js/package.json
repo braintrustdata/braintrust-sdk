@@ -55,7 +55,6 @@
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
-    "docs": "npx typedoc --options typedoc.json src/index.ts",
     "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel/**/*.test.ts\" --exclude \"smoke/**/*.test.ts\"",
     "test:api-compat": "vitest run src/api-compatibility.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
@@ -108,6 +107,7 @@
     "typedoc": "^0.25.13",
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
+    "zod": "^4.2.1",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^2.1.9"
   },
@@ -136,10 +136,9 @@
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
     "uuid": "^9.0.1",
-    "zod": "^3.25.34",
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
-    "zod": "^3.25.34"
+    "zod": "^3 || ^4"
   }
 }
