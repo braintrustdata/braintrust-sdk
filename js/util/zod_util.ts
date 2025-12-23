@@ -66,10 +66,22 @@ export function objectNullish<T extends z.ZodRawShape>(
   const originalShape = getShape(object) as Record<string, z.ZodTypeAny>;
   const newShape: Record<string, z.ZodTypeAny> = {};
   for (const [k, v] of Object.entries(originalShape)) {
-    newShape[k] = (v as z.ZodTypeAny).nullish();
+    // Call `.nullish()` on the original field so the resulting schema
+    // objects come from the same Zod runtime as the input (avoids mixing
+    // Zod v3 and v4 instances which leads to runtime/type errors).
+    newShape[k] = (v as any).nullish();
   }
 
-  // Prefer the public constructor to avoid depending on Zod internals.
+  // If the input object schema exposes an `extend` method, use it so the
+  // returned schema is created by the same Zod runtime as the input.
+  if (typeof (object as any).extend === "function") {
+    return (object as any).extend(newShape) as unknown as z.ZodObject<
+      { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
+      any
+    >;
+  }
+
+  // Fallback to the public `z.object()` constructor (best-effort).
   return z.object(newShape) as unknown as z.ZodObject<
     { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
     any
