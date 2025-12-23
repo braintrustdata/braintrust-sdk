@@ -69,18 +69,7 @@ export function objectNullish<T extends z.ZodRawShape>(
     newShape[k] = (v as z.ZodTypeAny).nullish();
   }
 
-  // If we can preserve the original _def (Zod v4), prefer constructing a
-  // new ZodObject with the same def but overridden shape. Otherwise fall back
-  // to the public `z.object()` constructor which works across versions.
-  if ((object as any)._def) {
-    const def = { ...(object as any)._def };
-    def.shape = () => newShape;
-    return new z.ZodObject(def) as unknown as z.ZodObject<
-      { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
-      any
-    >;
-  }
-
+  // Prefer the public constructor to avoid depending on Zod internals.
   return z.object(newShape) as unknown as z.ZodObject<
     { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
     any
