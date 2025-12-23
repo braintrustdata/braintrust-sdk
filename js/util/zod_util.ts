@@ -61,7 +61,10 @@ export function objectNullish<T extends z.ZodRawShape>(
     ...object._def,
     shape: () =>
       Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [k, (v as z.ZodTypeAny).nullish()]),
+        Object.entries(object.shape).map(([k, v]) => [
+          k,
+          (v as z.ZodTypeAny).nullish(),
+        ]),
       ),
   }) as unknown as z.ZodObject<
     { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },

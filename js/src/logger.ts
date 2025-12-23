@@ -6596,7 +6596,9 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.string(), z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
@@ -6683,7 +6685,9 @@ export class Prompt<
       }
     };
 
-    const dictArgParsed = z.record(z.string(), z.unknown()).safeParse(buildArgs);
+    const dictArgParsed = z
+      .record(z.string(), z.unknown())
+      .safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),

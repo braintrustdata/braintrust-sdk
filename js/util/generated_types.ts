@@ -50,18 +50,14 @@ export const AISecret = z.object({
   org_id: z.uuid(),
   name: z.string(),
   type: z.union([z.string(), z.null()]).optional(),
-  metadata: z
-    .union([z.looseObject({}).partial(), z.null()])
-    .optional(),
+  metadata: z.union([z.looseObject({}).partial(), z.null()]).optional(),
   preview_secret: z.union([z.string(), z.null()]).optional(),
 });
 export type AISecretType = z.infer<typeof AISecret>;
 export const ResponseFormatJsonSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  schema: z
-    .union([z.looseObject({}).partial(), z.string()])
-    .optional(),
+  schema: z.union([z.looseObject({}).partial(), z.string()]).optional(),
   strict: z.union([z.boolean(), z.null()]).optional(),
 });
 export type ResponseFormatJsonSchemaType = z.infer<
@@ -398,9 +394,7 @@ export const Dataset = z.object({
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
-  metadata: z
-    .union([z.looseObject({}).partial(), z.null()])
-    .optional(),
+  metadata: z.union([z.looseObject({}).partial(), z.null()]).optional(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -430,13 +424,7 @@ export const DatasetEvent = z.object({
   dataset_id: z.uuid(),
   input: z.unknown().optional(),
   expected: z.unknown().optional(),
-  metadata: z
-    .union([
-      z.looseObject({ model: z.union([z.string(), z.null()]) })
-                .partial(),
-      z.null(),
-    ])
-    .optional(),
+  metadata: z.union([z.looseObject({ model: z.union([z.string(), z.null()]) }).partial(), z.null()]).optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   span_id: z.string(),
   root_span_id: z.string(),
@@ -524,17 +512,7 @@ export const ExperimentEvent = z.object({
     .optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   metrics: z.union([z.record(z.string(), z.number()), z.null()]).optional(),
-  context: z
-    .union([
-      z.looseObject({
-                  caller_functionname: z.union([z.string(), z.null()]),
-                  caller_filename: z.union([z.string(), z.null()]),
-                  caller_lineno: z.union([z.number(), z.null()]),
-                })
-                .partial(),
-      z.null(),
-    ])
-    .optional(),
+  context: z.union([z.looseObject({ caller_functionname: z.union([z.string(), z.null()]), caller_filename: z.union([z.string(), z.null()]), caller_lineno: z.union([z.number(), z.null()]) }).partial(), z.null()]).optional(),
   span_id: z.string(),
   span_parents: z.union([z.array(z.string()), z.null()]).optional(),
   root_span_id: z.string(),
@@ -796,9 +774,7 @@ export const Function = z.object({
   created: z.union([z.string(), z.null()]).optional(),
   prompt_data: PromptDataNullish.optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metadata: z
-    .union([z.looseObject({}).partial(), z.null()])
-    .optional(),
+  metadata: z.union([z.looseObject({}).partial(), z.null()]).optional(),
   function_type: FunctionTypeEnumNullish.optional(),
   function_data: FunctionData,
   origin: z

@@ -38,7 +38,8 @@ export interface ParsedObject {
   [key: string]: LiteralValue;
 }
 export const objectLiteralSchema: z.ZodType<ParsedObject> = z.record(
-  z.string(), z.lazy(() => literalValueSchema),
+  z.string(),
+  z.lazy(() => literalValueSchema),
 );
 
 export type LiteralValue =
@@ -99,7 +100,12 @@ export type Ident = z.infer<typeof identSchema>;
 
 export const starSchema = z.strictObject({
   op: z.literal("star"),
-  replace: z.record(z.string(), z.lazy(() => exprSchema)).optional(),
+  replace: z
+    .record(
+      z.string(),
+      z.lazy(() => exprSchema),
+    )
+    .optional(),
   loc,
 });
 
