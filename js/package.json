@@ -75,6 +75,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "ts-morph": "^22.0.0",
     "@ai-sdk/anthropic": "2.0.37",
     "@anthropic-ai/sdk": "^0.60.0",
     "@google/genai": "^1.25.0",
