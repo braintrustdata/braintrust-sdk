@@ -15,8 +15,10 @@ const TEMPLATE_PATH = path.join(
 const OUTPUT_PATH = path.join(SCRIPT_DIR, "../src/generated_types.ts");
 
 async function main() {
+  const zodVersion = process.env.ZOD_VERSION || "3";
   const openApiDoc = JSON.parse(await fs.readFile(OPENAPI_SPEC_PATH, "utf-8"));
   const handlebars = getHandlebars();
+
   await generateZodClientFromOpenAPI({
     openApiDoc,
     templatePath: TEMPLATE_PATH,
@@ -29,7 +31,12 @@ async function main() {
     },
   });
 
-  const code = await fs.readFile(OUTPUT_PATH, "utf8");
+  let code = await fs.readFile(OUTPUT_PATH, "utf8");
+  if (zodVersion.startsWith("4")) {
+    // Patch all z.record(value) to z.record(z.string(), value) for Zod 4
+    // Handles nested parentheses by only replacing the first argument
+    code = code.replace(/z\.record\(([^,\)]+)\)/g, "z.record(z.string(), $1)");
+  }
   const internalGitSha = openApiDoc.info["x-internal-git-sha"] || "UNKNOWN";
   const banner = `// Auto-generated file (internal git SHA ${internalGitSha}) -- do not modify\n\n`;
   await fs.writeFile(OUTPUT_PATH, banner + code);
