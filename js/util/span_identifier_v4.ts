@@ -143,8 +143,17 @@ export class SpanComponentsV4 {
     });
 
     const allBuffers: Array<Uint8Array> = [];
+    // Normalize object_type to numeric value in case generated Zod types
+    // represent enums as strings (migration v3->v4 may change enum typings).
+    const objectTypeNum =
+      typeof this.data.object_type === "number"
+        ? this.data.object_type
+        : // try enum lookup (e.g. "EXPERIMENT" -> 1) or numeric parse
+        (SpanObjectTypeV3 as any)[this.data.object_type] ??
+        parseInt(String(this.data.object_type), 10);
+
     allBuffers.push(
-      new Uint8Array([ENCODING_VERSION_NUMBER_V4, this.data.object_type]),
+      new Uint8Array([ENCODING_VERSION_NUMBER_V4, objectTypeNum]),
     );
 
     const hexEntries: Array<Uint8Array> = [];
@@ -269,7 +278,13 @@ export class SpanComponentsV4 {
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV4 is initialized with an `object_id`",
       );
     }
-    switch (this.data.object_type) {
+    const ot =
+      typeof this.data.object_type === "number"
+        ? this.data.object_type
+        : (SpanObjectTypeV3 as any)[this.data.object_type] ??
+          parseInt(String(this.data.object_type), 10);
+
+    switch (ot) {
       case SpanObjectTypeV3.EXPERIMENT:
         return { experiment_id: this.data.object_id };
       case SpanObjectTypeV3.PROJECT_LOGS:
@@ -277,7 +292,7 @@ export class SpanComponentsV4 {
       case SpanObjectTypeV3.PLAYGROUND_LOGS:
         return { prompt_session_id: this.data.object_id, log_id: "x" };
       default:
-        const _: never = this.data.object_type;
+        const _: never = ot as never;
         throw new Error(`Invalid object_type ${this.data.object_type}`);
     }
   }
