@@ -445,8 +445,10 @@ export function contextFromSpanExport(exportStr: string): unknown {
 
   // Construct braintrust.parent identifier
   // Ensure object_type is a number (SpanObjectTypeV3)
-  let objectTypeEnum: number = components.data.object_type as number;
-  if (typeof components.data.object_type === "string") {
+  let objectTypeEnum: number = 0;
+  if (typeof components.data.object_type === "number") {
+    objectTypeEnum = components.data.object_type;
+  } else if (typeof components.data.object_type === "string") {
     const mapped = (SpanObjectTypeV3 as any)[components.data.object_type];
     objectTypeEnum = typeof mapped === "number" ? mapped : 0;
   }
