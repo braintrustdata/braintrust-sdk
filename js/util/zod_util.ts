@@ -54,19 +54,34 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
 export function objectNullish<T extends z.ZodRawShape>(
   object: z.ZodObject<T, any>,
 ) {
-  // Construct a new ZodObject at runtime while avoiding strict type-level
-  // dependency on Zod internals. We cast to the public ZodObject shape
-  // expected by the codebase.
-  return new z.ZodObject({
-    ...object._def,
-    shape: () =>
-      Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [
-          k,
-          (v as z.ZodTypeAny).nullish(),
-        ]),
-      ),
-  }) as unknown as z.ZodObject<
+  // Build a nullish version of the object's shape in a way that works with
+  // both Zod v3 and v4 internals. Some Zod versions expose `shape` as a
+  // property, others as a function, and `_def` may or may not be present.
+  const getShape = (obj: any) => {
+    if (typeof obj.shape === "function") return obj.shape();
+    if (obj._def && typeof obj._def.shape === "function") return obj._def.shape();
+    return obj.shape || (obj._def && obj._def.shape) || {};
+  };
+
+  const originalShape = getShape(object) as Record<string, z.ZodTypeAny>;
+  const newShape: Record<string, z.ZodTypeAny> = {};
+  for (const [k, v] of Object.entries(originalShape)) {
+    newShape[k] = (v as z.ZodTypeAny).nullish();
+  }
+
+  // If we can preserve the original _def (Zod v4), prefer constructing a
+  // new ZodObject with the same def but overridden shape. Otherwise fall back
+  // to the public `z.object()` constructor which works across versions.
+  if ((object as any)._def) {
+    const def = { ...(object as any)._def };
+    def.shape = () => newShape;
+    return new z.ZodObject(def) as unknown as z.ZodObject<
+      { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
+      any
+    >;
+  }
+
+  return z.object(newShape) as unknown as z.ZodObject<
     { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
     any
   >;
