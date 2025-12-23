@@ -394,7 +394,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python", "browser", "quickjs"]),
+    runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
     version: z.string(),
   }),
   location: z.union([
@@ -737,7 +737,7 @@ export const PromptDataNullish = z.union([
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
       template_format: z.union([
-        z.enum(["mustache", "nunjucks", "none"]),
+        z.enum(["mustache", "nunjucks", "none"] as const),
         z.null(),
       ]),
       mcp: z.union([
@@ -787,7 +787,7 @@ export const FunctionTypeEnumNullish = z.union([
     "custom_view",
     "preprocessor",
     "facet",
-  ]),
+  ] as const),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -889,7 +889,7 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python", "browser", "quickjs"]),
+          runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
           version: z.string(),
         }),
         code: z.string(),
@@ -963,7 +963,7 @@ export const PromptData = z
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
     template_format: z.union([
-      z.enum(["mustache", "nunjucks", "none"]),
+      z.enum(["mustache", "nunjucks", "none"] as const),
       z.null(),
     ]),
     mcp: z.union([
@@ -1006,7 +1006,7 @@ export const FunctionTypeEnum = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
-]);
+] as const);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
@@ -1023,7 +1023,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python", "browser", "quickjs"]),
+      runtime: z.enum(["node", "python", "browser", "quickjs"] as const),
       version: z.string(),
     }),
     code: z.string(),
@@ -1051,7 +1051,7 @@ export const FunctionObjectType = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
-]);
+] as const);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum([
   "completion",
@@ -1112,7 +1112,7 @@ export const InvokeContext = z.union([
       "experiment",
       "dataset",
       "playground_logs",
-    ]),
+    ] as const),
     object_id: z.string(),
     scope: InvokeScope,
   }),
@@ -1145,7 +1145,7 @@ export const InvokeParent = z.union([
 ]);
 export type InvokeParentType = z.infer<typeof InvokeParent>;
 export const StreamingMode = z.union([
-  z.enum(["auto", "parallel", "json", "text"]),
+  z.enum(["auto", "parallel", "json", "text"] as const),
   z.null(),
 ]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
@@ -1162,7 +1162,10 @@ export const InvokeFunction = FunctionId.and(
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
       strict: z.union([z.boolean(), z.null()]),
-      mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
+      mcp_auth: z.record(
+        z.string(),
+        z.object({ oauth_token: z.string() }).partial(),
+      ),
       overrides: z.union([z.object({}).partial().passthrough(), z.null()]),
     })
     .partial(),
@@ -1708,7 +1711,7 @@ export const ViewOptions = z.union([
         z.object({ from: z.string(), to: z.string() }),
         z.null(),
       ]),
-      queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
+      queryShape: z.union([z.enum(["traces", "spans"] as const), z.null()]),
       freezeColumns: z.union([z.boolean(), z.null()]),
     })
     .partial(),
