@@ -108,9 +108,9 @@
     "typedoc": "^0.25.13",
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
-    "zod": "^4.2.1",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "zod": "^4.2.1"
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",

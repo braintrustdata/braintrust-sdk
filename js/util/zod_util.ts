@@ -59,7 +59,8 @@ export function objectNullish<T extends z.ZodRawShape>(
   // property, others as a function, and `_def` may or may not be present.
   const getShape = (obj: any) => {
     if (typeof obj.shape === "function") return obj.shape();
-    if (obj._def && typeof obj._def.shape === "function") return obj._def.shape();
+    if (obj._def && typeof obj._def.shape === "function")
+      return obj._def.shape();
     return obj.shape || (obj._def && obj._def.shape) || {};
   };
 
