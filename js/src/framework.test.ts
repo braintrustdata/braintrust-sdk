@@ -812,7 +812,7 @@ test("tags remain empty when not set", async () => {
 });
 
 // ========== framework2 metadata tests ==========
-import { z } from "zod/v3";
+import { z } from "zod";
 import { projects, CodePrompt } from "./framework2";
 
 describe("framework2 metadata support", () => {
