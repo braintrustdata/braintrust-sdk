@@ -202,7 +202,10 @@ export function runDevServer(
 
           // This gets done again in the framework, but we do it here too to give a
           // better error message.
-          validateParameters(parameters ?? {}, evaluator.parameters);
+          validateParameters(
+            (parameters ?? {}) as Record<string, unknown>,
+            evaluator.parameters,
+          );
         } catch (e) {
           console.error("Error validating parameters", e);
           if (e instanceof z.ZodError || e instanceof Error) {
@@ -294,7 +297,7 @@ export function runDevServer(
               }
             },
             parent: parseParent(parent),
-            parameters: parameters ?? {},
+            parameters: (parameters ?? {}) as any,
           },
         );
 

@@ -21,7 +21,7 @@ export const errorHandler: ErrorRequestHandler = (
     res.status(400).json({
       error: {
         message: "Invalid request",
-        errors: err.errors,
+        errors: err.issues,
       },
     });
     return;

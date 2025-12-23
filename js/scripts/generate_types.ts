@@ -34,8 +34,13 @@ async function main() {
   let code = await fs.readFile(OUTPUT_PATH, "utf8");
   if (zodVersion.startsWith("4")) {
     // Patch all z.record(value) to z.record(z.string(), value) for Zod 4
-    // Handles nested parentheses by only replacing the first argument
-    code = code.replace(/z\.record\(([^,\)]+)\)/g, "z.record(z.string(), $1)");
+    code = code.replace(
+      /z\.record\s*\(\s*([^)\n]+?)\s*\)/g,
+      "z.record(z.string(), $1)",
+    );
+
+    // Patch all z.enum([...]) to z.enum([... as const]) for Zod 4
+    code = code.replace(/z\.enum\((\[[^\]]*\])\)/g, "z.enum($1 as const)");
   }
   const internalGitSha = openApiDoc.info["x-internal-git-sha"] || "UNKNOWN";
   const banner = `// Auto-generated file (internal git SHA ${internalGitSha}) -- do not modify\n\n`;

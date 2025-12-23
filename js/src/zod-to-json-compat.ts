@@ -35,5 +35,5 @@ export function zodToJsonSchema(schema: ZodType): unknown {
     return (schema as any).toJSONSchema();
   }
   // Fallback to zod-to-json-schema for zod 3
-  return zodToJsonSchemaLib(schema);
+  return zodToJsonSchemaLib(schema as any);
 }

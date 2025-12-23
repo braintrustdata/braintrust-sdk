@@ -16,12 +16,24 @@ export function zRecordCompat(
   if ((z as any).ZodFirstPartyTypeKind) {
     // If two arguments, use as keySchema, valueSchema
     if (valueSchema !== undefined) {
-      return z.record(valueOrKeySchema, valueSchema);
+      if (!(valueSchema instanceof z.ZodType)) {
+        throw new Error(
+          "zRecordCompat: valueSchema must be a Zod schema in Zod 4",
+        );
+      }
+      return z.record(z.string(), valueSchema);
     }
-    // If one argument, default keySchema to z.string()
+    if (!(valueOrKeySchema instanceof z.ZodType)) {
+      throw new Error(
+        "zRecordCompat: valueOrKeySchema must be a Zod schema in Zod 4",
+      );
+    }
     return z.record(z.string(), valueOrKeySchema);
   } else {
     // zod 3: only valueSchema
-    return z.record(valueOrKeySchema);
+    if (!(valueOrKeySchema instanceof z.ZodType)) {
+      throw new Error("zRecordCompat: valueOrKeySchema must be a Zod schema");
+    }
+    return z.record(z.string(), valueOrKeySchema);
   }
 }

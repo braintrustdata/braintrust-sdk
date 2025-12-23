@@ -9,14 +9,12 @@ import { PromptData as promptDataSchema } from "./generated_types";
 // Schema for evaluation parameters
 export const evalParametersSchema = z.record(
   z.string(),
-  z.union([
-    z.object({
-      type: z.literal("prompt"),
-      default: promptDefinitionWithToolsSchema.optional(),
-      description: z.string().optional(),
-    }),
-    z.instanceof(z.ZodType), // For Zod schemas
-  ]),
+  z.object({
+    name: z.string(),
+    value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    default: z.any().optional(),
+    description: z.string().optional(),
+  }),
 );
 
 export type EvalParameters = z.infer<typeof evalParametersSchema>;
@@ -59,7 +57,7 @@ export function validateParameters<
           return [name, Prompt.fromPromptData(name, promptData)];
         } else {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const schemaCasted = schema as z.ZodSchema<unknown>;
+          const schemaCasted = schema as unknown as z.ZodSchema<unknown>;
           return [name, schemaCasted.parse(value)];
         }
       } catch (e) {
