@@ -1,7 +1,7 @@
 import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
 import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
-import { END, START, StateGraph, StateGraphArgs } from "@langchain/langgraph";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush, initLogger, NOOP_SPAN } from "braintrust";
 import { http, HttpResponse } from "msw";
@@ -665,7 +665,7 @@ it("should handle parallel runnable execution", async () => {
       span_id: root_span_id,
       root_span_id,
     },
-    {
+    { // Updated for LangGraph 1.x API using Annotation
       span_attributes: { name: "RunnableSequence", type: "task" },
       input: { topic: "bear" },
       root_span_id,
@@ -700,29 +700,32 @@ it("should handle LangGraph state management", async () => {
     }),
   );
 
-  // derived from: https://techcommunity.microsoft.com/blog/educatordeveloperblog/an-absolute-beginners-guide-to-langgraph-js/4212496
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type HelloWorldGraphState = Record<string, any>;
+  const GraphState = Annotation.Root({
+    message: Annotation<string>({
+      reducer: (_, y) => y,
+      default: () => "",
+    }),
+  });
 
-  const graphStateChannels: StateGraphArgs<HelloWorldGraphState>["channels"] =
-    {};
+  type State = typeof GraphState.State;
+  type StateUpdate = typeof GraphState.Update;
 
   const model = new ChatOpenAI({
     model: "gpt-4o-mini-2024-07-18",
     callbacks: [handler],
   });
 
-  async function sayHello(state: HelloWorldGraphState) {
+  async function sayHello(_: State): Promise<StateUpdate> {
     const res = await model.invoke("Say hello");
-    return res.content;
+    return { message: typeof res.content === "string" ? res.content : "" };
   }
 
-  function sayBye(state: HelloWorldGraphState) {
+  function sayBye(_: State): StateUpdate {
     console.log(`From the 'sayBye' node: Bye world!`);
     return {};
   }
 
-  const graphBuilder = new StateGraph({ channels: graphStateChannels }) // Add our nodes to the Graph
+  const graphBuilder = new StateGraph(GraphState) // Add our nodes to the Graph
     .addNode("sayHello", sayHello)
     .addNode("sayBye", sayBye) // Add the edges between nodes
     .addEdge(START, "sayHello")
