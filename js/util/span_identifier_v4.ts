@@ -149,8 +149,8 @@ export class SpanComponentsV4 {
       typeof this.data.object_type === "number"
         ? this.data.object_type
         : // try enum lookup (e.g. "EXPERIMENT" -> 1) or numeric parse
-          ((SpanObjectTypeV3 as any)[this.data.object_type] ??
-          parseInt(String(this.data.object_type), 10));
+          (SpanObjectTypeV3 as any)[this.data.object_type] ??
+          parseInt(String(this.data.object_type), 10);
 
     allBuffers.push(
       new Uint8Array([ENCODING_VERSION_NUMBER_V4, objectTypeNum]),
@@ -281,8 +281,8 @@ export class SpanComponentsV4 {
     const ot =
       typeof this.data.object_type === "number"
         ? this.data.object_type
-        : ((SpanObjectTypeV3 as any)[this.data.object_type] ??
-          parseInt(String(this.data.object_type), 10));
+        : (SpanObjectTypeV3 as any)[this.data.object_type] ??
+          parseInt(String(this.data.object_type), 10);
 
     switch (ot) {
       case SpanObjectTypeV3.EXPERIMENT:
