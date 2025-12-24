@@ -17,37 +17,56 @@ from .utils import (
 )
 
 
-def _extract_workflow_input(args: Any, kwargs: Any) -> Any:
-    """Extract the user input from _execute parameters.
+def _extract_workflow_input(args: Any, kwargs: Any) -> dict:
+    """Extract the input from _execute parameters.
 
-    _execute receives (workflow_run_response, execution_input, ...) where:
-    - workflow_run_response.input contains the user input
-    - execution_input.input also contains the user input
+    _execute signature: (self, session, execution_input, workflow_run_response, run_context, ...)
+    - args[0]: session (WorkflowSession)
+    - args[1]: execution_input (WorkflowExecutionInput) - contains .input
+    - args[2]: workflow_run_response (WorkflowRunOutput) - contains .input, accumulates results
     """
-    workflow_run_response = args[0] if args else kwargs.get("workflow_run_response")
-    if workflow_run_response and hasattr(workflow_run_response, "input"):
-        return workflow_run_response.input
     execution_input = args[1] if len(args) > 1 else kwargs.get("execution_input")
-    if execution_input and hasattr(execution_input, "input"):
-        return execution_input.input
-    return None
+    workflow_run_response = args[2] if len(args) > 2 else kwargs.get("workflow_run_response")
+
+    result = {}
+
+    # Get the user's raw input from execution_input
+    if execution_input:
+        if hasattr(execution_input, "input"):
+            result["input"] = execution_input.input
+        # Include other relevant fields from execution_input
+        result["execution_input"] = _try_to_dict(execution_input)
+
+    # Get the run_response structure similar to Team
+    if workflow_run_response:
+        result["run_response"] = _try_to_dict(workflow_run_response)
+
+    return result
 
 
 def wrap_workflow(Workflow: Any) -> Any:
     if is_patched(Workflow):
         return Workflow
 
+    # DEBUG: Check what methods exist
+    print(f"DEBUG wrap_workflow: _execute exists: {hasattr(Workflow, '_execute')}")
+    print(f"DEBUG wrap_workflow: _execute_stream exists: {hasattr(Workflow, '_execute_stream')}")
+    print(f"DEBUG wrap_workflow: _aexecute exists: {hasattr(Workflow, '_aexecute')}")
+    print(f"DEBUG wrap_workflow: _aexecute_stream exists: {hasattr(Workflow, '_aexecute_stream')}")
+
     def execute_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         """Wrapper for _execute (sync, non-streaming)."""
+        print(f"DEBUG execute_wrapper CALLED! args count: {len(args)}")
         workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.run"
 
         input_data = _extract_workflow_input(args, kwargs)
+        print(f"DEBUG execute_wrapper input_data: {input_data}")
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"input": input_data},
+            input=input_data,
             metadata=extract_metadata(instance, "workflow"),
         ) as span:
             result = wrapped(*args, **kwargs)
@@ -63,7 +82,7 @@ def wrap_workflow(Workflow: Any) -> Any:
     def execute_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         """Wrapper for _execute_stream (sync, streaming)."""
         workflow_name = getattr(instance, "name", None) or "Workflow"
-        span_name = f"{workflow_name}.run"
+        span_name = f"{workflow_name}.run_stream"
 
         input_data = _extract_workflow_input(args, kwargs)
 
@@ -72,7 +91,7 @@ def wrap_workflow(Workflow: Any) -> Any:
             span = start_span(
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
-                input={"input": input_data},
+                input=input_data,
                 metadata=extract_metadata(instance, "workflow"),
             )
             span.set_current()
@@ -127,7 +146,7 @@ def wrap_workflow(Workflow: Any) -> Any:
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"input": input_data},
+            input=input_data,
             metadata=extract_metadata(instance, "workflow"),
         ) as span:
             result = await wrapped(*args, **kwargs)
@@ -143,7 +162,7 @@ def wrap_workflow(Workflow: Any) -> Any:
     def aexecute_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         """Wrapper for _aexecute_stream (async, streaming)."""
         workflow_name = getattr(instance, "name", None) or "Workflow"
-        span_name = f"{workflow_name}.arun"
+        span_name = f"{workflow_name}.arun_stream"
 
         input_data = _extract_workflow_input(args, kwargs)
 
@@ -152,7 +171,7 @@ def wrap_workflow(Workflow: Any) -> Any:
             span = start_span(
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
-                input={"input": input_data},
+                input=input_data,
                 metadata=extract_metadata(instance, "workflow"),
             )
             span.set_current()
