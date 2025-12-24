@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, Dict
 
 from wrapt import wrap_function_wrapper
 
@@ -17,7 +17,7 @@ from .utils import (
 )
 
 
-def _extract_workflow_input(args: Any, kwargs: Any) -> dict:
+def _extract_workflow_input(args: Any, kwargs: Any) -> Dict[str, Any]:
     """Extract the input from _execute parameters.
 
     _execute signature: (self, session, execution_input, workflow_run_response, run_context, ...)
@@ -28,7 +28,7 @@ def _extract_workflow_input(args: Any, kwargs: Any) -> dict:
     execution_input = args[1] if len(args) > 1 else kwargs.get("execution_input")
     workflow_run_response = args[2] if len(args) > 2 else kwargs.get("workflow_run_response")
 
-    result = {}
+    result: Dict[str, Any] = {}
 
     # Get the user's raw input from execution_input
     if execution_input:
@@ -48,20 +48,12 @@ def wrap_workflow(Workflow: Any) -> Any:
     if is_patched(Workflow):
         return Workflow
 
-    # DEBUG: Check what methods exist
-    print(f"DEBUG wrap_workflow: _execute exists: {hasattr(Workflow, '_execute')}")
-    print(f"DEBUG wrap_workflow: _execute_stream exists: {hasattr(Workflow, '_execute_stream')}")
-    print(f"DEBUG wrap_workflow: _aexecute exists: {hasattr(Workflow, '_aexecute')}")
-    print(f"DEBUG wrap_workflow: _aexecute_stream exists: {hasattr(Workflow, '_aexecute_stream')}")
-
     def execute_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         """Wrapper for _execute (sync, non-streaming)."""
-        print(f"DEBUG execute_wrapper CALLED! args count: {len(args)}")
         workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.run"
 
         input_data = _extract_workflow_input(args, kwargs)
-        print(f"DEBUG execute_wrapper input_data: {input_data}")
 
         with start_span(
             name=span_name,

@@ -444,32 +444,41 @@ def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
     """
     Aggregate WorkflowRunOutputEvent chunks into a complete response.
 
+    Matches the structure of _aggregate_agent_chunks for consistency.
+    Only captures final content from WorkflowRunCompleted to avoid duplicates.
+
     Workflow events can include:
     - WorkflowRunStarted
-    - WorkflowRunContent
-    - WorkflowRunCompleted
+    - WorkflowRunContent (intermediate content - ignored to avoid duplicates)
+    - WorkflowRunCompleted (final output)
     - ToolCallStarted (from nested agents/teams)
-    - Events from nested agents/teams
     """
     aggregated: Dict[str, Any] = {
         "content": "",
+        "reasoning_content": "",
         "tool_calls": [],
-        "metrics": {},
+        "citations": None,
+        "references": None,
+        "metrics": None,
+        "finish_reason": None,
     }
 
     for chunk in chunks:
         event_type = getattr(chunk, "event", None)
 
-        # Handle content events
-        if hasattr(chunk, "content") and chunk.content:
-            aggregated["content"] += str(chunk.content)
-
-        # Handle completion events with metrics
-        if event_type == "WorkflowRunCompleted":
+        # Handle WorkflowCompleted - get final content and metrics
+        if event_type == "WorkflowCompleted":
+            # Get final content from completed event
+            if hasattr(chunk, "content") and chunk.content:
+                aggregated["content"] = str(chunk.content)
+            # Keep raw metrics like Team does
             if hasattr(chunk, "metrics") and chunk.metrics:
-                chunk_metrics = parse_metrics_from_agno(chunk.metrics)
-                if chunk_metrics:
-                    _aggregate_metrics(aggregated["metrics"], chunk_metrics)
+                aggregated["metrics"] = chunk.metrics
+            aggregated["finish_reason"] = "stop"
+
+        # Handle WorkflowError
+        elif event_type == "WorkflowError":
+            aggregated["finish_reason"] = "error"
 
         # Handle tool calls (from nested agents/teams)
         elif event_type == "ToolCallStarted":
@@ -485,19 +494,8 @@ def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
                     }
                 )
 
-        # Handle any chunk with metrics
-        elif hasattr(chunk, "metrics") and chunk.metrics:
-            chunk_metrics = parse_metrics_from_agno(chunk.metrics)
-            if chunk_metrics:
-                _aggregate_metrics(aggregated["metrics"], chunk_metrics)
-
-    # Clean up empty values
-    if not aggregated["metrics"]:
-        aggregated["metrics"] = None
-    if not aggregated["tool_calls"]:
-        aggregated["tool_calls"] = None
-
-    return {k: v for k, v in aggregated.items() if v is not None and v != ""}
+    # Clean up empty values to match Team behavior
+    return {k: v for k, v in aggregated.items() if v not in (None, "", [])}
 
 
 # Legacy aliases for backward compatibility
