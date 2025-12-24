@@ -448,24 +448,42 @@ def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
     - WorkflowRunStarted
     - WorkflowRunContent
     - WorkflowRunCompleted
+    - ToolCallStarted (from nested agents/teams)
     - Events from nested agents/teams
     """
-    aggregated = {
+    aggregated: Dict[str, Any] = {
         "content": "",
+        "tool_calls": [],
         "metrics": {},
     }
 
     for chunk in chunks:
+        event_type = getattr(chunk, "event", None)
+
         # Handle content events
         if hasattr(chunk, "content") and chunk.content:
             aggregated["content"] += str(chunk.content)
 
         # Handle completion events with metrics
-        if hasattr(chunk, "event") and chunk.event == "WorkflowRunCompleted":
+        if event_type == "WorkflowRunCompleted":
             if hasattr(chunk, "metrics") and chunk.metrics:
                 chunk_metrics = parse_metrics_from_agno(chunk.metrics)
                 if chunk_metrics:
                     _aggregate_metrics(aggregated["metrics"], chunk_metrics)
+
+        # Handle tool calls (from nested agents/teams)
+        elif event_type == "ToolCallStarted":
+            if hasattr(chunk, "tool_call"):
+                aggregated["tool_calls"].append(
+                    {
+                        "id": getattr(chunk.tool_call, "id", None),
+                        "type": "function",
+                        "function": {
+                            "name": getattr(chunk.tool_call, "name", None),
+                            "arguments": getattr(chunk.tool_call, "arguments", ""),
+                        },
+                    }
+                )
 
         # Handle any chunk with metrics
         elif hasattr(chunk, "metrics") and chunk.metrics:
@@ -473,9 +491,11 @@ def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
             if chunk_metrics:
                 _aggregate_metrics(aggregated["metrics"], chunk_metrics)
 
-    # Clean up empty metrics
+    # Clean up empty values
     if not aggregated["metrics"]:
         aggregated["metrics"] = None
+    if not aggregated["tool_calls"]:
+        aggregated["tool_calls"] = None
 
     return {k: v for k, v in aggregated.items() if v is not None and v != ""}
 

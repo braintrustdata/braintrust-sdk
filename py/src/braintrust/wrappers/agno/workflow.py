@@ -14,29 +14,41 @@ from .utils import (
     extract_workflow_metrics,
     is_patched,
     mark_patched,
-    omit,
 )
+
+
+def _extract_workflow_input(args: Any, kwargs: Any) -> Any:
+    """Extract the user input from _execute parameters.
+
+    _execute receives (workflow_run_response, execution_input, ...) where:
+    - workflow_run_response.input contains the user input
+    - execution_input.input also contains the user input
+    """
+    workflow_run_response = args[0] if args else kwargs.get("workflow_run_response")
+    if workflow_run_response and hasattr(workflow_run_response, "input"):
+        return workflow_run_response.input
+    execution_input = args[1] if len(args) > 1 else kwargs.get("execution_input")
+    if execution_input and hasattr(execution_input, "input"):
+        return execution_input.input
+    return None
 
 
 def wrap_workflow(Workflow: Any) -> Any:
     if is_patched(Workflow):
         return Workflow
 
-    def run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def execute_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Wrapper for _execute (sync, non-streaming)."""
         workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.run"
 
-        input_data = args[0] if args else kwargs.get("input")
-        stream = kwargs.get("stream", False)
-
-        if stream:
-            return _trace_stream_sync(wrapped, instance, args, kwargs, workflow_name)
+        input_data = _extract_workflow_input(args, kwargs)
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
             input={"input": input_data},
-            metadata={**omit(kwargs, ["input"]), **extract_metadata(instance, "workflow")},
+            metadata=extract_metadata(instance, "workflow"),
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
@@ -45,11 +57,15 @@ def wrap_workflow(Workflow: Any) -> Any:
             )
             return result
 
-    wrap_function_wrapper(Workflow, "run", run_wrapper)
+    if hasattr(Workflow, "_execute"):
+        wrap_function_wrapper(Workflow, "_execute", execute_wrapper)
 
-    def _trace_stream_sync(wrapped: Any, instance: Any, args: Any, kwargs: Any, workflow_name: str):
+    def execute_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Wrapper for _execute_stream (sync, streaming)."""
+        workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.run"
-        input_data = args[0] if args else kwargs.get("input")
+
+        input_data = _extract_workflow_input(args, kwargs)
 
         def _trace_stream():
             start = time.time()
@@ -57,7 +73,7 @@ def wrap_workflow(Workflow: Any) -> Any:
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
                 input={"input": input_data},
-                metadata={**omit(kwargs, ["input"]), **extract_metadata(instance, "workflow")},
+                metadata=extract_metadata(instance, "workflow"),
             )
             span.set_current()
 
@@ -84,8 +100,6 @@ def wrap_workflow(Workflow: Any) -> Any:
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
             except GeneratorExit:
-                # Generator was closed early (e.g., break from for loop)
-                # Don't call unset_current() as context may have changed
                 should_unset = False
                 raise
             except Exception as e:
@@ -100,21 +114,21 @@ def wrap_workflow(Workflow: Any) -> Any:
 
         return _trace_stream()
 
-    async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    if hasattr(Workflow, "_execute_stream"):
+        wrap_function_wrapper(Workflow, "_execute_stream", execute_stream_wrapper)
+
+    async def aexecute_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Wrapper for _aexecute (async, non-streaming)."""
         workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.arun"
 
-        input_data = args[0] if args else kwargs.get("input")
-        stream = kwargs.get("stream", False)
-
-        if stream:
-            return _trace_stream_async(wrapped, instance, args, kwargs, workflow_name)
+        input_data = _extract_workflow_input(args, kwargs)
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
             input={"input": input_data},
-            metadata={**omit(kwargs, ["input"]), **extract_metadata(instance, "workflow")},
+            metadata=extract_metadata(instance, "workflow"),
         ) as span:
             result = await wrapped(*args, **kwargs)
             span.log(
@@ -123,12 +137,15 @@ def wrap_workflow(Workflow: Any) -> Any:
             )
             return result
 
-    if hasattr(Workflow, "arun"):
-        wrap_function_wrapper(Workflow, "arun", arun_wrapper)
+    if hasattr(Workflow, "_aexecute"):
+        wrap_function_wrapper(Workflow, "_aexecute", aexecute_wrapper)
 
-    def _trace_stream_async(wrapped: Any, instance: Any, args: Any, kwargs: Any, workflow_name: str):
+    def aexecute_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Wrapper for _aexecute_stream (async, streaming)."""
+        workflow_name = getattr(instance, "name", None) or "Workflow"
         span_name = f"{workflow_name}.arun"
-        input_data = args[0] if args else kwargs.get("input")
+
+        input_data = _extract_workflow_input(args, kwargs)
 
         async def _trace_stream():
             start = time.time()
@@ -136,7 +153,7 @@ def wrap_workflow(Workflow: Any) -> Any:
                 name=span_name,
                 type=SpanTypeAttribute.TASK,
                 input={"input": input_data},
-                metadata={**omit(kwargs, ["input"]), **extract_metadata(instance, "workflow")},
+                metadata=extract_metadata(instance, "workflow"),
             )
             span.set_current()
 
@@ -163,8 +180,6 @@ def wrap_workflow(Workflow: Any) -> Any:
                     metrics=extract_streaming_metrics(aggregated, start),
                 )
             except GeneratorExit:
-                # Generator was closed early (e.g., break from async for loop)
-                # Don't call unset_current() as context may have changed
                 should_unset = False
                 raise
             except Exception as e:
@@ -178,6 +193,9 @@ def wrap_workflow(Workflow: Any) -> Any:
                 span.end()
 
         return _trace_stream()
+
+    if hasattr(Workflow, "_aexecute_stream"):
+        wrap_function_wrapper(Workflow, "_aexecute_stream", aexecute_stream_wrapper)
 
     mark_patched(Workflow)
     return Workflow
