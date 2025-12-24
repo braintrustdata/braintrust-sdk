@@ -58,12 +58,29 @@ async function main() {
     // rewrites single-arg `z.record(valueSchema)` into `z.record(z.string(), valueSchema)`
     // and unwraps parenthesized expressions. If anything goes wrong, fall back to the cleaned string.
     try {
-      const sf = ts.createSourceFile("generated_types.ts", s, ts.ScriptTarget.Latest, /*setParentNodes*/ true, ts.ScriptKind.TS);
+      const sf = ts.createSourceFile(
+        "generated_types.ts",
+        s,
+        ts.ScriptTarget.Latest,
+        /*setParentNodes*/ true,
+        ts.ScriptKind.TS,
+      );
 
       const isZCall = (expr: ts.Expression, name: string) =>
-        ts.isPropertyAccessExpression(expr) && ts.isIdentifier(expr.expression) && expr.expression.text === "z" && expr.name.text === name;
+        ts.isPropertyAccessExpression(expr) &&
+        ts.isIdentifier(expr.expression) &&
+        expr.expression.text === "z" &&
+        expr.name.text === name;
 
-      const makeZCallExpr = (name: string) => ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("z"), name), undefined, []);
+      const makeZCallExpr = (name: string) =>
+        ts.factory.createCallExpression(
+          ts.factory.createPropertyAccessExpression(
+            ts.factory.createIdentifier("z"),
+            name,
+          ),
+          undefined,
+          [],
+        );
 
       const transformer: ts.TransformerFactory<ts.SourceFile> = (context) => {
         const visit: ts.Visitor = (node) => {
@@ -75,16 +92,30 @@ async function main() {
               const args = node.arguments.slice();
               if (args.length === 1) {
                 // single-arg -> insert z.string() as key schema
-                const valueArg = ts.isParenthesizedExpression(args[0]) ? args[0].expression : args[0];
-                return ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [makeZCallExpr("string"), valueArg]);
+                const valueArg = ts.isParenthesizedExpression(args[0])
+                  ? args[0].expression
+                  : args[0];
+                return ts.factory.updateCallExpression(
+                  node,
+                  node.expression,
+                  node.typeArguments,
+                  [makeZCallExpr("string"), valueArg],
+                );
               }
 
               // If call already has 2+ args, just unwrap parentheses on second arg
               if (args.length >= 2) {
                 const second = args[1];
-                const newSecond = ts.isParenthesizedExpression(second) ? second.expression : second;
+                const newSecond = ts.isParenthesizedExpression(second)
+                  ? second.expression
+                  : second;
                 const newArgs = [args[0], newSecond, ...args.slice(2)];
-                return ts.factory.updateCallExpression(node, node.expression, node.typeArguments, newArgs);
+                return ts.factory.updateCallExpression(
+                  node,
+                  node.expression,
+                  node.typeArguments,
+                  newArgs,
+                );
               }
             }
           }
@@ -100,7 +131,7 @@ async function main() {
       const printed = printer.printFile(transformed);
       result.dispose();
       return printed;
-      } catch {
+    } catch {
       return s;
     }
   };
@@ -128,25 +159,56 @@ async function main() {
       let end = -1;
       for (; k < src.length; k++) {
         const ch = src[k];
-        if (escaped) { escaped = false; continue; }
-        if (ch === "\\") { escaped = true; continue; }
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escaped = true;
+          continue;
+        }
         if (inSingle) {
-          if (ch === "'") { inSingle = false; }
+          if (ch === "'") {
+            inSingle = false;
+          }
           continue;
         }
         if (inDouble) {
-          if (ch === '"') { inDouble = false; }
+          if (ch === '"') {
+            inDouble = false;
+          }
           continue;
         }
         if (inBack) {
-          if (ch === '`') { inBack = false; }
+          if (ch === "`") {
+            inBack = false;
+          }
           continue;
         }
-        if (ch === "'") { inSingle = true; continue; }
-        if (ch === '"') { inDouble = true; continue; }
-        if (ch === '`') { inBack = true; continue; }
-        if (ch === '(') { depth++; continue; }
-        if (ch === ')') { depth--; if (depth === 0) { end = k; break; } continue; }
+        if (ch === "'") {
+          inSingle = true;
+          continue;
+        }
+        if (ch === '"') {
+          inDouble = true;
+          continue;
+        }
+        if (ch === "`") {
+          inBack = true;
+          continue;
+        }
+        if (ch === "(") {
+          depth++;
+          continue;
+        }
+        if (ch === ")") {
+          depth--;
+          if (depth === 0) {
+            end = k;
+            break;
+          }
+          continue;
+        }
       }
       if (end === -1) {
         // malformed remainder; append rest and break
@@ -158,25 +220,72 @@ async function main() {
 
       // determine if there is a top-level comma in `inner`
       let hasTopComma = false;
-      let pd = 0, bd = 0, cd = 0; // paren, bracket, brace depth for detection
+      let pd = 0,
+        bd = 0,
+        cd = 0; // paren, bracket, brace depth for detection
       inSingle = inDouble = inBack = escaped = false;
       for (let m = 0; m < inner.length; m++) {
         const ch = inner[m];
-        if (escaped) { escaped = false; continue; }
-        if (ch === "\\") { escaped = true; continue; }
-        if (inSingle) { if (ch === "'") inSingle = false; continue; }
-        if (inDouble) { if (ch === '"') inDouble = false; continue; }
-        if (inBack) { if (ch === '`') inBack = false; continue; }
-        if (ch === "'") { inSingle = true; continue; }
-        if (ch === '"') { inDouble = true; continue; }
-        if (ch === '`') { inBack = true; continue; }
-        if (ch === '(') { pd++; continue; }
-        if (ch === ')') { if (pd > 0) pd--; continue; }
-        if (ch === '[') { bd++; continue; }
-        if (ch === ']') { if (bd > 0) bd--; continue; }
-        if (ch === '{') { cd++; continue; }
-        if (ch === '}') { if (cd > 0) cd--; continue; }
-        if (ch === ',' && pd === 0 && bd === 0 && cd === 0) { hasTopComma = true; break; }
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (inSingle) {
+          if (ch === "'") inSingle = false;
+          continue;
+        }
+        if (inDouble) {
+          if (ch === '"') inDouble = false;
+          continue;
+        }
+        if (inBack) {
+          if (ch === "`") inBack = false;
+          continue;
+        }
+        if (ch === "'") {
+          inSingle = true;
+          continue;
+        }
+        if (ch === '"') {
+          inDouble = true;
+          continue;
+        }
+        if (ch === "`") {
+          inBack = true;
+          continue;
+        }
+        if (ch === "(") {
+          pd++;
+          continue;
+        }
+        if (ch === ")") {
+          if (pd > 0) pd--;
+          continue;
+        }
+        if (ch === "[") {
+          bd++;
+          continue;
+        }
+        if (ch === "]") {
+          if (bd > 0) bd--;
+          continue;
+        }
+        if (ch === "{") {
+          cd++;
+          continue;
+        }
+        if (ch === "}") {
+          if (cd > 0) cd--;
+          continue;
+        }
+        if (ch === "," && pd === 0 && bd === 0 && cd === 0) {
+          hasTopComma = true;
+          break;
+        }
       }
 
       let replacedCall = null;
@@ -195,7 +304,10 @@ async function main() {
       let j = end + 1;
       // count consecutive ) characters
       let closeCount = 0;
-      while (j < src.length && src[j] === ')') { closeCount++; j++; }
+      while (j < src.length && src[j] === ")") {
+        closeCount++;
+        j++;
+      }
       if (closeCount > 0) {
         // we already emitted one ')' as part of replacement; if extra ) found, skip them
         // (effectively collapsing duplicates)
