@@ -63,7 +63,7 @@ def wrap_workflow(Workflow: Any) -> Any:
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
-                output=_try_to_dict(result),
+                output=result,
                 metrics=extract_workflow_metrics(result),
             )
             return result
@@ -143,7 +143,7 @@ def wrap_workflow(Workflow: Any) -> Any:
         ) as span:
             result = await wrapped(*args, **kwargs)
             span.log(
-                output=_try_to_dict(result),
+                output=result,
                 metrics=extract_workflow_metrics(result),
             )
             return result
