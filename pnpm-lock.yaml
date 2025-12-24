@@ -132,7 +132,7 @@ importers:
         version: 5.3.3
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.10.5)(msw@2.6.6)
+        version: 2.1.9(@types/node@20.10.5)
 
   internal/golden:
     dependencies:
@@ -236,8 +236,8 @@ importers:
         specifier: ^9.0.1
         version: 9.0.1
       zod-to-json-schema:
-        specifier: ^3.22.5
-        version: 3.22.5(zod@4.2.1)
+        specifier: ^3.25.0
+        version: 3.25.0(zod@4.2.1)
     devDependencies:
       '@ai-sdk/anthropic':
         specifier: 2.0.37
@@ -328,7 +328,7 @@ importers:
         version: 4.0.1
       ts-jest:
         specifier: ^29.1.4
-        version: 29.1.4(@babel/core@7.24.7)(esbuild@0.27.0)(jest@29.7.0)(typescript@5.4.4)
+        version: 29.1.4(@babel/core@7.28.0)(esbuild@0.27.0)(jest@29.7.0)(typescript@5.4.4)
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(tsx@3.14.0)(typescript@5.4.4)
@@ -609,7 +609,7 @@ packages:
       '@ai-sdk/provider': 1.1.3
       '@ai-sdk/provider-utils': 2.2.8(zod@4.2.1)
       zod: 4.2.1
-      zod-to-json-schema: 3.24.6(zod@4.2.1)
+      zod-to-json-schema: 3.25.0(zod@4.2.1)
     dev: true
 
   /@ai-sdk/vue@0.0.11(vue@3.5.21)(zod@3.25.76):
@@ -2589,7 +2589,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       jest-message-util: 29.7.0
       jest-util: 29.7.0
@@ -2610,14 +2610,14 @@ packages:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 3.9.0
       exit: 0.1.2
       graceful-fs: 4.2.11
       jest-changed-files: 29.7.0
-      jest-config: 29.7.0(@types/node@20.19.16)
+      jest-config: 29.7.0(@types/node@22.19.1)
       jest-haste-map: 29.7.0
       jest-message-util: 29.7.0
       jest-regex-util: 29.6.3
@@ -2705,7 +2705,7 @@ packages:
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       collect-v8-coverage: 1.0.2
       exit: 0.1.2
@@ -3037,7 +3037,7 @@ packages:
       pkce-challenge: 5.0.0
       raw-body: 3.0.0
       zod: 3.25.76
-      zod-to-json-schema: 3.24.6(zod@3.25.76)
+      zod-to-json-schema: 3.25.0(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -3114,25 +3114,6 @@ packages:
       - ws
     dev: true
 
-  /@openai/agents-core@0.0.14(zod@3.25.67):
-    resolution: {integrity: sha512-enCk5ucz+xxwPgh0zBQoJi5c1RukSc60neRUmlW4eQRgj9p5hVFQaBQNapZ4RysagHCLm2scYRwKgaP6nPDuNQ==}
-    peerDependencies:
-      zod: 3.25.40 - 3.25.67
-    peerDependenciesMeta:
-      zod:
-        optional: true
-    dependencies:
-      '@openai/zod': /zod@3.25.67
-      debug: 4.4.1
-      openai: 5.11.0(zod@3.25.67)
-      zod: 3.25.67
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.18.0
-    transitivePeerDependencies:
-      - supports-color
-      - ws
-    dev: true
-
   /@openai/agents-core@0.0.15(ws@8.18.3)(zod@3.25.67):
     resolution: {integrity: sha512-ODTqttjW0s0ejBe5PKnYRlFbJSZH2IO6OtUlRhIKmWiWrX6pGRxvpKjTSOXy8DEtpRHBj6Nhky0UoSlO6eOkDQ==}
     peerDependencies:
@@ -3155,10 +3136,10 @@ packages:
   /@openai/agents-openai@0.0.14(zod@3.25.67):
     resolution: {integrity: sha512-qSGBictwfJ3dMhC3QvqOLMm8RVZ/eIYNcFNLHps7hWeB1xeDGJFDZ/X7dDicejOeEXbi/nGe1ry6LbXDYSo3uQ==}
     dependencies:
-      '@openai/agents-core': 0.0.14(zod@3.25.67)
+      '@openai/agents-core': 0.0.14(ws@8.18.3)(zod@3.25.67)
       '@openai/zod': /zod@3.25.67
       debug: 4.4.1
-      openai: 5.11.0(zod@3.25.67)
+      openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
     transitivePeerDependencies:
       - supports-color
       - ws
@@ -3211,7 +3192,7 @@ packages:
   /@openai/agents@0.0.14(zod@3.25.67):
     resolution: {integrity: sha512-67FwkSxlid8/fFzIDMBuIvDQJ2Egf7PCpI7zp2JAlIlsz4UZVSlptNcN63RCG2xP6X2XqsdyjPke8ZDEKVrePw==}
     dependencies:
-      '@openai/agents-core': 0.0.14(zod@3.25.67)
+      '@openai/agents-core': 0.0.14(ws@8.18.3)(zod@3.25.67)
       '@openai/agents-openai': 0.0.14(zod@3.25.67)
       '@openai/agents-realtime': 0.0.14(zod@3.25.67)
       debug: 4.4.1
@@ -4020,7 +4001,7 @@ packages:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.19
-      vite: 5.4.14(@types/node@20.10.5)
+      vite: 5.4.14(@types/node@20.19.9)
     dev: true
 
   /@vitest/pretty-format@2.1.9:
@@ -4419,7 +4400,7 @@ packages:
       mustache: 4.2.0
       openai: 4.104.0(zod@3.25.76)
       zod: 3.25.76
-      zod-to-json-schema: 3.24.6(zod@3.25.76)
+      zod-to-json-schema: 3.25.0(zod@3.25.76)
     transitivePeerDependencies:
       - encoding
       - ws
@@ -6660,7 +6641,7 @@ packages:
       '@jest/expect': 29.7.0
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.0
@@ -6749,7 +6730,7 @@ packages:
       - supports-color
     dev: true
 
-  /jest-config@29.7.0(@types/node@20.19.16):
+  /jest-config@29.7.0(@types/node@22.19.1):
     resolution: {integrity: sha512-uXbpfeQ7R6TZBqI3/TxCU4q4ttk3u0PJeC+E0zbfSoSjq6bJ7buBPxzQPL0ifrkY4DNu4JUdk0ImlBUYi840eQ==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     peerDependencies:
@@ -6764,7 +6745,7 @@ packages:
       '@babel/core': 7.28.4
       '@jest/test-sequencer': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       babel-jest: 29.7.0(@babel/core@7.28.4)
       chalk: 4.1.2
       ci-info: 3.9.0
@@ -6824,7 +6805,7 @@ packages:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       jest-mock: 29.7.0
       jest-util: 29.7.0
     dev: true
@@ -6946,7 +6927,7 @@ packages:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       emittery: 0.13.1
       graceful-fs: 4.2.11
@@ -6977,7 +6958,7 @@ packages:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       cjs-module-lexer: 1.4.3
       collect-v8-coverage: 1.0.2
@@ -7054,7 +7035,7 @@ packages:
     dependencies:
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -7091,11 +7072,6 @@ packages:
       - babel-plugin-macros
       - supports-color
       - ts-node
-    dev: true
-
-  /jiti@2.6.1:
-    resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
-    hasBin: true
     dev: true
 
   /joycon@3.1.1:
@@ -7850,21 +7826,6 @@ packages:
       zod: 3.25.67
     dev: true
 
-  /openai@5.11.0(zod@3.25.67):
-    resolution: {integrity: sha512-+AuTc5pVjlnTuA9zvn8rA/k+1RluPIx9AD4eDcnutv6JNwHHZxIhkFy+tmMKCvmMFDQzfA/r1ujvPWB19DQkYg==}
-    hasBin: true
-    peerDependencies:
-      ws: ^8.18.0
-      zod: ^3.23.8
-    peerDependenciesMeta:
-      ws:
-        optional: true
-      zod:
-        optional: true
-    dependencies:
-      zod: 3.25.67
-    dev: true
-
   /openai@5.11.0(zod@3.25.76):
     resolution: {integrity: sha512-+AuTc5pVjlnTuA9zvn8rA/k+1RluPIx9AD4eDcnutv6JNwHHZxIhkFy+tmMKCvmMFDQzfA/r1ujvPWB19DQkYg==}
     hasBin: true
@@ -8198,29 +8159,6 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
     dev: false
-
-  /postcss-load-config@6.0.1(jiti@2.6.1)(tsx@3.14.0):
-    resolution: {integrity: sha512-oPtTM4oerL+UXmx+93ytZVN82RrlY/wPUV8IeDxFrzIjXOLF1pN+EmKPLbubvKHT2HC20xXsCAH2Z+CKV6Oz/g==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      jiti: '>=1.21.0'
-      postcss: '>=8.0.9'
-      tsx: ^4.8.1
-      yaml: ^2.4.2
-    peerDependenciesMeta:
-      jiti:
-        optional: true
-      postcss:
-        optional: true
-      tsx:
-        optional: true
-      yaml:
-        optional: true
-    dependencies:
-      jiti: 2.6.1
-      lilconfig: 3.1.3
-      tsx: 3.14.0
-    dev: true
 
   /postcss-load-config@6.0.1(tsx@3.14.0):
     resolution: {integrity: sha512-oPtTM4oerL+UXmx+93ytZVN82RrlY/wPUV8IeDxFrzIjXOLF1pN+EmKPLbubvKHT2HC20xXsCAH2Z+CKV6Oz/g==}
@@ -9256,7 +9194,7 @@ packages:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
     dev: true
 
-  /ts-jest@29.1.4(@babel/core@7.24.7)(esbuild@0.27.0)(jest@29.7.0)(typescript@5.4.4):
+  /ts-jest@29.1.4(@babel/core@7.28.0)(esbuild@0.27.0)(jest@29.7.0)(typescript@5.4.4):
     resolution: {integrity: sha512-YiHwDhSvCiItoAgsKtoLFCuakDzDsJ1DLDnSouTaTmdOcOwIkSzbLXduaQ6M5DRVhuZC/NYaaZ/mtHbWMv/S6Q==}
     engines: {node: ^14.15.0 || ^16.10.0 || ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -9280,7 +9218,7 @@ packages:
       esbuild:
         optional: true
     dependencies:
-      '@babel/core': 7.24.7
+      '@babel/core': 7.28.0
       bs-logger: 0.2.6
       esbuild: 0.27.0
       fast-json-stable-stringify: 2.1.0
@@ -9346,7 +9284,7 @@ packages:
       esbuild: 0.24.2
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.6.1)(tsx@3.14.0)
+      postcss-load-config: 6.0.1(tsx@3.14.0)
       resolve-from: 5.0.0
       rollup: 4.35.0
       source-map: 0.8.0-beta.0
@@ -9389,7 +9327,7 @@ packages:
       esbuild: 0.24.2
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.6.1)(tsx@3.14.0)
+      postcss-load-config: 6.0.1(tsx@3.14.0)
       resolve-from: 5.0.0
       rollup: 4.35.0
       source-map: 0.8.0-beta.0
@@ -9477,7 +9415,7 @@ packages:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.6.1)(tsx@3.14.0)
+      postcss-load-config: 6.0.1(tsx@3.14.0)
       resolve-from: 5.0.0
       rollup: 4.35.0
       source-map: 0.7.6
@@ -10171,7 +10109,7 @@ packages:
     dependencies:
       '@types/node': 20.19.16
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -10229,7 +10167,7 @@ packages:
     dependencies:
       '@types/node': 20.19.9
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/mocker': 2.1.9(vite@5.4.14)
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -10504,14 +10442,6 @@ packages:
     dependencies:
       zod: 3.25.76
 
-  /zod-to-json-schema@3.22.5(zod@4.2.1):
-    resolution: {integrity: sha512-+akaPo6a0zpVCCseDed504KBJUQpEW5QZw7RMneNmKw+fGaML1Z9tUNLnHHAC8x6dzVRO1eB2oEMyZRnuBZg7Q==}
-    peerDependencies:
-      zod: ^3.22.4
-    dependencies:
-      zod: 4.2.1
-    dev: false
-
   /zod-to-json-schema@3.24.6(zod@3.25.76):
     resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
     peerDependencies:
@@ -10519,13 +10449,20 @@ packages:
     dependencies:
       zod: 3.25.76
 
-  /zod-to-json-schema@3.24.6(zod@4.2.1):
-    resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
+  /zod-to-json-schema@3.25.0(zod@3.25.76):
+    resolution: {integrity: sha512-HvWtU2UG41LALjajJrML6uQejQhNJx+JBO9IflpSja4R03iNWfKXrj6W2h7ljuLyc1nKS+9yDyL/9tD1U/yBnQ==}
     peerDependencies:
-      zod: ^3.24.1
+      zod: ^3.25 || ^4
+    dependencies:
+      zod: 3.25.76
+    dev: true
+
+  /zod-to-json-schema@3.25.0(zod@4.2.1):
+    resolution: {integrity: sha512-HvWtU2UG41LALjajJrML6uQejQhNJx+JBO9IflpSja4R03iNWfKXrj6W2h7ljuLyc1nKS+9yDyL/9tD1U/yBnQ==}
+    peerDependencies:
+      zod: ^3.25 || ^4
     dependencies:
       zod: 4.2.1
-    dev: true
 
   /zod@3.25.67:
     resolution: {integrity: sha512-idA2YXwpCdqUSKRCACDE6ItZD9TZzy3OZMtpfLoh6oPR47lipysRrJfjzMqFxQ3uJuUPyUeWe1r9vLH33xO/Qw==}
