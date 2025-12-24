@@ -96,6 +96,11 @@ def extract_metadata(instance: Any, component: str) -> Dict[str, Any]:
         model = getattr(instance, "model", None)
         if model:
             metadata["model"] = getattr(model, "id", None) or model.__class__.__name__
+    elif component == "workflow":
+        metadata["workflow_name"] = getattr(instance, "name", None)
+        steps = getattr(instance, "steps", None)
+        if steps:
+            metadata["steps_count"] = len(steps)
 
     return metadata
 
@@ -402,6 +407,77 @@ def _aggregate_agent_chunks(chunks: List[Any]) -> Dict[str, Any]:
                 )
 
     return {k: v for k, v in aggregated.items() if v not in (None, "")}
+
+
+def extract_workflow_metrics(result: Any) -> Optional[Dict[str, Any]]:
+    """
+    Extract metrics from a WorkflowRunOutput.
+
+    WorkflowRunOutput contains:
+    - content: The final output content
+    - metrics: Optional metrics from the workflow execution
+    """
+    if not result:
+        return None
+
+    metrics = {}
+
+    # Check for metrics attribute (WorkflowRunOutput may have this)
+    if hasattr(result, "metrics") and result.metrics:
+        workflow_metrics = result.metrics
+        # Map common metric fields
+        if hasattr(workflow_metrics, "input_tokens") and workflow_metrics.input_tokens:
+            metrics["prompt_tokens"] = workflow_metrics.input_tokens
+        if hasattr(workflow_metrics, "output_tokens") and workflow_metrics.output_tokens:
+            metrics["completion_tokens"] = workflow_metrics.output_tokens
+        if hasattr(workflow_metrics, "total_tokens") and workflow_metrics.total_tokens:
+            metrics["total_tokens"] = workflow_metrics.total_tokens
+        if hasattr(workflow_metrics, "duration") and workflow_metrics.duration:
+            metrics["duration"] = workflow_metrics.duration
+        if hasattr(workflow_metrics, "time_to_first_token") and workflow_metrics.time_to_first_token:
+            metrics["time_to_first_token"] = workflow_metrics.time_to_first_token
+
+    return metrics if metrics else None
+
+
+def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
+    """
+    Aggregate WorkflowRunOutputEvent chunks into a complete response.
+
+    Workflow events can include:
+    - WorkflowRunStarted
+    - WorkflowRunContent
+    - WorkflowRunCompleted
+    - Events from nested agents/teams
+    """
+    aggregated = {
+        "content": "",
+        "metrics": {},
+    }
+
+    for chunk in chunks:
+        # Handle content events
+        if hasattr(chunk, "content") and chunk.content:
+            aggregated["content"] += str(chunk.content)
+
+        # Handle completion events with metrics
+        if hasattr(chunk, "event") and chunk.event == "WorkflowRunCompleted":
+            if hasattr(chunk, "metrics") and chunk.metrics:
+                chunk_metrics = parse_metrics_from_agno(chunk.metrics)
+                if chunk_metrics:
+                    _aggregate_metrics(aggregated["metrics"], chunk_metrics)
+
+        # Handle any chunk with metrics
+        elif hasattr(chunk, "metrics") and chunk.metrics:
+            chunk_metrics = parse_metrics_from_agno(chunk.metrics)
+            if chunk_metrics:
+                _aggregate_metrics(aggregated["metrics"], chunk_metrics)
+
+    # Clean up empty metrics
+    if not aggregated["metrics"]:
+        aggregated["metrics"] = None
+
+    return {k: v for k, v in aggregated.items() if v is not None and v != ""}
 
 
 # Legacy aliases for backward compatibility

@@ -18,7 +18,7 @@ Usage:
     response = agent.run(...)
 """
 
-__all__ = ["setup_agno", "wrap_agent", "wrap_function_call", "wrap_model", "wrap_team"]
+__all__ = ["setup_agno", "wrap_agent", "wrap_function_call", "wrap_model", "wrap_team", "wrap_workflow"]
 
 import logging
 from typing import Optional
@@ -29,6 +29,7 @@ from .agent import wrap_agent
 from .function_call import wrap_function_call
 from .model import wrap_model
 from .team import wrap_team
+from .workflow import wrap_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,11 @@ def setup_agno(
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
 
     try:
-        from agno import agent, models, team, tools  # pyright: ignore
+        from agno import agent, models, team, tools, workflow  # pyright: ignore
 
         agent.Agent = wrap_agent(agent.Agent)  # pyright: ignore[reportUnknownMemberType]
         team.Team = wrap_team(team.Team)  # pyright: ignore[reportUnknownMemberType]
+        workflow.Workflow = wrap_workflow(workflow.Workflow)  # pyright: ignore[reportUnknownMemberType]
         models.base.Model = wrap_model(models.base.Model)  # pyright: ignore[reportUnknownMemberType]
         tools.function.FunctionCall = wrap_function_call(tools.function.FunctionCall)  # pyright: ignore[reportUnknownMemberType]
         return True
