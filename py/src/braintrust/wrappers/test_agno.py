@@ -5,6 +5,7 @@
 # pyright: reportUnknownVariableType=false
 # pyright: reportUnknownArgumentType=false
 import pytest
+
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.agno import setup_agno
