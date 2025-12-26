@@ -22,18 +22,8 @@ import { z } from "zod";
 import { capitalize } from "../../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
-import zodToJsonSchemaFallback from "zod-to-json-schema";
+import { customZodToJsonSchema as zodToJsonSchema } from "../../../util/custom_zod_to_json_schema";
 import pluralize from "pluralize";
-
-// Helper to convert Zod schema to JSON schema, using native .json() if available (Zod v4+)
-function zodToJsonSchema(schema: any): any {
-  if (typeof schema.json === "function") {
-    // Zod v4+ native JSON support
-    return schema.json();
-  }
-  // Fallback to zod-to-json-schema for older versions
-  return zodToJsonSchemaFallback(schema);
-}
 import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
 
 export type EvaluatorMap = Record<

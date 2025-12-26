@@ -131,6 +131,8 @@ export { loadPrettyXact, prettifyXact } from "./xact-ids";
 
 export { ExtraFieldsError, objectNullish, parseNoStrip } from "./zod_util";
 
+export { customZodToJsonSchema } from "./custom_zod_to_json_schema";
+
 export {
   base64ToUint8Array,
   concatUint8Arrays,
