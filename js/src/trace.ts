@@ -1,4 +1,4 @@
-import { _internalGetGlobalState } from "./logger";
+import type { BraintrustState } from "./logger";
 import iso from "./isomorph";
 
 const MAX_FETCH_RETRIES = 8;
@@ -14,6 +14,7 @@ export interface TraceOptions {
   logsId?: string;
   rootSpanId: string;
   ensureSpansFlushed?: () => Promise<void>;
+  state: BraintrustState;
 }
 
 function isObject(value: any): value is Record<string, unknown> {
@@ -49,6 +50,7 @@ export class Trace {
   private readonly logsId?: string;
   private readonly rootSpanId: string;
   private readonly ensureSpansFlushed?: () => Promise<void>;
+  private readonly state: BraintrustState;
   private spansFlushed = false;
   private spansFlushPromise: Promise<void> | null = null;
 
@@ -57,11 +59,13 @@ export class Trace {
     logsId,
     rootSpanId,
     ensureSpansFlushed,
+    state,
   }: TraceOptions) {
     this.experimentId = experimentId;
     this.logsId = logsId;
     this.rootSpanId = rootSpanId;
     this.ensureSpansFlushed = ensureSpansFlushed;
+    this.state = state;
   }
 
   getConfiguration() {
@@ -84,10 +88,7 @@ export class Trace {
       return [];
     }
 
-    const state = _internalGetGlobalState();
-    if (!state) {
-      return [];
-    }
+    const state = this.state;
 
     // Try local cache first
     const cachedSpans = state.spanCache.getByRootSpanId(this.rootSpanId);

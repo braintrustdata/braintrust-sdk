@@ -955,6 +955,7 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
+        const state = _internalGetGlobalState();
         const ensureSpansFlushed = async () => {
           // Flush native Braintrust spans
           if (experiment) {
@@ -966,11 +967,14 @@ async function runEvaluatorInternal(
           }
 
           // Also flush OTEL spans if registered
-          const state = _internalGetGlobalState();
           if (state) {
             await state.flushOtel();
           }
         };
+
+        if (!state) {
+          throw new Error("BraintrustState not initialized");
+        }
 
         const trace = new Trace({
           experimentId: experimentIdPromise
@@ -978,6 +982,7 @@ async function runEvaluatorInternal(
             : undefined,
           rootSpanId: rootSpan.rootSpanId,
           ensureSpansFlushed,
+          state,
         });
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
