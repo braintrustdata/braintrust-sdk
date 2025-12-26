@@ -278,13 +278,13 @@ export class SpanComponentsV4 {
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV4 is initialized with an `object_id`",
       );
     }
-    const ot =
+    const objectType =
       typeof this.data.object_type === "number"
         ? this.data.object_type
         : (SpanObjectTypeV3 as any)[this.data.object_type] ??
           parseInt(String(this.data.object_type), 10);
 
-    switch (ot) {
+    switch (objectType) {
       case SpanObjectTypeV3.EXPERIMENT:
         return { experiment_id: this.data.object_id };
       case SpanObjectTypeV3.PROJECT_LOGS:
@@ -292,7 +292,7 @@ export class SpanComponentsV4 {
       case SpanObjectTypeV3.PLAYGROUND_LOGS:
         return { prompt_session_id: this.data.object_id, log_id: "x" };
       default:
-        const _: never = ot as never;
+        const _: never = objectType as never;
         throw new Error(`Invalid object_type ${this.data.object_type}`);
     }
   }
