@@ -705,7 +705,7 @@ export async function Eval<
   } finally {
     progressReporter.stop();
     // Clean up disk-based span cache after eval completes
-    _internalGetGlobalState()?.spanCache?.dispose();
+    evaluator.state?.spanCache?.dispose();
   }
 }
 

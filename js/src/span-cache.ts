@@ -113,58 +113,81 @@ export class SpanCache {
     return this.initPromise;
   }
 
+  // Buffer for pending writes - flushed asynchronously
+  private writeBuffer: DiskSpanRecord[] = [];
+  private flushScheduled = false;
+  private flushPromise: Promise<void> | null = null;
+
   /**
-   * Write or update a span in the cache.
-   *
-   * @param rootSpanId The root span ID that groups this span
-   * @param spanId The unique ID of this span
-   * @param data The span data to cache
+   * Queue a span write for async flushing.
+   * This is non-blocking - writes are buffered in memory and flushed
+   * to disk on the next microtask.
    */
-  async write(
-    rootSpanId: string,
-    spanId: string,
-    data: CachedSpan,
-  ): Promise<void> {
+  queueWrite(rootSpanId: string, spanId: string, data: CachedSpan): void {
     if (this.disabled) {
+      return;
+    }
+
+    const record: DiskSpanRecord = { rootSpanId, spanId, data };
+    this.writeBuffer.push(record);
+    this.rootSpanIndex.add(rootSpanId);
+
+    // Schedule async flush if not already scheduled
+    if (!this.flushScheduled) {
+      this.flushScheduled = true;
+      this.flushPromise = this.flushWriteBuffer();
+    }
+  }
+
+  /**
+   * Flush the write buffer to disk asynchronously.
+   * Called automatically after queueWrite, but can also be called explicitly.
+   */
+  async flushWriteBuffer(): Promise<void> {
+    // Take a snapshot of records to flush, but DON'T clear the buffer yet.
+    // Records stay in writeBuffer until disk write succeeds so getByRootSpanId can find them.
+    const recordsToFlush = [...this.writeBuffer];
+    this.flushScheduled = false;
+
+    if (recordsToFlush.length === 0) {
       return;
     }
 
     await this.ensureInitialized();
 
-    const record: DiskSpanRecord = { rootSpanId, spanId, data };
-    const line = JSON.stringify(record) + "\n";
+    if (!this.fileHandle) {
+      return;
+    }
 
-    await this.fileHandle!.appendFile(line, "utf8");
-    this.rootSpanIndex.add(rootSpanId);
+    const lines = recordsToFlush.map((r) => JSON.stringify(r) + "\n").join("");
+    await this.fileHandle.appendFile(lines, "utf8");
+
+    // Only now remove the flushed records from the buffer.
+    // Filter out the records we just wrote (compare by reference).
+    this.writeBuffer = this.writeBuffer.filter(
+      (r) => !recordsToFlush.includes(r),
+    );
   }
 
   /**
+   * Wait for any pending writes to complete.
+   * Call this before reading from the cache to ensure consistency.
+   */
+  async waitForPendingWrites(): Promise<void> {
+    if (this.flushPromise) {
+      await this.flushPromise;
+      this.flushPromise = null;
+    }
+  }
+
+  /**
+   * @deprecated Use queueWrite instead - writeSync blocks the event loop.
    * Synchronous write - fire and forget.
    * Uses sync file operations to avoid blocking the caller.
    */
   writeSync(rootSpanId: string, spanId: string, data: CachedSpan): void {
-    if (this.disabled) {
-      return;
-    }
-
-    // Lazy init - create file synchronously if needed
-    if (!this.initialized) {
-      const tmpDir = iso.tmpdir!();
-      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      this.cacheFilePath = iso.pathJoin!(
-        tmpDir,
-        `braintrust-span-cache-${uniqueId}.jsonl`,
-      );
-      // Touch the file
-      iso.writeFileSync!(this.cacheFilePath, "");
-      this.initialized = true;
-    }
-
-    const record: DiskSpanRecord = { rootSpanId, spanId, data };
-    const line = JSON.stringify(record) + "\n";
-
-    iso.appendFileSync!(this.cacheFilePath!, line);
-    this.rootSpanIndex.add(rootSpanId);
+    // Delegate to the non-blocking version
+    this.queueWrite(rootSpanId, spanId, data);
   }
 
   /**
@@ -180,51 +203,63 @@ export class SpanCache {
       return undefined;
     }
 
-    if (!this.initialized || !this.cacheFilePath) {
-      return undefined;
-    }
-
     // Quick check using in-memory index
     if (!this.rootSpanIndex.has(rootSpanId)) {
       return undefined;
     }
 
-    try {
-      const content = iso.readFileSync!(this.cacheFilePath, "utf8");
-      const lines = content.trim().split("\n").filter(Boolean);
+    // Accumulate spans by spanId, merging updates
+    const spanMap = new Map<string, CachedSpan>();
 
-      // Accumulate spans by spanId, merging updates
-      const spanMap = new Map<string, CachedSpan>();
+    // First, read from disk if initialized
+    if (this.initialized && this.cacheFilePath) {
+      try {
+        const content = iso.readFileSync!(this.cacheFilePath, "utf8");
+        const lines = content.trim().split("\n").filter(Boolean);
 
-      for (const line of lines) {
-        try {
-          const record = JSON.parse(line) as DiskSpanRecord;
-          if (record.rootSpanId !== rootSpanId) {
-            continue;
+        for (const line of lines) {
+          try {
+            const record = JSON.parse(line) as DiskSpanRecord;
+            if (record.rootSpanId !== rootSpanId) {
+              continue;
+            }
+
+            const existing = spanMap.get(record.spanId);
+            if (existing) {
+              spanMap.set(
+                record.spanId,
+                this.mergeSpanData(existing, record.data),
+              );
+            } else {
+              spanMap.set(record.spanId, record.data);
+            }
+          } catch {
+            // Skip malformed lines
           }
-
-          const existing = spanMap.get(record.spanId);
-          if (existing) {
-            spanMap.set(
-              record.spanId,
-              this.mergeSpanData(existing, record.data),
-            );
-          } else {
-            spanMap.set(record.spanId, record.data);
-          }
-        } catch {
-          // Skip malformed lines
         }
+      } catch {
+        // Continue to check buffer even if disk read fails
       }
+    }
 
-      if (spanMap.size === 0) {
-        return undefined;
+    // Also check the in-memory write buffer for unflushed data
+    for (const record of this.writeBuffer) {
+      if (record.rootSpanId !== rootSpanId) {
+        continue;
       }
+      const existing = spanMap.get(record.spanId);
+      if (existing) {
+        spanMap.set(record.spanId, this.mergeSpanData(existing, record.data));
+      } else {
+        spanMap.set(record.spanId, record.data);
+      }
+    }
 
-      return Array.from(spanMap.values());
-    } catch {
+    if (spanMap.size === 0) {
       return undefined;
     }
+
+    return Array.from(spanMap.values());
   }
 
   /**
@@ -265,6 +300,11 @@ export class SpanCache {
    * Clean up the cache file. Call this when the eval is complete.
    */
   dispose(): void {
+    // Clear pending writes
+    this.writeBuffer = [];
+    this.flushScheduled = false;
+    this.flushPromise = null;
+
     if (this.fileHandle) {
       this.fileHandle.close().catch(() => {});
       this.fileHandle = null;
