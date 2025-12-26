@@ -1,8 +1,8 @@
 import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
 
 export interface TraceOptions {
-  experimentId?: string;
-  logsId?: string;
+  objectType: "experiment" | "project_logs";
+  objectId: string;
   rootSpanId: string;
   ensureSpansFlushed?: () => Promise<void>;
   state: BraintrustState;
@@ -16,7 +16,8 @@ type SpanRecord = any;
  */
 class SpanFetcher extends ObjectFetcher<SpanRecord> {
   constructor(
-    private readonly experimentId: string,
+    objectType: "experiment" | "project_logs",
+    private readonly _objectId: string,
     private readonly rootSpanId: string,
     private readonly _state: BraintrustState,
     private readonly spanTypeFilter?: string[],
@@ -24,7 +25,7 @@ class SpanFetcher extends ObjectFetcher<SpanRecord> {
     // Build the filter expression for root_span_id and optionally span_attributes.type
     const filterExpr = SpanFetcher.buildFilter(rootSpanId, spanTypeFilter);
 
-    super("experiment", undefined, undefined, {
+    super(objectType, undefined, undefined, {
       filter: filterExpr,
       order_by: [{ expr: { op: "ident", name: ["_xact_id"] }, asc: true }],
     });
@@ -62,7 +63,7 @@ class SpanFetcher extends ObjectFetcher<SpanRecord> {
   }
 
   public get id(): Promise<string> {
-    return Promise.resolve(this.experimentId);
+    return Promise.resolve(this._objectId);
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -77,8 +78,8 @@ class SpanFetcher extends ObjectFetcher<SpanRecord> {
  */
 export class Trace {
   // Store values privately so future helper methods can expose them safely.
-  private readonly experimentId?: string;
-  private readonly logsId?: string;
+  private readonly objectType: "experiment" | "project_logs";
+  private readonly objectId: string;
   private readonly rootSpanId: string;
   private readonly ensureSpansFlushed?: () => Promise<void>;
   private readonly state: BraintrustState;
@@ -86,14 +87,14 @@ export class Trace {
   private spansFlushPromise: Promise<void> | null = null;
 
   constructor({
-    experimentId,
-    logsId,
+    objectType,
+    objectId,
     rootSpanId,
     ensureSpansFlushed,
     state,
   }: TraceOptions) {
-    this.experimentId = experimentId;
-    this.logsId = logsId;
+    this.objectType = objectType;
+    this.objectId = objectId;
     this.rootSpanId = rootSpanId;
     this.ensureSpansFlushed = ensureSpansFlushed;
     this.state = state;
@@ -101,24 +102,18 @@ export class Trace {
 
   getConfiguration() {
     return {
-      experimentId: this.experimentId,
-      logsId: this.logsId,
+      objectType: this.objectType,
+      objectId: this.objectId,
       rootSpanId: this.rootSpanId,
     };
   }
 
   /**
-   * Fetch all rows for this root span from its parent experiment.
-   * Returns an empty array when no experiment is associated with the context.
-   *
+   * Fetch all rows for this root span from its parent object (experiment or project logs).
    * First checks the local span cache for recently logged spans, then falls
    * back to BTQL API if not found in cache.
    */
   async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<any[]> {
-    if (!this.experimentId) {
-      return [];
-    }
-
     const state = this.state;
 
     // Try local cache first
@@ -150,7 +145,8 @@ export class Trace {
     await state.login({});
 
     const fetcher = new SpanFetcher(
-      this.experimentId,
+      this.objectType,
+      this.objectId,
       this.rootSpanId,
       state,
       spanType,

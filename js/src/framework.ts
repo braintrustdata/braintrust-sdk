@@ -973,9 +973,10 @@ async function runEvaluatorInternal(
 
         const trace = state
           ? new Trace({
-              experimentId: experimentIdPromise
-                ? await experimentIdPromise
-                : undefined,
+              objectType: "experiment",
+              objectId: experimentIdPromise
+                ? (await experimentIdPromise) ?? ""
+                : "",
               rootSpanId: rootSpan.rootSpanId,
               ensureSpansFlushed,
               state,
