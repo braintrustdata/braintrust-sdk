@@ -1,13 +1,4 @@
-import type { BraintrustState } from "./logger";
-import iso from "./isomorph";
-
-const MAX_FETCH_RETRIES = 8;
-const INITIAL_RETRY_DELAY_MS = 250;
-
-const sleep = (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
 
 export interface TraceOptions {
   experimentId?: string;
@@ -17,27 +8,67 @@ export interface TraceOptions {
   state: BraintrustState;
 }
 
-function isObject(value: any): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpanRecord = any;
 
-const getMessageHash = (
-  message: any,
-  hashCache: Map<string, string>,
-): string => {
-  const messageString = JSON.stringify(message);
+/**
+ * Internal fetcher for spans by root_span_id, using the ObjectFetcher pattern.
+ */
+class SpanFetcher extends ObjectFetcher<SpanRecord> {
+  constructor(
+    private readonly experimentId: string,
+    private readonly rootSpanId: string,
+    private readonly _state: BraintrustState,
+    private readonly spanTypeFilter?: string[],
+  ) {
+    // Build the filter expression for root_span_id and optionally span_attributes.type
+    const filterExpr = SpanFetcher.buildFilter(rootSpanId, spanTypeFilter);
 
-  // In browser without hash support, return unique string to force cache miss
-  if (!iso.hash) {
-    return `no-hash-${Date.now()}-${Math.random()}`;
+    super("experiment", undefined, undefined, {
+      filter: filterExpr,
+      order_by: [{ expr: { op: "ident", name: ["_xact_id"] }, asc: true }],
+    });
   }
 
-  const hashString = iso.hash(messageString);
+  private static buildFilter(
+    rootSpanId: string,
+    spanTypeFilter?: string[],
+  ): Record<string, unknown> {
+    // Base filter: root_span_id = 'value'
+    const rootSpanFilter = {
+      op: "eq",
+      left: { op: "ident", name: ["root_span_id"] },
+      right: { op: "literal", value: rootSpanId },
+    };
 
-  // Cache the result
-  hashCache.set(messageString, hashString);
-  return hashString;
-};
+    // If no spanType filter, just return root_span_id filter
+    if (!spanTypeFilter || spanTypeFilter.length === 0) {
+      return rootSpanFilter;
+    }
+
+    // Add span_attributes.type IN [...] filter
+    const spanTypeInFilter = {
+      op: "in",
+      left: { op: "ident", name: ["span_attributes", "type"] },
+      right: spanTypeFilter.map((t) => ({ op: "literal", value: t })),
+    };
+
+    // Combine with AND
+    return {
+      op: "and",
+      left: rootSpanFilter,
+      right: spanTypeInFilter,
+    };
+  }
+
+  public get id(): Promise<string> {
+    return Promise.resolve(this.experimentId);
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    return this._state;
+  }
+}
 
 /**
  * Carries identifying information about the evaluation so scorers can perform
@@ -114,56 +145,29 @@ export class Trace {
       }));
     }
 
-    // Cache miss - fall back to BTQL
+    // Cache miss - fall back to BTQL via ObjectFetcher pattern
     await this.ensureSpansReady();
-
     await state.login({});
 
-    const query = `
-      from: experiment('${this.experimentId}')
-      | filter: root_span_id = '${this.rootSpanId}' ${spanType ? `AND span_attributes.type IN ${JSON.stringify(spanType)}` : ""}
-      | select: *
-      | sort: _xact_id asc
-    `;
+    const fetcher = new SpanFetcher(
+      this.experimentId,
+      this.rootSpanId,
+      state,
+      spanType,
+    );
 
-    for (let attempt = 0; attempt < MAX_FETCH_RETRIES; attempt++) {
-      const response = await state.apiConn().post(
-        "btql",
-        {
-          query,
-          use_columnstore: true,
-          brainstore_realtime: true,
-        },
-        { headers: { "Accept-Encoding": "gzip" } },
-      );
+    const rows: WithTransactionId<SpanRecord>[] = await fetcher.fetchedData();
 
-      const payload = await response.json();
-      const rows = payload?.data ?? [];
-      const freshness = payload?.freshness_state;
-      const isFresh =
-        freshness?.last_processed_xact_id != null &&
-        freshness?.last_processed_xact_id ===
-          freshness?.last_considered_xact_id;
-
-      if ((rows.length > 0 && isFresh) || attempt === MAX_FETCH_RETRIES - 1) {
-        return rows
-          .filter((row: any) => row.span_attributes?.type !== "score")
-          .map((row: any) => ({
-            input: row.input,
-            output: row.output,
-            metadata: row.metadata,
-            span_id: row.span_id,
-            span_parents: row.span_parents,
-            span_attributes: row.span_attributes,
-          }));
-      }
-
-      const backoff =
-        INITIAL_RETRY_DELAY_MS * Math.pow(2, Math.min(attempt, 3));
-      await sleep(backoff);
-    }
-
-    return [];
+    return rows
+      .filter((row) => row.span_attributes?.type !== "score")
+      .map((row) => ({
+        input: row.input,
+        output: row.output,
+        metadata: row.metadata,
+        span_id: row.span_id,
+        span_parents: row.span_parents,
+        span_attributes: row.span_attributes,
+      }));
   }
 
   private async ensureSpansReady() {

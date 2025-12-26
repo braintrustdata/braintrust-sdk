@@ -4833,9 +4833,9 @@ export type WithTransactionId<R> = R & {
 };
 
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
-const MAX_BTQL_ITERATIONS = 10000;
+export const MAX_BTQL_ITERATIONS = 10000;
 
-class ObjectFetcher<RecordType>
+export class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
