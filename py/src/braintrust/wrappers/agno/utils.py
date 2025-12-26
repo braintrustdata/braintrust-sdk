@@ -96,6 +96,11 @@ def extract_metadata(instance: Any, component: str) -> Dict[str, Any]:
         model = getattr(instance, "model", None)
         if model:
             metadata["model"] = getattr(model, "id", None) or model.__class__.__name__
+    elif component == "workflow":
+        metadata["workflow_name"] = getattr(instance, "name", None)
+        steps = getattr(instance, "steps", None)
+        if steps:
+            metadata["steps_count"] = len(steps)
 
     return metadata
 
@@ -402,6 +407,95 @@ def _aggregate_agent_chunks(chunks: List[Any]) -> Dict[str, Any]:
                 )
 
     return {k: v for k, v in aggregated.items() if v not in (None, "")}
+
+
+def extract_workflow_metrics(result: Any) -> Optional[Dict[str, Any]]:
+    """
+    Extract metrics from a WorkflowRunOutput.
+
+    WorkflowRunOutput contains:
+    - content: The final output content
+    - metrics: Optional metrics from the workflow execution
+    """
+    if not result:
+        return None
+
+    metrics = {}
+
+    # Check for metrics attribute (WorkflowRunOutput may have this)
+    if hasattr(result, "metrics") and result.metrics:
+        workflow_metrics = result.metrics
+        # Map common metric fields
+        if hasattr(workflow_metrics, "input_tokens") and workflow_metrics.input_tokens:
+            metrics["prompt_tokens"] = workflow_metrics.input_tokens
+        if hasattr(workflow_metrics, "output_tokens") and workflow_metrics.output_tokens:
+            metrics["completion_tokens"] = workflow_metrics.output_tokens
+        if hasattr(workflow_metrics, "total_tokens") and workflow_metrics.total_tokens:
+            metrics["total_tokens"] = workflow_metrics.total_tokens
+        if hasattr(workflow_metrics, "duration") and workflow_metrics.duration:
+            metrics["duration"] = workflow_metrics.duration
+        if hasattr(workflow_metrics, "time_to_first_token") and workflow_metrics.time_to_first_token:
+            metrics["time_to_first_token"] = workflow_metrics.time_to_first_token
+
+    return metrics if metrics else None
+
+
+def _aggregate_workflow_chunks(chunks: List[Any]) -> Dict[str, Any]:
+    """
+    Aggregate WorkflowRunOutputEvent chunks into a complete response.
+
+    Matches the structure of _aggregate_agent_chunks for consistency.
+    Only captures final content from WorkflowRunCompleted to avoid duplicates.
+
+    Workflow events can include:
+    - WorkflowRunStarted
+    - WorkflowRunContent (intermediate content - ignored to avoid duplicates)
+    - WorkflowRunCompleted (final output)
+    - ToolCallStarted (from nested agents/teams)
+    """
+    aggregated: Dict[str, Any] = {
+        "content": "",
+        "reasoning_content": "",
+        "tool_calls": [],
+        "citations": None,
+        "references": None,
+        "metrics": None,
+        "finish_reason": None,
+    }
+
+    for chunk in chunks:
+        event_type = getattr(chunk, "event", None)
+
+        # Handle WorkflowCompleted - get final content and metrics
+        if event_type == "WorkflowCompleted":
+            # Get final content from completed event
+            if hasattr(chunk, "content") and chunk.content:
+                aggregated["content"] = str(chunk.content)
+            # Keep raw metrics like Team does
+            if hasattr(chunk, "metrics") and chunk.metrics:
+                aggregated["metrics"] = chunk.metrics
+            aggregated["finish_reason"] = "stop"
+
+        # Handle WorkflowError
+        elif event_type == "WorkflowError":
+            aggregated["finish_reason"] = "error"
+
+        # Handle tool calls (from nested agents/teams)
+        elif event_type == "ToolCallStarted":
+            if hasattr(chunk, "tool_call"):
+                aggregated["tool_calls"].append(
+                    {
+                        "id": getattr(chunk.tool_call, "id", None),
+                        "type": "function",
+                        "function": {
+                            "name": getattr(chunk.tool_call, "name", None),
+                            "arguments": getattr(chunk.tool_call, "arguments", ""),
+                        },
+                    }
+                )
+
+    # Clean up empty values to match Team behavior
+    return {k: v for k, v in aggregated.items() if v not in (None, "", [])}
 
 
 # Legacy aliases for backward compatibility
