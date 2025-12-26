@@ -11,7 +11,6 @@ import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
 import { Trace } from "./trace";
-export { Trace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
