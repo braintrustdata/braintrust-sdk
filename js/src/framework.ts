@@ -971,18 +971,16 @@ async function runEvaluatorInternal(
           }
         };
 
-        if (!state) {
-          throw new Error("BraintrustState not initialized");
-        }
-
-        const trace = new Trace({
-          experimentId: experimentIdPromise
-            ? await experimentIdPromise
-            : undefined,
-          rootSpanId: rootSpan.rootSpanId,
-          ensureSpansFlushed,
-          state,
-        });
+        const trace = state
+          ? new Trace({
+              experimentId: experimentIdPromise
+                ? await experimentIdPromise
+                : undefined,
+              rootSpanId: rootSpan.rootSpanId,
+              ensureSpansFlushed,
+              state,
+            })
+          : undefined;
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
