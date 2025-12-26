@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Literal, Mapping, Optional, Sequence, TypedDict, Union
 
-from typing_extensions import NotRequired
+from typing_extensions import NotRequired, TypeAlias
 
-AclObjectType = Literal[
+AclObjectType: TypeAlias = Literal[
     'organization',
     'project',
     'experiment',
@@ -23,6 +23,9 @@ AclObjectType = Literal[
     'project_log',
     'org_project',
 ]
+"""
+The object type that the ACL applies to
+"""
 
 
 class AISecret(TypedDict):
@@ -116,7 +119,7 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
-    function_ids: Sequence
+    function_ids: Sequence[Any]
     skip_logging: NotRequired[Optional[bool]]
 
 
@@ -124,7 +127,7 @@ class AsyncScoringStateAsyncScoringState1(TypedDict):
     status: Literal['disabled']
 
 
-AsyncScoringState = Optional[Union[AsyncScoringStateAsyncScoringState, AsyncScoringStateAsyncScoringState1]]
+AsyncScoringState: TypeAlias = Optional[Union[AsyncScoringStateAsyncScoringState, AsyncScoringStateAsyncScoringState1]]
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -200,7 +203,7 @@ class CallEventCallEvent7(TypedDict):
     data: Literal['']
 
 
-CallEvent = Union[
+CallEvent: TypeAlias = Union[
     CallEventCallEvent,
     CallEventCallEvent1,
     CallEventCallEvent2,
@@ -353,7 +356,7 @@ class ChatCompletionTool(TypedDict):
 
 
 class CodeBundleRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
     version: str
 
 
@@ -454,6 +457,18 @@ class EnvVar(TypedDict):
     """
     Date the environment variable was last used
     """
+    metadata: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Optional metadata associated with the environment variable when managed via the function secrets API
+    """
+    secret_type: NotRequired[Optional[str]]
+    """
+    Optional classification for the secret (for example, the AI provider name)
+    """
+    secret_category: NotRequired[Optional[Literal['env_var', 'ai_provider']]]
+    """
+    The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
+    """
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -529,7 +544,7 @@ class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
     slug: str
 
 
-ExtendedSavedFunctionId = Union[
+ExtendedSavedFunctionId: TypeAlias = Union[
     ExtendedSavedFunctionIdExtendedSavedFunctionId,
     ExtendedSavedFunctionIdExtendedSavedFunctionId1,
     ExtendedSavedFunctionIdExtendedSavedFunctionId2,
@@ -552,6 +567,48 @@ class ExternalAttachmentReference(TypedDict):
     url: str
     """
     Fully qualified URL to the object in the external object store.
+    """
+
+
+class PreprocessorPreprocessor(TypedDict):
+    type: Literal['function']
+    id: str
+
+
+class PreprocessorPreprocessor1(TypedDict):
+    type: Literal['global']
+    name: str
+
+
+class PreprocessorPreprocessor2(TypedDict):
+    pass
+
+
+class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
+    pass
+
+
+class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+    pass
+
+
+Preprocessor: TypeAlias = Union[PreprocessorPreprocessor3, PreprocessorPreprocessor4]
+
+
+class FacetData(TypedDict):
+    type: Literal['facet']
+    preprocessor: NotRequired[Optional[Preprocessor]]
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[Optional[str]]
+    """
+    The model to use for facet extraction
+    """
+    no_match_pattern: NotRequired[Optional[str]]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
     """
 
 
@@ -581,7 +638,7 @@ class Data(CodeBundle):
 
 
 class FunctionDataFunctionData1DataRuntimeContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
     version: str
 
 
@@ -589,6 +646,10 @@ class FunctionDataFunctionData1Data(TypedDict):
     type: Literal['inline']
     runtime_context: FunctionDataFunctionData1DataRuntimeContext
     code: str
+    code_hash: NotRequired[Optional[str]]
+    """
+    SHA256 hash of the code, computed at save time
+    """
 
 
 class FunctionDataFunctionData1(TypedDict):
@@ -606,9 +667,13 @@ class FunctionDataFunctionData2(TypedDict):
 class FunctionDataFunctionData3(TypedDict):
     type: Literal['global']
     name: str
+    config: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Configuration options to pass to the global function (e.g., for preprocessor customization)
+    """
 
 
-FunctionFormat = Literal['llm', 'code', 'global', 'graph']
+FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
 
 
 class FunctionIdFunctionId(TypedDict):
@@ -660,7 +725,7 @@ class FunctionIdFunctionId3(TypedDict):
 
 
 class FunctionIdFunctionId4InlineContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser']
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
     version: str
 
 
@@ -676,19 +741,21 @@ class FunctionIdFunctionId4(TypedDict):
     """
 
 
-FunctionIdRef = Mapping[str, Any]
+FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view']
+FunctionObjectType: TypeAlias = Literal[
+    'prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet'
+]
 
 
-FunctionOutputType = Literal['completion', 'score', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
+FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
-FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view']
+FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
 class GitMetadataSettings(TypedDict):
@@ -969,7 +1036,79 @@ class Group(TypedDict):
     """
 
 
-IfExists = Literal['error', 'ignore', 'replace']
+IfExists: TypeAlias = Literal['error', 'ignore', 'replace']
+
+
+class InvokeFunctionInvokeFunction(TypedDict):
+    function_id: str
+    """
+    The ID of the function
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class InvokeFunctionInvokeFunction1(TypedDict):
+    project_name: str
+    """
+    The name of the project containing the function
+    """
+    slug: str
+    """
+    The slug of the function
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+
+
+class InvokeFunctionInvokeFunction3(TypedDict):
+    prompt_session_id: str
+    """
+    The ID of the prompt session
+    """
+    prompt_session_function_id: str
+    """
+    The ID of the function in the prompt session
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class InvokeFunctionInvokeFunction4InlineContext(TypedDict):
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
+    version: str
+
+
+class InvokeFunctionInvokeFunction4(TypedDict):
+    inline_context: InvokeFunctionInvokeFunction4InlineContext
+    code: str
+    """
+    The inline code to execute
+    """
+    name: NotRequired[Optional[str]]
+    """
+    The name of the inline code function
+    """
+
+
+class InvokeFunctionMcpAuth(TypedDict):
+    oauth_token: NotRequired[Optional[str]]
+    """
+    The OAuth token to use
+    """
 
 
 class InvokeParentInvokeParentRowIds(TypedDict):
@@ -1003,10 +1142,48 @@ class InvokeParentInvokeParent(TypedDict):
     """
 
 
-InvokeParent = Union[InvokeParentInvokeParent, str]
+InvokeParent: TypeAlias = Union[InvokeParentInvokeParent, str]
+"""
+Options for tracing the function call
+"""
 
 
-MessageRole = Literal['system', 'user', 'assistant', 'function', 'tool', 'model', 'developer']
+class MCPServer(TypedDict):
+    id: str
+    """
+    Unique identifier for the MCP server
+    """
+    project_id: str
+    """
+    Unique identifier for the project that the MCP server belongs under
+    """
+    user_id: NotRequired[Optional[str]]
+    """
+    Identifies the user who created the MCP server
+    """
+    created: NotRequired[Optional[str]]
+    """
+    Date of MCP server creation
+    """
+    deleted_at: NotRequired[Optional[str]]
+    """
+    Date of MCP server deletion, or null if the MCP server is still active
+    """
+    name: str
+    """
+    Name of the MCP server. Within a project, MCP server names are unique
+    """
+    description: NotRequired[Optional[str]]
+    """
+    Textual description of the MCP server
+    """
+    url: str
+    """
+    URL of the MCP server endpoint
+    """
+
+
+MessageRole: TypeAlias = Literal['system', 'user', 'assistant', 'function', 'tool', 'model', 'developer']
 
 
 class ModelParamsModelParamsToolChoiceFunction(TypedDict):
@@ -1059,6 +1236,24 @@ class ModelParamsModelParams4(TypedDict):
     use_cache: NotRequired[Optional[bool]]
     reasoning_enabled: NotRequired[Optional[bool]]
     reasoning_budget: NotRequired[Optional[float]]
+
+
+class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
+    type: Literal['function']
+    id: str
+
+
+class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
+    type: Literal['global']
+    name: str
+
+
+NullableSavedFunctionId: TypeAlias = Optional[
+    Union[NullableSavedFunctionIdNullableSavedFunctionId, NullableSavedFunctionIdNullableSavedFunctionId1]
+]
+"""
+Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default.
+"""
 
 
 class ObjectReference(TypedDict):
@@ -1126,7 +1321,14 @@ class Organization(TypedDict):
     """
 
 
-Permission = Literal['create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls']
+Permission: TypeAlias = Literal[
+    'create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls'
+]
+"""
+Each permission permits a certain type of operation on an object in the system
+
+Permissions can be assigned to to objects on an individual basis, or grouped into roles
+"""
 
 
 class ProjectAutomationConfigAction(TypedDict):
@@ -1137,6 +1339,25 @@ class ProjectAutomationConfigAction(TypedDict):
     url: str
     """
     The webhook URL to send the request to
+    """
+
+
+class ProjectAutomationConfigAction1(TypedDict):
+    type: Literal['slack']
+    """
+    The type of action to take
+    """
+    workspace_id: str
+    """
+    The Slack workspace ID to post to
+    """
+    channel: str
+    """
+    The Slack channel ID to post to
+    """
+    message_template: NotRequired[Optional[str]]
+    """
+    Custom message template for the alert
     """
 
 
@@ -1153,7 +1374,7 @@ class ProjectAutomationConfig(TypedDict):
     """
     Perform the triggered action at most once in this interval of seconds
     """
-    action: ProjectAutomationConfigAction
+    action: Union[ProjectAutomationConfigAction, ProjectAutomationConfigAction1]
     """
     The action to take when the automation rule is triggered
     """
@@ -1287,7 +1508,10 @@ class ProjectScoreCategory(TypedDict):
     """
 
 
-ProjectScoreType = Literal['slider', 'categorical', 'weighted', 'minimum', 'maximum', 'online', 'free-form']
+ProjectScoreType: TypeAlias = Literal['slider', 'categorical', 'weighted', 'minimum', 'maximum', 'online', 'free-form']
+"""
+The type of the configured score
+"""
 
 
 class ProjectSettingsSpanFieldOrderItem(TypedDict):
@@ -1324,6 +1548,7 @@ class ProjectSettings(TypedDict):
     """
     If true, disable real-time queries for this project. This can improve query performance for high-volume logs.
     """
+    default_preprocessor: NotRequired[Optional[NullableSavedFunctionId]]
 
 
 class ProjectTag(TypedDict):
@@ -1505,7 +1730,7 @@ class ResponseFormatNullishResponseFormatNullish2(TypedDict):
     type: Literal['text']
 
 
-ResponseFormatNullish = Optional[
+ResponseFormatNullish: TypeAlias = Optional[
     Union[
         ResponseFormatNullishResponseFormatNullish,
         ResponseFormatNullishResponseFormatNullish1,
@@ -1514,7 +1739,10 @@ ResponseFormatNullish = Optional[
 ]
 
 
-RetentionObjectType = Literal['project_logs', 'experiment', 'dataset']
+RetentionObjectType: TypeAlias = Literal['project_logs', 'experiment', 'dataset']
+"""
+The object type that the retention policy applies to
+"""
 
 
 class RoleMemberPermission(TypedDict):
@@ -1579,7 +1807,145 @@ class RunEvalData1(TypedDict):
 
 
 class RunEvalData2(TypedDict):
-    data: Sequence
+    data: Sequence[Any]
+
+
+class TaskTask(TypedDict):
+    function_id: str
+    """
+    The ID of the function
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class TaskTask1(TypedDict):
+    project_name: str
+    """
+    The name of the project containing the function
+    """
+    slug: str
+    """
+    The slug of the function
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class TaskTask2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+
+
+class TaskTask3(TypedDict):
+    prompt_session_id: str
+    """
+    The ID of the prompt session
+    """
+    prompt_session_function_id: str
+    """
+    The ID of the function in the prompt session
+    """
+    version: NotRequired[Optional[str]]
+    """
+    The version of the function
+    """
+
+
+class TaskTask4InlineContext(TypedDict):
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
+    version: str
+
+
+class TaskTask4(TypedDict):
+    inline_context: TaskTask4InlineContext
+    code: str
+    """
+    The inline code to execute
+    """
+    name: NotRequired[Optional[str]]
+    """
+    The name of the inline code function
+    """
+
+
+class TaskTask7(TypedDict):
+    pass
+
+
+class TaskTask8(TaskTask, TaskTask7):
+    pass
+
+
+class TaskTask9(TaskTask1, TaskTask7):
+    pass
+
+
+class TaskTask10(TaskTask2, TaskTask7):
+    pass
+
+
+class TaskTask11(TaskTask3, TaskTask7):
+    pass
+
+
+class TaskTask12(TaskTask4, TaskTask7):
+    pass
+
+
+class ParentParentRowIds(TypedDict):
+    id: str
+    """
+    The id of the row
+    """
+    span_id: str
+    """
+    The span_id of the row
+    """
+    root_span_id: str
+    """
+    The root_span_id of the row
+    """
+
+
+class ParentParent(TypedDict):
+    object_type: Literal['project_logs', 'experiment', 'playground_logs']
+    object_id: str
+    """
+    The id of the container object you are logging to
+    """
+    row_ids: NotRequired[Optional[ParentParentRowIds]]
+    """
+    Identifiers for the row to to log a subspan under
+    """
+    propagated_event: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Include these properties in every span created under this parent
+    """
+
+
+class ParentParent1(TypedDict):
+    pass
+
+
+class ParentParent2(ParentParent, ParentParent1):
+    pass
+
+
+Parent: TypeAlias = ParentParent2
+
+
+class RunEvalMcpAuth(TypedDict):
+    oauth_token: NotRequired[Optional[str]]
+    """
+    The OAuth token to use
+    """
 
 
 class SavedFunctionIdSavedFunctionId(TypedDict):
@@ -1592,7 +1958,7 @@ class SavedFunctionIdSavedFunctionId1(TypedDict):
     name: str
 
 
-SavedFunctionId = Union[SavedFunctionIdSavedFunctionId, SavedFunctionIdSavedFunctionId1]
+SavedFunctionId: TypeAlias = Union[SavedFunctionIdSavedFunctionId, SavedFunctionIdSavedFunctionId1]
 
 
 class ServiceToken(TypedDict):
@@ -1666,7 +2032,22 @@ class SpanIFrame(TypedDict):
     """
 
 
-SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
+class SpanScope(TypedDict):
+    type: Literal['span']
+    root_span_id: str
+    """
+    The root span id is a unique identifier for the trace.
+    """
+    id: str
+    """
+    A unique identifier for the span.
+    """
+
+
+SpanType: TypeAlias = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
+"""
+Type of the span, for display purposes only
+"""
 
 
 class SSEConsoleEventData(TypedDict):
@@ -1688,7 +2069,10 @@ class SSEProgressEventData(TypedDict):
     data: str
 
 
-StreamingMode = Literal['auto', 'parallel']
+StreamingMode: TypeAlias = Literal['auto', 'parallel']
+"""
+The mode format of the returned value (defaults to 'auto')
+"""
 
 
 class ToolFunctionDefinitionFunction(TypedDict):
@@ -1703,7 +2087,15 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
-UploadStatus = Literal['uploading', 'done', 'error']
+class TraceScope(TypedDict):
+    type: Literal['trace']
+    root_span_id: str
+    """
+    The root span id is a unique identifier for the trace.
+    """
+
+
+UploadStatus: TypeAlias = Literal['uploading', 'done', 'error']
 
 
 class User(TypedDict):
@@ -1755,6 +2147,7 @@ class ViewOptionsViewOptionsOptions(TypedDict):
 class ViewOptionsViewOptions(TypedDict):
     viewType: Literal['monitor']
     options: ViewOptionsViewOptionsOptions
+    freezeColumns: NotRequired[Optional[bool]]
 
 
 class ViewOptionsViewOptions1ExcludedMeasure(TypedDict):
@@ -1811,9 +2204,13 @@ class ViewOptionsViewOptions1(TypedDict):
     chartAnnotations: NotRequired[Optional[Sequence[ViewOptionsViewOptions1ChartAnnotation]]]
     timeRangeFilter: NotRequired[Optional[Union[str, ViewOptionsViewOptions1TimeRangeFilter]]]
     queryShape: NotRequired[Optional[Literal['traces', 'spans']]]
+    freezeColumns: NotRequired[Optional[bool]]
 
 
-ViewOptions = Optional[Union[ViewOptionsViewOptions, ViewOptionsViewOptions1]]
+ViewOptions: TypeAlias = Optional[Union[ViewOptionsViewOptions, ViewOptionsViewOptions1]]
+"""
+Options for the view in the app
+"""
 
 
 class Acl(TypedDict):
@@ -1883,10 +2280,10 @@ class AnyModelParams(TypedDict):
 
 class AsyncScoringControlAsyncScoringControl1(TypedDict):
     kind: Literal['state_override']
-    state: AsyncScoringState
+    state: Optional[AsyncScoringState]
 
 
-AsyncScoringControl = Union[
+AsyncScoringControl: TypeAlias = Union[
     AsyncScoringControlAsyncScoringControl,
     AsyncScoringControlAsyncScoringControl1,
     AsyncScoringControlAsyncScoringControl2,
@@ -1894,7 +2291,7 @@ AsyncScoringControl = Union[
 ]
 
 
-AttachmentReference = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
+AttachmentReference: TypeAlias = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
 
 
 class AttachmentStatus(TypedDict):
@@ -1905,7 +2302,7 @@ class AttachmentStatus(TypedDict):
     """
 
 
-ChatCompletionContentPart = Union[
+ChatCompletionContentPart: TypeAlias = Union[
     ChatCompletionContentPartTextWithTitle,
     ChatCompletionContentPartImageWithTitle,
     ChatCompletionContentPartFileWithTitle,
@@ -1927,7 +2324,7 @@ class ChatCompletionMessageParamChatCompletionMessageParam2(TypedDict):
     reasoning: NotRequired[Optional[Sequence[ChatCompletionMessageReasoning]]]
 
 
-ChatCompletionMessageParam = Union[
+ChatCompletionMessageParam: TypeAlias = Union[
     ChatCompletionMessageParamChatCompletionMessageParam,
     ChatCompletionMessageParamChatCompletionMessageParam1,
     ChatCompletionMessageParamChatCompletionMessageParam2,
@@ -1944,7 +2341,7 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDic
     name: NotRequired[Optional[str]]
 
 
-ChatCompletionOpenAIMessageParam = Union[
+ChatCompletionOpenAIMessageParam: TypeAlias = Union[
     ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam,
     ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1,
     ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2,
@@ -2078,6 +2475,12 @@ class Experiment(TypedDict):
     """
 
 
+InvokeScope: TypeAlias = Union[SpanScope, TraceScope]
+"""
+The scope at which to operate (span or trace)
+"""
+
+
 class ModelParamsModelParams(TypedDict):
     use_cache: NotRequired[Optional[bool]]
     reasoning_enabled: NotRequired[Optional[bool]]
@@ -2102,7 +2505,7 @@ class ModelParamsModelParams(TypedDict):
     verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
 
 
-ModelParams = Union[
+ModelParams: TypeAlias = Union[
     ModelParamsModelParams,
     ModelParamsModelParams1,
     ModelParamsModelParams2,
@@ -2209,7 +2612,7 @@ class ProjectAutomation(TypedDict):
     """
 
 
-ProjectScoreCategories = Optional[Union[Sequence[ProjectScoreCategory], Mapping[str, float], Sequence[str]]]
+ProjectScoreCategories: TypeAlias = Optional[Union[Sequence[ProjectScoreCategory], Mapping[str, float], Sequence[str]]]
 
 
 class ProjectScoreConfig(TypedDict):
@@ -2224,7 +2627,7 @@ class PromptBlockDataPromptBlockData(TypedDict):
     tools: NotRequired[Optional[str]]
 
 
-PromptBlockData = Union[PromptBlockDataPromptBlockData, PromptBlockDataPromptBlockData1]
+PromptBlockData: TypeAlias = Union[PromptBlockDataPromptBlockData, PromptBlockDataPromptBlockData1]
 
 
 class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
@@ -2233,7 +2636,7 @@ class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
     tools: NotRequired[Optional[str]]
 
 
-PromptBlockDataNullish = Optional[
+PromptBlockDataNullish: TypeAlias = Optional[
     Union[PromptBlockDataNullishPromptBlockDataNullish, PromptBlockDataNullishPromptBlockDataNullish1]
 ]
 
@@ -2255,7 +2658,9 @@ class ResponseFormatResponseFormat1(TypedDict):
     json_schema: ResponseFormatJsonSchema
 
 
-ResponseFormat = Union[ResponseFormatResponseFormat, ResponseFormatResponseFormat1, ResponseFormatResponseFormat2]
+ResponseFormat: TypeAlias = Union[
+    ResponseFormatResponseFormat, ResponseFormatResponseFormat1, ResponseFormatResponseFormat2
+]
 
 
 class SpanAttributes(TypedDict):
@@ -2373,7 +2778,7 @@ class GraphNodeGraphNode7(TypedDict):
     prompt: PromptBlockData
 
 
-GraphNode = Union[
+GraphNode: TypeAlias = Union[
     GraphNodeGraphNode,
     GraphNodeGraphNode1,
     GraphNodeGraphNode2,
@@ -2383,6 +2788,80 @@ GraphNode = Union[
     GraphNodeGraphNode6,
     GraphNodeGraphNode7,
 ]
+
+
+class InvokeContext(TypedDict):
+    object_type: Literal['project_logs', 'experiment', 'dataset', 'playground_logs']
+    """
+    The type of object containing the span data
+    """
+    object_id: str
+    """
+    The ID of the object containing the span data
+    """
+    scope: InvokeScope
+
+
+class InvokeFunctionInvokeFunction7(TypedDict):
+    input: NotRequired[Optional[Any]]
+    """
+    Argument to the function, which can be any JSON serializable value
+    """
+    expected: NotRequired[Optional[Any]]
+    """
+    The expected output of the function
+    """
+    metadata: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Any relevant metadata. This will be logged and available as the `metadata` argument.
+    """
+    tags: NotRequired[Optional[Sequence[str]]]
+    """
+    Any relevant tags to log on the span.
+    """
+    messages: NotRequired[Optional[Sequence[ChatCompletionMessageParam]]]
+    """
+    If the function is an LLM, additional messages to pass along to it
+    """
+    context: NotRequired[Optional[InvokeContext]]
+    parent: NotRequired[Optional[InvokeParent]]
+    stream: NotRequired[Optional[bool]]
+    """
+    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
+    """
+    mode: NotRequired[Optional[StreamingMode]]
+    strict: NotRequired[Optional[bool]]
+    """
+    If true, throw an error if one of the variables in the prompt is not present in the input
+    """
+    mcp_auth: NotRequired[Optional[Mapping[str, InvokeFunctionMcpAuth]]]
+    """
+    Map of MCP server URL to auth credentials
+    """
+    overrides: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
+    """
+
+
+class InvokeFunctionInvokeFunction8(InvokeFunctionInvokeFunction, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction9(InvokeFunctionInvokeFunction1, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction10(InvokeFunctionInvokeFunction2, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction11(InvokeFunctionInvokeFunction3, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction12(InvokeFunctionInvokeFunction4, InvokeFunctionInvokeFunction7):
+    pass
 
 
 class ProjectLogsEvent(TypedDict):
@@ -2518,6 +2997,7 @@ class PromptData(TypedDict):
     options: NotRequired[Optional[PromptOptionsNullish]]
     parser: NotRequired[Optional[PromptParserNullish]]
     tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    mcp: NotRequired[Optional[Mapping[str, Any]]]
     origin: NotRequired[Optional[PromptDataOrigin]]
 
 
@@ -2526,7 +3006,38 @@ class PromptDataNullish(TypedDict):
     options: NotRequired[Optional[PromptOptionsNullish]]
     parser: NotRequired[Optional[PromptParserNullish]]
     tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    mcp: NotRequired[Optional[Mapping[str, Any]]]
     origin: NotRequired[Optional[PromptDataNullishOrigin]]
+
+
+class TaskTask5(TypedDict):
+    inline_prompt: NotRequired[Optional[PromptData]]
+    inline_function: Mapping[str, Any]
+    function_type: NotRequired[Optional[FunctionTypeEnum]]
+    name: NotRequired[Optional[str]]
+    """
+    The name of the inline function
+    """
+
+
+class TaskTask6(TypedDict):
+    inline_prompt: PromptData
+    function_type: NotRequired[Optional[FunctionTypeEnum]]
+    name: NotRequired[Optional[str]]
+    """
+    The name of the inline prompt
+    """
+
+
+class TaskTask13(TaskTask5, TaskTask7):
+    pass
+
+
+class TaskTask14(TaskTask6, TaskTask7):
+    pass
+
+
+Task: TypeAlias = Union[TaskTask8, TaskTask9, TaskTask10, TaskTask11, TaskTask12, TaskTask13, TaskTask14]
 
 
 class View(TypedDict):
@@ -2597,7 +3108,7 @@ class FunctionIdFunctionId6(TypedDict):
     """
 
 
-FunctionId = Union[
+FunctionId: TypeAlias = Union[
     FunctionIdFunctionId,
     FunctionIdFunctionId1,
     FunctionIdFunctionId2,
@@ -2606,6 +3117,9 @@ FunctionId = Union[
     FunctionIdFunctionId5,
     FunctionIdFunctionId6,
 ]
+"""
+Options for identifying a function
+"""
 
 
 class GraphData(TypedDict):
@@ -2614,37 +3128,45 @@ class GraphData(TypedDict):
     edges: Mapping[str, GraphEdge]
 
 
-class InvokeFunction(TypedDict):
-    input: NotRequired[Optional[Any]]
+class InvokeFunctionInvokeFunction5(TypedDict):
+    inline_prompt: NotRequired[Optional[PromptData]]
+    inline_function: Mapping[str, Any]
+    function_type: NotRequired[Optional[FunctionTypeEnum]]
+    name: NotRequired[Optional[str]]
     """
-    Argument to the function, which can be any JSON serializable value
+    The name of the inline function
     """
-    expected: NotRequired[Optional[Any]]
+
+
+class InvokeFunctionInvokeFunction6(TypedDict):
+    inline_prompt: PromptData
+    function_type: NotRequired[Optional[FunctionTypeEnum]]
+    name: NotRequired[Optional[str]]
     """
-    The expected output of the function
+    The name of the inline prompt
     """
-    metadata: NotRequired[Optional[Mapping[str, Any]]]
-    """
-    Any relevant metadata. This will be logged and available as the `metadata` argument.
-    """
-    tags: NotRequired[Optional[Sequence[str]]]
-    """
-    Any relevant tags to log on the span.
-    """
-    messages: NotRequired[Optional[Sequence[ChatCompletionMessageParam]]]
-    """
-    If the function is an LLM, additional messages to pass along to it
-    """
-    parent: NotRequired[Optional[InvokeParent]]
-    stream: NotRequired[Optional[bool]]
-    """
-    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
-    """
-    mode: NotRequired[Optional[StreamingMode]]
-    strict: NotRequired[Optional[bool]]
-    """
-    If true, throw an error if one of the variables in the prompt is not present in the input
-    """
+
+
+class InvokeFunctionInvokeFunction13(InvokeFunctionInvokeFunction5, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction14(InvokeFunctionInvokeFunction6, InvokeFunctionInvokeFunction7):
+    pass
+
+
+InvokeFunction: TypeAlias = Union[
+    InvokeFunctionInvokeFunction8,
+    InvokeFunctionInvokeFunction9,
+    InvokeFunctionInvokeFunction10,
+    InvokeFunctionInvokeFunction11,
+    InvokeFunctionInvokeFunction12,
+    InvokeFunctionInvokeFunction13,
+    InvokeFunctionInvokeFunction14,
+]
+"""
+Options for identifying a function
+"""
 
 
 class Prompt(TypedDict):
@@ -2705,7 +3227,7 @@ class RunEval(TypedDict):
     """
     The dataset to use
     """
-    task: FunctionId
+    task: Task
     scores: Sequence[FunctionId]
     """
     The functions to score the eval on
@@ -2718,7 +3240,7 @@ class RunEval(TypedDict):
     """
     Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
     """
-    parent: NotRequired[Optional[InvokeParent]]
+    parent: NotRequired[Optional[Parent]]
     stream: NotRequired[Optional[bool]]
     """
     Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
@@ -2765,14 +3287,16 @@ class RunEval(TypedDict):
     """
     Optional tags that will be added to the experiment.
     """
+    mcp_auth: NotRequired[Optional[Mapping[str, RunEvalMcpAuth]]]
 
 
-FunctionData = Union[
+FunctionData: TypeAlias = Union[
     FunctionDataFunctionData,
     FunctionDataFunctionData1,
     GraphData,
     FunctionDataFunctionData2,
     FunctionDataFunctionData3,
+    FacetData,
 ]
 
 
