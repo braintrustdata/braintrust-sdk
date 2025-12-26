@@ -166,59 +166,6 @@ export class Trace {
     return [];
   }
 
-  /**
-   * Fetch the thread of messages for this trace.
-   *
-   * @experimental This method is experimental and may change in the future.
-   */
-  async getThread() {
-    const spans = await this.getSpans({ spanType: ["llm"] });
-    const hashCache = new Map<string, string>();
-    const messages: any[] = [];
-    const hashes = new Set<string>();
-    const addMessage = (
-      rawMessage: any,
-      { skipDedupe = false }: { skipDedupe?: boolean } = {},
-    ) => {
-      if (!isObject(rawMessage)) {
-        return;
-      }
-      const message = { ...rawMessage };
-      const messageHash = getMessageHash(message, hashCache);
-      if (!skipDedupe && hashes.has(messageHash)) {
-        return;
-      }
-      messages.push(message);
-      hashes.add(messageHash);
-    };
-    for (const span of spans) {
-      if (span.input instanceof Array) {
-        for (const message of span.input) {
-          addMessage(message);
-        }
-      } else if (isObject(span.input)) {
-        addMessage(span.input);
-      } else if (typeof span.input === "string") {
-        addMessage({ role: "user", content: span.input });
-      }
-
-      // Always include outputs
-      if (span.output instanceof Array) {
-        for (const message of span.output) {
-          addMessage(message, { skipDedupe: true });
-        }
-      } else if (isObject(span.output)) {
-        addMessage(span.output, { skipDedupe: true });
-      } else if (typeof span.output === "string") {
-        addMessage(
-          { role: "assistant", content: span.output },
-          { skipDedupe: true },
-        );
-      }
-    }
-    return messages;
-  }
-
   private async ensureSpansReady() {
     if (this.spansFlushed || !this.ensureSpansFlushed) {
       return;
