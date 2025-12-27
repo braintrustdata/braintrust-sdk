@@ -106,7 +106,7 @@ const wrapAgentGenerate = (
 ) => {
   return async (params: any) =>
     makeGenerateTextWrapper(
-      "Agent.generate",
+      `${instance.constructor.name}.generate`,
       options,
       generate.bind(instance), // as of v5 this is just streamText under the hood
       // Follows what the AI SDK does under the hood when calling generateText
@@ -120,7 +120,7 @@ const wrapAgentStream = (
 ) => {
   return (params: any) =>
     makeStreamTextWrapper(
-      "Agent.stream",
+      `${instance.constructor.name}.stream`,
       options,
       stream.bind(instance), // as of v5 this is just streamText under the hood
       undefined, // aiSDK not needed since model is already on instance
@@ -280,6 +280,9 @@ const wrapModel = (model: any, ai?: any): any => {
   };
 
   const wrappedDoStream = async (options: any) => {
+    const startTime = Date.now();
+    let receivedFirst = false;
+
     const span = startSpan({
       name: "doStream",
       spanAttributes: {
@@ -320,6 +323,16 @@ const wrapModel = (model: any, ai?: any): any => {
 
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
+        // Track time to first token on any chunk type
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+
         switch (chunk.type) {
           case "text-delta":
             text += extractTextDelta(chunk);
@@ -1043,6 +1056,28 @@ const processInputAttachments = (input: any) => {
     processed.tools = processTools(input.tools);
   }
 
+  // Process callOptionsSchema (used by ToolLoopAgent and other agents)
+  if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
+    processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  // TODO: Process output schema for ToolLoopAgent with Output.object()
+  // The output field contains an Output object with a responseFormat Promise that resolves
+  // to an object with type: "json" and schema: {...JSON Schema...}
+  // We need to:
+  // 1. Await the responseFormat Promise (requires making this function async)
+  // 2. Extract the resolved schema from responseFormat.schema
+  // 3. Log it in a useful format for users to recreate the output configuration
+  // Currently logs as output: {} which is not useful
+
+  // Remove prepareCall function from logs (not serializable and not useful)
+  if (
+    "prepareCall" in processed &&
+    typeof processed.prepareCall === "function"
+  ) {
+    processed.prepareCall = "[Function]";
+  }
+
   return processed;
 };
 
@@ -1373,112 +1408,135 @@ const convertFileToAttachment = (file: any, index: number): any => {
   }
 };
 
+function firstNumber(...values: unknown[]): number | undefined {
+  for (const v of values) {
+    if (typeof v === "number") {
+      return v;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Extracts all token metrics from usage data.
  * Handles various provider formats and naming conventions for token counts.
  */
 export function extractTokenMetrics(result: any): Record<string, number> {
   const metrics: Record<string, number> = {};
-  const usage = result?.usage;
+
+  // Agent results use totalUsage, other results use usage
+  // Try totalUsage first (for Agent calls), then fall back to usage
+  let usage = result?.totalUsage || result?.usage;
+
+  // If usage is not directly accessible, try as a getter
+  if (!usage && result) {
+    try {
+      if ("totalUsage" in result && typeof result.totalUsage !== "function") {
+        usage = result.totalUsage;
+      } else if ("usage" in result && typeof result.usage !== "function") {
+        usage = result.usage;
+      }
+    } catch {
+      // Ignore errors accessing getters
+    }
+  }
 
   if (!usage) {
     return metrics;
   }
 
-  // Prompt tokens (AI SDK v5 uses inputTokens)
-  if (usage.inputTokens !== undefined) {
-    metrics.prompt_tokens = usage.inputTokens;
-  } else if (usage.promptTokens !== undefined) {
-    metrics.prompt_tokens = usage.promptTokens;
-  } else if (usage.prompt_tokens !== undefined) {
-    metrics.prompt_tokens = usage.prompt_tokens;
+  // Prompt tokens (AI SDK v5 uses inputTokens, which can be a number or object with .total)
+  const promptTokens = firstNumber(
+    usage.inputTokens?.total,
+    usage.inputTokens,
+    usage.promptTokens,
+    usage.prompt_tokens,
+  );
+  if (promptTokens !== undefined) {
+    metrics.prompt_tokens = promptTokens;
   }
 
-  // Completion tokens (AI SDK v5 uses outputTokens)
-  if (usage.outputTokens !== undefined) {
-    metrics.completion_tokens = usage.outputTokens;
-  } else if (usage.completionTokens !== undefined) {
-    metrics.completion_tokens = usage.completionTokens;
-  } else if (usage.completion_tokens !== undefined) {
-    metrics.completion_tokens = usage.completion_tokens;
+  // Completion tokens (AI SDK v5 uses outputTokens, which can be a number or object with .total)
+  const completionTokens = firstNumber(
+    usage.outputTokens?.total,
+    usage.outputTokens,
+    usage.completionTokens,
+    usage.completion_tokens,
+  );
+  if (completionTokens !== undefined) {
+    metrics.completion_tokens = completionTokens;
   }
 
   // Total tokens
-  if (usage.totalTokens !== undefined) {
-    metrics.tokens = usage.totalTokens;
-  } else if (usage.tokens !== undefined) {
-    metrics.tokens = usage.tokens;
-  } else if (usage.total_tokens !== undefined) {
-    metrics.tokens = usage.total_tokens;
+  const totalTokens = firstNumber(
+    usage.totalTokens,
+    usage.tokens,
+    usage.total_tokens,
+  );
+  if (totalTokens !== undefined) {
+    metrics.tokens = totalTokens;
   }
 
-  // Prompt cached tokens (AI SDK v5 uses cachedInputTokens)
-  if (
-    usage.cachedInputTokens !== undefined ||
-    usage.promptCachedTokens !== undefined ||
-    usage.prompt_cached_tokens !== undefined
-  ) {
-    metrics.prompt_cached_tokens =
-      usage.cachedInputTokens ||
-      usage.promptCachedTokens ||
-      usage.prompt_cached_tokens;
+  // Prompt cached tokens (can be nested in inputTokens.cacheRead or top-level)
+  const promptCachedTokens = firstNumber(
+    usage.inputTokens?.cacheRead,
+    usage.cachedInputTokens,
+    usage.promptCachedTokens,
+    usage.prompt_cached_tokens,
+  );
+  if (promptCachedTokens !== undefined) {
+    metrics.prompt_cached_tokens = promptCachedTokens;
   }
 
   // Prompt cache creation tokens
-  if (
-    usage.promptCacheCreationTokens !== undefined ||
-    usage.prompt_cache_creation_tokens !== undefined
-  ) {
-    metrics.prompt_cache_creation_tokens =
-      usage.promptCacheCreationTokens || usage.prompt_cache_creation_tokens;
+  const promptCacheCreationTokens = firstNumber(
+    usage.promptCacheCreationTokens,
+    usage.prompt_cache_creation_tokens,
+  );
+  if (promptCacheCreationTokens !== undefined) {
+    metrics.prompt_cache_creation_tokens = promptCacheCreationTokens;
   }
 
   // Prompt reasoning tokens
-  if (
-    usage.promptReasoningTokens !== undefined ||
-    usage.prompt_reasoning_tokens !== undefined
-  ) {
-    metrics.prompt_reasoning_tokens =
-      usage.promptReasoningTokens || usage.prompt_reasoning_tokens;
+  const promptReasoningTokens = firstNumber(
+    usage.promptReasoningTokens,
+    usage.prompt_reasoning_tokens,
+  );
+  if (promptReasoningTokens !== undefined) {
+    metrics.prompt_reasoning_tokens = promptReasoningTokens;
   }
 
   // Completion cached tokens
-  if (
-    usage.completionCachedTokens !== undefined ||
-    usage.completion_cached_tokens !== undefined
-  ) {
-    metrics.completion_cached_tokens =
-      usage.completionCachedTokens || usage.completion_cached_tokens;
+  const completionCachedTokens = firstNumber(
+    usage.completionCachedTokens,
+    usage.completion_cached_tokens,
+  );
+  if (completionCachedTokens !== undefined) {
+    metrics.completion_cached_tokens = completionCachedTokens;
   }
 
-  // Completion reasoning tokens
-  if (
-    usage.reasoningTokens !== undefined ||
-    usage.completionReasoningTokens !== undefined ||
-    usage.completion_reasoning_tokens !== undefined ||
-    usage.reasoning_tokens !== undefined ||
-    usage.thinkingTokens !== undefined ||
-    usage.thinking_tokens !== undefined
-  ) {
-    const reasoningTokenCount =
-      usage.reasoningTokens ||
-      usage.completionReasoningTokens ||
-      usage.completion_reasoning_tokens ||
-      usage.reasoning_tokens ||
-      usage.thinkingTokens ||
-      usage.thinking_tokens;
-
+  // Completion reasoning tokens (can be nested in outputTokens.reasoning)
+  const reasoningTokenCount = firstNumber(
+    usage.outputTokens?.reasoning,
+    usage.reasoningTokens,
+    usage.completionReasoningTokens,
+    usage.completion_reasoning_tokens,
+    usage.reasoning_tokens,
+    usage.thinkingTokens,
+    usage.thinking_tokens,
+  );
+  if (reasoningTokenCount !== undefined) {
     metrics.completion_reasoning_tokens = reasoningTokenCount;
     metrics.reasoning_tokens = reasoningTokenCount;
   }
 
   // Completion audio tokens
-  if (
-    usage.completionAudioTokens !== undefined ||
-    usage.completion_audio_tokens !== undefined
-  ) {
-    metrics.completion_audio_tokens =
-      usage.completionAudioTokens || usage.completion_audio_tokens;
+  const completionAudioTokens = firstNumber(
+    usage.completionAudioTokens,
+    usage.completion_audio_tokens,
+  );
+  if (completionAudioTokens !== undefined) {
+    metrics.completion_audio_tokens = completionAudioTokens;
   }
 
   // Extract cost from providerMetadata.gateway.cost (e.g., from Vercel AI Gateway)

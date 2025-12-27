@@ -1,3 +1,4 @@
+# pyright: reportUnusedImport=false
 """
 A Python library for interacting with [Braintrust](https://braintrust.dev/). This library
 contains functionality for running evaluations, logging completions, loading and invoking
@@ -72,4 +73,7 @@ from .wrappers.anthropic import (
 )
 from .wrappers.litellm import (
     wrap_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
+)
+from .wrappers.pydantic_ai import (
+    setup_pydantic_ai,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
