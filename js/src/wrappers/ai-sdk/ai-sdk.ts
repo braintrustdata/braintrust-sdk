@@ -806,6 +806,22 @@ const wrapTools = (tools: any) => {
   return wrappedTools;
 };
 
+/**
+ * Checks if a value is an AsyncGenerator.
+ * AsyncGenerators are returned by async generator functions (async function* () {})
+ * and must be iterated to consume their yielded values.
+ */
+const isAsyncGenerator = (value: any): value is AsyncGenerator => {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof value[Symbol.asyncIterator] === "function" &&
+    typeof value.next === "function" &&
+    typeof value.return === "function" &&
+    typeof value.throw === "function"
+  );
+};
+
 const wrapToolExecute = (tool: any, name: string) => {
   // Only wrap tools that have an execute function (created with tool() helper)
   // AI SDK v3-v6: tool({ description, inputSchema/parameters, execute })
@@ -821,13 +837,50 @@ const wrapToolExecute = (tool: any, name: string) => {
     return new Proxy(tool, {
       get(target, prop) {
         if (prop === "execute") {
-          return (...args: any[]) =>
-            traced(
+          // Return a function that handles both regular async functions and async generators
+          const wrappedExecute = (...args: any[]) => {
+            const result = originalExecute.apply(target, args);
+
+            // Check if the result is an async generator (from async function* () {})
+            // AI SDK v5 supports async generator tools that yield intermediate status updates
+            if (isAsyncGenerator(result)) {
+              // Return a wrapper async generator that:
+              // 1. Iterates through the original generator
+              // 2. Yields all intermediate values (so consumers see status updates)
+              // 3. Tracks and logs the final yielded value as the tool output
+              return (async function* () {
+                const span = startSpan({
+                  name,
+                  spanAttributes: {
+                    type: SpanTypeAttribute.TOOL,
+                  },
+                });
+                span.log({ input: args.length === 1 ? args[0] : args });
+
+                try {
+                  let lastValue: any;
+                  for await (const value of result) {
+                    lastValue = value;
+                    yield value;
+                  }
+                  // Log the final yielded value as the output
+                  span.log({ output: lastValue });
+                } catch (error) {
+                  span.log({ error: serializeError(error) });
+                  throw error;
+                } finally {
+                  span.end();
+                }
+              })();
+            }
+
+            // For regular async functions, use traced as before
+            return traced(
               async (span) => {
                 span.log({ input: args.length === 1 ? args[0] : args });
-                const result = await originalExecute.apply(target, args);
-                span.log({ output: result });
-                return result;
+                const awaitedResult = await result;
+                span.log({ output: awaitedResult });
+                return awaitedResult;
               },
               {
                 name,
@@ -836,6 +889,8 @@ const wrapToolExecute = (tool: any, name: string) => {
                 },
               },
             );
+          };
+          return wrappedExecute;
         }
         return target[prop];
       },
