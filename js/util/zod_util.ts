@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z } from "zod";
 import { forEachMissingKey } from "./object_util";
 
 export class ExtraFieldsError extends Error {
@@ -51,20 +51,40 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
 //
 // Basically the same as `z.partial()`, except instead of marking fields just
 // optional, it marks them nullish.
-export function objectNullish<
-  T extends z.ZodRawShape,
-  UnknownKeys extends z.UnknownKeysParam,
-  Catchall extends z.ZodTypeAny,
->(object: z.ZodObject<T, UnknownKeys, Catchall>) {
-  return new z.ZodObject({
-    ...object._def,
-    shape: () =>
-      Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [k, v.nullish()]),
-      ),
-  }) as z.ZodObject<
+export function objectNullish<T extends z.ZodRawShape>(
+  object: z.ZodObject<T, any>,
+) {
+  // Build a nullish version of the object's shape in a way that works with
+  // both Zod v3 and v4 internals. Some Zod versions expose `shape` as a
+  // property, others as a function, and `_def` may or may not be present.
+  const getShape = (obj: any) => {
+    if (typeof obj.shape === "function") return obj.shape();
+    if (obj._def && typeof obj._def.shape === "function")
+      return obj._def.shape();
+    return obj.shape || (obj._def && obj._def.shape) || {};
+  };
+
+  const originalShape = getShape(object) as Record<string, z.ZodTypeAny>;
+  const newShape: Record<string, z.ZodTypeAny> = {};
+  for (const [k, v] of Object.entries(originalShape)) {
+    // Call `.nullish()` on the original field so the resulting schema
+    // objects come from the same Zod runtime as the input (avoids mixing
+    // Zod v3 and v4 instances which leads to runtime/type errors).
+    newShape[k] = (v as any).nullish();
+  }
+
+  // If the input object schema exposes an `extend` method, use it so the
+  // returned schema is created by the same Zod runtime as the input.
+  if (typeof (object as any).extend === "function") {
+    return (object as any).extend(newShape) as unknown as z.ZodObject<
+      { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
+      any
+    >;
+  }
+
+  // Fallback to the public `z.object()` constructor (best-effort).
+  return z.object(newShape) as unknown as z.ZodObject<
     { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
-    UnknownKeys,
-    Catchall
+    any
   >;
 }

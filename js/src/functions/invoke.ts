@@ -12,7 +12,7 @@ import {
   getSpanParentObject,
 } from "../logger";
 import { BraintrustStream } from "./stream";
-import { z } from "zod/v3";
+import { z } from "zod";
 
 /**
  * Arguments for the `invoke` function.
@@ -116,7 +116,7 @@ export interface InvokeFunctionArgs<
    * A Zod schema to validate the output of the function and return a typed value. This
    * is only used if `stream` is false.
    */
-  schema?: Stream extends true ? never : z.ZodSchema<Output>;
+  schema?: Stream extends true ? never : z.ZodType<Output>;
   /**
    * (Advanced) This parameter allows you to pass in a custom login state. This is useful
    * for multi-tenant environments where you are running functions from different Braintrust

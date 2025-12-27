@@ -444,8 +444,15 @@ export function contextFromSpanExport(exportStr: string): unknown {
   let ctx = trace.setSpan(context.active(), nonRecordingSpan);
 
   // Construct braintrust.parent identifier
+  // Normalize object_type to numeric value in case Zod schema represents it as string
+  const objectTypeNum =
+    typeof components.data.object_type === "number"
+      ? components.data.object_type
+      : SpanObjectTypeV3[
+          components.data.object_type as keyof typeof SpanObjectTypeV3
+        ];
   const braintrustParent = getBraintrustParent(
-    components.data.object_type,
+    objectTypeNum,
     components.data.object_id,
     components.data.compute_object_metadata_args,
   );
@@ -621,8 +628,6 @@ export function getOtelParentFromSpan(
  */
 export class BraintrustExporter {
   private readonly processor: BraintrustSpanProcessor;
-  private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: unknown) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
     // Use BraintrustSpanProcessor under the hood

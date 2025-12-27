@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { objectNullish, parseNoStrip } from "./zod_util";
-import { z } from "zod/v3";
+import { z } from "zod";
 
 const testSchema = z.object({
   a: z.string(),

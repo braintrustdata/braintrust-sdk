@@ -1,7 +1,7 @@
 import { _initializeSpanContext } from "./framework";
 import iso from "./isomorph";
 import { slugify } from "../util/string_util";
-import { z } from "zod/v3";
+import { z } from "zod";
 import {
   type FunctionTypeEnumType as FunctionType,
   IfExists as IfExistsSchema,
@@ -279,8 +279,8 @@ export class ScorerBuilder {
 }
 
 type Schema<Input, Output> = Partial<{
-  parameters: z.ZodSchema<Input>;
-  returns: z.ZodSchema<Output>;
+  parameters: z.ZodType<Input>;
+  returns: z.ZodType<Output>;
 }>;
 
 export type CodeOpts<
@@ -343,8 +343,8 @@ export class CodeFunction<
   public readonly slug: string;
   public readonly type: FunctionType;
   public readonly description?: string;
-  public readonly parameters?: z.ZodSchema<Input>;
-  public readonly returns?: z.ZodSchema<Output>;
+  public readonly parameters?: z.ZodType<Input>;
+  public readonly returns?: z.ZodType<Output>;
   public readonly ifExists?: IfExists;
   public readonly metadata?: Record<string, unknown>;
 
@@ -659,7 +659,7 @@ export class ProjectNameIdMap {
         .post_json("api/project/get", {
           id: projectId,
         });
-      const result = z.array(projectSchema).nonempty().parse(response);
+      const result = z.tuple([projectSchema], projectSchema).parse(response);
       const projectName = result[0].name;
       this.idToName[projectId] = projectName;
       this.nameToId[projectName] = projectId;
