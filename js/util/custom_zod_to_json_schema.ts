@@ -10,6 +10,11 @@ function extractChecks(def: AnyObj): AnyObj {
   }
 
   for (const check of def.checks) {
+    // Skip if check is null or undefined
+    if (!check) {
+      continue;
+    }
+
     // Zod v4 has format directly on check object
     if (check.format && check.format !== "safeint") {
       const format = check.format === "datetime" ? "date-time" : check.format;
@@ -159,7 +164,8 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
       !inner.properties &&
       !inner.items &&
       !inner.anyOf &&
-      !inner.allOf
+      !inner.allOf &&
+      !inner.additionalProperties
     ) {
       const result = {
         ...inner,
@@ -185,7 +191,8 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
       !inner.properties &&
       !inner.items &&
       !inner.anyOf &&
-      !inner.allOf
+      !inner.allOf &&
+      !inner.additionalProperties
     ) {
       const result = {
         ...inner,
