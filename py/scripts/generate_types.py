@@ -25,6 +25,7 @@ def generate_internal_types():
             "typing.TypedDict",
             "--target-python-version",
             "3.10",
+            "--use-union-operator",
             "--custom-file-header",
             '''"""
 Do not import this file directly. See `generated_types.py` for the classes that have a stable API.
