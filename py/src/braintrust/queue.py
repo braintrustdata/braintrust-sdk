@@ -1,6 +1,6 @@
 import threading
 from collections import deque
-from typing import List, Optional, TypeVar
+from typing import TypeVar
 
 from .util import eprint
 
@@ -46,7 +46,7 @@ class LogQueue:
         with self._mutex:
             self._enforce_size_limit = enforce
 
-    def put(self, item: T) -> List[T]:
+    def put(self, item: T) -> list[T]:
         """
         Put an item in the queue.
 
@@ -76,7 +76,7 @@ class LogQueue:
 
         return dropped
 
-    def drain_all(self) -> List[T]:
+    def drain_all(self) -> list[T]:
         """
         Drain all items from the queue.
 
@@ -105,7 +105,7 @@ class LogQueue:
         """
         return len(self._queue)
 
-    def wait_for_items(self, timeout: Optional[float] = None) -> bool:
+    def wait_for_items(self, timeout: float | None = None) -> bool:
         """
         Will block until the queue has at least one item in it. Might be empty by the time
         you read though.

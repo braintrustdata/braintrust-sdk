@@ -4,7 +4,6 @@ import re
 import subprocess
 import threading
 from functools import lru_cache as _cache
-from typing import Optional
 
 from .git_fields import GitMetadataSettings, RepoInfo
 
@@ -42,7 +41,7 @@ def _get_base_branch(remote=None):
     # To speed this up in the short term, we pick from a list of common names
     # and only fall back to the remote origin if required.
     COMMON_BASE_BRANCHES = ["main", "master", "develop"]
-    repo_branches = set(b.name for b in repo.branches)
+    repo_branches = {b.name for b in repo.branches}
     if sum(b in repo_branches for b in COMMON_BASE_BRANCHES) == 1:
         for b in COMMON_BASE_BRANCHES:
             if b in repo_branches:
@@ -121,7 +120,7 @@ def truncate_to_byte_limit(input_string, byte_limit=65536):
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def get_repo_info(settings: Optional[GitMetadataSettings] = None):
+def get_repo_info(settings: GitMetadataSettings | None = None):
     if settings is None:
         settings = GitMetadataSettings()
 

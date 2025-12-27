@@ -8,7 +8,7 @@ from braintrust_langchain.callbacks import BraintrustCallbackHandler
 __all__ = ["set_global_handler", "clear_global_handler"]
 
 
-braintrust_callback_handler_var: ContextVar[Optional[BraintrustCallbackHandler]] = ContextVar(
+braintrust_callback_handler_var: ContextVar[BraintrustCallbackHandler | None] = ContextVar(
     "braintrust_callback_handler", default=None
 )
 

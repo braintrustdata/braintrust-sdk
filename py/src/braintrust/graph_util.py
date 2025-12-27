@@ -1,24 +1,24 @@
 # Generic graph algorithms.
 
 import dataclasses
-from typing import Dict, List, Optional, Protocol, Set, Tuple
+from typing import Protocol
 
 
 # An UndirectedGraph consists of a set of vertex labels and a set of edges
 # between vertices.
 @dataclasses.dataclass
 class UndirectedGraph:
-    vertices: Set[int]
-    edges: Set[Tuple[int, int]]
+    vertices: set[int]
+    edges: set[tuple[int, int]]
 
 
 # An AdjacencyListGraph is a mapping from vertex label to the list of vertices
 # where there is a directed edge from the key to the value.
-AdjacencyListGraph = Dict[int, Set[int]]
+AdjacencyListGraph = dict[int, set[int]]
 
 
 class FirstVisitF(Protocol):
-    def __call__(self, vertex: int, *, parent_vertex: Optional[int], **kwargs) -> None:
+    def __call__(self, vertex: int, *, parent_vertex: int | None, **kwargs) -> None:
         """Extras:
         - parent_vertex: the vertex which spawned the current vertex as its
           child during the depth-first search. `parent_vertex` is guaranteed
@@ -33,9 +33,9 @@ class LastVisitF(Protocol):
 
 def depth_first_search(
     graph: AdjacencyListGraph,
-    first_visit_f: Optional[FirstVisitF] = None,
-    last_visit_f: Optional[LastVisitF] = None,
-    visitation_order: Optional[List[int]] = None,
+    first_visit_f: FirstVisitF | None = None,
+    last_visit_f: LastVisitF | None = None,
+    visitation_order: list[int] | None = None,
 ) -> None:
     """A general depth-first search algorithm over a directed graph. As it
     traverses the graph, it invokes user-provided hooks when a vertex is *first*
@@ -86,7 +86,7 @@ def depth_first_search(
             events.append(("first", child, dict(parent_vertex=vertex)))
 
 
-def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
+def undirected_connected_components(graph: UndirectedGraph) -> list[list[int]]:
     """Group together all the connected components of an undirected graph.
     Return each group as a list of vertices.
     """
@@ -124,7 +124,7 @@ def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
     return output
 
 
-def topological_sort(graph: AdjacencyListGraph, visitation_order: Optional[List[int]] = None) -> List[int]:
+def topological_sort(graph: AdjacencyListGraph, visitation_order: list[int] | None = None) -> list[int]:
     """The topological_sort function accepts a graph as input, with edges from
     parents to children. It returns an ordering where parents are guaranteed to
     come before their children.

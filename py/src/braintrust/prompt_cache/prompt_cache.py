@@ -9,18 +9,17 @@ This allows for efficient prompt retrieval while maintaining persistence across 
 The cache is keyed by project identifier (ID or name), prompt slug, and version.
 """
 
-from typing import Optional
 
 from braintrust import prompt
 from braintrust.prompt_cache import disk_cache, lru_cache
 
 
 def _create_cache_key(
-    project_id: Optional[str],
-    project_name: Optional[str],
-    slug: Optional[str],
+    project_id: str | None,
+    project_name: str | None,
+    slug: str | None,
     version: str = "latest",
-    id: Optional[str] = None,
+    id: str | None = None,
 ) -> str:
     """Creates a unique cache key from project identifier, slug and version, or from ID."""
     if id:
@@ -47,7 +46,7 @@ class PromptCache:
     def __init__(
         self,
         memory_cache: lru_cache.LRUCache[str, prompt.PromptSchema],
-        disk_cache: Optional[disk_cache.DiskCache[prompt.PromptSchema]] = None,
+        disk_cache: disk_cache.DiskCache[prompt.PromptSchema] | None = None,
     ):
         """
         Initialize the prompt cache.
@@ -61,11 +60,11 @@ class PromptCache:
 
     def get(
         self,
-        slug: Optional[str] = None,
+        slug: str | None = None,
         version: str = "latest",
-        project_id: Optional[str] = None,
-        project_name: Optional[str] = None,
-        id: Optional[str] = None,
+        project_id: str | None = None,
+        project_name: str | None = None,
+        id: str | None = None,
     ) -> prompt.PromptSchema:
         """
         Retrieve a prompt from the cache.
@@ -107,11 +106,11 @@ class PromptCache:
     def set(
         self,
         value: prompt.PromptSchema,
-        slug: Optional[str] = None,
+        slug: str | None = None,
         version: str = "latest",
-        project_id: Optional[str] = None,
-        project_name: Optional[str] = None,
-        id: Optional[str] = None,
+        project_id: str | None = None,
+        project_name: str | None = None,
+        id: str | None = None,
     ) -> None:
         """
         Store a prompt in the cache.

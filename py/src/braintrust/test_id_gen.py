@@ -1,9 +1,7 @@
-
 import os
 import uuid
 
 import pytest
-
 from braintrust import id_gen
 
 
@@ -76,7 +74,8 @@ def test_id_get_env_var(reset_id_generator_state):
 
 
 def _is_hex(s):
-    return all(c in '0123456789abcdef' for c in s.lower())
+    return all(c in "0123456789abcdef" for c in s.lower())
+
 
 def _assert_is_hex(x):
     assert _is_hex(x)

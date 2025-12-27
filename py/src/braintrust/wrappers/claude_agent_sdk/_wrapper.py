@@ -2,7 +2,8 @@ import dataclasses
 import logging
 import threading
 import time
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
+from collections.abc import AsyncGenerator, Callable
+from typing import Any
 
 from braintrust.logger import start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -108,12 +109,12 @@ def _wrap_tool_handler(handler: Any, tool_name: Any) -> Callable[..., Any]:
     so we try the context variable first, then fall back to current_span export.
     """
     # Check if already wrapped to prevent double-wrapping
-    if hasattr(handler, '_braintrust_wrapped'):
+    if hasattr(handler, "_braintrust_wrapped"):
         return handler
 
     async def wrapped_handler(args: Any) -> Any:
         # Get parent span export from thread-local storage
-        parent_export = getattr(_thread_local, 'parent_span_export', None)
+        parent_export = getattr(_thread_local, "parent_span_export", None)
 
         with start_span(
             name=str(tool_name),
@@ -144,11 +145,14 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
         We end the previous span when the next AssistantMessage arrives, using the marked
         start time to ensure sequential timing (no overlapping LLM spans).
         """
-        def __init__(self, query_start_time: Optional[float] = None):
-            self.current_span: Optional[Any] = None
-            self.next_start_time: Optional[float] = query_start_time
 
-        def start_llm_span(self, message: Any, prompt: Any, conversation_history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        def __init__(self, query_start_time: float | None = None):
+            self.current_span: Any | None = None
+            self.next_start_time: float | None = query_start_time
+
+        def start_llm_span(
+            self, message: Any, prompt: Any, conversation_history: list[dict[str, Any]]
+        ) -> dict[str, Any] | None:
             """Start a new LLM span, ending the previous one if it exists."""
             # Use the marked start time, or current time as fallback
             start_time = self.next_start_time if self.next_start_time is not None else time.time()
@@ -158,8 +162,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                 self.current_span.end(end_time=start_time)
 
             final_content, span = _create_llm_span_for_messages(
-                [message], prompt, conversation_history,
-                start_time=start_time
+                [message], prompt, conversation_history, start_time=start_time
             )
             self.current_span = span
             self.next_start_time = None  # Reset for next span
@@ -169,7 +172,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
             """Mark when the next LLM call will start (after tool results)."""
             self.next_start_time = time.time()
 
-        def log_usage(self, usage_metrics: Dict[str, float]) -> None:
+        def log_usage(self, usage_metrics: dict[str, float]) -> None:
             """Log usage metrics to the current LLM span."""
             if self.current_span and usage_metrics:
                 self.current_span.log(metrics=usage_metrics)
@@ -186,8 +189,8 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
             client = original_client_class(*args, **kwargs)
             super().__init__(client)
             self.__client = client
-            self.__last_prompt: Optional[str] = None
-            self.__query_start_time: Optional[float] = None
+            self.__last_prompt: str | None = None
+            self.__query_start_time: float | None = None
 
         async def query(self, *args: Any, **kwargs: Any) -> Any:
             """Wrap query to capture the prompt and start time for tracing."""
@@ -220,7 +223,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                 # Store the parent span export in thread-local storage for tool handlers
                 _thread_local.parent_span_export = span.export()
 
-                final_results: List[Dict[str, Any]] = []
+                final_results: list[dict[str, Any]] = []
                 llm_tracker = LLMSpanTracker(query_start_time=self.__query_start_time)
 
                 try:
@@ -243,10 +246,12 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                                 llm_tracker.log_usage(usage_metrics)
 
                             result_metadata = {
-                                k: v for k, v in {
+                                k: v
+                                for k, v in {
                                     "num_turns": getattr(message, "num_turns", None),
                                     "session_id": getattr(message, "session_id", None),
-                                }.items() if v is not None
+                                }.items()
+                                if v is not None
                             }
                             if result_metadata:
                                 span.log(metadata=result_metadata)
@@ -257,8 +262,8 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                     log.warning("Error in tracing code", exc_info=e)
                 finally:
                     llm_tracker.cleanup()
-                    if hasattr(_thread_local, 'parent_span_export'):
-                        delattr(_thread_local, 'parent_span_export')
+                    if hasattr(_thread_local, "parent_span_export"):
+                        delattr(_thread_local, "parent_span_export")
 
         async def __aenter__(self) -> "WrappedClaudeSDKClient":
             await self.__client.__aenter__()
@@ -271,11 +276,11 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
 
 
 def _create_llm_span_for_messages(
-    messages: List[Any],  # List of AssistantMessage objects
+    messages: list[Any],  # List of AssistantMessage objects
     prompt: Any,
-    conversation_history: List[Dict[str, Any]],
-    start_time: Optional[float] = None,
-) -> Tuple[Optional[Dict[str, Any]], Optional[Any]]:
+    conversation_history: list[dict[str, Any]],
+    start_time: float | None = None,
+) -> tuple[dict[str, Any] | None, Any | None]:
     """Creates an LLM span for a group of AssistantMessage objects.
 
     Returns a tuple of (final_content, span):
@@ -295,12 +300,11 @@ def _create_llm_span_for_messages(
     model = getattr(last_message, "model", None)
     input_messages = _build_llm_input(prompt, conversation_history)
 
-    outputs: List[Dict[str, Any]] = []
+    outputs: list[dict[str, Any]] = []
     for msg in messages:
         if hasattr(msg, "content"):
             content = _serialize_content_blocks(msg.content)
             outputs.append({"content": content, "role": "assistant"})
-
 
     llm_span = start_span(
         name="anthropic.messages.create",
@@ -355,7 +359,7 @@ def _serialize_content_blocks(content: Any) -> Any:
     return content
 
 
-def _extract_usage_from_result_message(result_message: Any) -> Dict[str, float]:
+def _extract_usage_from_result_message(result_message: Any) -> dict[str, float]:
     """Extracts and normalizes usage metrics from a ResultMessage.
 
     Uses shared Anthropic utilities for consistent metric extraction.
@@ -374,9 +378,7 @@ def _extract_usage_from_result_message(result_message: Any) -> Dict[str, float]:
     return metrics
 
 
-def _build_llm_input(
-    prompt: Any, conversation_history: List[Dict[str, Any]]
-) -> Optional[List[Dict[str, Any]]]:
+def _build_llm_input(prompt: Any, conversation_history: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
     """Builds the input array for an LLM span from the initial prompt and conversation history.
 
     Formats input to match Anthropic messages API format for proper UI rendering.

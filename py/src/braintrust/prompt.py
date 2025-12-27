@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Union
+from typing import Literal, Union
 
 from .generated_types import PromptOptions
 from .serializable_data_class import SerializableDataClass
@@ -46,17 +46,17 @@ class ImagePart(SerializableDataClass):
 
 @dataclass
 class PromptMessage(SerializableDataClass):
-    content: Union[str, List[Union[TextPart, ImagePart]]]
+    content: str | list[TextPart | ImagePart]
     role: Literal["system", "user", "assistant", "function", "tool", "model"]
-    name: Optional[str] = None
-    function_call: Union[str, FunctionCall, None] = None
-    tool_calls: Optional[List[ToolCall]] = None
+    name: str | None = None
+    function_call: str | FunctionCall | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 @dataclass
 class PromptChatBlock(SerializableDataClass):
-    messages: List[PromptMessage]
-    tools: Optional[str] = None
+    messages: list[PromptMessage]
+    tools: str | None = None
     type: Literal["chat"] = "chat"
 
 
@@ -65,20 +65,20 @@ PromptBlockData = Union[PromptCompletionBlock, PromptChatBlock]
 
 @dataclass
 class PromptData(SerializableDataClass):
-    prompt: Optional[PromptBlockData] = None
-    options: Optional[PromptOptions] = None
+    prompt: PromptBlockData | None = None
+    options: PromptOptions | None = None
 
 
 @dataclass
 class PromptSchema(SerializableDataClass):
-    id: Optional[str]
-    project_id: Optional[str]
-    _xact_id: Optional[str]
+    id: str | None
+    project_id: str | None
+    _xact_id: str | None
     name: str
     slug: str
-    description: Optional[str]
+    description: str | None
     prompt_data: PromptData
-    tags: Optional[List[str]]
+    tags: list[str] | None
 
 
 BRAINTRUST_PARAMS = ["use_cache"]

@@ -279,11 +279,15 @@ class TestBraintrustPluginIntegration:
 
             # Verify workflow span was created
             workflow_spans = [s for s in spans if "temporal.workflow" in s.get("span_attributes", {}).get("name", "")]
-            assert len(workflow_spans) > 0, f"Expected workflow span to be created. Span names: {[s.get('span_attributes', {}).get('name', 'unknown') for s in spans]}"
+            assert len(workflow_spans) > 0, (
+                f"Expected workflow span to be created. Span names: {[s.get('span_attributes', {}).get('name', 'unknown') for s in spans]}"
+            )
 
             # Verify activity span was created
             activity_spans = [s for s in spans if "temporal.activity" in s.get("span_attributes", {}).get("name", "")]
-            assert len(activity_spans) > 0, f"Expected activity span to be created. Span names: {[s.get('span_attributes', {}).get('name', 'unknown') for s in spans]}"
+            assert len(activity_spans) > 0, (
+                f"Expected activity span to be created. Span names: {[s.get('span_attributes', {}).get('name', 'unknown') for s in spans]}"
+            )
 
     @pytest.mark.asyncio
     async def test_plugin_context_propagation(self, temporal_env, memory_logger):
@@ -498,5 +502,6 @@ class TestBraintrustPluginIntegration:
         # Verify parent-child relationship: workflow should have client span as parent
         workflow_span = workflow_spans[0]
         client_span = client_spans[0]
-        assert workflow_span.get("root_span_id") == client_span.get("root_span_id"), \
+        assert workflow_span.get("root_span_id") == client_span.get("root_span_id"), (
             "Workflow span should be in same trace as client span"
+        )

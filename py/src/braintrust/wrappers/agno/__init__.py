@@ -21,7 +21,6 @@ Usage:
 __all__ = ["setup_agno", "wrap_agent", "wrap_function_call", "wrap_model", "wrap_team"]
 
 import logging
-from typing import Optional
 
 from braintrust.logger import NOOP_SPAN, current_span, init_logger
 
@@ -34,9 +33,9 @@ logger = logging.getLogger(__name__)
 
 
 def setup_agno(
-    api_key: Optional[str] = None,
-    project_id: Optional[str] = None,
-    project_name: Optional[str] = None,
+    api_key: str | None = None,
+    project_id: str | None = None,
+    project_name: str | None = None,
 ) -> bool:
     """
     Setup Braintrust integration with Agno. Will automatically patch Agno agents, models, and function calls for tracing.

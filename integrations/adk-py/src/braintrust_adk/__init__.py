@@ -1,8 +1,9 @@
 import inspect
 import logging
 import time
-from contextlib import AbstractAsyncContextManager
-from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union, cast
+from collections.abc import AsyncGenerator, Iterable
+from contextlib import aclosing
+from typing import Any, Dict, TypeVar, cast
 
 from wrapt import wrap_function_wrapper
 
@@ -20,10 +21,10 @@ def setup_braintrust(*args, **kwargs):
 
 
 def setup_adk(
-    api_key: Optional[str] = None,
-    project_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    SpanProcessor: Optional[type] = None,
+    api_key: str | None = None,
+    project_id: str | None = None,
+    project_name: str | None = None,
+    SpanProcessor: type | None = None,
 ) -> bool:
     """
     Setup Braintrust integration with Google ADK. Will automatically patch Google ADK agents, runners, flows, and MCP tools for automatic tracing.
@@ -279,8 +280,7 @@ def wrap_runner(Runner: Any):
                 if last_event:
                     runner_span.log(output=_try_dict(last_event))
 
-        for event in _trace():
-            yield event
+        yield from _trace()
 
     wrap_function_wrapper(Runner, "run", trace_run_sync_wrapper)
 
@@ -381,7 +381,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
     """
     try:
         # Convert to dict if it's a model object
-        request_dict = cast(Dict[str, Any], _try_dict(llm_request))
+        request_dict = cast(dict[str, Any], _try_dict(llm_request))
 
         # Check if there are tools in the config
         has_tools = bool(request_dict.get("config", {}).get("tools"))
@@ -518,7 +518,7 @@ def _serialize_part(part: Any) -> Any:
     return _try_dict(part)
 
 
-def _serialize_pydantic_schema(schema_class: Any) -> Dict[str, Any]:
+def _serialize_pydantic_schema(schema_class: Any) -> dict[str, Any]:
     """
     Serialize a Pydantic model class to its full JSON schema.
 
@@ -537,7 +537,7 @@ def _serialize_pydantic_schema(schema_class: Any) -> Dict[str, Any]:
     return {"__class__": schema_class.__name__ if inspect.isclass(schema_class) else str(type(schema_class).__name__)}
 
 
-def _serialize_config(config: Any) -> Union[Dict[str, Any], Any]:
+def _serialize_config(config: Any) -> dict[str, Any] | Any:
     """
     Serialize a config object, specifically handling schema fields that may contain Pydantic classes.
 
@@ -552,7 +552,7 @@ def _serialize_config(config: Any) -> Union[Dict[str, Any], Any]:
 
     # Extract schema fields BEFORE calling _try_dict (which converts Pydantic classes to dicts)
     schema_fields = ["response_schema", "response_json_schema", "input_schema", "output_schema"]
-    serialized_schemas: Dict[str, Any] = {}
+    serialized_schemas: dict[str, Any] = {}
 
     for field in schema_fields:
         schema_value = None
@@ -621,7 +621,7 @@ def _omit(obj: Any, keys: Iterable[str]):
     return {k: v for k, v in obj.items() if k not in keys}
 
 
-def _extract_metrics(response: Any) -> Optional[Dict[str, float]]:
+def _extract_metrics(response: Any) -> dict[str, float] | None:
     """Extract token usage metrics from Google GenAI response."""
     if not response:
         return None
@@ -630,7 +630,7 @@ def _extract_metrics(response: Any) -> Optional[Dict[str, float]]:
     if not usage_metadata:
         return None
 
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
     # Core token counts
     if hasattr(usage_metadata, "prompt_token_count") and usage_metadata.prompt_token_count is not None:
@@ -653,7 +653,7 @@ def _extract_metrics(response: Any) -> Optional[Dict[str, float]]:
     return metrics if metrics else None
 
 
-def _extract_model_name(response: Any, llm_request: Any, instance: Any) -> Optional[str]:
+def _extract_model_name(response: Any, llm_request: Any, instance: Any) -> str | None:
     """Extract model name from Google GenAI response, request, or flow instance."""
     # Try to get from response first
     if response:
@@ -678,29 +678,3 @@ def _extract_model_name(response: Any, llm_request: Any, instance: Any) -> Optio
             return str(instance.model)
 
     return None
-
-
-G = TypeVar("G", bound=AsyncGenerator[Any, None])
-
-
-# until we drop support for Python 3.9
-class aclosing(AbstractAsyncContextManager[G]):
-    def __init__(self, async_generator: G):
-        self.async_generator = async_generator
-
-    async def __aenter__(self):
-        return self.async_generator
-
-    async def __aexit__(self, *exc_info: Any):
-        try:
-            await self.async_generator.aclose()
-        except ValueError as e:
-            # Suppress ContextVar errors during async cleanup
-            # These occur when spans are created in one context and cleaned up in another during shutdown
-            if "was created in a different Context" not in str(e):
-                raise
-            else:
-                logger.debug(
-                    f"Suppressed ContextVar error during async cleanup: {e}. "
-                    "This is expected when async generators yield across context boundaries."
-                )

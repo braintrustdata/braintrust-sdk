@@ -12,7 +12,8 @@ import hashlib
 import json
 import logging
 import os
-from typing import Any, Callable, Generic, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -36,9 +37,9 @@ class DiskCache(Generic[T]):
     def __init__(
         self,
         cache_dir: str,
-        max_size: Optional[int] = None,
-        serializer: Optional[Callable[[T], Any]] = None,
-        deserializer: Optional[Callable[[Any], T]] = None,
+        max_size: int | None = None,
+        serializer: Callable[[T], Any] | None = None,
+        deserializer: Callable[[Any], T] | None = None,
         log_warnings: bool = True,
         mkdirs: bool = True,
     ):

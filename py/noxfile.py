@@ -57,22 +57,15 @@ VENDOR_PACKAGES = (
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 # litellm latest requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    LITELLM_VERSIONS = (LATEST, "1.74.0")
-else:
-    LITELLM_VERSIONS = ("1.74.0",)  # latest litellm requires Python 3.10+
+LITELLM_VERSIONS = (LATEST, "1.74.0")
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
 AGNO_VERSIONS = (LATEST, "2.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
 # Two test suites with different version requirements:
 # 1. wrap_openai approach: works with older versions (0.1.9+)
 # 2. Direct wrapper (setup_pydantic_ai): requires 1.10.0+ for all features
-if sys.version_info >= (3, 10):
-    PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
-    PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
-else:
-    PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "0.1.9")
-    PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST,)  # latest will resolve to 0.1.9 for Python 3.9
+PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
@@ -117,13 +110,12 @@ def test_pydantic_ai_integration(session, version):
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install_test_deps(session)
-        npm_bin = _install_npm_in_session(session)
-        session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
-        _install(session, "claude_agent_sdk", version)
-        _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
-        _run_core_tests(session)
+    _install_test_deps(session)
+    npm_bin = _install_npm_in_session(session)
+    session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
+    _install(session, "claude_agent_sdk", version)
+    _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -159,8 +151,7 @@ def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     # openai-agents requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install(session, "openai-agents")
+    _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 

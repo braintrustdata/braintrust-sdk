@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Literal, Optional
+from typing import Literal
 
 from .serializable_data_class import SerializableDataClass
 
@@ -8,21 +8,21 @@ from .serializable_data_class import SerializableDataClass
 class RepoInfo(SerializableDataClass):
     """Information about the current HEAD of the repo."""
 
-    commit: Optional[str] = None
-    branch: Optional[str] = None
-    tag: Optional[str] = None
-    dirty: Optional[bool] = None
-    author_name: Optional[str] = None
-    author_email: Optional[str] = None
-    commit_message: Optional[str] = None
-    commit_time: Optional[str] = None
-    git_diff: Optional[str] = None
+    commit: str | None = None
+    branch: str | None = None
+    tag: str | None = None
+    dirty: bool | None = None
+    author_name: str | None = None
+    author_email: str | None = None
+    commit_message: str | None = None
+    commit_time: str | None = None
+    git_diff: str | None = None
 
 
 @dataclass
 class GitMetadataSettings(SerializableDataClass):
     collect: Literal["all", "some", "none"] = "all"
-    fields: Optional[List[str]] = field(default_factory=list)
+    fields: list[str] | None = field(default_factory=list)
 
     @classmethod
     def merge(cls, s1: "GitMetadataSettings", s2: "GitMetadataSettings") -> "GitMetadataSettings":

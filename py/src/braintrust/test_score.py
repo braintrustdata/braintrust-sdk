@@ -65,9 +65,7 @@ class TestScore(unittest.TestCase):
 
     def test_from_dict_round_trip(self):
         """Test that Score can be serialized to dict and deserialized back."""
-        original = Score(
-            name="round_trip_scorer", score=0.95, metadata={"info": "test"}
-        )
+        original = Score(name="round_trip_scorer", score=0.95, metadata={"info": "test"})
 
         # Serialize to dict
         as_dict = original.as_dict()

@@ -1,9 +1,8 @@
 from typing import Any
 
-from wrapt import wrap_function_wrapper
-
 from braintrust.logger import start_span
 from braintrust.span_types import SpanTypeAttribute
+from wrapt import wrap_function_wrapper
 
 from .utils import is_patched
 

@@ -6,7 +6,6 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Dict, Optional
 from uuid import UUID
 
 from .span_identifier_v1 import SpanComponentsV1
@@ -54,9 +53,9 @@ class SpanRowIdsV2:
 @dataclasses.dataclass
 class SpanComponentsV2:
     object_type: SpanObjectTypeV2
-    object_id: Optional[str] = None
-    compute_object_metadata_args: Optional[Dict] = None
-    row_ids: Optional[SpanRowIdsV2] = None
+    object_id: str | None = None
+    compute_object_metadata_args: dict | None = None
+    row_ids: SpanRowIdsV2 | None = None
 
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectTypeV2)

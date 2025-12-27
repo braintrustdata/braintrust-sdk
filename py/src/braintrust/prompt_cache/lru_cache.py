@@ -7,7 +7,8 @@ used items when it reaches a maximum size. The implementation uses an OrderedDic
 for O(1) access and update operations.
 """
 
-from typing import Generic, Optional, OrderedDict, TypeVar
+from collections import OrderedDict
+from typing import Generic, TypeVar
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -28,7 +29,7 @@ class LRUCache(Generic[K, V]):
                  If not specified, the cache will grow unbounded.
     """
 
-    def __init__(self, max_size: Optional[int] = None):
+    def __init__(self, max_size: int | None = None):
         self._cache: OrderedDict[K, V] = OrderedDict()
         self._max_size = max_size
 

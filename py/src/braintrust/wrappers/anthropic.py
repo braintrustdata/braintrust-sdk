@@ -2,13 +2,11 @@ import logging
 import time
 import warnings
 from contextlib import contextmanager
-from typing import Optional
 
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 from braintrust.wrappers._anthropic_utils import Wrapper, extract_anthropic_usage, finalize_anthropic_tokens
 
 log = logging.getLogger(__name__)
-
 
 
 # This tracer depends on an internal anthropic method used to merge
@@ -242,7 +240,7 @@ class TracedMessageStream(Wrapper):
         self.__metrics = {}
         self.__snapshot = None
         self.__request_start_time = request_start_time
-        self.__time_to_first_token: Optional[float] = None
+        self.__time_to_first_token: float | None = None
 
     def _get_final_traced_message(self):
         return self.__snapshot
@@ -314,7 +312,7 @@ def _start_span(name, kwargs):
     return NOOP_SPAN
 
 
-def _log_message_to_span(message, span, time_to_first_token: Optional[float] = None):
+def _log_message_to_span(message, span, time_to_first_token: float | None = None):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
         usage = getattr(message, "usage", {})
@@ -326,13 +324,14 @@ def _log_message_to_span(message, span, time_to_first_token: Optional[float] = N
 
         # Create output dict with only truthy values for role and content
         output = {
-            k: v for k, v in {
-                "role": getattr(message, "role", None),
-                "content": getattr(message, "content", None)
-            }.items() if v
+            k: v
+            for k, v in {"role": getattr(message, "role", None), "content": getattr(message, "content", None)}.items()
+            if v
         } or None
 
         span.log(output=output, metrics=metrics)
+
+
 @contextmanager
 def _catch_exceptions():
     try:

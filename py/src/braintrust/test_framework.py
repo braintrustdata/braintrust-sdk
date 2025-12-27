@@ -240,11 +240,14 @@ async def test_hooks_trial_index_multiple_inputs():
     assert sorted(input_1_trials) == [0, 1]
     assert sorted(input_2_trials) == [0, 1]
 
+
 @pytest.fixture
 def simple_scorer():
     def simple_scorer_function(input, output, expected):
         return {"name": "simple_scorer", "score": 0.8}
+
     return simple_scorer_function
+
 
 @pytest.mark.asyncio
 async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
@@ -286,7 +289,7 @@ async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
 
 @pytest.mark.asyncio
 async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that hooks.tags can be appended to and logged. """
+    """Test that hooks.tags can be appended to and logged."""
 
     initial_tags = ["cookies n cream"]
     appended_tags = ["chocolate", "vanilla", "strawberry"]
@@ -321,9 +324,12 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("tags", "expected_tags"), [(None, None),([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])])
+@pytest.mark.parametrize(
+    ("tags", "expected_tags"),
+    [(None, None), ([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])],
+)
 async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_scorer, tags, expected_tags):
-    """ Test that hooks.tags can be set to a list. """
+    """Test that hooks.tags can be set to a list."""
 
     def task_with_hooks(input, hooks):
         hooks.tags = tags
@@ -351,9 +357,10 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_s
     assert len(root_span) == 1
     assert root_span[0].get("tags") == expected_tags
 
+
 @pytest.mark.asyncio
 async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that hooks.tags can be set to a list. """
+    """Test that hooks.tags can be set to a list."""
 
     expected_tags = ["chocolate", "vanilla", "strawberry"]
 
@@ -386,9 +393,11 @@ async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_
     assert len(root_span) == 1
     assert root_span[0].get("tags") == expected_tags
 
+
 @pytest.mark.asyncio
 async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that result contains an error for cases where hooks.tags is set to an invalid type. """
+    """Test that result contains an error for cases where hooks.tags is set to an invalid type."""
+
     def task_with_hooks(input, hooks):
         hooks.tags = 123
         return input
@@ -411,7 +420,8 @@ async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_lo
 
 @pytest.mark.asyncio
 async def test_hooks_without_setting_tags(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test where hooks.tags is not set """
+    """Test where hooks.tags is not set"""
+
     def task_with_hooks(input, hooks):
         return input
 

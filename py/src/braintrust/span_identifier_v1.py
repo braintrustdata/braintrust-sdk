@@ -5,7 +5,6 @@
 import base64
 import dataclasses
 from enum import Enum, auto
-from typing import Optional
 from uuid import UUID
 
 
@@ -50,7 +49,7 @@ class SpanRowIdsV1:
 class SpanComponentsV1:
     object_type: SpanObjectTypeV1
     object_id: str
-    row_ids: Optional[SpanRowIdsV1] = None
+    row_ids: SpanRowIdsV1 | None = None
 
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectTypeV1)

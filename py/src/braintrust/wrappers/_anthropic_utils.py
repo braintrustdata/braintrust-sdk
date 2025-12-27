@@ -1,6 +1,6 @@
 """Shared utilities for Anthropic API wrappers."""
 
-from typing import Any, Dict
+from typing import Any
 
 
 class Wrapper:
@@ -13,7 +13,7 @@ class Wrapper:
         return getattr(self.__wrapped, name)
 
 
-def extract_anthropic_usage(usage: Any) -> Dict[str, float]:
+def extract_anthropic_usage(usage: Any) -> dict[str, float]:
     """Extract and normalize usage metrics from Anthropic usage object or dict.
 
     Converts Anthropic's usage format to Braintrust's standard token metric names.
@@ -29,7 +29,7 @@ def extract_anthropic_usage(usage: Any) -> Dict[str, float]:
         - prompt_cached_tokens (from cache_read_input_tokens)
         - prompt_cache_creation_tokens (from cache_creation_input_tokens)
     """
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
     if not usage:
         return metrics
@@ -73,7 +73,7 @@ def extract_anthropic_usage(usage: Any) -> Dict[str, float]:
     return metrics
 
 
-def finalize_anthropic_tokens(metrics: Dict[str, float]) -> Dict[str, float]:
+def finalize_anthropic_tokens(metrics: dict[str, float]) -> dict[str, float]:
     """Finalize Anthropic token calculations.
 
     Anthropic doesn't include cache tokens in the total, so we need to sum them.

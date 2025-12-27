@@ -3,7 +3,6 @@ import time
 
 import litellm
 import pytest
-
 from braintrust import logger
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.litellm import wrap_litellm

@@ -1,6 +1,6 @@
 import contextvars
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import braintrust
@@ -30,7 +30,7 @@ class BraintrustTracer(BaseCallbackHandler):
         self.logger = logger
         self.spans = {}
 
-    def _start_span(self, parent_run_id, run_id, name: Optional[str], **kwargs: Any) -> Any:
+    def _start_span(self, parent_run_id, run_id, name: str | None, **kwargs: Any) -> Any:
         assert run_id not in self.spans, f"Span already exists for run_id {run_id} (this is likely a bug)"
 
         current_parent = langchain_parent.get()
@@ -60,29 +60,29 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_chain_start(
         self,
-        serialized: Dict[str, Any],
-        inputs: Dict[str, Any],
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(parent_run_id, run_id, "Chain", input=inputs, metadata={"tags": tags})
 
     def on_chain_end(
-        self, outputs: Dict[str, Any], *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
+        self, outputs: dict[str, Any], *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
     ) -> Any:
         self._end_span(run_id, output=outputs)
 
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -95,12 +95,12 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
-        messages: List[List[BaseMessage]],
+        serialized: dict[str, Any],
+        messages: list[list[BaseMessage]],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -112,7 +112,7 @@ class BraintrustTracer(BaseCallbackHandler):
         )
 
     def on_llm_end(
-        self, response: LLMResult, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
+        self, response: LLMResult, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
     ) -> Any:
         metrics = {}
         token_usage = response.llm_output.get("token_usage", {})
@@ -127,25 +127,23 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         _logger.warning("Starting tool, but it will not be traced in braintrust (unsupported)")
 
-    def on_tool_end(self, output: str, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any) -> Any:
+    def on_tool_end(self, output: str, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any) -> Any:
         pass
 
-    def on_retriever_start(
-        self, query: str, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
-    ) -> Any:
+    def on_retriever_start(self, query: str, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any) -> Any:
         _logger.warning("Starting retriever, but it will not be traced in braintrust (unsupported)")
 
     def on_retriever_end(
-        self, response: List[Document], *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
+        self, response: list[Document], *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
     ) -> Any:
         pass

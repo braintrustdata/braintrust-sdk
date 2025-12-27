@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from types import TracebackType
-from typing import Any, Callable
+from typing import Any
 
 from braintrust.logger import Span, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -655,7 +655,8 @@ def patch_litellm():
     """
     try:
         import litellm
-        if not hasattr(litellm, '_braintrust_wrapped'):
+
+        if not hasattr(litellm, "_braintrust_wrapped"):
             wrapped = wrap_litellm(litellm)
             litellm.completion = wrapped.completion
             litellm.acompletion = wrapped.acompletion

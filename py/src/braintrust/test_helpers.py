@@ -2,7 +2,6 @@ import os
 from contextlib import contextmanager
 
 import pytest
-
 from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata, ProjectExperimentMetadata
 from braintrust.util import LazyValue
@@ -15,10 +14,8 @@ TEST_ORG_NAME = "test-org-name"
 def has_devserver_installed() -> bool:
     """Check if devserver dependencies (starlette, uvicorn) are installed."""
     import importlib.util
-    return (
-        importlib.util.find_spec("starlette") is not None
-        and importlib.util.find_spec("uvicorn") is not None
-    )
+
+    return importlib.util.find_spec("starlette") is not None and importlib.util.find_spec("uvicorn") is not None
 
 
 def simulate_login() -> None:
@@ -68,11 +65,13 @@ def with_memory_logger():
     # Clean up global state to prevent test contamination
     logger._state.reset_parent_state()
 
+
 @pytest.fixture
 def memory_logger():
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
     logger._state.current_experiment = None
+
 
 @contextmanager
 def preserve_env_vars(*vars):
@@ -113,6 +112,7 @@ def init_test_logger(project_name: str):
 
     logger._compute_logger_metadata = fake_compute_logger_metadata
     return l
+
 
 def init_test_exp(experiment_name: str, project_name: str = None):
     """

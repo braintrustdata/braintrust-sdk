@@ -1,8 +1,8 @@
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
-def omit(obj: Dict[str, Any], keys: List[str]):
+def omit(obj: dict[str, Any], keys: list[str]):
     return {k: v for k, v in obj.items() if k not in keys}
 
 
@@ -14,11 +14,11 @@ def mark_patched(obj: Any):
     setattr(obj, "_braintrust_patched", True)
 
 
-def clean(obj: Dict[str, Any]) -> Dict[str, Any]:
+def clean(obj: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in obj.items() if v is not None}
 
 
-def get_args_kwargs(args: List[str], kwargs: Dict[str, Any], keys: List[str]):
+def get_args_kwargs(args: list[str], kwargs: dict[str, Any], keys: list[str]):
     return {k: args[i] if args else kwargs.get(k) for i, k in enumerate(keys)}, omit(kwargs, keys)
 
 
@@ -71,7 +71,7 @@ AGNO_METRICS_MAP = {
 }
 
 
-def extract_metadata(instance: Any, component: str) -> Dict[str, Any]:
+def extract_metadata(instance: Any, component: str) -> dict[str, Any]:
     """Extract metadata from any component (model, agent, team)."""
     metadata = {"component": component}
 
@@ -100,7 +100,7 @@ def extract_metadata(instance: Any, component: str) -> Dict[str, Any]:
     return metadata
 
 
-def parse_metrics_from_agno(usage: Any) -> Dict[str, Any]:
+def parse_metrics_from_agno(usage: Any) -> dict[str, Any]:
     """Parse metrics from Agno usage object, following OpenAI wrapper pattern."""
     metrics = {}
 
@@ -121,7 +121,7 @@ def parse_metrics_from_agno(usage: Any) -> Dict[str, Any]:
     return metrics
 
 
-def extract_metrics(result: Any, messages: Optional[list] = None) -> Dict[str, Any]:
+def extract_metrics(result: Any, messages: list | None = None) -> dict[str, Any]:
     """
     Unified metrics extraction for all components.
 
@@ -163,7 +163,7 @@ def extract_metrics(result: Any, messages: Optional[list] = None) -> Dict[str, A
     return {}
 
 
-def extract_streaming_metrics(aggregated: Dict[str, Any], start_time: float) -> Optional[Dict[str, Any]]:
+def extract_streaming_metrics(aggregated: dict[str, Any], start_time: float) -> dict[str, Any] | None:
     """Extract metrics from aggregated streaming response."""
     metrics = {}
 
@@ -187,7 +187,7 @@ def extract_streaming_metrics(aggregated: Dict[str, Any], start_time: float) -> 
     return metrics if metrics else None
 
 
-def _aggregate_metrics(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+def _aggregate_metrics(target: dict[str, Any], source: dict[str, Any]) -> None:
     """Aggregate metrics from source into target dict."""
     for key, value in source.items():
         if _is_numeric(value):
@@ -205,7 +205,7 @@ def _aggregate_metrics(target: Dict[str, Any], source: Dict[str, Any]) -> None:
                 target[key] = value
 
 
-def _aggregate_model_chunks(chunks: List[Any]) -> Dict[str, Any]:
+def _aggregate_model_chunks(chunks: list[Any]) -> dict[str, Any]:
     """Aggregate ModelResponse chunks from invoke_stream into a complete response."""
     aggregated = {
         "content": "",
@@ -263,7 +263,7 @@ def _aggregate_model_chunks(chunks: List[Any]) -> Dict[str, Any]:
     return aggregated
 
 
-def _aggregate_response_stream_chunks(chunks: List[Any]) -> Dict[str, Any]:
+def _aggregate_response_stream_chunks(chunks: list[Any]) -> dict[str, Any]:
     """
     Aggregate chunks from response_stream which can be ModelResponse, RunOutputEvent, or TeamRunOutputEvent.
 
@@ -344,7 +344,7 @@ def _aggregate_response_stream_chunks(chunks: List[Any]) -> Dict[str, Any]:
     return aggregated
 
 
-def _aggregate_agent_chunks(chunks: List[Any]) -> Dict[str, Any]:
+def _aggregate_agent_chunks(chunks: list[Any]) -> dict[str, Any]:
     """Aggregate BaseAgentRunEvent/BaseTeamRunEvent chunks into a complete response."""
     aggregated = {
         "content": "",

@@ -45,8 +45,8 @@ class UUIDGenerator(IDGenerator):
 
 
 class OTELIDGenerator(IDGenerator):
-    """ ID generator that generates OpenTelemetry-compatible IDs. We use this to have ids that can
-        seamlessly flow between Braintrust and OpenTelemetry.
+    """ID generator that generates OpenTelemetry-compatible IDs. We use this to have ids that can
+    seamlessly flow between Braintrust and OpenTelemetry.
     """
 
     def get_span_id(self):

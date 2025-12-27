@@ -39,9 +39,9 @@ def assert_matches_object(
     """
     if isinstance(expected, (list, tuple)):
         assert isinstance(actual, (list, tuple)), f"Expected sequence but got {type(actual)}"
-        assert len(actual) >= len(
-            expected
-        ), f"Expected sequence of length >= {len(expected)} but got length {len(actual)}"
+        assert len(actual) >= len(expected), (
+            f"Expected sequence of length >= {len(expected)} but got length {len(actual)}"
+        )
         if not ignore_order:
             for i, expected_item in enumerate(expected):
                 assert_matches_object(actual[i], expected_item)

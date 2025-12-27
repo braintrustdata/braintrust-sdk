@@ -8,7 +8,6 @@ when created in mixed contexts.
 import os
 
 import pytest
-
 from braintrust import current_span
 from braintrust.logger import _internal_with_memory_background_logger
 from braintrust.otel import BraintrustSpanProcessor
@@ -20,6 +19,7 @@ try:
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 except ImportError:
+
     class InMemorySpanExporter:
         def __init__(self):
             pass
@@ -44,17 +44,17 @@ class OtelFixture:
 
 @pytest.fixture
 def otel_fixture():
-    """ otel fixture configures everything we need to run mixed otel/bt tracing tests
-        that export to memory.
+    """otel fixture configures everything we need to run mixed otel/bt tracing tests
+    that export to memory.
     """
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT', 'BRAINTRUST_API_KEY'):
+    with preserve_env_vars("BRAINTRUST_OTEL_COMPAT", "BRAINTRUST_API_KEY"):
         # 1. Set environment variable first
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
+        os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
         # Set dummy API key for tests
-        os.environ['BRAINTRUST_API_KEY'] = 'test-api-key-for-fixture'
+        os.environ["BRAINTRUST_API_KEY"] = "test-api-key-for-fixture"
 
         # 2. Set up memory logger with proper context manager
         with _internal_with_memory_background_logger() as memory_logger:
@@ -109,8 +109,8 @@ def test_mixed_otel_bt_tracing_with_bt_logger_first(otel_fixture):
     s2 = otel_spans_by_name["2"]
 
     # Verify unified trace IDs - convert OTEL trace to hex string for comparison
-    s2_trace_id = format(s2.context.trace_id, '032x')
-    s2_span_id = format(s2.context.span_id, '016x')
+    s2_trace_id = format(s2.context.trace_id, "032x")
+    s2_span_id = format(s2.context.span_id, "016x")
 
     assert s1["root_span_id"] == s2_trace_id
     assert s1["root_span_id"] == s3["root_span_id"]
@@ -151,8 +151,8 @@ def test_mixed_otel_bt_tracing_with_experiment_parent(otel_fixture):
     s1, s2, s3 = spans_by_name["1"], spans_by_name["2"], spans_by_name["3"]
 
     # Verify unified trace IDs - convert OTEL trace to hex string for comparison
-    s2_trace_id = format(s2.context.trace_id, '032x')
-    s2_span_id = format(s2.context.span_id, '016x')
+    s2_trace_id = format(s2.context.trace_id, "032x")
+    s2_span_id = format(s2.context.span_id, "016x")
 
     assert s1["root_span_id"] == s2_trace_id
     assert s1["root_span_id"] == s3["root_span_id"]
@@ -193,10 +193,10 @@ def test_mixed_otel_bt_tracing_with_otel_first(otel_fixture):
     s1, s2, s3 = spans_by_name["1"], spans_by_name["2"], spans_by_name["3"]
 
     # Verify unified trace IDs - convert OTEL traces to hex string for comparison
-    s1_trace_id = format(s1.context.trace_id, '032x')
-    s1_span_id = format(s1.context.span_id, '016x')
-    s3_trace_id = format(s3.context.trace_id, '032x')
-    s3_span_id = format(s3.context.span_id, '016x')
+    s1_trace_id = format(s1.context.trace_id, "032x")
+    s1_span_id = format(s1.context.span_id, "016x")
+    s3_trace_id = format(s3.context.trace_id, "032x")
+    s3_span_id = format(s3.context.span_id, "016x")
 
     assert s1_trace_id == s2["root_span_id"]
     assert s1_trace_id == s3_trace_id
@@ -222,14 +222,14 @@ def test_separate_traces_should_not_be_unified(otel_fixture):
     # Second trace: OTEL only
     trace2_spans = []
     with tracer.start_as_current_span("otel_trace2") as otel_span2:
-        trace2_id = format(otel_span2.context.trace_id, '032x')
+        trace2_id = format(otel_span2.context.trace_id, "032x")
         trace2_spans.append(trace2_id)
         otel_span2.set_attribute("test", "second_trace")
 
     # Third trace: OTEL root with BT child
     trace3_spans = []
     with tracer.start_as_current_span("otel_trace3_root") as otel_span3:
-        otel3_trace_id = format(otel_span3.context.trace_id, '032x')
+        otel3_trace_id = format(otel_span3.context.trace_id, "032x")
         trace3_spans.append(otel3_trace_id)
 
         # BT span inside OTEL - should inherit OTEL trace ID, not previous BT trace
@@ -286,28 +286,28 @@ def test_otel_spans_inherit_parent_attribute(otel_fixture):
         assert len(bt_spans) == 1
 
 
-
 def test_uses_braintrust_context_manager_when_otel_disabled():
     """Test that BraintrustContextManager is used when OTEL is not enabled."""
     # Ensure OTEL is disabled
-    os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
+    os.environ.pop("BRAINTRUST_OTEL_COMPAT", None)
 
     try:
         from braintrust.context import get_context_manager
+
         cm = get_context_manager()
 
         # Should be BraintrustContextManager, not OTEL ContextManager
         assert type(cm).__name__ == "BraintrustContextManager"
 
         # Verify it has the expected interface
-        assert hasattr(cm, 'get_current_span_info')
-        assert hasattr(cm, 'get_parent_span_ids')
-        assert hasattr(cm, 'set_current_span')
-        assert hasattr(cm, 'unset_current_span')
+        assert hasattr(cm, "get_current_span_info")
+        assert hasattr(cm, "get_parent_span_ids")
+        assert hasattr(cm, "set_current_span")
+        assert hasattr(cm, "unset_current_span")
 
     finally:
         # Clean up - remove any environment variable we might have set
-        os.environ.pop('BRAINTRUST_OTEL_COMPAT', None)
+        os.environ.pop("BRAINTRUST_OTEL_COMPAT", None)
 
 
 def test_uses_otel_context_manager_when_enabled():
@@ -315,21 +315,22 @@ def test_uses_otel_context_manager_when_enabled():
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT'):
+    with preserve_env_vars("BRAINTRUST_OTEL_COMPAT"):
         # Enable OTEL
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
+        os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
 
         from braintrust.context import get_context_manager
+
         cm = get_context_manager()
 
         # Should be OTEL ContextManager, not BraintrustContextManager
         assert type(cm).__name__ == "ContextManager"
 
         # Verify it has the expected interface
-        assert hasattr(cm, 'get_current_span_info')
-        assert hasattr(cm, 'get_parent_span_ids')
-        assert hasattr(cm, 'set_current_span')
-        assert hasattr(cm, 'unset_current_span')
+        assert hasattr(cm, "get_current_span_info")
+        assert hasattr(cm, "get_parent_span_ids")
+        assert hasattr(cm, "set_current_span")
+        assert hasattr(cm, "unset_current_span")
 
 
 def test_bt_span_without_explicit_parent_inherits_from_otel(otel_fixture):
@@ -359,8 +360,8 @@ def test_bt_span_without_explicit_parent_inherits_from_otel(otel_fixture):
     otel_parent = otel_spans[0]
 
     # Convert OTEL IDs to hex for comparison
-    otel_trace_id = format(otel_parent.context.trace_id, '032x')
-    otel_span_id = format(otel_parent.context.span_id, '016x')
+    otel_trace_id = format(otel_parent.context.trace_id, "032x")
+    otel_span_id = format(otel_parent.context.span_id, "016x")
 
     # BT span should have inherited OTEL parent's trace ID as root_span_id
     assert bt_child["root_span_id"] == otel_trace_id
