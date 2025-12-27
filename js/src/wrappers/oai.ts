@@ -34,7 +34,6 @@ interface OpenAILike {
 }
 
 declare global {
-  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 
@@ -134,6 +133,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy(openai, {
     get(target, name, receiver) {
       switch (name) {
@@ -152,7 +152,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
       }
       return Reflect.get(target, name, receiver);
     },
-  });
+  }) as T;
 }
 
 type SpanInfo = {
@@ -191,7 +191,7 @@ function logCompletionResponse(
 function wrapBetaChatCompletionParse<
   P extends ChatParams,
   C extends Promise<NonStreamingChatResponse>,
->(completion: (params: P) => C): (params: P) => Promise<any> {
+>(completion: (params: P) => C): (params: P & SpanInfo) => Promise<any> {
   return async (allParams: P & SpanInfo) => {
     const { span_info: _, ...params } = allParams;
     const span = startSpan(
@@ -220,7 +220,7 @@ function wrapBetaChatCompletionParse<
 function wrapBetaChatCompletionStream<
   P extends ChatParams,
   C extends StreamingChatResponse,
->(completion: (params: P) => C): (params: P) => Promise<any> {
+>(completion: (params: P) => C): (params: P & SpanInfo) => Promise<any> {
   return (allParams: P & SpanInfo) => {
     const { span_info: _, ...params } = allParams;
     const span = startSpan(
@@ -312,7 +312,7 @@ function wrapChatCompletion<
   C extends NonStreamingChatResponse | StreamingChatResponse,
 >(
   completion: (params: P, options?: unknown) => APIPromise<C>,
-): (params: P, options?: unknown) => APIPromise<C> {
+): (params: P & SpanInfo, options?: unknown) => APIPromise<C> {
   return (allParams: P & SpanInfo, options?: unknown): APIPromise<C> => {
     const { span_info: _, ...params } = allParams;
 
@@ -368,7 +368,7 @@ function wrapChatCompletion<
               const { data: ret, response } =
                 await completionResponse.withResponse();
               logHeaders(response, span);
-              const { messages, ...rest } = params;
+              const { messages: _messages, ...rest } = params;
               span.log({
                 metadata: {
                   ...rest,
