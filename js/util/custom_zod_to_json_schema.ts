@@ -10,51 +10,56 @@ function extractChecks(def: AnyObj): AnyObj {
   }
 
   for (const check of def.checks) {
-    // In Zod v4, check has direct properties like format, isInt, etc.
-    if (check.format && check.format !== "safeint") {
-      result.format = check.format === "datetime" ? "date-time" : check.format;
+    const checkDef = check._zod?.def || check.def;
+    if (!checkDef) {
+      // Check for integer flag directly on check object
+      if (check.isInt === true) {
+        result.isInteger = true;
+      }
+      if (check.minValue !== undefined) {
+        result.minimum = check.minValue;
+      }
+      if (check.maxValue !== undefined) {
+        result.maximum = check.maxValue;
+      }
+      continue;
     }
 
-    // Check for integer flag
+    // Handle format checks (uuid, datetime, email, etc.)
+    // Skip safeint as it's represented by type: "integer" instead
+    if (checkDef.format && checkDef.format !== "safeint") {
+      result.format =
+        checkDef.format === "datetime" ? "date-time" : checkDef.format;
+    }
+
+    // Handle pattern (RegExp object needs conversion)
+    if (checkDef.pattern) {
+      if (checkDef.pattern instanceof RegExp) {
+        result.pattern = checkDef.pattern.source;
+      } else if (typeof checkDef.pattern === "string") {
+        result.pattern = checkDef.pattern;
+      }
+    }
+
+    // Handle min/max for numbers
+    if (checkDef.check === "greater_than" && checkDef.value !== undefined) {
+      result.minimum = checkDef.value;
+    }
+    if (checkDef.check === "less_than" && checkDef.value !== undefined) {
+      result.maximum = checkDef.value;
+    }
+
+    // Handle minLength/maxLength for strings
+    if (checkDef.check === "min_length" && checkDef.value !== undefined) {
+      result.minLength = checkDef.value;
+    }
+    if (checkDef.check === "max_length" && checkDef.value !== undefined) {
+      result.maxLength = checkDef.value;
+    }
+
+    // Check for integer on check object itself
     if (check.isInt === true) {
       result.isInteger = true;
-    }
-
-    // Check for min/max values on check object
-    if (check.minValue !== undefined && check.minValue !== -9007199254740991) {
-      result.minimum = check.minValue;
-    }
-    if (check.maxValue !== undefined && check.maxValue !== 9007199254740991) {
-      result.maximum = check.maxValue;
-    }
-
-    // Also check the def property for additional constraints
-    const checkDef = check._zod?.def || check.def;
-    if (checkDef) {
-      // Handle pattern (RegExp object needs conversion)
-      if (checkDef.pattern) {
-        if (checkDef.pattern instanceof RegExp) {
-          result.pattern = checkDef.pattern.source;
-        } else if (typeof checkDef.pattern === "string") {
-          result.pattern = checkDef.pattern;
-        }
-      }
-
-      // Handle min/max for numbers from checkDef
-      if (checkDef.check === "greater_than" && checkDef.value !== undefined) {
-        result.minimum = checkDef.value;
-      }
-      if (checkDef.check === "less_than" && checkDef.value !== undefined) {
-        result.maximum = checkDef.value;
-      }
-
-      // Handle minLength/maxLength for strings
-      if (checkDef.check === "min_length" && checkDef.value !== undefined) {
-        result.minLength = checkDef.value;
-      }
-      if (checkDef.check === "max_length" && checkDef.value !== undefined) {
-        result.maxLength = checkDef.value;
-      }
     }
   }
 
@@ -75,14 +80,8 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
   const def = schema._def;
 
   // Unwrap pipe types (transforms) - use the input type
-  // Also check for openapi.metadata.format for datetime fields
   if (def?.type === "pipe" && def?.in) {
-    const result = schemaToJsonSchema(def.in, isRoot);
-    // Check for openapi metadata format (used by typespecs)
-    if (def?.openapi?.metadata?.format) {
-      result.format = def.openapi.metadata.format;
-    }
-    return addDescription(result, schema);
+    return addDescription(schemaToJsonSchema(def.in, isRoot), schema);
   }
 
   // Handle object schemas
@@ -234,12 +233,7 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
 
   // Handle primitive types
   if (def?.type === "string") {
-    const checks = extractChecks(def);
-    // Also check for format at the top level of def (Zod v4 string formats)
-    if (def.format && !checks.format) {
-      checks.format = def.format === "datetime" ? "date-time" : def.format;
-    }
-    return addDescription({ type: "string", ...checks }, schema);
+    return addDescription({ type: "string", ...extractChecks(def) }, schema);
   }
 
   if (def?.type === "number") {
