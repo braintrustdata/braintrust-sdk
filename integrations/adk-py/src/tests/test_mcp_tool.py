@@ -178,6 +178,9 @@ async def test_setup_adk_patches_mcp_tool():
     for module in modules_to_remove:
         del sys.modules[module]
 
+    # Critical: Also clear the mcp_tool submodule to force re-import with mock
+    sys.modules.pop("google.adk.tools.mcp_tool.mcp_tool", None)
+
     with patch.dict(
         "sys.modules",
         {
