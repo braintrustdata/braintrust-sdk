@@ -1,8 +1,9 @@
 import logging
 import sys
 import time
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import AbstractAsyncContextManager
-from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -14,9 +15,9 @@ __all__ = ["setup_pydantic_ai"]
 
 
 def setup_pydantic_ai(
-    api_key: Optional[str] = None,
-    project_id: Optional[str] = None,
-    project_name: Optional[str] = None,
+    api_key: str | None = None,
+    project_id: str | None = None,
+    project_name: str | None = None,
 ) -> bool:
     """
     Setup Braintrust integration with Pydantic AI. Will automatically patch Pydantic AI Agents and direct API functions for automatic tracing.
@@ -745,7 +746,7 @@ def _serialize_model_response(response: Any) -> Any:
     return response_dict
 
 
-def _extract_model_info_from_model_instance(model: Any) -> tuple[Optional[str], Optional[str]]:
+def _extract_model_info_from_model_instance(model: Any) -> tuple[str | None, str | None]:
     """Extract model name and provider from a model instance.
 
     Args:
@@ -785,7 +786,7 @@ def _extract_model_info_from_model_instance(model: Any) -> tuple[Optional[str], 
     return None, None
 
 
-def _extract_model_info(agent: Any) -> tuple[Optional[str], Optional[str]]:
+def _extract_model_info(agent: Any) -> tuple[str | None, str | None]:
     """Extract model name and provider from agent.
 
     Args:
@@ -801,8 +802,8 @@ def _extract_model_info(agent: Any) -> tuple[Optional[str], Optional[str]]:
 
 
 def _build_model_metadata(
-    model_name: Optional[str], provider: Optional[str], model_settings: Any = None
-) -> Dict[str, Any]:
+    model_name: str | None, provider: str | None, model_settings: Any = None
+) -> dict[str, Any]:
     """Build metadata dictionary with model info.
 
     Args:
@@ -823,7 +824,7 @@ def _build_model_metadata(
     return metadata
 
 
-def _parse_model_string(model: Any) -> tuple[Optional[str], Optional[str]]:
+def _parse_model_string(model: Any) -> tuple[str | None, str | None]:
     """Parse model string to extract provider and model name.
 
     Pydantic AI uses format: "provider:model-name" (e.g., "openai:gpt-4o")
@@ -840,9 +841,9 @@ def _parse_model_string(model: Any) -> tuple[Optional[str], Optional[str]]:
     return model_str, None
 
 
-def _extract_usage_metrics(result: Any, start_time: float, end_time: float) -> Optional[Dict[str, float]]:
+def _extract_usage_metrics(result: Any, start_time: float, end_time: float) -> dict[str, float] | None:
     """Extract usage metrics from agent run result."""
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
     metrics["start"] = start_time
     metrics["end"] = end_time
@@ -903,10 +904,10 @@ def _extract_usage_metrics(result: Any, start_time: float, end_time: float) -> O
 
 
 def _extract_stream_usage_metrics(
-    stream_result: Any, start_time: float, end_time: float, first_token_time: Optional[float]
-) -> Optional[Dict[str, float]]:
+    stream_result: Any, start_time: float, end_time: float, first_token_time: float | None
+) -> dict[str, float] | None:
     """Extract usage metrics from stream result."""
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
     metrics["start"] = start_time
     metrics["end"] = end_time
@@ -942,10 +943,10 @@ def _extract_stream_usage_metrics(
 
 
 def _extract_response_metrics(
-    response: Any, start_time: float, end_time: float, first_token_time: Optional[float] = None
-) -> Optional[Dict[str, float]]:
+    response: Any, start_time: float, end_time: float, first_token_time: float | None = None
+) -> dict[str, float] | None:
     """Extract metrics from model response."""
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
     metrics["start"] = start_time
     metrics["end"] = end_time
@@ -985,7 +986,7 @@ def _is_patched(obj: Any) -> bool:
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _try_dict(obj: Any) -> Union[Iterable[Any], Dict[str, Any]]:
+def _try_dict(obj: Any) -> Iterable[Any] | dict[str, Any]:
     """Try to convert object to dict, handling Pydantic models and circular references."""
     if hasattr(obj, "model_dump"):
         try:
@@ -1074,7 +1075,7 @@ class aclosing(AbstractAsyncContextManager[G]):
                 )
 
 
-def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build input data and metadata for agent wrappers.
 
     Returns:
@@ -1177,7 +1178,7 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
     return input_data, metadata
 
 
-def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build input data and metadata for direct model request wrappers.
 
     Returns:
