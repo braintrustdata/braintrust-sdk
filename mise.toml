@@ -8,5 +8,10 @@ _.python.venv = { path = "venv", create = true, uv_create_args = ['--seed']}
 _.file = ".env"
 
 [tools]
+# SDK is a standalone module - include all required tools
+pnpm = "10.26.1"
+nodejs = "22.15.0"
+python = "3.13.3"
+pre-commit = "4.2.0"
 ruff = "0.12.7"
 uv = "latest"
