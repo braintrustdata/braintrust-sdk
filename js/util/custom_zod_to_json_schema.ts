@@ -10,6 +10,14 @@ function extractChecks(def: AnyObj): AnyObj {
   }
 
   for (const check of def.checks) {
+    // Zod v4 has format directly on check object
+    if (check.format && check.format !== "safeint") {
+      const format = check.format === "datetime" ? "date-time" : check.format;
+      result.format = format;
+      // Format found, continue to next check
+      continue;
+    }
+
     const checkDef = check._zod?.def || check.def;
     if (!checkDef) {
       // Check for integer flag directly on check object
@@ -25,7 +33,7 @@ function extractChecks(def: AnyObj): AnyObj {
       continue;
     }
 
-    // Handle format checks (uuid, datetime, email, etc.)
+    // Handle format checks (uuid, datetime, email, etc.) from checkDef
     // Skip safeint as it's represented by type: "integer" instead
     if (checkDef.format && checkDef.format !== "safeint") {
       result.format =
@@ -143,6 +151,22 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
 
   if (def?.type === "nullable" && def?.innerType) {
     const inner = schemaToJsonSchema(def.innerType, false);
+    // Use compact format for primitives: type: ["string", "null"]
+    // Use anyOf for complex types: anyOf: [{type: "object", ...}, {type: "null"}]
+    if (
+      inner.type &&
+      typeof inner.type === "string" &&
+      !inner.properties &&
+      !inner.items &&
+      !inner.anyOf &&
+      !inner.allOf
+    ) {
+      const result = {
+        ...inner,
+        type: [inner.type, "null"],
+      };
+      return addDescription(result, schema);
+    }
     return addDescription(
       {
         anyOf: [inner, { type: "null" }],
@@ -153,6 +177,22 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
 
   if (def?.type === "nullish" && def?.innerType) {
     const inner = schemaToJsonSchema(def.innerType, false);
+    // Use compact format for primitives: type: ["string", "null"]
+    // Use anyOf for complex types: anyOf: [{type: "object", ...}, {type: "null"}]
+    if (
+      inner.type &&
+      typeof inner.type === "string" &&
+      !inner.properties &&
+      !inner.items &&
+      !inner.anyOf &&
+      !inner.allOf
+    ) {
+      const result = {
+        ...inner,
+        type: [inner.type, "null"],
+      };
+      return addDescription(result, schema);
+    }
     return addDescription(
       {
         anyOf: [inner, { type: "null" }],
@@ -183,10 +223,14 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
   }
 
   // Handle enum types
-  if (def?.type === "enum" && def?.values) {
+  if (def?.type === "enum") {
+    // Zod v4 uses def.entries (object), v3 used def.values (array)
+    const enumValues =
+      def.values || (def.entries ? Object.keys(def.entries) : []);
     return addDescription(
       {
-        enum: def.values,
+        type: "string",
+        enum: enumValues,
       },
       schema,
     );
@@ -233,7 +277,12 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
 
   // Handle primitive types
   if (def?.type === "string") {
-    return addDescription({ type: "string", ...extractChecks(def) }, schema);
+    const checks = extractChecks(def);
+    // In Zod v4, z.uuid() puts format directly on def, not in checks
+    if (def.format && def.format !== "safeint" && !checks.format) {
+      checks.format = def.format === "datetime" ? "date-time" : def.format;
+    }
+    return addDescription({ type: "string", ...checks }, schema);
   }
 
   if (def?.type === "number") {
