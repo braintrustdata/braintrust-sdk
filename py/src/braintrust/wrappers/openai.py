@@ -3,7 +3,7 @@ Exports `BraintrustTracingProcessor`, a `tracing.TracingProcessor` that logs tra
 """
 
 import datetime
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import braintrust
 from agents import tracing
@@ -21,7 +21,7 @@ def _span_type(span: tracing.Span[Any]) -> braintrust.SpanTypeAttribute:
         return braintrust.SpanTypeAttribute.TASK
 
 
-def _span_name(span: tracing.Span[Any]) -> str:
+def _default_span_name(span: tracing.Span[Any]) -> str:
     # TODO(sachin): span name should also come from the span_data.
     if (
         isinstance(span.span_data, tracing.AgentSpanData)
@@ -59,13 +59,32 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     Args:
         logger: A `braintrust.Span` or `braintrust.Experiment` or `braintrust.Logger` to use for logging.
             If `None`, the current span, experiment, or logger will be selected exactly as in `braintrust.start_span`.
+        span_name_fn: An optional callable that takes a `tracing.Span` and returns a custom span name as a string.
+            If the callable returns `None`, the default span naming logic will be used as a fallback.
+            This allows you to customize span names for specific span types (e.g., LLM calls) while preserving
+            default behavior for others.
     """
 
-    def __init__(self, logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None):
+    def __init__(
+        self,
+        logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None,
+        span_name_fn: Optional[Callable[[tracing.Span[Any]], Optional[str]]] = None,
+    ):  
         self._logger = logger
+        self._span_name_fn = span_name_fn
         self._spans: Dict[str, braintrust.Span] = {}
         self._first_input: Dict[str, Any] = {}
         self._last_output: Dict[str, Any] = {}
+
+    def _span_name(self, span: tracing.Span[Any]) -> str:
+        # Try custom naming function first if provided
+        if self._span_name_fn is not None:
+            custom_name = self._span_name_fn(span)
+            if custom_name is not None:
+                return custom_name
+        
+        # Fall back to default naming logic
+        return _default_span_name(span)
 
     def on_trace_start(self, trace: tracing.Trace) -> None:
         trace_meta = trace.export() or {}
@@ -227,7 +246,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             parent = self._spans[span.trace_id]
         created_span = parent.start_span(
             id=span.span_id,
-            name=_span_name(span),
+            name=self._span_name(span),
             type=_span_type(span),
             start_time=_timestamp_from_maybe_iso(span.started_at),
         )
