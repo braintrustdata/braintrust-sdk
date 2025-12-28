@@ -130,10 +130,8 @@ function schemaToJsonSchema(schema: AnyObj, isRoot = false): AnyObj {
       additionalProperties,
     };
 
-    // Only add $schema to root level
-    if (isRoot) {
-      result.$schema = "https://json-schema.org/draft/2020-12/schema";
-    }
+    // Don't include $schema field - let consumers add it if needed
+    // This avoids version compatibility issues between different JSON Schema drafts
 
     return addDescription(result, schema);
   }
