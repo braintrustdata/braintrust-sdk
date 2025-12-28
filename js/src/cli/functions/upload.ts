@@ -45,6 +45,7 @@ interface BundledFunctionSpec {
   function_schema?: FunctionObject["function_schema"];
   if_exists?: IfExists;
   metadata?: Record<string, unknown>;
+  environment?: string;
 }
 
 const pathInfoSchema = z
@@ -114,6 +115,7 @@ export async function uploadHandleBundles({
               : undefined,
           if_exists: fn.ifExists,
           metadata: fn.metadata,
+          environment: fn.environment,
         });
       }
 
@@ -363,6 +365,7 @@ async function uploadBundles({
         function_schema: spec.function_schema,
         if_exists: spec.if_exists,
         metadata: spec.metadata,
+        environment: spec.environment,
       })),
     )) as FunctionEvent[]),
   ].map((fn) => ({

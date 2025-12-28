@@ -36,6 +36,7 @@ interface BaseFnOpts {
   description: string;
   ifExists: IfExists;
   metadata?: Record<string, unknown>;
+  environment?: string;
 }
 
 export { toolFunctionDefinitionSchema };
@@ -405,6 +406,7 @@ export class CodePrompt {
   public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
   public readonly metadata?: Record<string, unknown>;
+  public readonly environment?: string;
 
   constructor(
     project: Project,
@@ -426,6 +428,7 @@ export class CodePrompt {
     this.id = opts.id;
     this.functionType = functionType;
     this.metadata = opts.metadata;
+    this.environment = opts.environment;
   }
 
   async toFunctionDefinition(
@@ -467,6 +470,7 @@ export class CodePrompt {
       prompt_data,
       if_exists: this.ifExists,
       metadata: this.metadata,
+      environment: this.environment,
     };
   }
 }
@@ -624,6 +628,7 @@ export interface FunctionEvent {
   function_type?: FunctionType;
   if_exists?: IfExists;
   metadata?: Record<string, unknown>;
+  environment?: string;
 }
 
 export class ProjectNameIdMap {

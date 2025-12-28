@@ -68,6 +68,7 @@ class CodePrompt:
     id: Optional[str]
     if_exists: Optional[IfExists]
     metadata: Optional[Dict[str, Any]] = None
+    environment: Optional[str] = None
 
     def to_function_definition(self, if_exists: Optional[IfExists], project_ids: ProjectIdCache) -> Dict[str, Any]:
         prompt_data = self.prompt
@@ -101,6 +102,8 @@ class CodePrompt:
             j["function_type"] = self.function_type
         if self.metadata is not None:
             j["metadata"] = self.metadata
+        if self.environment is not None:
+            j["environment"] = self.environment
 
         return j
 
@@ -179,13 +182,14 @@ class PromptBuilder:
         slug: Optional[str] = None,
         description: Optional[str] = None,
         id: Optional[str] = None,
-        prompt: str,
-        model: str,
-        params: Optional[ModelParams] = None,
-        tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
-        if_exists: Optional[IfExists] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> CodePrompt: ...
+         prompt: str,
+         model: str,
+         params: Optional[ModelParams] = None,
+         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
+         if_exists: Optional[IfExists] = None,
+         metadata: Optional[Dict[str, Any]] = None,
+         environment: Optional[str] = None,
+     ) -> CodePrompt: ...
 
     @overload  # messages only, no prompt
     def create(
@@ -201,6 +205,7 @@ class PromptBuilder:
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        environment: Optional[str] = None,
     ) -> CodePrompt: ...
 
     def create(
@@ -217,6 +222,7 @@ class PromptBuilder:
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        environment: Optional[str] = None,
     ):
         """Creates a prompt.
 
@@ -232,6 +238,7 @@ class PromptBuilder:
             tools: The tools to use for the prompt.
             if_exists: What to do if the prompt already exists.
             metadata: Custom metadata to attach to the prompt.
+            environment: The environment to assign the prompt to.
         """
         self._task_counter += 1
         if not name:
@@ -281,6 +288,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
             metadata=metadata,
+            environment=environment,
         )
         self.project.add_prompt(p)
         return p

@@ -880,6 +880,39 @@ describe("framework2 metadata support", () => {
       expect(prompts[0].metadata).toBeUndefined();
     });
 
+    test("prompt stores environment correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const environment = "production";
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+        environment,
+      });
+
+      // The environment is stored on the CodePrompt in _publishablePrompts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].environment).toEqual(environment);
+    });
+
+    test("prompt works without environment", () => {
+      const project = projects.create({ name: "test-project" });
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].environment).toBeUndefined();
+    });
+
     test("toFunctionDefinition includes metadata when present", async () => {
       const project = projects.create({ name: "test-project" });
       const metadata = { version: "2.0", tag: "production" };
@@ -934,6 +967,62 @@ describe("framework2 metadata support", () => {
       const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
 
       expect(funcDef.metadata).toBeUndefined();
+    });
+
+    test("toFunctionDefinition includes environment when present", async () => {
+      const project = projects.create({ name: "test-project" });
+      const environment = "staging";
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+          environment,
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.environment).toEqual(environment);
+      expect(funcDef.name).toBe("test-prompt");
+      expect(funcDef.project_id).toBe("project-123");
+    });
+
+    test("toFunctionDefinition excludes environment when undefined", async () => {
+      const project = projects.create({ name: "test-project" });
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.environment).toBeUndefined();
     });
   });
 
