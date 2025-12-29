@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict, TypeVar, Union
 
 from sseclient import SSEClient
 
-from .._generated_types import InvokeContext
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
 from .constants import INVOKE_API_VERSION
@@ -42,7 +41,6 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
-    context: Optional[InvokeContext] = None,
     metadata: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
@@ -70,7 +68,6 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
-    context: Optional[InvokeContext] = None,
     metadata: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
@@ -97,7 +94,6 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
-    context: Optional[InvokeContext] = None,
     metadata: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
@@ -116,8 +112,6 @@ def invoke(
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
         messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
-        context: Context for functions that operate on spans/traces (e.g., facets). Should contain
-            `object_type`, `object_id`, and `scope` fields.
         metadata: Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
             It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
             to the function.
@@ -188,8 +182,6 @@ def invoke(
     )
     if messages is not None:
         request["messages"] = messages
-    if context is not None:
-        request["context"] = context
     if mode is not None:
         request["mode"] = mode
     if strict is not None:

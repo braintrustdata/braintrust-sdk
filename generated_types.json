@@ -423,11 +423,13 @@
               },
               "token": {
                 "type": "string"
+              },
+              "triggered_xact_id": {
+                "type": "string"
               }
             },
             "required": [
-              "kind",
-              "token"
+              "kind"
             ]
           },
           {
@@ -475,6 +477,48 @@
             "required": [
               "kind"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "add_triggered_functions"
+                ]
+              },
+              "triggered_function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "triggered_function_ids"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "triggered_function_complete"
+                ]
+              },
+              "function_id": {
+                "description": "The function ID"
+              },
+              "triggered_xact_id": {
+                "type": "string",
+                "description": "The triggered_xact_id to validate against"
+              }
+            },
+            "required": [
+              "kind",
+              "triggered_xact_id"
+            ]
           }
         ]
       },
@@ -494,14 +538,22 @@
               },
               "function_ids": {
                 "type": "array",
-                "items": {},
-                "minItems": 1
+                "items": {}
               },
               "skip_logging": {
                 "type": [
                   "boolean",
                   "null"
                 ]
+              },
+              "triggered_function_ids": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "$ref": "#/components/schemas/TriggeredFunction"
+                }
               }
             },
             "required": [
@@ -2341,6 +2393,58 @@
           "url"
         ]
       },
+      "FacetAutomationConfig": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "facet"
+            ],
+            "description": "The type of automation."
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedFunctionId"
+            },
+            "minItems": 1,
+            "description": "The facet functions to run (must be functions with function_type: 'facet')"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpanScope"
+              },
+              {
+                "$ref": "#/components/schemas/TraceScope"
+              },
+              {
+                "$ref": "#/components/schemas/GroupScope"
+              }
+            ],
+            "description": "The scope at which to run the facet"
+          },
+          "sampling_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "The sampling rate for facet extraction (0-1, default: 1)"
+          },
+          "btql_filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional BTQL filter to select which spans/traces to process"
+          }
+        },
+        "required": [
+          "event_type",
+          "facets",
+          "scope"
+        ]
+      },
       "FacetData": {
         "type": "object",
         "properties": {
@@ -3482,6 +3586,30 @@
         ],
         "description": "A group is a collection of users which can be assigned an ACL\n\nGroups can consist of individual users, as well as a set of groups they inherit from"
       },
+      "GroupScope": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "group"
+            ]
+          },
+          "group_by": {
+            "type": "string",
+            "description": "Field path to group by, e.g. metadata.session_id"
+          },
+          "idle_seconds": {
+            "type": "number",
+            "description": "Optional: trigger after this many seconds of inactivity"
+          }
+        },
+        "required": [
+          "type",
+          "group_by"
+        ],
+        "description": "Process spans/traces grouped by a field (e.g., session_id)"
+      },
       "IfExists": {
         "type": "string",
         "enum": [
@@ -3489,37 +3617,6 @@
           "ignore",
           "replace"
         ]
-      },
-      "InvokeContext": {
-        "type": [
-          "object",
-          "null"
-        ],
-        "properties": {
-          "object_type": {
-            "type": "string",
-            "enum": [
-              "project_logs",
-              "experiment",
-              "dataset",
-              "playground_logs"
-            ],
-            "description": "The type of object containing the span data"
-          },
-          "object_id": {
-            "type": "string",
-            "description": "The ID of the object containing the span data"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/InvokeScope"
-          }
-        },
-        "required": [
-          "object_type",
-          "object_id",
-          "scope"
-        ],
-        "description": "Context for functions that operate on spans/traces"
       },
       "InvokeFunction": {
         "allOf": [
@@ -3559,9 +3656,6 @@
                   "$ref": "#/components/schemas/ChatCompletionMessageParam"
                 },
                 "description": "If the function is an LLM, additional messages to pass along to it"
-              },
-              "context": {
-                "$ref": "#/components/schemas/InvokeContext"
               },
               "parent": {
                 "$ref": "#/components/schemas/InvokeParent"
@@ -3674,17 +3768,6 @@
           }
         ],
         "description": "Options for tracing the function call"
-      },
-      "InvokeScope": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/SpanScope"
-          },
-          {
-            "$ref": "#/components/schemas/TraceScope"
-          }
-        ],
-        "description": "The scope at which to operate (span or trace)"
       },
       "MCPServer": {
         "type": "object",
@@ -4295,6 +4378,13 @@
             "type": "string",
             "description": "Name of the project"
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the project"
+          },
           "created": {
             "type": [
               "string",
@@ -4679,6 +4769,9 @@
                   "event_type",
                   "action"
                 ]
+              },
+              {
+                "$ref": "#/components/schemas/FacetAutomationConfig"
               }
             ],
             "description": "The configuration for the automation rule"
@@ -6551,22 +6644,12 @@
             "enum": [
               "span"
             ]
-          },
-          "root_span_id": {
-            "type": "string",
-            "description": "The root span id is a unique identifier for the trace."
-          },
-          "id": {
-            "type": "string",
-            "description": "A unique identifier for the span."
           }
         },
         "required": [
-          "type",
-          "root_span_id",
-          "id"
+          "type"
         ],
-        "description": "Scope for operating on a single span"
+        "description": "Process individual spans"
       },
       "SpanType": {
         "type": [
@@ -6579,7 +6662,10 @@
           "function",
           "eval",
           "task",
-          "tool"
+          "tool",
+          "automation",
+          "facet",
+          "preprocessor"
         ],
         "description": "Type of the span, for display purposes only"
       },
@@ -6719,16 +6805,45 @@
               "trace"
             ]
           },
-          "root_span_id": {
-            "type": "string",
-            "description": "The root span id is a unique identifier for the trace."
+          "idle_seconds": {
+            "type": "number",
+            "description": "Consider trace complete after this many seconds of inactivity (default: 30)"
           }
         },
         "required": [
-          "type",
-          "root_span_id"
+          "type"
         ],
-        "description": "Scope for operating on an entire trace"
+        "description": "Process entire traces (all spans sharing the same root_span_id)"
+      },
+      "TriggeredFunction": {
+        "type": "object",
+        "properties": {
+          "function_id": {
+            "description": "The function to run"
+          },
+          "triggered_xact_id": {
+            "type": "string",
+            "description": "The xact_id when this function was triggered"
+          },
+          "completed_xact_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The xact_id when this function completed (matches triggered_xact_id if done)"
+          },
+          "attempts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Number of execution attempts (for retry tracking)"
+          }
+        },
+        "required": [
+          "triggered_xact_id"
+        ]
       },
       "UploadStatus": {
         "type": "string",
@@ -7264,7 +7379,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "d2eca897666af49c11b326a9dcc6643824279cf8"
+    "x-internal-git-sha": "9bf2117dcbe2dcfc71b22962e2e5d43b36c7b0b3"
   },
   "paths": {},
   "webhooks": {}
