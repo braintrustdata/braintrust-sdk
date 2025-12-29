@@ -1487,6 +1487,90 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
   });
 
+  test("ai sdk async generator tool execution", async () => {
+    // Test for GitHub issue #1134: async generator tools should work correctly
+    // AI SDK v5 supports tools with async generator execute functions that yield
+    // intermediate status updates
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Track status updates - use a fresh array each time to handle test retries
+    const statusUpdates: string[] = [];
+
+    const streamingTool = ai.tool({
+      description: "A tool that streams status updates",
+      inputSchema: z.object({
+        name: z.string().describe("The name to greet"),
+      }),
+      execute: async function* (args: { name: string }) {
+        statusUpdates.push("starting");
+        yield { status: "starting", message: "Preparing greeting..." };
+
+        statusUpdates.push("processing");
+        yield { status: "processing", message: `Looking up ${args.name}...` };
+
+        statusUpdates.push("done");
+        yield { status: "done", greeting: `Hello, ${args.name}!` };
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      tools: {
+        greeting: streamingTool,
+      },
+      toolChoice: "required",
+      prompt: "Please use the greeting tool to greet someone named World",
+      stopWhen: ai.stepCountIs(1),
+    });
+
+    assert.ok(result);
+
+    // Verify that the async generator was actually iterated (exactly once with 3 yields)
+    expect(statusUpdates).toEqual(["starting", "processing", "done"]);
+
+    const spans = await backgroundLogger.drain();
+
+    // Find the tool execution span
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpan = spans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (span: any) =>
+        span.span_attributes?.type === "tool" &&
+        span.span_attributes?.name === "greeting",
+    );
+
+    expect(toolSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpanTyped = toolSpan as any;
+
+    // Verify the tool span has the correct structure
+    expect(toolSpanTyped).toMatchObject({
+      span_attributes: {
+        type: "tool",
+        name: "greeting",
+      },
+    });
+
+    // Verify input is captured
+    expect(toolSpanTyped.input).toBeDefined();
+    const inputData = Array.isArray(toolSpanTyped.input)
+      ? toolSpanTyped.input[0]
+      : toolSpanTyped.input;
+    expect(inputData).toMatchObject({
+      name: "World",
+    });
+
+    // Verify output is captured (should be the final yielded value, not {})
+    expect(toolSpanTyped.output).toBeDefined();
+    expect(toolSpanTyped.output).not.toEqual({});
+    expect(toolSpanTyped.output).toMatchObject({
+      status: "done",
+      greeting: "Hello, World!",
+    });
+  });
+
   test("ai sdk string model ID resolution with per-step spans", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
