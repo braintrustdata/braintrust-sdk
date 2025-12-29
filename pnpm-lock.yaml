@@ -235,9 +235,6 @@ importers:
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
-      zod-to-json-schema:
-        specifier: ^3.25.0
-        version: 3.25.0(zod@4.2.1)
     devDependencies:
       '@ai-sdk/anthropic':
         specifier: 2.0.37
@@ -10463,6 +10460,7 @@ packages:
       zod: ^3.25 || ^4
     dependencies:
       zod: 4.2.1
+    dev: true
 
   /zod@3.25.67:
     resolution: {integrity: sha512-idA2YXwpCdqUSKRCACDE6ItZD9TZzy3OZMtpfLoh6oPR47lipysRrJfjzMqFxQ3uJuUPyUeWe1r9vLH33xO/Qw==}
@@ -10474,3 +10472,4 @@ packages:
 
   /zod@4.2.1:
     resolution: {integrity: sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw==}
+    dev: true

@@ -180,11 +180,13 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
-export const BraintrustModelParams = z.object({
-  use_cache: z.boolean().optional(),
-  reasoning_enabled: z.boolean().optional(),
-  reasoning_budget: z.number().optional(),
-});
+export const BraintrustModelParams = z
+  .object({
+    use_cache: z.boolean(),
+    reasoning_enabled: z.boolean(),
+    reasoning_budget: z.number(),
+  })
+  .partial();
 export type BraintrustModelParamsType = z.infer<typeof BraintrustModelParams>;
 export const CallEvent = z.union([
   z.object({
@@ -286,10 +288,9 @@ export const ChatCompletionMessageToolCall = z.object({
 export type ChatCompletionMessageToolCallType = z.infer<
   typeof ChatCompletionMessageToolCall
 >;
-export const ChatCompletionMessageReasoning = z.object({
-  id: z.string().optional(),
-  content: z.string().optional(),
-});
+export const ChatCompletionMessageReasoning = z
+  .object({ id: z.string(), content: z.string() })
+  .partial();
 export type ChatCompletionMessageReasoningType = z.infer<
   typeof ChatCompletionMessageReasoning
 >;
@@ -624,41 +625,36 @@ export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
 export const ModelParams = z.union([
   z
     .object({
-      use_cache: z.boolean().optional(),
-      reasoning_enabled: z.boolean().optional(),
-      reasoning_budget: z.number().optional(),
-      temperature: z.number().optional(),
-      top_p: z.number().optional(),
-      max_tokens: z.number().optional(),
-      max_completion_tokens: z.number().optional(),
-      frequency_penalty: z.number().optional(),
-      presence_penalty: z.number().optional(),
-      response_format: ResponseFormatNullish.optional(),
-      tool_choice: z
-        .union([
-          z.literal("auto"),
-          z.literal("none"),
-          z.literal("required"),
-          z.object({
-            type: z.literal("function"),
-            function: z.object({ name: z.string() }),
-          }),
-        ])
-        .optional(),
-      function_call: z
-        .union([
-          z.literal("auto"),
-          z.literal("none"),
-          z.object({ name: z.string() }),
-        ])
-        .optional(),
-      n: z.number().optional(),
-      stop: z.array(z.string()).optional(),
-      reasoning_effort: z
-        .enum(["none", "minimal", "low", "medium", "high"])
-        .optional(),
-      verbosity: z.enum(["low", "medium", "high"]).optional(),
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+      temperature: z.number(),
+      top_p: z.number(),
+      max_tokens: z.number(),
+      max_completion_tokens: z.number(),
+      frequency_penalty: z.number(),
+      presence_penalty: z.number(),
+      response_format: ResponseFormatNullish,
+      tool_choice: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.literal("required"),
+        z.object({
+          type: z.literal("function"),
+          function: z.object({ name: z.string() }),
+        }),
+      ]),
+      function_call: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.object({ name: z.string() }),
+      ]),
+      n: z.number(),
+      stop: z.array(z.string()),
+      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
+      verbosity: z.enum(["low", "medium", "high"]),
     })
+    .partial()
     .passthrough(),
   z
     .object({
@@ -706,11 +702,9 @@ export const ModelParams = z.union([
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
-  z.object({
-    model: z.string().optional(),
-    params: ModelParams.optional(),
-    position: z.string().optional(),
-  }),
+  z
+    .object({ model: z.string(), params: ModelParams, position: z.string() })
+    .partial(),
   z.null(),
 ]);
 export type PromptOptionsNullishType = z.infer<typeof PromptOptionsNullish>;

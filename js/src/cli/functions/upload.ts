@@ -22,7 +22,6 @@ import { z } from "zod";
 import { capitalize } from "../../../util/index";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
-import { customZodToJsonSchema as zodToJsonSchema } from "../../../util/custom_zod_to_json_schema";
 import pluralize from "pluralize";
 import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
 
@@ -107,9 +106,9 @@ export async function uploadHandleBundles({
             fn.parameters || fn.returns
               ? {
                   parameters: fn.parameters
-                    ? zodToJsonSchema(fn.parameters)
+                    ? fn.parameters.toJSONSchema()
                     : undefined,
-                  returns: fn.returns ? zodToJsonSchema(fn.returns) : undefined,
+                  returns: fn.returns ? fn.returns.toJSONSchema() : undefined,
                 }
               : undefined,
           if_exists: fn.ifExists,

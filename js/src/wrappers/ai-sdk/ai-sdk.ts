@@ -6,17 +6,6 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
-import zodToJsonSchemaFallback from "zod-to-json-schema";
-
-// Helper to convert Zod schema to JSON schema, using native .json() if available (Zod v4+)
-function zodToJsonSchema(schema: any): any {
-  if (typeof schema.json === "function") {
-    // Zod v4+ native JSON support
-    return schema.json();
-  }
-  // Fallback to zod-to-json-schema for older versions
-  return zodToJsonSchemaFallback(schema);
-}
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
@@ -1039,7 +1028,7 @@ const isZodSchema = (value: any): boolean => {
  */
 const serializeZodSchema = (schema: any): any => {
   try {
-    return zodToJsonSchema(schema);
+    return schema.toJSONSchema();
   } catch {
     // If conversion fails, return a placeholder
     return {

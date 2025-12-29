@@ -45,17 +45,6 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import zodToJsonSchemaFallback from "zod-to-json-schema";
-
-// Helper to convert Zod schema to JSON schema, using native .json() if available (Zod v4+)
-function zodToJsonSchema(schema: any): any {
-  if (typeof schema.json === "function") {
-    // Zod v4+ native JSON support
-    return schema.json();
-  }
-  // Fallback to zod-to-json-schema for older versions
-  return zodToJsonSchemaFallback(schema);
-}
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -422,7 +411,7 @@ function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schema = zodToJsonSchema(value as any);
+        const schema = (value as any).toJSONSchema();
         return [
           name,
           {
