@@ -244,6 +244,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  * @param options.projectName The project name containing the function.
  * @param options.slug The slug of the function to invoke.
  * @param options.version Optional version of the function to use. Defaults to latest.
+ * @param options.state Optional Braintrust state to use.
  * @returns A function that can be used as a task or scorer in Eval().
  */
 export function initFunction({
