@@ -1,10 +1,7 @@
 import {
   FunctionId as functionIdSchema,
-  InvokeFunction as InvokeFunctionRequestSchema,
   type InvokeFunctionType as InvokeFunctionRequest,
-  ChatCompletionMessageParam as MessageSchema,
   type ChatCompletionMessageParamType as Message,
-  StreamingMode as StreamingModeSchema,
   type StreamingModeType as StreamingMode,
 } from "../generated_types";
 import {
@@ -37,6 +34,11 @@ export interface InvokeFunctionArgs<
    */
   projectName?: string;
   /**
+   * The ID of the project to use for execution context (API keys, project defaults, etc.).
+   * This is not the project the function belongs to, but the project context for the invocation.
+   */
+  projectId?: string;
+  /**
    * The slug of the function to invoke.
    */
   slug?: string;
@@ -68,6 +70,12 @@ export interface InvokeFunctionArgs<
    * Additional OpenAI-style messages to add to the prompt (only works for llm functions).
    */
   messages?: Message[];
+
+  /**
+   * Context for functions that operate on spans/traces (e.g., facets). Should contain
+   * `object_type`, `object_id`, and `scope` fields.
+   */
+  context?: InvokeFunctionRequest["context"];
 
   /**
    * Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
@@ -144,6 +152,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     fetch,
     input,
     messages,
+    context,
     parent: parentArg,
     metadata,
     tags,
@@ -152,6 +161,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     mode,
     schema,
     strict,
+    projectId,
     ...functionIdArgs
   } = args;
 
@@ -189,6 +199,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     ...functionId.data,
     input,
     messages,
+    context,
     parent,
     metadata,
     tags,
@@ -197,10 +208,18 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     strict,
   };
 
+  const headers: Record<string, string> = {
+    Accept: stream ? "text/event-stream" : "application/json",
+  };
+  if (projectId) {
+    headers["x-bt-project-id"] = projectId;
+  }
+  if (orgName) {
+    headers["x-bt-org-name"] = orgName;
+  }
+
   const resp = await state.proxyConn().post(`function/invoke`, request, {
-    headers: {
-      Accept: stream ? "text/event-stream" : "application/json",
-    },
+    headers,
   });
 
   if (stream) {

@@ -19,7 +19,7 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../../logger";
-import { wrapAISDK, omit } from "./ai-sdk";
+import { wrapAISDK, omit, extractTokenMetrics } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -1208,6 +1208,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.end).toBeLessThanOrEqual(end);
   });
 
+  // TODO: Add test for ToolLoopAgent with Output.object() schema serialization
+  // Currently the output field is not properly serialized - it shows as output: {}
+  // because the responseFormat is a Promise that needs to be awaited.
+  // Once processInputAttachments is made async and properly handles the Promise,
+  // we should verify that the schema is serialized correctly in the logs.
+
   test("ai sdk multi-round tool use with metrics", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -1481,6 +1487,90 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
   });
 
+  test("ai sdk async generator tool execution", async () => {
+    // Test for GitHub issue #1134: async generator tools should work correctly
+    // AI SDK v5 supports tools with async generator execute functions that yield
+    // intermediate status updates
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Track status updates - use a fresh array each time to handle test retries
+    const statusUpdates: string[] = [];
+
+    const streamingTool = ai.tool({
+      description: "A tool that streams status updates",
+      inputSchema: z.object({
+        name: z.string().describe("The name to greet"),
+      }),
+      execute: async function* (args: { name: string }) {
+        statusUpdates.push("starting");
+        yield { status: "starting", message: "Preparing greeting..." };
+
+        statusUpdates.push("processing");
+        yield { status: "processing", message: `Looking up ${args.name}...` };
+
+        statusUpdates.push("done");
+        yield { status: "done", greeting: `Hello, ${args.name}!` };
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      tools: {
+        greeting: streamingTool,
+      },
+      toolChoice: "required",
+      prompt: "Please use the greeting tool to greet someone named World",
+      stopWhen: ai.stepCountIs(1),
+    });
+
+    assert.ok(result);
+
+    // Verify that the async generator was actually iterated (exactly once with 3 yields)
+    expect(statusUpdates).toEqual(["starting", "processing", "done"]);
+
+    const spans = await backgroundLogger.drain();
+
+    // Find the tool execution span
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpan = spans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (span: any) =>
+        span.span_attributes?.type === "tool" &&
+        span.span_attributes?.name === "greeting",
+    );
+
+    expect(toolSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpanTyped = toolSpan as any;
+
+    // Verify the tool span has the correct structure
+    expect(toolSpanTyped).toMatchObject({
+      span_attributes: {
+        type: "tool",
+        name: "greeting",
+      },
+    });
+
+    // Verify input is captured
+    expect(toolSpanTyped.input).toBeDefined();
+    const inputData = Array.isArray(toolSpanTyped.input)
+      ? toolSpanTyped.input[0]
+      : toolSpanTyped.input;
+    expect(inputData).toMatchObject({
+      name: "World",
+    });
+
+    // Verify output is captured (should be the final yielded value, not {})
+    expect(toolSpanTyped.output).toBeDefined();
+    expect(toolSpanTyped.output).not.toEqual({});
+    expect(toolSpanTyped.output).toMatchObject({
+      status: "done",
+      greeting: "Hello, World!",
+    });
+  });
+
   test("ai sdk string model ID resolution with per-step spans", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -1724,9 +1814,11 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
 
-    // Verify metrics
+    // Verify metrics including time_to_first_token
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.time_to_first_token).toBeGreaterThan(0);
+    expect(typeof doStreamSpan.metrics.time_to_first_token).toBe("number");
   });
 
   test("model/provider separation from gateway-style model string", async () => {
@@ -1851,3 +1943,110 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
     });
   },
 );
+
+describe("extractTokenMetrics", () => {
+  test("handles null values in usage without including them in metrics", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: null,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // null should not be included - it should be undefined or not present
+    expect(result.prompt_cached_tokens).toBeUndefined();
+  });
+
+  test("preserves zero values in usage", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: 0,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // Zero should be preserved, not treated as falsy
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("all metric values are numbers or undefined", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedInputTokens: null,
+        reasoningTokens: null,
+        completionAudioTokens: null,
+      },
+    });
+
+    // Every value should be a number or not present (undefined)
+    for (const [key, value] of Object.entries(result)) {
+      expect(typeof value === "number" || value === undefined).toBe(true);
+    }
+  });
+
+  test("handles nested usage structure from OpenAI Responses API (gpt-5 models)", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          cacheRead: 0,
+          noCache: 25,
+          total: 25,
+        },
+        outputTokens: {
+          reasoning: 768,
+          text: 22,
+          total: 790,
+        },
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(790);
+    expect(result.reasoning_tokens).toBe(768);
+    expect(result.completion_reasoning_tokens).toBe(768);
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("handles mixed flat and nested usage structures", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          total: 100,
+          cacheRead: 10,
+        },
+        outputTokens: 50,
+        totalTokens: 150,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(150);
+    expect(result.prompt_cached_tokens).toBe(10);
+  });
+
+  test("handles totalUsage field from Agent results", () => {
+    const result = extractTokenMetrics({
+      totalUsage: {
+        inputTokens: 25,
+        outputTokens: 50,
+        totalTokens: 75,
+        reasoningTokens: 20,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(75);
+    expect(result.reasoning_tokens).toBe(20);
+    expect(result.completion_reasoning_tokens).toBe(20);
+  });
+});

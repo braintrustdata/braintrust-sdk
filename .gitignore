@@ -17,3 +17,4 @@ dist
 **/.claude/settings.local.json
 CLAUDE.local.md
 .zed
+tsconfig.tsbuildinfo
