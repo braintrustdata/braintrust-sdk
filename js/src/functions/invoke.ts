@@ -250,13 +250,16 @@ export function initFunction({
   projectName,
   slug,
   version,
+  state,
 }: {
   projectName: string;
   slug: string;
   version?: string;
+  state?: BraintrustState;
 }) {
   // Disable span cache since remote function spans won't be in the local cache
-  _internalGetGlobalState()?.spanCache?.disable();
+  const s = state ?? _internalGetGlobalState();
+  s?.spanCache?.disable();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
