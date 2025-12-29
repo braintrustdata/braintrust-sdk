@@ -21,6 +21,7 @@ interface BaseFnOpts {
   description: string;
   ifExists: IfExists;
   metadata?: Record<string, unknown>;
+  environment?: string;
 }
 
 export type ToolOpts<
