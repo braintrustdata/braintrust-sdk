@@ -24,6 +24,7 @@ import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
 import pluralize from "pluralize";
 import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
+import { zodToJsonSchema } from "../../../util/zod-compat";
 
 export type EvaluatorMap = Record<
   string,
@@ -106,9 +107,9 @@ export async function uploadHandleBundles({
             fn.parameters || fn.returns
               ? {
                   parameters: fn.parameters
-                    ? fn.parameters.toJSONSchema()
+                    ? zodToJsonSchema(fn.parameters)
                     : undefined,
-                  returns: fn.returns ? fn.returns.toJSONSchema() : undefined,
+                  returns: fn.returns ? zodToJsonSchema(fn.returns) : undefined,
                 }
               : undefined,
           if_exists: fn.ifExists,

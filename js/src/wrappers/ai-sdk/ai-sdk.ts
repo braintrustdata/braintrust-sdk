@@ -6,6 +6,7 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
+import { safeZodToJsonSchema } from "../../../util/zod-compat";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
@@ -1025,17 +1026,10 @@ const isZodSchema = (value: any): boolean => {
 /**
  * Converts a Zod schema to JSON Schema for serialization
  * This prevents errors when logging tools with Zod schemas
+ * Supports both Zod v3 and v4
  */
 const serializeZodSchema = (schema: any): any => {
-  try {
-    return schema.toJSONSchema();
-  } catch {
-    // If conversion fails, return a placeholder
-    return {
-      type: "object",
-      description: "Zod schema (conversion failed)",
-    };
-  }
+  return safeZodToJsonSchema(schema);
 };
 
 /**

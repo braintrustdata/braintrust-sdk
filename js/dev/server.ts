@@ -45,6 +45,7 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
+import { zodToJsonSchema } from "../util/zod-compat";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -411,7 +412,7 @@ function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schema = (value as any).toJSONSchema();
+        const schema = zodToJsonSchema(value as any);
         return [
           name,
           {

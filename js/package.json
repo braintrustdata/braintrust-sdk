@@ -136,7 +136,8 @@
     "simple-git": "^3.21.0",
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
     "zod": "^3 || ^4"
