@@ -10,4 +10,4 @@ _.file = ".env"
 [tools]
 ruff = "0.12.7"
 uv = "latest"
-pnpm = "9.13.2"
+pnpm = "10.26.2"
