@@ -954,7 +954,7 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
-        const state = evaluator.state;
+        const state = evaluator.state ?? _internalGetGlobalState();
         const ensureSpansFlushed = async () => {
           // Flush native Braintrust spans
           if (experiment) {
@@ -970,6 +970,7 @@ async function runEvaluatorInternal(
             await state.flushOtel();
           }
         };
+        console.log("state", state);
 
         const trace = state
           ? new Trace({
