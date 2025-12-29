@@ -716,6 +716,8 @@ class HTTPConnection:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
     def get_json(self, object_type: str, args: Mapping[str, Any] | None = None, retries: int = 0) -> Mapping[str, Any]:
+        # FIXME[matt]: the retry logic seems to be unused and could be n*2 because of the the retry logic
+        # in the RetryRequestExceptionsAdapter. We should probably remove this.
         tries = retries + 1
         for i in range(tries):
             resp = self.get(f"/{object_type}", params=args)
