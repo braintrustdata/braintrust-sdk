@@ -970,7 +970,6 @@ async function runEvaluatorInternal(
             await state.flushOtel();
           }
         };
-        console.log("state", state);
 
         const trace = state
           ? new Trace({
