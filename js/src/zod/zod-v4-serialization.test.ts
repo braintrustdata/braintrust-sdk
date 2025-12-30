@@ -19,7 +19,7 @@ function getInstalledZodVersion(): 3 | 4 {
 
 describe("makeEvalParametersSchema with Zod v4", () => {
   function addDraft07Schema<T extends object>(obj: T): T & { $schema: string } {
-    return { ...obj, $schema: "http://json-schema.org/draft-07/schema#" };
+    return { ...obj, $schema: "https://json-schema.org/draft/2020-12/schema" };
   }
 
   beforeEach(() => {
