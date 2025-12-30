@@ -49,6 +49,7 @@ import {
   getDefaultValue,
   getDescription,
   zodToJsonSchema,
+  zodToJsonSchemaObject,
 } from "../src/zod/utils";
 import { secureHeapUsed } from "crypto";
 export interface DevServerOpts {
@@ -417,7 +418,7 @@ export function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as any);
+        const schemaObj = zodToJsonSchemaObject(value as any);
         return [name, schemaObj];
       }
     }),
