@@ -533,22 +533,10 @@ class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     id: str
 
 
-class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
     type: Literal['slug']
     project_id: str
     slug: str
-
-
-ExtendedSavedFunctionId: TypeAlias = Union[
-    ExtendedSavedFunctionIdExtendedSavedFunctionId,
-    ExtendedSavedFunctionIdExtendedSavedFunctionId1,
-    ExtendedSavedFunctionIdExtendedSavedFunctionId2,
-]
 
 
 class ExternalAttachmentReference(TypedDict):
@@ -575,41 +563,12 @@ class PreprocessorPreprocessor(TypedDict):
     id: str
 
 
-class PreprocessorPreprocessor1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class PreprocessorPreprocessor2(TypedDict):
     pass
 
 
 class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
     pass
-
-
-class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
-    pass
-
-
-Preprocessor: TypeAlias = Union[PreprocessorPreprocessor3, PreprocessorPreprocessor4]
-
-
-class FacetData(TypedDict):
-    type: Literal['facet']
-    preprocessor: NotRequired[Optional[Preprocessor]]
-    prompt: str
-    """
-    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
-    """
-    model: NotRequired[Optional[str]]
-    """
-    The model to use for facet extraction
-    """
-    no_match_pattern: NotRequired[Optional[str]]
-    """
-    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
-    """
 
 
 class FunctionOrigin(TypedDict):
@@ -664,15 +623,6 @@ class FunctionDataFunctionData2(TypedDict):
     parameters: Mapping[str, Any]
 
 
-class FunctionDataFunctionData3(TypedDict):
-    type: Literal['global']
-    name: str
-    config: NotRequired[Optional[Mapping[str, Any]]]
-    """
-    Configuration options to pass to the global function (e.g., for preprocessor customization)
-    """
-
-
 FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
 
 
@@ -699,13 +649,6 @@ class FunctionIdFunctionId1(TypedDict):
     version: NotRequired[Optional[str]]
     """
     The version of the function
-    """
-
-
-class FunctionIdFunctionId2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
 
 
@@ -1065,13 +1008,6 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
 
 
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-
-
 class InvokeFunctionInvokeFunction3(TypedDict):
     prompt_session_id: str
     """
@@ -1238,6 +1174,12 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[Optional[float]]
 
 
+NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+"""
+The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
+"""
+
+
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -1246,6 +1188,7 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
 
 
 NullableSavedFunctionId: TypeAlias = Optional[
@@ -1437,6 +1380,51 @@ class ProjectAutomationConfig1(TypedDict):
     batch_size: NotRequired[Optional[float]]
     """
     The number of rows to export in each batch
+    """
+
+
+class ProjectAutomationConfig3Action(TypedDict):
+    type: Literal['webhook']
+    """
+    The type of action to take
+    """
+    url: str
+    """
+    The webhook URL to send the request to
+    """
+
+
+class ProjectAutomationConfig3Action1(TypedDict):
+    type: Literal['slack']
+    """
+    The type of action to take
+    """
+    workspace_id: str
+    """
+    The Slack workspace ID to post to
+    """
+    channel: str
+    """
+    The Slack channel ID to post to
+    """
+    message_template: NotRequired[Optional[str]]
+    """
+    Custom message template for the alert
+    """
+
+
+class ProjectAutomationConfig3(TypedDict):
+    event_type: Literal['environment_update']
+    """
+    The type of automation.
+    """
+    environment_filter: NotRequired[Optional[Sequence[str]]]
+    """
+    Optional list of environment slugs to filter by
+    """
+    action: Union[ProjectAutomationConfig3Action, ProjectAutomationConfig3Action1]
+    """
+    The action to take when the automation rule is triggered
     """
 
 
@@ -1841,6 +1829,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
 
 
 class TaskTask3(TypedDict):
@@ -1956,6 +1945,7 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
 
 
 SavedFunctionId: TypeAlias = Union[SavedFunctionIdSavedFunctionId, SavedFunctionIdSavedFunctionId1]
@@ -2069,7 +2059,7 @@ class SSEProgressEventData(TypedDict):
     data: str
 
 
-StreamingMode: TypeAlias = Literal['auto', 'parallel']
+StreamingMode: TypeAlias = Literal['auto', 'parallel', 'json', 'text']
 """
 The mode format of the returned value (defaults to 'auto')
 """
@@ -2475,6 +2465,75 @@ class Experiment(TypedDict):
     """
 
 
+class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
+
+
+ExtendedSavedFunctionId: TypeAlias = Union[
+    ExtendedSavedFunctionIdExtendedSavedFunctionId,
+    ExtendedSavedFunctionIdExtendedSavedFunctionId1,
+    ExtendedSavedFunctionIdExtendedSavedFunctionId2,
+]
+
+
+class PreprocessorPreprocessor1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
+
+
+class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+    pass
+
+
+Preprocessor: TypeAlias = Union[PreprocessorPreprocessor3, PreprocessorPreprocessor4]
+
+
+class FacetData(TypedDict):
+    type: Literal['facet']
+    preprocessor: NotRequired[Optional[Preprocessor]]
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[Optional[str]]
+    """
+    The model to use for facet extraction
+    """
+    no_match_pattern: NotRequired[Optional[str]]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
+    """
+
+
+class FunctionDataFunctionData3(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
+    config: NotRequired[Optional[Mapping[str, Any]]]
+    """
+    Configuration options to pass to the global function (e.g., for preprocessor customization)
+    """
+
+
+class FunctionIdFunctionId2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
+
+
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[Optional[NullableFunctionTypeEnum]]
+
+
 InvokeScope: TypeAlias = Union[SpanScope, TraceScope]
 """
 The scope at which to operate (span or trace)
@@ -2554,6 +2613,10 @@ class Project(TypedDict):
     """
     Name of the project
     """
+    description: NotRequired[Optional[str]]
+    """
+    Textual description of the project
+    """
     created: NotRequired[Optional[str]]
     """
     Date of project creation
@@ -2606,7 +2669,9 @@ class ProjectAutomation(TypedDict):
     """
     Textual description of the project automation
     """
-    config: Union[ProjectAutomationConfig, ProjectAutomationConfig1, ProjectAutomationConfig2]
+    config: Union[
+        ProjectAutomationConfig, ProjectAutomationConfig1, ProjectAutomationConfig2, ProjectAutomationConfig3
+    ]
     """
     The configuration for the automation rule
     """
@@ -2997,6 +3062,7 @@ class PromptData(TypedDict):
     options: NotRequired[Optional[PromptOptionsNullish]]
     parser: NotRequired[Optional[PromptParserNullish]]
     tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    template_format: NotRequired[Optional[Literal['mustache', 'nunjucks', 'none']]]
     mcp: NotRequired[Optional[Mapping[str, Any]]]
     origin: NotRequired[Optional[PromptDataOrigin]]
 
@@ -3006,6 +3072,7 @@ class PromptDataNullish(TypedDict):
     options: NotRequired[Optional[PromptOptionsNullish]]
     parser: NotRequired[Optional[PromptParserNullish]]
     tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    template_format: NotRequired[Optional[Literal['mustache', 'nunjucks', 'none']]]
     mcp: NotRequired[Optional[Mapping[str, Any]]]
     origin: NotRequired[Optional[PromptDataNullishOrigin]]
 
