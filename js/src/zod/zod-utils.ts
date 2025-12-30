@@ -1,4 +1,5 @@
 import { zodToJsonSchema as zodToJsonSchemaV3 } from "zod-to-json-schema";
+import { z } from "zod";
 
 export function zodToJsonSchema(schema: any) {
   if (schema && typeof (schema as any).toJSONSchema === "function") {
@@ -76,30 +77,21 @@ export function getDefaultValue(schema: unknown): unknown {
   return undefined;
 }
 
-// Utility to get a ZodUnknown schema compatible with both Zod v3 and v4
+// Utility to get a ZodUnknown schema
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodUnknown(): any {
-  if (typeof z4.unknown === "function") {
-    return z4.unknown() as any;
-  }
-  if (typeof z3.unknown === "function") {
-    return z3.unknown() as any;
-  }
-  throw new Error(
-    "getZodUnknown: Could not find a compatible unknown schema for Zod v3 or v4",
-  );
+  return z.unknown() as any;
 }
 
 // Utility to get a ZodRecord schema compatible with both Zod v3 and v4
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodRecord(valueSchema: any): any {
-  if (typeof z4.record === "function") {
-    return z4.record(z4.string(), valueSchema as any) as any;
+  // Zod v4 requires key type as first argument, v3 makes it optional
+  // Try v3 style first (single argument)
+  try {
+    return z.record(valueSchema as any) as any;
+  } catch {
+    // Fall back to v4 style (key type + value type)
+    return z.record(z.string(), valueSchema as any) as any;
   }
-  if (typeof z3.record === "function") {
-    return z3.record(valueSchema as any) as any;
-  }
-  throw new Error(
-    "getZodRecord: Could not find a compatible record schema for Zod v3 or v4",
-  );
 }
