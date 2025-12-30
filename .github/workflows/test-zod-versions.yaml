@@ -35,19 +35,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup Zod v3 (already installed)
-        if: matrix.zod-version == '3.25.34'
+      - name: Setup Zod version
         working-directory: ./js
         run: |
           pnpm add -D zod@${{ matrix.zod-version }}
-      - name: Setup Zod v4 (install v4 without modifying lockfile)
+
+      - name: Build with types
+        if: matrix.zod-version == '3.25.34'
+        run: pnpm run build
+
+      - name: Build without types
         if: matrix.zod-version == '4.2.1'
         working-directory: ./js
-        run: |
-          echo "Installing Zod v4 (overriding v3)"
-          pnpm add -D zod@${{ matrix.zod-version }}
-      - name: Install dependencies
-        run: pnpm run build
+        run: pnpm tsup --no-dts
 
       - name: Run type checking
         if: matrix.zod-version == '3.25.34'
