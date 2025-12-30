@@ -22,13 +22,14 @@ export function zodToJsonSchema(schema: z4.ZodType | z3.ZodType) {
 }
 
 export function zodToJsonSchemaObject(schema: z4.ZodType | z3.ZodType) {
-  if (isZodV4(schema)) {
-    return z4.toJSONSchema(schema as z4.ZodType, {
-      target: "draft-7",
-    });
-  }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return zodToJsonSchemaV3(schema as z3.ZodType);
+  const schemaObj = zodToJsonSchema(schema);
+
+  return {
+    type: "data",
+    schema: schemaObj,
+    default: getDefaultValue(schema),
+    description: getDescription(schema),
+  };
 }
 
 export function getDescription(schema: unknown): string | undefined {

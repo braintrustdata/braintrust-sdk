@@ -50,6 +50,7 @@ import {
   getDescription,
   zodToJsonSchema,
 } from "../src/zod/utils";
+import { secureHeapUsed } from "crypto";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -417,25 +418,7 @@ export function makeEvalParametersSchema(
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const schemaObj = zodToJsonSchema(value as any);
-        // zod-to-json-compat returns an object with a 'definitions' and 'schema' or 'properties' field depending on version
-        // Try to extract the main schema definition for compatibility
-        let schema: unknown = schemaObj;
-        if (schemaObj && typeof schemaObj === "object") {
-          if ("schema" in schemaObj) {
-            schema = (schemaObj as any).schema;
-          } else if ("$schema" in schemaObj || "type" in schemaObj) {
-            schema = schemaObj;
-          }
-        }
-        return [
-          name,
-          {
-            type: "data",
-            schema,
-            default: getDefaultValue(value),
-            description: getDescription(value),
-          },
-        ];
+        return [name, schemaObj];
       }
     }),
   );
