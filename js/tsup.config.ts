@@ -5,7 +5,7 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: ["zod", "zod/v3", "zod/v4"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -19,7 +19,7 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: ["zod", "zod/v3", "zod/v4"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -33,7 +33,7 @@ export default defineConfig([
     entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
     outDir: "dist",
-    external: ["esbuild", "prettier", "typescript", "zod"],
+    external: ["esbuild", "prettier", "typescript", "zod", "zod/v3", "zod/v4"],
     // CLI doesn't need DTS
     dts: false,
     clean: false,
@@ -42,7 +42,7 @@ export default defineConfig([
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",
-    external: ["esbuild", "prettier", "typescript", "zod"],
+    external: ["esbuild", "prettier", "typescript", "zod", "zod/v3", "zod/v4"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -56,7 +56,7 @@ export default defineConfig([
     entry: ["util/index.ts"],
     format: ["cjs", "esm"],
     outDir: "util/dist",
-    external: ["esbuild", "prettier", "typescript", "zod"],
+    external: ["esbuild", "prettier", "typescript", "zod", "zod/v3", "zod/v4"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
