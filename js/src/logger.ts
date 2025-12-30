@@ -1275,10 +1275,7 @@ export class Attachment extends BaseAttachment {
             signedUrl: z.string().url(),
             headers: z.record(z.string()),
           })
-          .parse(await metadataResponse.json()) as {
-          signedUrl: string;
-          headers: Record<string, string>;
-        });
+          .parse(await metadataResponse.json()));
       } catch (error) {
         if (error instanceof ZodError) {
           const errorStr = JSON.stringify(error.flatten());
