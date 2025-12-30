@@ -1,0 +1,81 @@
+name: Test sdk with multiple zod versions
+on:
+  pull_request:
+    paths:
+      - "**"
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-zod-versions:
+    name: Test with zod ${{ matrix.zod-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        zod-version: ["3.25.34", "4.2.1"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Zod v3 (already installed)
+        if: matrix.zod-version == '3.25.34'
+        working-directory: ./js
+        run: |
+          pnpm add -D zod@${{ matrix.zod-version }}
+      - name: Setup Zod v4 (install v4 without modifying lockfile)
+        if: matrix.zod-version == '4.2.1'
+        working-directory: ./js
+        run: |
+          echo "Installing Zod v4 (overriding v3)"
+          pnpm add -D zod@${{ matrix.zod-version }}
+      - name: Run type checking
+        if: matrix.zod-version == '3.25.34'
+        working-directory: ./js
+        run: pnpm tsc --noEmit
+
+      - name: Run zod v3 tests
+        if: matrix.zod-version == '3.25.34'
+        working-directory: ./js
+        run: |
+          pnpm test:zod-v3
+          pnpm test
+
+      - name: Run zod v4 tests
+        if: matrix.zod-version == '4.2.1'
+        working-directory: ./js
+        run: |
+          pnpm test:zod-v4
+          pnpm test
+
+  test-summary:
+    name: Test Summary
+    needs: test-zod-versions
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.test-zod-versions.result }}" != "success" ]; then
+            echo "❌ Tests failed with one or more Zod versions"
+            exit 1
+          else
+            echo "✅ All tests passed with both Zod 3.x and 4.x"
+          fi

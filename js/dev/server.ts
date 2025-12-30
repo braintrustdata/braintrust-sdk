@@ -45,7 +45,7 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import zodToJsonSchema from "zod-to-json-schema";
+import { zodToJsonSchema } from "../src/zod/zod-utils";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -389,7 +389,7 @@ function makeScorer(
   return ret;
 }
 
-function makeEvalParametersSchema(
+export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
   return Object.fromEntries(
@@ -412,7 +412,17 @@ function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schema = zodToJsonSchema(value as any);
+        const schemaObj = zodToJsonSchema(value as any);
+        // zod-to-json-compat returns an object with a 'definitions' and 'schema' or 'properties' field depending on version
+        // Try to extract the main schema definition for compatibility
+        let schema: unknown = schemaObj;
+        if (schemaObj && typeof schemaObj === "object") {
+          if ("schema" in schemaObj) {
+            schema = (schemaObj as any).schema;
+          } else if ("$schema" in schemaObj || "type" in schemaObj) {
+            schema = schemaObj;
+          }
+        }
         return [
           name,
           {

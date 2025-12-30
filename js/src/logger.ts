@@ -79,7 +79,7 @@ import {
 } from "./template/renderer";
 import { renderNunjucksString } from "./template/nunjucks-env";
 
-import { z, ZodError } from "zod/v3";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,

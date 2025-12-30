@@ -56,7 +56,7 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
-    "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel/**/*.test.ts\" --exclude \"smoke/**/*.test.ts\"",
+    "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel/**/*.test.ts\" --exclude \"smoke/**/*.test.ts\" --exclude \"src/zod/**/*.test.ts\"",
     "test:api-compat": "vitest run src/api-compatibility.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
@@ -109,7 +109,8 @@
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "zod": "^3.25.34 || ^4.0"
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",
@@ -136,10 +137,9 @@
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
     "uuid": "^9.0.1",
-    "zod": "^3.25.34",
-    "zod-to-json-schema": "^3.22.5"
+    "zod-to-json-schema": "^3.25.0"
   },
   "peerDependencies": {
-    "zod": "^3.25.34"
+    "zod": "^3.25.34 || ^4.0"
   }
 }
