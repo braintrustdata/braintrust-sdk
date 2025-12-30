@@ -45,7 +45,7 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import { zodToJsonSchemaDataObject } from "../src/zod/utils";
+import { zodToJsonSchema } from "../src/zod/utils";
 import { secureHeapUsed } from "crypto";
 export interface DevServerOpts {
   host: string;
@@ -413,8 +413,16 @@ export function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchemaDataObject(value as any);
-        return [name, schemaObj];
+        const schemaObj = zodToJsonSchema(value as any);
+        return [
+          name,
+          {
+            type: "data",
+            schema: schemaObj,
+            default: schemaObj.default,
+            description: schemaObj.description,
+          },
+        ];
       }
     }),
   );
