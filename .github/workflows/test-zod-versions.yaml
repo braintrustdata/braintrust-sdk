@@ -41,16 +41,9 @@ jobs:
           pnpm add -D zod@${{ matrix.zod-version }}
 
       - name: Build with types
-        if: matrix.zod-version == '3.25.34'
         run: pnpm run build
 
-      - name: Build without types
-        if: matrix.zod-version == '4.2.1'
-        working-directory: ./js
-        run: pnpm tsup --no-dts
-
       - name: Run type checking
-        if: matrix.zod-version == '3.25.34'
         working-directory: ./js
         run: pnpm tsc --noEmit
 
