@@ -1,9 +1,10 @@
 import { zodToJsonSchema as zodToJsonSchemaV3 } from "zod-to-json-schema";
-import { z } from "zod";
+import * as z3 from "zod/v3";
+import * as z4 from "zod/v4";
 
 export function zodToJsonSchema(schema: any) {
   if (schema && typeof (schema as any).toJSONSchema === "function") {
-    return (schema as any).toJSONSchema(schema as any, {
+    return z4.toJSONSchema(schema as any, {
       target: "draft-7",
     });
   }
