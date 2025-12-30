@@ -1,7 +1,7 @@
 import { _initializeSpanContext } from "./framework";
 import iso from "./isomorph";
 import { slugify } from "../util/string_util";
-import { z } from "zod";
+import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
   IfExists as IfExistsSchema,
