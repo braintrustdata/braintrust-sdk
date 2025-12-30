@@ -21,7 +21,7 @@ export function zodToJsonSchema(schema: z4.ZodType | z3.ZodType) {
   return zodToJsonSchemaV3(schema as z3.ZodType);
 }
 
-export function zodToJsonSchemaObject(schema: z4.ZodType | z3.ZodType) {
+export function zodToJsonSchemaDataObject(schema: z4.ZodType | z3.ZodType) {
   const schemaObj = zodToJsonSchema(schema);
 
   return {
@@ -32,7 +32,7 @@ export function zodToJsonSchemaObject(schema: z4.ZodType | z3.ZodType) {
   };
 }
 
-export function getDescription(schema: unknown): string | undefined {
+function getDescription(schema: unknown): string | undefined {
   if (typeof schema === "object" && schema !== null) {
     // meta()?.description (Zod v4+)
     if ("meta" in schema && typeof (schema as any).meta === "function") {
@@ -68,7 +68,7 @@ export function getDescription(schema: unknown): string | undefined {
   return undefined;
 }
 
-export function getDefaultValue(schema: unknown): unknown {
+function getDefaultValue(schema: unknown): unknown {
   let current = schema;
   while (typeof current === "object" && current !== null && "_def" in current) {
     const def = (current as any)._def;
