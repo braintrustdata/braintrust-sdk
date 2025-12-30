@@ -81,21 +81,28 @@ export function getDefaultValue(schema: unknown): unknown {
 // Utility to get a ZodUnknown schema
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodUnknown(): any {
-  return z.unknown() as any;
+  if (typeof z4.unknown === "function") {
+    return z4.unknown() as any;
+  }
+  if (typeof z3.unknown === "function") {
+    return z3.unknown() as any;
+  }
+  throw new Error(
+    "getZodUnknown: Could not find a compatible unknown schema for Zod v3 or v4",
+  );
 }
 
 // Utility to get a ZodRecord schema compatible with both Zod v3 and v4
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodRecord(valueSchema: any): any {
   // Detect zod version by checking if a test schema has _zod property (v4) or not (v3)
-  const testSchema = z.string();
-  const isZodV4 = "_zod" in testSchema;
-
-  if (isZodV4) {
-    // Zod v4 requires both key and value types
-    return z.record(z.string(), valueSchema as any) as any;
-  } else {
-    // Zod v3 allows single argument
-    return z.record(valueSchema as any) as any;
+  if (typeof z4.record === "function") {
+    return z4.record(z4.string(), valueSchema as any) as any;
   }
+  if (typeof z3.record === "function") {
+    return z3.record(valueSchema as any) as any;
+  }
+  throw new Error(
+    "getZodRecord: Could not find a compatible record schema for Zod v3 or v4",
+  );
 }
