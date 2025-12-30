@@ -3,7 +3,12 @@ import * as z4 from "zod/v4";
 import { zodToJsonSchema as zodToJsonSchemaV3 } from "zod-to-json-schema";
 
 function isZodV4(zodObject: z3.ZodType | z4.ZodType): zodObject is z4.ZodType {
-  return "_zod" in zodObject;
+  return (
+    typeof zodObject === "object" &&
+    zodObject !== null &&
+    "_zod" in zodObject &&
+    (zodObject as any)._zod !== undefined
+  );
 }
 
 export function zodToJsonSchema(schema: z3.ZodType | z4.ZodType) {
@@ -16,48 +21,96 @@ export function zodToJsonSchema(schema: z3.ZodType | z4.ZodType) {
   return zodToJsonSchemaV3(schema as z3.ZodType);
 }
 
-export function getDescription(schema: any): string | undefined {
-  // Try .meta()?.description (Zod v4+)
-  if (typeof schema.meta === "function") {
-    const metaDesc = schema.meta()?.description;
-    if (typeof metaDesc === "string" && metaDesc.trim()) return metaDesc;
-  }
-  // Try .description
-  if (typeof schema.description === "string" && schema.description.trim()) {
-    return schema.description;
-  }
-  // Try ._def.description
-  if (
-    schema._def &&
-    typeof schema._def.description === "string" &&
-    schema._def.description.trim()
-  ) {
-    return schema._def.description;
-  }
-  // Recurse into ._def.innerType
-  if (schema._def && schema._def.innerType) {
-    return getDescription(schema._def.innerType);
+export function getDescription(schema: unknown): string | undefined {
+  if (typeof schema === "object" && schema !== null) {
+    // meta()?.description (Zod v4+)
+    if ("meta" in schema && typeof (schema as any).meta === "function") {
+      const metaDesc = (schema as any).meta()?.description;
+      if (typeof metaDesc === "string" && metaDesc.trim()) return metaDesc;
+    }
+    // .description
+    if (
+      "description" in schema &&
+      typeof (schema as any).description === "string" &&
+      (schema as any).description.trim()
+    ) {
+      return (schema as any).description;
+    }
+    // ._def.description
+    if (
+      "_def" in schema &&
+      (schema as any)._def &&
+      typeof (schema as any)._def.description === "string" &&
+      (schema as any)._def.description.trim()
+    ) {
+      return (schema as any)._def.description;
+    }
+    // recurse ._def.innerType
+    if (
+      "_def" in schema &&
+      (schema as any)._def &&
+      (schema as any)._def.innerType
+    ) {
+      return getDescription((schema as any)._def.innerType);
+    }
   }
   return undefined;
 }
 
 export function getDefaultValue(schema: unknown): unknown {
   let current = schema;
-  while (current?._def) {
-    const dv = current._def.defaultValue;
-    if (typeof dv === "function") {
-      return dv();
+  while (typeof current === "object" && current !== null && "_def" in current) {
+    const def = (current as any)._def;
+    if (def) {
+      const dv = def.defaultValue;
+      if (typeof dv === "function") {
+        return dv();
+      }
+      if (dv !== undefined) {
+        return dv;
+      }
+      if (def.innerType) {
+        current = def.innerType;
+        continue;
+      }
     }
-    if (dv !== undefined) {
-      return dv;
+    break;
+  }
+  if (typeof schema === "object" && schema !== null) {
+    if ("default" in schema && typeof (schema as any).default === "function") {
+      return (schema as any).default();
     }
-    current = current._def.innerType;
-  }
-  if (typeof schema.default === "function") {
-    return schema.default();
-  }
-  if (schema.default !== undefined) {
-    return schema.default;
+    if ("default" in schema && (schema as any).default !== undefined) {
+      return (schema as any).default;
+    }
   }
   return undefined;
+}
+
+// Utility to get a ZodUnknown schema compatible with both Zod v3 and v4
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getZodUnknown(): any {
+  if (typeof z4.unknown === "function") {
+    return z4.unknown() as any;
+  }
+  if (typeof z3.unknown === "function") {
+    return z3.unknown() as any;
+  }
+  throw new Error(
+    "getZodUnknown: Could not find a compatible unknown schema for Zod v3 or v4",
+  );
+}
+
+// Utility to get a ZodRecord schema compatible with both Zod v3 and v4
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getZodRecord(valueSchema: any): any {
+  if (typeof z4.record === "function") {
+    return z4.record(z4.string(), valueSchema as any) as any;
+  }
+  if (typeof z3.record === "function") {
+    return z3.record(valueSchema as any) as any;
+  }
+  throw new Error(
+    "getZodRecord: Could not find a compatible record schema for Zod v3 or v4",
+  );
 }

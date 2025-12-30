@@ -403,8 +403,10 @@ export function makeEvalParametersSchema(
           name,
           {
             type: "prompt",
-            default: getDefaultValue(value),
-            description: getDescription(value),
+            default: value.default
+              ? promptDefinitionToPromptData(value.default)
+              : undefined,
+            description: value.description,
           },
         ];
       } else {
