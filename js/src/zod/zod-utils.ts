@@ -86,12 +86,15 @@ export function getZodUnknown(): any {
 // Utility to get a ZodRecord schema compatible with both Zod v3 and v4
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodRecord(valueSchema: any): any {
-  // Zod v4 requires key type as first argument, v3 makes it optional
-  // Try v3 style first (single argument)
-  try {
-    return z.record(valueSchema as any) as any;
-  } catch {
-    // Fall back to v4 style (key type + value type)
+  // Detect zod version by checking if a test schema has _zod property (v4) or not (v3)
+  const testSchema = z.string();
+  const isZodV4 = "_zod" in testSchema;
+
+  if (isZodV4) {
+    // Zod v4 requires both key and value types
     return z.record(z.string(), valueSchema as any) as any;
+  } else {
+    // Zod v3 allows single argument
+    return z.record(valueSchema as any) as any;
   }
 }
