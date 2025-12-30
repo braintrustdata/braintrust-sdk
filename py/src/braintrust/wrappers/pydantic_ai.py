@@ -2,7 +2,7 @@ import logging
 import sys
 import time
 from contextlib import AbstractAsyncContextManager
-from typing import Any, AsyncGenerator, Dict, Iterable, Optional, TypeVar, Union
+from typing import Any, AsyncGenerator, Dict, Iterable, Optional, Tuple, TypeVar, Union
 
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -745,7 +745,7 @@ def _serialize_model_response(response: Any) -> Any:
     return response_dict
 
 
-def _extract_model_info_from_model_instance(model: Any) -> tuple[Optional[str], Optional[str]]:
+def _extract_model_info_from_model_instance(model: Any) -> Tuple[Optional[str], Optional[str]]:
     """Extract model name and provider from a model instance.
 
     Args:
