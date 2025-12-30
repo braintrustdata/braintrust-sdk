@@ -46,7 +46,6 @@ import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import { zodToJsonSchema } from "../src/zod/utils";
-import { secureHeapUsed } from "crypto";
 export interface DevServerOpts {
   host: string;
   port: number;
