@@ -5,7 +5,6 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Dict, Optional, Union
 
 from .span_identifier_v3 import (
     SpanComponentsV3,
@@ -13,6 +12,7 @@ from .span_identifier_v3 import (
 )
 
 ENCODING_VERSION_NUMBER_V4 = 4
+
 
 def _try_make_hex_trace_id(s):
     """Try to convert hex string to 16-byte binary (for trace IDs)"""
@@ -25,6 +25,7 @@ def _try_make_hex_trace_id(s):
         pass
     return None, False
 
+
 def _try_make_hex_span_id(s):
     """Try to convert hex string to 8-byte binary (for span IDs)"""
     try:
@@ -36,13 +37,16 @@ def _try_make_hex_span_id(s):
         pass
     return None, False
 
+
 INVALID_ENCODING_ERRMSG_V4 = f"SpanComponents string is not properly encoded. This library only supports encoding versions up to {ENCODING_VERSION_NUMBER_V4}. Please make sure the SDK library used to decode the SpanComponents is at least as new as any library used to encode it."
+
 
 class Fields(Enum):
     OBJECT_ID = 1
     ROW_ID = 2
     SPAN_ID = 3  # 8-byte hex
     ROOT_SPAN_ID = 4  # 16-byte hex
+
 
 _FIELDS_ID_TO_NAME = {
     Fields.OBJECT_ID: "object_id",
@@ -57,16 +61,16 @@ class SpanComponentsV4:
     object_type: SpanObjectTypeV3
 
     # Must provide one or the other.
-    object_id: Optional[str] = None
-    compute_object_metadata_args: Optional[Dict] = None
+    object_id: str | None = None
+    compute_object_metadata_args: dict | None = None
 
     # Either all of these must be provided or none.
-    row_id: Optional[str] = None
-    span_id: Optional[str] = None
-    root_span_id: Optional[str] = None
+    row_id: str | None = None
+    span_id: str | None = None
+    root_span_id: str | None = None
 
     # Additional span properties.
-    propagated_event: Optional[Dict] = None
+    propagated_event: dict | None = None
 
     def __post_init__(self):
         # Reuse V3 validation logic
@@ -98,10 +102,12 @@ class SpanComponentsV4:
         )
         json_obj = {k: v for k, v in json_obj.items() if v is not None}
 
-        raw_bytes = bytes([
-            ENCODING_VERSION_NUMBER_V4,
-            self.object_type.value,
-        ])
+        raw_bytes = bytes(
+            [
+                ENCODING_VERSION_NUMBER_V4,
+                self.object_type.value,
+            ]
+        )
 
         hex_entries = []
 
@@ -199,7 +205,7 @@ class SpanComponentsV4:
         except Exception:
             raise Exception(INVALID_ENCODING_ERRMSG_V4)
 
-    def object_id_fields(self) -> Dict[str, str]:
+    def object_id_fields(self) -> dict[str, str]:
         # Reuse V3 logic
         if not self.object_id:
             raise Exception(
@@ -218,7 +224,7 @@ class SpanComponentsV4:
         return self.to_str()
 
     @staticmethod
-    def _from_json_obj(json_obj: Dict) -> "SpanComponentsV4":
+    def _from_json_obj(json_obj: dict) -> "SpanComponentsV4":
         kwargs = {
             **json_obj,
             "object_type": SpanObjectTypeV3(json_obj["object_type"]),
@@ -226,8 +232,7 @@ class SpanComponentsV4:
         return SpanComponentsV4(**kwargs)
 
 
-
-def parse_parent(parent: Union[str, Dict, None]) -> Optional[str]:
+def parse_parent(parent: str | dict | None) -> str | None:
     """Parse a parent object into a string representation using V4 format."""
     # Reuse V3 logic but with V4 components
     if isinstance(parent, str):
@@ -250,17 +255,21 @@ def parse_parent(parent: Union[str, Dict, None]) -> Optional[str]:
 
         row_ids = parent.get("row_ids")
         if row_ids:
-            kwargs.update({
-                "row_id": row_ids.get("id"),
-                "span_id": row_ids.get("span_id"),
-                "root_span_id": row_ids.get("root_span_id"),
-            })
+            kwargs.update(
+                {
+                    "row_id": row_ids.get("id"),
+                    "span_id": row_ids.get("span_id"),
+                    "root_span_id": row_ids.get("root_span_id"),
+                }
+            )
         else:
-            kwargs.update({
-                "row_id": None,
-                "span_id": None,
-                "root_span_id": None,
-            })
+            kwargs.update(
+                {
+                    "row_id": None,
+                    "span_id": None,
+                    "root_span_id": None,
+                }
+            )
 
         if "propagated_event" in parent:
             kwargs["propagated_event"] = parent.get("propagated_event")

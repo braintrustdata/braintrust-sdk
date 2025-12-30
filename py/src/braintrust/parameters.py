@@ -1,6 +1,6 @@
 """Evaluation parameters support for Python SDK."""
 
-from typing import Any, Dict, Optional, TypedDict, Union
+from typing import Any, TypedDict
 
 from typing_extensions import NotRequired
 
@@ -12,17 +12,17 @@ class PromptParameter(TypedDict):
     """A prompt parameter specification."""
 
     type: str  # Literal["prompt"] but using str for flexibility
-    default: NotRequired[Optional[PromptData]]
-    description: NotRequired[Optional[str]]
+    default: NotRequired[PromptData | None]
+    description: NotRequired[str | None]
 
 
 # EvalParameters is a dict where values can be either:
 # - A PromptParameter (dict with type="prompt")
 # - A pydantic model class (typed as Any for now)
-EvalParameters = Dict[str, Union[PromptParameter, Any]]
+EvalParameters = dict[str, PromptParameter | Any]
 
 
-def _pydantic_to_json_schema(model: Any) -> Dict[str, Any]:
+def _pydantic_to_json_schema(model: Any) -> dict[str, Any]:
     """Convert a pydantic model to JSON schema."""
     if hasattr(model, "model_json_schema"):
         # pydantic 2
@@ -35,9 +35,9 @@ def _pydantic_to_json_schema(model: Any) -> Dict[str, Any]:
 
 
 def validate_parameters(
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     parameter_schema: EvalParameters,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Validate parameters against the schema.
 
@@ -120,7 +120,7 @@ def validate_parameters(
     return result
 
 
-def parameters_to_json_schema(parameters: EvalParameters) -> Dict[str, Any]:
+def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
     """
     Convert EvalParameters to JSON schema format for serialization.
 

@@ -3,7 +3,6 @@ import threading
 import time
 
 import pytest
-
 from braintrust.queue import DEFAULT_QUEUE_SIZE, LogQueue
 
 

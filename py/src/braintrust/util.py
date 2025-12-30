@@ -2,8 +2,9 @@ import inspect
 import sys
 import threading
 import urllib.parse
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from typing import Any, Generic, Literal, TypedDict, TypeVar, Union
 
 from requests import HTTPError, Response
 
@@ -29,8 +30,8 @@ def coalesce(*args):
 
 
 def merge_dicts_with_paths(
-    merge_into: Dict[str, Any], merge_from: Mapping[str, Any], path: Tuple[str, ...], merge_paths: Set[Tuple[str]]
-) -> Dict[str, Any]:
+    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str]]
+) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
     merge_paths."""
 
@@ -50,7 +51,7 @@ def merge_dicts_with_paths(
     return merge_into
 
 
-def merge_dicts(merge_into: Dict[str, Any], merge_from: Mapping[str, Any]) -> Dict[str, Any]:
+def merge_dicts(merge_into: dict[str, Any], merge_from: Mapping[str, Any]) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
@@ -92,7 +93,7 @@ class CallerLocation(TypedDict):
     caller_lineno: int
 
 
-def get_caller_location() -> Optional[CallerLocation]:
+def get_caller_location() -> CallerLocation | None:
     frame = inspect.currentframe()
     while frame:
         frame = frame.f_back
@@ -145,7 +146,7 @@ class LazyValue(Generic[T]):
         return self._state.has_succeeded
 
     @property
-    def value(self) -> Optional[T]:
+    def value(self) -> T | None:
         return self._state.value if self._state.has_succeeded == True else None
 
     def get(self) -> T:
@@ -167,7 +168,7 @@ class LazyValue(Generic[T]):
             if self.mutex:
                 self.mutex.release()
 
-    def get_sync(self) -> Tuple[bool, Optional[T]]:
+    def get_sync(self) -> tuple[bool, T | None]:
         """Returns a tuple of (has_succeeded, value) without triggering evaluation."""
         if self._state.has_succeeded:
             # should be fine without the mutex check
@@ -206,7 +207,7 @@ def bt_iscoroutinefunction(f):
     return inspect.iscoroutinefunction(f) or inspect.isasyncgenfunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
 
 
-def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:
+def add_azure_blob_headers(headers: dict[str, str], url: str) -> None:
     # According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
     # there is no way to avoid including this.
     if "blob.core.windows.net" in url:
