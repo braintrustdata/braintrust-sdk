@@ -21,6 +21,16 @@ export function zodToJsonSchema(schema: z4.ZodType | z3.ZodType) {
   return zodToJsonSchemaV3(schema as z3.ZodType);
 }
 
+export function zodToJsonSchemaObject(schema: z4.ZodType | z3.ZodType) {
+  if (isZodV4(schema)) {
+    return z4.toJSONSchema(schema as z4.ZodType, {
+      target: "draft-7",
+    });
+  }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return zodToJsonSchemaV3(schema as z3.ZodType);
+}
+
 export function getDescription(schema: unknown): string | undefined {
   if (typeof schema === "object" && schema !== null) {
     // meta()?.description (Zod v4+)

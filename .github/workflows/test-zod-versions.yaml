@@ -40,26 +40,21 @@ jobs:
         run: |
           pnpm add -D zod@${{ matrix.zod-version }}
 
-      - name: Build with types
-        run: pnpm run build
-
-      - name: Run type checking
-        working-directory: ./js
-        run: pnpm tsc --noEmit
+      - name: Run regular tests
+        shell: bash
+        run: make js-test
 
       - name: Run zod v3 tests
         if: matrix.zod-version == '3.25.34'
         working-directory: ./js
         run: |
           pnpm test:zod-v3
-          pnpm test
 
       - name: Run zod v4 tests
         if: matrix.zod-version == '4.2.1'
         working-directory: ./js
         run: |
           pnpm test:zod-v4
-          pnpm test --exclude src/api-compatibility.test.ts
 
   test-summary:
     name: Test Summary

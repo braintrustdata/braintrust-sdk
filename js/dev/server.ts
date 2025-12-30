@@ -49,7 +49,7 @@ import {
   getDefaultValue,
   getDescription,
   zodToJsonSchema,
-} from "../src/zod/zod-utils";
+} from "../src/zod/utils";
 export interface DevServerOpts {
   host: string;
   port: number;

@@ -6,7 +6,7 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
-import { zodToJsonSchema } from "../../zod/zod-utils";
+import { zodToJsonSchema } from "../../zod/utils";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
