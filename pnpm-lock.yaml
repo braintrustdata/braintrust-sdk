@@ -351,7 +351,7 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.10.5)(msw@2.6.6(@types/node@20.10.5)(typescript@5.4.4))
       zod:
-        specifier: ^3.25.34 || ^4.0
+        specifier: ^3.25.76
         version: 3.25.76
 
   js/src/wrappers/ai-sdk:

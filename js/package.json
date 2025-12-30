@@ -66,6 +66,8 @@
     "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v3": "vitest run src/wrappers/ai-sdk-v3.test.ts",
+    "test:zod-v3": "vitest run src/zod/zod-v3-serialization.test.ts",
+    "test:zod-v4": "vitest run src/zod/zod-v4-serialization.test.ts",
     "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
@@ -110,7 +112,7 @@
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^2.1.9",
-    "zod": "^3.25.34 || ^4.0"
+    "zod": "^3.25.76"
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",

@@ -40,7 +40,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
     };
 
     const result = makeEvalParametersSchema(parameters);
-
+    console.log(result);
     expect(result.instructions).toBeDefined();
     expect(result.instructions.type).toBe("data");
     if (result.instructions.type === "data") {

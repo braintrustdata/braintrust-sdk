@@ -43,9 +43,13 @@ import {
   evalParametersSerializedSchema,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import { zodToJsonSchema } from "../src/zod/zod-utils";
+import {
+  getDefaultValue,
+  getDescription,
+  zodToJsonSchema,
+} from "../src/zod/zod-utils";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -399,10 +403,8 @@ export function makeEvalParametersSchema(
           name,
           {
             type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
+            default: getDefaultValue(value),
+            description: getDescription(value),
           },
         ];
       } else {
@@ -428,8 +430,8 @@ export function makeEvalParametersSchema(
           {
             type: "data",
             schema,
-            default: value.default,
-            description: value.description,
+            default: getDefaultValue(value),
+            description: getDescription(value),
           },
         ];
       }
