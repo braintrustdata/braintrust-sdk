@@ -2,14 +2,23 @@ import { zodToJsonSchema as zodToJsonSchemaV3 } from "zod-to-json-schema";
 import * as z3 from "zod/v3";
 import * as z4 from "zod/v4";
 
-export function zodToJsonSchema(schema: any) {
-  if (schema && typeof (schema as any).toJSONSchema === "function") {
-    return z4.toJSONSchema(schema as any, {
+function isZodV4(zodObject: z3.ZodType | z4.ZodType): zodObject is z4.ZodType {
+  return (
+    typeof zodObject === "object" &&
+    zodObject !== null &&
+    "_zod" in zodObject &&
+    (zodObject as any)._zod !== undefined
+  );
+}
+
+export function zodToJsonSchema(schema: z4.ZodType | z3.ZodType) {
+  if (isZodV4(schema)) {
+    return z4.toJSONSchema(schema as z4.ZodType, {
       target: "draft-7",
     });
   }
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return zodToJsonSchemaV3(schema as any);
+  return zodToJsonSchemaV3(schema as z3.ZodType);
 }
 
 export function getDescription(schema: unknown): string | undefined {
@@ -95,7 +104,6 @@ export function getZodUnknown(): any {
 // Utility to get a ZodRecord schema compatible with both Zod v3 and v4
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getZodRecord(valueSchema: any): any {
-  // Detect zod version by checking if a test schema has _zod property (v4) or not (v3)
   if (typeof z4.record === "function") {
     return z4.record(z4.string(), valueSchema as any) as any;
   }
