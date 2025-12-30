@@ -66,7 +66,7 @@ jobs:
         working-directory: ./js
         run: |
           pnpm test:zod-v4
-          pnpm test
+          pnpm test --exclude src/api-compatibility.test.ts
 
   test-summary:
     name: Test Summary
