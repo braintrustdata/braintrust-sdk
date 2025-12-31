@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA d2eca897666af49c11b326a9dcc6643824279cf8) -- do not modify
+// Auto-generated file (internal git SHA 9bf2117dcbe2dcfc71b22962e2e5d43b36c7b0b3) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -132,12 +132,22 @@ export const ApiKey = z.object({
   org_id: z.union([z.string(), z.null()]).optional(),
 });
 export type ApiKeyType = z.infer<typeof ApiKey>;
+export const TriggeredFunction = z.object({
+  function_id: z.unknown().optional(),
+  triggered_xact_id: z.string(),
+  completed_xact_id: z.union([z.string(), z.null()]).optional(),
+  attempts: z.union([z.number(), z.null()]).optional(),
+});
+export type TriggeredFunctionType = z.infer<typeof TriggeredFunction>;
 export const AsyncScoringState = z.union([
   z.object({
     status: z.literal("enabled"),
     token: z.string(),
-    function_ids: z.array(z.unknown()).min(1),
+    function_ids: z.array(z.unknown()),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
+    triggered_function_ids: z
+      .union([z.array(TriggeredFunction), z.null()])
+      .optional(),
   }),
   z.object({ status: z.literal("disabled") }),
   z.null(),
@@ -145,10 +155,23 @@ export const AsyncScoringState = z.union([
 ]);
 export type AsyncScoringStateType = z.infer<typeof AsyncScoringState>;
 export const AsyncScoringControl = z.union([
-  z.object({ kind: z.literal("score_update"), token: z.string() }),
+  z.object({
+    kind: z.literal("score_update"),
+    token: z.string().optional(),
+    triggered_xact_id: z.string().optional(),
+  }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
+  z.object({
+    kind: z.literal("add_triggered_functions"),
+    triggered_function_ids: z.array(z.unknown()).min(1),
+  }),
+  z.object({
+    kind: z.literal("triggered_function_complete"),
+    function_id: z.unknown().optional(),
+    triggered_xact_id: z.string(),
+  }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
 export const BraintrustAttachmentReference = z.object({
@@ -525,7 +548,17 @@ export const Experiment = z.object({
 });
 export type ExperimentType = z.infer<typeof Experiment>;
 export const SpanType = z.union([
-  z.enum(["llm", "score", "function", "eval", "task", "tool"]),
+  z.enum([
+    "llm",
+    "score",
+    "function",
+    "eval",
+    "task",
+    "tool",
+    "automation",
+    "facet",
+    "preprocessor",
+  ]),
   z.null(),
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
@@ -597,6 +630,32 @@ export const ExtendedSavedFunctionId = z.union([
 export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
+export const SavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({ type: z.literal("global"), name: z.string() }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
+export const SpanScope = z.object({ type: z.literal("span") });
+export type SpanScopeType = z.infer<typeof SpanScope>;
+export const TraceScope = z.object({
+  type: z.literal("trace"),
+  idle_seconds: z.number().optional(),
+});
+export type TraceScopeType = z.infer<typeof TraceScope>;
+export const GroupScope = z.object({
+  type: z.literal("group"),
+  group_by: z.string(),
+  idle_seconds: z.number().optional(),
+});
+export type GroupScopeType = z.infer<typeof GroupScope>;
+export const FacetAutomationConfig = z.object({
+  event_type: z.literal("facet"),
+  facets: z.array(SavedFunctionId).min(1),
+  scope: z.union([SpanScope, TraceScope, GroupScope]),
+  sampling_rate: z.number().gte(0).lte(1).optional(),
+  btql_filter: z.union([z.string(), z.null()]).optional(),
+});
+export type FacetAutomationConfigType = z.infer<typeof FacetAutomationConfig>;
 export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
   z.object({ type: z.literal("global"), name: z.string() }),
@@ -718,11 +777,6 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
-export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
-]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -1077,33 +1131,6 @@ export const Group = z.object({
 export type GroupType = z.infer<typeof Group>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
-export const SpanScope = z.object({
-  type: z.literal("span"),
-  root_span_id: z.string(),
-  id: z.string(),
-});
-export type SpanScopeType = z.infer<typeof SpanScope>;
-export const TraceScope = z.object({
-  type: z.literal("trace"),
-  root_span_id: z.string(),
-});
-export type TraceScopeType = z.infer<typeof TraceScope>;
-export const InvokeScope = z.union([SpanScope, TraceScope]);
-export type InvokeScopeType = z.infer<typeof InvokeScope>;
-export const InvokeContext = z.union([
-  z.object({
-    object_type: z.enum([
-      "project_logs",
-      "experiment",
-      "dataset",
-      "playground_logs",
-    ]),
-    object_id: z.string(),
-    scope: InvokeScope,
-  }),
-  z.null(),
-]);
-export type InvokeContextType = z.infer<typeof InvokeContext>;
 export const InvokeParent = z.union([
   z.object({
     object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
@@ -1138,7 +1165,6 @@ export const InvokeFunction = FunctionId.and(
       metadata: z.union([z.object({}).partial().passthrough(), z.null()]),
       tags: z.union([z.array(z.string()), z.null()]),
       messages: z.array(ChatCompletionMessageParam),
-      context: InvokeContext,
       parent: InvokeParent,
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
@@ -1246,6 +1272,7 @@ export const Project = z.object({
   id: z.string().uuid(),
   org_id: z.string().uuid(),
   name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
@@ -1315,6 +1342,7 @@ export const ProjectAutomation = z.object({
         }),
       ]),
     }),
+    FacetAutomationConfig,
   ]),
 });
 export type ProjectAutomationType = z.infer<typeof ProjectAutomation>;
