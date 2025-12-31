@@ -16,6 +16,7 @@ function camelToSnake(str: string): string {
 // Keys to exclude from model parameters at the doGenerate/doStream level
 const DO_GENERATE_EXCLUDE_KEYS = new Set([
   "prompt", // Already captured as input
+  "responseFormat", // Already captured as input (user's schema request)
   "providerOptions", // Internal AI SDK configuration
   "abortSignal", // Not useful for logging
   "headers", // Request headers, not model parameters
@@ -487,25 +488,6 @@ const wrapGenerateObject = (
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
 
-    // Build response_format metadata if schema is provided
-    const responseFormatMetadata: Record<string, unknown> = {};
-    if (params.schema) {
-      try {
-        const jsonSchema = zodToJsonSchema(params.schema);
-        responseFormatMetadata.response_format = {
-          type: "json_schema",
-          json_schema: {
-            name: params.schemaName || "response",
-            description: params.schemaDescription,
-            schema: jsonSchema,
-            strict: true,
-          },
-        };
-      } catch {
-        // Ignore schema conversion errors
-      }
-    }
-
     return traced(
       async (span) => {
         const result = await generateObject({
@@ -546,7 +528,6 @@ const wrapGenerateObject = (
           metadata: {
             model: initialModel,
             ...(effectiveProvider ? { provider: effectiveProvider } : {}),
-            ...responseFormatMetadata,
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -710,25 +691,6 @@ const wrapStreamObject = (
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
 
-    // Build response_format metadata if schema is provided
-    const responseFormatMetadata: Record<string, unknown> = {};
-    if (params.schema) {
-      try {
-        const jsonSchema = zodToJsonSchema(params.schema);
-        responseFormatMetadata.response_format = {
-          type: "json_schema",
-          json_schema: {
-            name: params.schemaName || "response",
-            description: params.schemaDescription,
-            schema: jsonSchema,
-            strict: true,
-          },
-        };
-      } catch {
-        // Ignore schema conversion errors
-      }
-    }
-
     const span = startSpan({
       name: "streamObject",
       spanAttributes: {
@@ -739,7 +701,6 @@ const wrapStreamObject = (
         metadata: {
           model: initialModel,
           ...(effectiveProvider ? { provider: effectiveProvider } : {}),
-          ...responseFormatMetadata,
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -1194,6 +1155,11 @@ const processInputAttachments = (input: any) => {
   // Process tools to convert Zod schemas to JSON Schema
   if (input.tools) {
     processed.tools = processTools(input.tools);
+  }
+
+  // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
+  if (input.schema && isZodSchema(input.schema)) {
+    processed.schema = serializeZodSchema(input.schema);
   }
 
   // Process callOptionsSchema (used by ToolLoopAgent and other agents)

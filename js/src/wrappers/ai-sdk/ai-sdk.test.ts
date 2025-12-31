@@ -592,7 +592,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
   });
 
-  test("generateObject logs response_format schema in metadata", async () => {
+  test("generateObject logs schema in input", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
     const storySchema = z.object({
@@ -625,27 +625,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(generateObjectSpan.output.object).toBeTruthy();
     expect(generateObjectSpan.output.object.title).toBeTruthy();
 
-    // Verify metadata contains response_format with the JSON schema
-    expect(generateObjectSpan.metadata).toBeTruthy();
-    expect(generateObjectSpan.metadata.response_format).toBeTruthy();
-    expect(generateObjectSpan.metadata.response_format.type).toBe(
-      "json_schema",
+    // Verify input contains the schema (converted from Zod to JSON Schema)
+    expect(generateObjectSpan.input).toBeTruthy();
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty("title");
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "mainCharacter",
     );
-    expect(
-      generateObjectSpan.metadata.response_format.json_schema,
-    ).toBeTruthy();
-    expect(
-      generateObjectSpan.metadata.response_format.json_schema.schema,
-    ).toBeTruthy();
-    expect(
-      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
-    ).toHaveProperty("title");
-    expect(
-      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
-    ).toHaveProperty("mainCharacter");
-    expect(
-      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
-    ).toHaveProperty("plotPoints");
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "plotPoints",
+    );
+    // Verify the prompt is also in input
+    expect(generateObjectSpan.input.prompt).toBe(
+      "Generate a short story about a robot.",
+    );
   });
 
   test("streamObject toTextStreamResponse", async () => {
