@@ -592,6 +592,62 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
   });
 
+  test("generateObject logs response_format schema in metadata", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const storySchema = z.object({
+      title: z.string().describe("The title of the story"),
+      mainCharacter: z.string().describe("The name of the main character"),
+      plotPoints: z
+        .array(z.string())
+        .length(3)
+        .describe("Three key plot points in the story"),
+    });
+
+    const result = await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema: storySchema,
+      prompt: "Generate a short story about a robot.",
+    });
+
+    expect(result.object).toBeTruthy();
+    expect(result.object.title).toBeTruthy();
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateObject",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+
+    // Verify output contains the structured object
+    expect(generateObjectSpan.output).toBeTruthy();
+    expect(generateObjectSpan.output.object).toBeTruthy();
+    expect(generateObjectSpan.output.object.title).toBeTruthy();
+
+    // Verify metadata contains response_format with the JSON schema
+    expect(generateObjectSpan.metadata).toBeTruthy();
+    expect(generateObjectSpan.metadata.response_format).toBeTruthy();
+    expect(generateObjectSpan.metadata.response_format.type).toBe(
+      "json_schema",
+    );
+    expect(
+      generateObjectSpan.metadata.response_format.json_schema,
+    ).toBeTruthy();
+    expect(
+      generateObjectSpan.metadata.response_format.json_schema.schema,
+    ).toBeTruthy();
+    expect(
+      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
+    ).toHaveProperty("title");
+    expect(
+      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
+    ).toHaveProperty("mainCharacter");
+    expect(
+      generateObjectSpan.metadata.response_format.json_schema.schema.properties,
+    ).toHaveProperty("plotPoints");
+  });
+
   test("streamObject toTextStreamResponse", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 

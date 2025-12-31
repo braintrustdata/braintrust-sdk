@@ -8,6 +8,39 @@ import {
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
 
+// Helper to convert camelCase to snake_case for metadata keys
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+// Keys to exclude from model parameters at the doGenerate/doStream level
+const DO_GENERATE_EXCLUDE_KEYS = new Set([
+  "prompt", // Already captured as input
+  "providerOptions", // Internal AI SDK configuration
+  "abortSignal", // Not useful for logging
+  "headers", // Request headers, not model parameters
+]);
+
+/**
+ * Extracts model parameters from options, excluding specified keys.
+ * Converts camelCase keys to snake_case for consistency.
+ */
+function extractModelParameters(
+  params: Record<string, unknown>,
+  excludeKeys: Set<string>,
+): Record<string, unknown> {
+  const modelParams: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && !excludeKeys.has(key)) {
+      const snakeKey = camelToSnake(key);
+      modelParams[snakeKey] = value;
+    }
+  }
+
+  return modelParams;
+}
+
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
   // v3
@@ -136,6 +169,7 @@ const makeGenerateTextWrapper = (
   const wrapper = async function (params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
+    const effectiveProvider = params.model?.provider || initialProvider;
 
     return traced(
       async (span) => {
@@ -174,7 +208,7 @@ const makeGenerateTextWrapper = (
           input: processInputAttachments(params),
           metadata: {
             model: initialModel,
-            ...(initialProvider ? { provider: initialProvider } : {}),
+            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -248,6 +282,9 @@ const wrapModel = (model: any, ai?: any): any => {
         if (gatewayInfo?.model) {
           resolvedMetadata.model = gatewayInfo.model;
         }
+        if (result.finishReason !== undefined) {
+          resolvedMetadata.finish_reason = result.finishReason;
+        }
 
         span.log({
           output: await processOutput(result),
@@ -267,6 +304,7 @@ const wrapModel = (model: any, ai?: any): any => {
         event: {
           input: processInputAttachments(options),
           metadata: {
+            ...extractModelParameters(options, DO_GENERATE_EXCLUDE_KEYS),
             model: initialModel,
             ...(effectiveProvider ? { provider: effectiveProvider } : {}),
             braintrust: {
@@ -291,6 +329,7 @@ const wrapModel = (model: any, ai?: any): any => {
       event: {
         input: processInputAttachments(options),
         metadata: {
+          ...extractModelParameters(options, DO_GENERATE_EXCLUDE_KEYS),
           model: initialModel,
           ...(effectiveProvider ? { provider: effectiveProvider } : {}),
           braintrust: {
@@ -390,6 +429,9 @@ const wrapModel = (model: any, ai?: any): any => {
             if (gatewayInfo?.model) {
               resolvedMetadata.model = gatewayInfo.model;
             }
+            if (chunk.finishReason !== undefined) {
+              resolvedMetadata.finish_reason = chunk.finishReason;
+            }
 
             span.log({
               output: await processOutput(output),
@@ -443,6 +485,26 @@ const wrapGenerateObject = (
   return async function generateObjectWrapper(params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
+    const effectiveProvider = params.model?.provider || initialProvider;
+
+    // Build response_format metadata if schema is provided
+    const responseFormatMetadata: Record<string, unknown> = {};
+    if (params.schema) {
+      try {
+        const jsonSchema = zodToJsonSchema(params.schema);
+        responseFormatMetadata.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: params.schemaName || "response",
+            description: params.schemaDescription,
+            schema: jsonSchema,
+            strict: true,
+          },
+        };
+      } catch {
+        // Ignore schema conversion errors
+      }
+    }
 
     return traced(
       async (span) => {
@@ -483,7 +545,8 @@ const wrapGenerateObject = (
           input: processInputAttachments(params),
           metadata: {
             model: initialModel,
-            ...(initialProvider ? { provider: initialProvider } : {}),
+            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+            ...responseFormatMetadata,
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -504,6 +567,7 @@ const makeStreamTextWrapper = (
   const wrapper = function (params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
+    const effectiveProvider = params.model?.provider || initialProvider;
 
     const span = startSpan({
       name,
@@ -514,7 +578,7 @@ const makeStreamTextWrapper = (
         input: processInputAttachments(params),
         metadata: {
           model: initialModel,
-          ...(initialProvider ? { provider: initialProvider } : {}),
+          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -644,6 +708,26 @@ const wrapStreamObject = (
   return function streamObjectWrapper(params: any) {
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
+    const effectiveProvider = params.model?.provider || initialProvider;
+
+    // Build response_format metadata if schema is provided
+    const responseFormatMetadata: Record<string, unknown> = {};
+    if (params.schema) {
+      try {
+        const jsonSchema = zodToJsonSchema(params.schema);
+        responseFormatMetadata.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: params.schemaName || "response",
+            description: params.schemaDescription,
+            schema: jsonSchema,
+            strict: true,
+          },
+        };
+      } catch {
+        // Ignore schema conversion errors
+      }
+    }
 
     const span = startSpan({
       name: "streamObject",
@@ -654,7 +738,8 @@ const wrapStreamObject = (
         input: processInputAttachments(params),
         metadata: {
           model: initialModel,
-          ...(initialProvider ? { provider: initialProvider } : {}),
+          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+          ...responseFormatMetadata,
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
