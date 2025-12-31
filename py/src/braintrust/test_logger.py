@@ -650,6 +650,25 @@ def test_span_log_handles_infinity_gracefully(with_memory_logger):
     assert logs[0]["output"]["neg"] == "-Infinity"
 
 
+def test_span_log_with_binary_data(with_memory_logger):
+    """Test how span.log() currently handles binary data."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        span.log(
+            input={"file": "image.png"},
+            output={"embedding": b"\x00\x01\x02\x03" * 100},
+        )
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    # Document actual behavior - binary data goes through deep_copy_and_sanitize_dict
+    # which uses bt_dumps/bt_loads roundtrip
+    assert logs[0]["input"]["file"] == "image.png"
+    # The embedding should be present (converted to some serializable form)
+    assert "embedding" in logs[0]["output"]
+
+
 def test_span_log_handles_unstringifiable_object_gracefully(with_memory_logger):
     """Test that span.log() should handle objects with bad __str__ gracefully without raising.
 

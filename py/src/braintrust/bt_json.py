@@ -12,6 +12,8 @@ try:
 except ImportError:
     _HAS_ORJSON = False
 
+
+
 def _sanitize_object(v: Any) -> Any:
     """
     Replaces references to user objects
@@ -26,33 +28,64 @@ def _sanitize_object(v: Any) -> Any:
 
     if isinstance(v, Span):
         return "<span>"
-    elif isinstance(v, Experiment):
+
+    if isinstance(v, Experiment):
         return "<experiment>"
-    elif isinstance(v, Dataset):
+
+    if isinstance(v, Dataset):
         return "<dataset>"
-    elif isinstance(v, Logger):
+
+    if isinstance(v, Logger):
         return "<logger>"
-    elif isinstance(v, BaseAttachment):
+
+    if isinstance(v, BaseAttachment):
         return v
-    elif isinstance(v, ReadonlyAttachment):
+
+    if isinstance(v, ReadonlyAttachment):
         return v.reference
-    elif isinstance(v, float):
+
+    if dataclasses.is_dataclass(v) and not isinstance(v, type):
+        return dataclasses.asdict(v)
+
+    # Pydantic model classes (not instances) with model_json_schema
+    if isinstance(v, type) and hasattr(v, "model_json_schema") and callable(cast(Any, v).model_json_schema):
+        try:
+            return cast(Any, v).model_json_schema()
+        except Exception:
+            pass
+
+    # Attempt to dump a Pydantic v2 `BaseModel`.
+    try:
+        return cast(Any, v).model_dump()
+    except (AttributeError, TypeError):
+        pass
+
+    # Attempt to dump a Pydantic v1 `BaseModel`.
+    try:
+        return cast(Any, v).dict()
+    except (AttributeError, TypeError):
+        pass
+
+    if isinstance(v, float):
         # Handle NaN and Infinity for JSON compatibility
         if math.isnan(v):
             return "NaN"
-        elif math.isinf(v):
+
+        if math.isinf(v):
             return "Infinity" if v > 0 else "-Infinity"
+
         return v
-    elif isinstance(v, (int, str, bool)) or v is None:
+
+    if isinstance(v, (int, str, bool)) or v is None:
         # Skip roundtrip for primitive types.
         return v
-    else:
-        # Note: we avoid using copy.deepcopy, because it's difficult to
-        # guarantee the independence of such copied types from their origin.
-        # E.g. the original type could have a `__del__` method that alters
-        # some shared internal state, and we need this deep copy to be
-        # fully-independent from the original.
-        return bt_loads(bt_dumps(v))
+
+    # Note: we avoid using copy.deepcopy, because it's difficult to
+    # guarantee the independence of such copied types from their origin.
+    # E.g. the original type could have a `__del__` method that alters
+    # some shared internal state, and we need this deep copy to be
+    # fully-independent from the original.
+    return bt_loads(bt_dumps(v))
 
 def deep_copy_and_sanitize_dict(dikt: Mapping[str, Any], sanitize_func: Callable[[Any], Any] | None = None) -> dict[str, Any]:
     """
@@ -104,42 +137,23 @@ def deep_copy_and_sanitize_dict(dikt: Mapping[str, Any], sanitize_func: Callable
                 # to appear in different branches of the tree
                 visited.discard(obj_id)
 
-        return sanitize_func(v)
+        try:
+            return sanitize_func(v)
+        except Exception:
+            return f"<non-sanitizable: {type(v).__name__}>"
 
     return _deep_copy_object(dikt)
 
 
 def _to_dict(obj: Any) -> Any:
     """
-    Function-based default handler for non-JSON-serializable objects.
-
-    Handles:
-    - dataclasses
-    - Pydantic v2 BaseModel
-    - Pydantic v1 BaseModel
-    - Falls back to str() for unknown types
+    Handler for non-JSON-serializable objects. Returns a string representation of the object.
+    If you need to handle more complex objects, you can pass a custom sanitize function to deep_copy_and_sanitize_dict.
     """
-    # TODO: move into deep copy event
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
-
-    # Attempt to dump a Pydantic v2 `BaseModel`.
-    try:
-        return cast(Any, obj).model_dump()
-    except (AttributeError, TypeError):
-        pass
-
-    # Attempt to dump a Pydantic v1 `BaseModel`.
-    try:
-        return cast(Any, obj).dict()
-    except (AttributeError, TypeError):
-        pass
-
     # When everything fails, try to return the string representation of the object
     try:
         return str(obj)
     except Exception:
-        # If str() fails, return an error placeholder
         return f"<non-serializable: {type(obj).__name__}>"
 
 
