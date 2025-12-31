@@ -641,6 +641,166 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
   });
 
+  test("generateText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "My Custom Prompt",
+      spanAttributes: { customAttr: "test-value" },
+      metadata: {
+        prompt: {
+          id: "prompt-abc123",
+          project_id: "proj-xyz789",
+          version: "1.0.0",
+          variables: { topic: "testing" },
+        },
+      },
+    };
+
+    await wrappedAI.generateText({
+      model: openai(TEST_MODEL),
+      prompt: "Say hello",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "My Custom Prompt",
+    );
+
+    expect(generateTextSpan).toBeTruthy();
+    // Verify span name was overridden
+    expect(generateTextSpan.span_attributes.name).toBe("My Custom Prompt");
+    // Verify custom span attributes were merged
+    expect(generateTextSpan.span_attributes.customAttr).toBe("test-value");
+    // Verify prompt metadata was included
+    expect(generateTextSpan.metadata.prompt).toBeTruthy();
+    expect(generateTextSpan.metadata.prompt.id).toBe("prompt-abc123");
+    expect(generateTextSpan.metadata.prompt.project_id).toBe("proj-xyz789");
+    expect(generateTextSpan.metadata.prompt.version).toBe("1.0.0");
+    expect(generateTextSpan.metadata.prompt.variables).toEqual({
+      topic: "testing",
+    });
+    // Verify span_info is not in input (should be stripped)
+    expect(generateTextSpan.input.span_info).toBeUndefined();
+  });
+
+  test("streamText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Streaming Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-stream-123",
+          project_id: "proj-stream-456",
+          version: "2.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const stream = wrappedAI.streamText({
+      model: openai(TEST_MODEL),
+      prompt: "Count to 3",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.textStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Streaming Prompt",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.span_attributes.name).toBe("Streaming Prompt");
+    expect(streamTextSpan.metadata.prompt.id).toBe("prompt-stream-123");
+    expect(streamTextSpan.metadata.prompt.project_id).toBe("proj-stream-456");
+  });
+
+  test("generateObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Object Generation Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-obj-789",
+          project_id: "proj-obj-012",
+          version: "3.0.0",
+          variables: { format: "json" },
+        },
+      },
+    };
+
+    const schema = z.object({ greeting: z.string() });
+
+    await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Generate a greeting",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Object Generation Prompt",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+    expect(generateObjectSpan.span_attributes.name).toBe(
+      "Object Generation Prompt",
+    );
+    expect(generateObjectSpan.metadata.prompt.id).toBe("prompt-obj-789");
+    expect(generateObjectSpan.metadata.prompt.project_id).toBe("proj-obj-012");
+    // Verify schema is still in input
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+  });
+
+  test("streamObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Stream Object Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-sobj-111",
+          project_id: "proj-sobj-222",
+          version: "4.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const schema = z.object({ message: z.string() });
+
+    const stream = wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Stream a message",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.partialObjectStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Stream Object Prompt",
+    );
+
+    expect(streamObjectSpan).toBeTruthy();
+    expect(streamObjectSpan.span_attributes.name).toBe("Stream Object Prompt");
+    expect(streamObjectSpan.metadata.prompt.id).toBe("prompt-sobj-111");
+    expect(streamObjectSpan.metadata.prompt.project_id).toBe("proj-sobj-222");
+  });
+
   test("streamObject toTextStreamResponse", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 

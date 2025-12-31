@@ -167,7 +167,15 @@ const makeGenerateTextWrapper = (
   generateText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = async function (params: any) {
+  const wrapper = async function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
@@ -201,13 +209,15 @@ const makeGenerateTextWrapper = (
         return result;
       },
       {
-        name,
+        name: spanName || name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
         },
         event: {
           input: processInputAttachments(params),
           metadata: {
+            ...spanInfoMetadata,
             model: initialModel,
             ...(effectiveProvider ? { provider: effectiveProvider } : {}),
             braintrust: {
@@ -483,7 +493,15 @@ const wrapGenerateObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return async function generateObjectWrapper(params: any) {
+  return async function generateObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
@@ -519,13 +537,15 @@ const wrapGenerateObject = (
         return result;
       },
       {
-        name: "generateObject",
+        name: spanName || "generateObject",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
         },
         event: {
           input: processInputAttachments(params),
           metadata: {
+            ...spanInfoMetadata,
             model: initialModel,
             ...(effectiveProvider ? { provider: effectiveProvider } : {}),
             braintrust: {
@@ -545,19 +565,29 @@ const makeStreamTextWrapper = (
   streamText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = function (params: any) {
+  const wrapper = function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
 
     const span = startSpan({
-      name,
+      name: spanName || name,
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
       },
       event: {
         input: processInputAttachments(params),
         metadata: {
+          ...spanInfoMetadata,
           model: initialModel,
           ...(effectiveProvider ? { provider: effectiveProvider } : {}),
           braintrust: {
@@ -686,19 +716,29 @@ const wrapStreamObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return function streamObjectWrapper(params: any) {
+  return function streamObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
     const { model: initialModel, provider: initialProvider } =
       serializeModelWithProvider(params.model);
     const effectiveProvider = params.model?.provider || initialProvider;
 
     const span = startSpan({
-      name: "streamObject",
+      name: spanName || "streamObject",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
       },
       event: {
         input: processInputAttachments(params),
         metadata: {
+          ...spanInfoMetadata,
           model: initialModel,
           ...(effectiveProvider ? { provider: effectiveProvider } : {}),
           braintrust: {
