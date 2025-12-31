@@ -2381,6 +2381,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -2820,6 +2823,9 @@
               "name": {
                 "type": "string"
               },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+              },
               "config": {
                 "type": [
                   "object",
@@ -2901,6 +2907,9 @@
               "global_function": {
                 "type": "string",
                 "description": "The name of the global function. Currently, the global namespace includes the functions in autoevals"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -4156,6 +4165,22 @@
           }
         ]
       },
+      "NullableFunctionTypeEnum": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "llm",
+          "scorer",
+          "task",
+          "tool",
+          "custom_view",
+          "preprocessor",
+          "facet"
+        ],
+        "description": "The type of global function. If unspecified, defaults to 'scorer' for backward compatibility."
+      },
       "NullableSavedFunctionId": {
         "anyOf": [
           {
@@ -4188,6 +4213,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -6535,6 +6563,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -7435,7 +7466,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "6430917922738f0371af4fd3f99f2ecceb3885ba"
+    "x-internal-git-sha": "87547838ffb9178642aeadfdeaeb6d88eb14b56f"
   },
   "paths": {},
   "webhooks": {}

@@ -34,11 +34,11 @@ class AISecret(TypedDict):
     """
     Unique identifier for the AI secret
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of AI secret creation
     """
-    updated_at: NotRequired[Optional[str | None]]
+    updated_at: NotRequired[str | None]
     """
     Date of last AI secret update
     """
@@ -50,9 +50,9 @@ class AISecret(TypedDict):
     """
     Name of the AI secret
     """
-    type: NotRequired[Optional[str | None]]
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
-    preview_secret: NotRequired[Optional[str | None]]
+    type: NotRequired[str | None]
+    metadata: NotRequired[Mapping[str, Any] | None]
+    preview_secret: NotRequired[str | None]
 
 
 class AnyModelParamsToolChoiceFunction(TypedDict):
@@ -73,7 +73,7 @@ class ApiKey(TypedDict):
     """
     Unique identifier for the api key
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of api key creation
     """
@@ -82,23 +82,23 @@ class ApiKey(TypedDict):
     Name of the api key
     """
     preview_name: str
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Unique identifier for the user
     """
-    user_email: NotRequired[Optional[str | None]]
+    user_email: NotRequired[str | None]
     """
     The user's email
     """
-    user_given_name: NotRequired[Optional[str | None]]
+    user_given_name: NotRequired[str | None]
     """
     Given name of the user
     """
-    user_family_name: NotRequired[Optional[str | None]]
+    user_family_name: NotRequired[str | None]
     """
     Family name of the user
     """
-    org_id: NotRequired[Optional[str | None]]
+    org_id: NotRequired[str | None]
     """
     Unique identifier for the organization
     """
@@ -106,7 +106,7 @@ class ApiKey(TypedDict):
 
 class AsyncScoringControlAsyncScoringControl(TypedDict):
     kind: Literal['score_update']
-    token: NotRequired[Optional[str]]
+    token: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl2(TypedDict):
@@ -137,24 +137,12 @@ class PreprocessorPreprocessor(TypedDict):
     id: str
 
 
-class PreprocessorPreprocessor1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class PreprocessorPreprocessor2(TypedDict):
     pass
 
 
 class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
     pass
-
-
-class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
-    pass
-
-
-Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
 
 
 class BatchedFacetDataFacet(TypedDict):
@@ -166,20 +154,14 @@ class BatchedFacetDataFacet(TypedDict):
     """
     The prompt to use for LLM extraction. The preprocessed text will be provided as context.
     """
-    model: NotRequired[Optional[str]]
+    model: NotRequired[str | None]
     """
     The model to use for facet extraction
     """
-    no_match_pattern: NotRequired[Optional[str]]
+    no_match_pattern: NotRequired[str | None]
     """
     Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
     """
-
-
-class BatchedFacetData(TypedDict):
-    type: Literal['batched_facet']
-    preprocessor: NotRequired[Optional[Preprocessor]]
-    facets: Sequence[BatchedFacetDataFacet]
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -202,55 +184,55 @@ class BraintrustAttachmentReference(TypedDict):
 
 
 class BraintrustModelParams(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
 
 
 class CallEventCallEvent(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['text_delta']
 
 
 class CallEventCallEvent1(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['reasoning_delta']
 
 
 class CallEventCallEvent2(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['json_delta']
 
 
 class CallEventCallEvent3(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['progress']
 
 
 class CallEventCallEvent4(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['error']
 
 
 class CallEventCallEvent5(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     data: str
     event: Literal['console']
 
 
 class CallEventCallEvent6(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     event: Literal['start']
     data: Literal['']
 
 
 class CallEventCallEvent7(TypedDict):
-    id: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
     event: Literal['done']
     data: Literal['']
 
@@ -268,9 +250,9 @@ CallEvent: TypeAlias = (
 
 
 class ChatCompletionContentPartFileFile(TypedDict):
-    file_data: NotRequired[Optional[str]]
-    filename: NotRequired[Optional[str]]
-    file_id: NotRequired[Optional[str]]
+    file_data: NotRequired[str | None]
+    filename: NotRequired[str | None]
+    file_id: NotRequired[str | None]
 
 
 class ChatCompletionContentPartFileWithTitle(TypedDict):
@@ -280,7 +262,7 @@ class ChatCompletionContentPartFileWithTitle(TypedDict):
 
 class ChatCompletionContentPartImageWithTitleImageUrl(TypedDict):
     url: str
-    detail: NotRequired[Optional[Literal['auto'] | Literal['low'] | Literal['high']]]
+    detail: NotRequired[Literal['auto'] | Literal['low'] | Literal['high'] | None]
 
 
 class ChatCompletionContentPartImageWithTitle(TypedDict):
@@ -295,7 +277,7 @@ class ChatCompletionContentPartTextCacheControl(TypedDict):
 class ChatCompletionContentPartText(TypedDict):
     text: str
     type: Literal['text']
-    cache_control: NotRequired[Optional[ChatCompletionContentPartTextCacheControl]]
+    cache_control: NotRequired[ChatCompletionContentPartTextCacheControl | None]
 
 
 class ChatCompletionContentPartTextWithTitleCacheControl(TypedDict):
@@ -305,13 +287,13 @@ class ChatCompletionContentPartTextWithTitleCacheControl(TypedDict):
 class ChatCompletionContentPartTextWithTitle(TypedDict):
     text: str
     type: Literal['text']
-    cache_control: NotRequired[Optional[ChatCompletionContentPartTextWithTitleCacheControl]]
+    cache_control: NotRequired[ChatCompletionContentPartTextWithTitleCacheControl | None]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam(TypedDict):
     content: str | Sequence[ChatCompletionContentPartText]
     role: Literal['system']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam2FunctionCall(TypedDict):
@@ -334,17 +316,17 @@ class ChatCompletionMessageParamChatCompletionMessageParam4(TypedDict):
 class ChatCompletionMessageParamChatCompletionMessageParam5(TypedDict):
     content: str | Sequence[ChatCompletionContentPartText]
     role: Literal['developer']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam6(TypedDict):
     role: Literal['model']
-    content: NotRequired[Optional[str | None]]
+    content: NotRequired[str | None]
 
 
 class ChatCompletionMessageReasoning(TypedDict):
-    id: NotRequired[Optional[str]]
-    content: NotRequired[Optional[str]]
+    id: NotRequired[str | None]
+    content: NotRequired[str | None]
 
 
 class ChatCompletionMessageToolCallFunction(TypedDict):
@@ -361,7 +343,7 @@ class ChatCompletionMessageToolCall(TypedDict):
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam(TypedDict):
     content: str | Sequence[ChatCompletionContentPartText]
     role: Literal['system']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall(TypedDict):
@@ -371,11 +353,11 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionC
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2(TypedDict):
     role: Literal['assistant']
-    content: NotRequired[Optional[str | Sequence[ChatCompletionContentPartText] | None]]
-    function_call: NotRequired[Optional[ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall]]
-    name: NotRequired[Optional[str]]
-    tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
-    reasoning: NotRequired[Optional[Sequence[ChatCompletionMessageReasoning]]]
+    content: NotRequired[str | Sequence[ChatCompletionContentPartText] | None]
+    function_call: NotRequired[ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall | None]
+    name: NotRequired[str | None]
+    tool_calls: NotRequired[Sequence[ChatCompletionMessageToolCall] | None]
+    reasoning: NotRequired[Sequence[ChatCompletionMessageReasoning] | None]
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3(TypedDict):
@@ -393,13 +375,13 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4(TypedDic
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5(TypedDict):
     content: str | Sequence[ChatCompletionContentPartText]
     role: Literal['developer']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 class ChatCompletionToolFunction(TypedDict):
     name: str
-    description: NotRequired[Optional[str]]
-    parameters: NotRequired[Optional[Mapping[str, Any]]]
+    description: NotRequired[str | None]
+    parameters: NotRequired[Mapping[str, Any] | None]
 
 
 class ChatCompletionTool(TypedDict):
@@ -436,7 +418,7 @@ class CodeBundle(TypedDict):
     runtime_context: CodeBundleRuntimeContext
     location: CodeBundleLocation | CodeBundleLocation1
     bundle_id: str
-    preview: NotRequired[Optional[str | None]]
+    preview: NotRequired[str | None]
     """
     A preview of the code
     """
@@ -455,30 +437,30 @@ class Dataset(TypedDict):
     """
     Name of the dataset. Within a project, dataset names are unique
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the dataset
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of dataset creation
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of dataset deletion, or null if the dataset is still active
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the dataset
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     User-controlled metadata about the dataset
     """
 
 
 class DatasetEventMetadata(TypedDict):
-    model: NotRequired[Optional[str | None]]
+    model: NotRequired[str | None]
     """
     The model used for this example
     """
@@ -501,80 +483,80 @@ class EnvVar(TypedDict):
     """
     The name of the environment variable
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of environment variable creation
     """
-    used: NotRequired[Optional[str | None]]
+    used: NotRequired[str | None]
     """
     Date the environment variable was last used
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     Optional metadata associated with the environment variable when managed via the function secrets API
     """
-    secret_type: NotRequired[Optional[str | None]]
+    secret_type: NotRequired[str | None]
     """
     Optional classification for the secret (for example, the AI provider name)
     """
-    secret_category: NotRequired[Optional[Literal['env_var', 'ai_provider']]]
+    secret_category: NotRequired[Literal['env_var', 'ai_provider'] | None]
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
 
 
 class ExperimentEventMetadata(TypedDict):
-    model: NotRequired[Optional[str | None]]
+    model: NotRequired[str | None]
     """
     The model used for this example
     """
 
 
 class ExperimentEventMetrics(TypedDict):
-    start: NotRequired[Optional[float | None]]
+    start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the experiment event started
     """
-    end: NotRequired[Optional[float | None]]
+    end: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the experiment event finished
     """
-    prompt_tokens: NotRequired[Optional[int | None]]
+    prompt_tokens: NotRequired[int | None]
     """
     The number of tokens in the prompt used to generate the experiment event (only set if this is an LLM span)
     """
-    completion_tokens: NotRequired[Optional[int | None]]
+    completion_tokens: NotRequired[int | None]
     """
     The number of tokens in the completion generated by the model (only set if this is an LLM span)
     """
-    tokens: NotRequired[Optional[int | None]]
+    tokens: NotRequired[int | None]
     """
     The total number of tokens in the input and output of the experiment event.
     """
-    caller_functionname: NotRequired[Optional[Any]]
+    caller_functionname: NotRequired[Any | None]
     """
     This metric is deprecated
     """
-    caller_filename: NotRequired[Optional[Any]]
+    caller_filename: NotRequired[Any | None]
     """
     This metric is deprecated
     """
-    caller_lineno: NotRequired[Optional[Any]]
+    caller_lineno: NotRequired[Any | None]
     """
     This metric is deprecated
     """
 
 
 class ExperimentEventContext(TypedDict):
-    caller_functionname: NotRequired[Optional[str | None]]
+    caller_functionname: NotRequired[str | None]
     """
     The function in code which created the experiment event
     """
-    caller_filename: NotRequired[Optional[str | None]]
+    caller_filename: NotRequired[str | None]
     """
     Name of the file in code where the experiment event was created
     """
-    caller_lineno: NotRequired[Optional[int | None]]
+    caller_lineno: NotRequired[int | None]
     """
     Line of code where the experiment event was created
     """
@@ -585,22 +567,10 @@ class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     id: str
 
 
-class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
     type: Literal['slug']
     project_id: str
     slug: str
-
-
-ExtendedSavedFunctionId: TypeAlias = (
-    ExtendedSavedFunctionIdExtendedSavedFunctionId
-    | ExtendedSavedFunctionIdExtendedSavedFunctionId1
-    | ExtendedSavedFunctionIdExtendedSavedFunctionId2
-)
 
 
 class ExternalAttachmentReference(TypedDict):
@@ -627,11 +597,6 @@ class Preprocessor1Preprocessor1(TypedDict):
     id: str
 
 
-class Preprocessor1Preprocessor11(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class Preprocessor1Preprocessor12(TypedDict):
     pass
 
@@ -640,45 +605,21 @@ class Preprocessor1Preprocessor13(Preprocessor1Preprocessor1, Preprocessor1Prepr
     pass
 
 
-class Preprocessor1Preprocessor14(Preprocessor1Preprocessor11, Preprocessor1Preprocessor12):
-    pass
-
-
-Preprocessor1: TypeAlias = Preprocessor1Preprocessor13 | Preprocessor1Preprocessor14
-
-
-class FacetData(TypedDict):
-    type: Literal['facet']
-    preprocessor: NotRequired[Optional[Preprocessor1]]
-    prompt: str
-    """
-    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
-    """
-    model: NotRequired[Optional[str]]
-    """
-    The model to use for facet extraction
-    """
-    no_match_pattern: NotRequired[Optional[str]]
-    """
-    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
-    """
-
-
 class FunctionOrigin(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
     Id of the object the function is originating from
     """
-    internal: NotRequired[Optional[bool | None]]
+    internal: NotRequired[bool | None]
     """
     The function exists for internal purposes and should not be displayed in the list of functions.
     """
 
 
 class FunctionFunctionSchema(TypedDict):
-    parameters: NotRequired[Optional[Any]]
-    returns: NotRequired[Optional[Any]]
+    parameters: NotRequired[Any | None]
+    returns: NotRequired[Any | None]
 
 
 class FunctionDataFunctionData(TypedDict):
@@ -698,7 +639,7 @@ class FunctionDataFunctionData1Data(TypedDict):
     type: Literal['inline']
     runtime_context: FunctionDataFunctionData1DataRuntimeContext
     code: str
-    code_hash: NotRequired[Optional[str]]
+    code_hash: NotRequired[str | None]
     """
     SHA256 hash of the code, computed at save time
     """
@@ -716,15 +657,6 @@ class FunctionDataFunctionData2(TypedDict):
     parameters: Mapping[str, Any]
 
 
-class FunctionDataFunctionData3(TypedDict):
-    type: Literal['global']
-    name: str
-    config: NotRequired[Optional[Mapping[str, Any] | None]]
-    """
-    Configuration options to pass to the global function (e.g., for preprocessor customization)
-    """
-
-
 FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
 
 
@@ -733,7 +665,7 @@ class FunctionIdFunctionId(TypedDict):
     """
     The ID of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -748,16 +680,9 @@ class FunctionIdFunctionId1(TypedDict):
     """
     The slug of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
-    """
-
-
-class FunctionIdFunctionId2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
 
 
@@ -770,7 +695,7 @@ class FunctionIdFunctionId3(TypedDict):
     """
     The ID of the function in the prompt session
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -787,7 +712,7 @@ class FunctionIdFunctionId4(TypedDict):
     """
     The inline code to execute
     """
-    name: NotRequired[Optional[str | None]]
+    name: NotRequired[str | None]
     """
     The name of the inline code function
     """
@@ -866,11 +791,11 @@ class GraphNodeGraphNodePosition(TypedDict):
 
 
 class GraphNodeGraphNode(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNodePosition | None]]
+    position: NotRequired[GraphNodeGraphNodePosition | None]
     """
     The position of the node
     """
@@ -890,11 +815,11 @@ class GraphNodeGraphNode1Position(TypedDict):
 
 
 class GraphNodeGraphNode1(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode1Position | None]]
+    position: NotRequired[GraphNodeGraphNode1Position | None]
     """
     The position of the node
     """
@@ -916,11 +841,11 @@ class GraphNodeGraphNode2Position(TypedDict):
 
 
 class GraphNodeGraphNode2(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode2Position | None]]
+    position: NotRequired[GraphNodeGraphNode2Position | None]
     """
     The position of the node
     """
@@ -942,16 +867,16 @@ class GraphNodeGraphNode3Position(TypedDict):
 
 
 class GraphNodeGraphNode3(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode3Position | None]]
+    position: NotRequired[GraphNodeGraphNode3Position | None]
     """
     The position of the node
     """
     type: Literal['literal']
-    value: NotRequired[Optional[Any]]
+    value: NotRequired[Any | None]
     """
     A literal value to be returned
     """
@@ -969,11 +894,11 @@ class GraphNodeGraphNode4Position(TypedDict):
 
 
 class GraphNodeGraphNode4(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode4Position | None]]
+    position: NotRequired[GraphNodeGraphNode4Position | None]
     """
     The position of the node
     """
@@ -996,16 +921,16 @@ class GraphNodeGraphNode5Position(TypedDict):
 
 
 class GraphNodeGraphNode5(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode5Position | None]]
+    position: NotRequired[GraphNodeGraphNode5Position | None]
     """
     The position of the node
     """
     type: Literal['gate']
-    condition: NotRequired[Optional[str | None]]
+    condition: NotRequired[str | None]
     """
     A BTQL expression to be evaluated
     """
@@ -1023,11 +948,11 @@ class GraphNodeGraphNode6Position(TypedDict):
 
 
 class GraphNodeGraphNode6(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode6Position | None]]
+    position: NotRequired[GraphNodeGraphNode6Position | None]
     """
     The position of the node
     """
@@ -1056,11 +981,11 @@ class Group(TypedDict):
 
     It is forbidden to change the org after creating a group
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the group
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of group creation
     """
@@ -1068,19 +993,19 @@ class Group(TypedDict):
     """
     Name of the group
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the group
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of group deletion, or null if the group is still active
     """
-    member_users: NotRequired[Optional[Sequence[str]]]
+    member_users: NotRequired[Sequence[str] | None]
     """
     Ids of users which belong to this group
     """
-    member_groups: NotRequired[Optional[Sequence[str]]]
+    member_groups: NotRequired[Sequence[str] | None]
     """
     Ids of the groups this group inherits from
 
@@ -1094,7 +1019,7 @@ class GroupScope(TypedDict):
     """
     Field path to group by, e.g. metadata.session_id
     """
-    idle_seconds: NotRequired[Optional[float]]
+    idle_seconds: NotRequired[float | None]
     """
     Optional: trigger after this many seconds of inactivity
     """
@@ -1108,7 +1033,7 @@ class InvokeFunctionInvokeFunction(TypedDict):
     """
     The ID of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -1123,16 +1048,9 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
     The slug of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
-    """
-
-
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
 
 
@@ -1145,7 +1063,7 @@ class InvokeFunctionInvokeFunction3(TypedDict):
     """
     The ID of the function in the prompt session
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -1162,14 +1080,14 @@ class InvokeFunctionInvokeFunction4(TypedDict):
     """
     The inline code to execute
     """
-    name: NotRequired[Optional[str | None]]
+    name: NotRequired[str | None]
     """
     The name of the inline code function
     """
 
 
 class InvokeFunctionMcpAuth(TypedDict):
-    oauth_token: NotRequired[Optional[str]]
+    oauth_token: NotRequired[str | None]
     """
     The OAuth token to use
     """
@@ -1196,11 +1114,11 @@ class InvokeParentInvokeParent(TypedDict):
     """
     The id of the container object you are logging to
     """
-    row_ids: NotRequired[Optional[InvokeParentInvokeParentRowIds | None]]
+    row_ids: NotRequired[InvokeParentInvokeParentRowIds | None]
     """
     Identifiers for the row to to log a subspan under
     """
-    propagated_event: NotRequired[Optional[Mapping[str, Any] | None]]
+    propagated_event: NotRequired[Mapping[str, Any] | None]
     """
     Include these properties in every span created under this parent
     """
@@ -1221,15 +1139,15 @@ class MCPServer(TypedDict):
     """
     Unique identifier for the project that the MCP server belongs under
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the MCP server
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of MCP server creation
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of MCP server deletion, or null if the MCP server is still active
     """
@@ -1237,7 +1155,7 @@ class MCPServer(TypedDict):
     """
     Name of the MCP server. Within a project, MCP server names are unique
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the MCP server
     """
@@ -1264,42 +1182,48 @@ class ModelParamsModelParamsFunctionCall(TypedDict):
 
 
 class ModelParamsModelParams1(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
     max_tokens: float
     temperature: float
-    top_p: NotRequired[Optional[float]]
-    top_k: NotRequired[Optional[float]]
-    stop_sequences: NotRequired[Optional[Sequence[str]]]
-    max_tokens_to_sample: NotRequired[Optional[float]]
+    top_p: NotRequired[float | None]
+    top_k: NotRequired[float | None]
+    stop_sequences: NotRequired[Sequence[str] | None]
+    max_tokens_to_sample: NotRequired[float | None]
     """
     This is a legacy parameter that should not be used.
     """
 
 
 class ModelParamsModelParams2(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
-    temperature: NotRequired[Optional[float]]
-    maxOutputTokens: NotRequired[Optional[float]]
-    topP: NotRequired[Optional[float]]
-    topK: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
+    temperature: NotRequired[float | None]
+    maxOutputTokens: NotRequired[float | None]
+    topP: NotRequired[float | None]
+    topK: NotRequired[float | None]
 
 
 class ModelParamsModelParams3(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
-    temperature: NotRequired[Optional[float]]
-    topK: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
+    temperature: NotRequired[float | None]
+    topK: NotRequired[float | None]
 
 
 class ModelParamsModelParams4(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
+
+
+NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+"""
+The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
+"""
 
 
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
@@ -1310,6 +1234,7 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
 NullableSavedFunctionId: TypeAlias = (
@@ -1333,11 +1258,11 @@ class ObjectReference(TypedDict):
     """
     ID of the original event.
     """
-    _xact_id: NotRequired[Optional[str | None]]
+    _xact_id: NotRequired[str | None]
     """
     Transaction ID of the original event.
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Created timestamp of the original event. Used to help sort in the UI
     """
@@ -1356,11 +1281,11 @@ class ObjectReferenceNullish(TypedDict):
     """
     ID of the original event.
     """
-    _xact_id: NotRequired[Optional[str | None]]
+    _xact_id: NotRequired[str | None]
     """
     Transaction ID of the original event.
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Created timestamp of the original event. Used to help sort in the UI
     """
@@ -1375,11 +1300,11 @@ class Organization(TypedDict):
     """
     Name of the organization
     """
-    api_url: NotRequired[Optional[str | None]]
-    is_universal_api: NotRequired[Optional[bool | None]]
-    proxy_url: NotRequired[Optional[str | None]]
-    realtime_url: NotRequired[Optional[str | None]]
-    created: NotRequired[Optional[str | None]]
+    api_url: NotRequired[str | None]
+    is_universal_api: NotRequired[bool | None]
+    proxy_url: NotRequired[str | None]
+    realtime_url: NotRequired[str | None]
+    created: NotRequired[str | None]
     """
     Date of organization creation
     """
@@ -1419,7 +1344,7 @@ class ProjectAutomationConfigAction1(TypedDict):
     """
     The Slack channel ID to post to
     """
-    message_template: NotRequired[Optional[str]]
+    message_template: NotRequired[str | None]
     """
     Custom message template for the alert
     """
@@ -1498,7 +1423,7 @@ class ProjectAutomationConfig1(TypedDict):
     Perform the triggered action at most once in this interval of seconds
     """
     credentials: ProjectAutomationConfig1Credentials
-    batch_size: NotRequired[Optional[float | None]]
+    batch_size: NotRequired[float | None]
     """
     The number of rows to export in each batch
     """
@@ -1528,7 +1453,7 @@ class ProjectAutomationConfig3Action1(TypedDict):
     """
     The Slack channel ID to post to
     """
-    message_template: NotRequired[Optional[str]]
+    message_template: NotRequired[str | None]
     """
     Custom message template for the alert
     """
@@ -1539,7 +1464,7 @@ class ProjectAutomationConfig3(TypedDict):
     """
     The type of automation.
     """
-    environment_filter: NotRequired[Optional[Sequence[str]]]
+    environment_filter: NotRequired[Sequence[str] | None]
     """
     Optional list of environment slugs to filter by
     """
@@ -1550,57 +1475,57 @@ class ProjectAutomationConfig3(TypedDict):
 
 
 class ProjectLogsEventMetadata(TypedDict):
-    model: NotRequired[Optional[str | None]]
+    model: NotRequired[str | None]
     """
     The model used for this example
     """
 
 
 class ProjectLogsEventMetrics(TypedDict):
-    start: NotRequired[Optional[float | None]]
+    start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the project logs event started
     """
-    end: NotRequired[Optional[float | None]]
+    end: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the project logs event finished
     """
-    prompt_tokens: NotRequired[Optional[int | None]]
+    prompt_tokens: NotRequired[int | None]
     """
     The number of tokens in the prompt used to generate the project logs event (only set if this is an LLM span)
     """
-    completion_tokens: NotRequired[Optional[int | None]]
+    completion_tokens: NotRequired[int | None]
     """
     The number of tokens in the completion generated by the model (only set if this is an LLM span)
     """
-    tokens: NotRequired[Optional[int | None]]
+    tokens: NotRequired[int | None]
     """
     The total number of tokens in the input and output of the project logs event.
     """
-    caller_functionname: NotRequired[Optional[Any]]
+    caller_functionname: NotRequired[Any | None]
     """
     This metric is deprecated
     """
-    caller_filename: NotRequired[Optional[Any]]
+    caller_filename: NotRequired[Any | None]
     """
     This metric is deprecated
     """
-    caller_lineno: NotRequired[Optional[Any]]
+    caller_lineno: NotRequired[Any | None]
     """
     This metric is deprecated
     """
 
 
 class ProjectLogsEventContext(TypedDict):
-    caller_functionname: NotRequired[Optional[str | None]]
+    caller_functionname: NotRequired[str | None]
     """
     The function in code which created the project logs event
     """
-    caller_filename: NotRequired[Optional[str | None]]
+    caller_filename: NotRequired[str | None]
     """
     Name of the file in code where the project logs event was created
     """
-    caller_lineno: NotRequired[Optional[int | None]]
+    caller_lineno: NotRequired[int | None]
     """
     Line of code where the project logs event was created
     """
@@ -1627,37 +1552,37 @@ class ProjectSettingsSpanFieldOrderItem(TypedDict):
     object_type: str
     column_id: str
     position: str
-    layout: NotRequired[Optional[Literal['full'] | Literal['two_column'] | None]]
+    layout: NotRequired[Literal['full'] | Literal['two_column'] | None]
 
 
 class ProjectSettingsRemoteEvalSource(TypedDict):
     url: str
     name: str
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
 
 
 class ProjectSettings(TypedDict):
-    comparison_key: NotRequired[Optional[str | None]]
+    comparison_key: NotRequired[str | None]
     """
     The key used to join two experiments (defaults to `input`)
     """
-    baseline_experiment_id: NotRequired[Optional[str | None]]
+    baseline_experiment_id: NotRequired[str | None]
     """
     The id of the experiment to use as the default baseline for comparisons
     """
-    spanFieldOrder: NotRequired[Optional[Sequence[ProjectSettingsSpanFieldOrderItem]]]
+    spanFieldOrder: NotRequired[Sequence[ProjectSettingsSpanFieldOrderItem] | None]
     """
     The order of the fields to display in the trace view
     """
-    remote_eval_sources: NotRequired[Optional[Sequence[ProjectSettingsRemoteEvalSource]]]
+    remote_eval_sources: NotRequired[Sequence[ProjectSettingsRemoteEvalSource] | None]
     """
     The remote eval sources to use for the project
     """
-    disable_realtime_queries: NotRequired[Optional[bool | None]]
+    disable_realtime_queries: NotRequired[bool | None]
     """
     If true, disable real-time queries for this project. This can improve query performance for high-volume logs.
     """
-    default_preprocessor: NotRequired[Optional[NullableSavedFunctionId]]
+    default_preprocessor: NotRequired[NullableSavedFunctionId | None]
 
 
 class ProjectTag(TypedDict):
@@ -1670,7 +1595,7 @@ class ProjectTag(TypedDict):
     Unique identifier for the project that the project tag belongs under
     """
     user_id: str
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of project tag creation
     """
@@ -1678,15 +1603,15 @@ class ProjectTag(TypedDict):
     """
     Name of the project tag
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the project tag
     """
-    color: NotRequired[Optional[str | None]]
+    color: NotRequired[str | None]
     """
     Color of the tag for the UI
     """
-    position: NotRequired[Optional[str | None]]
+    position: NotRequired[str | None]
     """
     An optional LexoRank-based string that sets the sort position for the tag in the UI
     """
@@ -1703,15 +1628,15 @@ class PromptBlockDataNullishPromptBlockDataNullish1(TypedDict):
 
 
 class PromptDataOrigin(TypedDict):
-    prompt_id: NotRequired[Optional[str]]
-    project_id: NotRequired[Optional[str]]
-    prompt_version: NotRequired[Optional[str]]
+    prompt_id: NotRequired[str | None]
+    project_id: NotRequired[str | None]
+    prompt_version: NotRequired[str | None]
 
 
 class PromptDataNullishOrigin(TypedDict):
-    prompt_id: NotRequired[Optional[str]]
-    project_id: NotRequired[Optional[str]]
-    prompt_version: NotRequired[Optional[str]]
+    prompt_id: NotRequired[str | None]
+    project_id: NotRequired[str | None]
+    prompt_version: NotRequired[str | None]
 
 
 class PromptParserNullish(TypedDict):
@@ -1733,7 +1658,7 @@ class PromptSessionEvent(TypedDict):
     """
     The timestamp the prompt session event was created
     """
-    _pagination_key: NotRequired[Optional[str | None]]
+    _pagination_key: NotRequired[str | None]
     """
     A stable, time-ordered key that can be used to paginate over prompt session events. This field is auto-generated by Braintrust and only exists in Brainstore.
     """
@@ -1745,67 +1670,67 @@ class PromptSessionEvent(TypedDict):
     """
     Unique identifier for the prompt
     """
-    prompt_session_data: NotRequired[Optional[Any]]
+    prompt_session_data: NotRequired[Any | None]
     """
     Data about the prompt session
     """
-    prompt_data: NotRequired[Optional[Any]]
+    prompt_data: NotRequired[Any | None]
     """
     Data about the prompt
     """
-    function_data: NotRequired[Optional[Any]]
+    function_data: NotRequired[Any | None]
     """
     Data about the function
     """
-    function_type: NotRequired[Optional[FunctionTypeEnumNullish]]
-    object_data: NotRequired[Optional[Any]]
+    function_type: NotRequired[FunctionTypeEnumNullish | None]
+    object_data: NotRequired[Any | None]
     """
     Data about the mapped data
     """
-    completion: NotRequired[Optional[Any]]
+    completion: NotRequired[Any | None]
     """
     Data about the completion
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags to log
     """
 
 
 class RepoInfo(TypedDict):
-    commit: NotRequired[Optional[str | None]]
+    commit: NotRequired[str | None]
     """
     SHA of most recent commit
     """
-    branch: NotRequired[Optional[str | None]]
+    branch: NotRequired[str | None]
     """
     Name of the branch the most recent commit belongs to
     """
-    tag: NotRequired[Optional[str | None]]
+    tag: NotRequired[str | None]
     """
     Name of the tag on the most recent commit
     """
-    dirty: NotRequired[Optional[bool | None]]
+    dirty: NotRequired[bool | None]
     """
     Whether or not the repo had uncommitted changes when snapshotted
     """
-    author_name: NotRequired[Optional[str | None]]
+    author_name: NotRequired[str | None]
     """
     Name of the author of the most recent commit
     """
-    author_email: NotRequired[Optional[str | None]]
+    author_email: NotRequired[str | None]
     """
     Email of the author of the most recent commit
     """
-    commit_message: NotRequired[Optional[str | None]]
+    commit_message: NotRequired[str | None]
     """
     Most recent commit message
     """
-    commit_time: NotRequired[Optional[str | None]]
+    commit_time: NotRequired[str | None]
     """
     Time of the most recent commit
     """
-    git_diff: NotRequired[Optional[str | None]]
+    git_diff: NotRequired[str | None]
     """
     If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit.
     """
@@ -1821,9 +1746,9 @@ class ResponseFormatResponseFormat2(TypedDict):
 
 class ResponseFormatJsonSchema(TypedDict):
     name: str
-    description: NotRequired[Optional[str]]
-    schema: NotRequired[Optional[Mapping[str, Any] | str]]
-    strict: NotRequired[Optional[bool | None]]
+    description: NotRequired[str | None]
+    schema: NotRequired[Mapping[str, Any] | str | None]
+    strict: NotRequired[bool | None]
 
 
 class ResponseFormatNullishResponseFormatNullish(TypedDict):
@@ -1855,7 +1780,7 @@ The object type that the retention policy applies to
 
 class RoleMemberPermission(TypedDict):
     permission: Permission
-    restrict_object_type: NotRequired[Optional[AclObjectType]]
+    restrict_object_type: NotRequired[AclObjectType | None]
 
 
 class Role(TypedDict):
@@ -1863,7 +1788,7 @@ class Role(TypedDict):
     """
     Unique identifier for the role
     """
-    org_id: NotRequired[Optional[str | None]]
+    org_id: NotRequired[str | None]
     """
     Unique id for the organization that the role belongs under
 
@@ -1871,11 +1796,11 @@ class Role(TypedDict):
 
     It is forbidden to change the org after creating a role
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the role
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of role creation
     """
@@ -1883,19 +1808,19 @@ class Role(TypedDict):
     """
     Name of the role
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the role
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of role deletion, or null if the role is still active
     """
-    member_permissions: NotRequired[Optional[Sequence[RoleMemberPermission]]]
+    member_permissions: NotRequired[Sequence[RoleMemberPermission] | None]
     """
     (permission, restrict_object_type) tuples which belong to this role
     """
-    member_roles: NotRequired[Optional[Sequence[str]]]
+    member_roles: NotRequired[Sequence[str] | None]
     """
     Ids of the roles this role inherits from
 
@@ -1905,13 +1830,13 @@ class Role(TypedDict):
 
 class RunEvalData(TypedDict):
     dataset_id: str
-    _internal_btql: NotRequired[Optional[Mapping[str, Any] | None]]
+    _internal_btql: NotRequired[Mapping[str, Any] | None]
 
 
 class RunEvalData1(TypedDict):
     project_name: str
     dataset_name: str
-    _internal_btql: NotRequired[Optional[Mapping[str, Any] | None]]
+    _internal_btql: NotRequired[Mapping[str, Any] | None]
 
 
 class RunEvalData2(TypedDict):
@@ -1923,7 +1848,7 @@ class TaskTask(TypedDict):
     """
     The ID of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -1938,7 +1863,7 @@ class TaskTask1(TypedDict):
     """
     The slug of the function
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -1949,6 +1874,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
 class TaskTask3(TypedDict):
@@ -1960,7 +1886,7 @@ class TaskTask3(TypedDict):
     """
     The ID of the function in the prompt session
     """
-    version: NotRequired[Optional[str]]
+    version: NotRequired[str | None]
     """
     The version of the function
     """
@@ -1977,7 +1903,7 @@ class TaskTask4(TypedDict):
     """
     The inline code to execute
     """
-    name: NotRequired[Optional[str | None]]
+    name: NotRequired[str | None]
     """
     The name of the inline code function
     """
@@ -2028,11 +1954,11 @@ class ParentParent(TypedDict):
     """
     The id of the container object you are logging to
     """
-    row_ids: NotRequired[Optional[ParentParentRowIds | None]]
+    row_ids: NotRequired[ParentParentRowIds | None]
     """
     Identifiers for the row to to log a subspan under
     """
-    propagated_event: NotRequired[Optional[Mapping[str, Any] | None]]
+    propagated_event: NotRequired[Mapping[str, Any] | None]
     """
     Include these properties in every span created under this parent
     """
@@ -2050,7 +1976,7 @@ Parent: TypeAlias = ParentParent2
 
 
 class RunEvalMcpAuth(TypedDict):
-    oauth_token: NotRequired[Optional[str]]
+    oauth_token: NotRequired[str | None]
     """
     The OAuth token to use
     """
@@ -2064,6 +1990,7 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
 SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
@@ -2074,7 +2001,7 @@ class ServiceToken(TypedDict):
     """
     Unique identifier for the service token
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of service token creation
     """
@@ -2083,19 +2010,19 @@ class ServiceToken(TypedDict):
     Name of the service token
     """
     preview_name: str
-    service_account_id: NotRequired[Optional[str | None]]
+    service_account_id: NotRequired[str | None]
     """
     Unique identifier for the service token
     """
-    service_account_email: NotRequired[Optional[str | None]]
+    service_account_email: NotRequired[str | None]
     """
     The service account email (not routable)
     """
-    service_account_name: NotRequired[Optional[str | None]]
+    service_account_name: NotRequired[str | None]
     """
     The service account name
     """
-    org_id: NotRequired[Optional[str | None]]
+    org_id: NotRequired[str | None]
     """
     Unique identifier for the organization
     """
@@ -2110,15 +2037,15 @@ class SpanIFrame(TypedDict):
     """
     Unique identifier for the project that the span iframe belongs under
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the span iframe
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of span iframe creation
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of span iframe deletion, or null if the span iframe is still active
     """
@@ -2126,7 +2053,7 @@ class SpanIFrame(TypedDict):
     """
     Name of the span iframe
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the span iframe
     """
@@ -2134,7 +2061,7 @@ class SpanIFrame(TypedDict):
     """
     URL to embed the project viewer in an iframe
     """
-    post_message: NotRequired[Optional[bool | None]]
+    post_message: NotRequired[bool | None]
     """
     Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.
     """
@@ -2163,7 +2090,7 @@ class SSEProgressEventData(TypedDict):
     The id of the span this event is for
     """
     object_type: FunctionObjectType
-    origin: NotRequired[Optional[ObjectReferenceNullish | None]]
+    origin: NotRequired[ObjectReferenceNullish | None]
     format: FunctionFormat
     output_type: FunctionOutputType
     name: str
@@ -2179,9 +2106,9 @@ The mode format of the returned value (defaults to 'auto')
 
 class ToolFunctionDefinitionFunction(TypedDict):
     name: str
-    description: NotRequired[Optional[str]]
-    parameters: NotRequired[Optional[Mapping[str, Any]]]
-    strict: NotRequired[Optional[bool | None]]
+    description: NotRequired[str | None]
+    parameters: NotRequired[Mapping[str, Any] | None]
+    strict: NotRequired[bool | None]
 
 
 class ToolFunctionDefinition(TypedDict):
@@ -2191,14 +2118,14 @@ class ToolFunctionDefinition(TypedDict):
 
 class TraceScope(TypedDict):
     type: Literal['trace']
-    idle_seconds: NotRequired[Optional[float]]
+    idle_seconds: NotRequired[float | None]
     """
     Consider trace complete after this many seconds of inactivity (default: 30)
     """
 
 
 class TriggeredFunction(TypedDict):
-    function_id: NotRequired[Optional[Any]]
+    function_id: NotRequired[Any | None]
     """
     The function to run
     """
@@ -2206,11 +2133,11 @@ class TriggeredFunction(TypedDict):
     """
     The xact_id when this function was triggered
     """
-    completed_xact_id: NotRequired[Optional[str | None]]
+    completed_xact_id: NotRequired[str | None]
     """
     The xact_id when this function completed (matches triggered_xact_id if done)
     """
-    attempts: NotRequired[Optional[int | None]]
+    attempts: NotRequired[int | None]
     """
     Number of execution attempts (for retry tracking)
     """
@@ -2224,51 +2151,51 @@ class User(TypedDict):
     """
     Unique identifier for the user
     """
-    given_name: NotRequired[Optional[str | None]]
+    given_name: NotRequired[str | None]
     """
     Given name of the user
     """
-    family_name: NotRequired[Optional[str | None]]
+    family_name: NotRequired[str | None]
     """
     Family name of the user
     """
-    email: NotRequired[Optional[str | None]]
+    email: NotRequired[str | None]
     """
     The user's email
     """
-    avatar_url: NotRequired[Optional[str | None]]
+    avatar_url: NotRequired[str | None]
     """
     URL of the user's Avatar image
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of user creation
     """
 
 
 class ViewDataSearch(TypedDict):
-    filter: NotRequired[Optional[Sequence[Any] | None]]
-    tag: NotRequired[Optional[Sequence[Any] | None]]
-    match: NotRequired[Optional[Sequence[Any] | None]]
-    sort: NotRequired[Optional[Sequence[Any] | None]]
+    filter: NotRequired[Sequence[Any] | None]
+    tag: NotRequired[Sequence[Any] | None]
+    match: NotRequired[Sequence[Any] | None]
+    sort: NotRequired[Sequence[Any] | None]
 
 
 class ViewOptionsViewOptionsOptions(TypedDict):
-    spanType: NotRequired[Optional[Literal['range', 'frame']]]
-    rangeValue: NotRequired[Optional[str | None]]
-    frameStart: NotRequired[Optional[str | None]]
-    frameEnd: NotRequired[Optional[str | None]]
-    tzUTC: NotRequired[Optional[bool | None]]
-    chartVisibility: NotRequired[Optional[Mapping[str, Any] | None]]
-    projectId: NotRequired[Optional[str | None]]
-    type: NotRequired[Optional[Literal['project', 'experiment']]]
-    groupBy: NotRequired[Optional[str | None]]
+    spanType: NotRequired[Literal['range', 'frame'] | None]
+    rangeValue: NotRequired[str | None]
+    frameStart: NotRequired[str | None]
+    frameEnd: NotRequired[str | None]
+    tzUTC: NotRequired[bool | None]
+    chartVisibility: NotRequired[Mapping[str, Any] | None]
+    projectId: NotRequired[str | None]
+    type: NotRequired[Literal['project', 'experiment'] | None]
+    groupBy: NotRequired[str | None]
 
 
 class ViewOptionsViewOptions(TypedDict):
     viewType: Literal['monitor']
     options: ViewOptionsViewOptionsOptions
-    freezeColumns: NotRequired[Optional[bool | None]]
+    freezeColumns: NotRequired[bool | None]
 
 
 class ViewOptionsViewOptions1ExcludedMeasure(TypedDict):
@@ -2306,26 +2233,26 @@ ViewOptionsViewOptions1TimeRangeFilter = TypedDict(
 
 
 class ViewOptionsViewOptions1(TypedDict):
-    columnVisibility: NotRequired[Optional[Mapping[str, Any] | None]]
-    columnOrder: NotRequired[Optional[Sequence[str]]]
-    columnSizing: NotRequired[Optional[Mapping[str, Any] | None]]
-    grouping: NotRequired[Optional[str | None]]
-    rowHeight: NotRequired[Optional[str | None]]
-    tallGroupRows: NotRequired[Optional[bool | None]]
-    layout: NotRequired[Optional[str | None]]
-    chartHeight: NotRequired[Optional[float | None]]
-    excludedMeasures: NotRequired[Optional[Sequence[ViewOptionsViewOptions1ExcludedMeasure]]]
-    yMetric: NotRequired[Optional[ViewOptionsViewOptions1YMetric | None]]
-    xAxis: NotRequired[Optional[ViewOptionsViewOptions1XAxis | None]]
-    symbolGrouping: NotRequired[Optional[ViewOptionsViewOptions1SymbolGrouping | None]]
-    xAxisAggregation: NotRequired[Optional[str | None]]
+    columnVisibility: NotRequired[Mapping[str, Any] | None]
+    columnOrder: NotRequired[Sequence[str] | None]
+    columnSizing: NotRequired[Mapping[str, Any] | None]
+    grouping: NotRequired[str | None]
+    rowHeight: NotRequired[str | None]
+    tallGroupRows: NotRequired[bool | None]
+    layout: NotRequired[str | None]
+    chartHeight: NotRequired[float | None]
+    excludedMeasures: NotRequired[Sequence[ViewOptionsViewOptions1ExcludedMeasure] | None]
+    yMetric: NotRequired[ViewOptionsViewOptions1YMetric | None]
+    xAxis: NotRequired[ViewOptionsViewOptions1XAxis | None]
+    symbolGrouping: NotRequired[ViewOptionsViewOptions1SymbolGrouping | None]
+    xAxisAggregation: NotRequired[str | None]
     """
     One of 'avg', 'sum', 'min', 'max', 'median', 'all'
     """
-    chartAnnotations: NotRequired[Optional[Sequence[ViewOptionsViewOptions1ChartAnnotation]]]
-    timeRangeFilter: NotRequired[Optional[str | ViewOptionsViewOptions1TimeRangeFilter | None]]
-    queryShape: NotRequired[Optional[Literal['traces', 'spans']]]
-    freezeColumns: NotRequired[Optional[bool | None]]
+    chartAnnotations: NotRequired[Sequence[ViewOptionsViewOptions1ChartAnnotation] | None]
+    timeRangeFilter: NotRequired[str | ViewOptionsViewOptions1TimeRangeFilter | None]
+    queryShape: NotRequired[Literal['traces', 'spans'] | None]
+    freezeColumns: NotRequired[bool | None]
 
 
 ViewOptions: TypeAlias = ViewOptionsViewOptions | ViewOptionsViewOptions1 | None
@@ -2344,17 +2271,17 @@ class Acl(TypedDict):
     """
     The id of the object the ACL applies to
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Id of the user the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
-    group_id: NotRequired[Optional[str | None]]
+    group_id: NotRequired[str | None]
     """
     Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
-    permission: NotRequired[Optional[Permission]]
-    restrict_object_type: NotRequired[Optional[AclObjectType]]
-    role_id: NotRequired[Optional[str | None]]
+    permission: NotRequired[Permission | None]
+    restrict_object_type: NotRequired[AclObjectType | None]
+    role_id: NotRequired[str | None]
     """
     Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
     """
@@ -2362,49 +2289,49 @@ class Acl(TypedDict):
     """
     The organization the ACL's referred object belongs to
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of acl creation
     """
 
 
 class AnyModelParams(TypedDict):
-    temperature: NotRequired[Optional[float]]
-    top_p: NotRequired[Optional[float]]
+    temperature: NotRequired[float | None]
+    top_p: NotRequired[float | None]
     max_tokens: float
-    max_completion_tokens: NotRequired[Optional[float]]
+    max_completion_tokens: NotRequired[float | None]
     """
     The successor to max_tokens
     """
-    frequency_penalty: NotRequired[Optional[float]]
-    presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[ResponseFormatNullish]]
-    tool_choice: NotRequired[Optional[Literal['auto'] | Literal['none'] | Literal['required'] | AnyModelParamsToolChoice]]
-    function_call: NotRequired[Optional[Literal['auto'] | Literal['none'] | AnyModelParamsFunctionCall]]
-    n: NotRequired[Optional[float]]
-    stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
-    top_k: NotRequired[Optional[float]]
-    stop_sequences: NotRequired[Optional[Sequence[str]]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
-    max_tokens_to_sample: NotRequired[Optional[float]]
+    frequency_penalty: NotRequired[float | None]
+    presence_penalty: NotRequired[float | None]
+    response_format: NotRequired[ResponseFormatNullish | None]
+    tool_choice: NotRequired[Literal['auto'] | Literal['none'] | Literal['required'] | AnyModelParamsToolChoice | None]
+    function_call: NotRequired[Literal['auto'] | Literal['none'] | AnyModelParamsFunctionCall | None]
+    n: NotRequired[float | None]
+    stop: NotRequired[Sequence[str] | None]
+    reasoning_effort: NotRequired[Literal['none', 'minimal', 'low', 'medium', 'high'] | None]
+    verbosity: NotRequired[Literal['low', 'medium', 'high'] | None]
+    top_k: NotRequired[float | None]
+    stop_sequences: NotRequired[Sequence[str] | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
+    max_tokens_to_sample: NotRequired[float | None]
     """
     This is a legacy parameter that should not be used.
     """
-    maxOutputTokens: NotRequired[Optional[float]]
-    topP: NotRequired[Optional[float]]
-    topK: NotRequired[Optional[float]]
-    use_cache: NotRequired[Optional[bool]]
+    maxOutputTokens: NotRequired[float | None]
+    topP: NotRequired[float | None]
+    topK: NotRequired[float | None]
+    use_cache: NotRequired[bool | None]
 
 
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
     function_ids: Sequence[Any]
-    skip_logging: NotRequired[Optional[bool | None]]
-    triggered_function_ids: NotRequired[Optional[Sequence[TriggeredFunction]]]
+    skip_logging: NotRequired[bool | None]
+    triggered_function_ids: NotRequired[Sequence[TriggeredFunction] | None]
 
 
 AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
@@ -2415,10 +2342,29 @@ AttachmentReference: TypeAlias = BraintrustAttachmentReference | ExternalAttachm
 
 class AttachmentStatus(TypedDict):
     upload_status: UploadStatus
-    error_message: NotRequired[Optional[str]]
+    error_message: NotRequired[str | None]
     """
     Describes the error encountered while uploading.
     """
+
+
+class PreprocessorPreprocessor1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+    pass
+
+
+Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
 
 
 ChatCompletionContentPart: TypeAlias = (
@@ -2431,16 +2377,16 @@ ChatCompletionContentPart: TypeAlias = (
 class ChatCompletionMessageParamChatCompletionMessageParam1(TypedDict):
     content: str | Sequence[ChatCompletionContentPart]
     role: Literal['user']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam2(TypedDict):
     role: Literal['assistant']
-    content: NotRequired[Optional[str | Sequence[ChatCompletionContentPartText] | None]]
-    function_call: NotRequired[Optional[ChatCompletionMessageParamChatCompletionMessageParam2FunctionCall]]
-    name: NotRequired[Optional[str]]
-    tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
-    reasoning: NotRequired[Optional[Sequence[ChatCompletionMessageReasoning]]]
+    content: NotRequired[str | Sequence[ChatCompletionContentPartText] | None]
+    function_call: NotRequired[ChatCompletionMessageParamChatCompletionMessageParam2FunctionCall | None]
+    name: NotRequired[str | None]
+    tool_calls: NotRequired[Sequence[ChatCompletionMessageToolCall] | None]
+    reasoning: NotRequired[Sequence[ChatCompletionMessageReasoning] | None]
 
 
 ChatCompletionMessageParam: TypeAlias = (
@@ -2457,7 +2403,7 @@ ChatCompletionMessageParam: TypeAlias = (
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDict):
     content: str | Sequence[ChatCompletionContentPart]
     role: Literal['user']
-    name: NotRequired[Optional[str]]
+    name: NotRequired[str | None]
 
 
 ChatCompletionOpenAIMessageParam: TypeAlias = (
@@ -2483,7 +2429,7 @@ class DatasetEvent(TypedDict):
     """
     The timestamp the dataset event was created
     """
-    _pagination_key: NotRequired[Optional[str | None]]
+    _pagination_key: NotRequired[str | None]
     """
     A stable, time-ordered key that can be used to paginate over dataset events. This field is auto-generated by Braintrust and only exists in Brainstore.
     """
@@ -2495,19 +2441,19 @@ class DatasetEvent(TypedDict):
     """
     Unique identifier for the dataset
     """
-    input: NotRequired[Optional[Any]]
+    input: NotRequired[Any | None]
     """
     The argument that uniquely define an input case (an arbitrary, JSON serializable object)
     """
-    expected: NotRequired[Optional[Any]]
+    expected: NotRequired[Any | None]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object)
     """
-    metadata: NotRequired[Optional[DatasetEventMetadata | None]]
+    metadata: NotRequired[DatasetEventMetadata | None]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags to log
     """
@@ -2519,16 +2465,16 @@ class DatasetEvent(TypedDict):
     """
     A unique identifier for the trace this dataset event belongs to
     """
-    is_root: NotRequired[Optional[bool | None]]
+    is_root: NotRequired[bool | None]
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[ObjectReferenceNullish | None]]
-    comments: NotRequired[Optional[Sequence[Any] | None]]
+    origin: NotRequired[ObjectReferenceNullish | None]
+    comments: NotRequired[Sequence[Any] | None]
     """
     Optional list of comments attached to this event
     """
-    audit_data: NotRequired[Optional[Sequence[Any] | None]]
+    audit_data: NotRequired[Sequence[Any] | None]
     """
     Optional list of audit entries attached to this event
     """
@@ -2547,32 +2493,32 @@ class Experiment(TypedDict):
     """
     Name of the experiment. Within a project, experiment names are unique
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the experiment
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of experiment creation
     """
-    repo_info: NotRequired[Optional[RepoInfo | None]]
-    commit: NotRequired[Optional[str | None]]
+    repo_info: NotRequired[RepoInfo | None]
+    commit: NotRequired[str | None]
     """
     Commit, taken directly from `repo_info.commit`
     """
-    base_exp_id: NotRequired[Optional[str | None]]
+    base_exp_id: NotRequired[str | None]
     """
     Id of default base experiment to compare against when viewing this experiment
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of experiment deletion, or null if the experiment is still active
     """
-    dataset_id: NotRequired[Optional[str | None]]
+    dataset_id: NotRequired[str | None]
     """
     Identifier of the linked dataset, or null if the experiment is not linked to a dataset
     """
-    dataset_version: NotRequired[Optional[str | None]]
+    dataset_version: NotRequired[str | None]
     """
     Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.
     """
@@ -2580,18 +2526,31 @@ class Experiment(TypedDict):
     """
     Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the experiment
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     User-controlled metadata about the experiment
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags for the experiment
     """
+
+
+class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+ExtendedSavedFunctionId: TypeAlias = (
+    ExtendedSavedFunctionIdExtendedSavedFunctionId
+    | ExtendedSavedFunctionIdExtendedSavedFunctionId1
+    | ExtendedSavedFunctionIdExtendedSavedFunctionId2
+)
 
 
 class FacetAutomationConfig(TypedDict):
@@ -2607,52 +2566,108 @@ class FacetAutomationConfig(TypedDict):
     """
     The scope at which to run the facet
     """
-    sampling_rate: NotRequired[Optional[float]]
+    sampling_rate: NotRequired[float | None]
     """
     The sampling rate for facet extraction (0-1, default: 1)
     """
-    btql_filter: NotRequired[Optional[str | None]]
+    btql_filter: NotRequired[str | None]
     """
     Optional BTQL filter to select which spans/traces to process
     """
 
 
+class Preprocessor1Preprocessor11(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+class Preprocessor1Preprocessor14(Preprocessor1Preprocessor11, Preprocessor1Preprocessor12):
+    pass
+
+
+Preprocessor1: TypeAlias = Preprocessor1Preprocessor13 | Preprocessor1Preprocessor14
+
+
+class FacetData(TypedDict):
+    type: Literal['facet']
+    preprocessor: NotRequired[Preprocessor1 | None]
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[str | None]
+    """
+    The model to use for facet extraction
+    """
+    no_match_pattern: NotRequired[str | None]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
+    """
+
+
+class FunctionDataFunctionData3(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    config: NotRequired[Mapping[str, Any] | None]
+    """
+    Configuration options to pass to the global function (e.g., for preprocessor customization)
+    """
+
+
+class FunctionIdFunctionId2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
 class InvokeFunctionInvokeFunction7(TypedDict):
-    input: NotRequired[Optional[Any]]
+    input: NotRequired[Any | None]
     """
     Argument to the function, which can be any JSON serializable value
     """
-    expected: NotRequired[Optional[Any]]
+    expected: NotRequired[Any | None]
     """
     The expected output of the function
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     Any relevant metadata. This will be logged and available as the `metadata` argument.
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     Any relevant tags to log on the span.
     """
-    messages: NotRequired[Optional[Sequence[ChatCompletionMessageParam]]]
+    messages: NotRequired[Sequence[ChatCompletionMessageParam] | None]
     """
     If the function is an LLM, additional messages to pass along to it
     """
-    parent: NotRequired[Optional[InvokeParent]]
-    stream: NotRequired[Optional[bool | None]]
+    parent: NotRequired[InvokeParent | None]
+    stream: NotRequired[bool | None]
     """
     Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
     """
-    mode: NotRequired[Optional[StreamingMode]]
-    strict: NotRequired[Optional[bool | None]]
+    mode: NotRequired[StreamingMode | None]
+    strict: NotRequired[bool | None]
     """
     If true, throw an error if one of the variables in the prompt is not present in the input
     """
-    mcp_auth: NotRequired[Optional[Mapping[str, InvokeFunctionMcpAuth]]]
+    mcp_auth: NotRequired[Mapping[str, InvokeFunctionMcpAuth] | None]
     """
     Map of MCP server URL to auth credentials
     """
-    overrides: NotRequired[Optional[Mapping[str, Any] | None]]
+    overrides: NotRequired[Mapping[str, Any] | None]
     """
     Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
     """
@@ -2679,27 +2694,27 @@ class InvokeFunctionInvokeFunction12(InvokeFunctionInvokeFunction4, InvokeFuncti
 
 
 class ModelParamsModelParams(TypedDict):
-    use_cache: NotRequired[Optional[bool]]
-    reasoning_enabled: NotRequired[Optional[bool]]
-    reasoning_budget: NotRequired[Optional[float]]
-    temperature: NotRequired[Optional[float]]
-    top_p: NotRequired[Optional[float]]
-    max_tokens: NotRequired[Optional[float]]
-    max_completion_tokens: NotRequired[Optional[float]]
+    use_cache: NotRequired[bool | None]
+    reasoning_enabled: NotRequired[bool | None]
+    reasoning_budget: NotRequired[float | None]
+    temperature: NotRequired[float | None]
+    top_p: NotRequired[float | None]
+    max_tokens: NotRequired[float | None]
+    max_completion_tokens: NotRequired[float | None]
     """
     The successor to max_tokens
     """
-    frequency_penalty: NotRequired[Optional[float]]
-    presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[ResponseFormatNullish]]
+    frequency_penalty: NotRequired[float | None]
+    presence_penalty: NotRequired[float | None]
+    response_format: NotRequired[ResponseFormatNullish | None]
     tool_choice: NotRequired[
         Literal['auto'] | Literal['none'] | Literal['required'] | ModelParamsModelParamsToolChoice
     ]
-    function_call: NotRequired[Optional[Literal['auto'] | Literal['none'] | ModelParamsModelParamsFunctionCall]]
-    n: NotRequired[Optional[float]]
-    stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal['none', 'minimal', 'low', 'medium', 'high']]]
-    verbosity: NotRequired[Optional[Literal['low', 'medium', 'high']]]
+    function_call: NotRequired[Literal['auto'] | Literal['none'] | ModelParamsModelParamsFunctionCall | None]
+    n: NotRequired[float | None]
+    stop: NotRequired[Sequence[str] | None]
+    reasoning_effort: NotRequired[Literal['none', 'minimal', 'low', 'medium', 'high'] | None]
+    verbosity: NotRequired[Literal['low', 'medium', 'high'] | None]
 
 
 ModelParams: TypeAlias = (
@@ -2720,19 +2735,19 @@ class OnlineScoreConfig(TypedDict):
     """
     The list of scorers to use for online scoring
     """
-    btql_filter: NotRequired[Optional[str | None]]
+    btql_filter: NotRequired[str | None]
     """
     Filter logs using BTQL
     """
-    apply_to_root_span: NotRequired[Optional[bool | None]]
+    apply_to_root_span: NotRequired[bool | None]
     """
     Whether to trigger online scoring on the root span of each trace
     """
-    apply_to_span_names: NotRequired[Optional[Sequence[str]]]
+    apply_to_span_names: NotRequired[Sequence[str] | None]
     """
     Trigger online scoring on any spans with a name in this list
     """
-    skip_logging: NotRequired[Optional[bool | None]]
+    skip_logging: NotRequired[bool | None]
     """
     Whether to skip adding scorer spans when computing scores
     """
@@ -2751,23 +2766,23 @@ class Project(TypedDict):
     """
     Name of the project
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the project
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of project creation
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of project deletion, or null if the project is still active
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the project
     """
-    settings: NotRequired[Optional[ProjectSettings | None]]
+    settings: NotRequired[ProjectSettings | None]
 
 
 class ProjectAutomationConfig2(TypedDict):
@@ -2791,11 +2806,11 @@ class ProjectAutomation(TypedDict):
     """
     Unique identifier for the project that the project automation belongs under
     """
-    user_id: NotRequired[Optional[str | None]]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the project automation
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of project automation creation
     """
@@ -2803,7 +2818,7 @@ class ProjectAutomation(TypedDict):
     """
     Name of the project automation
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the project automation
     """
@@ -2823,15 +2838,15 @@ ProjectScoreCategories: TypeAlias = Sequence[ProjectScoreCategory] | Mapping[str
 
 
 class ProjectScoreConfig(TypedDict):
-    multi_select: NotRequired[Optional[bool | None]]
-    destination: NotRequired[Optional[str | None]]
-    online: NotRequired[Optional[OnlineScoreConfig | None]]
+    multi_select: NotRequired[bool | None]
+    destination: NotRequired[str | None]
+    online: NotRequired[OnlineScoreConfig | None]
 
 
 class PromptBlockDataPromptBlockData(TypedDict):
     type: Literal['chat']
     messages: Sequence[ChatCompletionMessageParam]
-    tools: NotRequired[Optional[str]]
+    tools: NotRequired[str | None]
 
 
 PromptBlockData: TypeAlias = PromptBlockDataPromptBlockData | PromptBlockDataPromptBlockData1
@@ -2840,7 +2855,7 @@ PromptBlockData: TypeAlias = PromptBlockDataPromptBlockData | PromptBlockDataPro
 class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
     type: Literal['chat']
     messages: Sequence[ChatCompletionMessageParam]
-    tools: NotRequired[Optional[str]]
+    tools: NotRequired[str | None]
 
 
 PromptBlockDataNullish: TypeAlias = (
@@ -2849,15 +2864,15 @@ PromptBlockDataNullish: TypeAlias = (
 
 
 class PromptOptions(TypedDict):
-    model: NotRequired[Optional[str]]
-    params: NotRequired[Optional[ModelParams]]
-    position: NotRequired[Optional[str]]
+    model: NotRequired[str | None]
+    params: NotRequired[ModelParams | None]
+    position: NotRequired[str | None]
 
 
 class PromptOptionsNullish(TypedDict):
-    model: NotRequired[Optional[str]]
-    params: NotRequired[Optional[ModelParams]]
-    position: NotRequired[Optional[str]]
+    model: NotRequired[str | None]
+    params: NotRequired[ModelParams | None]
+    position: NotRequired[str | None]
 
 
 class ResponseFormatResponseFormat1(TypedDict):
@@ -2871,16 +2886,16 @@ ResponseFormat: TypeAlias = (
 
 
 class SpanAttributes(TypedDict):
-    name: NotRequired[Optional[str | None]]
+    name: NotRequired[str | None]
     """
     Name of the span, for display purposes only
     """
-    type: NotRequired[Optional[SpanType]]
+    type: NotRequired[SpanType | None]
 
 
 class ViewData(TypedDict):
-    search: NotRequired[Optional[ViewDataSearch | None]]
-    custom_charts: NotRequired[Optional[Any]]
+    search: NotRequired[ViewDataSearch | None]
+    custom_charts: NotRequired[Any | None]
 
 
 class AsyncScoringControlAsyncScoringControl1(TypedDict):
@@ -2911,7 +2926,7 @@ class ExperimentEvent(TypedDict):
     """
     The timestamp the experiment event was created
     """
-    _pagination_key: NotRequired[Optional[str | None]]
+    _pagination_key: NotRequired[str | None]
     """
     A stable, time-ordered key that can be used to paginate over experiment events. This field is auto-generated by Braintrust and only exists in Brainstore.
     """
@@ -2923,39 +2938,39 @@ class ExperimentEvent(TypedDict):
     """
     Unique identifier for the experiment
     """
-    input: NotRequired[Optional[Any]]
+    input: NotRequired[Any | None]
     """
     The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
     """
-    output: NotRequired[Optional[Any]]
+    output: NotRequired[Any | None]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
     """
-    expected: NotRequired[Optional[Any]]
+    expected: NotRequired[Any | None]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
     """
-    error: NotRequired[Optional[Any]]
+    error: NotRequired[Any | None]
     """
     The error that occurred, if any.
     """
-    scores: NotRequired[Optional[Mapping[str, Any] | None]]
+    scores: NotRequired[Mapping[str, Any] | None]
     """
     A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
     """
-    metadata: NotRequired[Optional[ExperimentEventMetadata | None]]
+    metadata: NotRequired[ExperimentEventMetadata | None]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags to log
     """
-    metrics: NotRequired[Optional[ExperimentEventMetrics | None]]
+    metrics: NotRequired[ExperimentEventMetrics | None]
     """
     Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
     """
-    context: NotRequired[Optional[ExperimentEventContext | None]]
+    context: NotRequired[ExperimentEventContext | None]
     """
     Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
     """
@@ -2963,7 +2978,7 @@ class ExperimentEvent(TypedDict):
     """
     A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
     """
-    span_parents: NotRequired[Optional[Sequence[str]]]
+    span_parents: NotRequired[Sequence[str] | None]
     """
     An array of the parent `span_ids` of this experiment event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
     """
@@ -2971,28 +2986,28 @@ class ExperimentEvent(TypedDict):
     """
     A unique identifier for the trace this experiment event belongs to
     """
-    span_attributes: NotRequired[Optional[SpanAttributes | None]]
-    is_root: NotRequired[Optional[bool | None]]
+    span_attributes: NotRequired[SpanAttributes | None]
+    is_root: NotRequired[bool | None]
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[ObjectReferenceNullish | None]]
-    comments: NotRequired[Optional[Sequence[Any] | None]]
+    origin: NotRequired[ObjectReferenceNullish | None]
+    comments: NotRequired[Sequence[Any] | None]
     """
     Optional list of comments attached to this event
     """
-    audit_data: NotRequired[Optional[Sequence[Any] | None]]
+    audit_data: NotRequired[Sequence[Any] | None]
     """
     Optional list of audit entries attached to this event
     """
 
 
 class GraphNodeGraphNode7(TypedDict):
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     The description of the node
     """
-    position: NotRequired[Optional[GraphNodeGraphNode7Position | None]]
+    position: NotRequired[GraphNodeGraphNode7Position | None]
     """
     The position of the node
     """
@@ -3021,7 +3036,7 @@ class ProjectLogsEvent(TypedDict):
     """
     The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the project logs (see the `version` parameter)
     """
-    _pagination_key: NotRequired[Optional[str | None]]
+    _pagination_key: NotRequired[str | None]
     """
     A stable, time-ordered key that can be used to paginate over project logs events. This field is auto-generated by Braintrust and only exists in Brainstore.
     """
@@ -3041,39 +3056,39 @@ class ProjectLogsEvent(TypedDict):
     """
     A literal 'g' which identifies the log as a project log
     """
-    input: NotRequired[Optional[Any]]
+    input: NotRequired[Any | None]
     """
     The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
     """
-    output: NotRequired[Optional[Any]]
+    output: NotRequired[Any | None]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
     """
-    expected: NotRequired[Optional[Any]]
+    expected: NotRequired[Any | None]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
     """
-    error: NotRequired[Optional[Any]]
+    error: NotRequired[Any | None]
     """
     The error that occurred, if any.
     """
-    scores: NotRequired[Optional[Mapping[str, Any] | None]]
+    scores: NotRequired[Mapping[str, Any] | None]
     """
     A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
     """
-    metadata: NotRequired[Optional[ProjectLogsEventMetadata | None]]
+    metadata: NotRequired[ProjectLogsEventMetadata | None]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags to log
     """
-    metrics: NotRequired[Optional[ProjectLogsEventMetrics | None]]
+    metrics: NotRequired[ProjectLogsEventMetrics | None]
     """
     Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
     """
-    context: NotRequired[Optional[ProjectLogsEventContext | None]]
+    context: NotRequired[ProjectLogsEventContext | None]
     """
     Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
     """
@@ -3081,7 +3096,7 @@ class ProjectLogsEvent(TypedDict):
     """
     A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
     """
-    span_parents: NotRequired[Optional[Sequence[str]]]
+    span_parents: NotRequired[Sequence[str] | None]
     """
     An array of the parent `span_ids` of this project logs event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
     """
@@ -3089,21 +3104,21 @@ class ProjectLogsEvent(TypedDict):
     """
     A unique identifier for the trace this project logs event belongs to
     """
-    is_root: NotRequired[Optional[bool | None]]
+    is_root: NotRequired[bool | None]
     """
     Whether this span is a root span
     """
-    span_attributes: NotRequired[Optional[SpanAttributes | None]]
-    origin: NotRequired[Optional[ObjectReferenceNullish | None]]
-    comments: NotRequired[Optional[Sequence[Any] | None]]
+    span_attributes: NotRequired[SpanAttributes | None]
+    origin: NotRequired[ObjectReferenceNullish | None]
+    comments: NotRequired[Sequence[Any] | None]
     """
     Optional list of comments attached to this event
     """
-    audit_data: NotRequired[Optional[Sequence[Any] | None]]
+    audit_data: NotRequired[Sequence[Any] | None]
     """
     Optional list of audit entries attached to this event
     """
-    _async_scoring_state: NotRequired[Optional[Any]]
+    _async_scoring_state: NotRequired[Any | None]
     """
     The async scoring state for this event
     """
@@ -3119,7 +3134,7 @@ class ProjectScore(TypedDict):
     Unique identifier for the project that the project score belongs under
     """
     user_id: str
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of project score creation
     """
@@ -3127,44 +3142,44 @@ class ProjectScore(TypedDict):
     """
     Name of the project score
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the project score
     """
     score_type: ProjectScoreType
-    categories: NotRequired[Optional[ProjectScoreCategories]]
-    config: NotRequired[Optional[ProjectScoreConfig | None]]
-    position: NotRequired[Optional[str | None]]
+    categories: NotRequired[ProjectScoreCategories | None]
+    config: NotRequired[ProjectScoreConfig | None]
+    position: NotRequired[str | None]
     """
     An optional LexoRank-based string that sets the sort position for the score in the UI
     """
 
 
 class PromptData(TypedDict):
-    prompt: NotRequired[Optional[PromptBlockDataNullish]]
-    options: NotRequired[Optional[PromptOptionsNullish | None]]
-    parser: NotRequired[Optional[PromptParserNullish | None]]
-    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
-    template_format: NotRequired[Optional[Literal['mustache', 'nunjucks', 'none']]]
-    mcp: NotRequired[Optional[Mapping[str, Any] | None]]
-    origin: NotRequired[Optional[PromptDataOrigin | None]]
+    prompt: NotRequired[PromptBlockDataNullish | None]
+    options: NotRequired[PromptOptionsNullish | None]
+    parser: NotRequired[PromptParserNullish | None]
+    tool_functions: NotRequired[Sequence[SavedFunctionId] | None]
+    template_format: NotRequired[Literal['mustache', 'nunjucks', 'none'] | None]
+    mcp: NotRequired[Mapping[str, Any] | None]
+    origin: NotRequired[PromptDataOrigin | None]
 
 
 class PromptDataNullish(TypedDict):
-    prompt: NotRequired[Optional[PromptBlockDataNullish]]
-    options: NotRequired[Optional[PromptOptionsNullish | None]]
-    parser: NotRequired[Optional[PromptParserNullish | None]]
-    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
-    template_format: NotRequired[Optional[Literal['mustache', 'nunjucks', 'none']]]
-    mcp: NotRequired[Optional[Mapping[str, Any] | None]]
-    origin: NotRequired[Optional[PromptDataNullishOrigin | None]]
+    prompt: NotRequired[PromptBlockDataNullish | None]
+    options: NotRequired[PromptOptionsNullish | None]
+    parser: NotRequired[PromptParserNullish | None]
+    tool_functions: NotRequired[Sequence[SavedFunctionId] | None]
+    template_format: NotRequired[Literal['mustache', 'nunjucks', 'none'] | None]
+    mcp: NotRequired[Mapping[str, Any] | None]
+    origin: NotRequired[PromptDataNullishOrigin | None]
 
 
 class TaskTask5(TypedDict):
-    inline_prompt: NotRequired[Optional[PromptData]]
+    inline_prompt: NotRequired[PromptData | None]
     inline_function: Mapping[str, Any]
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline function
     """
@@ -3172,8 +3187,8 @@ class TaskTask5(TypedDict):
 
 class TaskTask6(TypedDict):
     inline_prompt: PromptData
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline prompt
     """
@@ -3223,27 +3238,27 @@ class View(TypedDict):
     """
     Name of the view
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of view creation
     """
-    view_data: NotRequired[Optional[ViewData | None]]
-    options: NotRequired[Optional[ViewOptions]]
-    user_id: NotRequired[Optional[str | None]]
+    view_data: NotRequired[ViewData | None]
+    options: NotRequired[ViewOptions | None]
+    user_id: NotRequired[str | None]
     """
     Identifies the user who created the view
     """
-    deleted_at: NotRequired[Optional[str | None]]
+    deleted_at: NotRequired[str | None]
     """
     Date of role deletion, or null if the role is still active
     """
 
 
 class FunctionIdFunctionId5(TypedDict):
-    inline_prompt: NotRequired[Optional[PromptData]]
+    inline_prompt: NotRequired[PromptData | None]
     inline_function: Mapping[str, Any]
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline function
     """
@@ -3251,8 +3266,8 @@ class FunctionIdFunctionId5(TypedDict):
 
 class FunctionIdFunctionId6(TypedDict):
     inline_prompt: PromptData
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline prompt
     """
@@ -3279,10 +3294,10 @@ class GraphData(TypedDict):
 
 
 class InvokeFunctionInvokeFunction5(TypedDict):
-    inline_prompt: NotRequired[Optional[PromptData]]
+    inline_prompt: NotRequired[PromptData | None]
     inline_function: Mapping[str, Any]
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline function
     """
@@ -3290,8 +3305,8 @@ class InvokeFunctionInvokeFunction5(TypedDict):
 
 class InvokeFunctionInvokeFunction6(TypedDict):
     inline_prompt: PromptData
-    function_type: NotRequired[Optional[FunctionTypeEnum]]
-    name: NotRequired[Optional[str | None]]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
     """
     The name of the inline prompt
     """
@@ -3348,24 +3363,24 @@ class Prompt(TypedDict):
     """
     Unique identifier for the prompt
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the prompt
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of prompt creation
     """
-    prompt_data: NotRequired[Optional[PromptDataNullish | None]]
-    tags: NotRequired[Optional[Sequence[str]]]
+    prompt_data: NotRequired[PromptDataNullish | None]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags for the prompt
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     User-controlled metadata about the prompt
     """
-    function_type: NotRequired[Optional[FunctionTypeEnumNullish]]
+    function_type: NotRequired[FunctionTypeEnumNullish | None]
 
 
 class RunEval(TypedDict):
@@ -3382,62 +3397,62 @@ class RunEval(TypedDict):
     """
     The functions to score the eval on
     """
-    experiment_name: NotRequired[Optional[str]]
+    experiment_name: NotRequired[str | None]
     """
     An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
     """
-    metadata: NotRequired[Optional[Mapping[str, Any]]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
     """
-    parent: NotRequired[Optional[Parent]]
-    stream: NotRequired[Optional[bool]]
+    parent: NotRequired[Parent | None]
+    stream: NotRequired[bool | None]
     """
     Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
     """
-    trial_count: NotRequired[Optional[float | None]]
+    trial_count: NotRequired[float | None]
     """
     The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
     """
-    is_public: NotRequired[Optional[bool | None]]
+    is_public: NotRequired[bool | None]
     """
     Whether the experiment should be public. Defaults to false.
     """
-    timeout: NotRequired[Optional[float | None]]
+    timeout: NotRequired[float | None]
     """
     The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
     """
-    max_concurrency: NotRequired[Optional[float | None]]
+    max_concurrency: NotRequired[float | None]
     """
     The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.
     """
-    base_experiment_name: NotRequired[Optional[str | None]]
+    base_experiment_name: NotRequired[str | None]
     """
     An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
     """
-    base_experiment_id: NotRequired[Optional[str | None]]
+    base_experiment_id: NotRequired[str | None]
     """
     An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
     """
-    git_metadata_settings: NotRequired[Optional[GitMetadataSettings]]
-    repo_info: NotRequired[Optional[RepoInfo | None]]
-    strict: NotRequired[Optional[bool | None]]
+    git_metadata_settings: NotRequired[GitMetadataSettings | None]
+    repo_info: NotRequired[RepoInfo | None]
+    strict: NotRequired[bool | None]
     """
     If true, throw an error if one of the variables in the prompt is not present in the input
     """
-    stop_token: NotRequired[Optional[str | None]]
+    stop_token: NotRequired[str | None]
     """
     The token to stop the run
     """
-    extra_messages: NotRequired[Optional[str]]
+    extra_messages: NotRequired[str | None]
     """
     A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.
     """
-    tags: NotRequired[Optional[Sequence[str]]]
+    tags: NotRequired[Sequence[str] | None]
     """
     Optional tags that will be added to the experiment.
     """
-    mcp_auth: NotRequired[Optional[Mapping[str, RunEvalMcpAuth]]]
+    mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
 FunctionData: TypeAlias = (
@@ -3480,27 +3495,27 @@ class Function(TypedDict):
     """
     Unique identifier for the prompt
     """
-    description: NotRequired[Optional[str | None]]
+    description: NotRequired[str | None]
     """
     Textual description of the prompt
     """
-    created: NotRequired[Optional[str | None]]
+    created: NotRequired[str | None]
     """
     Date of prompt creation
     """
-    prompt_data: NotRequired[Optional[PromptDataNullish | None]]
-    tags: NotRequired[Optional[Sequence[str]]]
+    prompt_data: NotRequired[PromptDataNullish | None]
+    tags: NotRequired[Sequence[str] | None]
     """
     A list of tags for the prompt
     """
-    metadata: NotRequired[Optional[Mapping[str, Any] | None]]
+    metadata: NotRequired[Mapping[str, Any] | None]
     """
     User-controlled metadata about the prompt
     """
-    function_type: NotRequired[Optional[FunctionTypeEnumNullish]]
+    function_type: NotRequired[FunctionTypeEnumNullish | None]
     function_data: FunctionData
-    origin: NotRequired[Optional[FunctionOrigin | None]]
-    function_schema: NotRequired[Optional[FunctionFunctionSchema | None]]
+    origin: NotRequired[FunctionOrigin | None]
+    function_schema: NotRequired[FunctionFunctionSchema | None]
     """
     JSON schema for the function's parameters and return type
     """

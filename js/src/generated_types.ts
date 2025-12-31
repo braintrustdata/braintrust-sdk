@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 6430917922738f0371af4fd3f99f2ecceb3885ba) -- do not modify
+// Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -200,9 +200,28 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
+export const NullableFunctionTypeEnum = z.union([
+  z.enum([
+    "llm",
+    "scorer",
+    "task",
+    "tool",
+    "custom_view",
+    "preprocessor",
+    "facet",
+  ]),
+  z.null(),
+]);
+export type NullableFunctionTypeEnumType = z.infer<
+  typeof NullableFunctionTypeEnum
+>;
 export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.null(),
 ]);
 export type NullableSavedFunctionIdType = z.infer<
@@ -637,7 +656,11 @@ export const ExperimentEvent = z.object({
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     type: z.literal("slug"),
     project_id: z.string(),
@@ -649,7 +672,11 @@ export type ExtendedSavedFunctionIdType = z.infer<
 >;
 export const SavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
 ]);
 export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const SpanScope = z.object({ type: z.literal("span") });
@@ -964,6 +991,7 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
     config: z
       .union([z.object({}).partial().passthrough(), z.null()])
       .optional(),
@@ -1068,7 +1096,10 @@ export const FunctionId = z.union([
     slug: z.string(),
     version: z.string().optional(),
   }),
-  z.object({ global_function: z.string() }),
+  z.object({
+    global_function: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     prompt_session_id: z.string(),
     prompt_session_function_id: z.string(),
