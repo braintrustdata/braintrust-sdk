@@ -47,7 +47,7 @@ Advanced Usage with LiteLLM Patching:
     ```
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from braintrust.logger import current_span, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -58,9 +58,7 @@ from braintrust.span_types import SpanTypeAttribute
 try:
     from dspy.utils.callback import BaseCallback
 except ImportError:
-    raise ImportError(
-        "DSPy is not installed. Please install it with: pip install dspy"
-    )
+    raise ImportError("DSPy is not installed. Please install it with: pip install dspy")
 
 
 class BraintrustDSpyCallback(BaseCallback):
@@ -130,13 +128,13 @@ class BraintrustDSpyCallback(BaseCallback):
         """Initialize the Braintrust DSPy callback handler."""
         super().__init__()
         # Map call_id to span objects for proper nesting
-        self._spans: Dict[str, Any] = {}
+        self._spans: dict[str, Any] = {}
 
     def on_lm_start(
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a language model call.
 
@@ -174,8 +172,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_lm_end(
         self,
         call_id: str,
-        outputs: Optional[Dict[str, Any]],
-        exception: Optional[Exception] = None,
+        outputs: dict[str, Any] | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a language model call.
 
@@ -205,7 +203,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a DSPy module execution.
 
@@ -236,8 +234,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_module_end(
         self,
         call_id: str,
-        outputs: Optional[Any],
-        exception: Optional[Exception] = None,
+        outputs: Any | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a DSPy module execution.
 
@@ -274,7 +272,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a tool invocation.
 
@@ -309,8 +307,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_tool_end(
         self,
         call_id: str,
-        outputs: Optional[Dict[str, Any]],
-        exception: Optional[Exception] = None,
+        outputs: dict[str, Any] | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a tool invocation.
 
@@ -340,7 +338,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of an evaluation run.
 
@@ -374,8 +372,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_evaluate_end(
         self,
         call_id: str,
-        outputs: Optional[Any],
-        exception: Optional[Exception] = None,
+        outputs: Any | None,
+        exception: Exception | None = None,
     ):
         """Log the end of an evaluation run.
 

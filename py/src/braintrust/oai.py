@@ -2,7 +2,8 @@ import abc
 import base64
 import re
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from .logger import Attachment, Span, start_span
 from .span_types import SpanTypeAttribute
@@ -70,7 +71,7 @@ def log_headers(response: Any, span: Span):
         )
 
 
-def _convert_data_url_to_attachment(data_url: str, filename: Optional[str] = None) -> Union[Attachment, str]:
+def _convert_data_url_to_attachment(data_url: str, filename: str | None = None) -> Attachment | str:
     """Helper function to convert data URL to an Attachment."""
     data_url_match = re.match(r"^data:([^;]+);base64,(.+)$", data_url)
     if not data_url_match:
@@ -140,7 +141,7 @@ def _process_attachments_in_input(input_data: Any) -> Any:
 
 
 class ChatCompletionWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
 
@@ -254,7 +255,7 @@ class ChatCompletionWrapper:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
@@ -274,12 +275,12 @@ class ChatCompletionWrapper:
         )
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[dict[str, Any]]) -> dict[str, Any]:
         role = None
         content = None
-        tool_calls: Optional[List[Any]] = None
+        tool_calls: list[Any] | None = None
         finish_reason = None
-        metrics: Dict[str, float] = {}
+        metrics: dict[str, float] = {}
         for result in all_results:
             usage = result.get("usage")
             if usage:
@@ -338,7 +339,7 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
         self.name = name
@@ -447,7 +448,7 @@ class ResponseWrapper:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
@@ -467,7 +468,7 @@ class ResponseWrapper:
         )
 
     @classmethod
-    def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_event_from_result(cls, result: dict[str, Any]) -> dict[str, Any]:
         """Parse event from response result"""
         data = {"metrics": {}}
 
@@ -487,7 +488,7 @@ class ResponseWrapper:
         return data
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[Any]) -> dict[str, Any]:
         """Process streaming results - minimal version focused on metrics extraction."""
         metrics = {}
         output = []
@@ -570,13 +571,13 @@ class ResponseWrapper:
 
 
 class BaseWrapper(abc.ABC):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str):
         self._create_fn = create_fn
         self._acreate_fn = acreate_fn
         self._name = name
 
     @abc.abstractmethod
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span):
         """Process the API response and log relevant information to the span."""
         pass
 
@@ -614,7 +615,7 @@ class BaseWrapper(abc.ABC):
             return raw_response
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
@@ -634,10 +635,10 @@ class BaseWrapper(abc.ABC):
 
 
 class EmbeddingWrapper(BaseWrapper):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         super().__init__(create_fn, acreate_fn, "Embedding")
 
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span):
         usage = response.get("usage")
         metrics = _parse_metrics_from_usage(usage)
         span.log(
@@ -649,7 +650,7 @@ class EmbeddingWrapper(BaseWrapper):
 
 
 class ModerationWrapper(BaseWrapper):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         super().__init__(create_fn, acreate_fn, "Moderation")
 
     def process_output(self, response: Any, span: Span):
@@ -896,7 +897,7 @@ TOKEN_PREFIX_MAP = {
 }
 
 
-def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
+def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
     # For simplicity, this function handles all the different APIs
     metrics = {}
 
@@ -930,7 +931,7 @@ def _is_numeric(v):
     return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
 
 
-def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
     # Filter out NOT_GIVEN parameters
     # https://linear.app/braintrustdata/issue/BRA-2467
     ret = {k: v for k, v in params.items() if not _is_not_given(v)}
@@ -940,7 +941,7 @@ def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
     return ret
 
 
-def _try_to_dict(obj: Any) -> Dict[str, Any]:
+def _try_to_dict(obj: Any) -> dict[str, Any]:
     if isinstance(obj, dict):
         return obj
     # convert a pydantic object to a dict
