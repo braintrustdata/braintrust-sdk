@@ -62,6 +62,13 @@ def cleanup_internal_types():
     # nullable attribute of certain types.
     contents = re.sub(r"(\s[A-Za-z0-9_]+: NotRequired\[)(?!Optional\[\s*)(.+)(\]\n)", r"\1Optional[\2]\3", contents)
 
+    # Add Optional to imports since we wrap NotRequired values with Optional above
+    contents = re.sub(
+        r"(from typing import .+)(TypedDict)",
+        r"\1Optional, \2",
+        contents,
+    )
+
     # Replace `schema_` with `schema`; this happens because datamodel-codegen
     # treats `schema` specially, expecting Pydantic.
     contents = re.sub(r"(\s+)schema_:", r"\1schema:", contents)

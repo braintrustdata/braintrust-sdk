@@ -6,7 +6,7 @@ Auto-generated file -- do not modify.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping, Sequence, TypeAlias, TypedDict
+from typing import Any, Literal, Mapping, Optional, Sequence, TypeAlias, TypedDict
 
 from typing_extensions import NotRequired
 
