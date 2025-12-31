@@ -4,7 +4,7 @@
 from typing import Any
 from unittest import TestCase
 
-from braintrust.bt_json import deep_copy_event
+from braintrust.bt_json import deep_copy_and_sanitize_dict
 from braintrust.logger import Attachment, ExternalAttachment, _check_json_serializable
 
 
@@ -14,7 +14,7 @@ class TestBTJson(TestCase):
             "input": {"foo": "bar", "null": None, "empty": {}},
             "output": [1, 2, "3", None, {}],
         }
-        copy = deep_copy_event(original)
+        copy = deep_copy_and_sanitize_dict(original)
         self.assertEqual(copy, original)
         self.assertIsNot(copy, original)
         self.assertIsNot(copy["input"], original["input"])
@@ -57,7 +57,7 @@ class TestBTJson(TestCase):
             },
         }
 
-        copy = deep_copy_event(original)
+        copy = deep_copy_and_sanitize_dict(original)
 
         self.assertEqual(
             copy,

@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import math
-from typing import Any, Mapping, cast
+from typing import Any, Callable, Mapping, cast
 
 # Try to import orjson for better performance
 # If not available, we'll use standard json
@@ -12,14 +12,51 @@ try:
 except ImportError:
     _HAS_ORJSON = False
 
-def deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
+def _sanitize_object(v: Any) -> Any:
     """
-    Creates a deep copy of the given event. Replaces references to user objects
+    Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
     and `ExternalAttachment` objects, which are preserved and not deep-copied.
 
     Handles circular references and excessive nesting depth to prevent
     RecursionError during serialization.
+    """
+    # avoid circular imports
+    from braintrust.logger import BaseAttachment, Dataset, Experiment, Logger, ReadonlyAttachment, Span
+
+    if isinstance(v, Span):
+        return "<span>"
+    elif isinstance(v, Experiment):
+        return "<experiment>"
+    elif isinstance(v, Dataset):
+        return "<dataset>"
+    elif isinstance(v, Logger):
+        return "<logger>"
+    elif isinstance(v, BaseAttachment):
+        return v
+    elif isinstance(v, ReadonlyAttachment):
+        return v.reference
+    elif isinstance(v, float):
+        # Handle NaN and Infinity for JSON compatibility
+        if math.isnan(v):
+            return "NaN"
+        elif math.isinf(v):
+            return "Infinity" if v > 0 else "-Infinity"
+        return v
+    elif isinstance(v, (int, str, bool)) or v is None:
+        # Skip roundtrip for primitive types.
+        return v
+    else:
+        # Note: we avoid using copy.deepcopy, because it's difficult to
+        # guarantee the independence of such copied types from their origin.
+        # E.g. the original type could have a `__del__` method that alters
+        # some shared internal state, and we need this deep copy to be
+        # fully-independent from the original.
+        return bt_loads(bt_dumps(v))
+
+def deep_copy_and_sanitize_dict(dikt: Mapping[str, Any], sanitize_func: Callable[[Any], Any] | None = None) -> dict[str, Any]:
+    """
+    Creates a deep copy of the given object.
     """
     # Maximum depth to prevent hitting Python's recursion limit
     # Python's default limit is ~1000, we use a conservative limit
@@ -28,6 +65,9 @@ def deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
 
     # Track visited objects to detect circular references
     visited: set[int] = set()
+
+    if sanitize_func is None:
+        sanitize_func = _sanitize_object
 
     def _deep_copy_object(v: Any, depth: int = 0) -> Any:
         # Check depth limit - use >= to stop before exceeding
@@ -64,40 +104,9 @@ def deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
                 # to appear in different branches of the tree
                 visited.discard(obj_id)
 
-        # avoid circular imports
-        from braintrust.logger import BaseAttachment, Dataset, Experiment, Logger, ReadonlyAttachment, Span
+        return sanitize_func(v)
 
-        if isinstance(v, Span):
-            return "<span>"
-        elif isinstance(v, Experiment):
-            return "<experiment>"
-        elif isinstance(v, Dataset):
-            return "<dataset>"
-        elif isinstance(v, Logger):
-            return "<logger>"
-        elif isinstance(v, BaseAttachment):
-            return v
-        elif isinstance(v, ReadonlyAttachment):
-            return v.reference
-        elif isinstance(v, float):
-            # Handle NaN and Infinity for JSON compatibility
-            if math.isnan(v):
-                return "NaN"
-            elif math.isinf(v):
-                return "Infinity" if v > 0 else "-Infinity"
-            return v
-        elif isinstance(v, (int, str, bool)) or v is None:
-            # Skip roundtrip for primitive types.
-            return v
-        else:
-            # Note: we avoid using copy.deepcopy, because it's difficult to
-            # guarantee the independence of such copied types from their origin.
-            # E.g. the original type could have a `__del__` method that alters
-            # some shared internal state, and we need this deep copy to be
-            # fully-independent from the original.
-            return bt_loads(bt_dumps(v))
-
-    return _deep_copy_object(event)
+    return _deep_copy_object(dikt)
 
 
 def _to_dict(obj: Any) -> Any:

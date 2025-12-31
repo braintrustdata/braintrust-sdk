@@ -45,7 +45,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps, deep_copy_event
+from .bt_json import bt_dumps, deep_copy_and_sanitize_dict
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -2974,7 +2974,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    update_event = deep_copy_event(update_event)
+    update_event = deep_copy_and_sanitize_dict(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3030,7 +3030,7 @@ def _update_span_impl(
         event=event,
     )
 
-    update_event = deep_copy_event(update_event)
+    update_event = deep_copy_and_sanitize_dict(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3850,7 +3850,7 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        serializable_partial_record = deep_copy_event(partial_record)
+        serializable_partial_record = deep_copy_and_sanitize_dict(partial_record)
         _check_json_serializable(serializable_partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
@@ -4219,7 +4219,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
         _check_json_serializable(args)
-        args = deep_copy_event(args)
+        args = deep_copy_and_sanitize_dict(args)
 
         def compute_args() -> dict[str, Any]:
             return dict(
@@ -4323,7 +4323,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             },
         )
         _check_json_serializable(partial_args)
-        partial_args = deep_copy_event(partial_args)
+        partial_args = deep_copy_and_sanitize_dict(partial_args)
 
         def compute_args():
             return dict(
