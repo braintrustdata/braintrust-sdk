@@ -1,6 +1,7 @@
 import dataclasses
 import json
-from typing import Any, cast
+import math
+from typing import Any, Mapping, cast
 
 # Try to import orjson for better performance
 # If not available, we'll use standard json
@@ -10,6 +11,93 @@ try:
     _HAS_ORJSON = True
 except ImportError:
     _HAS_ORJSON = False
+
+def deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
+    """
+    Creates a deep copy of the given event. Replaces references to user objects
+    with placeholder strings to ensure serializability, except for `Attachment`
+    and `ExternalAttachment` objects, which are preserved and not deep-copied.
+
+    Handles circular references and excessive nesting depth to prevent
+    RecursionError during serialization.
+    """
+    # Maximum depth to prevent hitting Python's recursion limit
+    # Python's default limit is ~1000, we use a conservative limit
+    # to account for existing call stack usage from pytest, application code, etc.
+    MAX_DEPTH = 200
+
+    # Track visited objects to detect circular references
+    visited: set[int] = set()
+
+    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
+        # Check depth limit - use >= to stop before exceeding
+        if depth >= MAX_DEPTH:
+            return "<max depth exceeded>"
+
+        # Check for circular references in mutable containers
+        # Use id() to track object identity
+        if isinstance(v, (Mapping, list, tuple, set)):
+            obj_id = id(v)
+            if obj_id in visited:
+                return "<circular reference>"
+            visited.add(obj_id)
+            try:
+                if isinstance(v, Mapping):
+                    # Prevent dict keys from holding references to user data. Note that
+                    # `bt_json` already coerces keys to string, a behavior that comes from
+                    # `json.dumps`. However, that runs at log upload time, while we want to
+                    # cut out all the references to user objects synchronously in this
+                    # function.
+                    result = {}
+                    for k in v:
+                        try:
+                            key_str = str(k)
+                        except Exception:
+                            # If str() fails on the key, use a fallback representation
+                            key_str = f"<non-stringifiable-key: {type(k).__name__}>"
+                        result[key_str] = _deep_copy_object(v[k], depth + 1)
+                    return result
+                elif isinstance(v, (list, tuple, set)):
+                    return [_deep_copy_object(x, depth + 1) for x in v]
+            finally:
+                # Remove from visited set after processing to allow the same object
+                # to appear in different branches of the tree
+                visited.discard(obj_id)
+
+        # avoid circular imports
+        from braintrust.logger import BaseAttachment, Dataset, Experiment, Logger, ReadonlyAttachment, Span
+
+        if isinstance(v, Span):
+            return "<span>"
+        elif isinstance(v, Experiment):
+            return "<experiment>"
+        elif isinstance(v, Dataset):
+            return "<dataset>"
+        elif isinstance(v, Logger):
+            return "<logger>"
+        elif isinstance(v, BaseAttachment):
+            return v
+        elif isinstance(v, ReadonlyAttachment):
+            return v.reference
+        elif isinstance(v, float):
+            # Handle NaN and Infinity for JSON compatibility
+            if math.isnan(v):
+                return "NaN"
+            elif math.isinf(v):
+                return "Infinity" if v > 0 else "-Infinity"
+            return v
+        elif isinstance(v, (int, str, bool)) or v is None:
+            # Skip roundtrip for primitive types.
+            return v
+        else:
+            # Note: we avoid using copy.deepcopy, because it's difficult to
+            # guarantee the independence of such copied types from their origin.
+            # E.g. the original type could have a `__del__` method that alters
+            # some shared internal state, and we need this deep copy to be
+            # fully-independent from the original.
+            return bt_loads(bt_dumps(v))
+
+    return _deep_copy_object(event)
 
 
 def _to_dict(obj: Any) -> Any:
@@ -22,6 +110,7 @@ def _to_dict(obj: Any) -> Any:
     - Pydantic v1 BaseModel
     - Falls back to str() for unknown types
     """
+    # TODO: move into deep copy event
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return dataclasses.asdict(obj)
 
