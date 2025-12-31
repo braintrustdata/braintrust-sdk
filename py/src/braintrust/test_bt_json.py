@@ -5,7 +5,7 @@ import json
 from typing import Any
 from unittest import TestCase
 
-from braintrust.bt_json import _sanitize_object, deep_copy_and_sanitize_dict
+from braintrust.bt_json import json_safe_deep_copy, to_json_safe
 from braintrust.logger import Attachment, ExternalAttachment, _check_json_serializable
 
 
@@ -15,7 +15,7 @@ class TestBTJson(TestCase):
             "input": {"foo": "bar", "null": None, "empty": {}},
             "output": [1, 2, "3", None, {}],
         }
-        copy = deep_copy_and_sanitize_dict(original)
+        copy = json_safe_deep_copy(original)
         self.assertEqual(copy, original)
         self.assertIsNot(copy, original)
         self.assertIsNot(copy["input"], original["input"])
@@ -30,7 +30,7 @@ class TestBTJson(TestCase):
             "nested_in_list": [{"key": "val"}],
         }
 
-        copy = deep_copy_and_sanitize_dict(original)
+        copy = json_safe_deep_copy(original)
 
         # Mutate the copy at various levels
         copy["top_level"] = "MODIFIED"
@@ -93,7 +93,7 @@ class TestBTJson(TestCase):
             },
         }
 
-        copy = deep_copy_and_sanitize_dict(original)
+        copy = json_safe_deep_copy(original)
 
         self.assertEqual(
             copy,
@@ -159,7 +159,7 @@ class TestBTJson(TestCase):
             "memoryview": memoryview(b"memory"),
             "nested": {"embedded": b"\x00\x01\x02\x03"},
         }
-        result = deep_copy_and_sanitize_dict(data)
+        result = json_safe_deep_copy(data)
 
         # The function uses bt_dumps/bt_loads for non-container types, so binary
         # gets JSON-serialized. Check what actually comes back:
@@ -176,7 +176,7 @@ class TestBTJson(TestCase):
     def test_deep_copy_frozenset(self):
         """Test current frozenset handling through JSON roundtrip."""
         data = {"frozen": frozenset([1, 2, 3])}
-        result = deep_copy_and_sanitize_dict(data)
+        result = json_safe_deep_copy(data)
 
         # frozenset goes through bt_dumps/bt_loads - it becomes a string representation
         # since frozenset is not JSON-serializable, bt_dumps converts it to str
@@ -192,7 +192,7 @@ class TestBTJson(TestCase):
             "empty_set": set(),
             "nested": {"also_empty": {}},
         }
-        result = deep_copy_and_sanitize_dict(data)
+        result = json_safe_deep_copy(data)
 
         self.assertEqual(result["empty_list"], [])
         self.assertEqual(result["empty_dict"], {})
@@ -209,7 +209,7 @@ class TestBTJson(TestCase):
             current["child"] = {"level": i}
             current = current["child"]
 
-        result = deep_copy_and_sanitize_dict(nested)
+        result = json_safe_deep_copy(nested)
 
         # Should succeed - verify structure is preserved
         self.assertEqual(result["level"], 0)
@@ -232,7 +232,7 @@ class TestBTJson(TestCase):
             current["child"] = {"level": i}
             current = current["child"]
 
-        result = deep_copy_and_sanitize_dict(nested)
+        result = json_safe_deep_copy(nested)
 
         # Should have root level preserved
         self.assertEqual(result["level"], 0)
@@ -259,7 +259,7 @@ class TestBTJson(TestCase):
                 raise RuntimeError("Cannot stringify")
 
         data = {BadKey(): "value"}
-        result = deep_copy_and_sanitize_dict(data)
+        result = json_safe_deep_copy(data)
 
         # Should have fallback key from exception handler
         keys = list(result.keys())
@@ -279,7 +279,7 @@ class TestBTJson(TestCase):
             (1, 2): "tuple_key",
             None: "none_key",
         }
-        result = deep_copy_and_sanitize_dict(data)
+        result = json_safe_deep_copy(data)
 
         # All keys should be coerced to strings
         self.assertTrue(all(isinstance(k, str) for k in result.keys()))
@@ -301,7 +301,7 @@ class TestBTJson(TestCase):
             return v
 
         data = {"answer": 42, "other": 10}
-        result = deep_copy_and_sanitize_dict(data, sanitize_func=bad_sanitizer)
+        result = json_safe_deep_copy(data, to_json_safe=bad_sanitizer)
 
         # Exception should be caught and replaced with error marker
         answer_value = result["answer"]
@@ -318,14 +318,14 @@ class TestBTJson(TestCase):
             if isinstance(v, str):
                 return v.upper()
             # Let default handler deal with everything else
-            return _sanitize_object(v)
+            return to_json_safe(v)
 
         data = {
             "text": "hello",
             "nested": {"message": "world"},
             "number": 42,
         }
-        result = deep_copy_and_sanitize_dict(data, sanitize_func=uppercase_strings)
+        result = json_safe_deep_copy(data, to_json_safe=uppercase_strings)
 
         # Strings should be uppercased
         self.assertEqual(result["text"], "HELLO")

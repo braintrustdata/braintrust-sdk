@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import math
-from typing import Any, Callable, Mapping, cast
+from typing import Any, Callable, Mapping, cast, overload
 
 # Try to import orjson for better performance
 # If not available, we'll use standard json
@@ -14,14 +14,15 @@ except ImportError:
 
 
 
-def _sanitize_object(v: Any) -> Any:
+def to_json_safe(v: Any) -> Any:
     """
-    Replaces references to user objects
-    with placeholder strings to ensure serializability, except for `Attachment`
-    and `ExternalAttachment` objects, which are preserved and not deep-copied.
+    Converts the object to a JSON-safe representation.
 
-    Handles circular references and excessive nesting depth to prevent
-    RecursionError during serialization.
+    Args:
+        v: Object to convert to a JSON-safe representation.
+
+    Returns:
+        JSON-safe representation of the object.
     """
     # avoid circular imports
     from braintrust.logger import BaseAttachment, Dataset, Experiment, Logger, ReadonlyAttachment, Span
@@ -87,24 +88,44 @@ def _sanitize_object(v: Any) -> Any:
     # fully-independent from the original.
     return bt_loads(bt_dumps(v))
 
-def deep_copy_and_sanitize_dict(dikt: Mapping[str, Any], sanitize_func: Callable[[Any], Any] | None = None) -> dict[str, Any]:
+@overload
+def json_safe_deep_copy(
+    obj: Mapping[str, Any],
+    to_json_safe: Callable[[Any], Any] = ...,
+    max_depth: int = ...,
+) -> dict[str, Any]: ...
+
+@overload
+def json_safe_deep_copy(
+    obj: list[Any],
+    to_json_safe: Callable[[Any], Any] = ...,
+    max_depth: int = ...,
+) -> list[Any]: ...
+
+@overload
+def json_safe_deep_copy(
+    obj: Any,
+    to_json_safe: Callable[[Any], Any] = ...,
+    max_depth: int = ...,
+) -> Any: ...
+def json_safe_deep_copy(obj: Any, to_json_safe: Callable[[Any], Any]=to_json_safe, max_depth: int=200):
     """
     Creates a deep copy of the given object.
-    """
-    # Maximum depth to prevent hitting Python's recursion limit
-    # Python's default limit is ~1000, we use a conservative limit
-    # to account for existing call stack usage from pytest, application code, etc.
-    MAX_DEPTH = 200
 
+    Args:
+        obj: Object to deep copy and sanitize.
+        to_json_safe: Function to ensure the object is json safe.
+        max_depth: Maximum depth to copy.
+
+    Returns:
+        Deep copy of the object.
+    """
     # Track visited objects to detect circular references
     visited: set[int] = set()
 
-    if sanitize_func is None:
-        sanitize_func = _sanitize_object
-
     def _deep_copy_object(v: Any, depth: int = 0) -> Any:
         # Check depth limit - use >= to stop before exceeding
-        if depth >= MAX_DEPTH:
+        if depth >= max_depth:
             return "<max depth exceeded>"
 
         # Check for circular references in mutable containers
@@ -138,11 +159,11 @@ def deep_copy_and_sanitize_dict(dikt: Mapping[str, Any], sanitize_func: Callable
                 visited.discard(obj_id)
 
         try:
-            return sanitize_func(v)
+            return to_json_safe(v)
         except Exception:
             return f"<non-sanitizable: {type(v).__name__}>"
 
-    return _deep_copy_object(dikt)
+    return _deep_copy_object(obj)
 
 
 def _to_dict(obj: Any) -> Any:
