@@ -107,26 +107,25 @@ class ApiKey(TypedDict):
 class AsyncScoringControlAsyncScoringControl(TypedDict):
     kind: Literal['score_update']
     token: NotRequired[Optional[str]]
-    triggered_xact_id: NotRequired[Optional[str]]
 
 
-class AsyncScoringControlAsyncScoringControl1(TypedDict):
-    kind: Literal['score_batch_update']
-    function_ids: Sequence[Any]
-    triggered_xact_id: str
-
-
-class AsyncScoringControlAsyncScoringControl3(TypedDict):
+class AsyncScoringControlAsyncScoringControl2(TypedDict):
     kind: Literal['state_force_reselect']
 
 
-class AsyncScoringControlAsyncScoringControl4(TypedDict):
+class AsyncScoringControlAsyncScoringControl3(TypedDict):
     kind: Literal['state_enabled_force_rescore']
 
 
-class AsyncScoringControlAsyncScoringControl5(TypedDict):
+class AsyncScoringControlAsyncScoringControl4(TypedDict):
     kind: Literal['add_triggered_functions']
     triggered_function_ids: Sequence[Any]
+
+
+class AsyncScoringControlAsyncScoringControl5(TypedDict):
+    kind: Literal['complete_triggered_functions']
+    function_ids: Sequence[Any]
+    triggered_xact_id: str
 
 
 class AsyncScoringStateAsyncScoringState1(TypedDict):
@@ -2884,7 +2883,7 @@ class ViewData(TypedDict):
     custom_charts: NotRequired[Optional[Any]]
 
 
-class AsyncScoringControlAsyncScoringControl2(TypedDict):
+class AsyncScoringControlAsyncScoringControl1(TypedDict):
     kind: Literal['state_override']
     state: AsyncScoringState
 

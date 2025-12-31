@@ -423,37 +423,10 @@
               },
               "token": {
                 "type": "string"
-              },
-              "triggered_xact_id": {
-                "type": "string"
               }
             },
             "required": [
               "kind"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "score_batch_update"
-                ]
-              },
-              "function_ids": {
-                "type": "array",
-                "items": {},
-                "minItems": 1
-              },
-              "triggered_xact_id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "function_ids",
-              "triggered_xact_id"
             ]
           },
           {
@@ -520,6 +493,30 @@
             "required": [
               "kind",
               "triggered_function_ids"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "complete_triggered_functions"
+                ]
+              },
+              "function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
+              },
+              "triggered_xact_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "function_ids",
+              "triggered_xact_id"
             ]
           }
         ]
@@ -7438,7 +7435,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "e334cb4fe1645d67a8dc3b4c63411d918131d6d0"
+    "x-internal-git-sha": "6430917922738f0371af4fd3f99f2ecceb3885ba"
   },
   "paths": {},
   "webhooks": {}

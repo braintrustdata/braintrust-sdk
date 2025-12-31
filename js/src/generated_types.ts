@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA e334cb4fe1645d67a8dc3b4c63411d918131d6d0) -- do not modify
+// Auto-generated file (internal git SHA 6430917922738f0371af4fd3f99f2ecceb3885ba) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -155,22 +155,18 @@ export const AsyncScoringState = z.union([
 ]);
 export type AsyncScoringStateType = z.infer<typeof AsyncScoringState>;
 export const AsyncScoringControl = z.union([
-  z.object({
-    kind: z.literal("score_update"),
-    token: z.string().optional(),
-    triggered_xact_id: z.string().optional(),
-  }),
-  z.object({
-    kind: z.literal("score_batch_update"),
-    function_ids: z.array(z.unknown()).min(1),
-    triggered_xact_id: z.string(),
-  }),
+  z.object({ kind: z.literal("score_update"), token: z.string().optional() }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
   z.object({
     kind: z.literal("add_triggered_functions"),
     triggered_function_ids: z.array(z.unknown()).min(1),
+  }),
+  z.object({
+    kind: z.literal("complete_triggered_functions"),
+    function_ids: z.array(z.unknown()).min(1),
+    triggered_xact_id: z.string(),
   }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
