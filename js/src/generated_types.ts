@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 9bf2117dcbe2dcfc71b22962e2e5d43b36c7b0b3) -- do not modify
+// Auto-generated file (internal git SHA e334cb4fe1645d67a8dc3b4c63411d918131d6d0) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -160,17 +160,17 @@ export const AsyncScoringControl = z.union([
     token: z.string().optional(),
     triggered_xact_id: z.string().optional(),
   }),
+  z.object({
+    kind: z.literal("score_batch_update"),
+    function_ids: z.array(z.unknown()).min(1),
+    triggered_xact_id: z.string(),
+  }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
   z.object({
     kind: z.literal("add_triggered_functions"),
     triggered_function_ids: z.array(z.unknown()).min(1),
-  }),
-  z.object({
-    kind: z.literal("triggered_function_complete"),
-    function_id: z.unknown().optional(),
-    triggered_xact_id: z.string(),
   }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
@@ -204,6 +204,27 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
+export const NullableSavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({ type: z.literal("global"), name: z.string() }),
+  z.null(),
+]);
+export type NullableSavedFunctionIdType = z.infer<
+  typeof NullableSavedFunctionId
+>;
+export const BatchedFacetData = z.object({
+  type: z.literal("batched_facet"),
+  preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
+  facets: z.array(
+    z.object({
+      name: z.string(),
+      prompt: z.string(),
+      model: z.string().optional(),
+      no_match_pattern: z.string().optional(),
+    }),
+  ),
+});
+export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
@@ -656,14 +677,6 @@ export const FacetAutomationConfig = z.object({
   btql_filter: z.union([z.string(), z.null()]).optional(),
 });
 export type FacetAutomationConfigType = z.infer<typeof FacetAutomationConfig>;
-export const NullableSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
-  z.null(),
-]);
-export type NullableSavedFunctionIdType = z.infer<
-  typeof NullableSavedFunctionId
->;
 export const FacetData = z.object({
   type: z.literal("facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -960,6 +973,7 @@ export const FunctionData = z.union([
       .optional(),
   }),
   FacetData,
+  BatchedFacetData,
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
