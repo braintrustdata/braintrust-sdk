@@ -193,6 +193,8 @@ export {
   toolFunctionDefinitionSchema,
 } from "./framework2";
 
+export { Trace } from "./trace";
+
 export type {
   ParentExperimentIds,
   ParentProjectLogIds,
