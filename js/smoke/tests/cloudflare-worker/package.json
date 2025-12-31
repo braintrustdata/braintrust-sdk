@@ -10,7 +10,8 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts braintrust"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "latest",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
