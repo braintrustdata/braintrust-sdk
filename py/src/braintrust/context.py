@@ -5,12 +5,13 @@ import os
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
 
 @dataclass
 class SpanInfo:
     """Information about a span in the context."""
+
     trace_id: str
     span_id: str
     span_object: Any = None
@@ -19,7 +20,7 @@ class SpanInfo:
 @dataclass
 class ParentSpanIds:
     root_span_id: str
-    span_parents: List[str]
+    span_parents: list[str]
 
 
 class ContextManager(ABC):
@@ -30,7 +31,7 @@ class ContextManager(ABC):
     """
 
     @abstractmethod
-    def get_current_span_info(self) -> Optional[Any]:
+    def get_current_span_info(self) -> Any | None:
         """Get information about the currently active span.
 
         Returns:
@@ -40,7 +41,7 @@ class ContextManager(ABC):
         pass
 
     @abstractmethod
-    def get_parent_span_ids(self) -> Optional[ParentSpanIds]:
+    def get_parent_span_ids(self) -> ParentSpanIds | None:
         """Get parent span IDs for creating a new Braintrust span.
 
         Returns:
@@ -75,32 +76,25 @@ class BraintrustContextManager(ContextManager):
     """Braintrust-only context manager using contextvars when OTEL is not available."""
 
     def __init__(self):
-        self._current_span: ContextVar[Optional[Any]] = ContextVar('braintrust_current_span', default=None)
+        self._current_span: ContextVar[Any | None] = ContextVar("braintrust_current_span", default=None)
 
-    def get_current_span_info(self) -> Optional[SpanInfo]:
+    def get_current_span_info(self) -> SpanInfo | None:
         """Get information about the currently active span."""
         current_span = self._current_span.get()
         if not current_span:
             return None
 
         # Return SpanInfo for BT spans
-        return SpanInfo(
-            trace_id=current_span.root_span_id,
-            span_id=current_span.span_id,
-            span_object=current_span
-        )
+        return SpanInfo(trace_id=current_span.root_span_id, span_id=current_span.span_id, span_object=current_span)
 
-    def get_parent_span_ids(self) -> Optional[ParentSpanIds]:
+    def get_parent_span_ids(self) -> ParentSpanIds | None:
         """Get parent information for creating a new Braintrust span."""
         current_span = self._current_span.get()
         if not current_span:
             return None
 
         # If current span is a BT span, use it as parent
-        return ParentSpanIds(
-            root_span_id=current_span.root_span_id,
-            span_parents=[current_span.span_id]
-        )
+        return ParentSpanIds(root_span_id=current_span.root_span_id, span_parents=[current_span.span_id])
 
     def set_current_span(self, span_object: Any) -> Any:
         """Set the current active span."""
@@ -123,9 +117,10 @@ def get_context_manager() -> ContextManager:
     """
 
     # Check if OTEL should be explicitly enabled via environment variable
-    if os.environ.get('BRAINTRUST_OTEL_COMPAT', '').lower() in ('1', 'true', 'yes'):
+    if os.environ.get("BRAINTRUST_OTEL_COMPAT", "").lower() in ("1", "true", "yes"):
         try:
             from braintrust.otel.context import ContextManager as OtelContextManager
+
             return OtelContextManager()
         except ImportError:
             logging.warning("OTEL not available, falling back to Braintrust-only version")
