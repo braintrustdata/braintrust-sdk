@@ -45,6 +45,7 @@ export {
   ContextManager,
   DEFAULT_FETCH_BATCH_SIZE,
   Dataset,
+  ObjectFetcher,
   ERR_PERMALINK,
   Experiment,
   ExternalAttachment,
@@ -194,6 +195,7 @@ export {
 } from "./framework2";
 
 export type { Trace, SpanData } from "./trace";
+export { SpanFetcher } from "./trace";
 
 export type {
   ParentExperimentIds,

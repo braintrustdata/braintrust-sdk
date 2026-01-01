@@ -12,9 +12,10 @@ export interface TraceOptions {
 type SpanRecord = any;
 
 /**
- * Internal fetcher for spans by root_span_id, using the ObjectFetcher pattern.
+ * Fetcher for spans by root_span_id, using the ObjectFetcher pattern.
+ * Handles pagination automatically via cursor-based iteration.
  */
-class SpanFetcher extends ObjectFetcher<SpanRecord> {
+export class SpanFetcher extends ObjectFetcher<SpanRecord> {
   constructor(
     objectType: "experiment" | "project_logs",
     private readonly _objectId: string,
