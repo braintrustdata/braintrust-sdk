@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify
+// Auto-generated file (internal git SHA fb4062b230f0607ea52073450cc776e2dfaecc82) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -670,36 +670,6 @@ export const ExtendedSavedFunctionId = z.union([
 export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
-export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
-  }),
-]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
-export const SpanScope = z.object({ type: z.literal("span") });
-export type SpanScopeType = z.infer<typeof SpanScope>;
-export const TraceScope = z.object({
-  type: z.literal("trace"),
-  idle_seconds: z.number().optional(),
-});
-export type TraceScopeType = z.infer<typeof TraceScope>;
-export const GroupScope = z.object({
-  type: z.literal("group"),
-  group_by: z.string(),
-  idle_seconds: z.number().optional(),
-});
-export type GroupScopeType = z.infer<typeof GroupScope>;
-export const FacetAutomationConfig = z.object({
-  event_type: z.literal("facet"),
-  facets: z.array(SavedFunctionId).min(1),
-  scope: z.union([SpanScope, TraceScope, GroupScope]),
-  sampling_rate: z.number().gte(0).lte(1).optional(),
-  btql_filter: z.union([z.string(), z.null()]).optional(),
-});
-export type FacetAutomationConfigType = z.infer<typeof FacetAutomationConfig>;
 export const FacetData = z.object({
   type: z.literal("facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -813,6 +783,15 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
+export const SavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -1170,6 +1149,12 @@ export const Group = z.object({
   member_groups: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 export type GroupType = z.infer<typeof Group>;
+export const GroupScope = z.object({
+  type: z.literal("group"),
+  group_by: z.string(),
+  idle_seconds: z.number().optional(),
+});
+export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
 export const InvokeParent = z.union([
@@ -1252,6 +1237,13 @@ export const ObjectReference = z.object({
   created: z.union([z.string(), z.null()]).optional(),
 });
 export type ObjectReferenceType = z.infer<typeof ObjectReference>;
+export const SpanScope = z.object({ type: z.literal("span") });
+export type SpanScopeType = z.infer<typeof SpanScope>;
+export const TraceScope = z.object({
+  type: z.literal("trace"),
+  idle_seconds: z.number().optional(),
+});
+export type TraceScopeType = z.infer<typeof TraceScope>;
 export const OnlineScoreConfig = z.union([
   z.object({
     sampling_rate: z.number().gte(0).lte(1),
@@ -1260,6 +1252,7 @@ export const OnlineScoreConfig = z.union([
     apply_to_root_span: z.union([z.boolean(), z.null()]).optional(),
     apply_to_span_names: z.union([z.array(z.string()), z.null()]).optional(),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
+    scope: z.union([SpanScope, TraceScope, GroupScope, z.null()]).optional(),
   }),
   z.null(),
 ]);
@@ -1383,7 +1376,6 @@ export const ProjectAutomation = z.object({
         }),
       ]),
     }),
-    FacetAutomationConfig,
   ]),
 });
 export type ProjectAutomationType = z.infer<typeof ProjectAutomation>;

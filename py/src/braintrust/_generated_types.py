@@ -2553,29 +2553,6 @@ ExtendedSavedFunctionId: TypeAlias = (
 )
 
 
-class FacetAutomationConfig(TypedDict):
-    event_type: Literal['facet']
-    """
-    The type of automation.
-    """
-    facets: Sequence[SavedFunctionId]
-    """
-    The facet functions to run (must be functions with function_type: 'facet')
-    """
-    scope: SpanScope | TraceScope | GroupScope
-    """
-    The scope at which to run the facet
-    """
-    sampling_rate: NotRequired[float | None]
-    """
-    The sampling rate for facet extraction (0-1, default: 1)
-    """
-    btql_filter: NotRequired[str | None]
-    """
-    Optional BTQL filter to select which spans/traces to process
-    """
-
-
 class Preprocessor1Preprocessor11(TypedDict):
     type: Literal['global']
     name: str
@@ -2733,7 +2710,7 @@ class OnlineScoreConfig(TypedDict):
     """
     scorers: Sequence[SavedFunctionId]
     """
-    The list of scorers to use for online scoring
+    The list of functions to run for online scoring. Can include scorers, facets, or other function types.
     """
     btql_filter: NotRequired[str | None]
     """
@@ -2741,15 +2718,19 @@ class OnlineScoreConfig(TypedDict):
     """
     apply_to_root_span: NotRequired[bool | None]
     """
-    Whether to trigger online scoring on the root span of each trace
+    Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset.
     """
     apply_to_span_names: NotRequired[Sequence[str] | None]
     """
-    Trigger online scoring on any spans with a name in this list
+    Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset.
     """
     skip_logging: NotRequired[bool | None]
     """
     Whether to skip adding scorer spans when computing scores
+    """
+    scope: NotRequired[SpanScope | TraceScope | GroupScope | None]
+    """
+    The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets.
     """
 
 
@@ -2822,13 +2803,7 @@ class ProjectAutomation(TypedDict):
     """
     Textual description of the project automation
     """
-    config: (
-        ProjectAutomationConfig
-        | ProjectAutomationConfig1
-        | ProjectAutomationConfig2
-        | ProjectAutomationConfig3
-        | FacetAutomationConfig
-    )
+    config: ProjectAutomationConfig | ProjectAutomationConfig1 | ProjectAutomationConfig2 | ProjectAutomationConfig3
     """
     The configuration for the automation rule
     """

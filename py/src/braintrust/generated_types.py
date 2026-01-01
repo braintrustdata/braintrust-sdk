@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify"""
+"""Auto-generated file (internal git SHA fb4062b230f0607ea52073450cc776e2dfaecc82) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -33,7 +33,6 @@ from ._generated_types import (
     ExperimentEvent,
     ExtendedSavedFunctionId,
     ExternalAttachmentReference,
-    FacetAutomationConfig,
     FacetData,
     Function,
     FunctionData,
@@ -142,7 +141,6 @@ __all__ = [
     "ExperimentEvent",
     "ExtendedSavedFunctionId",
     "ExternalAttachmentReference",
-    "FacetAutomationConfig",
     "FacetData",
     "Function",
     "FunctionData",

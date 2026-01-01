@@ -2449,58 +2449,6 @@
           "url"
         ]
       },
-      "FacetAutomationConfig": {
-        "type": "object",
-        "properties": {
-          "event_type": {
-            "type": "string",
-            "enum": [
-              "facet"
-            ],
-            "description": "The type of automation."
-          },
-          "facets": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SavedFunctionId"
-            },
-            "minItems": 1,
-            "description": "The facet functions to run (must be functions with function_type: 'facet')"
-          },
-          "scope": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SpanScope"
-              },
-              {
-                "$ref": "#/components/schemas/TraceScope"
-              },
-              {
-                "$ref": "#/components/schemas/GroupScope"
-              }
-            ],
-            "description": "The scope at which to run the facet"
-          },
-          "sampling_rate": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "The sampling rate for facet extraction (0-1, default: 1)"
-          },
-          "btql_filter": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional BTQL filter to select which spans/traces to process"
-          }
-        },
-        "required": [
-          "event_type",
-          "facets",
-          "scope"
-        ]
-      },
       "FacetData": {
         "type": "object",
         "properties": {
@@ -4342,7 +4290,7 @@
             "items": {
               "$ref": "#/components/schemas/SavedFunctionId"
             },
-            "description": "The list of scorers to use for online scoring"
+            "description": "The list of functions to run for online scoring. Can include scorers, facets, or other function types."
           },
           "btql_filter": {
             "type": [
@@ -4356,7 +4304,7 @@
               "boolean",
               "null"
             ],
-            "description": "Whether to trigger online scoring on the root span of each trace"
+            "description": "Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset."
           },
           "apply_to_span_names": {
             "type": [
@@ -4366,7 +4314,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Trigger online scoring on any spans with a name in this list"
+            "description": "Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset."
           },
           "skip_logging": {
             "type": [
@@ -4374,6 +4322,23 @@
               "null"
             ],
             "description": "Whether to skip adding scorer spans when computing scores"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpanScope"
+              },
+              {
+                "$ref": "#/components/schemas/TraceScope"
+              },
+              {
+                "$ref": "#/components/schemas/GroupScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets."
           }
         },
         "required": [
@@ -4853,9 +4818,6 @@
                   "event_type",
                   "action"
                 ]
-              },
-              {
-                "$ref": "#/components/schemas/FacetAutomationConfig"
               }
             ],
             "description": "The configuration for the automation rule"
@@ -7466,7 +7428,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "87547838ffb9178642aeadfdeaeb6d88eb14b56f"
+    "x-internal-git-sha": "fb4062b230f0607ea52073450cc776e2dfaecc82"
   },
   "paths": {},
   "webhooks": {}
