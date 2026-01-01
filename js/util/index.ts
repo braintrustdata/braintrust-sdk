@@ -104,6 +104,7 @@ export {
 export type { SpanComponentsV3Data } from "./span_identifier_v3";
 
 export {
+  makeScorerPropagatedEvent,
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanComponentsV3Schema,
