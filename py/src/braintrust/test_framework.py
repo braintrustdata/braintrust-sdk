@@ -241,6 +241,59 @@ async def test_hooks_trial_index_multiple_inputs():
     assert sorted(input_2_trials) == [0, 1]
 
 
+@pytest.mark.asyncio
+async def test_scorer_spans_have_purpose_attribute(with_memory_logger):
+    """Test that scorer spans have span_attributes.purpose='scorer' and propagate to subspans."""
+    # Define test data
+    data = [
+        EvalCase(input="hello", expected="hello"),
+    ]
+
+    def simple_task(input_value):
+        return input_value
+
+    def simple_scorer(input_value, output, expected):
+        return 1.0 if output == expected else 0.0
+
+    evaluator = Evaluator(
+        project_name="test-project",
+        eval_name="test-scorer-purpose",
+        data=data,
+        task=simple_task,
+        scores=[simple_scorer],
+        experiment_name=None,
+        metadata=None,
+    )
+
+    # Run evaluator
+    result = await run_evaluator(experiment=None, evaluator=evaluator, position=None, filters=[])
+
+    assert len(result.results) == 1
+    assert result.results[0].scores.get("simple_scorer") == 1.0
+
+    # Check the logged spans
+    logs = with_memory_logger.pop()
+
+    # Find the scorer span (has type="score")
+    scorer_spans = [log for log in logs if log.get("span_attributes", {}).get("type") == "score"]
+    assert len(scorer_spans) == 1, f"Expected 1 scorer span, found {len(scorer_spans)}"
+
+    scorer_span = scorer_spans[0]
+
+    # Verify the scorer span has purpose='scorer'
+    assert scorer_span["span_attributes"].get("purpose") == "scorer", (
+        f"Scorer span should have purpose='scorer', got: {scorer_span['span_attributes']}"
+    )
+
+    # Verify that non-scorer spans (task, eval) do NOT have purpose='scorer'
+    non_scorer_spans = [log for log in logs if log.get("span_attributes", {}).get("type") != "score"]
+    assert len(non_scorer_spans) > 0, "Expected at least one non-scorer span"
+    for span in non_scorer_spans:
+        assert span.get("span_attributes", {}).get("purpose") != "scorer", (
+            f"Non-scorer span should NOT have purpose='scorer', got: {span['span_attributes']}"
+        )
+
+
 @pytest.fixture
 def simple_scorer():
     def simple_scorer_function(input, output, expected):
