@@ -10,7 +10,7 @@ import { queue } from "async";
 import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
-import { Trace } from "./trace";
+import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
@@ -972,7 +972,7 @@ async function runEvaluatorInternal(
         };
 
         const trace = state
-          ? new Trace({
+          ? new LocalTrace({
               objectType: "experiment",
               objectId: experimentIdPromise
                 ? (await experimentIdPromise) ?? ""

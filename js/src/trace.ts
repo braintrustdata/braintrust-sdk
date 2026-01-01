@@ -72,11 +72,41 @@ class SpanFetcher extends ObjectFetcher<SpanRecord> {
 }
 
 /**
- * Carries identifying information about the evaluation so scorers can perform
- * richer logging or side effects. Additional behavior will be layered on top
- * of this skeleton class later.
+ * Span data returned by getSpans().
  */
-export class Trace {
+export interface SpanData {
+  input?: unknown;
+  output?: unknown;
+  metadata?: Record<string, unknown>;
+  span_id?: string;
+  span_parents?: string[];
+  span_attributes?: {
+    type?: string;
+    name?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Interface for trace objects that can be used by scorers.
+ * Both the SDK's LocalTrace class and the API wrapper's WrapperTrace implement this.
+ */
+export interface Trace {
+  getConfiguration(): {
+    objectType: string;
+    objectId: string;
+    rootSpanId: string;
+  };
+  getSpans(options?: { spanType?: string[] }): Promise<SpanData[]>;
+}
+
+/**
+ * SDK implementation of Trace that uses local span cache and falls back to BTQL.
+ * Carries identifying information about the evaluation so scorers can perform
+ * richer logging or side effects.
+ */
+export class LocalTrace implements Trace {
   // Store values privately so future helper methods can expose them safely.
   private readonly objectType: "experiment" | "project_logs";
   private readonly objectId: string;
@@ -113,7 +143,9 @@ export class Trace {
    * First checks the local span cache for recently logged spans, then falls
    * back to BTQL API if not found in cache.
    */
-  async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<any[]> {
+  async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<
+    SpanData[]
+  > {
     const state = this.state;
 
     // Try local cache first
