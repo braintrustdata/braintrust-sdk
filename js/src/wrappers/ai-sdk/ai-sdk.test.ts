@@ -1886,6 +1886,9 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doGenSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doGenSpan.metadata.braintrust.sdk_language).toBe("typescript");
 
+    // Verify finish_reason is captured in metadata
+    expect(doGenSpan.metadata.finish_reason).toBeDefined();
+
     // Verify metrics
     expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
@@ -2022,6 +2025,9 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metadata.braintrust).toBeDefined();
     expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify finish_reason is captured in metadata
+    expect(doStreamSpan.metadata.finish_reason).toBeDefined();
 
     // Verify metrics including time_to_first_token
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);

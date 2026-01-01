@@ -8,40 +8,6 @@ import {
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
 
-// Helper to convert camelCase to snake_case for metadata keys
-function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-}
-
-// Keys to exclude from model parameters at the doGenerate/doStream level
-const DO_GENERATE_EXCLUDE_KEYS = new Set([
-  "prompt", // Already captured as input
-  "responseFormat", // Already captured as input (user's schema request)
-  "providerOptions", // Internal AI SDK configuration
-  "abortSignal", // Not useful for logging
-  "headers", // Request headers, not model parameters
-]);
-
-/**
- * Extracts model parameters from options, excluding specified keys.
- * Converts camelCase keys to snake_case for consistency.
- */
-function extractModelParameters(
-  params: Record<string, unknown>,
-  excludeKeys: Set<string>,
-): Record<string, unknown> {
-  const modelParams: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && !excludeKeys.has(key)) {
-      const snakeKey = camelToSnake(key);
-      modelParams[snakeKey] = value;
-    }
-  }
-
-  return modelParams;
-}
-
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
   // v3
@@ -176,9 +142,7 @@ const makeGenerateTextWrapper = (
       spanAttributes: spanInfoAttrs,
     } = span_info ?? {};
 
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
-    const effectiveProvider = params.model?.provider || initialProvider;
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     return traced(
       async (span) => {
@@ -218,8 +182,8 @@ const makeGenerateTextWrapper = (
           input: processInputAttachments(params),
           metadata: {
             ...spanInfoMetadata,
-            model: initialModel,
-            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+            model,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -275,9 +239,8 @@ const wrapModel = (model: any, ai?: any): any => {
   const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
   const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
 
-  const { model: initialModel, provider: initialProvider } =
-    serializeModelWithProvider(resolvedModel.modelId);
-  const effectiveProvider = resolvedModel.provider || initialProvider;
+  const { model: modelId, provider } =
+    serializeModelWithProvider(resolvedModel);
 
   const wrappedDoGenerate = async (options: any) => {
     return traced(
@@ -315,9 +278,8 @@ const wrapModel = (model: any, ai?: any): any => {
         event: {
           input: processInputAttachments(options),
           metadata: {
-            ...extractModelParameters(options, DO_GENERATE_EXCLUDE_KEYS),
-            model: initialModel,
-            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+            model: modelId,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -340,9 +302,8 @@ const wrapModel = (model: any, ai?: any): any => {
       event: {
         input: processInputAttachments(options),
         metadata: {
-          ...extractModelParameters(options, DO_GENERATE_EXCLUDE_KEYS),
-          model: initialModel,
-          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+          model: modelId,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -502,9 +463,7 @@ const wrapGenerateObject = (
       spanAttributes: spanInfoAttrs,
     } = span_info ?? {};
 
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
-    const effectiveProvider = params.model?.provider || initialProvider;
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     return traced(
       async (span) => {
@@ -546,8 +505,8 @@ const wrapGenerateObject = (
           input: processInputAttachments(params),
           metadata: {
             ...spanInfoMetadata,
-            model: initialModel,
-            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+            model,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -574,9 +533,7 @@ const makeStreamTextWrapper = (
       spanAttributes: spanInfoAttrs,
     } = span_info ?? {};
 
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
-    const effectiveProvider = params.model?.provider || initialProvider;
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     const span = startSpan({
       name: spanName || name,
@@ -588,8 +545,8 @@ const makeStreamTextWrapper = (
         input: processInputAttachments(params),
         metadata: {
           ...spanInfoMetadata,
-          model: initialModel,
-          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+          model,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -725,9 +682,7 @@ const wrapStreamObject = (
       spanAttributes: spanInfoAttrs,
     } = span_info ?? {};
 
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
-    const effectiveProvider = params.model?.provider || initialProvider;
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     const span = startSpan({
       name: spanName || "streamObject",
@@ -739,8 +694,8 @@ const wrapStreamObject = (
         input: processInputAttachments(params),
         metadata: {
           ...spanInfoMetadata,
-          model: initialModel,
-          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+          model,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -1052,17 +1007,29 @@ function parseGatewayModelString(modelString: string): {
 }
 
 /**
- * Extracts model and provider info from a model, parsing gateway-style strings.
+ * Extracts model ID and effective provider from a model object or string.
+ * Provider precedence: model.provider > parsed from gateway-style modelId string.
+ *
+ * @param model - Either a model object (with modelId and optional provider) or a model string
  */
 function serializeModelWithProvider(model: any): {
   model: string;
   provider?: string;
 } {
   const modelId = typeof model === "string" ? model : model?.modelId;
+  // Provider can be set directly on the model object (e.g., AI SDK model instances)
+  const explicitProvider =
+    typeof model === "object" ? model?.provider : undefined;
+
   if (!modelId) {
-    return { model: modelId };
+    return { model: modelId, provider: explicitProvider };
   }
-  return parseGatewayModelString(modelId);
+
+  const parsed = parseGatewayModelString(modelId);
+  return {
+    model: parsed.model,
+    provider: explicitProvider || parsed.provider,
+  };
 }
 
 /**
