@@ -897,7 +897,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
-  "agent",
+  "workflow",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
@@ -1494,7 +1494,7 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
+    "workflows",
     "monitor",
   ]),
   name: z.string(),

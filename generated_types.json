@@ -2890,7 +2890,7 @@
           "tool",
           "scorer",
           "task",
-          "agent",
+          "workflow",
           "custom_view",
           "preprocessor",
           "facet"
@@ -6862,7 +6862,7 @@
               "tools",
               "scorers",
               "logs",
-              "agents",
+              "workflows",
               "monitor",
               "for_review"
             ],

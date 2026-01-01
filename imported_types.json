@@ -2594,7 +2594,7 @@
           "tool",
           "scorer",
           "task",
-          "agent"
+          "workflow"
         ]
       },
       "FunctionOutputType": {
@@ -5800,7 +5800,7 @@
               "tools",
               "scorers",
               "logs",
-              "agents",
+              "workflows",
               "monitor"
             ],
             "description": "Type of object that the view corresponds to."
