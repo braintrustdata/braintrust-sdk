@@ -3,6 +3,7 @@ import {
   type InvokeFunctionType as InvokeFunctionRequest,
   type ChatCompletionMessageParamType as Message,
   type StreamingModeType as StreamingMode,
+  type FunctionTypeEnumType as FunctionType,
 } from "../generated_types";
 import {
   _internalGetGlobalState,
@@ -47,6 +48,10 @@ export interface InvokeFunctionArgs<
    * The name of the global function to invoke.
    */
   globalFunction?: string;
+  /**
+   * The type of the global function to invoke. If unspecified, defaults to 'scorer' for backward compatibility.
+   */
+  functionType?: FunctionType;
   /**
    * The ID of the prompt session to invoke the function from.
    */
@@ -178,6 +183,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     project_name: functionIdArgs.projectName,
     slug: functionIdArgs.slug,
     global_function: functionIdArgs.globalFunction,
+    function_type: functionIdArgs.functionType,
     prompt_session_id: functionIdArgs.promptSessionId,
     prompt_session_function_id: functionIdArgs.promptSessionFunctionId,
     version: functionIdArgs.version,

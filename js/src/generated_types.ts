@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 9bf2117dcbe2dcfc71b22962e2e5d43b36c7b0b3) -- do not modify
+// Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -155,11 +155,7 @@ export const AsyncScoringState = z.union([
 ]);
 export type AsyncScoringStateType = z.infer<typeof AsyncScoringState>;
 export const AsyncScoringControl = z.union([
-  z.object({
-    kind: z.literal("score_update"),
-    token: z.string().optional(),
-    triggered_xact_id: z.string().optional(),
-  }),
+  z.object({ kind: z.literal("score_update"), token: z.string().optional() }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
@@ -168,8 +164,8 @@ export const AsyncScoringControl = z.union([
     triggered_function_ids: z.array(z.unknown()).min(1),
   }),
   z.object({
-    kind: z.literal("triggered_function_complete"),
-    function_id: z.unknown().optional(),
+    kind: z.literal("complete_triggered_functions"),
+    function_ids: z.array(z.unknown()).min(1),
     triggered_xact_id: z.string(),
   }),
 ]);
@@ -204,6 +200,46 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
+export const NullableFunctionTypeEnum = z.union([
+  z.enum([
+    "llm",
+    "scorer",
+    "task",
+    "tool",
+    "custom_view",
+    "preprocessor",
+    "facet",
+  ]),
+  z.null(),
+]);
+export type NullableFunctionTypeEnumType = z.infer<
+  typeof NullableFunctionTypeEnum
+>;
+export const NullableSavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
+  z.null(),
+]);
+export type NullableSavedFunctionIdType = z.infer<
+  typeof NullableSavedFunctionId
+>;
+export const BatchedFacetData = z.object({
+  type: z.literal("batched_facet"),
+  preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
+  facets: z.array(
+    z.object({
+      name: z.string(),
+      prompt: z.string(),
+      model: z.string().optional(),
+      no_match_pattern: z.string().optional(),
+    }),
+  ),
+});
+export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
@@ -620,7 +656,11 @@ export const ExperimentEvent = z.object({
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     type: z.literal("slug"),
     project_id: z.string(),
@@ -632,7 +672,11 @@ export type ExtendedSavedFunctionIdType = z.infer<
 >;
 export const SavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
 ]);
 export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const SpanScope = z.object({ type: z.literal("span") });
@@ -656,14 +700,6 @@ export const FacetAutomationConfig = z.object({
   btql_filter: z.union([z.string(), z.null()]).optional(),
 });
 export type FacetAutomationConfigType = z.infer<typeof FacetAutomationConfig>;
-export const NullableSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
-  z.null(),
-]);
-export type NullableSavedFunctionIdType = z.infer<
-  typeof NullableSavedFunctionId
->;
 export const FacetData = z.object({
   type: z.literal("facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -955,11 +991,13 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
     config: z
       .union([z.object({}).partial().passthrough(), z.null()])
       .optional(),
   }),
   FacetData,
+  BatchedFacetData,
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -1058,7 +1096,10 @@ export const FunctionId = z.union([
     slug: z.string(),
     version: z.string().optional(),
   }),
-  z.object({ global_function: z.string() }),
+  z.object({
+    global_function: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     prompt_session_id: z.string(),
     prompt_session_function_id: z.string(),

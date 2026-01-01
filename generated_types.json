@@ -423,9 +423,6 @@
               },
               "token": {
                 "type": "string"
-              },
-              "triggered_xact_id": {
-                "type": "string"
               }
             },
             "required": [
@@ -504,19 +501,21 @@
               "kind": {
                 "type": "string",
                 "enum": [
-                  "triggered_function_complete"
+                  "complete_triggered_functions"
                 ]
               },
-              "function_id": {
-                "description": "The function ID"
+              "function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
               },
               "triggered_xact_id": {
-                "type": "string",
-                "description": "The triggered_xact_id to validate against"
+                "type": "string"
               }
             },
             "required": [
               "kind",
+              "function_ids",
               "triggered_xact_id"
             ]
           }
@@ -615,6 +614,60 @@
         "required": [
           "upload_status"
         ]
+      },
+      "BatchedFacetData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "batched_facet"
+            ]
+          },
+          "preprocessor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NullableSavedFunctionId"
+              },
+              {
+                "description": "The preprocessor function to use for facet extraction. If not provided, the project default preprocessor will be used, falling back to the global 'thread' preprocessor."
+              }
+            ]
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The name of the facet"
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "The prompt to use for LLM extraction. The preprocessed text will be provided as context."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "The model to use for facet extraction"
+                },
+                "no_match_pattern": {
+                  "type": "string",
+                  "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
+                }
+              },
+              "required": [
+                "name",
+                "prompt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "type",
+          "facets"
+        ],
+        "title": "batched_facet"
       },
       "BraintrustAttachmentReference": {
         "type": "object",
@@ -2328,6 +2381,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -2767,6 +2823,9 @@
               "name": {
                 "type": "string"
               },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+              },
               "config": {
                 "type": [
                   "object",
@@ -2784,6 +2843,9 @@
           },
           {
             "$ref": "#/components/schemas/FacetData"
+          },
+          {
+            "$ref": "#/components/schemas/BatchedFacetData"
           }
         ]
       },
@@ -2845,6 +2907,9 @@
               "global_function": {
                 "type": "string",
                 "description": "The name of the global function. Currently, the global namespace includes the functions in autoevals"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -4100,6 +4165,22 @@
           }
         ]
       },
+      "NullableFunctionTypeEnum": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "llm",
+          "scorer",
+          "task",
+          "tool",
+          "custom_view",
+          "preprocessor",
+          "facet"
+        ],
+        "description": "The type of global function. If unspecified, defaults to 'scorer' for backward compatibility."
+      },
       "NullableSavedFunctionId": {
         "anyOf": [
           {
@@ -4132,6 +4213,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -6479,6 +6563,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -7379,7 +7466,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "9bf2117dcbe2dcfc71b22962e2e5d43b36c7b0b3"
+    "x-internal-git-sha": "87547838ffb9178642aeadfdeaeb6d88eb14b56f"
   },
   "paths": {},
   "webhooks": {}
