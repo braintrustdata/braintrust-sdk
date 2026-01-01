@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA fb4062b230f0607ea52073450cc776e2dfaecc82) -- do not modify
+// Auto-generated file (internal git SHA 72c2653d250149b4f635ed3fa3cef74d315f0901) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -200,27 +200,22 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
-export const NullableFunctionTypeEnum = z.union([
-  z.enum([
-    "llm",
-    "scorer",
-    "task",
-    "tool",
-    "custom_view",
-    "preprocessor",
-    "facet",
-  ]),
-  z.null(),
+export const FunctionTypeEnum = z.enum([
+  "llm",
+  "scorer",
+  "task",
+  "tool",
+  "custom_view",
+  "preprocessor",
+  "facet",
 ]);
-export type NullableFunctionTypeEnumType = z.infer<
-  typeof NullableFunctionTypeEnum
->;
+export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.null(),
 ]);
@@ -659,7 +654,7 @@ export const ExtendedSavedFunctionId = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.object({
     type: z.literal("slug"),
@@ -788,7 +783,7 @@ export const SavedFunctionId = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
 ]);
 export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
@@ -970,7 +965,7 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     config: z
       .union([z.object({}).partial().passthrough(), z.null()])
       .optional(),
@@ -1058,16 +1053,6 @@ export const PromptData = z
   })
   .partial();
 export type PromptDataType = z.infer<typeof PromptData>;
-export const FunctionTypeEnum = z.enum([
-  "llm",
-  "scorer",
-  "task",
-  "tool",
-  "custom_view",
-  "preprocessor",
-  "facet",
-]);
-export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
   z.object({
@@ -1077,7 +1062,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     global_function: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.object({
     prompt_session_id: z.string(),
@@ -1095,12 +1080,12 @@ export const FunctionId = z.union([
   z.object({
     inline_prompt: PromptData.optional(),
     inline_function: z.object({}).partial().passthrough(),
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
     inline_prompt: PromptData,
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
 ]);

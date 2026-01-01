@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA fb4062b230f0607ea52073450cc776e2dfaecc82) -- do not modify"""
+"""Auto-generated file (internal git SHA 72c2653d250149b4f635ed3fa3cef74d315f0901) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -55,7 +55,6 @@ from ._generated_types import (
     MCPServer,
     MessageRole,
     ModelParams,
-    NullableFunctionTypeEnum,
     NullableSavedFunctionId,
     ObjectReference,
     ObjectReferenceNullish,
@@ -163,7 +162,6 @@ __all__ = [
     "MCPServer",
     "MessageRole",
     "ModelParams",
-    "NullableFunctionTypeEnum",
     "NullableSavedFunctionId",
     "ObjectReference",
     "ObjectReferenceNullish",
