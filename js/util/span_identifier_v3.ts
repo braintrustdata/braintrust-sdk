@@ -8,7 +8,6 @@ import {
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod/v3";
-import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
 import {
   base64ToUint8Array,
   concatUint8Arrays,
@@ -16,7 +15,6 @@ import {
   uint8ArrayToBase64,
   uint8ArrayToString,
 } from "./bytes";
-import { mergeDicts } from "./object_util";
 
 function tryMakeUuid(
   s: string,
@@ -247,24 +245,4 @@ export class SpanComponentsV3 {
   private static fromJsonObj(jsonObj: unknown): SpanComponentsV3 {
     return new SpanComponentsV3(spanComponentsV3Schema.parse(jsonObj));
   }
-}
-
-/**
- * Creates a propagatedEvent for scorer spans by merging the purpose into
- * any existing propagatedEvent from the parent span.
- *
- * @param parent - The parent span export string, or undefined if no parent
- * @returns A propagatedEvent with span_attributes.purpose set to "scorer",
- *          merged with any existing propagatedEvent from the parent
- */
-export function makeScorerPropagatedEvent(
-  parent: string | undefined,
-): Record<string, unknown> {
-  const parentPropagatedEvent = parent
-    ? SpanComponentsV3.fromStr(parent).data.propagated_event ?? {}
-    : {};
-  return mergeDicts(
-    { ...parentPropagatedEvent },
-    { span_attributes: { purpose: "scorer" } },
-  );
 }
