@@ -730,6 +730,9 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+"""
+The type of global function. Defaults to 'scorer'.
+"""
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
@@ -1054,6 +1057,14 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
 
 
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[FunctionTypeEnum | None]
+
+
 class InvokeFunctionInvokeFunction3(TypedDict):
     prompt_session_id: str
     """
@@ -1220,12 +1231,6 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[float | None]
 
 
-NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
-"""
-The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
-"""
-
-
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -1234,7 +1239,7 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 NullableSavedFunctionId: TypeAlias = (
@@ -1874,7 +1879,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class TaskTask3(TypedDict):
@@ -1990,7 +1995,7 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
@@ -2351,7 +2356,7 @@ class AttachmentStatus(TypedDict):
 class PreprocessorPreprocessor1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
@@ -2543,7 +2548,7 @@ class Experiment(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 ExtendedSavedFunctionId: TypeAlias = (
@@ -2556,7 +2561,7 @@ ExtendedSavedFunctionId: TypeAlias = (
 class Preprocessor1Preprocessor11(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class Preprocessor1Preprocessor14(Preprocessor1Preprocessor11, Preprocessor1Preprocessor12):
@@ -2586,7 +2591,7 @@ class FacetData(TypedDict):
 class FunctionDataFunctionData3(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
     config: NotRequired[Mapping[str, Any] | None]
     """
     Configuration options to pass to the global function (e.g., for preprocessor customization)
@@ -2598,15 +2603,7 @@ class FunctionIdFunctionId2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class InvokeFunctionInvokeFunction7(TypedDict):

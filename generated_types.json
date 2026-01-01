@@ -2383,7 +2383,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -2772,7 +2772,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               },
               "config": {
                 "type": [
@@ -2857,7 +2857,7 @@
                 "description": "The name of the global function. Currently, the global namespace includes the functions in autoevals"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -3022,7 +3022,9 @@
           "custom_view",
           "preprocessor",
           "facet"
-        ]
+        ],
+        "default": "scorer",
+        "description": "The type of global function. Defaults to 'scorer'."
       },
       "FunctionTypeEnumNullish": {
         "type": [
@@ -4113,22 +4115,6 @@
           }
         ]
       },
-      "NullableFunctionTypeEnum": {
-        "type": [
-          "string",
-          "null"
-        ],
-        "enum": [
-          "llm",
-          "scorer",
-          "task",
-          "tool",
-          "custom_view",
-          "preprocessor",
-          "facet"
-        ],
-        "description": "The type of global function. If unspecified, defaults to 'scorer' for backward compatibility."
-      },
       "NullableSavedFunctionId": {
         "anyOf": [
           {
@@ -4163,7 +4149,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -6527,7 +6513,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
