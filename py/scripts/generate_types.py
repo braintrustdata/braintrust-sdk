@@ -52,15 +52,17 @@ def cleanup_internal_types():
     with open(INTERNAL_TYPES_OUTPUT_PATH, "r") as f:
         contents = f.read()
 
-    # Replace `NotRequired[...]` with `NotRequired[Optional[...]]` for Python
-    # TypedDict definitions.
+    # Add `| None` to `NotRequired[...]` fields that aren't already nullable.
     #
-    # Note that this weakens optional-but-not-nullable OpenAPI types into
+    # This weakens optional-but-not-nullable OpenAPI types into
     # optional-and-nullable TypedDicts. But this seems better than having
     # optional-and-nullable OpenAPI types converted into
     # optional-but-not-nullable TypedDicts.
-    # nullable attribute of certain types.
-    contents = re.sub(r"(\s[A-Za-z0-9_]+: NotRequired\[)(?!Optional\[\s*)(.+)(\]\n)", r"\1Optional[\2]\3", contents)
+    contents = re.sub(
+        r"(\s[A-Za-z0-9_]+: NotRequired\[)(.+?)(\])\n",
+        lambda m: m.group(0) if m.group(2).rstrip().endswith("None") else f"{m.group(1)}{m.group(2)} | None{m.group(3)}\n",
+        contents,
+    )
 
     # Replace `schema_` with `schema`; this happens because datamodel-codegen
     # treats `schema` specially, expecting Pydantic.
