@@ -57,13 +57,13 @@ def to_json_safe(v: Any) -> Any:
 
     # Attempt to dump a Pydantic v2 `BaseModel`.
     try:
-        return cast(Any, v).model_dump()
+        return cast(Any, v).model_dump(exclude_none=True)
     except (AttributeError, TypeError):
         pass
 
     # Attempt to dump a Pydantic v1 `BaseModel`.
     try:
-        return cast(Any, v).dict()
+        return cast(Any, v).dict(exclude_none=True)
     except (AttributeError, TypeError):
         pass
 
