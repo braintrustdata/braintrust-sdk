@@ -1,5 +1,6 @@
 import {
   makeScorerPropagatedEvent,
+  mergeDicts,
   Score,
   SpanTypeAttribute,
 } from "../util/index";

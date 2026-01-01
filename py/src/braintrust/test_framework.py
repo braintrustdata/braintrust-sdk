@@ -242,7 +242,7 @@ async def test_hooks_trial_index_multiple_inputs():
 
 
 @pytest.mark.asyncio
-async def test_scorer_spans_have_purpose_attribute(with_memory_logger):
+async def test_scorer_spans_have_purpose_attribute(with_memory_logger, with_simulate_login):
     """Test that scorer spans have span_attributes.purpose='scorer' and propagate to subspans."""
     # Define test data
     data = [
@@ -252,7 +252,7 @@ async def test_scorer_spans_have_purpose_attribute(with_memory_logger):
     def simple_task(input_value):
         return input_value
 
-    def simple_scorer(input_value, output, expected):
+    def purpose_scorer(input_value, output, expected):
         return 1.0 if output == expected else 0.0
 
     evaluator = Evaluator(
@@ -260,16 +260,19 @@ async def test_scorer_spans_have_purpose_attribute(with_memory_logger):
         eval_name="test-scorer-purpose",
         data=data,
         task=simple_task,
-        scores=[simple_scorer],
-        experiment_name=None,
+        scores=[purpose_scorer],
+        experiment_name="test-scorer-purpose",
         metadata=None,
     )
 
+    # Create experiment so spans get logged
+    exp = init_test_exp("test-scorer-purpose", "test-project")
+
     # Run evaluator
-    result = await run_evaluator(experiment=None, evaluator=evaluator, position=None, filters=[])
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
 
     assert len(result.results) == 1
-    assert result.results[0].scores.get("simple_scorer") == 1.0
+    assert result.results[0].scores.get("purpose_scorer") == 1.0
 
     # Check the logged spans
     logs = with_memory_logger.pop()
