@@ -1285,7 +1285,10 @@ async def _run_evaluator_internal(
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
         with root_span.start_span(
-            name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
+            name=name,
+            span_attributes={"type": SpanTypeAttribute.SCORE, "purpose": "scorer"},
+            propagated_event={"span_attributes": {"purpose": "scorer"}},
+            input=dict(**kwargs),
         ) as span:
             score = scorer
             if hasattr(scorer, "eval_async"):

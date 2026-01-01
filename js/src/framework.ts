@@ -1084,7 +1084,9 @@ async function runEvaluatorInternal(
                   name: scorerNames[score_idx],
                   spanAttributes: {
                     type: SpanTypeAttribute.SCORE,
+                    purpose: "scorer",
                   },
+                  propagatedEvent: { span_attributes: { purpose: "scorer" } },
                   event: { input: scoringArgs },
                 });
                 return { kind: "score", value: results } as const;
