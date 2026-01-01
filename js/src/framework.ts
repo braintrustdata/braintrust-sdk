@@ -1,4 +1,9 @@
-import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
+import {
+  Score,
+  SpanComponentsV3,
+  SpanTypeAttribute,
+  mergeDicts,
+} from "../util/index";
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type ObjectReferenceType as ObjectReference,
@@ -1080,13 +1085,24 @@ async function runEvaluatorInternal(
                   return results;
                 };
 
+                // Merge purpose into parent's propagatedEvent rather than replacing it
+                const parentExport = await rootSpan.export();
+                const parentPropagatedEvent = parentExport
+                  ? SpanComponentsV3.fromStr(parentExport).data
+                      .propagated_event ?? {}
+                  : {};
+                const mergedPropagatedEvent = mergeDicts(
+                  { ...parentPropagatedEvent },
+                  { span_attributes: { purpose: "scorer" } },
+                );
+
                 const results = await rootSpan.traced(runScorer, {
                   name: scorerNames[score_idx],
                   spanAttributes: {
                     type: SpanTypeAttribute.SCORE,
                     purpose: "scorer",
                   },
-                  propagatedEvent: { span_attributes: { purpose: "scorer" } },
+                  propagatedEvent: mergedPropagatedEvent,
                   event: { input: scoringArgs },
                 });
                 return { kind: "score", value: results } as const;
