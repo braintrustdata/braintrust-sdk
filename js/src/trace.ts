@@ -28,7 +28,6 @@ export class SpanFetcher extends ObjectFetcher<SpanRecord> {
 
     super(objectType, undefined, undefined, {
       filter: filterExpr,
-      order_by: [{ expr: { op: "ident", name: ["_xact_id"] }, asc: true }],
     });
   }
 
@@ -52,14 +51,13 @@ export class SpanFetcher extends ObjectFetcher<SpanRecord> {
     const spanTypeInFilter = {
       op: "in",
       left: { op: "ident", name: ["span_attributes", "type"] },
-      right: spanTypeFilter.map((t) => ({ op: "literal", value: t })),
+      right: { op: "literal", value: spanTypeFilter },
     };
 
     // Combine with AND
     return {
       op: "and",
-      left: rootSpanFilter,
-      right: spanTypeInFilter,
+      children: [rootSpanFilter, spanTypeInFilter],
     };
   }
 
