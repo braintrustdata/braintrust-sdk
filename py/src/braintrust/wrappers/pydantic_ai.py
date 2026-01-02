@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import AbstractAsyncContextManager
 from typing import Any, TypeVar
 
-from braintrust.bt_json import json_safe_deep_copy
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 from wrapt import wrap_function_wrapper
@@ -401,7 +401,7 @@ def _build_model_class_input_and_metadata(instance: Any, args: Any, kwargs: Any)
 
     input_data = {"messages": serialized_messages}
     if model_settings is not None:
-        input_data["model_settings"] = json_safe_deep_copy(model_settings)
+        input_data["model_settings"] = bt_safe_deep_copy(model_settings)
 
     metadata = _build_model_metadata(model_name, provider, model_settings=None)
 
@@ -684,7 +684,7 @@ def _serialize_content_part(part: Any) -> Any:
     if isinstance(part, str):
         return part
 
-    return json_safe_deep_copy(part)
+    return bt_safe_deep_copy(part)
 
 
 def _serialize_messages(messages: Any) -> Any:
@@ -694,7 +694,7 @@ def _serialize_messages(messages: Any) -> Any:
 
     result = []
     for msg in messages:
-        serialized_msg = json_safe_deep_copy(msg)
+        serialized_msg = bt_safe_deep_copy(msg)
 
         if hasattr(msg, "parts") and isinstance(serialized_msg, dict):
             serialized_msg["parts"] = [_serialize_content_part(p) for p in msg.parts]
@@ -712,12 +712,12 @@ def _serialize_result_output(result: Any) -> Any:
     output_dict = {}
 
     if hasattr(result, "output"):
-        output_dict["output"] = json_safe_deep_copy(result.output)
+        output_dict["output"] = bt_safe_deep_copy(result.output)
 
     if hasattr(result, "response"):
         output_dict["response"] = _serialize_model_response(result.response)
 
-    return output_dict if output_dict else json_safe_deep_copy(result)
+    return output_dict if output_dict else bt_safe_deep_copy(result)
 
 
 def _serialize_stream_output(stream_result: Any) -> Any:
@@ -738,7 +738,7 @@ def _serialize_model_response(response: Any) -> Any:
     if not response:
         return None
 
-    response_dict = json_safe_deep_copy(response)
+    response_dict = bt_safe_deep_copy(response)
 
     if hasattr(response, "parts") and isinstance(response_dict, dict):
         response_dict["parts"] = [_serialize_content_part(p) for p in response.parts]
@@ -820,7 +820,7 @@ def _build_model_metadata(
     if provider:
         metadata["provider"] = provider
     if model_settings:
-        metadata["model_settings"] = json_safe_deep_copy(model_settings)
+        metadata["model_settings"] = bt_safe_deep_copy(model_settings)
     return metadata
 
 
@@ -1029,7 +1029,7 @@ def _serialize_type(obj: Any) -> Any:
         return obj.__name__
 
     # Try standard serialization
-    return json_safe_deep_copy(obj)
+    return bt_safe_deep_copy(obj)
 
 
 G = TypeVar("G", bound=AsyncGenerator[Any, None])
@@ -1079,9 +1079,9 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
             input_data[key] = _serialize_type(value) if value is not None else None
         elif key == "model_settings":
             # model_settings passed to run() goes in INPUT (it's a run() parameter)
-            input_data[key] = json_safe_deep_copy(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
         else:
-            input_data[key] = json_safe_deep_copy(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     if "model" in kwargs:
         model_name, provider = _parse_model_string(kwargs["model"])
@@ -1178,7 +1178,7 @@ def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[dict
 
     for key, value in kwargs.items():
         if key not in ["model", "messages"]:
-            input_data[key] = json_safe_deep_copy(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     model_name, provider = _parse_model_string(model)
     metadata = _build_model_metadata(model_name, provider)

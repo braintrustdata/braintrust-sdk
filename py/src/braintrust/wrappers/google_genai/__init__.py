@@ -3,7 +3,7 @@ import time
 from collections.abc import Iterable
 from typing import Any
 
-from braintrust.bt_json import json_safe_deep_copy
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 from wrapt import wrap_function_wrapper
@@ -150,7 +150,7 @@ def wrap_async_models(AsyncModels: Any):
 
 
 def _serialize_input(api_client: Any, input: dict[str, Any]):
-    config = json_safe_deep_copy(input.get("config"))
+    config = bt_safe_deep_copy(input.get("config"))
 
     if config is not None:
         tools = _serialize_tools(api_client, input)
