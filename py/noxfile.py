@@ -113,8 +113,13 @@ def test_claude_agent_sdk(session, version):
     _install_test_deps(session)
     # Install Claude Code CLI using native installer (no nodeenv needed)
     if sys.platform == "win32":
-        # Windows: use PowerShell installer
-        session.run("powershell", "-Command", "irm https://claude.ai/install.ps1 | iex", external=True)
+        # Windows: use CMD installer (more compatible than PowerShell)
+        session.run(
+            "cmd",
+            "/c",
+            "curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd",
+            external=True,
+        )
     else:
         # macOS/Linux: use bash installer
         session.run("bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash", external=True)
