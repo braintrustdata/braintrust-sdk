@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 570d061acf93c711162b8ce209724d081ba9a371) -- do not modify"""
+"""Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -98,7 +98,7 @@ from ._generated_types import (
     StreamingMode,
     ToolFunctionDefinition,
     TraceScope,
-    TriggeredFunction,
+    TriggeredFunctionState,
     UploadStatus,
     User,
     View,
@@ -205,7 +205,7 @@ __all__ = [
     "StreamingMode",
     "ToolFunctionDefinition",
     "TraceScope",
-    "TriggeredFunction",
+    "TriggeredFunctionState",
     "UploadStatus",
     "User",
     "View",

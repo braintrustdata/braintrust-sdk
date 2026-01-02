@@ -144,8 +144,19 @@ class AsyncScoringControlAsyncScoringControl5(TypedDict):
     triggered_xact_id: str
 
 
+class AsyncScoringStateAsyncScoringState(TypedDict):
+    status: Literal['enabled']
+    token: str
+    function_ids: Sequence[Any]
+    skip_logging: NotRequired[bool | None]
+    triggered_functions: NotRequired[Mapping[str, Any] | None]
+
+
 class AsyncScoringStateAsyncScoringState1(TypedDict):
     status: Literal['disabled']
+
+
+AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
 
 
 class PreprocessorPreprocessor(TypedDict):
@@ -2145,11 +2156,21 @@ class TraceScope(TypedDict):
     """
 
 
-class TriggeredFunction(TypedDict):
-    function_id: NotRequired[Any | None]
-    """
-    The function to run
-    """
+class TriggeredFunctionStateScope(TypedDict):
+    type: Literal['span']
+
+
+class TriggeredFunctionStateScope1(TypedDict):
+    type: Literal['trace']
+
+
+class TriggeredFunctionStateScope2(TypedDict):
+    type: Literal['group']
+    key: str
+    value: str
+
+
+class TriggeredFunctionState(TypedDict):
     triggered_xact_id: str
     """
     The xact_id when this function was triggered
@@ -2161,6 +2182,10 @@ class TriggeredFunction(TypedDict):
     attempts: NotRequired[int | None]
     """
     Number of execution attempts (for retry tracking)
+    """
+    scope: TriggeredFunctionStateScope | TriggeredFunctionStateScope1 | TriggeredFunctionStateScope2
+    """
+    The scope of data this function operates on
     """
 
 
@@ -2347,15 +2372,19 @@ class AnyModelParams(TypedDict):
     use_cache: NotRequired[bool | None]
 
 
-class AsyncScoringStateAsyncScoringState(TypedDict):
-    status: Literal['enabled']
-    token: str
-    function_ids: Sequence[Any]
-    skip_logging: NotRequired[bool | None]
-    triggered_function_ids: NotRequired[Sequence[TriggeredFunction] | None]
+class AsyncScoringControlAsyncScoringControl1(TypedDict):
+    kind: Literal['state_override']
+    state: AsyncScoringState
 
 
-AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
+AsyncScoringControl: TypeAlias = (
+    AsyncScoringControlAsyncScoringControl
+    | AsyncScoringControlAsyncScoringControl1
+    | AsyncScoringControlAsyncScoringControl2
+    | AsyncScoringControlAsyncScoringControl3
+    | AsyncScoringControlAsyncScoringControl4
+    | AsyncScoringControlAsyncScoringControl5
+)
 
 
 AttachmentReference: TypeAlias = BraintrustAttachmentReference | ExternalAttachmentReference
@@ -2884,21 +2913,6 @@ class SpanAttributes(TypedDict):
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
-
-
-class AsyncScoringControlAsyncScoringControl1(TypedDict):
-    kind: Literal['state_override']
-    state: AsyncScoringState
-
-
-AsyncScoringControl: TypeAlias = (
-    AsyncScoringControlAsyncScoringControl
-    | AsyncScoringControlAsyncScoringControl1
-    | AsyncScoringControlAsyncScoringControl2
-    | AsyncScoringControlAsyncScoringControl3
-    | AsyncScoringControlAsyncScoringControl4
-    | AsyncScoringControlAsyncScoringControl5
-)
 
 
 class ExperimentEvent(TypedDict):
