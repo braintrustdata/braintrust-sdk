@@ -160,12 +160,15 @@ export const AsyncScoringControl = z.union([
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
   z.object({
-    kind: z.literal("add_triggered_functions"),
+    kind: z.literal("trigger_functions"),
     triggered_functions: z
       .array(
         z.object({
           function_id: z.unknown().optional(),
-          scope: z.object({ type: z.enum(["span", "trace"]) }),
+          scope: z.union([
+            z.object({ type: z.literal("span") }),
+            z.object({ type: z.literal("trace") }),
+          ]),
         }),
       )
       .min(1),

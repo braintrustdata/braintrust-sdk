@@ -118,16 +118,23 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
 
 
 class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope(TypedDict):
-    type: Literal['span', 'trace']
+    type: Literal['span']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1(TypedDict):
+    type: Literal['trace']
 
 
 class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
     function_id: NotRequired[Any | None]
-    scope: AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+    scope: (
+        AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+        | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
+    )
 
 
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
-    kind: Literal['add_triggered_functions']
+    kind: Literal['trigger_functions']
     triggered_functions: Sequence[AsyncScoringControlAsyncScoringControl4TriggeredFunction]
 
 

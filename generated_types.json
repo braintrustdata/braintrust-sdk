@@ -481,7 +481,7 @@
               "kind": {
                 "type": "string",
                 "enum": [
-                  "add_triggered_functions"
+                  "trigger_functions"
                 ]
               },
               "triggered_functions": {
@@ -491,18 +491,35 @@
                   "properties": {
                     "function_id": {},
                     "scope": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string",
-                          "enum": [
-                            "span",
-                            "trace"
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "span"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "trace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type"
                           ]
                         }
-                      },
-                      "required": [
-                        "type"
                       ]
                     }
                   },
