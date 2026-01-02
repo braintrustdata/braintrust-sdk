@@ -52,9 +52,9 @@ EOF
 # Clear any existing Claude auth to avoid conflicts with ANTHROPIC_API_KEY
 claude /logout > /dev/null 2>&1 || true
 
-# Install Claude Code CLI using native installer
-echo "Installing Claude Code..."
-curl -fsSL https://claude.ai/install.sh | bash
+# Update Claude to latest version
+echo "Updating Claude..."
+sudo npm install -g @anthropic-ai/claude-code@latest
 
 # Add Braintrust MCP server
 echo "Adding Braintrust MCP server..."

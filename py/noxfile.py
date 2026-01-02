@@ -58,7 +58,8 @@ ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
 # litellm latest requires Python >= 3.10
 LITELLM_VERSIONS = (LATEST, "1.74.0")
-CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
+# CLI bundling started in 0.1.10 - older versions require external Claude Code installation
+CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.10")
 AGNO_VERSIONS = (LATEST, "2.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
 # Two test suites with different version requirements:
@@ -111,18 +112,6 @@ def test_pydantic_ai_integration(session, version):
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
     _install_test_deps(session)
-    # Install Claude Code CLI using native installer (no nodeenv needed)
-    if sys.platform == "win32":
-        # Windows: use CMD installer (more compatible than PowerShell)
-        session.run(
-            "cmd",
-            "/c",
-            "curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd",
-            external=True,
-        )
-    else:
-        # macOS/Linux: use bash installer
-        session.run("bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash", external=True)
     _install(session, "claude_agent_sdk", version)
     _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
     _run_core_tests(session)
