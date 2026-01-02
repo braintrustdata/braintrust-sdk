@@ -47,7 +47,7 @@ from .resource_manager import ResourceManager
 from .score import Score, is_score, is_scorer
 from .serializable_data_class import SerializableDataClass
 from .span_types import SpanTypeAttribute
-from .util import bt_iscoroutinefunction, eprint
+from .util import bt_iscoroutinefunction, eprint, merge_dicts
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
@@ -1284,8 +1284,17 @@ async def _run_evaluator_internal(
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
+        # Merge purpose into parent's propagated_event rather than replacing it
+        parent_propagated = root_span.propagated_event or {}
+        merged_propagated = merge_dicts(
+            {**parent_propagated},
+            {"span_attributes": {"purpose": "scorer"}},
+        )
         with root_span.start_span(
-            name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
+            name=name,
+            span_attributes={"type": SpanTypeAttribute.SCORE, "purpose": "scorer"},
+            propagated_event=merged_propagated,
+            input=dict(**kwargs),
         ) as span:
             score = scorer
             if hasattr(scorer, "eval_async"):
