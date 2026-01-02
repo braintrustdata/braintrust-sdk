@@ -401,9 +401,15 @@ importers:
 
   js/src/wrappers/vitest:
     devDependencies:
+      '@ai-sdk/openai':
+        specifier: 2.0.53
+        version: 2.0.53(zod@4.2.1)
       '@types/node':
         specifier: ^20.10.5
         version: 20.19.16
+      ai:
+        specifier: 5.0.76
+        version: 5.0.76(zod@4.2.1)
       typescript:
         specifier: 5.4.4
         version: 5.4.4

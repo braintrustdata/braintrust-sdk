@@ -4,7 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import * as ai from "ai";
 
 const logger = initLogger({
-  projectName: "golden-ts-vitest",
+  projectName: "golden-ts-vitest-v4",
 });
 
 const { generateText } = wrapAISDK(ai);
@@ -15,11 +15,10 @@ bt.describe("Vitest Wrapper Golden Tests", () => {
     await logger.flush();
   });
 
-  bt.test("basic test with logging", async () => {
+  bt.test("basic test with auto pass/fail", async () => {
     const result = { value: 42 };
-    bt.logOutputs({ result });
-    bt.logFeedback({ name: "correctness", score: 1.0 });
     expect(result.value).toBe(42);
+    // Pass feedback is automatically logged
   });
 
   bt.test(
@@ -35,6 +34,7 @@ bt.describe("Vitest Wrapper Golden Tests", () => {
       bt.logOutputs({ answer: result });
       expect(result).toBe(expected);
       expect((input as any).query).toBe("What is 2+2?");
+      // Pass feedback is automatically logged
     },
   );
 
@@ -44,7 +44,10 @@ bt.describe("Vitest Wrapper Golden Tests", () => {
       prompt: "Say hello in exactly 3 words",
     });
 
+    // Log output for tracking (pass/fail is automatic)
     bt.logOutputs({ text: result.text });
+
+    // Add custom quality feedback in addition to automatic pass/fail
     bt.logFeedback({ name: "quality", score: 0.9 });
 
     expect(result.text).toBeTruthy();
@@ -64,12 +67,15 @@ bt.describe("Vitest Wrapper Golden Tests", () => {
         prompt: (input as any).task,
       });
 
+      // Log the output for tracking
       bt.logOutputs({ translation: result.text });
 
+      // Add custom correctness metric (in addition to automatic pass/fail)
       const isCorrect = result.text.toLowerCase().includes(expected as string);
       bt.logFeedback({ name: "correctness", score: isCorrect ? 1.0 : 0.0 });
 
       expect(result.text.toLowerCase()).toContain(expected as string);
+      // Pass/fail feedback is automatically logged based on assertion
     },
   );
 
@@ -82,7 +88,6 @@ bt.describe("Vitest Wrapper Golden Tests", () => {
   bt.test("test with failure", async () => {
     const result = { value: 42 };
     bt.logOutputs({ result });
-    bt.logFeedback({ name: "correctness", score: 0.0 });
-    expect(result.value).toBe(99);
+    expect(result.value).toBe(99); // Intentional failure - fail feedback automatically logged
   });
 });

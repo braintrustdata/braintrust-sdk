@@ -20,7 +20,7 @@ help:
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-vitesttest-latest install-optional-deps publish-beta-local test-smoke
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-vitest test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing

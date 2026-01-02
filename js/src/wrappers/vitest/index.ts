@@ -5,7 +5,8 @@ import type { VitestMethods, BraintrustVitest, WrapperConfig } from "./types";
 export type { TestConfig, TestContext } from "./types";
 
 /**
- * Wraps Vitest methods with Braintrust tracing. This automatically sends test trace execution.
+ * Wraps Vitest methods with Braintrust tracing. This automatically sends test trace execution
+ * and logs pass/fail status as feedback.
  *
  * @param vitestMethods - Object containing Vitest methods (test, describe, expect, etc.)
  * @param config - Optional configuration
@@ -19,9 +20,17 @@ export type { TestConfig, TestContext } from "./types";
  * const bt = wrapVitest({ test, expect, describe });
  *
  * bt.describe('My Tests', () => {
+ *   // Simple case - automatic pass/fail tracking
  *   bt.test('should work', async () => {
  *     const result = await myFunction();
- *     bt.logOutputs({ result });
+ *     expect(result).toBe('expected'); // Pass/fail automatically logged
+ *   });
+ *
+ *   // Add custom outputs and feedback
+ *   bt.test('detailed evaluation', async () => {
+ *     const result = await myFunction();
+ *     bt.logOutputs({ result }); // Optional: log additional outputs
+ *     bt.logFeedback({ name: 'quality', score: 0.9 }); // Optional: add custom metrics
  *     expect(result).toBe('expected');
  *   });
  * });

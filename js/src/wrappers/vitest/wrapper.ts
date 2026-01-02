@@ -26,6 +26,7 @@ export function wrapTest(
     return originalTest(name, async (vitestContext: any) => {
       return await traced(
         async (span) => {
+          let testResult: any;
           try {
             if (testConfig) {
               const params: TestContext = {
@@ -33,12 +34,30 @@ export function wrapTest(
                 expected: testConfig.expected,
                 metadata: testConfig.metadata,
               };
-              await fn({ ...vitestContext, ...params });
+              testResult = await fn({ ...vitestContext, ...params });
             } else {
-              await fn(vitestContext);
+              testResult = await fn(vitestContext);
+            }
+
+            // Automatically log pass feedback on success
+            span.log({
+              scores: {
+                pass: 1,
+              },
+            });
+
+            // If test function returns a value, log it as output
+            if (testResult !== undefined) {
+              span.log({
+                output: testResult,
+              });
             }
           } catch (error) {
+            // Automatically log fail feedback on error
             span.log({
+              scores: {
+                pass: 0,
+              },
               metadata: {
                 error:
                   error instanceof Error
