@@ -1134,37 +1134,37 @@ async def test_serialize_pydantic_schema_direct():
 
 
 @pytest.mark.asyncio
-async def test_json_safe_deep_copy_never_raises():
-    """Test that json_safe_deep_copy never raises exceptions."""
-    from braintrust_adk import json_safe_deep_copy
+async def test_bt_safe_deep_copy_never_raises():
+    """Test that bt_safe_deep_copy never raises exceptions."""
+    from braintrust_adk import bt_safe_deep_copy
 
     class BrokenModel:
         def model_dump(self):
             raise ValueError("I'm broken!")
 
     # Should not raise
-    result = json_safe_deep_copy(BrokenModel())
+    result = bt_safe_deep_copy(BrokenModel())
     assert result is not None
 
     # Test with various types
-    assert json_safe_deep_copy({"key": "value"}) == {"key": "value"}
-    assert json_safe_deep_copy([1, 2, 3]) == [1, 2, 3]
-    assert json_safe_deep_copy("string") == "string"
-    assert json_safe_deep_copy(123) == 123
-    assert json_safe_deep_copy(None) is None
+    assert bt_safe_deep_copy({"key": "value"}) == {"key": "value"}
+    assert bt_safe_deep_copy([1, 2, 3]) == [1, 2, 3]
+    assert bt_safe_deep_copy("string") == "string"
+    assert bt_safe_deep_copy(123) == 123
+    assert bt_safe_deep_copy(None) is None
 
     # Test with Pydantic model instance
     class WorkingModel(BaseModel):
         value: str = "test"
 
     instance = WorkingModel()
-    result = json_safe_deep_copy(instance)
+    result = bt_safe_deep_copy(instance)
     assert isinstance(result, dict)
     assert result["value"] == "test"
 
     # Test with Pydantic model class (not instance)
-    # json_safe_deep_copy now returns the JSON schema for Pydantic model classes
-    result = json_safe_deep_copy(WorkingModel)
+    # bt_safe_deep_copy now returns the JSON schema for Pydantic model classes
+    result = bt_safe_deep_copy(WorkingModel)
     assert isinstance(result, dict)
     assert "properties" in result
     assert "value" in result["properties"]

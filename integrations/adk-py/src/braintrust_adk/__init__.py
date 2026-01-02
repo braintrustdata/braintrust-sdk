@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from wrapt import wrap_function_wrapper
 
-from braintrust.bt_json import json_safe_deep_copy
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 
@@ -87,7 +87,7 @@ def wrap_agent(Agent: Any) -> Any:
             with start_span(
                 name=f"agent_run [{instance.name}]",
                 type=SpanTypeAttribute.TASK,
-                metadata=json_safe_deep_copy({"parent_context": parent_context, **_omit(kwargs, ["parent_context"])}),
+                metadata=bt_safe_deep_copy({"parent_context": parent_context, **_omit(kwargs, ["parent_context"])}),
             ) as agent_span:
                 last_event = None
                 async with aclosing(wrapped(*args, **kwargs)) as agen:
@@ -118,7 +118,7 @@ def wrap_flow(Flow: Any):
             with start_span(
                 name=f"call_llm",
                 type=SpanTypeAttribute.TASK,
-                metadata=json_safe_deep_copy(
+                metadata=bt_safe_deep_copy(
                     {
                         "invocation_context": invocation_context,
                         **_omit(kwargs, ["invocation_context"]),
@@ -146,7 +146,7 @@ def wrap_flow(Flow: Any):
 
         async def _trace():
             # Extract and serialize contents BEFORE converting to dict
-            # This is critical because json_safe_deep_copy converts bytes to string representations
+            # This is critical because bt_safe_deep_copy converts bytes to string representations
             serialized_contents = None
             if llm_request and hasattr(llm_request, "contents"):
                 contents = llm_request.contents
@@ -158,7 +158,7 @@ def wrap_flow(Flow: Any):
                     )
 
             # Now convert the whole request to dict
-            serialized_request = json_safe_deep_copy(llm_request)
+            serialized_request = bt_safe_deep_copy(llm_request)
 
             # Replace contents with our serialized version that has Attachments
             if serialized_contents is not None and isinstance(serialized_request, dict):
@@ -177,7 +177,7 @@ def wrap_flow(Flow: Any):
                 name="llm_call",
                 type=SpanTypeAttribute.LLM,
                 input=serialized_request,
-                metadata=json_safe_deep_copy(
+                metadata=bt_safe_deep_copy(
                     {
                         "invocation_context": invocation_context,
                         "model_response_event": model_response_event,
@@ -208,11 +208,11 @@ def wrap_flow(Flow: Any):
                 if last_event:
                     # We need to check if we should merge content from an earlier event
                     # Convert to dict to inspect/modify, but let span.log() handle final serialization
-                    output_dict = json_safe_deep_copy(last_event)
+                    output_dict = bt_safe_deep_copy(last_event)
                     if event_with_content and isinstance(output_dict, dict):
                         if "content" not in output_dict or output_dict.get("content") is None:
                             content = (
-                                json_safe_deep_copy(event_with_content.content)
+                                bt_safe_deep_copy(event_with_content.content)
                                 if hasattr(event_with_content, "content")
                                 else None
                             )
@@ -266,7 +266,7 @@ def wrap_runner(Runner: Any):
                 name=f"invocation [{instance.app_name}]",
                 type=SpanTypeAttribute.TASK,
                 input={"new_message": serialized_message},
-                metadata=json_safe_deep_copy(
+                metadata=bt_safe_deep_copy(
                     {
                         "user_id": user_id,
                         "session_id": session_id,
@@ -300,7 +300,7 @@ def wrap_runner(Runner: Any):
                 name=f"invocation [{instance.app_name}]",
                 type=SpanTypeAttribute.TASK,
                 input={"new_message": serialized_message},
-                metadata=json_safe_deep_copy(
+                metadata=bt_safe_deep_copy(
                     {
                         "user_id": user_id,
                         "session_id": session_id,
@@ -383,7 +383,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
     """
     try:
         # Convert to dict if it's a model object
-        request_dict = cast(dict[str, Any], json_safe_deep_copy(llm_request))
+        request_dict = cast(dict[str, Any], bt_safe_deep_copy(llm_request))
 
         # Check if there are tools in the config
         has_tools = bool(request_dict.get("config", {}).get("tools"))
@@ -414,7 +414,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
 
             # Fallback: Check the response dict structure
             if not response_has_function_call:
-                response_dict = json_safe_deep_copy(model_response)
+                response_dict = bt_safe_deep_copy(model_response)
                 if isinstance(response_dict, dict):
                     # Try multiple possible response structures
                     # 1. Standard: response.content.parts
@@ -521,7 +521,7 @@ def _serialize_part(part: Any) -> Any:
         return result
 
     # Try standard serialization methods
-    return json_safe_deep_copy(part)
+    return bt_safe_deep_copy(part)
 
 
 def _serialize_pydantic_schema(schema_class: Any) -> dict[str, Any]:
@@ -556,7 +556,7 @@ def _serialize_config(config: Any) -> dict[str, Any] | Any:
     if not config:
         return config
 
-    # Extract schema fields BEFORE calling json_safe_deep_copy (which converts Pydantic classes to dicts)
+    # Extract schema fields BEFORE calling bt_safe_deep_copy (which converts Pydantic classes to dicts)
     schema_fields = ["response_schema", "response_json_schema", "input_schema", "output_schema"]
     serialized_schemas: dict[str, Any] = {}
 
@@ -580,7 +580,7 @@ def _serialize_config(config: Any) -> dict[str, Any] | Any:
                 pass
 
     # Serialize the config
-    config_dict = json_safe_deep_copy(config)
+    config_dict = bt_safe_deep_copy(config)
     if not isinstance(config_dict, dict):
         return config_dict  # type: ignore
 
