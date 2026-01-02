@@ -14,15 +14,9 @@ except ImportError:
 
 
 
-def to_json_safe(v: Any) -> Any:
+def _to_bt_safe(v: Any) -> Any:
     """
-    Converts the object to a JSON-safe representation.
-
-    Args:
-        v: Object to convert to a JSON-safe representation.
-
-    Returns:
-        JSON-safe representation of the object.
+    Converts the object to a Braintrust-safe representation (i.e. Attachment objects are safe (specially handled by background logger)).
     """
     # avoid circular imports
     from braintrust.logger import BaseAttachment, Dataset, Experiment, Logger, ReadonlyAttachment, Span
@@ -91,28 +85,25 @@ def to_json_safe(v: Any) -> Any:
     return bt_loads(bt_dumps(v, encoder=_str_encoder))
 
 @overload
-def json_safe_deep_copy(
+def bt_safe_deep_copy(
     obj: Mapping[str, Any],
-    to_json_safe: Callable[[Any], Any] = ...,
     max_depth: int = ...,
 ) -> dict[str, Any]: ...
 
 @overload
-def json_safe_deep_copy(
+def bt_safe_deep_copy(
     obj: list[Any],
-    to_json_safe: Callable[[Any], Any] = ...,
     max_depth: int = ...,
 ) -> list[Any]: ...
 
 @overload
-def json_safe_deep_copy(
+def bt_safe_deep_copy(
     obj: Any,
-    to_json_safe: Callable[[Any], Any] = ...,
     max_depth: int = ...,
 ) -> Any: ...
-def json_safe_deep_copy(obj: Any, to_json_safe: Callable[[Any], Any]=to_json_safe, max_depth: int=200):
+def bt_safe_deep_copy(obj: Any, max_depth: int=200):
     """
-    Creates a deep copy of the given object.
+    Creates a deep copy of the given object and converts rich objects to Braintrust-safe representations. See `_to_bt_safe` for more details.
 
     Args:
         obj: Object to deep copy and sanitize.
@@ -161,7 +152,7 @@ def json_safe_deep_copy(obj: Any, to_json_safe: Callable[[Any], Any]=to_json_saf
                 visited.discard(obj_id)
 
         try:
-            return to_json_safe(v)
+            return _to_bt_safe(v)
         except Exception:
             return f"<non-sanitizable: {type(v).__name__}>"
 
@@ -174,13 +165,22 @@ def _safe_str(obj: Any) -> str:
         return f"<non-serializable: {type(obj).__name__}>"
 
 
-def _to_dict(obj: Any) -> Any:
+def _to_json_safe(obj: Any) -> Any:
     """
     Handler for non-JSON-serializable objects. Returns a string representation of the object.
-    If you need to handle more complex objects, you can pass a custom sanitize function to deep_copy_and_sanitize_dict.
     """
+    # avoid circular imports
+    from braintrust.logger import BaseAttachment
+
     try:
-        return to_json_safe(obj)
+        v = _to_bt_safe(obj)
+
+        # JSON-safe representation of Attachment objects are their reference.
+        # If we get this object at this point, we have to assume someone has already uploaded the attachment!
+        if isinstance(v, BaseAttachment):
+            v = v.reference
+
+        return v
     except Exception:
         pass
 
@@ -196,7 +196,7 @@ class BraintrustJSONEncoder(json.JSONEncoder):
     """
 
     def default(self, o: Any):
-        return _to_dict(o)
+        return _to_json_safe(o)
 
 
 class BraintrustStrEncoder(json.JSONEncoder):
@@ -208,7 +208,7 @@ class Encoder(NamedTuple):
     native: type[json.JSONEncoder]
     orjson: Callable[[Any], Any]
 
-_json_encoder = Encoder(native=BraintrustJSONEncoder, orjson=_to_dict)
+_json_encoder = Encoder(native=BraintrustJSONEncoder, orjson=_to_json_safe)
 _str_encoder = Encoder(native=BraintrustStrEncoder, orjson=_safe_str)
 
 def bt_dumps(obj: Any, encoder: Encoder | None=_json_encoder, **kwargs: Any) -> str:
