@@ -70,6 +70,7 @@
     "test:zod-v4": "vitest run src/zod/zod-v4-serialization.test.ts",
     "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
+    "test:vitest": "vitest run src/wrappers/vitest/vitest-wrapper.test.ts",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
   },
   "author": "",

@@ -97,6 +97,18 @@ pnpm dlx tsx anthropic.ts
 pnpm dlx tsx openai.ts
 ```
 
+### Vitest Golden Tests
+
+```bash
+cd vitest
+pnpm install --ignore-workspace
+export BRAINTRUST_API_KEY=<your-key>  # Required to send spans to Braintrust
+export OPENAI_API_KEY=<your-key>       # Required for OpenAI tests
+pnpm test
+```
+
+This will run the Vitest wrapper golden tests which validate that the `wrapVitest` integration correctly traces test execution to Braintrust. Tests include both basic logging and OpenAI API calls to verify wrapper composition.
+
 ### Python Tests
 
 ```bash

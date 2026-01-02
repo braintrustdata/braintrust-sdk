@@ -1,0 +1,15 @@
+{
+  "name": "@braintrust/vitest-wrapper-tests",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Test infrastructure for Vitest wrapper",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9",
+    "@types/node": "^20.10.5",
+    "typescript": "5.4.4",
+    "vite-tsconfig-paths": "^4.3.2"
+  }
+}
