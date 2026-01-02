@@ -146,7 +146,7 @@ function wrapClaudeAgentQuery<
       // interrupt() right after query() without consuming any messages first.
       const invocationTarget: unknown =
         thisArg === proxy || thisArg === undefined
-          ? (defaultThis ?? thisArg)
+          ? defaultThis ?? thisArg
           : thisArg;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
