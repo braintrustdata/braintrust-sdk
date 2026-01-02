@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify
+// Auto-generated file (internal git SHA 570d061acf93c711162b8ce209724d081ba9a371) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -160,8 +160,18 @@ export const AsyncScoringControl = z.union([
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
   z.object({
-    kind: z.literal("add_triggered_functions"),
-    triggered_function_ids: z.array(z.unknown()).min(1),
+    kind: z.literal("trigger_functions"),
+    triggered_functions: z
+      .array(
+        z.object({
+          function_id: z.unknown().optional(),
+          scope: z.union([
+            z.object({ type: z.literal("span") }),
+            z.object({ type: z.literal("trace") }),
+          ]),
+        }),
+      )
+      .min(1),
   }),
   z.object({
     kind: z.literal("complete_triggered_functions"),
@@ -200,27 +210,22 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
-export const NullableFunctionTypeEnum = z.union([
-  z.enum([
-    "llm",
-    "scorer",
-    "task",
-    "tool",
-    "custom_view",
-    "preprocessor",
-    "facet",
-  ]),
-  z.null(),
+export const FunctionTypeEnum = z.enum([
+  "llm",
+  "scorer",
+  "task",
+  "tool",
+  "custom_view",
+  "preprocessor",
+  "facet",
 ]);
-export type NullableFunctionTypeEnumType = z.infer<
-  typeof NullableFunctionTypeEnum
->;
+export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.null(),
 ]);
@@ -659,7 +664,7 @@ export const ExtendedSavedFunctionId = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.object({
     type: z.literal("slug"),
@@ -670,36 +675,6 @@ export const ExtendedSavedFunctionId = z.union([
 export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
-export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
-  }),
-]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
-export const SpanScope = z.object({ type: z.literal("span") });
-export type SpanScopeType = z.infer<typeof SpanScope>;
-export const TraceScope = z.object({
-  type: z.literal("trace"),
-  idle_seconds: z.number().optional(),
-});
-export type TraceScopeType = z.infer<typeof TraceScope>;
-export const GroupScope = z.object({
-  type: z.literal("group"),
-  group_by: z.string(),
-  idle_seconds: z.number().optional(),
-});
-export type GroupScopeType = z.infer<typeof GroupScope>;
-export const FacetAutomationConfig = z.object({
-  event_type: z.literal("facet"),
-  facets: z.array(SavedFunctionId).min(1),
-  scope: z.union([SpanScope, TraceScope, GroupScope]),
-  sampling_rate: z.number().gte(0).lte(1).optional(),
-  btql_filter: z.union([z.string(), z.null()]).optional(),
-});
-export type FacetAutomationConfigType = z.infer<typeof FacetAutomationConfig>;
 export const FacetData = z.object({
   type: z.literal("facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -813,6 +788,15 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
+export const SavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -991,7 +975,7 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     config: z
       .union([z.object({}).partial().passthrough(), z.null()])
       .optional(),
@@ -1079,16 +1063,6 @@ export const PromptData = z
   })
   .partial();
 export type PromptDataType = z.infer<typeof PromptData>;
-export const FunctionTypeEnum = z.enum([
-  "llm",
-  "scorer",
-  "task",
-  "tool",
-  "custom_view",
-  "preprocessor",
-  "facet",
-]);
-export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
   z.object({
@@ -1098,7 +1072,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     global_function: z.string(),
-    function_type: NullableFunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
   }),
   z.object({
     prompt_session_id: z.string(),
@@ -1116,12 +1090,12 @@ export const FunctionId = z.union([
   z.object({
     inline_prompt: PromptData.optional(),
     inline_function: z.object({}).partial().passthrough(),
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
     inline_prompt: PromptData,
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
 ]);
@@ -1170,6 +1144,12 @@ export const Group = z.object({
   member_groups: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 export type GroupType = z.infer<typeof Group>;
+export const GroupScope = z.object({
+  type: z.literal("group"),
+  group_by: z.string(),
+  idle_seconds: z.number().optional(),
+});
+export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
 export const InvokeParent = z.union([
@@ -1252,6 +1232,13 @@ export const ObjectReference = z.object({
   created: z.union([z.string(), z.null()]).optional(),
 });
 export type ObjectReferenceType = z.infer<typeof ObjectReference>;
+export const SpanScope = z.object({ type: z.literal("span") });
+export type SpanScopeType = z.infer<typeof SpanScope>;
+export const TraceScope = z.object({
+  type: z.literal("trace"),
+  idle_seconds: z.number().optional(),
+});
+export type TraceScopeType = z.infer<typeof TraceScope>;
 export const OnlineScoreConfig = z.union([
   z.object({
     sampling_rate: z.number().gte(0).lte(1),
@@ -1260,6 +1247,7 @@ export const OnlineScoreConfig = z.union([
     apply_to_root_span: z.union([z.boolean(), z.null()]).optional(),
     apply_to_span_names: z.union([z.array(z.string()), z.null()]).optional(),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
+    scope: z.union([SpanScope, TraceScope, GroupScope, z.null()]).optional(),
   }),
   z.null(),
 ]);
@@ -1383,7 +1371,6 @@ export const ProjectAutomation = z.object({
         }),
       ]),
     }),
-    FacetAutomationConfig,
   ]),
 });
 export type ProjectAutomationType = z.infer<typeof ProjectAutomation>;

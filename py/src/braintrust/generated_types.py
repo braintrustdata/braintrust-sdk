@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 87547838ffb9178642aeadfdeaeb6d88eb14b56f) -- do not modify"""
+"""Auto-generated file (internal git SHA 570d061acf93c711162b8ce209724d081ba9a371) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -33,7 +33,6 @@ from ._generated_types import (
     ExperimentEvent,
     ExtendedSavedFunctionId,
     ExternalAttachmentReference,
-    FacetAutomationConfig,
     FacetData,
     Function,
     FunctionData,
@@ -56,7 +55,6 @@ from ._generated_types import (
     MCPServer,
     MessageRole,
     ModelParams,
-    NullableFunctionTypeEnum,
     NullableSavedFunctionId,
     ObjectReference,
     ObjectReferenceNullish,
@@ -142,7 +140,6 @@ __all__ = [
     "ExperimentEvent",
     "ExtendedSavedFunctionId",
     "ExternalAttachmentReference",
-    "FacetAutomationConfig",
     "FacetData",
     "Function",
     "FunctionData",
@@ -165,7 +162,6 @@ __all__ = [
     "MCPServer",
     "MessageRole",
     "ModelParams",
-    "NullableFunctionTypeEnum",
     "NullableSavedFunctionId",
     "ObjectReference",
     "ObjectReferenceNullish",

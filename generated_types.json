@@ -481,18 +481,58 @@
               "kind": {
                 "type": "string",
                 "enum": [
-                  "add_triggered_functions"
+                  "trigger_functions"
                 ]
               },
-              "triggered_function_ids": {
+              "triggered_functions": {
                 "type": "array",
-                "items": {},
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "function_id": {},
+                    "scope": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "span"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "trace"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "scope"
+                  ]
+                },
                 "minItems": 1
               }
             },
             "required": [
               "kind",
-              "triggered_function_ids"
+              "triggered_functions"
             ]
           },
           {
@@ -2383,7 +2423,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -2447,58 +2487,6 @@
           "filename",
           "content_type",
           "url"
-        ]
-      },
-      "FacetAutomationConfig": {
-        "type": "object",
-        "properties": {
-          "event_type": {
-            "type": "string",
-            "enum": [
-              "facet"
-            ],
-            "description": "The type of automation."
-          },
-          "facets": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SavedFunctionId"
-            },
-            "minItems": 1,
-            "description": "The facet functions to run (must be functions with function_type: 'facet')"
-          },
-          "scope": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SpanScope"
-              },
-              {
-                "$ref": "#/components/schemas/TraceScope"
-              },
-              {
-                "$ref": "#/components/schemas/GroupScope"
-              }
-            ],
-            "description": "The scope at which to run the facet"
-          },
-          "sampling_rate": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "The sampling rate for facet extraction (0-1, default: 1)"
-          },
-          "btql_filter": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional BTQL filter to select which spans/traces to process"
-          }
-        },
-        "required": [
-          "event_type",
-          "facets",
-          "scope"
         ]
       },
       "FacetData": {
@@ -2824,7 +2812,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               },
               "config": {
                 "type": [
@@ -2909,7 +2897,7 @@
                 "description": "The name of the global function. Currently, the global namespace includes the functions in autoevals"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -3074,7 +3062,9 @@
           "custom_view",
           "preprocessor",
           "facet"
-        ]
+        ],
+        "default": "scorer",
+        "description": "The type of global function. Defaults to 'scorer'."
       },
       "FunctionTypeEnumNullish": {
         "type": [
@@ -4165,22 +4155,6 @@
           }
         ]
       },
-      "NullableFunctionTypeEnum": {
-        "type": [
-          "string",
-          "null"
-        ],
-        "enum": [
-          "llm",
-          "scorer",
-          "task",
-          "tool",
-          "custom_view",
-          "preprocessor",
-          "facet"
-        ],
-        "description": "The type of global function. If unspecified, defaults to 'scorer' for backward compatibility."
-      },
       "NullableSavedFunctionId": {
         "anyOf": [
           {
@@ -4215,7 +4189,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -4342,7 +4316,7 @@
             "items": {
               "$ref": "#/components/schemas/SavedFunctionId"
             },
-            "description": "The list of scorers to use for online scoring"
+            "description": "The list of functions to run for online scoring. Can include scorers, facets, or other function types."
           },
           "btql_filter": {
             "type": [
@@ -4356,7 +4330,7 @@
               "boolean",
               "null"
             ],
-            "description": "Whether to trigger online scoring on the root span of each trace"
+            "description": "Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset."
           },
           "apply_to_span_names": {
             "type": [
@@ -4366,7 +4340,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Trigger online scoring on any spans with a name in this list"
+            "description": "Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset."
           },
           "skip_logging": {
             "type": [
@@ -4374,6 +4348,23 @@
               "null"
             ],
             "description": "Whether to skip adding scorer spans when computing scores"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpanScope"
+              },
+              {
+                "$ref": "#/components/schemas/TraceScope"
+              },
+              {
+                "$ref": "#/components/schemas/GroupScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets."
           }
         },
         "required": [
@@ -4853,9 +4844,6 @@
                   "event_type",
                   "action"
                 ]
-              },
-              {
-                "$ref": "#/components/schemas/FacetAutomationConfig"
               }
             ],
             "description": "The configuration for the automation rule"
@@ -6565,7 +6553,7 @@
                 "type": "string"
               },
               "function_type": {
-                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+                "$ref": "#/components/schemas/FunctionTypeEnum"
               }
             },
             "required": [
@@ -7466,7 +7454,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "87547838ffb9178642aeadfdeaeb6d88eb14b56f"
+    "x-internal-git-sha": "570d061acf93c711162b8ce209724d081ba9a371"
   },
   "paths": {},
   "webhooks": {}

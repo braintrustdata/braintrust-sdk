@@ -117,9 +117,25 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
     kind: Literal['state_enabled_force_rescore']
 
 
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope(TypedDict):
+    type: Literal['span']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1(TypedDict):
+    type: Literal['trace']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
+    function_id: NotRequired[Any | None]
+    scope: (
+        AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+        | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
+    )
+
+
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
-    kind: Literal['add_triggered_functions']
-    triggered_function_ids: Sequence[Any]
+    kind: Literal['trigger_functions']
+    triggered_functions: Sequence[AsyncScoringControlAsyncScoringControl4TriggeredFunction]
 
 
 class AsyncScoringControlAsyncScoringControl5(TypedDict):
@@ -730,6 +746,9 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+"""
+The type of global function. Defaults to 'scorer'.
+"""
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
@@ -1054,6 +1073,14 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
 
 
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[FunctionTypeEnum | None]
+
+
 class InvokeFunctionInvokeFunction3(TypedDict):
     prompt_session_id: str
     """
@@ -1220,12 +1247,6 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[float | None]
 
 
-NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
-"""
-The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
-"""
-
-
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -1234,7 +1255,7 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 NullableSavedFunctionId: TypeAlias = (
@@ -1874,7 +1895,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class TaskTask3(TypedDict):
@@ -1990,7 +2011,7 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
@@ -2351,7 +2372,7 @@ class AttachmentStatus(TypedDict):
 class PreprocessorPreprocessor1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
@@ -2543,7 +2564,7 @@ class Experiment(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 ExtendedSavedFunctionId: TypeAlias = (
@@ -2553,33 +2574,10 @@ ExtendedSavedFunctionId: TypeAlias = (
 )
 
 
-class FacetAutomationConfig(TypedDict):
-    event_type: Literal['facet']
-    """
-    The type of automation.
-    """
-    facets: Sequence[SavedFunctionId]
-    """
-    The facet functions to run (must be functions with function_type: 'facet')
-    """
-    scope: SpanScope | TraceScope | GroupScope
-    """
-    The scope at which to run the facet
-    """
-    sampling_rate: NotRequired[float | None]
-    """
-    The sampling rate for facet extraction (0-1, default: 1)
-    """
-    btql_filter: NotRequired[str | None]
-    """
-    Optional BTQL filter to select which spans/traces to process
-    """
-
-
 class Preprocessor1Preprocessor11(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class Preprocessor1Preprocessor14(Preprocessor1Preprocessor11, Preprocessor1Preprocessor12):
@@ -2609,7 +2607,7 @@ class FacetData(TypedDict):
 class FunctionDataFunctionData3(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
     config: NotRequired[Mapping[str, Any] | None]
     """
     Configuration options to pass to the global function (e.g., for preprocessor customization)
@@ -2621,15 +2619,7 @@ class FunctionIdFunctionId2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class InvokeFunctionInvokeFunction7(TypedDict):
@@ -2733,7 +2723,7 @@ class OnlineScoreConfig(TypedDict):
     """
     scorers: Sequence[SavedFunctionId]
     """
-    The list of scorers to use for online scoring
+    The list of functions to run for online scoring. Can include scorers, facets, or other function types.
     """
     btql_filter: NotRequired[str | None]
     """
@@ -2741,15 +2731,19 @@ class OnlineScoreConfig(TypedDict):
     """
     apply_to_root_span: NotRequired[bool | None]
     """
-    Whether to trigger online scoring on the root span of each trace
+    Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset.
     """
     apply_to_span_names: NotRequired[Sequence[str] | None]
     """
-    Trigger online scoring on any spans with a name in this list
+    Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset.
     """
     skip_logging: NotRequired[bool | None]
     """
     Whether to skip adding scorer spans when computing scores
+    """
+    scope: NotRequired[SpanScope | TraceScope | GroupScope | None]
+    """
+    The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets.
     """
 
 
@@ -2822,13 +2816,7 @@ class ProjectAutomation(TypedDict):
     """
     Textual description of the project automation
     """
-    config: (
-        ProjectAutomationConfig
-        | ProjectAutomationConfig1
-        | ProjectAutomationConfig2
-        | ProjectAutomationConfig3
-        | FacetAutomationConfig
-    )
+    config: ProjectAutomationConfig | ProjectAutomationConfig1 | ProjectAutomationConfig2 | ProjectAutomationConfig3
     """
     The configuration for the automation rule
     """
