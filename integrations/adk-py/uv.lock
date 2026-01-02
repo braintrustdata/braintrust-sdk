@@ -107,8 +107,8 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.4.0"
-source = { editable = "../../py" }
+version = "0.3.6"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -121,43 +121,10 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "wrapt" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", marker = "extra == 'all'" },
-    { name = "boto3", marker = "extra == 'cli'" },
-    { name = "chevron" },
-    { name = "exceptiongroup", specifier = ">=1.2.0" },
-    { name = "gitpython" },
-    { name = "openai-agents", marker = "extra == 'all'" },
-    { name = "openai-agents", marker = "extra == 'openai-agents'" },
-    { name = "opentelemetry-api", marker = "extra == 'all'" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'all'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'all'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'" },
-    { name = "psycopg2-binary", marker = "extra == 'all'" },
-    { name = "psycopg2-binary", marker = "extra == 'cli'" },
-    { name = "pydoc-markdown", marker = "extra == 'all'" },
-    { name = "pydoc-markdown", marker = "extra == 'doc'" },
-    { name = "python-dotenv" },
-    { name = "python-slugify" },
-    { name = "requests" },
-    { name = "sseclient-py" },
-    { name = "starlette", marker = "extra == 'all'" },
-    { name = "starlette", marker = "extra == 'cli'" },
-    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'all'", specifier = ">=1.19.0" },
-    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'temporal'", specifier = ">=1.19.0" },
-    { name = "tqdm" },
-    { name = "typing-extensions", specifier = ">=4.1.0" },
-    { name = "uv", marker = "extra == 'all'" },
-    { name = "uv", marker = "extra == 'cli'" },
-    { name = "uvicorn", marker = "extra == 'all'" },
-    { name = "uvicorn", marker = "extra == 'cli'" },
-    { name = "wrapt" },
+sdist = { url = "https://files.pythonhosted.org/packages/f7/ad/21cd9f46ac1804d40974afc6f40a5fc8fb4fad45570fbdd4760c1a5ac46d/braintrust-0.3.6.tar.gz", hash = "sha256:d5995ed0f2602d8a76e890bc3a597d2c92c8fa65ff6edef74a475de4b976b6f1", size = 233590, upload-time = "2025-10-30T20:19:02.737Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/80/c3a3fa4660e2ab3736cfcb5d56ca981cb7001146154da5ff02f7b2880efd/braintrust-0.3.6-py3-none-any.whl", hash = "sha256:1ad51547c99a0d12629351af281e4043ce8841df43462c18fdabccca2abd4325", size = 277122, upload-time = "2025-10-30T20:19:01.274Z" },
 ]
-provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-adk"
@@ -180,7 +147,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", editable = "../../py" },
+    { name = "braintrust", specifier = ">=0.2.4" },
     { name = "google-adk", specifier = ">=1.14.1" },
     { name = "wrapt", specifier = ">=1.17.3" },
 ]
