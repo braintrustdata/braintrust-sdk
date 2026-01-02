@@ -625,14 +625,28 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
         base_num_retries: Maximum number of retries before giving up and re-raising the exception.
         backoff_factor: A multiplier used to determine the time to wait between retries.
                        The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+        default_timeout_secs: Default timeout in seconds for requests that don't specify one.
+                             Prevents indefinite hangs on stale connections.
     """
 
-    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+    def __init__(
+        self,
+        *args: Any,
+        base_num_retries: int = 0,
+        backoff_factor: float = 0.5,
+        default_timeout_secs: float = 60,
+        **kwargs: Any,
+    ):
         self.base_num_retries = base_num_retries
         self.backoff_factor = backoff_factor
+        self.default_timeout_secs = default_timeout_secs
         super().__init__(*args, **kwargs)
 
     def send(self, *args, **kwargs):
+        # Apply default timeout if none provided to prevent indefinite hangs
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.default_timeout_secs
+
         num_prev_retries = 0
         while True:
             try:
@@ -644,6 +658,10 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                 if num_prev_retries < self.base_num_retries:
+                    # Reset connection pool on timeout errors to clear stale connections
+                    # (e.g., NAT gateway dropped idle connections)
+                    if isinstance(e, requests.exceptions.ReadTimeout):
+                        self.close()
                     # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
                     sleep_s = self.backoff_factor * (2**num_prev_retries)
                     print("Retrying request after error:", e, file=sys.stderr)
@@ -671,7 +689,10 @@ class HTTPConnection:
 
     def make_long_lived(self) -> None:
         if not self.adapter:
-            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
+            timeout_secs = float(os.environ.get("BRAINTRUST_HTTP_TIMEOUT", "60"))
+            self.adapter = RetryRequestExceptionsAdapter(
+                base_num_retries=10, backoff_factor=0.5, default_timeout_secs=timeout_secs
+            )
         self._reset()
 
     @staticmethod
