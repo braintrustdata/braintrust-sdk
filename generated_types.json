@@ -2276,6 +2276,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -2663,6 +2666,9 @@
               "name": {
                 "type": "string"
               },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
+              },
               "config": {
                 "type": [
                   "object",
@@ -2741,6 +2747,9 @@
               "global_function": {
                 "type": "string",
                 "description": "The name of the global function. Currently, the global namespace includes the functions in autoevals"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -4017,6 +4026,22 @@
           }
         ]
       },
+      "NullableFunctionTypeEnum": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "llm",
+          "scorer",
+          "task",
+          "tool",
+          "custom_view",
+          "preprocessor",
+          "facet"
+        ],
+        "description": "The type of global function. If unspecified, defaults to 'scorer' for backward compatibility."
+      },
       "NullableSavedFunctionId": {
         "anyOf": [
           {
@@ -4049,6 +4074,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -4294,6 +4322,13 @@
           "name": {
             "type": "string",
             "description": "Name of the project"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the project"
           },
           "created": {
             "type": [
@@ -6386,6 +6421,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "function_type": {
+                "$ref": "#/components/schemas/NullableFunctionTypeEnum"
               }
             },
             "required": [
@@ -7265,7 +7303,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "d2eca897666af49c11b326a9dcc6643824279cf8"
+    "x-internal-git-sha": "547fa17c0937e0e25fdf9214487be6f31c91a37a"
   },
   "paths": {},
   "webhooks": {}
