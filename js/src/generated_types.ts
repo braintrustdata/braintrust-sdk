@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 72c2653d250149b4f635ed3fa3cef74d315f0901) -- do not modify
+// Auto-generated file (internal git SHA 570d061acf93c711162b8ce209724d081ba9a371) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -161,7 +161,14 @@ export const AsyncScoringControl = z.union([
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
   z.object({
     kind: z.literal("add_triggered_functions"),
-    triggered_function_ids: z.array(z.unknown()).min(1),
+    triggered_functions: z
+      .array(
+        z.object({
+          function_id: z.unknown().optional(),
+          scope: z.object({ type: z.enum(["span", "trace"]) }),
+        }),
+      )
+      .min(1),
   }),
   z.object({
     kind: z.literal("complete_triggered_functions"),

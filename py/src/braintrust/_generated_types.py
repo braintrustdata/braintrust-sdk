@@ -117,9 +117,18 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
     kind: Literal['state_enabled_force_rescore']
 
 
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope(TypedDict):
+    type: Literal['span', 'trace']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
+    function_id: NotRequired[Any | None]
+    scope: AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+
+
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
     kind: Literal['add_triggered_functions']
-    triggered_function_ids: Sequence[Any]
+    triggered_functions: Sequence[AsyncScoringControlAsyncScoringControl4TriggeredFunction]
 
 
 class AsyncScoringControlAsyncScoringControl5(TypedDict):

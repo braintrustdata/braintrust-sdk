@@ -484,15 +484,38 @@
                   "add_triggered_functions"
                 ]
               },
-              "triggered_function_ids": {
+              "triggered_functions": {
                 "type": "array",
-                "items": {},
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "function_id": {},
+                    "scope": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "span",
+                            "trace"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "scope"
+                  ]
+                },
                 "minItems": 1
               }
             },
             "required": [
               "kind",
-              "triggered_function_ids"
+              "triggered_functions"
             ]
           },
           {
@@ -7414,7 +7437,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "72c2653d250149b4f635ed3fa3cef74d315f0901"
+    "x-internal-git-sha": "570d061acf93c711162b8ce209724d081ba9a371"
   },
   "paths": {},
   "webhooks": {}
