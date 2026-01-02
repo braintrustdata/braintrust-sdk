@@ -1,11 +1,11 @@
-from typing import Any, Dict, Union
+from typing import Any
 
 from braintrust import init_dataset
 from braintrust._generated_types import RunEvalData, RunEvalData1, RunEvalData2
 from braintrust.logger import BraintrustState
 
 
-async def get_dataset_by_id(state: BraintrustState, dataset_id: str) -> Dict[str, str]:
+async def get_dataset_by_id(state: BraintrustState, dataset_id: str) -> dict[str, str]:
     """Fetch dataset information by ID."""
     # Make API call to get dataset info
     conn = state.api_conn()
@@ -23,9 +23,7 @@ async def get_dataset_by_id(state: BraintrustState, dataset_id: str) -> Dict[str
 
 
 # NOTE: To make this performant, we'll have to make these functions work with async i/o
-async def get_dataset(
-    state: BraintrustState, data: Union[RunEvalData, RunEvalData1, RunEvalData2, Dict[str, Any]]
-) -> Any:
+async def get_dataset(state: BraintrustState, data: RunEvalData | RunEvalData1 | RunEvalData2 | dict[str, Any]) -> Any:
     """
     Get dataset from various data sources.
 

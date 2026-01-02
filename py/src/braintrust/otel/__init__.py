@@ -1,7 +1,6 @@
 import logging
 import os
 import warnings
-from typing import Dict, Optional
 from urllib.parse import urljoin
 
 INSTALL_ERR_MSG = (
@@ -138,10 +137,10 @@ class OtelExporter(OTLPSpanExporter):
 
     def __init__(
         self,
-        url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        parent: Optional[str] = None,
-        headers: Optional[Dict[str, str]] = None,
+        url: str | None = None,
+        api_key: str | None = None,
+        parent: str | None = None,
+        headers: dict[str, str] | None = None,
         **kwargs,
     ):
         """
@@ -189,13 +188,14 @@ class OtelExporter(OTLPSpanExporter):
         super().__init__(endpoint=endpoint, headers=exporter_headers, **kwargs)
 
 
-def add_braintrust_span_processor(tracer_provider,
-    api_key: Optional[str] = None,
-    parent: Optional[str] = None,
-    api_url: Optional[str] = None,
+def add_braintrust_span_processor(
+    tracer_provider,
+    api_key: str | None = None,
+    parent: str | None = None,
+    api_url: str | None = None,
     filter_ai_spans: bool = False,
     custom_filter=None,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
 ):
     processor = BraintrustSpanProcessor(
         api_key=api_key,
@@ -225,13 +225,13 @@ class BraintrustSpanProcessor:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        parent: Optional[str] = None,
-        api_url: Optional[str] = None,
+        api_key: str | None = None,
+        parent: str | None = None,
+        api_url: str | None = None,
         filter_ai_spans: bool = False,
-        custom_filter = None,
-        headers: Optional[Dict[str, str]] = None,
-        SpanProcessor: Optional[type] = None,
+        custom_filter=None,
+        headers: dict[str, str] | None = None,
+        SpanProcessor: type | None = None,
     ):
         """
         Initialize the BraintrustSpanProcessor.
@@ -279,16 +279,17 @@ class BraintrustSpanProcessor:
 
             # Priority 1: Check if braintrust.parent is in current OTEL context
             from opentelemetry import baggage, context
+
             current_context = context.get_current()
-            parent_value = context.get_value('braintrust.parent', current_context)
+            parent_value = context.get_value("braintrust.parent", current_context)
 
             # Priority 2: Check OTEL baggage (propagates automatically across contexts)
             if not parent_value:
-                parent_value = baggage.get_baggage('braintrust.parent', context=current_context)
+                parent_value = baggage.get_baggage("braintrust.parent", context=current_context)
 
             # Priority 3: Check if parent_context has braintrust.parent (backup)
             if not parent_value and parent_context:
-                parent_value = context.get_value('braintrust.parent', parent_context)
+                parent_value = context.get_value("braintrust.parent", parent_context)
 
             # Priority 4: Check if parent OTEL span has braintrust.parent attribute
             if not parent_value and parent_context:
@@ -304,7 +305,6 @@ class BraintrustSpanProcessor:
 
         self._processor.on_start(span, parent_context)
 
-
     def _get_parent_otel_braintrust_parent(self, parent_context):
         """Get braintrust.parent attribute from parent OTEL span if it exists."""
         try:
@@ -313,7 +313,7 @@ class BraintrustSpanProcessor:
             # Get the current span from the parent context
             current_span = trace.get_current_span(parent_context)
 
-            if current_span and hasattr(current_span, 'attributes') and current_span.attributes:
+            if current_span and hasattr(current_span, "attributes") and current_span.attributes:
                 # Check if parent span has braintrust.parent attribute
                 attributes = dict(current_span.attributes)
                 return attributes.get("braintrust.parent")
@@ -346,11 +346,7 @@ class BraintrustSpanProcessor:
         return self._processor
 
 
-def _get_braintrust_parent(
-    object_type,
-    object_id: Optional[str] = None,
-    compute_args: Optional[Dict] = None
-) -> Optional[str]:
+def _get_braintrust_parent(object_type, object_id: str | None = None, compute_args: dict | None = None) -> str | None:
     """
     Construct a braintrust.parent identifier string from span components.
 
@@ -405,10 +401,9 @@ def context_from_span_export(export_str: str):
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
+    from braintrust.span_identifier_v4 import SpanComponentsV4
     from opentelemetry import baggage, trace
     from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
-
-    from braintrust.span_identifier_v4 import SpanComponentsV4
 
     # Parse the export string (handles V3/V4 automatically)
     components = SpanComponentsV4.from_str(export_str)
@@ -417,7 +412,7 @@ def context_from_span_export(export_str: str):
     braintrust_parent = _get_braintrust_parent(
         object_type=components.object_type,
         object_id=components.object_id,
-        compute_args=components.compute_object_metadata_args
+        compute_args=components.compute_object_metadata_args,
     )
 
     # Convert hex strings to OTEL integers
@@ -429,7 +424,7 @@ def context_from_span_export(export_str: str):
         trace_id=trace_id_int,
         span_id=span_id_int,
         is_remote=True,  # Critical: mark as remote for distributed tracing
-        trace_flags=TraceFlags(TraceFlags.SAMPLED)
+        trace_flags=TraceFlags(TraceFlags.SAMPLED),
     )
 
     # Create NonRecordingSpan and set in context
@@ -438,7 +433,7 @@ def context_from_span_export(export_str: str):
 
     # Set braintrust.parent in OTEL baggage so it propagates automatically
     if braintrust_parent:
-        ctx = baggage.set_baggage('braintrust.parent', braintrust_parent, context=ctx)
+        ctx = baggage.set_baggage("braintrust.parent", braintrust_parent, context=ctx)
 
     return ctx
 
@@ -475,7 +470,7 @@ def add_parent_to_baggage(parent: str, ctx=None):
     from opentelemetry import baggage, context
 
     # Set in baggage so it propagates via inject()
-    new_ctx = baggage.set_baggage('braintrust.parent', parent, context=ctx)
+    new_ctx = baggage.set_baggage("braintrust.parent", parent, context=ctx)
     token = context.attach(new_ctx)
     return token
 
@@ -511,11 +506,11 @@ def add_span_parent_to_baggage(span, ctx=None):
         raise ImportError(INSTALL_ERR_MSG)
 
     # Get braintrust.parent from span attributes
-    if not span or not hasattr(span, 'attributes') or not span.attributes:
+    if not span or not hasattr(span, "attributes") or not span.attributes:
         logging.warning("add_span_parent_to_baggage: span has no attributes")
         return None
 
-    parent_value = span.attributes.get('braintrust.parent')
+    parent_value = span.attributes.get("braintrust.parent")
     if not parent_value:
         logging.warning(
             "add_span_parent_to_baggage: braintrust.parent attribute not found. "
@@ -527,7 +522,7 @@ def add_span_parent_to_baggage(span, ctx=None):
     return add_parent_to_baggage(parent_value, ctx=ctx)
 
 
-def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
+def parent_from_headers(headers: dict[str, str]) -> str | None:
     """
     Extract a Braintrust-compatible parent string from W3C Trace Context headers.
 
@@ -554,17 +549,16 @@ def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
 
+    from braintrust.span_identifier_v4 import SpanComponentsV4
     from opentelemetry import baggage, trace
     from opentelemetry.propagate import extract
-
-    from braintrust.span_identifier_v4 import SpanComponentsV4
 
     # Extract context from headers using W3C Trace Context propagator
     ctx = extract(headers)
 
     # Get span from context
     span = trace.get_current_span(ctx)
-    if not span or not hasattr(span, 'get_span_context'):
+    if not span or not hasattr(span, "get_span_context"):
         logging.error("parent_from_headers: No valid span found in headers")
         return None
 
@@ -574,19 +568,19 @@ def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
         return None
 
     # Convert OTEL IDs to hex strings
-    trace_id_hex = format(span_context.trace_id, '032x')
-    span_id_hex = format(span_context.span_id, '016x')
+    trace_id_hex = format(span_context.trace_id, "032x")
+    span_id_hex = format(span_context.span_id, "016x")
 
     # Validate trace_id and span_id are not all zeros
-    if trace_id_hex == '00000000000000000000000000000000':
+    if trace_id_hex == "00000000000000000000000000000000":
         logging.error("parent_from_headers: Invalid trace_id (all zeros)")
         return None
-    if span_id_hex == '0000000000000000':
+    if span_id_hex == "0000000000000000":
         logging.error("parent_from_headers: Invalid span_id (all zeros)")
         return None
 
     # Get braintrust.parent from baggage if present
-    braintrust_parent = baggage.get_baggage('braintrust.parent', context=ctx)
+    braintrust_parent = baggage.get_baggage("braintrust.parent", context=ctx)
 
     # Parse braintrust.parent to extract object_type and object_id
     object_type = None
@@ -607,22 +601,28 @@ def parent_from_headers(headers: Dict[str, str]) -> Optional[str]:
         # Parse braintrust.parent format: "project_id:abc", "project_name:xyz", or "experiment_id:123"
         if braintrust_parent.startswith("project_id:"):
             object_type = SpanObjectTypeV3.PROJECT_LOGS
-            object_id = braintrust_parent[len("project_id:"):]
+            object_id = braintrust_parent[len("project_id:") :]
             if not object_id:
-                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty project_id): {braintrust_parent}")
+                logging.error(
+                    f"parent_from_headers: Invalid braintrust.parent format (empty project_id): {braintrust_parent}"
+                )
                 return None
         elif braintrust_parent.startswith("project_name:"):
             object_type = SpanObjectTypeV3.PROJECT_LOGS
-            project_name = braintrust_parent[len("project_name:"):]
+            project_name = braintrust_parent[len("project_name:") :]
             if not project_name:
-                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty project_name): {braintrust_parent}")
+                logging.error(
+                    f"parent_from_headers: Invalid braintrust.parent format (empty project_name): {braintrust_parent}"
+                )
                 return None
             compute_args = {"project_name": project_name}
         elif braintrust_parent.startswith("experiment_id:"):
             object_type = SpanObjectTypeV3.EXPERIMENT
-            object_id = braintrust_parent[len("experiment_id:"):]
+            object_id = braintrust_parent[len("experiment_id:") :]
             if not object_id:
-                logging.error(f"parent_from_headers: Invalid braintrust.parent format (empty experiment_id): {braintrust_parent}")
+                logging.error(
+                    f"parent_from_headers: Invalid braintrust.parent format (empty experiment_id): {braintrust_parent}"
+                )
                 return None
         else:
             logging.error(

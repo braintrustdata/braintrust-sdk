@@ -45,7 +45,7 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import zodToJsonSchema from "zod-to-json-schema";
+import { zodToJsonSchema } from "../src/zod/utils";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -389,7 +389,7 @@ function makeScorer(
   return ret;
 }
 
-function makeEvalParametersSchema(
+export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
   return Object.fromEntries(
@@ -412,14 +412,14 @@ function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schema = zodToJsonSchema(value as any);
+        const schemaObj = zodToJsonSchema(value as any);
         return [
           name,
           {
             type: "data",
-            schema,
-            default: value.default,
-            description: value.description,
+            schema: schemaObj,
+            default: schemaObj.default,
+            description: schemaObj.description,
           },
         ];
       }
