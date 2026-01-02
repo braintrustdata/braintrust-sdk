@@ -410,7 +410,7 @@ type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
 function getSpanComponentsClass(): SpanComponent {
   return globalThis.BRAINTRUST_SPAN_COMPONENT
     ? globalThis.BRAINTRUST_SPAN_COMPONENT
-    : SpanComponentsV3;
+    : SpanComponentsV4;
 }
 
 export function getContextManager(): ContextManager {
