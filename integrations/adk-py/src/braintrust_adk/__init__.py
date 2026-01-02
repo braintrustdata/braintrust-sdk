@@ -1,12 +1,13 @@
 import inspect
 import logging
 import time
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import Iterable
 from contextlib import aclosing
-from typing import Any, Dict, TypeVar, cast
+from typing import Any, cast
 
 from wrapt import wrap_function_wrapper
 
+from braintrust.bt_json import json_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 
@@ -86,7 +87,7 @@ def wrap_agent(Agent: Any) -> Any:
             with start_span(
                 name=f"agent_run [{instance.name}]",
                 type=SpanTypeAttribute.TASK,
-                metadata=_try_dict({"parent_context": parent_context, **_omit(kwargs, ["parent_context"])}),
+                metadata=json_safe_deep_copy({"parent_context": parent_context, **_omit(kwargs, ["parent_context"])}),
             ) as agent_span:
                 last_event = None
                 async with aclosing(wrapped(*args, **kwargs)) as agen:
@@ -95,7 +96,7 @@ def wrap_agent(Agent: Any) -> Any:
                             last_event = event
                         yield event
                 if last_event:
-                    agent_span.log(output=_try_dict(last_event))
+                    agent_span.log(output=last_event)
 
         async with aclosing(_trace()) as agen:
             async for event in agen:
@@ -117,7 +118,7 @@ def wrap_flow(Flow: Any):
             with start_span(
                 name=f"call_llm",
                 type=SpanTypeAttribute.TASK,
-                metadata=_try_dict(
+                metadata=json_safe_deep_copy(
                     {
                         "invocation_context": invocation_context,
                         **_omit(kwargs, ["invocation_context"]),
@@ -130,7 +131,7 @@ def wrap_flow(Flow: Any):
                         last_event = event
                         yield event
                 if last_event:
-                    llm_span.log(output=_try_dict(last_event))
+                    llm_span.log(output=last_event)
 
         async with aclosing(_trace()) as agen:
             async for event in agen:
@@ -145,7 +146,7 @@ def wrap_flow(Flow: Any):
 
         async def _trace():
             # Extract and serialize contents BEFORE converting to dict
-            # This is critical because _try_dict converts bytes to string representations
+            # This is critical because json_safe_deep_copy converts bytes to string representations
             serialized_contents = None
             if llm_request and hasattr(llm_request, "contents"):
                 contents = llm_request.contents
@@ -157,7 +158,7 @@ def wrap_flow(Flow: Any):
                     )
 
             # Now convert the whole request to dict
-            serialized_request = _try_dict(llm_request)
+            serialized_request = json_safe_deep_copy(llm_request)
 
             # Replace contents with our serialized version that has Attachments
             if serialized_contents is not None and isinstance(serialized_request, dict):
@@ -176,7 +177,7 @@ def wrap_flow(Flow: Any):
                 name="llm_call",
                 type=SpanTypeAttribute.LLM,
                 input=serialized_request,
-                metadata=_try_dict(
+                metadata=json_safe_deep_copy(
                     {
                         "invocation_context": invocation_context,
                         "model_response_event": model_response_event,
@@ -205,17 +206,18 @@ def wrap_flow(Flow: Any):
 
                 # After execution, update span with correct call type and output
                 if last_event:
-                    output = _try_dict(last_event)
-                    # If last event is missing content but we have an earlier event with content, merge them
-                    if event_with_content and isinstance(output, dict):
-                        if "content" not in output or output.get("content") is None:
+                    # We need to check if we should merge content from an earlier event
+                    # Convert to dict to inspect/modify, but let span.log() handle final serialization
+                    output_dict = json_safe_deep_copy(last_event)
+                    if event_with_content and isinstance(output_dict, dict):
+                        if "content" not in output_dict or output_dict.get("content") is None:
                             content = (
-                                _try_dict(event_with_content.content)
+                                json_safe_deep_copy(event_with_content.content)
                                 if hasattr(event_with_content, "content")
                                 else None
                             )
                             if content:
-                                output["content"] = content
+                                output_dict["content"] = content
 
                     # Extract metrics from response
                     metrics = _extract_metrics(last_event)
@@ -235,8 +237,8 @@ def wrap_flow(Flow: Any):
                         span_attributes={"llm_call_type": call_type},
                     )
 
-                    # Log output and metrics
-                    llm_span.log(output=output, metrics=metrics)
+                    # Log output and metrics (span.log will handle serialization)
+                    llm_span.log(output=output_dict, metrics=metrics)
 
         async with aclosing(_trace()) as agen:
             async for event in agen:
@@ -264,7 +266,7 @@ def wrap_runner(Runner: Any):
                 name=f"invocation [{instance.app_name}]",
                 type=SpanTypeAttribute.TASK,
                 input={"new_message": serialized_message},
-                metadata=_try_dict(
+                metadata=json_safe_deep_copy(
                     {
                         "user_id": user_id,
                         "session_id": session_id,
@@ -278,7 +280,7 @@ def wrap_runner(Runner: Any):
                         last_event = event
                     yield event
                 if last_event:
-                    runner_span.log(output=_try_dict(last_event))
+                    runner_span.log(output=last_event)
 
         yield from _trace()
 
@@ -298,7 +300,7 @@ def wrap_runner(Runner: Any):
                 name=f"invocation [{instance.app_name}]",
                 type=SpanTypeAttribute.TASK,
                 input={"new_message": serialized_message},
-                metadata=_try_dict(
+                metadata=json_safe_deep_copy(
                     {
                         "user_id": user_id,
                         "session_id": session_id,
@@ -314,7 +316,7 @@ def wrap_runner(Runner: Any):
                             last_event = event
                         yield event
                 if last_event:
-                    runner_span.log(output=_try_dict(last_event))
+                    runner_span.log(output=last_event)
 
         async with aclosing(_trace()) as agen:
             async for event in agen:
@@ -353,12 +355,12 @@ def wrap_mcp_tool(McpTool: Any) -> Any:
         with start_span(
             name=f"mcp_tool [{tool_name}]",
             type=SpanTypeAttribute.TOOL,
-            input={"tool_name": tool_name, "arguments": _try_dict(tool_args)},
-            metadata=_try_dict(_omit(kwargs, ["args"])),
+            input={"tool_name": tool_name, "arguments": tool_args},
+            metadata=_omit(kwargs, ["args"]),
         ) as tool_span:
             try:
                 result = await wrapped(*args, **kwargs)
-                tool_span.log(output=_try_dict(result))
+                tool_span.log(output=result)
                 return result
             except Exception as e:
                 # Log error to span but re-raise for ADK to handle
@@ -381,7 +383,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
     """
     try:
         # Convert to dict if it's a model object
-        request_dict = cast(dict[str, Any], _try_dict(llm_request))
+        request_dict = cast(dict[str, Any], json_safe_deep_copy(llm_request))
 
         # Check if there are tools in the config
         has_tools = bool(request_dict.get("config", {}).get("tools"))
@@ -395,7 +397,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
                 parts = content.get("parts", [])
                 for part in parts:
                     if isinstance(part, dict):
-                        if "function_response" in part:
+                        if "function_response" in part and part["function_response"] is not None:
                             has_function_response = True
 
         # Check if the response contains function calls
@@ -412,7 +414,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
 
             # Fallback: Check the response dict structure
             if not response_has_function_call:
-                response_dict = _try_dict(model_response)
+                response_dict = json_safe_deep_copy(model_response)
                 if isinstance(response_dict, dict):
                     # Try multiple possible response structures
                     # 1. Standard: response.content.parts
@@ -422,7 +424,9 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
                         if isinstance(parts, list):
                             for part in parts:
                                 if isinstance(part, dict):
-                                    if "function_call" in part or "functionCall" in part:
+                                    if ("function_call" in part and part["function_call"] is not None) or (
+                                        "functionCall" in part and part["functionCall"] is not None
+                                    ):
                                         response_has_function_call = True
                                         break
 
@@ -432,7 +436,9 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
                         if isinstance(parts, list):
                             for part in parts:
                                 if isinstance(part, dict):
-                                    if "function_call" in part or "functionCall" in part:
+                                    if ("function_call" in part and part["function_call"] is not None) or (
+                                        "functionCall" in part and part["functionCall"] is not None
+                                    ):
                                         response_has_function_call = True
                                         break
 
@@ -515,7 +521,7 @@ def _serialize_part(part: Any) -> Any:
         return result
 
     # Try standard serialization methods
-    return _try_dict(part)
+    return json_safe_deep_copy(part)
 
 
 def _serialize_pydantic_schema(schema_class: Any) -> dict[str, Any]:
@@ -550,7 +556,7 @@ def _serialize_config(config: Any) -> dict[str, Any] | Any:
     if not config:
         return config
 
-    # Extract schema fields BEFORE calling _try_dict (which converts Pydantic classes to dicts)
+    # Extract schema fields BEFORE calling json_safe_deep_copy (which converts Pydantic classes to dicts)
     schema_fields = ["response_schema", "response_json_schema", "input_schema", "output_schema"]
     serialized_schemas: dict[str, Any] = {}
 
@@ -574,7 +580,7 @@ def _serialize_config(config: Any) -> dict[str, Any] | Any:
                 pass
 
     # Serialize the config
-    config_dict = _try_dict(config)
+    config_dict = json_safe_deep_copy(config)
     if not isinstance(config_dict, dict):
         return config_dict  # type: ignore
 
@@ -582,39 +588,6 @@ def _serialize_config(config: Any) -> dict[str, Any] | Any:
     config_dict.update(serialized_schemas)
 
     return config_dict
-
-
-def _try_dict(obj: Any) -> Any:
-    """
-    Convert an object to a dict representation if possible.
-
-    This function should NEVER raise - it's used for logging/tracing.
-    Falls back to returning the original object, which Braintrust's
-    serialization will handle (via bt_json module).
-    """
-    try:
-        if hasattr(obj, "model_dump"):
-            # Check if it's a class (not an instance)
-            if inspect.isclass(obj):
-                # For classes, return class name - schema conversion handled in _serialize_config
-                return {"__class__": obj.__name__}
-            # Try to serialize Pydantic instances
-            try:
-                return obj.model_dump(exclude_none=True)
-            except Exception:
-                # Return original object - Braintrust will handle it
-                return obj
-
-        if isinstance(obj, dict):
-            return {k: _try_dict(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-            return [_try_dict(item) for item in obj]
-
-        # Return original object - Braintrust serialization handles primitives and complex types
-        return obj
-    except Exception:
-        # Last resort: return original object
-        return obj
 
 
 def _omit(obj: Any, keys: Iterable[str]):

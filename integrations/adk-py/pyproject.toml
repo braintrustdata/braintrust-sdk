@@ -40,6 +40,9 @@ members = [
     ".",
 ]
 
+[tool.uv.sources]
+braintrust = { path = "../../py", editable = true }
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
