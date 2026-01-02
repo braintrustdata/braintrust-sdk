@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import math
-from typing import Any, Callable, Mapping, cast, overload
+from typing import Any, Callable, Mapping, NamedTuple, cast, overload
 
 # Try to import orjson for better performance
 # If not available, we'll use standard json
@@ -86,7 +86,9 @@ def to_json_safe(v: Any) -> Any:
     # E.g. the original type could have a `__del__` method that alters
     # some shared internal state, and we need this deep copy to be
     # fully-independent from the original.
-    return bt_loads(bt_dumps(v))
+
+    # We pass `encoder=_str_encoder` since we've already tried converting rich objects to json safe objects.
+    return bt_loads(bt_dumps(v, encoder=_str_encoder))
 
 @overload
 def json_safe_deep_copy(
@@ -165,17 +167,25 @@ def json_safe_deep_copy(obj: Any, to_json_safe: Callable[[Any], Any]=to_json_saf
 
     return _deep_copy_object(obj)
 
+def _safe_str(obj: Any) -> str:
+    try:
+        return str(obj)
+    except Exception:
+        return f"<non-serializable: {type(obj).__name__}>"
+
 
 def _to_dict(obj: Any) -> Any:
     """
     Handler for non-JSON-serializable objects. Returns a string representation of the object.
     If you need to handle more complex objects, you can pass a custom sanitize function to deep_copy_and_sanitize_dict.
     """
-    # When everything fails, try to return the string representation of the object
     try:
-        return str(obj)
+        return to_json_safe(obj)
     except Exception:
-        return f"<non-serializable: {type(obj).__name__}>"
+        pass
+
+    # When everything fails, try to return the string representation of the object
+    return _safe_str(obj)
 
 
 class BraintrustJSONEncoder(json.JSONEncoder):
@@ -189,7 +199,19 @@ class BraintrustJSONEncoder(json.JSONEncoder):
         return _to_dict(o)
 
 
-def bt_dumps(obj, **kwargs) -> str:
+class BraintrustStrEncoder(json.JSONEncoder):
+    def default(self, o: Any):
+        return _safe_str(o)
+
+
+class Encoder(NamedTuple):
+    native: type[json.JSONEncoder]
+    orjson: Callable[[Any], Any]
+
+_json_encoder = Encoder(native=BraintrustJSONEncoder, orjson=_to_dict)
+_str_encoder = Encoder(native=BraintrustStrEncoder, orjson=_safe_str)
+
+def bt_dumps(obj: Any, encoder: Encoder | None=_json_encoder, **kwargs: Any) -> str:
     """
     Serialize obj to a JSON-formatted string.
 
@@ -198,6 +220,7 @@ def bt_dumps(obj, **kwargs) -> str:
 
     Args:
         obj: Object to serialize
+        encoder: Encoder to use, defaults to `_default_encoder`
         **kwargs: Additional arguments (passed to json.dumps in fallback path)
 
     Returns:
@@ -209,7 +232,7 @@ def bt_dumps(obj, **kwargs) -> str:
             # pylint: disable=no-member  # orjson is a C extension, pylint can't introspect it
             return orjson.dumps(  # type: ignore[possibly-unbound]
                 obj,
-                default=_to_dict,
+                default=encoder.orjson if encoder else None,
                 # options match json.dumps behavior for bc
                 option=orjson.OPT_SORT_KEYS | orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS,  # type: ignore[possibly-unbound]
             ).decode("utf-8")
@@ -219,7 +242,7 @@ def bt_dumps(obj, **kwargs) -> str:
 
     # Use standard json (either orjson not available or it failed)
     # Use sort_keys=True for deterministic output (matches orjson OPT_SORT_KEYS)
-    return json.dumps(obj, cls=BraintrustJSONEncoder, allow_nan=False, sort_keys=True, **kwargs)
+    return json.dumps(obj, cls=encoder.native if encoder else None, allow_nan=False, sort_keys=True, **kwargs)
 
 
 def bt_loads(s: str, **kwargs) -> Any:
