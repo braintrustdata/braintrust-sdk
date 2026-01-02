@@ -1,0 +1,13 @@
+services:
+  dev:
+    build: .
+    volumes:
+      - .:/app
+      - dev-home:/home/dev/
+    working_dir: /app
+    env_file: .env
+    environment:
+      - MISE_TRUSTED_CONFIG_PATHS=/app
+
+volumes:
+  dev-home:
