@@ -59,6 +59,7 @@ test-ai-sdk:
 # -------------------------------------------------------------------------------------------------
 
 test-claude-agent-sdk:
+	@command -v claude >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash
 	cd src/wrappers/claude-agent-sdk && pnpm install && pnpm test
 
 

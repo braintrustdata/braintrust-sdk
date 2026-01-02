@@ -111,8 +111,8 @@ def test_pydantic_ai_integration(session, version):
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
     _install_test_deps(session)
-    npm_bin = _install_npm_in_session(session)
-    session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
+    # Install Claude Code CLI using native installer (no nodeenv needed)
+    session.run("bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash", external=True)
     _install(session, "claude_agent_sdk", version)
     _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
     _run_core_tests(session)
