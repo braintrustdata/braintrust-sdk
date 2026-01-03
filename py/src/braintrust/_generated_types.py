@@ -7,7 +7,7 @@ Auto-generated file -- do not modify.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, Optional, TypeAlias, TypedDict, Union
+from typing import Any, Literal, TypeAlias, TypedDict
 
 from typing_extensions import NotRequired
 
@@ -128,7 +128,7 @@ class AsyncScoringStateAsyncScoringState1(TypedDict):
     status: Literal['disabled']
 
 
-AsyncScoringState: TypeAlias = Optional[Union[AsyncScoringStateAsyncScoringState, AsyncScoringStateAsyncScoringState1]]
+AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -204,16 +204,16 @@ class CallEventCallEvent7(TypedDict):
     data: Literal['']
 
 
-CallEvent: TypeAlias = Union[
-    CallEventCallEvent,
-    CallEventCallEvent1,
-    CallEventCallEvent2,
-    CallEventCallEvent3,
-    CallEventCallEvent4,
-    CallEventCallEvent5,
-    CallEventCallEvent6,
-    CallEventCallEvent7,
-]
+CallEvent: TypeAlias = (
+    CallEventCallEvent
+    | CallEventCallEvent1
+    | CallEventCallEvent2
+    | CallEventCallEvent3
+    | CallEventCallEvent4
+    | CallEventCallEvent5
+    | CallEventCallEvent6
+    | CallEventCallEvent7
+)
 
 
 class ChatCompletionContentPartFileFile(TypedDict):
@@ -534,22 +534,10 @@ class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     id: str
 
 
-class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
     type: Literal['slug']
     project_id: str
     slug: str
-
-
-ExtendedSavedFunctionId: TypeAlias = Union[
-    ExtendedSavedFunctionIdExtendedSavedFunctionId,
-    ExtendedSavedFunctionIdExtendedSavedFunctionId1,
-    ExtendedSavedFunctionIdExtendedSavedFunctionId2,
-]
 
 
 class ExternalAttachmentReference(TypedDict):
@@ -576,11 +564,6 @@ class PreprocessorPreprocessor(TypedDict):
     id: str
 
 
-class PreprocessorPreprocessor1(TypedDict):
-    type: Literal['global']
-    name: str
-
-
 class PreprocessorPreprocessor2(TypedDict):
     pass
 
@@ -589,32 +572,8 @@ class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocess
     pass
 
 
-class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
-    pass
-
-
-Preprocessor: TypeAlias = Union[PreprocessorPreprocessor3, PreprocessorPreprocessor4]
-
-
-class FacetData(TypedDict):
-    type: Literal['facet']
-    preprocessor: NotRequired[Preprocessor | None]
-    prompt: str
-    """
-    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
-    """
-    model: NotRequired[str | None]
-    """
-    The model to use for facet extraction
-    """
-    no_match_pattern: NotRequired[str | None]
-    """
-    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
-    """
-
-
 class FunctionOrigin(TypedDict):
-    object_type: AclObjectType | None
+    object_type: AclObjectType
     object_id: str
     """
     Id of the object the function is originating from
@@ -665,15 +624,6 @@ class FunctionDataFunctionData2(TypedDict):
     parameters: Mapping[str, Any]
 
 
-class FunctionDataFunctionData3(TypedDict):
-    type: Literal['global']
-    name: str
-    config: NotRequired[Mapping[str, Any] | None]
-    """
-    Configuration options to pass to the global function (e.g., for preprocessor customization)
-    """
-
-
 FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
 
 
@@ -700,13 +650,6 @@ class FunctionIdFunctionId1(TypedDict):
     version: NotRequired[str | None]
     """
     The version of the function
-    """
-
-
-class FunctionIdFunctionId2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
 
 
@@ -1066,13 +1009,6 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
 
 
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-
-
 class InvokeFunctionInvokeFunction3(TypedDict):
     prompt_session_id: str
     """
@@ -1143,7 +1079,7 @@ class InvokeParentInvokeParent(TypedDict):
     """
 
 
-InvokeParent: TypeAlias = Union[InvokeParentInvokeParent, str]
+InvokeParent: TypeAlias = InvokeParentInvokeParent | str
 """
 Options for tracing the function call
 """
@@ -1239,6 +1175,12 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[float | None]
 
 
+NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+"""
+The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
+"""
+
+
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -1247,11 +1189,12 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-NullableSavedFunctionId: TypeAlias = Optional[
-    Union[NullableSavedFunctionIdNullableSavedFunctionId, NullableSavedFunctionIdNullableSavedFunctionId1]
-]
+NullableSavedFunctionId: TypeAlias = (
+    NullableSavedFunctionIdNullableSavedFunctionId | NullableSavedFunctionIdNullableSavedFunctionId1 | None
+)
 """
 Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default.
 """
@@ -1415,9 +1358,9 @@ class ProjectAutomationConfig1(TypedDict):
     The type of automation.
     """
     export_definition: (
-        ProjectAutomationConfig1ExportDefinition |
-        ProjectAutomationConfig1ExportDefinition1 |
-        ProjectAutomationConfig1ExportDefinition2
+        ProjectAutomationConfig1ExportDefinition
+        | ProjectAutomationConfig1ExportDefinition1
+        | ProjectAutomationConfig1ExportDefinition2
     )
     """
     The definition of what to export
@@ -1438,6 +1381,51 @@ class ProjectAutomationConfig1(TypedDict):
     batch_size: NotRequired[float | None]
     """
     The number of rows to export in each batch
+    """
+
+
+class ProjectAutomationConfig3Action(TypedDict):
+    type: Literal['webhook']
+    """
+    The type of action to take
+    """
+    url: str
+    """
+    The webhook URL to send the request to
+    """
+
+
+class ProjectAutomationConfig3Action1(TypedDict):
+    type: Literal['slack']
+    """
+    The type of action to take
+    """
+    workspace_id: str
+    """
+    The Slack workspace ID to post to
+    """
+    channel: str
+    """
+    The Slack channel ID to post to
+    """
+    message_template: NotRequired[str | None]
+    """
+    Custom message template for the alert
+    """
+
+
+class ProjectAutomationConfig3(TypedDict):
+    event_type: Literal['environment_update']
+    """
+    The type of automation.
+    """
+    environment_filter: NotRequired[Sequence[str] | None]
+    """
+    Optional list of environment slugs to filter by
+    """
+    action: ProjectAutomationConfig3Action | ProjectAutomationConfig3Action1
+    """
+    The action to take when the automation rule is triggered
     """
 
 
@@ -1731,13 +1719,12 @@ class ResponseFormatNullishResponseFormatNullish2(TypedDict):
     type: Literal['text']
 
 
-ResponseFormatNullish: TypeAlias = Optional[
-    Union[
-        ResponseFormatNullishResponseFormatNullish,
-        ResponseFormatNullishResponseFormatNullish1,
-        ResponseFormatNullishResponseFormatNullish2,
-    ]
-]
+ResponseFormatNullish: TypeAlias = (
+    ResponseFormatNullishResponseFormatNullish
+    | ResponseFormatNullishResponseFormatNullish1
+    | ResponseFormatNullishResponseFormatNullish2
+    | None
+)
 
 
 RetentionObjectType: TypeAlias = Literal['project_logs', 'experiment', 'dataset']
@@ -1842,6 +1829,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
 class TaskTask3(TypedDict):
@@ -1957,9 +1945,10 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-SavedFunctionId: TypeAlias = Union[SavedFunctionIdSavedFunctionId, SavedFunctionIdSavedFunctionId1]
+SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
 
 
 class ServiceToken(TypedDict):
@@ -2070,7 +2059,7 @@ class SSEProgressEventData(TypedDict):
     data: str
 
 
-StreamingMode: TypeAlias = Literal['auto', 'parallel']
+StreamingMode: TypeAlias = Literal['auto', 'parallel', 'json', 'text']
 """
 The mode format of the returned value (defaults to 'auto')
 """
@@ -2208,7 +2197,7 @@ class ViewOptionsViewOptions1(TypedDict):
     freezeColumns: NotRequired[bool | None]
 
 
-ViewOptions: TypeAlias = Optional[Union[ViewOptionsViewOptions, ViewOptionsViewOptions1]]
+ViewOptions: TypeAlias = ViewOptionsViewOptions | ViewOptionsViewOptions1 | None
 """
 Options for the view in the app
 """
@@ -2219,7 +2208,7 @@ class Acl(TypedDict):
     """
     Unique identifier for the acl
     """
-    object_type: AclObjectType | None
+    object_type: AclObjectType
     object_id: str
     """
     The id of the object the ACL applies to
@@ -2281,18 +2270,18 @@ class AnyModelParams(TypedDict):
 
 class AsyncScoringControlAsyncScoringControl1(TypedDict):
     kind: Literal['state_override']
-    state: AsyncScoringState | None
+    state: AsyncScoringState
 
 
-AsyncScoringControl: TypeAlias = Union[
-    AsyncScoringControlAsyncScoringControl,
-    AsyncScoringControlAsyncScoringControl1,
-    AsyncScoringControlAsyncScoringControl2,
-    AsyncScoringControlAsyncScoringControl3,
-]
+AsyncScoringControl: TypeAlias = (
+    AsyncScoringControlAsyncScoringControl
+    | AsyncScoringControlAsyncScoringControl1
+    | AsyncScoringControlAsyncScoringControl2
+    | AsyncScoringControlAsyncScoringControl3
+)
 
 
-AttachmentReference: TypeAlias = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
+AttachmentReference: TypeAlias = BraintrustAttachmentReference | ExternalAttachmentReference
 
 
 class AttachmentStatus(TypedDict):
@@ -2303,11 +2292,11 @@ class AttachmentStatus(TypedDict):
     """
 
 
-ChatCompletionContentPart: TypeAlias = Union[
-    ChatCompletionContentPartTextWithTitle,
-    ChatCompletionContentPartImageWithTitle,
-    ChatCompletionContentPartFileWithTitle,
-]
+ChatCompletionContentPart: TypeAlias = (
+    ChatCompletionContentPartTextWithTitle
+    | ChatCompletionContentPartImageWithTitle
+    | ChatCompletionContentPartFileWithTitle
+)
 
 
 class ChatCompletionMessageParamChatCompletionMessageParam1(TypedDict):
@@ -2325,15 +2314,15 @@ class ChatCompletionMessageParamChatCompletionMessageParam2(TypedDict):
     reasoning: NotRequired[Sequence[ChatCompletionMessageReasoning] | None]
 
 
-ChatCompletionMessageParam: TypeAlias = Union[
-    ChatCompletionMessageParamChatCompletionMessageParam,
-    ChatCompletionMessageParamChatCompletionMessageParam1,
-    ChatCompletionMessageParamChatCompletionMessageParam2,
-    ChatCompletionMessageParamChatCompletionMessageParam3,
-    ChatCompletionMessageParamChatCompletionMessageParam4,
-    ChatCompletionMessageParamChatCompletionMessageParam5,
-    ChatCompletionMessageParamChatCompletionMessageParam6,
-]
+ChatCompletionMessageParam: TypeAlias = (
+    ChatCompletionMessageParamChatCompletionMessageParam
+    | ChatCompletionMessageParamChatCompletionMessageParam1
+    | ChatCompletionMessageParamChatCompletionMessageParam2
+    | ChatCompletionMessageParamChatCompletionMessageParam3
+    | ChatCompletionMessageParamChatCompletionMessageParam4
+    | ChatCompletionMessageParamChatCompletionMessageParam5
+    | ChatCompletionMessageParamChatCompletionMessageParam6
+)
 
 
 class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDict):
@@ -2342,14 +2331,14 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDic
     name: NotRequired[str | None]
 
 
-ChatCompletionOpenAIMessageParam: TypeAlias = Union[
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam,
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1,
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2,
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3,
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4,
-    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5,
-]
+ChatCompletionOpenAIMessageParam: TypeAlias = (
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam
+    | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1
+    | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2
+    | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3
+    | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4
+    | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5
+)
 
 
 class DatasetEvent(TypedDict):
@@ -2476,7 +2465,76 @@ class Experiment(TypedDict):
     """
 
 
-InvokeScope: TypeAlias = Union[SpanScope, TraceScope]
+class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+ExtendedSavedFunctionId: TypeAlias = (
+    ExtendedSavedFunctionIdExtendedSavedFunctionId
+    | ExtendedSavedFunctionIdExtendedSavedFunctionId1
+    | ExtendedSavedFunctionIdExtendedSavedFunctionId2
+)
+
+
+class PreprocessorPreprocessor1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+    pass
+
+
+Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+
+
+class FacetData(TypedDict):
+    type: Literal['facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[str | None]
+    """
+    The model to use for facet extraction
+    """
+    no_match_pattern: NotRequired[str | None]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
+    """
+
+
+class FunctionDataFunctionData3(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    config: NotRequired[Mapping[str, Any] | None]
+    """
+    Configuration options to pass to the global function (e.g., for preprocessor customization)
+    """
+
+
+class FunctionIdFunctionId2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[NullableFunctionTypeEnum | None]
+
+
+InvokeScope: TypeAlias = SpanScope | TraceScope
 """
 The scope at which to operate (span or trace)
 """
@@ -2506,13 +2564,13 @@ class ModelParamsModelParams(TypedDict):
     verbosity: NotRequired[Literal['low', 'medium', 'high'] | None]
 
 
-ModelParams: TypeAlias = Union[
-    ModelParamsModelParams,
-    ModelParamsModelParams1,
-    ModelParamsModelParams2,
-    ModelParamsModelParams3,
-    ModelParamsModelParams4,
-]
+ModelParams: TypeAlias = (
+    ModelParamsModelParams
+    | ModelParamsModelParams1
+    | ModelParamsModelParams2
+    | ModelParamsModelParams3
+    | ModelParamsModelParams4
+)
 
 
 class OnlineScoreConfig(TypedDict):
@@ -2554,6 +2612,10 @@ class Project(TypedDict):
     name: str
     """
     Name of the project
+    """
+    description: NotRequired[str | None]
+    """
+    Textual description of the project
     """
     created: NotRequired[str | None]
     """
@@ -2607,13 +2669,13 @@ class ProjectAutomation(TypedDict):
     """
     Textual description of the project automation
     """
-    config: ProjectAutomationConfig | ProjectAutomationConfig1 | ProjectAutomationConfig2
+    config: ProjectAutomationConfig | ProjectAutomationConfig1 | ProjectAutomationConfig2 | ProjectAutomationConfig3
     """
     The configuration for the automation rule
     """
 
 
-ProjectScoreCategories: TypeAlias = Optional[Union[Sequence[ProjectScoreCategory], Mapping[str, float], Sequence[str]]]
+ProjectScoreCategories: TypeAlias = Sequence[ProjectScoreCategory] | Mapping[str, float] | Sequence[str] | None
 
 
 class ProjectScoreConfig(TypedDict):
@@ -2628,7 +2690,7 @@ class PromptBlockDataPromptBlockData(TypedDict):
     tools: NotRequired[str | None]
 
 
-PromptBlockData: TypeAlias = Union[PromptBlockDataPromptBlockData, PromptBlockDataPromptBlockData1]
+PromptBlockData: TypeAlias = PromptBlockDataPromptBlockData | PromptBlockDataPromptBlockData1
 
 
 class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
@@ -2637,9 +2699,9 @@ class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
     tools: NotRequired[str | None]
 
 
-PromptBlockDataNullish: TypeAlias = Optional[
-    Union[PromptBlockDataNullishPromptBlockDataNullish, PromptBlockDataNullishPromptBlockDataNullish1]
-]
+PromptBlockDataNullish: TypeAlias = (
+    PromptBlockDataNullishPromptBlockDataNullish | PromptBlockDataNullishPromptBlockDataNullish1 | None
+)
 
 
 class PromptOptions(TypedDict):
@@ -2659,9 +2721,9 @@ class ResponseFormatResponseFormat1(TypedDict):
     json_schema: ResponseFormatJsonSchema
 
 
-ResponseFormat: TypeAlias = Union[
-    ResponseFormatResponseFormat, ResponseFormatResponseFormat1, ResponseFormatResponseFormat2
-]
+ResponseFormat: TypeAlias = (
+    ResponseFormatResponseFormat | ResponseFormatResponseFormat1 | ResponseFormatResponseFormat2
+)
 
 
 class SpanAttributes(TypedDict):
@@ -2779,16 +2841,16 @@ class GraphNodeGraphNode7(TypedDict):
     prompt: PromptBlockData
 
 
-GraphNode: TypeAlias = Union[
-    GraphNodeGraphNode,
-    GraphNodeGraphNode1,
-    GraphNodeGraphNode2,
-    GraphNodeGraphNode3,
-    GraphNodeGraphNode4,
-    GraphNodeGraphNode5,
-    GraphNodeGraphNode6,
-    GraphNodeGraphNode7,
-]
+GraphNode: TypeAlias = (
+    GraphNodeGraphNode
+    | GraphNodeGraphNode1
+    | GraphNodeGraphNode2
+    | GraphNodeGraphNode3
+    | GraphNodeGraphNode4
+    | GraphNodeGraphNode5
+    | GraphNodeGraphNode6
+    | GraphNodeGraphNode7
+)
 
 
 class InvokeContext(TypedDict):
@@ -2998,6 +3060,7 @@ class PromptData(TypedDict):
     options: NotRequired[PromptOptionsNullish | None]
     parser: NotRequired[PromptParserNullish | None]
     tool_functions: NotRequired[Sequence[SavedFunctionId] | None]
+    template_format: NotRequired[Literal['mustache', 'nunjucks', 'none'] | None]
     mcp: NotRequired[Mapping[str, Any] | None]
     origin: NotRequired[PromptDataOrigin | None]
 
@@ -3007,6 +3070,7 @@ class PromptDataNullish(TypedDict):
     options: NotRequired[PromptOptionsNullish | None]
     parser: NotRequired[PromptParserNullish | None]
     tool_functions: NotRequired[Sequence[SavedFunctionId] | None]
+    template_format: NotRequired[Literal['mustache', 'nunjucks', 'none'] | None]
     mcp: NotRequired[Mapping[str, Any] | None]
     origin: NotRequired[PromptDataNullishOrigin | None]
 
@@ -3038,7 +3102,7 @@ class TaskTask14(TaskTask6, TaskTask7):
     pass
 
 
-Task: TypeAlias = Union[TaskTask8, TaskTask9, TaskTask10, TaskTask11, TaskTask12, TaskTask13, TaskTask14]
+Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
 
 
 class View(TypedDict):
@@ -3046,7 +3110,7 @@ class View(TypedDict):
     """
     Unique identifier for the view
     """
-    object_type: AclObjectType | None
+    object_type: AclObjectType
     object_id: str
     """
     The id of the object the view applies to
@@ -3109,15 +3173,15 @@ class FunctionIdFunctionId6(TypedDict):
     """
 
 
-FunctionId: TypeAlias = Union[
-    FunctionIdFunctionId,
-    FunctionIdFunctionId1,
-    FunctionIdFunctionId2,
-    FunctionIdFunctionId3,
-    FunctionIdFunctionId4,
-    FunctionIdFunctionId5,
-    FunctionIdFunctionId6,
-]
+FunctionId: TypeAlias = (
+    FunctionIdFunctionId
+    | FunctionIdFunctionId1
+    | FunctionIdFunctionId2
+    | FunctionIdFunctionId3
+    | FunctionIdFunctionId4
+    | FunctionIdFunctionId5
+    | FunctionIdFunctionId6
+)
 """
 Options for identifying a function
 """
@@ -3156,15 +3220,15 @@ class InvokeFunctionInvokeFunction14(InvokeFunctionInvokeFunction6, InvokeFuncti
     pass
 
 
-InvokeFunction: TypeAlias = Union[
-    InvokeFunctionInvokeFunction8,
-    InvokeFunctionInvokeFunction9,
-    InvokeFunctionInvokeFunction10,
-    InvokeFunctionInvokeFunction11,
-    InvokeFunctionInvokeFunction12,
-    InvokeFunctionInvokeFunction13,
-    InvokeFunctionInvokeFunction14,
-]
+InvokeFunction: TypeAlias = (
+    InvokeFunctionInvokeFunction8
+    | InvokeFunctionInvokeFunction9
+    | InvokeFunctionInvokeFunction10
+    | InvokeFunctionInvokeFunction11
+    | InvokeFunctionInvokeFunction12
+    | InvokeFunctionInvokeFunction13
+    | InvokeFunctionInvokeFunction14
+)
 """
 Options for identifying a function
 """
@@ -3291,14 +3355,14 @@ class RunEval(TypedDict):
     mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
-FunctionData: TypeAlias = Union[
-    FunctionDataFunctionData,
-    FunctionDataFunctionData1,
-    GraphData,
-    FunctionDataFunctionData2,
-    FunctionDataFunctionData3,
-    FacetData,
-]
+FunctionData: TypeAlias = (
+    FunctionDataFunctionData
+    | FunctionDataFunctionData1
+    | GraphData
+    | FunctionDataFunctionData2
+    | FunctionDataFunctionData3
+    | FacetData
+)
 
 
 class Function(TypedDict):
