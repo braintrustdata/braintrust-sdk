@@ -6,7 +6,6 @@ import os
 import sys
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Dict, List, Optional, Union
 
 from .. import login
 from ..framework import (
@@ -70,7 +69,7 @@ class EvaluatorOpts:
     no_progress_bars: bool
     terminate_on_failure: bool
     watch: bool
-    filters: List[str]
+    filters: list[str]
     list: bool
     jsonl: bool
 
@@ -79,13 +78,13 @@ class EvaluatorOpts:
 class LoadedEvaluator:
     handle: FileHandle
     evaluator: Evaluator
-    reporter: Optional[Union[ReporterDef, str]] = None
+    reporter: ReporterDef | str | None = None
 
 
 @dataclass
 class EvaluatorState:
-    evaluators: List[LoadedEvaluator] = field(default_factory=list)
-    reporters: Dict[str, ReporterDef] = field(default_factory=dict)
+    evaluators: list[LoadedEvaluator] = field(default_factory=list)
+    reporters: dict[str, ReporterDef] = field(default_factory=dict)
 
 
 def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure):
@@ -157,7 +156,7 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
             experiment.flush()
 
 
-def resolve_reporter(reporter: Optional[Union[ReporterDef, str]], reporters: Dict[str, ReporterDef]) -> ReporterDef:
+def resolve_reporter(reporter: ReporterDef | str | None, reporters: dict[str, ReporterDef]) -> ReporterDef:
     if isinstance(reporter, str):
         if reporter not in reporters:
             raise ValueError(f"Reporter {reporter} not found")
@@ -179,7 +178,7 @@ def add_report(eval_reports, reporter, report):
     eval_reports[reporter.name]["results"].append(report)
 
 
-async def run_once(handles: List[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
+async def run_once(handles: list[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
     objects = EvaluatorState()
     update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 

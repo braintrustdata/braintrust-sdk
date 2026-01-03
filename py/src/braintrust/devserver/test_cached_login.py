@@ -10,7 +10,7 @@ class TestCachedLogin(unittest.TestCase):
         """Clear the cache before each test."""
         cache._login_cache = cache.LRUCache(max_size=32)
 
-    @patch('braintrust.devserver.cache.login_to_state')
+    @patch("braintrust.devserver.cache.login_to_state")
     def test_cached_login_caches_results(self, mock_login):
         """Test that cached_login caches and reuses results."""
         mock_state = MagicMock()
@@ -26,7 +26,7 @@ class TestCachedLogin(unittest.TestCase):
         self.assertEqual(result2, mock_state)
         self.assertEqual(mock_login.call_count, 1)  # Still 1, not called again
 
-    @patch('braintrust.devserver.cache.login_to_state')
+    @patch("braintrust.devserver.cache.login_to_state")
     def test_cached_login_different_keys(self, mock_login):
         """Test that different cache keys create separate entries."""
         mock_state1 = MagicMock()
@@ -48,7 +48,7 @@ class TestCachedLogin(unittest.TestCase):
         self.assertEqual(result3, mock_state3)
         self.assertEqual(mock_login.call_count, 3)
 
-    @patch('braintrust.devserver.cache.login_to_state')
+    @patch("braintrust.devserver.cache.login_to_state")
     def test_cached_login_with_org_name(self, mock_login):
         """Test caching with org_name parameter."""
         mock_state = MagicMock()
@@ -68,7 +68,7 @@ class TestCachedLogin(unittest.TestCase):
         result3 = asyncio.run(cache.cached_login("api_key_1", "https://app.braintrust.com", org_name="other_org"))
         self.assertEqual(mock_login.call_count, 2)
 
-    @patch('braintrust.devserver.cache.login_to_state')
+    @patch("braintrust.devserver.cache.login_to_state")
     def test_cached_login_propagates_exceptions(self, mock_login):
         """Test that exceptions from login_to_state are propagated."""
         mock_login.side_effect = ValueError("Invalid API key")

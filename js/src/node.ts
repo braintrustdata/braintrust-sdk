@@ -21,6 +21,8 @@ export function configureNode() {
   iso.processOn = (event: string, handler: (code: any) => void) => {
     process.on(event, handler);
   };
+  iso.basename = path.basename;
+  iso.writeln = (text: string) => process.stdout.write(text + "\n");
   iso.pathJoin = path.join;
   iso.pathDirname = path.dirname;
   iso.mkdir = fs.mkdir;

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import {
   test,
   assert,
@@ -17,7 +19,7 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../../logger";
-import { wrapAISDK, omit } from "./ai-sdk";
+import { wrapAISDK, omit, extractTokenMetrics } from "./ai-sdk";
 import { getCurrentUnixTimestamp } from "../../util";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -90,9 +92,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(result.text.toLowerCase()).toContain("paris");
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate (per-step LLM call)
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -160,9 +165,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     });
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     // Verify braintrust fingerprint metadata
     expect(span.metadata.braintrust).toBeDefined();
@@ -213,9 +221,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     ).toBe(true);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -315,9 +326,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.ok(result.text);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span).toMatchObject({
       project_id: expect.any(String),
@@ -420,9 +434,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(fullText).toMatch(/1.*2.*3.*4.*5/s);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // Now we get 2 spans: streamText (parent) + doStream (child)
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes.name === "streamText",
+    ) as any;
 
     expect(span.span_attributes.name).toBe("streamText");
     expect(span.span_attributes.type).toBe("llm");
@@ -472,9 +489,12 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(result.text.toLowerCase()).toContain("alice");
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span.input.messages).toHaveLength(3);
     expect(span.input.messages[0].role).toBe("user");
@@ -522,13 +542,263 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(hasPirateSpeak).toBe(true);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
+    // 2 spans: parent generateText + child doGenerate
+    expect(spans).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    const span = spans[0] as any;
+    const span = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
 
     expect(span.input).toMatchObject({
       system: "You are a pirate. Always respond in pirate speak.",
     });
+  });
+
+  test("generateObject logs output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const recipeSchema = z.object({
+      name: z.string(),
+      ingredients: z.array(
+        z.object({
+          name: z.string(),
+          amount: z.string(),
+        }),
+      ),
+      steps: z.array(z.string()),
+    });
+
+    const result = await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema: recipeSchema,
+      prompt: "Generate a simple recipe for toast with butter.",
+    });
+
+    expect(result.object).toBeTruthy();
+    expect(result.object.name).toBeTruthy();
+    expect(Array.isArray(result.object.ingredients)).toBe(true);
+    expect(Array.isArray(result.object.steps)).toBe(true);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateObject",
+    );
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.output).toBeTruthy();
+    expect(wrapperSpan.output.object).toBeTruthy();
+    expect(wrapperSpan.output.object.name).toBeTruthy();
+    expect(Array.isArray(wrapperSpan.output.object.ingredients)).toBe(true);
+    expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
+  });
+
+  test("generateObject logs schema in input", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const storySchema = z.object({
+      title: z.string().describe("The title of the story"),
+      mainCharacter: z.string().describe("The name of the main character"),
+      plotPoints: z
+        .array(z.string())
+        .length(3)
+        .describe("Three key plot points in the story"),
+    });
+
+    const result = await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema: storySchema,
+      prompt: "Generate a short story about a robot.",
+    });
+
+    expect(result.object).toBeTruthy();
+    expect(result.object.title).toBeTruthy();
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateObject",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+
+    // Verify output contains the structured object
+    expect(generateObjectSpan.output).toBeTruthy();
+    expect(generateObjectSpan.output.object).toBeTruthy();
+    expect(generateObjectSpan.output.object.title).toBeTruthy();
+
+    // Verify input contains the schema (converted from Zod to JSON Schema)
+    expect(generateObjectSpan.input).toBeTruthy();
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty("title");
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "mainCharacter",
+    );
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "plotPoints",
+    );
+    // Verify the prompt is also in input
+    expect(generateObjectSpan.input.prompt).toBe(
+      "Generate a short story about a robot.",
+    );
+  });
+
+  test("generateText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "My Custom Prompt",
+      spanAttributes: { customAttr: "test-value" },
+      metadata: {
+        prompt: {
+          id: "prompt-abc123",
+          project_id: "proj-xyz789",
+          version: "1.0.0",
+          variables: { topic: "testing" },
+        },
+      },
+    };
+
+    await wrappedAI.generateText({
+      model: openai(TEST_MODEL),
+      prompt: "Say hello",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "My Custom Prompt",
+    );
+
+    expect(generateTextSpan).toBeTruthy();
+    // Verify span name was overridden
+    expect(generateTextSpan.span_attributes.name).toBe("My Custom Prompt");
+    // Verify custom span attributes were merged
+    expect(generateTextSpan.span_attributes.customAttr).toBe("test-value");
+    // Verify prompt metadata was included
+    expect(generateTextSpan.metadata.prompt).toBeTruthy();
+    expect(generateTextSpan.metadata.prompt.id).toBe("prompt-abc123");
+    expect(generateTextSpan.metadata.prompt.project_id).toBe("proj-xyz789");
+    expect(generateTextSpan.metadata.prompt.version).toBe("1.0.0");
+    expect(generateTextSpan.metadata.prompt.variables).toEqual({
+      topic: "testing",
+    });
+    // Verify span_info is not in input (should be stripped)
+    expect(generateTextSpan.input.span_info).toBeUndefined();
+  });
+
+  test("streamText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Streaming Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-stream-123",
+          project_id: "proj-stream-456",
+          version: "2.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const stream = wrappedAI.streamText({
+      model: openai(TEST_MODEL),
+      prompt: "Count to 3",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.textStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Streaming Prompt",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.span_attributes.name).toBe("Streaming Prompt");
+    expect(streamTextSpan.metadata.prompt.id).toBe("prompt-stream-123");
+    expect(streamTextSpan.metadata.prompt.project_id).toBe("proj-stream-456");
+  });
+
+  test("generateObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Object Generation Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-obj-789",
+          project_id: "proj-obj-012",
+          version: "3.0.0",
+          variables: { format: "json" },
+        },
+      },
+    };
+
+    const schema = z.object({ greeting: z.string() });
+
+    await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Generate a greeting",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Object Generation Prompt",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+    expect(generateObjectSpan.span_attributes.name).toBe(
+      "Object Generation Prompt",
+    );
+    expect(generateObjectSpan.metadata.prompt.id).toBe("prompt-obj-789");
+    expect(generateObjectSpan.metadata.prompt.project_id).toBe("proj-obj-012");
+    // Verify schema is still in input
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+  });
+
+  test("streamObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Stream Object Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-sobj-111",
+          project_id: "proj-sobj-222",
+          version: "4.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const schema = z.object({ message: z.string() });
+
+    const stream = wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Stream a message",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.partialObjectStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Stream Object Prompt",
+    );
+
+    expect(streamObjectSpan).toBeTruthy();
+    expect(streamObjectSpan.span_attributes.name).toBe("Stream Object Prompt");
+    expect(streamObjectSpan.metadata.prompt.id).toBe("prompt-sobj-111");
+    expect(streamObjectSpan.metadata.prompt.project_id).toBe("proj-sobj-222");
   });
 
   test("streamObject toTextStreamResponse", async () => {
@@ -567,6 +837,92 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
     expect(wrapperSpan).toBeTruthy();
     expect(typeof wrapperSpan.metrics?.time_to_first_token).toBe("number");
+  });
+
+  test("streamObject logs object in output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const recipeSchema = z.object({
+      name: z.string(),
+      ingredients: z.array(
+        z.object({
+          name: z.string(),
+          amount: z.string(),
+        }),
+      ),
+      steps: z.array(z.string()),
+    });
+
+    const streamRes = await wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema: recipeSchema,
+      prompt: "Generate a simple recipe for toast with butter.",
+    });
+
+    for await (const _ of streamRes.partialObjectStream) {
+    }
+
+    const finalObject = await streamRes.object;
+    expect(finalObject).toBeTruthy();
+    expect(finalObject.name).toBeTruthy();
+    expect(Array.isArray(finalObject.ingredients)).toBe(true);
+    expect(Array.isArray(finalObject.steps)).toBe(true);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+    const wrapperSpan = spans.find(
+      (s) => s?.span_attributes?.name === "streamObject",
+    );
+    expect(wrapperSpan).toBeTruthy();
+    expect(wrapperSpan.output).toBeTruthy();
+    expect(wrapperSpan.output.object).toBeTruthy();
+    expect(wrapperSpan.output.object.name).toBeTruthy();
+    expect(Array.isArray(wrapperSpan.output.object.ingredients)).toBe(true);
+    expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
+  });
+
+  test("doStream captures JSON content for streamObject", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const simpleSchema = z.object({
+      answer: z.string(),
+    });
+
+    const streamRes = await wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema: simpleSchema,
+      prompt: "What is 2+2? Answer with just the number.",
+    });
+
+    for await (const _ of streamRes.partialObjectStream) {
+    }
+
+    const finalObject = await streamRes.object;
+    expect(finalObject).toBeTruthy();
+    expect(finalObject.answer).toBeTruthy();
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const spans = (await backgroundLogger.drain()) as any[];
+
+    // Find the doStream span (child of streamObject)
+    const doStreamSpan = spans.find(
+      (s) =>
+        s?.span_attributes?.name === "doStream" &&
+        s?.span_attributes?.type === "llm",
+    );
+
+    // doStream span should exist and have output
+    expect(doStreamSpan).toBeTruthy();
+    expect(doStreamSpan.output).toBeDefined();
+
+    // For structured output, the text should contain the JSON response
+    expect(doStreamSpan.output.finishReason).toBe("stop");
+    expect(doStreamSpan.output.usage).toBeDefined();
+
+    // The text should contain the JSON object (may be empty for some providers)
+    // At minimum, verify the output structure is correct
+    expect(typeof doStreamSpan.output.text).toBe("string");
+    expect(Array.isArray(doStreamSpan.output.toolCalls)).toBe(true);
   });
 
   test("streamText returns correct type with toUIMessageStreamResponse", async () => {
@@ -1059,5 +1415,853 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(start).toBeLessThanOrEqual(metrics.start);
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
+  });
+
+  // TODO: Add test for ToolLoopAgent with Output.object() schema serialization
+  // Currently the output field is not properly serialized - it shows as output: {}
+  // because the responseFormat is a Promise that needs to be awaited.
+  // Once processInputAttachments is made async and properly handles the Promise,
+  // we should verify that the schema is serialized correctly in the logs.
+
+  test("ai sdk multi-round tool use with metrics", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const getStorePriceTool = ai.tool({
+      description: "Get the price of an item from a specific store",
+      inputSchema: z.object({
+        store: z.string().describe("The store name (e.g., 'StoreA', 'StoreB')"),
+        item: z.string().describe("The item to get the price for"),
+      }),
+      execute: async (args: { store: string; item: string }) => {
+        const prices: Record<string, Record<string, number>> = {
+          StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+          StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+        };
+        const price = prices[args.store]?.[args.item] ?? 0;
+        return JSON.stringify({ store: args.store, item: args.item, price });
+      },
+    });
+
+    const applyDiscountTool = ai.tool({
+      description: "Apply a discount code to a total amount",
+      inputSchema: z.object({
+        total: z.number().describe("The total amount before discount"),
+        discountCode: z.string().describe("The discount code to apply"),
+      }),
+      execute: async (args: { total: number; discountCode: string }) => {
+        const discounts: Record<string, number> = {
+          SAVE10: 0.1,
+          SAVE20: 0.2,
+        };
+        const discountRate = discounts[args.discountCode] ?? 0;
+        const finalTotal = args.total - args.total * discountRate;
+        return JSON.stringify({
+          originalTotal: args.total,
+          discountCode: args.discountCode,
+          finalTotal,
+        });
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+    const start = getCurrentUnixTimestamp();
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "You are a shopping assistant. When asked about prices, always get the price from each store mentioned using get_store_price, then apply any discount codes using apply_discount. Use the tools provided.",
+      tools: {
+        get_store_price: getStorePriceTool,
+        apply_discount: applyDiscountTool,
+      },
+      toolChoice: "required",
+      prompt:
+        "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+      stopWhen: ai.stepCountIs(6),
+    });
+
+    const end = getCurrentUnixTimestamp();
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const llmSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Should have multiple doGenerate spans - one per LLM round/step
+    // This allows visualizing the LLM ↔ tool roundtrips
+    expect(llmSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Should have tool spans for get_store_price calls (at least 2 for StoreA and StoreB)
+    expect(toolSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify each doGenerate span has its own metrics
+    for (const llmSpan of llmSpans) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const span = llmSpan as any;
+      expect(span.metrics).toBeDefined();
+      expect(span.metrics.start).toBeDefined();
+      expect(span.metrics.end).toBeDefined();
+      expect(start).toBeLessThanOrEqual(span.metrics.start);
+      expect(span.metrics.end).toBeLessThanOrEqual(end);
+
+      // Each doGenerate span should have token metrics for that specific LLM call
+      expect(span.metrics.tokens).toBeGreaterThan(0);
+      expect(span.metrics.prompt_tokens).toBeGreaterThan(0);
+      expect(span.metrics.completion_tokens).toBeGreaterThanOrEqual(0);
+    }
+
+    // Verify tool spans have the expected structure
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storePriceSpans = toolSpans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "get_store_price",
+    );
+    expect(storePriceSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify tool spans have input/output
+    for (const toolSpan of storePriceSpans) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const span = toolSpan as any;
+      expect(span.input).toBeDefined();
+      expect(span.output).toBeDefined();
+
+      const inputData = Array.isArray(span.input) ? span.input[0] : span.input;
+      expect(inputData.store).toMatch(/^Store[AB]$/);
+      expect(inputData.item).toBe("laptop");
+    }
+  });
+
+  test("ai sdk multi-round tool use span hierarchy", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const stepOneTool = ai.tool({
+      description: "First step tool that returns a number",
+      inputSchema: z.object({
+        input: z.string(),
+      }),
+      execute: async () => "42",
+    });
+
+    const stepTwoTool = ai.tool({
+      description: "Second step tool that uses the result from step one",
+      inputSchema: z.object({
+        value: z.number(),
+      }),
+      execute: async (args: { value: number }) => String(args.value * 2),
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "You must use the tools in sequence. First call step_one to get a number, then call step_two with that number.",
+      tools: {
+        step_one: stepOneTool,
+        step_two: stepTwoTool,
+      },
+      toolChoice: "required",
+      prompt:
+        "Execute the two-step process: first get a number, then double it.",
+      stopWhen: ai.stepCountIs(5),
+    });
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const llmSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Should have multiple doGenerate spans (one per LLM call)
+    expect(llmSpans.length).toBeGreaterThanOrEqual(2);
+
+    // Should have at least 1 tool span (step_one)
+    expect(toolSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Verify spans have root_span_id linking them together
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rootSpanIds = new Set(spans.map((s: any) => s.root_span_id));
+    // All spans should share the same root (they're part of the same generateText call)
+    expect(rootSpanIds.size).toBe(1);
+
+    // Verify step_one tool was called
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stepOneSpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "step_one",
+    );
+    expect(stepOneSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((stepOneSpan as any).output).toBe("42");
+  });
+
+  test("ai sdk parallel tool calls in single round", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    let toolACalls = 0;
+    let toolBCalls = 0;
+
+    const toolA = ai.tool({
+      description: "Tool A - gets value A",
+      inputSchema: z.object({ id: z.string() }),
+      execute: async () => {
+        toolACalls++;
+        return "value_a";
+      },
+    });
+
+    const toolB = ai.tool({
+      description: "Tool B - gets value B",
+      inputSchema: z.object({ id: z.string() }),
+      execute: async () => {
+        toolBCalls++;
+        return "value_b";
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      system:
+        "When asked to get both values, you MUST call both tool_a and tool_b in parallel in the same response.",
+      tools: {
+        tool_a: toolA,
+        tool_b: toolB,
+      },
+      toolChoice: "required",
+      prompt:
+        'Get both value A (id: "1") and value B (id: "2") at the same time.',
+      stopWhen: ai.stepCountIs(4),
+    });
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpans = spans.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.type === "tool",
+    );
+
+    // Both tools should have been called
+    expect(toolACalls).toBeGreaterThanOrEqual(1);
+    expect(toolBCalls).toBeGreaterThanOrEqual(1);
+
+    // Should have tool spans for both
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolASpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "tool_a",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolBSpan = toolSpans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => s.span_attributes?.name === "tool_b",
+    );
+
+    expect(toolASpan).toBeDefined();
+    expect(toolBSpan).toBeDefined();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolASpan as any).output).toBe("value_a");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolBSpan as any).output).toBe("value_b");
+
+    // Both tool spans should share the same root
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((toolASpan as any).root_span_id).toBe(
+      (toolBSpan as any).root_span_id,
+    );
+  });
+
+  test("ai sdk async generator tool execution", async () => {
+    // Test for GitHub issue #1134: async generator tools should work correctly
+    // AI SDK v5 supports tools with async generator execute functions that yield
+    // intermediate status updates
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Track status updates - use a fresh array each time to handle test retries
+    const statusUpdates: string[] = [];
+
+    const streamingTool = ai.tool({
+      description: "A tool that streams status updates",
+      inputSchema: z.object({
+        name: z.string().describe("The name to greet"),
+      }),
+      execute: async function* (args: { name: string }) {
+        statusUpdates.push("starting");
+        yield { status: "starting", message: "Preparing greeting..." };
+
+        statusUpdates.push("processing");
+        yield { status: "processing", message: `Looking up ${args.name}...` };
+
+        statusUpdates.push("done");
+        yield { status: "done", greeting: `Hello, ${args.name}!` };
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      tools: {
+        greeting: streamingTool,
+      },
+      toolChoice: "required",
+      prompt: "Please use the greeting tool to greet someone named World",
+      stopWhen: ai.stepCountIs(1),
+    });
+
+    assert.ok(result);
+
+    // Verify that the async generator was actually iterated (exactly once with 3 yields)
+    expect(statusUpdates).toEqual(["starting", "processing", "done"]);
+
+    const spans = await backgroundLogger.drain();
+
+    // Find the tool execution span
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpan = spans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (span: any) =>
+        span.span_attributes?.type === "tool" &&
+        span.span_attributes?.name === "greeting",
+    );
+
+    expect(toolSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpanTyped = toolSpan as any;
+
+    // Verify the tool span has the correct structure
+    expect(toolSpanTyped).toMatchObject({
+      span_attributes: {
+        type: "tool",
+        name: "greeting",
+      },
+    });
+
+    // Verify input is captured
+    expect(toolSpanTyped.input).toBeDefined();
+    const inputData = Array.isArray(toolSpanTyped.input)
+      ? toolSpanTyped.input[0]
+      : toolSpanTyped.input;
+    expect(inputData).toMatchObject({
+      name: "World",
+    });
+
+    // Verify output is captured (should be the final yielded value, not {})
+    expect(toolSpanTyped.output).toBeDefined();
+    expect(toolSpanTyped.output).not.toEqual({});
+    expect(toolSpanTyped.output).toMatchObject({
+      status: "done",
+      greeting: "Hello, World!",
+    });
+  });
+
+  test("ai sdk string model ID resolution with per-step spans", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Set up the global provider so string model IDs can be resolved
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const simpleTool = ai.tool({
+      description: "A simple tool that echoes input",
+      inputSchema: z.object({ message: z.string() }),
+      execute: async (args: { message: string }) => `Echo: ${args.message}`,
+    });
+
+    // Use string model ID instead of openai("gpt-4o-mini")
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      tools: { echo: simpleTool },
+      toolChoice: "required",
+      prompt: "Use the echo tool with message 'hello'",
+      stopWhen: ai.stepCountIs(4),
+    });
+
+    // Clean up global provider
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+
+    // Should have parent generateText span + doGenerate spans + tool spans
+    expect(spans.length).toBeGreaterThanOrEqual(2);
+
+    // Verify we have doGenerate spans (per-step LLM calls)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Verify doGenerate span has proper metadata from resolved model
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const firstDoGenerate = doGenerateSpans[0] as any;
+    expect(firstDoGenerate.metadata).toBeDefined();
+    expect(firstDoGenerate.metadata.model).toBe("gpt-4o-mini");
+    expect(firstDoGenerate.metadata.provider).toMatch(/openai/);
+
+    // Verify metrics are captured
+    expect(firstDoGenerate.metrics.tokens).toBeGreaterThan(0);
+  });
+
+  test("doGenerate captures input and output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+    expect(result.text).toBeTruthy();
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = doGenerateSpans[0] as any;
+
+    // Verify input is captured (should have prompt array from LanguageModelV1CallOptions)
+    expect(doGenSpan.input).toBeDefined();
+    expect(doGenSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doGenSpan.input.prompt)).toBe(true);
+
+    // Verify output is captured (doGenerate returns content array, not text directly)
+    expect(doGenSpan.output).toBeDefined();
+    expect(doGenSpan.output.content).toBeDefined();
+    expect(Array.isArray(doGenSpan.output.content)).toBe(true);
+    expect(doGenSpan.output.content[0].text).toBeDefined();
+    expect(doGenSpan.output.finishReason).toBeDefined();
+
+    // Verify metadata has braintrust integration info
+    expect(doGenSpan.metadata.braintrust).toBeDefined();
+    expect(doGenSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
+    expect(doGenSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify finish_reason is captured in metadata
+    expect(doGenSpan.metadata.finish_reason).toBeDefined();
+
+    // Verify metrics
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
+  });
+
+  test("doGenerate processes image attachments in prompt array", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const base64Image = readFileSync(
+      join(FIXTURES_DIR, "test-image.png"),
+      "base64",
+    );
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const result = await wrappedAI.generateText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              image: `data:image/png;base64,${base64Image}`,
+            },
+            { type: "text", text: "What color is this image?" },
+          ],
+        },
+      ],
+      maxOutputTokens: 100,
+    });
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    assert.ok(result);
+    expect(result.text).toBeTruthy();
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenerateSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doGenerate",
+    );
+    expect(doGenerateSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = doGenerateSpans[0] as any;
+
+    // Verify input has prompt array (provider-level format)
+    expect(doGenSpan.input).toBeDefined();
+    expect(doGenSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doGenSpan.input.prompt)).toBe(true);
+    expect(doGenSpan.input.prompt.length).toBeGreaterThan(0);
+
+    // Find the user message in the prompt array
+    const userMessage = doGenSpan.input.prompt.find(
+      (m: any) => m.role === "user",
+    );
+    expect(userMessage).toBeDefined();
+    expect(Array.isArray(userMessage.content)).toBe(true);
+
+    // Find the file content part (AI SDK converts image to file at provider level)
+    const fileContent = userMessage.content.find((c: any) => c.type === "file");
+    expect(fileContent).toBeDefined();
+
+    // Verify image was converted to a braintrust attachment
+    // At provider level, the attachment is in data.reference
+    if (fileContent && fileContent.data) {
+      expect(fileContent.data.reference).toMatchObject({
+        type: "braintrust_attachment",
+        key: expect.any(String),
+        content_type: "image/png",
+      });
+    }
+  });
+
+  test("doStream captures input and accumulated output correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const openaiProvider = createOpenAI({});
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER = openaiProvider;
+
+    const stream = await wrappedAI.streamText({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: "Count from 1 to 3.",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    let fullText = "";
+    for await (const chunk of stream.textStream) {
+      fullText += chunk;
+    }
+
+    delete (globalThis as any).AI_SDK_DEFAULT_PROVIDER;
+
+    expect(fullText).toMatch(/1.*2.*3/s);
+
+    const spans = await backgroundLogger.drain();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStreamSpans = spans.filter(
+      (s: any) =>
+        s.span_attributes?.type === "llm" &&
+        s.span_attributes?.name === "doStream",
+    );
+    expect(doStreamSpans.length).toBeGreaterThanOrEqual(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStreamSpan = doStreamSpans[0] as any;
+
+    // Verify input is captured
+    expect(doStreamSpan.input).toBeDefined();
+    expect(doStreamSpan.input.prompt).toBeDefined();
+    expect(Array.isArray(doStreamSpan.input.prompt)).toBe(true);
+
+    // Verify output structure (text may be empty if provider doesn't emit text-delta chunks)
+    expect(doStreamSpan.output).toBeDefined();
+    expect(typeof doStreamSpan.output.text).toBe("string");
+    expect(doStreamSpan.output.text).not.toContain("undefined");
+    expect(doStreamSpan.output.finishReason).toBe("stop");
+    expect(doStreamSpan.output.usage).toBeDefined();
+
+    // Verify metadata has braintrust integration info
+    expect(doStreamSpan.metadata.braintrust).toBeDefined();
+    expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
+    expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify finish_reason is captured in metadata
+    expect(doStreamSpan.metadata.finish_reason).toBeDefined();
+
+    // Verify metrics including time_to_first_token
+    expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.time_to_first_token).toBeGreaterThan(0);
+    expect(typeof doStreamSpan.metrics.time_to_first_token).toBe("number");
+  });
+
+  test("model/provider separation from gateway-style model string", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const model = openai(TEST_MODEL);
+
+    await wrappedAI.generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: "Say hello",
+        },
+      ],
+      maxOutputTokens: 50,
+    });
+
+    const spans = await backgroundLogger.drain();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const generateTextSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "generateText",
+    ) as any;
+
+    expect(generateTextSpan).toBeDefined();
+    expect(generateTextSpan.metadata.model).toBe(TEST_MODEL);
+  });
+});
+
+const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY;
+
+describe.skipIf(!AI_GATEWAY_API_KEY)(
+  "ai sdk cost extraction tests",
+  TEST_SUITE_OPTIONS,
+  () => {
+    let wrappedAI: typeof ai;
+    let backgroundLogger: TestBackgroundLogger;
+
+    beforeAll(async () => {
+      await _exportsForTestingOnly.simulateLoginForTests();
+    });
+
+    beforeEach(() => {
+      backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+      wrappedAI = wrapAISDK(ai);
+      initLogger({
+        projectName: "ai-sdk-cost.test.ts",
+        projectId: "test-project-id",
+      });
+    });
+
+    afterEach(() => {
+      _exportsForTestingOnly.clearTestBackgroundLogger();
+    });
+
+    test("cost extraction and model/provider separation", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const result = await wrappedAI.generateText({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: "Say hello in one word.",
+          },
+        ],
+      });
+
+      expect(result.text).toBeTruthy();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Verify model/provider separation
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+
+      // Verify cost is extracted from gateway marketCost
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+    });
+
+    test("multi-step tool use extracts total cost", async () => {
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const simpleTool = ai.tool({
+        description: "Echo a message back",
+        inputSchema: z.object({ message: z.string() }),
+        execute: async (args: { message: string }) => `Echo: ${args.message}`,
+      });
+
+      const result = await wrappedAI.generateText({
+        model: "openai/gpt-4o-mini",
+        tools: { echo: simpleTool },
+        toolChoice: "required",
+        prompt: "Echo the message 'hello'",
+        stopWhen: ai.stepCountIs(2),
+      });
+
+      expect(result).toBeDefined();
+
+      const spans = await backgroundLogger.drain();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateTextSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "generateText",
+      ) as any;
+
+      expect(generateTextSpan).toBeDefined();
+
+      // Cost should be sum of all steps
+      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+
+      // Verify model/provider in metadata
+      expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
+      expect(generateTextSpan.metadata.provider).toBe("openai");
+    });
+  },
+);
+
+describe("extractTokenMetrics", () => {
+  test("handles null values in usage without including them in metrics", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: null,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // null should not be included - it should be undefined or not present
+    expect(result.prompt_cached_tokens).toBeUndefined();
+  });
+
+  test("preserves zero values in usage", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        cachedInputTokens: 0,
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    // Zero should be preserved, not treated as falsy
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("all metric values are numbers or undefined", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedInputTokens: null,
+        reasoningTokens: null,
+        completionAudioTokens: null,
+      },
+    });
+
+    // Every value should be a number or not present (undefined)
+    for (const [key, value] of Object.entries(result)) {
+      expect(typeof value === "number" || value === undefined).toBe(true);
+    }
+  });
+
+  test("handles nested usage structure from OpenAI Responses API (gpt-5 models)", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          cacheRead: 0,
+          noCache: 25,
+          total: 25,
+        },
+        outputTokens: {
+          reasoning: 768,
+          text: 22,
+          total: 790,
+        },
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(790);
+    expect(result.reasoning_tokens).toBe(768);
+    expect(result.completion_reasoning_tokens).toBe(768);
+    expect(result.prompt_cached_tokens).toBe(0);
+  });
+
+  test("handles mixed flat and nested usage structures", () => {
+    const result = extractTokenMetrics({
+      usage: {
+        inputTokens: {
+          total: 100,
+          cacheRead: 10,
+        },
+        outputTokens: 50,
+        totalTokens: 150,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(100);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(150);
+    expect(result.prompt_cached_tokens).toBe(10);
+  });
+
+  test("handles totalUsage field from Agent results", () => {
+    const result = extractTokenMetrics({
+      totalUsage: {
+        inputTokens: 25,
+        outputTokens: 50,
+        totalTokens: 75,
+        reasoningTokens: 20,
+      },
+    });
+
+    expect(result.prompt_tokens).toBe(25);
+    expect(result.completion_tokens).toBe(50);
+    expect(result.tokens).toBe(75);
+    expect(result.reasoning_tokens).toBe(20);
+    expect(result.completion_reasoning_tokens).toBe(20);
   });
 });

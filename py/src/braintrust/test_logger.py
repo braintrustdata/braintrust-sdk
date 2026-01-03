@@ -2940,7 +2940,7 @@ class TestDatasetInternalBtql(TestCase):
 
     @patch("braintrust.logger.BraintrustState")
     def test_dataset_internal_btql_limit_not_overwritten(self, mock_state_class):
-        """Test that custom limit in _internal_btql is not overwritten by INTERNAL_BTQL_LIMIT."""
+        """Test that custom limit in _internal_btql is not overwritten by DEFAULT_FETCH_BATCH_SIZE."""
         # Set up mock state
         mock_state = MagicMock()
         mock_state_class.return_value = mock_state
@@ -2987,7 +2987,7 @@ class TestDatasetInternalBtql(TestCase):
         call_args = mock_api_conn.post.call_args
         query_json = call_args[1]["json"]["query"]
 
-        # Verify that the custom limit is present (not overwritten by INTERNAL_BTQL_LIMIT)
+        # Verify that the custom limit is present (not overwritten by DEFAULT_FETCH_BATCH_SIZE)
         self.assertEqual(query_json["limit"], custom_limit)
 
         # Verify that other _internal_btql fields are also present
@@ -2995,8 +2995,14 @@ class TestDatasetInternalBtql(TestCase):
 
     @patch("braintrust.logger.BraintrustState")
     def test_dataset_default_limit_when_not_specified(self, mock_state_class):
-        """Test that INTERNAL_BTQL_LIMIT is used when no custom limit is specified."""
-        from braintrust.logger import INTERNAL_BTQL_LIMIT, Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+        """Test that DEFAULT_FETCH_BATCH_SIZE is used when no custom limit is specified."""
+        from braintrust.logger import (
+            DEFAULT_FETCH_BATCH_SIZE,
+            Dataset,
+            LazyValue,
+            ObjectMetadata,
+            ProjectDatasetMetadata,
+        )
 
         # Set up mock state
         mock_state = MagicMock()
@@ -3039,4 +3045,52 @@ class TestDatasetInternalBtql(TestCase):
         query_json = call_args[1]["json"]["query"]
 
         # Verify that the default limit is used
-        self.assertEqual(query_json["limit"], INTERNAL_BTQL_LIMIT)
+        self.assertEqual(query_json["limit"], DEFAULT_FETCH_BATCH_SIZE)
+
+    @patch("braintrust.logger.BraintrustState")
+    def test_dataset_custom_batch_size_in_fetch(self, mock_state_class):
+        """Test that custom batch_size in fetch() is properly passed to BTQL query."""
+        from braintrust.logger import Dataset, LazyValue, ObjectMetadata, ProjectDatasetMetadata
+
+        # Set up mock state
+        mock_state = MagicMock()
+        mock_state_class.return_value = mock_state
+
+        # Mock the API connection and response
+        mock_api_conn = MagicMock()
+        mock_state.api_conn.return_value = mock_api_conn
+
+        # Mock response object
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [{"id": "1", "input": "test1", "expected": "output1"}],
+            "cursor": None,
+        }
+        mock_api_conn.post.return_value = mock_response
+
+        # Create dataset
+        project_metadata = ObjectMetadata(id="test-project", name="test-project", full_info={})
+        dataset_metadata = ObjectMetadata(id="test-dataset", name="test-dataset", full_info={})
+        lazy_metadata = LazyValue(
+            lambda: ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata),
+            use_mutex=False,
+        )
+
+        dataset = Dataset(
+            lazy_metadata=lazy_metadata,
+            state=mock_state,
+        )
+
+        # Trigger a fetch with custom batch_size
+        custom_batch_size = 250
+        list(dataset.fetch(batch_size=custom_batch_size))
+
+        # Verify the API was called
+        mock_api_conn.post.assert_called_once()
+
+        # Get the actual call arguments
+        call_args = mock_api_conn.post.call_args
+        query_json = call_args[1]["json"]["query"]
+
+        # Verify that the custom batch_size is used
+        self.assertEqual(query_json["limit"], custom_batch_size)
