@@ -1,4 +1,9 @@
-import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
+import {
+  makeScorerPropagatedEvent,
+  mergeDicts,
+  Score,
+  SpanTypeAttribute,
+} from "../util/index";
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type ObjectReferenceType as ObjectReference,
@@ -1084,7 +1089,11 @@ async function runEvaluatorInternal(
                   name: scorerNames[score_idx],
                   spanAttributes: {
                     type: SpanTypeAttribute.SCORE,
+                    purpose: "scorer",
                   },
+                  propagatedEvent: makeScorerPropagatedEvent(
+                    await rootSpan.export(),
+                  ),
                   event: { input: scoringArgs },
                 });
                 return { kind: "score", value: results } as const;
