@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 570d061acf93c711162b8ce209724d081ba9a371) -- do not modify
+// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -132,21 +132,25 @@ export const ApiKey = z.object({
   org_id: z.union([z.string(), z.null()]).optional(),
 });
 export type ApiKeyType = z.infer<typeof ApiKey>;
-export const TriggeredFunction = z.object({
-  function_id: z.unknown().optional(),
+export const TriggeredFunctionState = z.object({
   triggered_xact_id: z.string(),
   completed_xact_id: z.union([z.string(), z.null()]).optional(),
-  attempts: z.union([z.number(), z.null()]).optional(),
+  attempts: z.number().int().gte(0).optional().default(0),
+  scope: z.union([
+    z.object({ type: z.literal("span") }),
+    z.object({ type: z.literal("trace") }),
+    z.object({ type: z.literal("group"), key: z.string(), value: z.string() }),
+  ]),
 });
-export type TriggeredFunctionType = z.infer<typeof TriggeredFunction>;
+export type TriggeredFunctionStateType = z.infer<typeof TriggeredFunctionState>;
 export const AsyncScoringState = z.union([
   z.object({
     status: z.literal("enabled"),
     token: z.string(),
     function_ids: z.array(z.unknown()),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
-    triggered_function_ids: z
-      .union([z.array(TriggeredFunction), z.null()])
+    triggered_functions: z
+      .union([z.record(TriggeredFunctionState), z.null()])
       .optional(),
   }),
   z.object({ status: z.literal("disabled") }),
