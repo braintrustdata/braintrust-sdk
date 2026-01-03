@@ -1,3 +1,4 @@
+import { Expr } from "../btql/ast";
 import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
 
 export interface TraceOptions {
@@ -35,29 +36,44 @@ export class SpanFetcher extends ObjectFetcher<SpanRecord> {
     rootSpanId: string,
     spanTypeFilter?: string[],
   ): Record<string, unknown> {
-    // Base filter: root_span_id = 'value'
-    const rootSpanFilter = {
-      op: "eq",
-      left: { op: "ident", name: ["root_span_id"] },
-      right: { op: "literal", value: rootSpanId },
-    };
+    const children: Expr[] = [
+      // Base filter: root_span_id = 'value'
+      {
+        op: "eq",
+        left: { op: "ident", name: ["root_span_id"] },
+        right: { op: "literal", value: rootSpanId },
+      },
+      // Exclude span_attributes.purpose = 'score'
+      {
+        op: "or",
+        children: [
+          {
+            op: "isnull",
+            expr: { op: "ident", name: ["span_attributes", "purpose"] },
+          },
+          {
+            op: "ne",
+            left: { op: "ident", name: ["span_attributes", "purpose"] },
+            right: { op: "literal", value: "scorer" },
+          },
+        ],
+      },
+    ];
 
     // If no spanType filter, just return root_span_id filter
-    if (!spanTypeFilter || spanTypeFilter.length === 0) {
-      return rootSpanFilter;
+    if (spanTypeFilter && spanTypeFilter.length > 0) {
+      // Add span_attributes.type IN [...] filter
+      children.push({
+        op: "in",
+        left: { op: "ident", name: ["span_attributes", "type"] },
+        right: { op: "literal", value: spanTypeFilter },
+      });
     }
-
-    // Add span_attributes.type IN [...] filter
-    const spanTypeInFilter = {
-      op: "in",
-      left: { op: "ident", name: ["span_attributes", "type"] },
-      right: { op: "literal", value: spanTypeFilter },
-    };
 
     // Combine with AND
     return {
       op: "and",
-      children: [rootSpanFilter, spanTypeInFilter],
+      children,
     };
   }
 
@@ -186,7 +202,7 @@ export class LocalTrace implements Trace {
     const rows: WithTransactionId<SpanRecord>[] = await fetcher.fetchedData();
 
     return rows
-      .filter((row) => row.span_attributes?.type !== "score")
+      .filter((row) => row.span_attributes?.purpose !== "scorer")
       .map((row) => ({
         input: row.input,
         output: row.output,
