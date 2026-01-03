@@ -167,7 +167,7 @@ export class LocalTrace implements Trace {
     const cachedSpans = state.spanCache.getByRootSpanId(this.rootSpanId);
     if (cachedSpans && cachedSpans.length > 0) {
       let spans = cachedSpans.filter(
-        (span) => span.span_attributes?.type !== "score",
+        (span) => span.span_attributes?.purpose !== "scorer",
       );
 
       // Apply spanType filter if specified
