@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
+// Auto-generated file (internal git SHA 1090a4fef22daaa3719ae03d763f2f99c386d058) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -244,6 +244,7 @@ export const BatchedFacetData = z.object({
       name: z.string(),
       prompt: z.string(),
       model: z.string().optional(),
+      embedding_model: z.string().optional(),
       no_match_pattern: z.string().optional(),
     }),
   ),
@@ -536,6 +537,7 @@ export const DatasetEvent = z.object({
   origin: ObjectReferenceNullish.optional(),
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
@@ -661,6 +663,7 @@ export const ExperimentEvent = z.object({
   origin: ObjectReferenceNullish.optional(),
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
@@ -684,6 +687,7 @@ export const FacetData = z.object({
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
   prompt: z.string(),
   model: z.string().optional(),
+  embedding_model: z.string().optional(),
   no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
@@ -1426,6 +1430,7 @@ export const ProjectLogsEvent = z.object({
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
   _async_scoring_state: z.unknown().optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type ProjectLogsEventType = z.infer<typeof ProjectLogsEvent>;
 export const ProjectScoreType = z.enum([

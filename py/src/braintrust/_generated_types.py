@@ -185,6 +185,10 @@ class BatchedFacetDataFacet(TypedDict):
     """
     The model to use for facet extraction
     """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
+    """
     no_match_pattern: NotRequired[str | None]
     """
     Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
@@ -2528,6 +2532,10 @@ class DatasetEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
 
 
 class Experiment(TypedDict):
@@ -2626,6 +2634,10 @@ class FacetData(TypedDict):
     model: NotRequired[str | None]
     """
     The model to use for facet extraction
+    """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
     """
     no_match_pattern: NotRequired[str | None]
     """
@@ -3002,6 +3014,10 @@ class ExperimentEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
 
 
 class GraphNodeGraphNode7(TypedDict):
@@ -3123,6 +3139,10 @@ class ProjectLogsEvent(TypedDict):
     _async_scoring_state: NotRequired[Any | None]
     """
     The async scoring state for this event
+    """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
     """
 
 

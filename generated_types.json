@@ -691,6 +691,10 @@
                   "type": "string",
                   "description": "The model to use for facet extraction"
                 },
+                "embedding_model": {
+                  "type": "string",
+                  "description": "The embedding model to use for vectorizing facet results."
+                },
                 "no_match_pattern": {
                   "type": "string",
                   "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
@@ -1960,6 +1964,14 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -2377,6 +2389,14 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -2515,6 +2535,10 @@
           "model": {
             "type": "string",
             "description": "The model to use for facet extraction"
+          },
+          "embedding_model": {
+            "type": "string",
+            "description": "The embedding model to use for vectorizing facet results."
           },
           "no_match_pattern": {
             "type": "string",
@@ -5086,6 +5110,14 @@
           },
           "_async_scoring_state": {
             "description": "The async scoring state for this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -7505,7 +7537,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "87ac73f4945a47eff2d4e42775ba4dbc58854c73"
+    "x-internal-git-sha": "1090a4fef22daaa3719ae03d763f2f99c386d058"
   },
   "paths": {},
   "webhooks": {}
