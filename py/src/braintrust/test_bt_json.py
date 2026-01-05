@@ -5,7 +5,7 @@ import json
 from typing import Any
 from unittest import TestCase
 
-from braintrust.bt_json import bt_safe_deep_copy
+from braintrust.bt_json import bt_dumps, bt_safe_deep_copy
 from braintrust.logger import Attachment, ExternalAttachment, _check_json_serializable
 
 
@@ -127,29 +127,18 @@ class TestBTJson(TestCase):
         self.assertIs(copy["output"]["attachmentList"][1], attachment2)
         self.assertIs(copy["output"]["attachmentList"][3], attachment3)
 
-    def test_check_json_serializable_catches_circular_references(self):
-        """Test that _check_json_serializable properly handles circular references.
+    def test_check_json_serializable_circular_references(self):
+        """Test that _check_json_serializable raises on circular references.
 
-        After fix, _check_json_serializable should catch ValueError from circular
-        references and convert them to a more appropriate exception or handle them.
+        Note: _check_json_serializable does NOT use bt_safe_deep_copy, so circular
+        references cause a ValueError from bt_dumps which is wrapped in an Exception.
         """
-        # Create data with circular reference
         data: dict[str, Any] = {"a": "b"}
         data["self"] = data
 
-        # Should either succeed (by handling circular refs) or raise a clear exception
-        # The error message should indicate the data is not serializable
-        try:
-            result = _check_json_serializable(data)
-            # If it succeeds, it should return a serialized string
-            self.assertIsInstance(result, str)
-        except Exception as e:
-            # If it raises an exception, it should mention serialization issue
-            error_msg = str(e).lower()
-            self.assertTrue(
-                "json-serializable" in error_msg or "circular" in error_msg,
-                f"Expected error message to mention serialization issue, got: {e}",
-            )
+        with self.assertRaises(Exception) as ctx:
+            _check_json_serializable(data)
+        self.assertIn("JSON-serializable", str(ctx.exception))
 
     def test_deep_copy_binary_types(self):
         """Test current handling of bytes, bytearray, memoryview through bt_dumps/bt_loads roundtrip."""
@@ -291,3 +280,365 @@ class TestBTJson(TestCase):
         # tuple str representation
         self.assertTrue("(1, 2)" in result or "1, 2" in result)
         self.assertIn("None", result)
+
+    def test_to_bt_safe_special_objects(self):
+        """Test _to_bt_safe handling of Span, Experiment, Dataset, Logger objects."""
+        from braintrust import init, init_dataset, init_logger
+
+        # Create actual objects
+        exp = init(project="test", experiment="test")
+        dataset = init_dataset(project="test", name="test")
+        logger = init_logger(project="test")
+        span = exp.start_span()
+
+        # Import _to_bt_safe
+        from braintrust.bt_json import _to_bt_safe
+
+        # Test each special object
+        self.assertEqual(_to_bt_safe(span), "<span>")
+        self.assertEqual(_to_bt_safe(exp), "<experiment>")
+        self.assertEqual(_to_bt_safe(dataset), "<dataset>")
+        self.assertEqual(_to_bt_safe(logger), "<logger>")
+
+        # Clean up
+        exp.flush()
+        dataset.flush()
+        logger.flush()
+
+    def test_to_bt_safe_attachments(self):
+        """Test _to_bt_safe preserves BaseAttachment and converts ReadonlyAttachment to reference."""
+        from braintrust.bt_json import _to_bt_safe
+
+        # Test BaseAttachment preservation
+        attachment = Attachment(data=b"test", filename="test.txt", content_type="text/plain")
+        result = _to_bt_safe(attachment)
+        self.assertIs(result, attachment)
+
+        # Test ExternalAttachment preservation
+        ext_attachment = ExternalAttachment(
+            url="s3://bucket/key", filename="ext.pdf", content_type="application/pdf"
+        )
+        result_ext = _to_bt_safe(ext_attachment)
+        self.assertIs(result_ext, ext_attachment)
+
+        # Test ReadonlyAttachment conversion to reference
+        from braintrust.logger import ReadonlyAttachment
+
+        reference = {
+            "type": "braintrust_attachment",
+            "key": "test-key",
+            "filename": "readonly.txt",
+            "content_type": "text/plain",
+        }
+        readonly = ReadonlyAttachment(reference)
+        result_readonly = _to_bt_safe(readonly)
+        self.assertEqual(result_readonly, reference)
+        self.assertIsNot(result_readonly, readonly)
+
+    def test_to_bt_safe_pydantic_models(self):
+        """Test _to_bt_safe handling of Pydantic v1 and v2 models."""
+        from braintrust.bt_json import _to_bt_safe
+
+        try:
+            from pydantic import BaseModel
+
+            class TestModel(BaseModel):
+                name: str
+                value: int
+
+            model = TestModel(name="test", value=42)
+            result = _to_bt_safe(model)
+
+            # Should convert to dict
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result["name"], "test")
+            self.assertEqual(result["value"], 42)
+        except ImportError:
+            self.skipTest("Pydantic not available")
+
+    def test_to_bt_safe_dataclasses(self):
+        """Test _to_bt_safe handling of dataclasses with attachment fields."""
+        from dataclasses import dataclass
+
+        from braintrust.bt_json import _to_bt_safe
+
+        @dataclass
+        class SimpleData:
+            text: str
+            number: int
+
+        @dataclass
+        class DataWithAttachment:
+            name: str
+            file: Attachment
+
+        # Test simple dataclass
+        simple = SimpleData(text="hello", number=123)
+        result = _to_bt_safe(simple)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["text"], "hello")
+        self.assertEqual(result["number"], 123)
+
+        # Test dataclass with attachment field
+        attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+        with_attachment = DataWithAttachment(name="test", file=attachment)
+        result_with_att = _to_bt_safe(with_attachment)
+
+        self.assertIsInstance(result_with_att, dict)
+        self.assertEqual(result_with_att["name"], "test")
+        # The attachment should be preserved in the dict
+        self.assertIs(result_with_att["file"], attachment)
+
+    def test_to_bt_safe_special_floats(self):
+        """Test _to_bt_safe handling of NaN, Infinity, -Infinity."""
+        from braintrust.bt_json import _to_bt_safe
+
+        self.assertEqual(_to_bt_safe(float("nan")), "NaN")
+        self.assertEqual(_to_bt_safe(float("inf")), "Infinity")
+        self.assertEqual(_to_bt_safe(float("-inf")), "-Infinity")
+        self.assertEqual(_to_bt_safe(1.5), 1.5)
+        self.assertEqual(_to_bt_safe(0.0), 0.0)
+
+    def test_to_bt_safe_fallback_exceptions(self):
+        """Test _to_bt_safe graceful handling when serialization fails in bt_safe_deep_copy."""
+
+        class UnserializableObject:
+            def __init__(self):
+                self.data = "test"
+
+        obj = UnserializableObject()
+
+        # When called through bt_safe_deep_copy, exceptions are caught
+        result = bt_safe_deep_copy({"key": obj})
+
+        # The object should be in the result (after roundtrip through bt_dumps/bt_loads)
+        self.assertIn("key", result)
+        # The value might be stringified or converted depending on fallback behavior
+        self.assertIsNotNone(result["key"])
+
+    def test_bt_safe_deep_copy_attachment_identity(self):
+        """Test bt_safe_deep_copy preserves attachment object identity."""
+        attachment1 = Attachment(data=b"data1", filename="file1.txt", content_type="text/plain")
+        attachment2 = ExternalAttachment(
+            url="s3://bucket/key", filename="file2.pdf", content_type="application/pdf"
+        )
+
+        original = {
+            "field1": attachment1,
+            "nested": {"field2": attachment2},
+            "list": [attachment1, "string", attachment2],
+        }
+
+        result = bt_safe_deep_copy(original)
+
+        # Verify attachment identity is preserved (same object)
+        self.assertIs(result["field1"], attachment1)
+        self.assertIs(result["nested"]["field2"], attachment2)
+        self.assertIs(result["list"][0], attachment1)
+        self.assertIs(result["list"][2], attachment2)
+
+        # But container objects are copied
+        self.assertIsNot(result, original)
+        self.assertIsNot(result["nested"], original["nested"])
+        self.assertIsNot(result["list"], original["list"])
+
+    def test_bt_safe_deep_copy_mixed_attachment_types(self):
+        """Test bt_safe_deep_copy with BaseAttachment and ReadonlyAttachment together."""
+        from braintrust.logger import ReadonlyAttachment
+
+        base_attachment = Attachment(data=b"base", filename="base.txt", content_type="text/plain")
+
+        reference = {
+            "type": "braintrust_attachment",
+            "key": "readonly-key",
+            "filename": "readonly.txt",
+            "content_type": "text/plain",
+        }
+        readonly_attachment = ReadonlyAttachment(reference)
+
+        original = {
+            "base": base_attachment,
+            "readonly": readonly_attachment,
+            "mixed_list": [base_attachment, readonly_attachment],
+        }
+
+        result = bt_safe_deep_copy(original)
+
+        # BaseAttachment preserved as-is
+        self.assertIs(result["base"], base_attachment)
+        self.assertIs(result["mixed_list"][0], base_attachment)
+
+        # ReadonlyAttachment converted to reference dict
+        self.assertEqual(result["readonly"], reference)
+        self.assertIsInstance(result["readonly"], dict)
+        self.assertEqual(result["mixed_list"][1], reference)
+
+    def test_bt_safe_deep_copy_circular_with_attachments(self):
+        """Test circular reference detection with attachments in the structure."""
+        attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+        # Create circular structure with attachment
+        circular: dict[str, Any] = {"attachment": attachment, "data": "test"}
+        circular["self"] = circular
+
+        result = bt_safe_deep_copy(circular)
+
+        # Attachment should be preserved
+        self.assertIs(result["attachment"], attachment)
+        self.assertEqual(result["data"], "test")
+
+        # Circular reference should be detected
+        self.assertEqual(result["self"], "<circular reference>")
+
+    def test_bt_safe_deep_copy_containers_with_attachments(self):
+        """Test tuple, set, and nested containers with attachments."""
+        attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+        original = {
+            "tuple_with_attachment": (attachment, "string", 123),
+            "set_with_attachment": {attachment, "value"},
+            "nested": {"inner_tuple": (1, 2, attachment)},
+        }
+
+        result = bt_safe_deep_copy(original)
+
+        # Tuples and sets are converted to lists
+        self.assertIsInstance(result["tuple_with_attachment"], list)
+        self.assertIsInstance(result["set_with_attachment"], list)
+
+        # Attachment preserved in converted list
+        self.assertIs(result["tuple_with_attachment"][0], attachment)
+        self.assertIn(attachment, result["set_with_attachment"])
+
+        # Nested tuple also converted
+        self.assertIsInstance(result["nested"]["inner_tuple"], list)
+        self.assertIs(result["nested"]["inner_tuple"][2], attachment)
+
+    def test_bt_safe_deep_copy_pydantic_with_attachments(self):
+        """Test Pydantic model with attachment field."""
+        try:
+            from pydantic import BaseModel
+
+            attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+            class ModelWithAttachment(BaseModel):
+                name: str
+                file: Any  # Pydantic doesn't have built-in type for our Attachment
+
+            model = ModelWithAttachment(name="test", file=attachment)
+
+            result = bt_safe_deep_copy(model)
+
+            # Model should be converted to dict
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result["name"], "test")
+
+            # Attachment should be preserved
+            self.assertIs(result["file"], attachment)
+        except ImportError:
+            self.skipTest("Pydantic not available")
+
+    def test_bt_safe_deep_copy_dataclass_with_attachments(self):
+        """Test that dataclasses with attachments are handled correctly."""
+        from dataclasses import dataclass
+
+        attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+        @dataclass
+        class DataWithAttachment:
+            name: str
+            value: int
+            file: Attachment
+
+        data = DataWithAttachment(name="test", value=42, file=attachment)
+
+        result = bt_safe_deep_copy({"data": data})
+
+        # Dataclasses with Attachment fields are now properly converted by
+        # recursively applying _to_bt_safe to each field instead of using
+        # dataclasses.asdict() which would try to deepcopy the Attachment.
+        self.assertIsInstance(result["data"], dict)
+        self.assertEqual(result["data"]["name"], "test")
+        self.assertEqual(result["data"]["value"], 42)
+        self.assertIs(result["data"]["file"], attachment)
+
+        # Attachments in regular dicts also work fine
+        dict_with_attachment = {"name": "test", "value": 42, "file": attachment}
+        result2 = bt_safe_deep_copy({"data": dict_with_attachment})
+        self.assertIsInstance(result2["data"], dict)
+        self.assertIs(result2["data"]["file"], attachment)
+
+    def test_bt_safe_deep_copy_circular_in_pydantic_deferred_to_bt_dumps(self):
+        """Test that circular references inside Pydantic model results bypass bt_safe_deep_copy detection.
+
+        Current behavior: model_dump() preserves the circular structure (with different object
+        identity). bt_safe_deep_copy passes it through, and bt_dumps catches it at serialization.
+        This differs from plain dicts where circular refs are caught and replaced with
+        '<circular reference>'.
+        """
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            self.skipTest("Pydantic not available")
+
+        class ModelWithObject(BaseModel):
+            data: object
+            model_config = {"arbitrary_types_allowed": True}
+
+        circular: dict[str, Any] = {"value": 1}
+        circular["self"] = circular
+
+        model = ModelWithObject(data=circular)
+
+        # bt_safe_deep_copy passes through the circular structure from model_dump()
+        result = bt_safe_deep_copy({"model": model})
+        self.assertIsInstance(result["model"], dict)
+        # model_dump() preserves circular structure but NOT object identity
+        self.assertIsInstance(result["model"]["data"]["self"], dict)
+        self.assertEqual(result["model"]["data"]["self"]["value"], 1)
+
+        # bt_dumps catches the circular reference at serialization time
+        with self.assertRaises(ValueError) as ctx:
+            bt_dumps(result)
+        self.assertIn("Circular reference", str(ctx.exception))
+
+    def test_bt_safe_deep_copy_pydantic_with_attachment_field(self):
+        """Test Pydantic model with a Braintrust Attachment field.
+
+        Pydantic models with Attachment fields should work correctly through
+        bt_safe_deep_copy, with the Attachment object preserved.
+        """
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            self.skipTest("Pydantic not available")
+
+        attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+        class ModelWithAttachment(BaseModel):
+            name: str
+            file: object
+            model_config = {"arbitrary_types_allowed": True}
+
+        model = ModelWithAttachment(name="test", file=attachment)
+
+        result = bt_safe_deep_copy({"model": model})
+
+        self.assertIsInstance(result["model"], dict)
+        self.assertEqual(result["model"]["name"], "test")
+        # Attachment should be preserved through model_dump()
+        self.assertIs(result["model"]["file"], attachment)
+
+    def test_bt_safe_deep_copy_circular_in_plain_dict_is_caught(self):
+        """Contrast test: circular references in plain dicts ARE caught by bt_safe_deep_copy."""
+        circular: dict[str, Any] = {"value": 1}
+        circular["self"] = circular
+
+        result = bt_safe_deep_copy({"data": circular})
+
+        # Circular reference IS detected and replaced
+        self.assertEqual(result["data"]["self"], "<circular reference>")
+
+        # bt_dumps succeeds because the circular ref was sanitized
+        json_str = bt_dumps(result)
+        self.assertIn("<circular reference>", json_str)

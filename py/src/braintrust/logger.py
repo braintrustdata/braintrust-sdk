@@ -738,7 +738,7 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def _check_json_serializable(event):
+def _check_json_serializable(event: Any):
     try:
         return bt_dumps(event)
     except (TypeError, ValueError) as e:
@@ -794,6 +794,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.lock = threading.Lock()
         self.logs = []
         self.masking_function: Callable[[Any], Any] | None = None
+        self.upload_attempts: list[BaseAttachment] = []  # Track upload attempts
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
         pass
@@ -807,7 +808,21 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.masking_function = masking_function
 
     def flush(self, batch_size: int | None = None):
-        pass
+        """Flush the memory logger, extracting attachments and tracking upload attempts."""
+        with self.lock:
+            if not self.logs:
+                return
+
+            # Unwrap lazy values and extract attachments
+            logs = [l.get() for l in self.logs]
+
+            # Extract attachments from all logs
+            attachments: list[BaseAttachment] = []
+            for log in logs:
+                _extract_attachments(log, attachments)
+
+            # Track upload attempts (don't actually call upload() in tests)
+            self.upload_attempts.extend(attachments)
 
     def pop(self):
         with self.lock:

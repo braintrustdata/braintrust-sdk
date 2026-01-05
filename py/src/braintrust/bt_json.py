@@ -40,7 +40,10 @@ def _to_bt_safe(v: Any) -> Any:
         return v.reference
 
     if dataclasses.is_dataclass(v) and not isinstance(v, type):
-        return dataclasses.asdict(v)
+        # Use manual field iteration instead of dataclasses.asdict() because
+        # asdict() deep-copies values, which breaks objects like Attachment
+        # that contain non-copyable items (thread locks, file handles, etc.)
+        return {f.name: _to_bt_safe(getattr(v, f.name)) for f in dataclasses.fields(v)}
 
     # Pydantic model classes (not instances) with model_json_schema
     if isinstance(v, type) and hasattr(v, "model_json_schema") and callable(cast(Any, v).model_json_schema):
