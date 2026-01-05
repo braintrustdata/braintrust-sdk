@@ -71,7 +71,16 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
-from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptData, PromptMessage, PromptSchema, TextPart
+from .prompt import (
+    BRAINTRUST_PARAMS,
+    ImagePart,
+    PromptBlockData,
+    PromptData,
+    PromptMessage,
+    PromptSchema,
+    TemplateFormat,
+    TextPart,
+)
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
@@ -4574,8 +4583,6 @@ def _create_custom_render():
 
 _custom_render = _create_custom_render()
 
-TemplateFormat = Literal["mustache", "jinja", "none"]
-
 
 class _JinjaSafeDict:
     """
@@ -4835,28 +4842,32 @@ class Prompt:
     def options(self) -> PromptOptions:
         return self._lazy_metadata.get().prompt_data.options or {}
 
+    @property
+    def template_format(self) -> TemplateFormat:
+        return self._lazy_metadata.get().prompt_data.template_format or "mustache"
+
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
     def build(
         self,
-        *,
-        template_format: TemplateFormat = "mustache",
         **build_args: Any,
     ) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
         be forwarded to the template that defines the prompt and rendered with the
-        specified template engine (mustache, jinja, or none).
+        prompt's configured template engine (mustache, jinja, or none).
 
-        :param template_format: The template format to use ("mustache", "jinja", or "none"). Defaults to "mustache".
         :param build_args: Arguments to forward to the prompt template. Can include 'strict=True' to enable strict mode validation.
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
         # Extract strict mode setting from build_args (using get to avoid modifying the original dict)
         strict = build_args.get("strict", False)
+
+        # Use the prompt's template_format
+        template_format = self.template_format
 
         params = self.options.get("params") or {}
         params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}

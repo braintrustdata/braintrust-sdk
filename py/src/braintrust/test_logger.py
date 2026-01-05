@@ -448,7 +448,7 @@ class TestLogger(TestCase):
         # Missing variables render as empty strings in chevron
         self.assertEqual(result["messages"][0]["content"], "Hello John, please help with ")
 
-    def _create_test_prompt(self, content: str):
+    def _create_test_prompt(self, content: str, template_format: str | None = None):
         """Helper to create a test prompt with the proper structure."""
         from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 
@@ -462,6 +462,7 @@ class TestLogger(TestCase):
             prompt_data=PromptData(
                 prompt=PromptChatBlock(messages=[PromptMessage(role="user", content=content)]),
                 options={"model": "gpt-4o"},
+                template_format=template_format,
             ),
             tags=None,
         )
@@ -561,9 +562,9 @@ class TestLogger(TestCase):
 
     def test_prompt_build_with_none_format(self):
         """Test Prompt.build with none template format (no templating)."""
-        prompt = self._create_test_prompt("Hello {{name}}, you are {{age}} years old")
+        prompt = self._create_test_prompt("Hello {{name}}, you are {{age}} years old", template_format="none")
 
-        result = prompt.build(template_format="none", name="John", age=30)
+        result = prompt.build(name="John", age=30)
         self.assertEqual(result["messages"][0]["content"], "Hello {{name}}, you are {{age}} years old")
 
     def test_render_prompt_params_no_response_format(self):
@@ -765,9 +766,9 @@ class TestLogger(TestCase):
 
     def test_jinja_prompt_build(self):
         """Test Prompt.build with jinja template format."""
-        prompt = self._create_test_prompt("Hello {{ name }}, you are {{ age }} years old")
+        prompt = self._create_test_prompt("Hello {{ name }}, you are {{ age }} years old", template_format="jinja")
 
-        result = prompt.build(template_format="jinja", name="John", age=30)
+        result = prompt.build(name="John", age=30)
         self.assertEqual(result["messages"][0]["content"], "Hello John, you are 30 years old")
 
     def test_jinja_prompt_build_completion(self):
@@ -784,13 +785,14 @@ class TestLogger(TestCase):
             prompt_data=PromptData(
                 prompt=PromptCompletionBlock(content="Hello {{ name }}, age {{ age }}"),
                 options={"model": "gpt-4o"},
+                template_format="jinja",
             ),
             tags=None,
         )
         lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
         prompt = Prompt(lazy_prompt, {}, False)
 
-        result = prompt.build(template_format="jinja", name="John", age=30)
+        result = prompt.build(name="John", age=30)
         self.assertEqual(result["prompt"], "Hello John, age 30")
 
     def test_jinja_prompt_build_chat_with_tools(self):
@@ -810,28 +812,29 @@ class TestLogger(TestCase):
                     tools='{"type": "function", "function": {"name": "{{ function_name }}"}}',
                 ),
                 options={"model": "gpt-4o"},
+                template_format="jinja",
             ),
             tags=None,
         )
         lazy_prompt = LazyValue(lambda: prompt_schema, use_mutex=False)
         prompt = Prompt(lazy_prompt, {}, False)
 
-        result = prompt.build(template_format="jinja", name="John", function_name="test_func")
+        result = prompt.build(name="John", function_name="test_func")
         self.assertEqual(result["messages"][0]["content"], "Hello John")
         tools = result["tools"]
         self.assertEqual(tools["function"]["name"], "test_func")
 
     def test_jinja_prompt_build_strict_mode(self):
         """Test Prompt.build with jinja format and strict mode."""
-        prompt = self._create_test_prompt("Hello {{ name }}, task {{ task }}")
+        prompt = self._create_test_prompt("Hello {{ name }}, task {{ task }}", template_format="jinja")
 
         # Valid build
-        result = prompt.build(template_format="jinja", strict=True, name="John", task="coding")
+        result = prompt.build(strict=True, name="John", task="coding")
         self.assertEqual(result["messages"][0]["content"], "Hello John, task coding")
 
         # Missing variable should raise error in strict mode
         with self.assertRaises(ValueError):
-            prompt.build(template_format="jinja", strict=True, name="John")  # Missing 'task'
+            prompt.build(strict=True, name="John")  # Missing 'task'
 
     def test_render_message_with_file_content_parts(self):
         """Test render_message with mixed text, image, and file content parts including all file fields."""
