@@ -3067,7 +3067,8 @@
           "tool",
           "custom_view",
           "preprocessor",
-          "facet"
+          "facet",
+          "classifier"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3084,7 +3085,8 @@
           "tool",
           "custom_view",
           "preprocessor",
-          "facet"
+          "facet",
+          "classifier"
         ]
       },
       "GitMetadataSettings": {

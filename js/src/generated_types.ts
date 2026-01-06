@@ -222,6 +222,7 @@ export const FunctionTypeEnum = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
+  "classifier",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -862,6 +863,7 @@ export const FunctionTypeEnumNullish = z.union([
     "custom_view",
     "preprocessor",
     "facet",
+    "classifier",
   ]),
   z.null(),
 ]);

@@ -760,13 +760,17 @@ FunctionObjectType: TypeAlias = Literal[
 FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnum: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+]
 """
 The type of global function. Defaults to 'scorer'.
 """
 
 
-FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnumNullish: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+]
 
 
 class GitMetadataSettings(TypedDict, closed=True):
