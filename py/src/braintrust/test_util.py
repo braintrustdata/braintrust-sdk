@@ -3,7 +3,7 @@ from typing import List
 
 import pytest
 
-from .util import LazyValue, mask_api_key
+from .util import LazyValue, apply_array_deletes, mask_api_key, merge_dicts_with_paths
 
 
 class TestLazyValue(unittest.TestCase):
@@ -160,3 +160,99 @@ def test_mask_api_key():
     assert mask_api_key("12345") == "12*45"
     for i in ["", "1", "12", "123", "1234"]:
         assert mask_api_key(i) == "*" * len(i)
+
+
+class TestTagsSetUnionMerge:
+    def test_tags_arrays_are_merged_as_sets_by_default(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": ["b", "c"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b", "c"}
+
+    def test_tags_merge_deduplicates_values(self):
+        a = {"tags": ["a", "b", "c"]}
+        b = {"tags": ["a", "b", "c", "d"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b", "c", "d"}
+
+    def test_tags_merge_works_when_merge_into_has_no_tags(self):
+        a = {"other": "data"}
+        b = {"tags": ["a", "b"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b"}
+
+    def test_tags_merge_works_when_merge_from_has_no_tags(self):
+        a = {"tags": ["a", "b"]}
+        b = {"other": "data"}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b"}
+
+    def test_tags_are_replaced_when_included_in_merge_paths(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": ["c", "d"]}
+        merge_dicts_with_paths(a, b, (), {("tags",)})
+        assert a["tags"] == ["c", "d"]
+
+    def test_empty_tags_array_clears_tags_when_in_merge_paths(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": []}
+        merge_dicts_with_paths(a, b, (), {("tags",)})
+        assert a["tags"] == []
+
+    def test_none_tags_replaces_tags(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": None}
+        merge_dicts_with_paths(a, b, (), set())
+        assert a["tags"] is None
+
+    def test_set_union_only_applies_to_top_level_tags_field(self):
+        a = {"metadata": {"tags": ["a", "b"]}}
+        b = {"metadata": {"tags": ["c", "d"]}}
+        merge_dicts_with_paths(a, b, (), set())
+        assert a["metadata"]["tags"] == ["c", "d"]
+
+
+class TestApplyArrayDeletes:
+    def test_removes_specified_values_from_array(self):
+        target = {"tags": ["a", "b", "c", "d"]}
+        apply_array_deletes(target, {"tags": ["b", "d"]})
+        assert target["tags"] == ["a", "c"]
+
+    def test_handles_non_existent_values_gracefully(self):
+        target = {"tags": ["a", "b", "c"]}
+        apply_array_deletes(target, {"tags": ["x", "y", "z"]})
+        assert target["tags"] == ["a", "b", "c"]
+
+    def test_handles_empty_delete_array(self):
+        target = {"tags": ["a", "b", "c"]}
+        apply_array_deletes(target, {"tags": []})
+        assert target["tags"] == ["a", "b", "c"]
+
+    def test_handles_non_existent_field_gracefully(self):
+        target = {"other": "data"}
+        apply_array_deletes(target, {"tags": ["a"]})
+        assert target == {"other": "data"}
+
+    def test_handles_nested_paths_with_dot_notation(self):
+        target = {"metadata": {"categories": ["a", "b", "c"]}}
+        apply_array_deletes(target, {"metadata.categories": ["b"]})
+        assert target["metadata"]["categories"] == ["a", "c"]
+
+    def test_handles_multiple_fields(self):
+        target = {
+            "tags": ["a", "b", "c"],
+            "labels": ["x", "y", "z"],
+        }
+        apply_array_deletes(target, {"tags": ["b"], "labels": ["y"]})
+        assert target["tags"] == ["a", "c"]
+        assert target["labels"] == ["x", "z"]
+
+    def test_ignores_non_list_delete_values(self):
+        target = {"tags": ["a", "b", "c"]}
+        apply_array_deletes(target, {"tags": "not-a-list"})  # type: ignore
+        assert target["tags"] == ["a", "b", "c"]
+
+    def test_ignores_when_target_field_is_not_a_list(self):
+        target = {"tags": "not-a-list"}
+        apply_array_deletes(target, {"tags": ["a"]})
+        assert target["tags"] == "not-a-list"
