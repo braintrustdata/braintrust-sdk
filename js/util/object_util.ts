@@ -1,7 +1,12 @@
-import { isObject, isObjectOrArray } from "./type_util";
+import { isArray, isObject, isObjectOrArray } from "./type_util";
+
+// Fields that automatically use set-union merge semantics (unless in mergePaths).
+const SET_UNION_FIELDS = new Set(["tags"]);
 
 // Mutably updates `mergeInto` with the contents of `mergeFrom`, merging objects
 // deeply. Does not merge any further than `merge_paths`.
+// For fields in SET_UNION_FIELDS (like "tags"), arrays are merged as sets (union)
+// unless the field is explicitly listed in mergePaths (opt-out to replacement).
 export function mergeDictsWithPaths({
   mergeInto,
   mergeFrom,
@@ -37,7 +42,18 @@ function mergeDictsWithPathsHelper({
     const fullPath = path.concat([k]);
     const fullPathSerialized = JSON.stringify(fullPath);
     const mergeIntoV = recordFind(mergeInto, k);
-    if (
+
+    // Check if this field should use set-union merge (e.g., "tags" at top level)
+    const isSetUnionField =
+      path.length === 0 &&
+      SET_UNION_FIELDS.has(k) &&
+      !mergePaths.has(fullPathSerialized);
+
+    if (isSetUnionField && isArray(mergeIntoV) && isArray(mergeFromV)) {
+      // Set-union merge: combine arrays, deduplicate
+      const combined = new Set([...mergeIntoV, ...mergeFromV]);
+      mergeInto[k] = Array.from(combined);
+    } else if (
       isObject(mergeIntoV) &&
       isObject(mergeFromV) &&
       !mergePaths.has(fullPathSerialized)
@@ -64,6 +80,60 @@ export function mergeDicts(
   mergeFrom: Record<string, unknown>,
 ) {
   return mergeDictsWithPaths({ mergeInto, mergeFrom, mergePaths: [] });
+}
+
+/**
+ * Mutably removes specified values from array fields in the target object.
+ * @param target - The object to modify
+ * @param arrayDeletes - A map from field paths (dot-separated strings or top-level keys) to arrays of values to remove
+ * @example applyArrayDeletes({ tags: ["a", "b", "c"] }, { tags: ["b"] }) // { tags: ["a", "c"] }
+ */
+export function applyArrayDeletes(
+  target: Record<string, unknown>,
+  arrayDeletes: Record<string, unknown[]>,
+): Record<string, unknown> {
+  for (const [fieldPath, valuesToRemove] of Object.entries(arrayDeletes)) {
+    if (!isArray(valuesToRemove)) {
+      continue;
+    }
+
+    // Support both top-level fields and dot-separated paths
+    const pathParts = fieldPath.split(".");
+    let current: unknown = target;
+    let parent: Record<string, unknown> | null = null;
+    let lastKey: string | null = null;
+
+    // Navigate to the target array
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+      if (!isObject(current) && !isArray(current)) {
+        current = null;
+        break;
+      }
+      if (i === pathParts.length - 1) {
+        parent = current as Record<string, unknown>;
+        lastKey = part;
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        current = (current as Record<string, unknown>)[part];
+      }
+    }
+
+    // If we found an array at the path, remove the specified values
+    if (parent && lastKey && isArray(current)) {
+      const toRemoveSet = new Set(
+        valuesToRemove.map((v) =>
+          typeof v === "object" ? JSON.stringify(v) : v,
+        ),
+      );
+      parent[lastKey] = current.filter((item) => {
+        const key = typeof item === "object" ? JSON.stringify(item) : item;
+        return !toRemoveSet.has(key);
+      });
+    }
+  }
+
+  return target;
 }
 
 // Recursively walks down `lhs` and `rhs`, invoking `fn` for each key in any

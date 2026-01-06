@@ -29,11 +29,16 @@ def coalesce(*args):
     return None
 
 
+# Fields that automatically use set-union merge semantics (unless in merge_paths).
+_SET_UNION_FIELDS = frozenset(["tags"])
+
+
 def merge_dicts_with_paths(
-    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str]]
+    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str, ...]]
 ) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
-    merge_paths."""
+    merge_paths. For fields in _SET_UNION_FIELDS (like "tags"), arrays are merged as sets (union)
+    unless the field is explicitly listed in merge_paths (opt-out to replacement)."""
 
     if not isinstance(merge_into, dict):
         raise ValueError("merge_into must be a dictionary")
@@ -43,7 +48,22 @@ def merge_dicts_with_paths(
     for k, merge_from_v in merge_from.items():
         full_path = path + (k,)
         merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
+
+        # Check if this field should use set-union merge (e.g., "tags" at top level)
+        is_set_union_field = len(path) == 0 and k in _SET_UNION_FIELDS and full_path not in merge_paths
+
+        if is_set_union_field and isinstance(merge_into_v, list) and isinstance(merge_from_v, list):
+            # Set-union merge: combine arrays, deduplicate while preserving order
+            seen = set()
+            combined = []
+            for item in merge_into_v + list(merge_from_v):
+                # Use a hashable representation for deduplication
+                item_key = item if isinstance(item, (str, int, float, bool, type(None))) else id(item)
+                if item_key not in seen:
+                    seen.add(item_key)
+                    combined.append(item)
+            merge_into[k] = combined
+        elif isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
             merge_dicts_with_paths(merge_into_v, merge_from_v, full_path, merge_paths)
         else:
             merge_into[k] = merge_from_v
@@ -55,6 +75,61 @@ def merge_dicts(merge_into: dict[str, Any], merge_from: Mapping[str, Any]) -> di
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
+
+
+def apply_array_deletes(target: dict[str, Any], array_deletes: dict[str, list[Any]]) -> dict[str, Any]:
+    """
+    Mutably removes specified values from array fields in the target object.
+
+    Args:
+        target: The object to modify
+        array_deletes: A map from field paths (dot-separated strings or top-level keys) to arrays of values to remove
+
+    Example:
+        apply_array_deletes({"tags": ["a", "b", "c"]}, {"tags": ["b"]})  # {"tags": ["a", "c"]}
+    """
+    for field_path, values_to_remove in array_deletes.items():
+        if not isinstance(values_to_remove, list):
+            continue
+
+        # Support both top-level fields and dot-separated paths
+        path_parts = field_path.split(".")
+        current: Any = target
+        parent: dict[str, Any] | None = None
+        last_key: str | None = None
+
+        # Navigate to the target array
+        for i, part in enumerate(path_parts):
+            if not isinstance(current, dict):
+                current = None
+                break
+            if i == len(path_parts) - 1:
+                parent = current
+                last_key = part
+                current = current.get(part)
+            else:
+                current = current.get(part)
+
+        # If we found a list at the path, remove the specified values
+        if parent is not None and last_key is not None and isinstance(current, list):
+            # Create a set for efficient lookup, using a hashable representation
+            to_remove_set = set()
+            for v in values_to_remove:
+                if isinstance(v, (str, int, float, bool, type(None))):
+                    to_remove_set.add(v)
+                else:
+                    # For non-hashable types, convert to string for comparison
+                    to_remove_set.add(str(v))
+
+            def should_keep(item: Any) -> bool:
+                if isinstance(item, (str, int, float, bool, type(None))):
+                    return item not in to_remove_set
+                else:
+                    return str(item) not in to_remove_set
+
+            parent[last_key] = [item for item in current if should_keep(item)]
+
+    return target
 
 
 def encode_uri_component(name: str) -> str:

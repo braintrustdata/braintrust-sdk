@@ -1,5 +1,6 @@
 export type { Source, TransactionId } from "./db_fields";
 export {
+  ARRAY_DELETE_FIELD,
   ASYNC_SCORING_CONTROL_FIELD,
   AUDIT_METADATA_FIELD,
   AUDIT_SOURCE_FIELD,
@@ -58,6 +59,7 @@ export type { Score, Scorer, ScorerArgs } from "./score";
 export { constructJsonArray, deterministicReplacer } from "./json_util";
 
 export {
+  applyArrayDeletes,
   forEachMissingKey,
   getObjValueByPath,
   getRecordKeys,

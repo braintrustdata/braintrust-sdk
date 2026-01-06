@@ -3945,9 +3945,6 @@ class SpanImpl(Span):
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
-
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
             return dict(
