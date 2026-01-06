@@ -1807,6 +1807,7 @@ async def test_agent_with_tool_execution(memory_logger):
     assert "toolsets" not in agent_span["metadata"], "toolsets should NOT be in metadata"
 
 
+@pytest.mark.vcr
 def test_tool_execution_creates_spans(memory_logger):
     """Test that executing tools with agents works and creates traced spans.
 
