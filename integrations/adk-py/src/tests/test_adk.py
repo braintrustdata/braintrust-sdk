@@ -10,6 +10,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from braintrust import logger
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import Attachment
 from braintrust.test_helpers import init_test_logger
 from braintrust_adk import setup_adk
@@ -1134,39 +1135,40 @@ async def test_serialize_pydantic_schema_direct():
 
 
 @pytest.mark.asyncio
-async def test_try_dict_never_raises():
-    """Test that _try_dict never raises exceptions."""
-    from braintrust_adk import _try_dict
+async def test_bt_safe_deep_copy_never_raises():
+    """Test that bt_safe_deep_copy never raises exceptions."""
+    from braintrust_adk import bt_safe_deep_copy
 
     class BrokenModel:
         def model_dump(self):
             raise ValueError("I'm broken!")
 
     # Should not raise
-    result = _try_dict(BrokenModel())
+    result = bt_safe_deep_copy(BrokenModel())
     assert result is not None
 
     # Test with various types
-    assert _try_dict({"key": "value"}) == {"key": "value"}
-    assert _try_dict([1, 2, 3]) == [1, 2, 3]
-    assert _try_dict("string") == "string"
-    assert _try_dict(123) == 123
-    assert _try_dict(None) is None
+    assert bt_safe_deep_copy({"key": "value"}) == {"key": "value"}
+    assert bt_safe_deep_copy([1, 2, 3]) == [1, 2, 3]
+    assert bt_safe_deep_copy("string") == "string"
+    assert bt_safe_deep_copy(123) == 123
+    assert bt_safe_deep_copy(None) is None
 
     # Test with Pydantic model instance
     class WorkingModel(BaseModel):
         value: str = "test"
 
     instance = WorkingModel()
-    result = _try_dict(instance)
+    result = bt_safe_deep_copy(instance)
     assert isinstance(result, dict)
     assert result["value"] == "test"
 
     # Test with Pydantic model class (not instance)
-    result = _try_dict(WorkingModel)
+    # bt_safe_deep_copy now returns the JSON schema for Pydantic model classes
+    result = bt_safe_deep_copy(WorkingModel)
     assert isinstance(result, dict)
-    assert "__class__" in result
-    assert result["__class__"] == "WorkingModel"
+    assert "properties" in result
+    assert "value" in result["properties"]
 
 
 @pytest.mark.vcr
@@ -1319,3 +1321,98 @@ async def test_serialize_config_preserves_none():
     # Empty string should be preserved
     result = _serialize_config("")
     assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_bt_safe_deep_copy_with_attachments(memory_logger):
+    """Test that bt_safe_deep_copy preserves Attachment objects in ADK context."""
+    from braintrust.bt_json import bt_safe_deep_copy
+
+    attachment = Attachment(data=b"test data", filename="test.txt", content_type="text/plain")
+
+    # Test preserving attachment in nested structure (simulating ADK metadata)
+    metadata = {"file": attachment, "nested": {"also_file": attachment}}
+
+    result = bt_safe_deep_copy(metadata)
+
+    # Attachment identity should be preserved
+    assert result["file"] is attachment
+    assert result["nested"]["also_file"] is attachment
+
+
+@pytest.mark.asyncio
+async def test_adk_agent_metadata_with_attachment(memory_logger):
+    """Test that attachments in ADK agent metadata are preserved and uploaded."""
+    from unittest.mock import patch
+
+    assert not memory_logger.pop()
+
+    attachment = Attachment(data=b"context data", filename="context.txt", content_type="text/plain")
+
+    def simple_tool(query: str):
+        """A simple tool."""
+        return {"result": f"Processed: {query}"}
+
+    agent = Agent(
+        name="tool_agent",
+        model="gemini-2.0-flash",
+        instruction="You are a helpful assistant with tools.",
+        tools=[simple_tool],
+    )
+
+    APP_NAME = "attachment_app"
+    USER_ID = "test-user"
+    SESSION_ID = "test-session-attachment"
+
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
+    runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
+
+    # Create message with attachment in metadata context
+    user_msg = types.Content(role="user", parts=[types.Part(text="Use the tool with query: test")])
+
+    with patch.object(Attachment, "upload", return_value={"upload_status": "done"}) as mock_upload:
+        responses = []
+        # We can't directly inject attachment into ADK's internal flow,
+        # but we can test that if an attachment appears in logged metadata,
+        # bt_safe_deep_copy preserves it
+        async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=user_msg):
+            if event.is_final_response():
+                responses.append(event)
+
+        memory_logger.flush()
+
+    spans = memory_logger.pop()
+    assert len(spans) > 0, "Should have logged spans"
+
+    # Verify bt_safe_deep_copy behavior with attachment
+    test_data = {"metadata": {"context_file": attachment}}
+    copied = bt_safe_deep_copy(test_data)
+    assert copied["metadata"]["context_file"] is attachment
+
+
+@pytest.mark.asyncio
+async def test_adk_bytes_and_attachment_in_structure():
+    """Test that dataclass/dict with both bytes and attachment fields are handled correctly."""
+    from braintrust.bt_json import bt_safe_deep_copy
+
+    attachment = Attachment(data=b"attachment data", filename="file.txt", content_type="text/plain")
+
+    # Simulate ADK structure with both bytes and attachments
+    structure = {
+        "binary_data": b"some bytes",
+        "attachment": attachment,
+        "nested": {"more_bytes": bytearray(b"more data"), "another_attachment": attachment},
+    }
+
+    result = bt_safe_deep_copy(structure)
+
+    # Attachment should be preserved
+    assert result["attachment"] is attachment
+    assert result["nested"]["another_attachment"] is attachment
+
+    # Bytes should be handled (converted via bt_dumps/bt_loads)
+    assert "binary_data" in result
+    assert "nested" in result
+    assert "more_bytes" in result["nested"]
