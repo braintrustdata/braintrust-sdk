@@ -50,9 +50,18 @@ function mergeDictsWithPathsHelper({
       !mergePaths.has(fullPathSerialized);
 
     if (isSetUnionField && isArray(mergeIntoV) && isArray(mergeFromV)) {
-      // Set-union merge: combine arrays, deduplicate
-      const combined = new Set([...mergeIntoV, ...mergeFromV]);
-      mergeInto[k] = Array.from(combined);
+      // Set-union merge: combine arrays, deduplicate using JSON.stringify for objects
+      const seen = new Set<string>();
+      const combined: unknown[] = [];
+      for (const item of [...mergeIntoV, ...mergeFromV]) {
+        const key =
+          typeof item === "object" ? JSON.stringify(item) : String(item);
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(item);
+        }
+      }
+      mergeInto[k] = combined;
     } else if (
       isObject(mergeIntoV) &&
       isObject(mergeFromV) &&
@@ -85,20 +94,28 @@ export function mergeDicts(
 /**
  * Mutably removes specified values from array fields in the target object.
  * @param target - The object to modify
- * @param arrayDeletes - A map from field paths (dot-separated strings or top-level keys) to arrays of values to remove
- * @example applyArrayDeletes({ tags: ["a", "b", "c"] }, { tags: ["b"] }) // { tags: ["a", "c"] }
+ * @param arrayDeletes - An array of {path, delete} objects specifying which values to remove from which paths
+ * @example applyArrayDeletes({ tags: ["a", "b", "c"] }, [{ path: ["tags"], delete: ["b"] }]) // { tags: ["a", "c"] }
  */
 export function applyArrayDeletes(
   target: Record<string, unknown>,
-  arrayDeletes: Record<string, unknown[]>,
+  arrayDeletes: Array<{ path: string[]; delete: unknown[] }>,
 ): Record<string, unknown> {
-  for (const [fieldPath, valuesToRemove] of Object.entries(arrayDeletes)) {
-    if (!isArray(valuesToRemove)) {
+  if (!isArray(arrayDeletes)) {
+    return target;
+  }
+
+  for (const entry of arrayDeletes) {
+    if (!isObject(entry)) {
+      continue;
+    }
+    const pathParts = entry.path;
+    const valuesToRemove = entry.delete;
+
+    if (!isArray(pathParts) || !isArray(valuesToRemove)) {
       continue;
     }
 
-    // Support both top-level fields and dot-separated paths
-    const pathParts = fieldPath.split(".");
     let current: unknown = target;
     let parent: Record<string, unknown> | null = null;
     let lastKey: string | null = null;

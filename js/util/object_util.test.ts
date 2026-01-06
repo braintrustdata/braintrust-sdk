@@ -247,43 +247,45 @@ describe("tags set-union merge", () => {
 describe("applyArrayDeletes", () => {
   test("removes specified values from array", () => {
     const target = { tags: ["a", "b", "c", "d"] };
-    applyArrayDeletes(target, { tags: ["b", "d"] });
+    applyArrayDeletes(target, [{ path: ["tags"], delete: ["b", "d"] }]);
     expect(target.tags).toEqual(["a", "c"]);
   });
 
   test("handles non-existent values gracefully", () => {
     const target = { tags: ["a", "b", "c"] };
-    applyArrayDeletes(target, { tags: ["x", "y", "z"] });
+    applyArrayDeletes(target, [{ path: ["tags"], delete: ["x", "y", "z"] }]);
     expect(target.tags).toEqual(["a", "b", "c"]);
   });
 
   test("handles empty delete array", () => {
     const target = { tags: ["a", "b", "c"] };
-    applyArrayDeletes(target, { tags: [] });
+    applyArrayDeletes(target, [{ path: ["tags"], delete: [] }]);
     expect(target.tags).toEqual(["a", "b", "c"]);
   });
 
   test("handles non-existent field gracefully", () => {
     const target: Record<string, unknown> = { other: "data" };
-    applyArrayDeletes(target, { tags: ["a"] });
+    applyArrayDeletes(target, [{ path: ["tags"], delete: ["a"] }]);
     expect(target).toEqual({ other: "data" });
   });
 
-  test("handles nested paths with dot notation", () => {
+  test("handles nested paths", () => {
     const target = { metadata: { categories: ["a", "b", "c"] } };
-    applyArrayDeletes(target, { "metadata.categories": ["b"] });
+    applyArrayDeletes(target, [
+      { path: ["metadata", "categories"], delete: ["b"] },
+    ]);
     expect(target.metadata.categories).toEqual(["a", "c"]);
   });
 
-  test("handles multiple fields", () => {
+  test("handles multiple deletions", () => {
     const target = {
       tags: ["a", "b", "c"],
       labels: ["x", "y", "z"],
     };
-    applyArrayDeletes(target, {
-      tags: ["b"],
-      labels: ["y"],
-    });
+    applyArrayDeletes(target, [
+      { path: ["tags"], delete: ["b"] },
+      { path: ["labels"], delete: ["y"] },
+    ]);
     expect(target.tags).toEqual(["a", "c"]);
     expect(target.labels).toEqual(["x", "z"]);
   });
@@ -292,19 +294,30 @@ describe("applyArrayDeletes", () => {
     const target = {
       items: [{ id: 1 }, { id: 2 }, { id: 3 }],
     };
-    applyArrayDeletes(target, { items: [{ id: 2 }] });
+    applyArrayDeletes(target, [{ path: ["items"], delete: [{ id: 2 }] }]);
     expect(target.items).toEqual([{ id: 1 }, { id: 3 }]);
   });
 
-  test("ignores non-array delete values", () => {
+  test("ignores invalid entries", () => {
     const target = { tags: ["a", "b", "c"] };
-    applyArrayDeletes(target, { tags: "not-an-array" as unknown as unknown[] });
+    applyArrayDeletes(target, [
+      { path: "not-an-array", delete: ["a"] } as unknown as {
+        path: string[];
+        delete: unknown[];
+      },
+    ]);
     expect(target.tags).toEqual(["a", "b", "c"]);
   });
 
   test("ignores when target field is not an array", () => {
     const target: Record<string, unknown> = { tags: "not-an-array" };
-    applyArrayDeletes(target, { tags: ["a"] });
+    applyArrayDeletes(target, [{ path: ["tags"], delete: ["a"] }]);
     expect(target.tags).toEqual("not-an-array");
+  });
+
+  test("handles empty array deletes", () => {
+    const target = { tags: ["a", "b", "c"] };
+    applyArrayDeletes(target, []);
+    expect(target.tags).toEqual(["a", "b", "c"]);
   });
 });

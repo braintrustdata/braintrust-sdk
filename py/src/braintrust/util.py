@@ -1,4 +1,5 @@
 import inspect
+import json
 import sys
 import threading
 import urllib.parse
@@ -53,12 +54,12 @@ def merge_dicts_with_paths(
         is_set_union_field = len(path) == 0 and k in _SET_UNION_FIELDS and full_path not in merge_paths
 
         if is_set_union_field and isinstance(merge_into_v, list) and isinstance(merge_from_v, list):
-            # Set-union merge: combine arrays, deduplicate while preserving order
-            seen = set()
+            # Set-union merge: combine arrays, deduplicate using JSON for objects
+            seen: set[str] = set()
             combined = []
             for item in merge_into_v + list(merge_from_v):
-                # Use a hashable representation for deduplication
-                item_key = item if isinstance(item, (str, int, float, bool, type(None))) else id(item)
+                # Use JSON serialization for consistent object comparison
+                item_key = json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item)
                 if item_key not in seen:
                     seen.add(item_key)
                     combined.append(item)
@@ -77,23 +78,30 @@ def merge_dicts(merge_into: dict[str, Any], merge_from: Mapping[str, Any]) -> di
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
 
 
-def apply_array_deletes(target: dict[str, Any], array_deletes: dict[str, list[Any]]) -> dict[str, Any]:
+def apply_array_deletes(target: dict[str, Any], array_deletes: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Mutably removes specified values from array fields in the target object.
 
     Args:
         target: The object to modify
-        array_deletes: A map from field paths (dot-separated strings or top-level keys) to arrays of values to remove
+        array_deletes: A list of {path, delete} dicts specifying which values to remove from which paths
 
     Example:
-        apply_array_deletes({"tags": ["a", "b", "c"]}, {"tags": ["b"]})  # {"tags": ["a", "c"]}
+        apply_array_deletes({"tags": ["a", "b", "c"]}, [{"path": ["tags"], "delete": ["b"]}])  # {"tags": ["a", "c"]}
     """
-    for field_path, values_to_remove in array_deletes.items():
-        if not isinstance(values_to_remove, list):
+    if not isinstance(array_deletes, list):
+        return target
+
+    for entry in array_deletes:
+        if not isinstance(entry, dict):
             continue
 
-        # Support both top-level fields and dot-separated paths
-        path_parts = field_path.split(".")
+        path_parts = entry.get("path")
+        values_to_remove = entry.get("delete")
+
+        if not isinstance(path_parts, list) or not isinstance(values_to_remove, list):
+            continue
+
         current: Any = target
         parent: dict[str, Any] | None = None
         last_key: str | None = None
@@ -112,18 +120,17 @@ def apply_array_deletes(target: dict[str, Any], array_deletes: dict[str, list[An
 
         # If we found a list at the path, remove the specified values
         if parent is not None and last_key is not None and isinstance(current, list):
-            # Create a set for efficient lookup, using a hashable representation
-            to_remove_set = set()
+            # Create a set for efficient lookup, using JSON for objects
+            to_remove_set: set[str] = set()
             for v in values_to_remove:
-                if isinstance(v, (str, int, float, bool, type(None))):
-                    to_remove_set.add(v)
+                if isinstance(v, (dict, list)):
+                    to_remove_set.add(json.dumps(v, sort_keys=True))
                 else:
-                    # For non-hashable types, convert to string for comparison
                     to_remove_set.add(str(v))
 
             def should_keep(item: Any) -> bool:
-                if isinstance(item, (str, int, float, bool, type(None))):
-                    return item not in to_remove_set
+                if isinstance(item, (dict, list)):
+                    return json.dumps(item, sort_keys=True) not in to_remove_set
                 else:
                     return str(item) not in to_remove_set
 

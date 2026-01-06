@@ -215,44 +215,52 @@ class TestTagsSetUnionMerge:
 class TestApplyArrayDeletes:
     def test_removes_specified_values_from_array(self):
         target = {"tags": ["a", "b", "c", "d"]}
-        apply_array_deletes(target, {"tags": ["b", "d"]})
+        apply_array_deletes(target, [{"path": ["tags"], "delete": ["b", "d"]}])
         assert target["tags"] == ["a", "c"]
 
     def test_handles_non_existent_values_gracefully(self):
         target = {"tags": ["a", "b", "c"]}
-        apply_array_deletes(target, {"tags": ["x", "y", "z"]})
+        apply_array_deletes(target, [{"path": ["tags"], "delete": ["x", "y", "z"]}])
         assert target["tags"] == ["a", "b", "c"]
 
     def test_handles_empty_delete_array(self):
         target = {"tags": ["a", "b", "c"]}
-        apply_array_deletes(target, {"tags": []})
+        apply_array_deletes(target, [{"path": ["tags"], "delete": []}])
         assert target["tags"] == ["a", "b", "c"]
 
     def test_handles_non_existent_field_gracefully(self):
         target = {"other": "data"}
-        apply_array_deletes(target, {"tags": ["a"]})
+        apply_array_deletes(target, [{"path": ["tags"], "delete": ["a"]}])
         assert target == {"other": "data"}
 
-    def test_handles_nested_paths_with_dot_notation(self):
+    def test_handles_nested_paths(self):
         target = {"metadata": {"categories": ["a", "b", "c"]}}
-        apply_array_deletes(target, {"metadata.categories": ["b"]})
+        apply_array_deletes(target, [{"path": ["metadata", "categories"], "delete": ["b"]}])
         assert target["metadata"]["categories"] == ["a", "c"]
 
-    def test_handles_multiple_fields(self):
+    def test_handles_multiple_deletions(self):
         target = {
             "tags": ["a", "b", "c"],
             "labels": ["x", "y", "z"],
         }
-        apply_array_deletes(target, {"tags": ["b"], "labels": ["y"]})
+        apply_array_deletes(
+            target,
+            [{"path": ["tags"], "delete": ["b"]}, {"path": ["labels"], "delete": ["y"]}],
+        )
         assert target["tags"] == ["a", "c"]
         assert target["labels"] == ["x", "z"]
 
-    def test_ignores_non_list_delete_values(self):
+    def test_ignores_invalid_entries(self):
         target = {"tags": ["a", "b", "c"]}
-        apply_array_deletes(target, {"tags": "not-a-list"})  # type: ignore
+        apply_array_deletes(target, [{"path": "not-a-list", "delete": ["a"]}])  # type: ignore
         assert target["tags"] == ["a", "b", "c"]
 
     def test_ignores_when_target_field_is_not_a_list(self):
         target = {"tags": "not-a-list"}
-        apply_array_deletes(target, {"tags": ["a"]})
+        apply_array_deletes(target, [{"path": ["tags"], "delete": ["a"]}])
         assert target["tags"] == "not-a-list"
+
+    def test_handles_empty_array_deletes(self):
+        target = {"tags": ["a", "b", "c"]}
+        apply_array_deletes(target, [])
+        assert target["tags"] == ["a", "b", "c"]
