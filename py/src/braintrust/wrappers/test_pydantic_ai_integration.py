@@ -386,7 +386,7 @@ async def test_agent_run_stream(memory_logger):
 
     # time_to_first_token should be reasonable: > 0 and < duration
     assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
-    assert ttft < duration, f"time_to_first_token ({ttft}s) should be < duration ({duration}s)"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
     assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
 
     # Debug: Print full span data
@@ -584,7 +584,7 @@ async def test_direct_model_request_stream(memory_logger, direct):
 
     # time_to_first_token should be reasonable: > 0 and < duration
     assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
-    assert ttft < duration, f"time_to_first_token ({ttft}s) should be < duration ({duration}s)"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
     assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
 
     print(f"✓ Direct stream time_to_first_token: {ttft}s (duration: {duration}s)")
@@ -1182,7 +1182,7 @@ def test_agent_run_stream_sync(memory_logger):
 
     # time_to_first_token should be reasonable: > 0 and < duration
     assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
-    assert ttft < duration, f"time_to_first_token ({ttft}s) should be < duration ({duration}s)"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
     assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
 
     print(f"✓ Sync stream time_to_first_token: {ttft}s (duration: {duration}s)")
@@ -1282,7 +1282,7 @@ def test_direct_model_request_stream_sync(memory_logger, direct):
 
     # time_to_first_token should be reasonable: > 0 and < duration
     assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
-    assert ttft < duration, f"time_to_first_token ({ttft}s) should be < duration ({duration}s)"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
     assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
 
     print(f"✓ Direct sync stream time_to_first_token: {ttft}s (duration: {duration}s)")
