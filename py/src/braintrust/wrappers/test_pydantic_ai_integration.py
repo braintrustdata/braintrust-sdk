@@ -2,6 +2,7 @@
 # pyright: reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false
 # pyright: reportPrivateUsage=false
+import asyncio
 import time
 
 import pytest
