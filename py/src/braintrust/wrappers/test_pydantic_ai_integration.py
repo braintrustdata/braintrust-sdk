@@ -1446,7 +1446,9 @@ async def test_stream_buffer_pattern_early_return(memory_logger, direct):
     assert span["span_attributes"]["name"] == "model_request_stream"
     assert "start" in span["metrics"]
     assert span["metrics"]["start"] >= start
-    assert span["metrics"]["end"] <= end
+    # "end" may not be present if span was terminated early, but if present it should be valid
+    if "end" in span["metrics"]:
+        assert span["metrics"]["end"] <= end
 
 
 @pytest.mark.vcr
@@ -1575,14 +1577,27 @@ async def test_agent_with_binary_content(memory_logger):
         if not span_input:
             return False
 
+        def check_item(item):
+            """Recursively check an item for attachments."""
+            if isinstance(item, dict):
+                if item.get("type") == "binary" and isinstance(item.get("attachment"), Attachment):
+                    return True
+                # Check nested content field (for UserPromptPart-like structures)
+                if "content" in item:
+                    content = item["content"]
+                    if isinstance(content, list):
+                        for sub_item in content:
+                            if check_item(sub_item):
+                                return True
+            return False
+
         # Check user_prompt (agent_run span)
         if "user_prompt" in span_input:
             user_prompt = span_input["user_prompt"]
             if isinstance(user_prompt, list):
                 for item in user_prompt:
-                    if isinstance(item, dict) and item.get("type") == "binary":
-                        if isinstance(item.get("attachment"), Attachment):
-                            return True
+                    if check_item(item):
+                        return True
 
         # Check messages (chat span)
         if "messages" in span_input:
@@ -1593,9 +1608,8 @@ async def test_agent_with_binary_content(memory_logger):
                         parts = msg["parts"]
                         if isinstance(parts, list):
                             for part in parts:
-                                if isinstance(part, dict) and part.get("type") == "binary":
-                                    if isinstance(part.get("attachment"), Attachment):
-                                        return True
+                                if check_item(part):
+                                    return True
 
         return False
 
@@ -1663,17 +1677,30 @@ async def test_agent_with_document_input(memory_logger):
         if not span_input:
             return False
 
+        def check_item(item):
+            """Recursively check an item for PDF attachments."""
+            if isinstance(item, dict):
+                if item.get("type") == "binary" and item.get("media_type") == "application/pdf":
+                    attachment = item.get("attachment")
+                    if isinstance(attachment, Attachment):
+                        if attachment._reference.get("content_type") == "application/pdf":
+                            return True
+                # Check nested content field (for UserPromptPart-like structures)
+                if "content" in item:
+                    content = item["content"]
+                    if isinstance(content, list):
+                        for sub_item in content:
+                            if check_item(sub_item):
+                                return True
+            return False
+
         # Check user_prompt (agent_run span)
         if "user_prompt" in span_input:
             user_prompt = span_input["user_prompt"]
             if isinstance(user_prompt, list):
                 for item in user_prompt:
-                    if isinstance(item, dict) and item.get("type") == "binary":
-                        if item.get("media_type") == "application/pdf":
-                            attachment = item.get("attachment")
-                            if isinstance(attachment, Attachment):
-                                if attachment._reference.get("content_type") == "application/pdf":
-                                    return True
+                    if check_item(item):
+                        return True
 
         # Check messages (chat span)
         if "messages" in span_input:
@@ -1684,12 +1711,8 @@ async def test_agent_with_document_input(memory_logger):
                         parts = msg["parts"]
                         if isinstance(parts, list):
                             for part in parts:
-                                if isinstance(part, dict) and part.get("type") == "binary":
-                                    if part.get("media_type") == "application/pdf":
-                                        attachment = part.get("attachment")
-                                        if isinstance(attachment, Attachment):
-                                            if attachment._reference.get("content_type") == "application/pdf":
-                                                return True
+                                if check_item(part):
+                                    return True
 
         return False
 

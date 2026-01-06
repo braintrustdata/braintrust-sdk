@@ -1,0 +1,92 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"What is 2+2?"}],"model":"gpt-4o-mini","max_completion_tokens":50,"stream":false}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '119'
+      Content-Type:
+      - application/json
+      Cookie:
+      - _cfuvid=38YM9lXH3FatSFpx.oohTOG_bmi1.QSlVK8qWgnMVz0-1767740983062-0.0.1.1-604800000;
+        __cf_bm=8MTHAkEnCDmYeZtLufX8.8R6_vAB_Y2zwThfSkVxHFY-1767740983-1.0.1.1-E85wdZvN4tQC_8yQw46olGwbne8JjFsxTBJOZJhA6FUM3CXf1u.6pp85kVMYaulrf_CZUysafKMx1kCxnHw7R.vPT2_ZJbwkZRivQwwpjdA
+      Host:
+      - api.openai.com
+      User-Agent:
+      - pydantic-ai/1.39.1
+      X-Stainless-Arch:
+      - arm64
+      X-Stainless-Async:
+      - async:asyncio
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - MacOS
+      X-Stainless-Package-Version:
+      - 2.14.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.13.5
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '1'
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: "{\n  \"error\": {\n    \"message\": \"Incorrect API key provided: sk-test-***********************ests.
+        You can find your API key at https://platform.openai.com/account/api-keys.\",\n
+        \   \"type\": \"invalid_request_error\",\n    \"code\": \"invalid_api_key\",\n
+        \   \"param\": null\n  },\n  \"status\": 401\n}"
+    headers:
+      CF-RAY:
+      - 9b9ee287f8f21d99-SJC
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '281'
+      Content-Type:
+      - text/plain
+      Date:
+      - Tue, 06 Jan 2026 23:09:45 GMT
+      Server:
+      - cloudflare
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      X-Content-Type-Options:
+      - nosniff
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      x-datadog-parent-id:
+      - '16887196208088743343'
+      x-datadog-sampling-priority:
+      - '0'
+      x-datadog-trace-id:
+      - '4745784497091999256'
+      x-envoy-upstream-service-time:
+      - '3'
+      x-error-json:
+      - ewogICJlcnJvciI6IHsKICAgICJtZXNzYWdlIjogIkluY29ycmVjdCBBUEkga2V5IHByb3ZpZGVkOiBzay10ZXN0LSoqKioqKioqKioqKioqKioqKioqKioqZXN0cy4gWW91IGNhbiBmaW5kIHlvdXIgQVBJIGtleSBhdCBodHRwczovL3BsYXRmb3JtLm9wZW5haS5jb20vYWNjb3VudC9hcGkta2V5cy4iLAogICAgInR5cGUiOiAiaW52YWxpZF9yZXF1ZXN0X2Vycm9yIiwKICAgICJjb2RlIjogImludmFsaWRfYXBpX2tleSIsCiAgICAicGFyYW0iOiBudWxsCiAgfSwKICAic3RhdHVzIjogNDAxCn0=
+      x-openai-authorization-error:
+      - '401'
+      x-openai-ide-error-code:
+      - invalid_api_key
+      x-openai-internal-caller:
+      - unknown_through_ide
+      x-openai-proxy-wasm:
+      - v0.1
+      x-request-id:
+      - req_8671ed8d974141e586a253918c08d63e
+    status:
+      code: 401
+      message: Unauthorized
+version: 1
