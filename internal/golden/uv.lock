@@ -162,7 +162,7 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.3.13"
+version = "0.4.0"
 source = { editable = "../../py" }
 dependencies = [
     { name = "chevron" },
@@ -216,7 +216,7 @@ provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-adk"
-version = "0.2.4"
+version = "0.3.0"
 source = { editable = "../../integrations/adk-py" }
 dependencies = [
     { name = "braintrust" },
@@ -242,7 +242,7 @@ dev = [
 
 [[package]]
 name = "braintrust-langchain"
-version = "0.1.5"
+version = "0.2.0"
 source = { editable = "../../integrations/langchain-py" }
 dependencies = [
     { name = "braintrust" },
@@ -265,7 +265,7 @@ dev = [
     { name = "isort", specifier = "==5.12.0" },
     { name = "langchain-anthropic", specifier = ">=0.3.20" },
     { name = "langchain-openai" },
-    { name = "langgraph", marker = "python_full_version >= '3.9'", specifier = ">=0.2.1,<0.4.0" },
+    { name = "langgraph", specifier = ">=0.2.1,<0.4.0" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },
