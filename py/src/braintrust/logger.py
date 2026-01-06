@@ -738,13 +738,6 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def _check_json_serializable(event: Any):
-    try:
-        return bt_dumps(event)
-    except (TypeError, ValueError) as e:
-        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
 
@@ -1973,24 +1966,14 @@ def get_span_parent_object(
 
 def _try_log_input(span, f_sig, f_args, f_kwargs):
     if f_sig:
-        bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
-        input_serializable = bound_args
+        input_data = f_sig.bind(*f_args, **f_kwargs).arguments
     else:
-        input_serializable = dict(args=f_args, kwargs=f_kwargs)
-    try:
-        _check_json_serializable(input_serializable)
-    except Exception as e:
-        input_serializable = "<input not json-serializable>: " + str(e)
-    span.log(input=input_serializable)
+        input_data = dict(args=f_args, kwargs=f_kwargs)
+    span.log(input=input_data)
 
 
 def _try_log_output(span, output):
-    output_serializable = output
-    try:
-        _check_json_serializable(output)
-    except Exception as e:
-        output_serializable = "<output not json-serializable>: " + str(e)
-    span.log(output=output_serializable)
+    span.log(output=output)
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -3866,7 +3849,6 @@ class SpanImpl(Span):
         )
 
         serializable_partial_record = bt_safe_deep_copy(partial_record)
-        _check_json_serializable(serializable_partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
@@ -4233,7 +4215,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args[IS_MERGE_FIELD] = True
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
-        _check_json_serializable(args)
         args = bt_safe_deep_copy(args)
 
         def compute_args() -> dict[str, Any]:
@@ -4337,7 +4318,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
-        _check_json_serializable(partial_args)
         partial_args = bt_safe_deep_copy(partial_args)
 
         def compute_args():

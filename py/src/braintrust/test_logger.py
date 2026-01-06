@@ -23,7 +23,6 @@ from braintrust import (
 )
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
 from braintrust.logger import (
-    _check_json_serializable,
     _extract_attachments,
     parent_context,
     render_message,
@@ -2667,29 +2666,6 @@ class TestDatasetInternalBtql(TestCase):
 
         # Verify that the custom batch_size is used
         self.assertEqual(query_json["limit"], custom_batch_size)
-
-
-def test_check_json_serializable_with_attachment():
-    """Test that _check_json_serializable succeeds with attachment."""
-    attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
-    event = {"input": "test", "file": attachment}
-
-    # Should not raise - attachments are BT-safe
-    result = _check_json_serializable(event)
-    assert isinstance(result, str)
-
-
-def test_check_json_serializable_circular_refs():
-    """Test that _check_json_serializable handles circular references gracefully."""
-    from braintrust.logger import _check_json_serializable
-
-    circular = {"data": "test"}
-    circular["self"] = circular
-
-    # Should handle gracefully by replacing circular ref with placeholder
-    result = _check_json_serializable(circular)
-    assert isinstance(result, str)
-    assert "<circular reference>" in result
 
 
 def test_attachment_identity_preserved_through_bt_safe_deep_copy():

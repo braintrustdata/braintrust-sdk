@@ -6,7 +6,7 @@ from typing import Any
 from unittest import TestCase
 
 from braintrust.bt_json import bt_dumps, bt_safe_deep_copy
-from braintrust.logger import Attachment, ExternalAttachment, _check_json_serializable
+from braintrust.logger import Attachment, ExternalAttachment
 
 
 class TestBTJson(TestCase):
@@ -127,18 +127,18 @@ class TestBTJson(TestCase):
         self.assertIs(copy["output"]["attachmentList"][1], attachment2)
         self.assertIs(copy["output"]["attachmentList"][3], attachment3)
 
-    def test_check_json_serializable_circular_references(self):
-        """Test that _check_json_serializable raises on circular references.
+    def test_bt_dumps_circular_references_raises(self):
+        """Test that bt_dumps raises on circular references in raw data.
 
-        Note: _check_json_serializable does NOT use bt_safe_deep_copy, so circular
-        references cause a ValueError from bt_dumps which is wrapped in an Exception.
+        Note: bt_dumps without bt_safe_deep_copy will raise ValueError on circular refs.
+        Use bt_safe_deep_copy first to handle circular references gracefully.
         """
         data: dict[str, Any] = {"a": "b"}
         data["self"] = data
 
-        with self.assertRaises(Exception) as ctx:
-            _check_json_serializable(data)
-        self.assertIn("JSON-serializable", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            bt_dumps(data)
+        self.assertIn("Circular reference", str(ctx.exception))
 
     def test_deep_copy_binary_types(self):
         """Test current handling of bytes, bytearray, memoryview through bt_dumps/bt_loads roundtrip."""
