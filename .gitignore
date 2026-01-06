@@ -13,6 +13,10 @@ dist
 *.egg-info
 .aider*
 !.aiderignore
+.pnpm-store
+
+docker-compose.override.yml
+Dockerfile.local
 
 **/.claude/settings.local.json
 CLAUDE.local.md
