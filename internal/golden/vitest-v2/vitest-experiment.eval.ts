@@ -5,7 +5,7 @@ import * as ai from "ai";
 
 const { generateText } = wrapAISDK(ai);
 
-// Automatically creates datasets and experiments
+// indicate the project name the tests will be sent to
 const bt = wrapVitest(
   { test, expect, describe, afterAll },
   { projectName: "golden-ts-vitest-experiment-v2" },
@@ -22,10 +22,9 @@ bt.describe("Vitest Experiment Mode Tests", () => {
       tags: ["arithmetic"],
     },
     async ({ input, expected }) => {
-      const result = 4; // Simulated computation
+      const result = 4;
       bt.logOutputs({ answer: result });
       expect(result).toBe(expected);
-      // Pass feedback is automatically logged
     },
   );
 
@@ -47,7 +46,6 @@ bt.describe("Vitest Experiment Mode Tests", () => {
 
       bt.logOutputs({ translation: result.text });
 
-      // Add custom correctness score
       const isCorrect = result.text.toLowerCase().includes(expected as string);
       bt.logFeedback({
         name: "correctness",
@@ -63,7 +61,6 @@ bt.describe("Vitest Experiment Mode Tests", () => {
     const result = { value: 42 };
     bt.logOutputs({ result });
     expect(result.value).toBe(42);
-    // Pass feedback is automatically logged
   });
 
   // Test with failure - fail feedback automatically logged
@@ -77,7 +74,7 @@ bt.describe("Vitest Experiment Mode Tests", () => {
     async ({ input, expected }) => {
       const result = (input as any).value;
       bt.logOutputs({ result });
-      expect(result).toBe(expected); // Intentional failure
+      expect(result).toBe(expected);
     },
   );
 });

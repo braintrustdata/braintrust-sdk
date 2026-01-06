@@ -73,64 +73,74 @@ export function getExperimentContext(): ExperimentContext | null {
   return currentExperimentContext;
 }
 
-export function wrapTest(
-  originalTest: TestFunction,
+export function wrapTest<VitestContext = unknown>(
+  originalTest: TestFunction<VitestContext>,
   config: WrapperConfig,
-): WrappedTest {
-  const wrappedTest: any = function (
+): WrappedTest<VitestContext> {
+  const wrappedTest = function (
     name: string,
-    configOrFn: TestConfig | ((context: any) => void | Promise<void>),
-    maybeFn?: (context: TestContext) => void | Promise<void>,
+    configOrFn: TestConfig | ((context: VitestContext) => void | Promise<void>),
+    maybeFn?: (context: TestContext & VitestContext) => void | Promise<void>,
   ) {
     const isEnhanced = typeof configOrFn !== "function";
-    const testConfig = isEnhanced ? (configOrFn as TestConfig) : undefined;
-    const fn = isEnhanced ? maybeFn! : (configOrFn as any);
-    const experimentContext = getExperimentContext();
+    const testConfig = isEnhanced ? configOrFn : undefined;
 
-    // Add test data to dataset if it has input/expected
-    if (experimentContext && testConfig) {
-      const { input, expected, metadata, tags } = testConfig;
-      if (input !== undefined || expected !== undefined) {
-        // Add to dataset (will not duplicate if already exists)
-        const exampleId = experimentContext.dataset.insert({
-          input,
-          expected,
-          metadata,
-          tags,
-        });
-        experimentContext.datasetExamples.set(name, exampleId);
-      }
-    }
+    return originalTest(name, async (vitestContext: VitestContext) => {
+      const experimentContext = getExperimentContext();
+      const experiment = experimentContext?.experiment;
 
-    return originalTest(name, async (vitestContext: any) => {
       // If no experiment context, just run the test normally
-      if (!experimentContext) {
-        if (testConfig) {
+      if (!experiment) {
+        if (testConfig && maybeFn) {
           const params: TestContext = {
             input: testConfig.input,
             expected: testConfig.expected,
             metadata: testConfig.metadata,
           };
-          return await fn({ ...vitestContext, ...params });
-        } else {
-          return await fn(vitestContext);
+          const context = {
+            ...vitestContext,
+            ...params,
+          } satisfies TestContext & VitestContext;
+          return await maybeFn(context);
+        } else if (typeof configOrFn === "function") {
+          return await configOrFn(vitestContext);
+        }
+        return;
+      }
+
+      // Add test data to dataset at execution time (not registration time)
+      if (experimentContext && testConfig) {
+        const { input, expected, metadata, tags } = testConfig;
+        if (input !== undefined || expected !== undefined) {
+          // Add to dataset (will not duplicate if already exists)
+          const exampleId = experimentContext.dataset.insert({
+            input,
+            expected,
+            metadata,
+            tags,
+          });
+          experimentContext.datasetExamples.set(name, exampleId);
         }
       }
 
       // Use experiment.traced()
-      return await experimentContext.experiment.traced(
+      return await experiment.traced(
         async (span) => {
-          let testResult: any;
+          let testResult: unknown;
           try {
-            if (testConfig) {
+            if (testConfig && maybeFn) {
               const params: TestContext = {
                 input: testConfig.input,
                 expected: testConfig.expected,
                 metadata: testConfig.metadata,
               };
-              testResult = await fn({ ...vitestContext, ...params });
-            } else {
-              testResult = await fn(vitestContext);
+              const context = {
+                ...vitestContext,
+                ...params,
+              } satisfies TestContext & VitestContext;
+              testResult = await maybeFn(context);
+            } else if (typeof configOrFn === "function") {
+              testResult = await configOrFn(vitestContext);
             }
 
             // Automatically log pass feedback on success
@@ -191,7 +201,9 @@ export function wrapTest(
   if (originalTest.todo) wrappedTest.todo = originalTest.todo;
   if (originalTest.each) wrappedTest.each = originalTest.each;
 
-  return wrappedTest as WrappedTest;
+  // Type assertion needed because we dynamically add properties to the function
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return wrappedTest as WrappedTest<VitestContext>;
 }
 
 export function wrapDescribe(
@@ -199,57 +211,76 @@ export function wrapDescribe(
   config: WrapperConfig,
   afterAll?: (fn: () => void | Promise<void>) => void,
 ): WrappedDescribe {
-  const wrappedDescribe: any = function (
-    suiteName: string,
-    factory: () => void,
-  ) {
+  const wrappedDescribe = function (suiteName: string, factory: () => void) {
     return originalDescribe(suiteName, () => {
-      // Initialize dataset and experiment for this describe block
-      const projectName = config.projectName || suiteName;
-      const dataset = initDataset({
-        project: projectName,
-        dataset: suiteName,
-      });
+      // Lazily initialize experiment context on first access
+      let context: ExperimentContext | null = null;
+      const getOrCreateContext = (): ExperimentContext => {
+        if (!context) {
+          const projectName = config.projectName || suiteName;
+          const dataset = initDataset({
+            project: projectName,
+            dataset: suiteName,
+          });
 
-      const experiment = initExperiment(projectName, {
-        experiment: `${suiteName}-${new Date().toISOString()}`,
-        dataset,
-      });
+          const experiment = initExperiment(projectName, {
+            experiment: `${suiteName}-${new Date().toISOString()}`,
+            dataset,
+          });
 
-      const context: ExperimentContext = {
-        dataset,
-        experiment,
-        datasetExamples: new Map(),
+          context = {
+            dataset,
+            experiment,
+            datasetExamples: new Map(),
+          };
+        }
+        return context;
       };
 
-      setExperimentContext(context);
+      // Set a lazy getter that creates context on first access
+      // Type assertion needed for lazy initialization pattern
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const lazyContext = {
+        get dataset() {
+          return getOrCreateContext().dataset;
+        },
+        get experiment() {
+          return getOrCreateContext().experiment;
+        },
+        get datasetExamples() {
+          return getOrCreateContext().datasetExamples;
+        },
+      } as ExperimentContext;
+
+      setExperimentContext(lazyContext);
 
       // Run the test suite
       factory();
 
       // Automatically flush experiment after all tests complete
-      if (afterAll) {
+      // Skip if displaySummary is false (typically in test mode)
+      if (afterAll && (config.displaySummary ?? true)) {
         afterAll(async () => {
-          const ctx = getExperimentContext();
-          if (!ctx) return;
-
-          const shouldDisplaySummary = config.displaySummary ?? true;
+          // Only flush if context was actually created (i.e., tests ran)
+          if (!context) return;
 
           let summary;
-          if (shouldDisplaySummary) {
-            try {
-              summary = await ctx.experiment.summarize();
-            } catch (error) {
-              console.warn(
-                "Braintrust: Failed to generate experiment summary:",
-                error,
-              );
-            }
+          try {
+            summary = await context.experiment.summarize();
+          } catch (error) {
+            console.warn(
+              "Braintrust: Failed to generate experiment summary:",
+              error,
+            );
           }
 
-          await ctx.experiment.flush();
+          try {
+            await context.experiment.flush();
+          } catch (error) {
+            console.warn("Braintrust: Failed to flush experiment:", error);
+          }
 
-          if (summary && shouldDisplaySummary) {
+          if (summary) {
             console.log(formatExperimentSummary(summary));
           }
         });
@@ -267,5 +298,7 @@ export function wrapDescribe(
   if (originalDescribe.todo) wrappedDescribe.todo = originalDescribe.todo;
   if (originalDescribe.each) wrappedDescribe.each = originalDescribe.each;
 
+  // Type assertion needed because we dynamically add properties to the function
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return wrappedDescribe as WrappedDescribe;
 }

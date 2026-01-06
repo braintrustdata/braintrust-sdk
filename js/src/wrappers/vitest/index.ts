@@ -60,10 +60,10 @@ export type { TestConfig, TestContext } from "./types";
  *
  * @see README.md for full documentation and examples
  */
-export function wrapVitest(
-  vitestMethods: VitestMethods,
+export function wrapVitest<VitestContext = unknown, ExpectType = unknown>(
+  vitestMethods: VitestMethods<VitestContext, ExpectType>,
   config: WrapperConfig = {},
-): BraintrustVitest {
+): BraintrustVitest<VitestContext, ExpectType> {
   if (!vitestMethods.test) {
     throw new Error(
       "Braintrust: vitestMethods.test is required. Please pass in the test function from vitest.",
@@ -80,7 +80,7 @@ export function wrapVitest(
     );
   }
 
-  const wrappedTest = wrapTest(vitestMethods.test, config);
+  const wrappedTest = wrapTest<VitestContext>(vitestMethods.test, config);
   const wrappedDescribe = wrapDescribe(
     vitestMethods.describe,
     config,

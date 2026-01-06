@@ -13,28 +13,44 @@ export interface TestContext {
   metadata?: Record<string, unknown>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type TestFunction = any;
+export type TestFunction<VitestContext = unknown> = {
+  (name: string, fn: (context: VitestContext) => void | Promise<void>): void;
+  skip?: TestFunction<VitestContext>;
+  only?: TestFunction<VitestContext>;
+  concurrent?: TestFunction<VitestContext>;
+  todo?: (name: string) => void;
+  each?: <T>(
+    cases: readonly T[],
+  ) => (name: string, fn: (context: T) => void | Promise<void>) => void;
+};
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DescribeFunction = any;
+export type DescribeFunction = {
+  (name: string, factory: () => void): void;
+  skip?: DescribeFunction;
+  only?: DescribeFunction;
+  concurrent?: DescribeFunction;
+  todo?: (name: string) => void;
+  each?: <T>(
+    cases: readonly T[],
+  ) => (name: string, factory: () => void) => void;
+};
 
-export interface WrappedTest {
-  (name: string, fn: (context: any) => void | Promise<void>): void;
+export interface WrappedTest<VitestContext = unknown> {
+  (name: string, fn: (context: VitestContext) => void | Promise<void>): void;
   (
     name: string,
     config: TestConfig,
-    fn: (context: TestContext) => void | Promise<void>,
+    fn: (context: TestContext & VitestContext) => void | Promise<void>,
   ): void;
-  skip: WrappedTest;
-  only: WrappedTest;
-  concurrent: WrappedTest;
+  skip: WrappedTest<VitestContext>;
+  only: WrappedTest<VitestContext>;
+  concurrent: WrappedTest<VitestContext>;
   todo: (name: string) => void;
   each: <T>(
     cases: readonly T[],
   ) => (
     name: string,
-    fn: (context: T & TestContext) => void | Promise<void>,
+    fn: (context: T & TestContext & VitestContext) => void | Promise<void>,
   ) => void;
 }
 
@@ -47,26 +63,29 @@ export interface WrappedDescribe {
   each: <T>(cases: readonly T[]) => (name: string, factory: () => void) => void;
 }
 
-export interface VitestMethods {
-  test: any;
-  it?: any;
-  expect: any;
-  describe: any;
-  beforeAll?: any;
-  afterAll?: any;
-  beforeEach?: any;
-  afterEach?: any;
+export interface VitestMethods<VitestContext = unknown, ExpectType = unknown> {
+  test: TestFunction<VitestContext>;
+  it?: TestFunction<VitestContext>;
+  expect: ExpectType;
+  describe: DescribeFunction;
+  beforeAll?: (fn: () => void | Promise<void>) => void;
+  afterAll?: (fn: () => void | Promise<void>) => void;
+  beforeEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
+  afterEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
 }
 
-export interface BraintrustVitest {
-  test: WrappedTest;
-  it: WrappedTest;
-  expect: any;
+export interface BraintrustVitest<
+  VitestContext = unknown,
+  ExpectType = unknown,
+> {
+  test: WrappedTest<VitestContext>;
+  it: WrappedTest<VitestContext>;
+  expect: ExpectType;
   describe: WrappedDescribe;
-  beforeAll: any;
-  afterAll: any;
-  beforeEach?: any;
-  afterEach?: any;
+  beforeAll: (fn: () => void | Promise<void>) => void;
+  afterAll: (fn: () => void | Promise<void>) => void;
+  beforeEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
+  afterEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
   logOutputs: (outputs: Record<string, unknown>) => void;
   logFeedback: (feedback: {
     name: string;
