@@ -78,67 +78,6 @@ def merge_dicts(merge_into: dict[str, Any], merge_from: Mapping[str, Any]) -> di
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
 
 
-def apply_array_deletes(target: dict[str, Any], array_deletes: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Mutably removes specified values from array fields in the target object.
-
-    Args:
-        target: The object to modify
-        array_deletes: A list of {path, delete} dicts specifying which values to remove from which paths
-
-    Example:
-        apply_array_deletes({"tags": ["a", "b", "c"]}, [{"path": ["tags"], "delete": ["b"]}])  # {"tags": ["a", "c"]}
-    """
-    if not isinstance(array_deletes, list):
-        return target
-
-    for entry in array_deletes:
-        if not isinstance(entry, dict):
-            continue
-
-        path_parts = entry.get("path")
-        values_to_remove = entry.get("delete")
-
-        if not isinstance(path_parts, list) or not isinstance(values_to_remove, list):
-            continue
-
-        current: Any = target
-        parent: dict[str, Any] | None = None
-        last_key: str | None = None
-
-        # Navigate to the target array
-        for i, part in enumerate(path_parts):
-            if not isinstance(current, dict):
-                current = None
-                break
-            if i == len(path_parts) - 1:
-                parent = current
-                last_key = part
-                current = current.get(part)
-            else:
-                current = current.get(part)
-
-        # If we found a list at the path, remove the specified values
-        if parent is not None and last_key is not None and isinstance(current, list):
-            # Create a set for efficient lookup, using JSON for objects
-            to_remove_set: set[str] = set()
-            for v in values_to_remove:
-                if isinstance(v, (dict, list)):
-                    to_remove_set.add(json.dumps(v, sort_keys=True))
-                else:
-                    to_remove_set.add(str(v))
-
-            def should_keep(item: Any) -> bool:
-                if isinstance(item, (dict, list)):
-                    return json.dumps(item, sort_keys=True) not in to_remove_set
-                else:
-                    return str(item) not in to_remove_set
-
-            parent[last_key] = [item for item in current if should_keep(item)]
-
-    return target
-
-
 def encode_uri_component(name: str) -> str:
     """Encode a single component of a URI. Slashes are encoded as well, so this
     should not be used for multiple slash-separated URI components."""

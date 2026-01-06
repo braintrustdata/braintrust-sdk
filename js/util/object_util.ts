@@ -91,68 +91,6 @@ export function mergeDicts(
   return mergeDictsWithPaths({ mergeInto, mergeFrom, mergePaths: [] });
 }
 
-/**
- * Mutably removes specified values from array fields in the target object.
- * @param target - The object to modify
- * @param arrayDeletes - An array of {path, delete} objects specifying which values to remove from which paths
- * @example applyArrayDeletes({ tags: ["a", "b", "c"] }, [{ path: ["tags"], delete: ["b"] }]) // { tags: ["a", "c"] }
- */
-export function applyArrayDeletes(
-  target: Record<string, unknown>,
-  arrayDeletes: Array<{ path: string[]; delete: unknown[] }>,
-): Record<string, unknown> {
-  if (!isArray(arrayDeletes)) {
-    return target;
-  }
-
-  for (const entry of arrayDeletes) {
-    if (!isObject(entry)) {
-      continue;
-    }
-    const pathParts = entry.path;
-    const valuesToRemove = entry.delete;
-
-    if (!isArray(pathParts) || !isArray(valuesToRemove)) {
-      continue;
-    }
-
-    let current: unknown = target;
-    let parent: Record<string, unknown> | null = null;
-    let lastKey: string | null = null;
-
-    // Navigate to the target array
-    for (let i = 0; i < pathParts.length; i++) {
-      const part = pathParts[i];
-      if (!isObject(current) && !isArray(current)) {
-        current = null;
-        break;
-      }
-      if (i === pathParts.length - 1) {
-        parent = current as Record<string, unknown>;
-        lastKey = part;
-        current = (current as Record<string, unknown>)[part];
-      } else {
-        current = (current as Record<string, unknown>)[part];
-      }
-    }
-
-    // If we found an array at the path, remove the specified values
-    if (parent && lastKey && isArray(current)) {
-      const toRemoveSet = new Set(
-        valuesToRemove.map((v) =>
-          typeof v === "object" ? JSON.stringify(v) : v,
-        ),
-      );
-      parent[lastKey] = current.filter((item) => {
-        const key = typeof item === "object" ? JSON.stringify(item) : item;
-        return !toRemoveSet.has(key);
-      });
-    }
-  }
-
-  return target;
-}
-
 // Recursively walks down `lhs` and `rhs`, invoking `fn` for each key in any
 // `rhs` subobject which is not in the corresponding `lhs` subobject.
 export function forEachMissingKey({
