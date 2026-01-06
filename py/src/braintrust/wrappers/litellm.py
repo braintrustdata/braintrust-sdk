@@ -660,6 +660,8 @@ def patch_litellm():
             wrapped = wrap_litellm(litellm)
             litellm.completion = wrapped.completion
             litellm.acompletion = wrapped.acompletion
+            litellm.responses = wrapped.responses
+            litellm.aresponses = wrapped.aresponses
             litellm._braintrust_wrapped = True
     except ImportError:
         pass  # litellm not available
