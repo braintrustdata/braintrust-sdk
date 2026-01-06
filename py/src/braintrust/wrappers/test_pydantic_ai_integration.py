@@ -2507,3 +2507,54 @@ async def test_streaming_wrappers_capture_time_to_first_token():
     print("✓ _DirectStreamWrapperSync captures first token time")
 
     print("\n✅ All streaming wrapper unit tests passed!")
+
+
+@pytest.mark.asyncio
+async def test_attachment_preserved_in_model_settings(memory_logger):
+    """Test that attachments in model_settings are preserved through serialization."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+
+    attachment = Attachment(data=b"config data", filename="config.txt", content_type="text/plain")
+
+    # Simulate model_settings with attachment
+    settings = {"temperature": 0.7, "context_file": attachment}
+
+    # Test bt_safe_deep_copy preserves attachment
+    copied = bt_safe_deep_copy(settings)
+    assert copied["context_file"] is attachment
+    assert copied["temperature"] == 0.7
+
+
+@pytest.mark.asyncio
+async def test_attachment_in_message_part(memory_logger):
+    """Test that attachment in custom message part is preserved."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+
+    attachment = Attachment(data=b"message data", filename="msg.txt", content_type="text/plain")
+
+    # Simulate message part with attachment
+    message_part = {"type": "file", "content": attachment, "metadata": {"source": "upload"}}
+
+    copied = bt_safe_deep_copy(message_part)
+    assert copied["content"] is attachment
+    assert copied["type"] == "file"
+
+
+@pytest.mark.asyncio
+async def test_attachment_in_result_data(memory_logger):
+    """Test that attachment in custom result data is preserved."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import ExternalAttachment
+
+    ext_attachment = ExternalAttachment(
+        url="s3://bucket/result.pdf", filename="result.pdf", content_type="application/pdf"
+    )
+
+    # Simulate agent result with attachment
+    result_data = {"success": True, "output_file": ext_attachment, "metadata": {"processed": True}}
+
+    copied = bt_safe_deep_copy(result_data)
+    assert copied["output_file"] is ext_attachment
+    assert copied["success"] is True

@@ -216,7 +216,7 @@ provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-adk"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "../../integrations/adk-py" }
 dependencies = [
     { name = "braintrust" },
@@ -226,7 +226,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", specifier = ">=0.2.4" },
+    { name = "braintrust", editable = "../../py" },
     { name = "google-adk", specifier = ">=1.14.1" },
     { name = "wrapt", specifier = ">=1.17.3" },
 ]

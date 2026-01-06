@@ -1,12 +1,11 @@
 import asyncio
-import dataclasses
 import logging
 import sys
 import time
-from collections.abc import Iterable
 from contextlib import AbstractAsyncContextManager
 from typing import Any
 
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 from wrapt import wrap_function_wrapper
@@ -76,7 +75,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=f"agent_run [{instance.name}]" if hasattr(instance, "name") and instance.name else "agent_run",
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -100,7 +99,7 @@ def wrap_agent(Agent: Any) -> Any:
             else "agent_run_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             result = wrapped(*args, **kwargs)
@@ -140,7 +139,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=span_name,
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         )
         span = span_cm.__enter__()
         start_time = time.time()
@@ -172,7 +171,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=span_name,
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             event_count = 0
@@ -218,7 +217,7 @@ def _create_direct_model_request_wrapper():
             name="model_request",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -243,7 +242,7 @@ def _create_direct_model_request_sync_wrapper():
             name="model_request_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = wrapped(*args, **kwargs)
@@ -298,7 +297,7 @@ def wrap_model_request(original_func: Any) -> Any:
             name="model_request",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await original_func(*args, **kwargs)
@@ -321,7 +320,7 @@ def wrap_model_request_sync(original_func: Any) -> Any:
             name="model_request_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = original_func(*args, **kwargs)
@@ -402,7 +401,7 @@ def _build_model_class_input_and_metadata(instance: Any, args: Any, kwargs: Any)
 
     input_data = {"messages": serialized_messages}
     if model_settings is not None:
-        input_data["model_settings"] = _try_dict(model_settings)
+        input_data["model_settings"] = bt_safe_deep_copy(model_settings)
 
     metadata = _build_model_metadata(model_name, provider, model_settings=None)
 
@@ -421,7 +420,7 @@ def _wrap_concrete_model_class(model_class: Any):
             name=f"chat {display_name}",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -471,7 +470,7 @@ class _AgentStreamWrapper(AbstractAsyncContextManager):
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
         self.span_cm.__enter__()
 
@@ -554,7 +553,7 @@ class _DirectStreamWrapper(AbstractAsyncContextManager):
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
         self.span_cm.__enter__()
 
@@ -708,7 +707,7 @@ class _DirectStreamWrapperSync:
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
         span = self.span_cm.__enter__()
 
@@ -814,13 +813,13 @@ def _serialize_content_part(part: Any) -> Any:
         content = part.content
         if isinstance(content, list):
             serialized_content = [_serialize_content_part(item) for item in content]
-            result = _try_dict(part)
+            result = bt_safe_deep_copy(part)
             if isinstance(result, dict):
                 result["content"] = serialized_content
             return result
         elif content is not None:
             serialized_content = _serialize_content_part(content)
-            result = _try_dict(part)
+            result = bt_safe_deep_copy(part)
             if isinstance(result, dict):
                 result["content"] = serialized_content
             return result
@@ -828,7 +827,7 @@ def _serialize_content_part(part: Any) -> Any:
     if isinstance(part, str):
         return part
 
-    return _try_dict(part)
+    return bt_safe_deep_copy(part)
 
 
 def _serialize_messages(messages: Any) -> Any:
@@ -847,15 +846,15 @@ def _serialize_messages(messages: Any) -> Any:
                 try:
                     serialized_msg = msg.model_dump(exclude={"parts"}, exclude_none=True)
                 except (TypeError, ValueError):
-                    # If exclude parameter not supported, fall back to full serialization
-                    serialized_msg = _try_dict(msg)
+                    # If exclude parameter not supported, fall back to bt_safe_deep_copy
+                    serialized_msg = bt_safe_deep_copy(msg)
             else:
-                serialized_msg = _try_dict(msg)
+                serialized_msg = bt_safe_deep_copy(msg)
 
             if isinstance(serialized_msg, dict):
                 serialized_msg["parts"] = serialized_parts
         else:
-            serialized_msg = _try_dict(msg)
+            serialized_msg = bt_safe_deep_copy(msg)
 
         result.append(serialized_msg)
 
@@ -870,12 +869,12 @@ def _serialize_result_output(result: Any) -> Any:
     output_dict = {}
 
     if hasattr(result, "output"):
-        output_dict["output"] = _try_dict(result.output)
+        output_dict["output"] = bt_safe_deep_copy(result.output)
 
     if hasattr(result, "response"):
         output_dict["response"] = _serialize_model_response(result.response)
 
-    return output_dict if output_dict else _try_dict(result)
+    return output_dict if output_dict else bt_safe_deep_copy(result)
 
 
 def _serialize_stream_output(stream_result: Any) -> Any:
@@ -896,11 +895,10 @@ def _serialize_model_response(response: Any) -> Any:
     if not response:
         return None
 
-    response_dict = _try_dict(response)
+    response_dict = bt_safe_deep_copy(response)
 
-    if isinstance(response_dict, dict) and "parts" in response_dict:
-        if hasattr(response, "parts"):
-            response_dict["parts"] = [_serialize_content_part(p) for p in response.parts]
+    if hasattr(response, "parts") and isinstance(response_dict, dict):
+        response_dict["parts"] = [_serialize_content_part(p) for p in response.parts]
 
     return response_dict
 
@@ -977,7 +975,7 @@ def _build_model_metadata(model_name: str | None, provider: str | None, model_se
     if provider:
         metadata["provider"] = provider
     if model_settings:
-        metadata["model_settings"] = _try_dict(model_settings)
+        metadata["model_settings"] = bt_safe_deep_copy(model_settings)
     return metadata
 
 
@@ -1143,29 +1141,6 @@ def _is_patched(obj: Any) -> bool:
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _try_dict(obj: Any) -> Iterable[Any] | dict[str, Any]:
-    """Try to convert object to dict, handling Pydantic models, dataclasses, and circular references."""
-    if hasattr(obj, "model_dump"):
-        try:
-            obj = obj.model_dump(exclude_none=True)
-        except ValueError as e:
-            if "Circular reference" in str(e):
-                return {}
-            raise
-    elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        try:
-            obj = dataclasses.asdict(obj)
-        except (TypeError, ValueError):
-            pass
-
-    if isinstance(obj, dict):
-        return {k: _try_dict(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [_try_dict(item) for item in obj]
-
-    return obj
-
-
 def _serialize_type(obj: Any) -> Any:
     """Serialize a type/class for logging, handling Pydantic models and other types.
 
@@ -1209,7 +1184,7 @@ def _serialize_type(obj: Any) -> Any:
         return obj.__name__
 
     # Try standard serialization
-    return _try_dict(obj)
+    return bt_safe_deep_copy(obj)
 
 
 def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1234,9 +1209,9 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
             input_data[key] = _serialize_type(value) if value is not None else None
         elif key == "model_settings":
             # model_settings passed to run() goes in INPUT (it's a run() parameter)
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
         else:
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     if "model" in kwargs:
         model_name, provider = _parse_model_string(kwargs["model"])
@@ -1335,7 +1310,7 @@ def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[dict
 
     for key, value in kwargs.items():
         if key not in ["model", "messages"]:
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     model_name, provider = _parse_model_string(model)
     metadata = _build_model_metadata(model_name, provider)
