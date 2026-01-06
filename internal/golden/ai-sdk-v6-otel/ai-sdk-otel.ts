@@ -14,6 +14,8 @@ import type { LanguageModel } from "ai";
 
 console.log("Running ai sdk version:", require("ai/package.json").version);
 
+const projectName = "golden-ts-ai-sdk-v6-otel";
+
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 let exporter: BraintrustExporter;
@@ -26,6 +28,7 @@ function setupTracer() {
 
   exporter = new BraintrustExporter({
     filterAISpans: true,
+    parent: `project_name:${projectName}`,
   });
 
   sdk = new NodeSDK({
@@ -37,7 +40,7 @@ function setupTracer() {
 
 async function initialize() {
   const logger = initLogger({
-    projectName: "golden-ts-ai-sdk-v6-otel",
+    projectName,
   });
   await logger.project;
   return logger;
@@ -586,6 +589,16 @@ async function testToolUseWithResult() {
     },
   };
 
+  const greetingTool = ai.tool({
+    description: "A tool that streams a personalized greeting",
+    inputSchema: z.object({ name: z.string() }),
+    execute: async function* ({ name }: { name: string }) {
+      yield { status: "starting", message: "Preparing..." };
+      yield { status: "processing", message: `Looking up ${name}...` };
+      yield { status: "done", greeting: `Hello, ${name}!` };
+    },
+  });
+
   for (const model of [openai("gpt-5-mini"), anthropic("claude-sonnet-4-5")]) {
     await ai.generateText({
       model: model as LanguageModel,
@@ -608,6 +621,20 @@ async function testToolUseWithResult() {
       },
     }).generate({
       prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "test_tool_use_with_result",
+        metadata: { golden: true, sdkVersion: "v6" },
+      },
+    });
+
+    await ai.generateText({
+      model: model as LanguageModel,
+      tools: {
+        greeting: greetingTool,
+      },
+      prompt: "Greet Alice using the greeting tool.",
+      stopWhen: ai.stepCountIs(2),
       experimental_telemetry: {
         isEnabled: true,
         functionId: "test_tool_use_with_result",

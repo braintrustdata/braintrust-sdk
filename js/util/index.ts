@@ -113,6 +113,7 @@ export {
 
 export type { SpanComponentsV4Data } from "./span_identifier_v4";
 export {
+  makeScorerPropagatedEvent,
   SpanComponentsV4,
   parseParent,
   spanComponentsV4Schema,

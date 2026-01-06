@@ -141,21 +141,24 @@ function wrapClaudeAgentQuery<
         currentMessages.length = 0;
       };
 
+      // Eagerly create the original generator so methods like interrupt() work immediately
+      // (before iteration starts). This is important because callers may want to call
+      // interrupt() right after query() without consuming any messages first.
+      const invocationTarget: unknown =
+        thisArg === proxy || thisArg === undefined
+          ? defaultThis ?? thisArg
+          : thisArg;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const originalGenerator: any = withCurrent(span, () =>
+        Reflect.apply(target, invocationTarget, argArray),
+      );
+
       // Create wrapped async generator that maintains span context
       const wrappedGenerator: AsyncGenerator<SDKMessage, void, unknown> =
         (async function* () {
           try {
-            const invocationTarget: unknown =
-              thisArg === proxy || thisArg === undefined
-                ? defaultThis ?? thisArg
-                : thisArg;
-
-            const generator: AsyncGenerator<SDKMessage, void, unknown> =
-              withCurrent(span, () =>
-                Reflect.apply(target, invocationTarget, argArray),
-              ) as AsyncGenerator<SDKMessage, void, unknown>;
-
-            for await (const message of generator) {
+            for await (const message of originalGenerator) {
               const currentTime = getCurrentUnixTimestamp();
 
               const messageId = message.message?.id;
@@ -231,7 +234,33 @@ function wrapClaudeAgentQuery<
           }
         })();
 
-      return wrappedGenerator as ReturnType<T>;
+      // Create a Proxy that forwards unknown properties (like interrupt()) to the original Query object
+      const proxiedGenerator = new Proxy(wrappedGenerator, {
+        get(target, prop, receiver) {
+          // First check if the property exists on the wrapped generator (async iterator protocol)
+          if (prop in target) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value === "function") {
+              return value.bind(target);
+            }
+            return value;
+          }
+
+          // Forward to original generator if it exists and has the property
+          // This handles methods like interrupt() that exist on the Query object
+          if (originalGenerator && prop in originalGenerator) {
+            const value = originalGenerator[prop];
+            if (typeof value === "function") {
+              return value.bind(originalGenerator);
+            }
+            return value;
+          }
+
+          return undefined;
+        },
+      });
+
+      return proxiedGenerator as ReturnType<T>;
     },
   });
 
