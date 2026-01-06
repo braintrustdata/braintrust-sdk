@@ -4,57 +4,36 @@ import {
   _internalGetGlobalState,
 } from "./logger";
 
-/**
- * Represents an association between a prompt version and an environment.
- */
 export interface PromptEnvironmentAssociation {
-  /** Unique identifier for the association */
   id: string;
-  /** Type of object (always "prompt" for now) */
   object_type: string;
-  /** The prompt ID */
   object_id: string;
-  /** The version (xact_id) of the prompt */
   object_version: string;
-  /** The environment slug */
   environment_slug: string;
-  /** When the association was created */
   created: string;
 }
 
 export type ListPromptEnvironmentsOptions = FullLoginOptions & {
-  /** The ID of the prompt to list environment associations for */
   promptId: string;
-  /** Optional state for testing */
   state?: BraintrustState;
 };
 
 export type GetPromptEnvironmentOptions = FullLoginOptions & {
-  /** The ID of the prompt */
   promptId: string;
-  /** The environment slug to get */
   environmentSlug: string;
-  /** Optional state for testing */
   state?: BraintrustState;
 };
 
 export type SetPromptEnvironmentOptions = FullLoginOptions & {
-  /** The ID of the prompt */
   promptId: string;
-  /** The environment slug to set */
   environmentSlug: string;
-  /** The version (xact_id) of the prompt to associate with this environment */
   version: string;
-  /** Optional state for testing */
   state?: BraintrustState;
 };
 
 export type DeletePromptEnvironmentOptions = FullLoginOptions & {
-  /** The ID of the prompt */
   promptId: string;
-  /** The environment slug to delete */
   environmentSlug: string;
-  /** Optional state for testing */
   state?: BraintrustState;
 };
 
