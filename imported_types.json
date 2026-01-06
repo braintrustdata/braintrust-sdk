@@ -2593,8 +2593,7 @@
           "prompt",
           "tool",
           "scorer",
-          "task",
-          "workflow"
+          "task"
         ]
       },
       "FunctionOutputType": {
@@ -5800,7 +5799,6 @@
               "tools",
               "scorers",
               "logs",
-              "workflows",
               "monitor"
             ],
             "description": "Type of object that the view corresponds to."
