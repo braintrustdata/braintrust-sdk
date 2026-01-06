@@ -716,3 +716,89 @@ def test_add_span_parent_to_baggage():
     # Test with None span (should return None and warn)
     token = add_span_parent_to_baggage(None)
     assert token is None
+
+
+def test_composite_propagator_supports_all_formats():
+    """Test that a composite propagator with B3 + W3C supports all header formats.
+
+    This verifies that users can configure a composite propagator that handles:
+    - W3C traceparent/baggage headers (for parent_from_headers)
+    - B3 headers (for B3-based distributed tracing)
+
+    All formats should work together without breaking each other.
+    """
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from braintrust.otel import parent_from_headers
+    from opentelemetry import baggage, trace
+    from opentelemetry.baggage.propagation import W3CBaggagePropagator
+    from opentelemetry.propagate import extract, get_global_textmap, inject, set_global_textmap
+    from opentelemetry.propagators.b3 import B3MultiFormat
+    from opentelemetry.propagators.composite import CompositePropagator
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
+    # Save original propagator
+    original_propagator = get_global_textmap()
+
+    try:
+        # Set up TracerProvider
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
+        tracer = trace.get_tracer("test-tracer")
+
+        # Configure composite propagator with all formats
+        composite = CompositePropagator(
+            [B3MultiFormat(), TraceContextTextMapPropagator(), W3CBaggagePropagator()]
+        )
+        set_global_textmap(composite)
+
+        # Test 1: W3C headers work with parent_from_headers
+        w3c_headers = {
+            "traceparent": "00-dbd7eedb3331c8ab4614fe0e1806e56e-14ff6a4acf7beead-01",
+            "baggage": "braintrust.parent=project_name%3Aw3c-test",
+        }
+        result = parent_from_headers(w3c_headers)
+        assert result is not None, "W3C headers should work with composite propagator"
+
+        # Test 2: B3 headers are extracted correctly by OTEL (lowercase keys)
+        b3_headers = {
+            "x-b3-traceid": "dbd7eedb3331c8ab4614fe0e1806e56e",
+            "x-b3-spanid": "14ff6a4acf7beead",
+            "x-b3-sampled": "1",
+        }
+        b3_ctx = extract(b3_headers)
+        b3_span = trace.get_current_span(b3_ctx)
+        b3_span_ctx = b3_span.get_span_context()
+        assert b3_span_ctx.span_id != 0, "B3 headers should be extracted correctly"
+        assert format(b3_span_ctx.span_id, "016x") == "14ff6a4acf7beead"
+
+        # Test 3: W3C headers are extracted correctly by OTEL
+        w3c_ctx = extract(w3c_headers)
+        w3c_span = trace.get_current_span(w3c_ctx)
+        w3c_span_ctx = w3c_span.get_span_context()
+        assert w3c_span_ctx.span_id != 0, "W3C headers should be extracted correctly"
+        # Verify baggage is also extracted
+        bt_parent = baggage.get_baggage("braintrust.parent", context=w3c_ctx)
+        assert bt_parent == "project_name:w3c-test", "W3C baggage should be extracted correctly"
+
+        # Test 4: Inside an active span, parent_from_headers still works
+        with tracer.start_as_current_span("POST /v1/chat/completions"):
+            result_in_span = parent_from_headers(w3c_headers)
+            assert result_in_span is not None, "parent_from_headers should work inside active span"
+
+        # Test 5: inject() produces both W3C and B3 headers
+        with tracer.start_as_current_span("test-span"):
+            injected_headers = {}
+            inject(injected_headers)
+            # Should have W3C headers
+            assert "traceparent" in injected_headers, "inject should produce W3C traceparent"
+            # Should have B3 headers (B3MultiFormat uses lowercase)
+            assert "x-b3-traceid" in injected_headers, "inject should produce B3 headers"
+
+        provider.shutdown()
+
+    finally:
+        # Restore original propagator
+        set_global_textmap(original_propagator)

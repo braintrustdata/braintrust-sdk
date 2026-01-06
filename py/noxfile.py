@@ -227,6 +227,8 @@ def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
+    # Install B3 propagator for distributed tracing tests
+    session.install("opentelemetry-propagator-b3")
     _run_tests(session, "braintrust/test_otel.py")
 
 
