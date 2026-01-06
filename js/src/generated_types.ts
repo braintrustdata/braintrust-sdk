@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
+// Auto-generated file (internal git SHA 8fc73777e3e76bbc3c9e2ac1a337a21dd6f97481) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -491,6 +491,7 @@ export const Dataset = z.object({
   metadata: z
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
+  url_slug: z.string(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -603,6 +604,7 @@ export const SpanType = z.union([
     "automation",
     "facet",
     "preprocessor",
+    "classifier",
   ]),
   z.null(),
 ]);
@@ -787,7 +789,8 @@ export const PromptParserNullish = z.union([
   z.object({
     type: z.literal("llm_classifier"),
     use_cot: z.boolean(),
-    choice_scores: z.record(z.number().gte(0).lte(1)),
+    choice_scores: z.record(z.number().gte(0).lte(1)).optional(),
+    choice: z.array(z.string()).optional(),
   }),
   z.null(),
 ]);
@@ -1113,6 +1116,7 @@ export const FunctionObjectType = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
+  "classifier",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
