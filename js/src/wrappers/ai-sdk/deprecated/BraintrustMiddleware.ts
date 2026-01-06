@@ -237,6 +237,8 @@ const V2_EXCLUDE_KEYS = new Set([
  * @param config - Configuration options for the middleware
  * @returns A middleware object compatible with AI SDK v2's wrapLanguageModel
  *
+ * @deprecated The new `wrapAISDK` replaces this middleware.
+ *
  * @example
  * ```typescript
  * import { wrapLanguageModel } from "ai";
@@ -248,6 +250,7 @@ const V2_EXCLUDE_KEYS = new Set([
  *   middleware: BraintrustMiddleware({ debug: true, name: "MyMiddleware" })
  * });
  * ```
+ *
  */
 export function BraintrustMiddleware(
   config: MiddlewareConfig = {},

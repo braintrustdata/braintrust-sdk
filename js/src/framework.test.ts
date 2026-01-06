@@ -811,6 +811,61 @@ test("tags remain empty when not set", async () => {
   expect((rootSpans[0] as any).tags).toEqual(undefined);
 });
 
+test("scorer spans have purpose='scorer' attribute", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-scorer-purpose");
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "test-scorer-purpose",
+      evalName: "scorer-purpose-eval",
+      data: [{ input: "hello", expected: "hello" }],
+      task: async (input: string) => input,
+      scores: [
+        (args: { input: string; output: string; expected: string }) => ({
+          name: "simple_scorer",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+      ],
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+    undefined,
+    true,
+  );
+
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].scores.simple_scorer).toBe(1);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+
+  // Find scorer spans (type="score")
+  const scorerSpans = logs.filter(
+    (l: any) => l["span_attributes"]?.["type"] === "score",
+  );
+  expect(scorerSpans).toHaveLength(1);
+
+  // Verify the scorer span has purpose='scorer'
+  expect((scorerSpans[0] as any).span_attributes.purpose).toBe("scorer");
+
+  // Verify that non-scorer spans (task, eval) do NOT have purpose='scorer'
+  const nonScorerSpans = logs.filter(
+    (l: any) => l["span_attributes"]?.["type"] !== "score",
+  );
+  expect(nonScorerSpans.length).toBeGreaterThan(0);
+  for (const span of nonScorerSpans) {
+    expect((span as any).span_attributes?.purpose).not.toBe("scorer");
+  }
+
+  _exportsForTestingOnly.clearTestBackgroundLogger();
+  _exportsForTestingOnly.simulateLogoutForTests();
+});
+
 // ========== framework2 metadata tests ==========
 import { z } from "zod/v3";
 import { projects, CodePrompt } from "./framework2";

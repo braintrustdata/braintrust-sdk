@@ -270,6 +270,10 @@ class _NoopSpan(Span):
     def id(self):
         return ""
 
+    @property
+    def propagated_event(self):
+        return None
+
     def log(self, **event: Any):
         pass
 
