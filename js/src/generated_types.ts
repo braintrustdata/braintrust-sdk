@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 547fa17c0937e0e25fdf9214487be6f31c91a37a) -- do not modify
+// Auto-generated file (internal git SHA 997381eb601f7b13ae1161dcc6b6ef7ae159f2c8) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -118,6 +118,7 @@ export const AnyModelParams = z.object({
   topP: z.number().optional(),
   topK: z.number().optional(),
   use_cache: z.boolean().optional(),
+  use_native_inference: z.boolean().optional(),
 });
 export type AnyModelParamsType = z.infer<typeof AnyModelParams>;
 export const ApiKey = z.object({
@@ -184,6 +185,7 @@ export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
+    use_native_inference: z.boolean(),
     reasoning_enabled: z.boolean(),
     reasoning_budget: z.number(),
   })
@@ -650,6 +652,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -683,6 +686,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean().optional(),
+      use_native_inference: z.boolean().optional(),
       reasoning_enabled: z.boolean().optional(),
       reasoning_budget: z.number().optional(),
       max_tokens: z.number(),
@@ -696,6 +700,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -708,6 +713,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -718,6 +724,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
     })

@@ -337,6 +337,9 @@
           },
           "use_cache": {
             "type": "boolean"
+          },
+          "use_native_inference": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -601,6 +604,9 @@
         "type": "object",
         "properties": {
           "use_cache": {
+            "type": "boolean"
+          },
+          "use_native_inference": {
             "type": "boolean"
           },
           "reasoning_enabled": {
@@ -3775,6 +3781,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -3922,6 +3931,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -3964,6 +3976,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -3992,6 +4007,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -4012,6 +4030,9 @@
             "type": "object",
             "properties": {
               "use_cache": {
+                "type": "boolean"
+              },
+              "use_native_inference": {
                 "type": "boolean"
               },
               "reasoning_enabled": {
@@ -7302,7 +7323,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "547fa17c0937e0e25fdf9214487be6f31c91a37a"
+    "x-internal-git-sha": "997381eb601f7b13ae1161dcc6b6ef7ae159f2c8"
   },
   "paths": {},
   "webhooks": {}

@@ -6,12 +6,11 @@ Auto-generated file -- do not modify.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Any, Literal, Mapping, Sequence, TypedDict
 
 from typing_extensions import NotRequired
 
-AclObjectType: TypeAlias = Literal[
+AclObjectType = Literal[
     'organization',
     'project',
     'experiment',
@@ -24,9 +23,6 @@ AclObjectType: TypeAlias = Literal[
     'project_log',
     'org_project',
 ]
-"""
-The object type that the ACL applies to
-"""
 
 
 class AISecret(TypedDict):
@@ -120,7 +116,7 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
-    function_ids: Sequence[Any]
+    function_ids: Sequence
     skip_logging: NotRequired[bool | None]
 
 
@@ -128,7 +124,7 @@ class AsyncScoringStateAsyncScoringState1(TypedDict):
     status: Literal['disabled']
 
 
-AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
+AsyncScoringState = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -152,6 +148,7 @@ class BraintrustAttachmentReference(TypedDict):
 
 class BraintrustModelParams(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
 
@@ -204,7 +201,7 @@ class CallEventCallEvent7(TypedDict):
     data: Literal['']
 
 
-CallEvent: TypeAlias = (
+CallEvent = (
     CallEventCallEvent
     | CallEventCallEvent1
     | CallEventCallEvent2
@@ -559,21 +556,8 @@ class ExternalAttachmentReference(TypedDict):
     """
 
 
-class PreprocessorPreprocessor(TypedDict):
-    type: Literal['function']
-    id: str
-
-
-class PreprocessorPreprocessor2(TypedDict):
-    pass
-
-
-class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
-    pass
-
-
 class FunctionOrigin(TypedDict):
-    object_type: AclObjectType
+    object_type: AclObjectType | None
     object_id: str
     """
     Id of the object the function is originating from
@@ -624,7 +608,7 @@ class FunctionDataFunctionData2(TypedDict):
     parameters: Mapping[str, Any]
 
 
-FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
+FunctionFormat = Literal['llm', 'code', 'global', 'graph']
 
 
 class FunctionIdFunctionId(TypedDict):
@@ -685,21 +669,19 @@ class FunctionIdFunctionId4(TypedDict):
     """
 
 
-FunctionIdRef: TypeAlias = Mapping[str, Any]
+FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet'
-]
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet']
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
+FunctionOutputType = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
-FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnumNullish = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
 class GitMetadataSettings(TypedDict):
@@ -980,68 +962,10 @@ class Group(TypedDict):
     """
 
 
-IfExists: TypeAlias = Literal['error', 'ignore', 'replace']
+IfExists = Literal['error', 'ignore', 'replace']
 
 
-class InvokeFunctionInvokeFunction(TypedDict):
-    function_id: str
-    """
-    The ID of the function
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class InvokeFunctionInvokeFunction1(TypedDict):
-    project_name: str
-    """
-    The name of the project containing the function
-    """
-    slug: str
-    """
-    The slug of the function
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class InvokeFunctionInvokeFunction3(TypedDict):
-    prompt_session_id: str
-    """
-    The ID of the prompt session
-    """
-    prompt_session_function_id: str
-    """
-    The ID of the function in the prompt session
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class InvokeFunctionInvokeFunction4InlineContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser', 'quickjs']
-    version: str
-
-
-class InvokeFunctionInvokeFunction4(TypedDict):
-    inline_context: InvokeFunctionInvokeFunction4InlineContext
-    code: str
-    """
-    The inline code to execute
-    """
-    name: NotRequired[str | None]
-    """
-    The name of the inline code function
-    """
-
-
-class InvokeFunctionMcpAuth(TypedDict):
+class McpAuth(TypedDict):
     oauth_token: NotRequired[str | None]
     """
     The OAuth token to use
@@ -1079,10 +1003,7 @@ class InvokeParentInvokeParent(TypedDict):
     """
 
 
-InvokeParent: TypeAlias = InvokeParentInvokeParent | str
-"""
-Options for tracing the function call
-"""
+InvokeParent = InvokeParentInvokeParent | str
 
 
 class MCPServer(TypedDict):
@@ -1120,7 +1041,7 @@ class MCPServer(TypedDict):
     """
 
 
-MessageRole: TypeAlias = Literal['system', 'user', 'assistant', 'function', 'tool', 'model', 'developer']
+MessageRole = Literal['system', 'user', 'assistant', 'function', 'tool', 'model', 'developer']
 
 
 class ModelParamsModelParamsToolChoiceFunction(TypedDict):
@@ -1138,6 +1059,7 @@ class ModelParamsModelParamsFunctionCall(TypedDict):
 
 class ModelParamsModelParams1(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
     max_tokens: float
@@ -1153,6 +1075,7 @@ class ModelParamsModelParams1(TypedDict):
 
 class ModelParamsModelParams2(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
     temperature: NotRequired[float | None]
@@ -1163,6 +1086,7 @@ class ModelParamsModelParams2(TypedDict):
 
 class ModelParamsModelParams3(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
     temperature: NotRequired[float | None]
@@ -1171,14 +1095,12 @@ class ModelParamsModelParams3(TypedDict):
 
 class ModelParamsModelParams4(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
 
 
-NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
-"""
-The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
-"""
+NullableFunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
@@ -1192,12 +1114,9 @@ class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-NullableSavedFunctionId: TypeAlias = (
+NullableSavedFunctionId = (
     NullableSavedFunctionIdNullableSavedFunctionId | NullableSavedFunctionIdNullableSavedFunctionId1 | None
 )
-"""
-Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default.
-"""
 
 
 class ObjectReference(TypedDict):
@@ -1265,14 +1184,7 @@ class Organization(TypedDict):
     """
 
 
-Permission: TypeAlias = Literal[
-    'create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls'
-]
-"""
-Each permission permits a certain type of operation on an object in the system
-
-Permissions can be assigned to to objects on an individual basis, or grouped into roles
-"""
+Permission = Literal['create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls']
 
 
 class ProjectAutomationConfigAction(TypedDict):
@@ -1497,10 +1409,7 @@ class ProjectScoreCategory(TypedDict):
     """
 
 
-ProjectScoreType: TypeAlias = Literal['slider', 'categorical', 'weighted', 'minimum', 'maximum', 'online', 'free-form']
-"""
-The type of the configured score
-"""
+ProjectScoreType = Literal['slider', 'categorical', 'weighted', 'minimum', 'maximum', 'online', 'free-form']
 
 
 class ProjectSettingsSpanFieldOrderItem(TypedDict):
@@ -1719,7 +1628,7 @@ class ResponseFormatNullishResponseFormatNullish2(TypedDict):
     type: Literal['text']
 
 
-ResponseFormatNullish: TypeAlias = (
+ResponseFormatNullish = (
     ResponseFormatNullishResponseFormatNullish
     | ResponseFormatNullishResponseFormatNullish1
     | ResponseFormatNullishResponseFormatNullish2
@@ -1727,10 +1636,7 @@ ResponseFormatNullish: TypeAlias = (
 )
 
 
-RetentionObjectType: TypeAlias = Literal['project_logs', 'experiment', 'dataset']
-"""
-The object type that the retention policy applies to
-"""
+RetentionObjectType = Literal['project_logs', 'experiment', 'dataset']
 
 
 class RoleMemberPermission(TypedDict):
@@ -1795,139 +1701,7 @@ class RunEvalData1(TypedDict):
 
 
 class RunEvalData2(TypedDict):
-    data: Sequence[Any]
-
-
-class TaskTask(TypedDict):
-    function_id: str
-    """
-    The ID of the function
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class TaskTask1(TypedDict):
-    project_name: str
-    """
-    The name of the project containing the function
-    """
-    slug: str
-    """
-    The slug of the function
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class TaskTask2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-class TaskTask3(TypedDict):
-    prompt_session_id: str
-    """
-    The ID of the prompt session
-    """
-    prompt_session_function_id: str
-    """
-    The ID of the function in the prompt session
-    """
-    version: NotRequired[str | None]
-    """
-    The version of the function
-    """
-
-
-class TaskTask4InlineContext(TypedDict):
-    runtime: Literal['node', 'python', 'browser', 'quickjs']
-    version: str
-
-
-class TaskTask4(TypedDict):
-    inline_context: TaskTask4InlineContext
-    code: str
-    """
-    The inline code to execute
-    """
-    name: NotRequired[str | None]
-    """
-    The name of the inline code function
-    """
-
-
-class TaskTask7(TypedDict):
-    pass
-
-
-class TaskTask8(TaskTask, TaskTask7):
-    pass
-
-
-class TaskTask9(TaskTask1, TaskTask7):
-    pass
-
-
-class TaskTask10(TaskTask2, TaskTask7):
-    pass
-
-
-class TaskTask11(TaskTask3, TaskTask7):
-    pass
-
-
-class TaskTask12(TaskTask4, TaskTask7):
-    pass
-
-
-class ParentParentRowIds(TypedDict):
-    id: str
-    """
-    The id of the row
-    """
-    span_id: str
-    """
-    The span_id of the row
-    """
-    root_span_id: str
-    """
-    The root_span_id of the row
-    """
-
-
-class ParentParent(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'playground_logs']
-    object_id: str
-    """
-    The id of the container object you are logging to
-    """
-    row_ids: NotRequired[ParentParentRowIds | None]
-    """
-    Identifiers for the row to to log a subspan under
-    """
-    propagated_event: NotRequired[Mapping[str, Any] | None]
-    """
-    Include these properties in every span created under this parent
-    """
-
-
-class ParentParent1(TypedDict):
-    pass
-
-
-class ParentParent2(ParentParent, ParentParent1):
-    pass
-
-
-Parent: TypeAlias = ParentParent2
+    data: Sequence
 
 
 class RunEvalMcpAuth(TypedDict):
@@ -1948,7 +1722,7 @@ class SavedFunctionIdSavedFunctionId1(TypedDict):
     function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
+SavedFunctionId = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
 
 
 class ServiceToken(TypedDict):
@@ -2034,10 +1808,7 @@ class SpanScope(TypedDict):
     """
 
 
-SpanType: TypeAlias = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
-"""
-Type of the span, for display purposes only
-"""
+SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
 
 
 class SSEConsoleEventData(TypedDict):
@@ -2059,10 +1830,7 @@ class SSEProgressEventData(TypedDict):
     data: str
 
 
-StreamingMode: TypeAlias = Literal['auto', 'parallel', 'json', 'text']
-"""
-The mode format of the returned value (defaults to 'auto')
-"""
+StreamingMode = Literal['auto', 'parallel', 'json', 'text']
 
 
 class ToolFunctionDefinitionFunction(TypedDict):
@@ -2085,7 +1853,7 @@ class TraceScope(TypedDict):
     """
 
 
-UploadStatus: TypeAlias = Literal['uploading', 'done', 'error']
+UploadStatus = Literal['uploading', 'done', 'error']
 
 
 class User(TypedDict):
@@ -2197,10 +1965,7 @@ class ViewOptionsViewOptions1(TypedDict):
     freezeColumns: NotRequired[bool | None]
 
 
-ViewOptions: TypeAlias = ViewOptionsViewOptions | ViewOptionsViewOptions1 | None
-"""
-Options for the view in the app
-"""
+ViewOptions = ViewOptionsViewOptions | ViewOptionsViewOptions1 | None
 
 
 class Acl(TypedDict):
@@ -2208,7 +1973,7 @@ class Acl(TypedDict):
     """
     Unique identifier for the acl
     """
-    object_type: AclObjectType
+    object_type: AclObjectType | None
     object_id: str
     """
     The id of the object the ACL applies to
@@ -2266,6 +2031,7 @@ class AnyModelParams(TypedDict):
     topP: NotRequired[float | None]
     topK: NotRequired[float | None]
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
 
 
 class AsyncScoringControlAsyncScoringControl1(TypedDict):
@@ -2273,7 +2039,7 @@ class AsyncScoringControlAsyncScoringControl1(TypedDict):
     state: AsyncScoringState
 
 
-AsyncScoringControl: TypeAlias = (
+AsyncScoringControl = (
     AsyncScoringControlAsyncScoringControl
     | AsyncScoringControlAsyncScoringControl1
     | AsyncScoringControlAsyncScoringControl2
@@ -2281,7 +2047,7 @@ AsyncScoringControl: TypeAlias = (
 )
 
 
-AttachmentReference: TypeAlias = BraintrustAttachmentReference | ExternalAttachmentReference
+AttachmentReference = BraintrustAttachmentReference | ExternalAttachmentReference
 
 
 class AttachmentStatus(TypedDict):
@@ -2292,7 +2058,7 @@ class AttachmentStatus(TypedDict):
     """
 
 
-ChatCompletionContentPart: TypeAlias = (
+ChatCompletionContentPart = (
     ChatCompletionContentPartTextWithTitle
     | ChatCompletionContentPartImageWithTitle
     | ChatCompletionContentPartFileWithTitle
@@ -2314,7 +2080,7 @@ class ChatCompletionMessageParamChatCompletionMessageParam2(TypedDict):
     reasoning: NotRequired[Sequence[ChatCompletionMessageReasoning] | None]
 
 
-ChatCompletionMessageParam: TypeAlias = (
+ChatCompletionMessageParam = (
     ChatCompletionMessageParamChatCompletionMessageParam
     | ChatCompletionMessageParamChatCompletionMessageParam1
     | ChatCompletionMessageParamChatCompletionMessageParam2
@@ -2331,7 +2097,7 @@ class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDic
     name: NotRequired[str | None]
 
 
-ChatCompletionOpenAIMessageParam: TypeAlias = (
+ChatCompletionOpenAIMessageParam = (
     ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam
     | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1
     | ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2
@@ -2471,29 +2237,16 @@ class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
     function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-ExtendedSavedFunctionId: TypeAlias = (
+ExtendedSavedFunctionId = (
     ExtendedSavedFunctionIdExtendedSavedFunctionId
     | ExtendedSavedFunctionIdExtendedSavedFunctionId1
     | ExtendedSavedFunctionIdExtendedSavedFunctionId2
 )
 
 
-class PreprocessorPreprocessor1(TypedDict):
-    type: Literal['global']
-    name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
-    pass
-
-
-Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
-
-
 class FacetData(TypedDict):
     type: Literal['facet']
-    preprocessor: NotRequired[Preprocessor | None]
+    preprocessor: NotRequired[NullableSavedFunctionId | None]
     prompt: str
     """
     The prompt to use for LLM extraction. The preprocessed text will be provided as context.
@@ -2526,22 +2279,12 @@ class FunctionIdFunctionId2(TypedDict):
     function_type: NotRequired[NullableFunctionTypeEnum | None]
 
 
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
-    """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
-    """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-InvokeScope: TypeAlias = SpanScope | TraceScope
-"""
-The scope at which to operate (span or trace)
-"""
+InvokeScope = SpanScope | TraceScope
 
 
 class ModelParamsModelParams(TypedDict):
     use_cache: NotRequired[bool | None]
+    use_native_inference: NotRequired[bool | None]
     reasoning_enabled: NotRequired[bool | None]
     reasoning_budget: NotRequired[float | None]
     temperature: NotRequired[float | None]
@@ -2564,7 +2307,7 @@ class ModelParamsModelParams(TypedDict):
     verbosity: NotRequired[Literal['low', 'medium', 'high'] | None]
 
 
-ModelParams: TypeAlias = (
+ModelParams = (
     ModelParamsModelParams
     | ModelParamsModelParams1
     | ModelParamsModelParams2
@@ -2675,7 +2418,7 @@ class ProjectAutomation(TypedDict):
     """
 
 
-ProjectScoreCategories: TypeAlias = Sequence[ProjectScoreCategory] | Mapping[str, float] | Sequence[str] | None
+ProjectScoreCategories = Sequence[ProjectScoreCategory] | Mapping[str, float] | Sequence[str] | None
 
 
 class ProjectScoreConfig(TypedDict):
@@ -2690,7 +2433,7 @@ class PromptBlockDataPromptBlockData(TypedDict):
     tools: NotRequired[str | None]
 
 
-PromptBlockData: TypeAlias = PromptBlockDataPromptBlockData | PromptBlockDataPromptBlockData1
+PromptBlockData = PromptBlockDataPromptBlockData | PromptBlockDataPromptBlockData1
 
 
 class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
@@ -2699,7 +2442,7 @@ class PromptBlockDataNullishPromptBlockDataNullish(TypedDict):
     tools: NotRequired[str | None]
 
 
-PromptBlockDataNullish: TypeAlias = (
+PromptBlockDataNullish = (
     PromptBlockDataNullishPromptBlockDataNullish | PromptBlockDataNullishPromptBlockDataNullish1 | None
 )
 
@@ -2721,9 +2464,7 @@ class ResponseFormatResponseFormat1(TypedDict):
     json_schema: ResponseFormatJsonSchema
 
 
-ResponseFormat: TypeAlias = (
-    ResponseFormatResponseFormat | ResponseFormatResponseFormat1 | ResponseFormatResponseFormat2
-)
+ResponseFormat = ResponseFormatResponseFormat | ResponseFormatResponseFormat1 | ResponseFormatResponseFormat2
 
 
 class SpanAttributes(TypedDict):
@@ -2841,7 +2582,7 @@ class GraphNodeGraphNode7(TypedDict):
     prompt: PromptBlockData
 
 
-GraphNode: TypeAlias = (
+GraphNode = (
     GraphNodeGraphNode
     | GraphNodeGraphNode1
     | GraphNodeGraphNode2
@@ -2863,68 +2604,6 @@ class InvokeContext(TypedDict):
     The ID of the object containing the span data
     """
     scope: InvokeScope
-
-
-class InvokeFunctionInvokeFunction7(TypedDict):
-    input: NotRequired[Any | None]
-    """
-    Argument to the function, which can be any JSON serializable value
-    """
-    expected: NotRequired[Any | None]
-    """
-    The expected output of the function
-    """
-    metadata: NotRequired[Mapping[str, Any] | None]
-    """
-    Any relevant metadata. This will be logged and available as the `metadata` argument.
-    """
-    tags: NotRequired[Sequence[str] | None]
-    """
-    Any relevant tags to log on the span.
-    """
-    messages: NotRequired[Sequence[ChatCompletionMessageParam] | None]
-    """
-    If the function is an LLM, additional messages to pass along to it
-    """
-    context: NotRequired[InvokeContext | None]
-    parent: NotRequired[InvokeParent | None]
-    stream: NotRequired[bool | None]
-    """
-    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
-    """
-    mode: NotRequired[StreamingMode | None]
-    strict: NotRequired[bool | None]
-    """
-    If true, throw an error if one of the variables in the prompt is not present in the input
-    """
-    mcp_auth: NotRequired[Mapping[str, InvokeFunctionMcpAuth] | None]
-    """
-    Map of MCP server URL to auth credentials
-    """
-    overrides: NotRequired[Mapping[str, Any] | None]
-    """
-    Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
-    """
-
-
-class InvokeFunctionInvokeFunction8(InvokeFunctionInvokeFunction, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction9(InvokeFunctionInvokeFunction1, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction10(InvokeFunctionInvokeFunction2, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction11(InvokeFunctionInvokeFunction3, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction12(InvokeFunctionInvokeFunction4, InvokeFunctionInvokeFunction7):
-    pass
 
 
 class ProjectLogsEvent(TypedDict):
@@ -3075,42 +2754,12 @@ class PromptDataNullish(TypedDict):
     origin: NotRequired[PromptDataNullishOrigin | None]
 
 
-class TaskTask5(TypedDict):
-    inline_prompt: NotRequired[PromptData | None]
-    inline_function: Mapping[str, Any]
-    function_type: NotRequired[FunctionTypeEnum | None]
-    name: NotRequired[str | None]
-    """
-    The name of the inline function
-    """
-
-
-class TaskTask6(TypedDict):
-    inline_prompt: PromptData
-    function_type: NotRequired[FunctionTypeEnum | None]
-    name: NotRequired[str | None]
-    """
-    The name of the inline prompt
-    """
-
-
-class TaskTask13(TaskTask5, TaskTask7):
-    pass
-
-
-class TaskTask14(TaskTask6, TaskTask7):
-    pass
-
-
-Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
-
-
 class View(TypedDict):
     id: str
     """
     Unique identifier for the view
     """
-    object_type: AclObjectType
+    object_type: AclObjectType | None
     object_id: str
     """
     The id of the object the view applies to
@@ -3173,7 +2822,7 @@ class FunctionIdFunctionId6(TypedDict):
     """
 
 
-FunctionId: TypeAlias = (
+FunctionId = (
     FunctionIdFunctionId
     | FunctionIdFunctionId1
     | FunctionIdFunctionId2
@@ -3182,9 +2831,6 @@ FunctionId: TypeAlias = (
     | FunctionIdFunctionId5
     | FunctionIdFunctionId6
 )
-"""
-Options for identifying a function
-"""
 
 
 class GraphData(TypedDict):
@@ -3193,45 +2839,46 @@ class GraphData(TypedDict):
     edges: Mapping[str, GraphEdge]
 
 
-class InvokeFunctionInvokeFunction5(TypedDict):
-    inline_prompt: NotRequired[PromptData | None]
-    inline_function: Mapping[str, Any]
-    function_type: NotRequired[FunctionTypeEnum | None]
-    name: NotRequired[str | None]
+class InvokeFunction(TypedDict):
+    input: NotRequired[Any | None]
     """
-    The name of the inline function
+    Argument to the function, which can be any JSON serializable value
     """
-
-
-class InvokeFunctionInvokeFunction6(TypedDict):
-    inline_prompt: PromptData
-    function_type: NotRequired[FunctionTypeEnum | None]
-    name: NotRequired[str | None]
+    expected: NotRequired[Any | None]
     """
-    The name of the inline prompt
+    The expected output of the function
     """
-
-
-class InvokeFunctionInvokeFunction13(InvokeFunctionInvokeFunction5, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction14(InvokeFunctionInvokeFunction6, InvokeFunctionInvokeFunction7):
-    pass
-
-
-InvokeFunction: TypeAlias = (
-    InvokeFunctionInvokeFunction8
-    | InvokeFunctionInvokeFunction9
-    | InvokeFunctionInvokeFunction10
-    | InvokeFunctionInvokeFunction11
-    | InvokeFunctionInvokeFunction12
-    | InvokeFunctionInvokeFunction13
-    | InvokeFunctionInvokeFunction14
-)
-"""
-Options for identifying a function
-"""
+    metadata: NotRequired[Mapping[str, Any] | None]
+    """
+    Any relevant metadata. This will be logged and available as the `metadata` argument.
+    """
+    tags: NotRequired[Sequence[str] | None]
+    """
+    Any relevant tags to log on the span.
+    """
+    messages: NotRequired[Sequence[ChatCompletionMessageParam] | None]
+    """
+    If the function is an LLM, additional messages to pass along to it
+    """
+    context: NotRequired[InvokeContext | None]
+    parent: NotRequired[InvokeParent | None]
+    stream: NotRequired[bool | None]
+    """
+    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
+    """
+    mode: NotRequired[StreamingMode | None]
+    strict: NotRequired[bool | None]
+    """
+    If true, throw an error if one of the variables in the prompt is not present in the input
+    """
+    mcp_auth: NotRequired[Mapping[str, McpAuth] | None]
+    """
+    Map of MCP server URL to auth credentials
+    """
+    overrides: NotRequired[Mapping[str, Any] | None]
+    """
+    Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
+    """
 
 
 class Prompt(TypedDict):
@@ -3292,7 +2939,7 @@ class RunEval(TypedDict):
     """
     The dataset to use
     """
-    task: Task
+    task: FunctionId
     scores: Sequence[FunctionId]
     """
     The functions to score the eval on
@@ -3305,7 +2952,7 @@ class RunEval(TypedDict):
     """
     Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
     """
-    parent: NotRequired[Parent | None]
+    parent: NotRequired[InvokeParent | None]
     stream: NotRequired[bool | None]
     """
     Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
@@ -3355,7 +3002,7 @@ class RunEval(TypedDict):
     mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
-FunctionData: TypeAlias = (
+FunctionData = (
     FunctionDataFunctionData
     | FunctionDataFunctionData1
     | GraphData
