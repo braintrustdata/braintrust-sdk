@@ -1,0 +1,93 @@
+name: Claude Fix Issue
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  claude-fix:
+    if: github.event.label.name == 'claude-fix'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Run Claude to Fix Issue
+        id: claude-fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            ISSUE #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+
+            ---
+
+            You are tasked with fixing this issue using strict Test-Driven Development (TDD).
+
+            IMPORTANT RULES:
+            1. You may create PRs but NEVER merge them
+            2. Only create a PR if you have a working fix with passing tests
+
+            FOLLOW THIS PROCESS:
+
+            ## Step 1: Understand the Issue
+            - Read and analyze the issue carefully
+            - Search the codebase to understand the relevant code
+            - Comment on the issue acknowledging you're working on it
+
+            ## Step 2: Reproduce the Problem (TDD Red Phase)
+            - Write or identify a failing test that demonstrates the bug/missing feature
+            - Run the test and SHOW THE FAILING OUTPUT
+            - If you cannot reproduce the issue with a test, comment on the issue explaining why and stop
+
+            ## Step 3: Implement the Fix (TDD Green Phase)
+            - Write the MINIMAL code needed to make the test pass
+            - Run the test again and SHOW THE PASSING OUTPUT
+            - Run the appropriate test suite to ensure all tests pass
+
+            ## Step 4: Refactor if Needed
+            - Clean up the code if necessary
+            - Ensure tests still pass
+
+            ## Step 5: Create PR (only if fix is successful)
+            - Create a new branch: `fix/issue-${{ github.event.issue.number }}`
+            - Commit your changes with a clear message referencing the issue
+            - Push the branch and create a PR
+            - The PR description should include:
+              - What the issue was
+              - The failing test output (before)
+              - The passing test output (after)
+              - Brief explanation of the fix
+            - Link the PR to the issue with "Fixes #${{ github.event.issue.number }}"
+
+            ## If You Cannot Fix the Issue
+            - Comment on the issue explaining what you tried and why it didn't work
+            - Do NOT create a PR with a non-working fix
+
+          claude_args: '--allowedTools "Bash(grep:*),Bash(rg:*),Bash(find:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(nox:*),Bash(pytest:*),Bash(make:*),Bash(pnpm:*),Bash(node:*),Bash(npm:*),Bash(npx:*),Bash(git status:*),Bash(git diff:*),Bash(git branch:*),Bash(git checkout:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git log:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Edit,Read,Write,Glob,Grep"'
