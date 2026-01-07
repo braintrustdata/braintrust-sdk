@@ -37,7 +37,13 @@ make fixup                   # Run pre-commit hooks on all files
 
 ## Test Framework
 
-Uses Vitest. Config in `vitest.config.js`.
+Uses Vitest. Config in `vitest.config.js`. Tests make real API calls (no VCR/cassettes).
+
+```bash
+# Required env vars for wrapper tests
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
 
 ```typescript
 import { describe, it, expect } from "vitest";

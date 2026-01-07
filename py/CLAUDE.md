@@ -40,12 +40,36 @@ def test_openai_chat_metrics(memory_logger):
     response = client.chat.completions.create(...)
 ```
 
-**Record new cassettes:**
+**VCR commands:**
 
 ```bash
+# Run tests normally (play back from cassettes)
+nox -s "test_openai(latest)"
+
+# Run with real API calls (no VCR)
 export OPENAI_API_KEY="sk-..."
 nox -s "test_openai(latest)" -- --disable-vcr
+
+# Record new cassettes (overwrites existing)
+export OPENAI_API_KEY="sk-..."
+nox -s "test_openai(latest)" -- --vcr-record=all
+
+# Record only missing cassettes
+nox -s "test_openai(latest)" -- --vcr-record=once
+
+# Record a single test's cassette
+nox -s "test_openai(latest)" -- --vcr-record=all -k "test_openai_chat_metrics"
+
+# Fail if cassette is missing (CI mode)
+nox -s "test_openai(latest)" -- --vcr-record=none
 ```
+
+**Recording modes:**
+
+- `once` (default) - record if cassette missing, play back otherwise
+- `new_episodes` - record new interactions, play back existing
+- `all` - always record, overwrite cassettes
+- `none` - only play back, fail if missing
 
 ## Test Fixtures
 

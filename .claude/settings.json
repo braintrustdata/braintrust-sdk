@@ -42,7 +42,13 @@
       "Bash(diff:*)",
       "Bash(jq:*)",
       "Bash(source:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(.nox/*/bin/pytest:*)",
+      "Bash(.nox/*/bin/python:*)",
+      "Bash(.nox/*/bin/pip:*)",
+      "Bash(py/.nox/*/bin/pytest:*)",
+      "Bash(py/.nox/*/bin/python:*)",
+      "Bash(py/.nox/*/bin/pip:*)"
     ],
     "deny": []
   }
