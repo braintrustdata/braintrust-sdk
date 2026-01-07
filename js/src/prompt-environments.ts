@@ -18,12 +18,6 @@ export type ListPromptEnvironmentsOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
-export type GetPromptEnvironmentOptions = FullLoginOptions & {
-  promptId: string;
-  environmentSlug: string;
-  state?: BraintrustState;
-};
-
 export type SetPromptEnvironmentOptions = FullLoginOptions & {
   promptId: string;
   environmentSlug: string;
@@ -31,7 +25,7 @@ export type SetPromptEnvironmentOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
-export type DeletePromptEnvironmentOptions = FullLoginOptions & {
+export type ClearPromptEnvironmentOptions = FullLoginOptions & {
   promptId: string;
   environmentSlug: string;
   state?: BraintrustState;
@@ -83,57 +77,6 @@ export async function listPromptEnvironments({
     );
 
   return (response.objects ?? []) as PromptEnvironmentAssociation[];
-}
-
-/**
- * Get a specific environment association for a prompt.
- *
- * @param options Options for the request
- * @param options.promptId The ID of the prompt
- * @param options.environmentSlug The environment slug to get (e.g., "production", "staging")
- * @param options.apiKey The API key to use. If not specified, will use the `BRAINTRUST_API_KEY` environment variable.
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
- * @param options.orgName (Optional) The name of a specific organization to connect to.
- * @returns The environment association
- * @throws If no association exists for the prompt and environment
- *
- * @example
- * ```javascript
- * const association = await getPromptEnvironment({
- *   promptId: "prompt-uuid",
- *   environmentSlug: "production",
- * });
- * console.log(association.object_version); // "123"
- * ```
- */
-export async function getPromptEnvironment({
-  promptId,
-  environmentSlug,
-  appUrl,
-  apiKey,
-  orgName,
-  fetch,
-  forceLogin,
-  state: stateArg,
-}: GetPromptEnvironmentOptions): Promise<PromptEnvironmentAssociation> {
-  const state = stateArg ?? _internalGetGlobalState();
-
-  await state.login({
-    orgName,
-    apiKey,
-    appUrl,
-    fetch,
-    forceLogin,
-  });
-
-  const response = await state
-    .apiConn()
-    .get_json(
-      `environment-object/prompt/${promptId}/${environmentSlug}`,
-      orgName ? { org_name: orgName } : {},
-    );
-
-  return response as PromptEnvironmentAssociation;
 }
 
 /**
@@ -205,7 +148,7 @@ export async function setPromptEnvironment({
 }
 
 /**
- * Delete an environment association for a prompt.
+ * Clear an environment association for a prompt.
  *
  * @param options Options for the request
  * @param options.promptId The ID of the prompt
@@ -213,19 +156,19 @@ export async function setPromptEnvironment({
  * @param options.apiKey The API key to use. If not specified, will use the `BRAINTRUST_API_KEY` environment variable.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.orgName (Optional) The name of a specific organization to connect to.
- * @returns The deleted environment association
+ * @returns The cleared environment association
  * @throws If no association exists for the prompt and environment
  *
  * @example
  * ```javascript
  * // Remove the "staging" environment association
- * await deletePromptEnvironment({
+ * await clearPromptEnvironment({
  *   promptId: "prompt-uuid",
  *   environmentSlug: "staging",
  * });
  * ```
  */
-export async function deletePromptEnvironment({
+export async function clearPromptEnvironment({
   promptId,
   environmentSlug,
   appUrl,
@@ -234,7 +177,7 @@ export async function deletePromptEnvironment({
   fetch,
   forceLogin,
   state: stateArg,
-}: DeletePromptEnvironmentOptions): Promise<PromptEnvironmentAssociation> {
+}: ClearPromptEnvironmentOptions): Promise<PromptEnvironmentAssociation> {
   const state = stateArg ?? _internalGetGlobalState();
 
   await state.login({

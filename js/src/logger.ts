@@ -90,6 +90,15 @@ import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
 import {
+  clearPromptEnvironment,
+  listPromptEnvironments,
+  setPromptEnvironment,
+  type ClearPromptEnvironmentOptions,
+  type ListPromptEnvironmentsOptions,
+  type PromptEnvironmentAssociation,
+  type SetPromptEnvironmentOptions,
+} from "./prompt-environments";
+import {
   addAzureBlobHeaders,
   getCurrentUnixTimestamp,
   GLOBAL_PROJECT,
@@ -6480,6 +6489,46 @@ export class Prompt<
 
   public get promptData(): PromptData {
     return this.getParsedPromptData()!;
+  }
+
+  private requireId(): string {
+    const id = this.id as string | undefined;
+    if (!id) {
+      throw new Error(
+        "Prompt id is required to manage environments. Load the prompt from the API first.",
+      );
+    }
+    return id;
+  }
+
+  public listPromptEnvironments(
+    this: Prompt<true, HasVersion>,
+    options: Omit<ListPromptEnvironmentsOptions, "promptId"> = {},
+  ): Promise<PromptEnvironmentAssociation[]> {
+    return listPromptEnvironments({
+      ...options,
+      promptId: this.requireId(),
+    });
+  }
+
+  public setPromptEnvironment(
+    this: Prompt<true, HasVersion>,
+    options: Omit<SetPromptEnvironmentOptions, "promptId">,
+  ): Promise<PromptEnvironmentAssociation> {
+    return setPromptEnvironment({
+      ...options,
+      promptId: this.requireId(),
+    });
+  }
+
+  public clearPromptEnvironment(
+    this: Prompt<true, HasVersion>,
+    options: Omit<ClearPromptEnvironmentOptions, "promptId">,
+  ): Promise<PromptEnvironmentAssociation> {
+    return clearPromptEnvironment({
+      ...options,
+      promptId: this.requireId(),
+    });
   }
 
   /**

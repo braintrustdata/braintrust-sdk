@@ -102,21 +102,6 @@ export {
 } from "./logger";
 
 export {
-  deletePromptEnvironment,
-  getPromptEnvironment,
-  listPromptEnvironments,
-  setPromptEnvironment,
-} from "./prompt-environments";
-
-export type {
-  DeletePromptEnvironmentOptions,
-  GetPromptEnvironmentOptions,
-  ListPromptEnvironmentsOptions,
-  PromptEnvironmentAssociation,
-  SetPromptEnvironmentOptions,
-} from "./prompt-environments";
-
-export {
   isTemplateFormat,
   parseTemplateFormat,
   renderTemplateContent,

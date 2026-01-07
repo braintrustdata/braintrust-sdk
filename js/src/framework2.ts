@@ -28,6 +28,15 @@ import {
   Prompt,
   PromptRowWithId,
 } from "./logger";
+import {
+  clearPromptEnvironment,
+  listPromptEnvironments,
+  setPromptEnvironment,
+  type ClearPromptEnvironmentOptions,
+  type ListPromptEnvironmentsOptions,
+  type PromptEnvironmentAssociation,
+  type SetPromptEnvironmentOptions,
+} from "./prompt-environments";
 import { GenericFunction } from "./framework-types";
 
 interface BaseFnOpts {
@@ -580,6 +589,24 @@ export class PromptBuilder {
     this.project.addPrompt(codePrompt);
 
     return prompt;
+  }
+
+  public listPromptEnvironments(
+    options: ListPromptEnvironmentsOptions,
+  ): Promise<PromptEnvironmentAssociation[]> {
+    return listPromptEnvironments(options);
+  }
+
+  public setPromptEnvironment(
+    options: SetPromptEnvironmentOptions,
+  ): Promise<PromptEnvironmentAssociation> {
+    return setPromptEnvironment(options);
+  }
+
+  public clearPromptEnvironment(
+    options: ClearPromptEnvironmentOptions,
+  ): Promise<PromptEnvironmentAssociation> {
+    return clearPromptEnvironment(options);
   }
 }
 
