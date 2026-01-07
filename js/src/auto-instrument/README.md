@@ -96,10 +96,12 @@ interface Config {
 
 ### Supported SDKs
 
-- ✅ `openai` - OpenAI SDK
-- 🚧 `@anthropic-ai/sdk` - Anthropic SDK (coming soon)
-- 🚧 `@ai-sdk/core` - Vercel AI SDK (coming soon)
-- 🚧 `@google/genai` - Google GenAI (coming soon)
+- ✅ `openai` - OpenAI SDK (fully supported)
+- ✅ `@anthropic-ai/sdk` - Anthropic SDK (fully supported)
+- ⚠️ `ai` - Vercel AI SDK (use manual wrapping for now)
+- ⚠️ `@google/genai` - Google GenAI (use manual wrapping for now)
+
+**Note:** Auto-instrumentation works best with constructor-based SDKs (OpenAI, Anthropic). For module-level wrappers (AI SDK, Google GenAI), use [manual wrapping](https://www.braintrust.dev/docs) until full auto-instrumentation support is added.
 
 ## How It Works
 

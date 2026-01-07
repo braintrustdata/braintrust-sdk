@@ -5,6 +5,15 @@ import { filterFrom, getCurrentUnixTimestamp } from "../util";
 import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
 import { isObject } from "../../util/index";
 
+declare global {
+  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
+  var __inherited_braintrust_wrap_anthropic:
+    | ((anthropic: any) => any)
+    | undefined;
+}
+
+const WRAPPED_SYMBOL = Symbol.for("braintrust.wrapped.anthropic");
+
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
  * not configured, nothing will be traced. If this is not an `Anthropic` object, this function is
@@ -17,6 +26,15 @@ import { isObject } from "../../util/index";
  */
 export function wrapAnthropic<T extends object>(anthropic: T): T {
   const au: unknown = anthropic;
+  // Check if already wrapped
+  if (
+    au &&
+    typeof au === "object" &&
+    WRAPPED_SYMBOL in au &&
+    (au as any)[WRAPPED_SYMBOL]
+  ) {
+    return anthropic;
+  }
   if (
     au &&
     typeof au === "object" &&
@@ -31,11 +49,16 @@ export function wrapAnthropic<T extends object>(anthropic: T): T {
     return anthropic;
   }
 }
+globalThis.__inherited_braintrust_wrap_anthropic = wrapAnthropic;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function anthropicProxy(anthropic: any): any {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
+      // Return true for wrapped symbol
+      if (prop === WRAPPED_SYMBOL) {
+        return true;
+      }
       switch (prop) {
         case "beta":
           return betaProxy(target.beta);

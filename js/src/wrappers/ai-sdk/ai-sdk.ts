@@ -8,6 +8,13 @@ import {
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
 
+declare global {
+  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
+  var __inherited_braintrust_wrap_ai_sdk: ((aiSDK: any) => any) | undefined;
+}
+
+const WRAPPED_SYMBOL = Symbol.for("braintrust.wrapped.ai-sdk");
+
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
   // v3
@@ -53,9 +60,23 @@ interface WrapAISDKOptions {
  * ```
  */
 export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // Check if already wrapped
+  if (
+    aiSDK &&
+    typeof aiSDK === "object" &&
+    WRAPPED_SYMBOL in aiSDK &&
+    (aiSDK as any)[WRAPPED_SYMBOL]
+  ) {
+    return aiSDK;
+  }
+
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy(aiSDK as unknown as any, {
     get(target, prop, receiver) {
+      // Return true for wrapped symbol
+      if (prop === WRAPPED_SYMBOL) {
+        return true;
+      }
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
@@ -75,6 +96,7 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
     },
   }) as T;
 }
+globalThis.__inherited_braintrust_wrap_ai_sdk = wrapAISDK;
 
 const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
   return new Proxy(AgentClass, {

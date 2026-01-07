@@ -3,6 +3,15 @@ import { Span, traced, Attachment } from "../logger";
 import { SpanTypeAttribute } from "../../util/index";
 import { getCurrentUnixTimestamp } from "../util";
 
+declare global {
+  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
+  var __inherited_braintrust_wrap_google_genai:
+    | ((googleGenAI: any) => any)
+    | undefined;
+}
+
+const WRAPPED_SYMBOL = Symbol.for("braintrust.wrapped.google-genai");
+
 /**
  * Wrap a Google GenAI module (imported with `import * as googleGenAI from '@google/genai'`) to add tracing.
  * If Braintrust is not configured, nothing will be traced.
@@ -23,6 +32,16 @@ import { getCurrentUnixTimestamp } from "../util";
 export function wrapGoogleGenAI<T extends Record<string, any>>(
   googleGenAI: T,
 ): T {
+  // Check if already wrapped
+  if (
+    googleGenAI &&
+    typeof googleGenAI === "object" &&
+    WRAPPED_SYMBOL in googleGenAI &&
+    (googleGenAI as any)[WRAPPED_SYMBOL]
+  ) {
+    return googleGenAI;
+  }
+
   if (!googleGenAI || typeof googleGenAI !== "object") {
     console.warn("Invalid Google GenAI module. Not wrapping.");
     return googleGenAI;
@@ -37,6 +56,10 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
 
   return new Proxy(googleGenAI, {
     get(target, prop, receiver) {
+      // Return true for wrapped symbol
+      if (prop === WRAPPED_SYMBOL) {
+        return true;
+      }
       if (prop === "GoogleGenAI") {
         const OriginalGoogleGenAI = Reflect.get(target, prop, receiver);
         return wrapGoogleGenAIClass(OriginalGoogleGenAI);
@@ -45,6 +68,7 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
     },
   });
 }
+globalThis.__inherited_braintrust_wrap_google_genai = wrapGoogleGenAI;
 
 function wrapGoogleGenAIClass(OriginalGoogleGenAI: any): any {
   return new Proxy(OriginalGoogleGenAI, {
