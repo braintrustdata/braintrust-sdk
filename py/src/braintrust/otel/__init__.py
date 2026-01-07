@@ -90,17 +90,12 @@ class AISpanProcessor:
     def _should_keep_filtered_span(self, span):
         """
         Keep spans if:
-        1. It's a root span (no parent)
-        2. Custom filter returns True/False (if provided)
-        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
-        4. Any attribute name starts with those prefixes
+        1. Custom filter returns True/False (if provided)
+        2. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
+        3. Any attribute name starts with those prefixes
         """
         if not span:
             return False
-
-        # Braintrust requires root spans, so always keep them
-        if span.parent is None:
-            return True
 
         # Apply custom filter if provided
         if self._custom_filter:
@@ -384,6 +379,9 @@ def _get_braintrust_parent(object_type, object_id: str | None = None, compute_ar
 
     return None
 
+def is_root_span(span) -> bool:
+    """Returns True if the span is a root span (no parent span)."""
+    return getattr(span, "parent", None) is None
 
 def context_from_span_export(export_str: str):
     """

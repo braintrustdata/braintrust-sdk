@@ -294,13 +294,12 @@ class TestSpanFiltering:
             self.provider.shutdown()
             self.memory_exporter.clear()
 
-    def test_keeps_root_spans(self):
+    def test_filters_out_root_spans(self):
         with self.tracer.start_as_current_span("root_operation"):
             pass
 
         spans = self.memory_exporter.get_finished_spans()
-        assert len(spans) == 1
-        assert spans[0].name == "root_operation"
+        assert len(spans) == 0
 
     def test_keeps_gen_ai_spans(self):
         with self.tracer.start_as_current_span("root"):
@@ -312,7 +311,7 @@ class TestSpanFiltering:
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "gen_ai.completion" in span_names
         assert "regular_operation" not in span_names
 
@@ -328,6 +327,19 @@ class TestSpanFiltering:
 
         assert "braintrust.eval" in span_names
         assert "database_query" not in span_names
+
+    def test_keeps_traceloop_spans(self):
+        with self.tracer.start_as_current_span("root"):
+            with self.tracer.start_as_current_span("traceloop.agent"):
+                pass
+            with self.tracer.start_as_current_span("traceloop.workflow.step"):
+                pass
+
+        spans = self.memory_exporter.get_finished_spans()
+        span_names = [span.name for span in spans]
+        assert "root" not in span_names
+        assert "traceloop.agent" in span_names
+        assert "traceloop.workflow.step" in span_names
 
     def test_keeps_llm_spans(self):
         with self.tracer.start_as_current_span("root"):
@@ -345,19 +357,8 @@ class TestSpanFiltering:
 
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
+        assert "root" not in span_names
         assert "ai.model_call" in span_names
-
-    def test_keeps_traceloop_spans(self):
-        with self.tracer.start_as_current_span("root"):
-            with self.tracer.start_as_current_span("traceloop.agent"):
-                pass
-            with self.tracer.start_as_current_span("traceloop.workflow.step"):
-                pass
-
-        spans = self.memory_exporter.get_finished_spans()
-        span_names = [span.name for span in spans]
-        assert "traceloop.agent" in span_names
-        assert "traceloop.workflow.step" in span_names
 
     def test_keeps_spans_with_llm_attributes(self):
         with self.tracer.start_as_current_span("root"):
@@ -374,7 +375,7 @@ class TestSpanFiltering:
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "some_operation" in span_names  # has gen_ai.model attribute
         assert "another_operation" in span_names  # has llm.tokens attribute
         assert "traceloop_operation" in span_names  # has traceloop.agent_id attribute
@@ -390,10 +391,7 @@ class TestSpanFiltering:
                 pass
 
         spans = self.memory_exporter.get_finished_spans()
-
-        # Only root should be kept
-        assert len(spans) == 1
-        assert spans[0].name == "root"
+        assert len(spans) == 0
 
     def test_custom_filter_keeps_spans(self):
         def custom_filter(span):
@@ -422,9 +420,9 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
         assert "custom_keep" in span_names  # kept by custom filter
         assert "regular_operation" not in span_names  # dropped by default logic
+        assert "root" not in span_names
 
     def test_custom_filter_drops_spans(self):
         def custom_filter(span):
@@ -453,9 +451,9 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
         assert "gen_ai.drop_this" not in span_names  # dropped by custom filter
         assert "gen_ai.keep_this" in span_names  # kept by default LLM logic
+        assert "root" not in span_names
 
     def test_custom_filter_none_uses_default_logic(self):
         def custom_filter(span):
@@ -482,7 +480,7 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "gen_ai.completion" in span_names  # kept by default LLM logic
         assert "regular_operation" not in span_names  # dropped by default logic
 
@@ -546,11 +544,32 @@ class TestSpanFiltering:
         filtered_spans = filtered_spans_exporter.get_finished_spans()
         filtered_span_names = [span.name for span in filtered_spans]
 
-        assert len(filtered_spans) == 3
-        assert "user_request" in filtered_span_names  # root span
+        assert len(filtered_spans) == 2
+        assert "user_request" not in filtered_span_names  # root span
         assert "gen_ai.completion" in filtered_span_names  # LLM name
         assert "response_formatting" in filtered_span_names  # LLM attribute
 
+    def test_custom_filter_is_root_span(self):
+        from braintrust.otel import AISpanProcessor, is_root_span
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+        memory_exporter = InMemorySpanExporter()
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=is_root_span)
+        provider = TracerProvider()
+        provider.add_span_processor(processor)
+        tracer = provider.get_tracer("test-braintrust-root-filter")
+
+        with tracer.start_as_current_span("root_span"):
+            with tracer.start_as_current_span("child_span"):
+                pass
+
+        provider.shutdown()
+        spans = memory_exporter.get_finished_spans()
+        names = [span.name for span in spans]
+        assert "root_span" in names
+        assert "child_span" not in names
 
 def test_parent_from_headers_invalid_inputs():
     """Test parent_from_headers with various invalid inputs."""
