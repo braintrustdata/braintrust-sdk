@@ -44,6 +44,16 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
+    },
+    "./auto-instrument": {
+      "types": "./dist/auto-instrument/index.d.ts",
+      "import": "./dist/auto-instrument/index.mjs",
+      "require": "./dist/auto-instrument/index.js"
+    },
+    "./auto-instrument/register": {
+      "types": "./dist/auto-instrument/register.d.ts",
+      "import": "./dist/auto-instrument/register.mjs",
+      "require": "./dist/auto-instrument/register.js"
     }
   },
   "files": [
@@ -143,5 +153,8 @@
   },
   "peerDependencies": {
     "zod": "^3.25.34 || ^4.0"
+  },
+  "optionalDependencies": {
+    "import-in-the-middle": "^2.0.1"
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Test that only uses environment variable + --import flag
- * Run with: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-register-only.mjs
+ * Run with: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/auto-instrument/register.mjs test-auto-instrument.mjs
  */
 
 console.log("\n========================================");
