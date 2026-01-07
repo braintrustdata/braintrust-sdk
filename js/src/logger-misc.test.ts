@@ -309,6 +309,67 @@ describe("span.link", () => {
     );
   });
 
+  test("span.link uses BRAINTRUST_ORG_NAME env var when state.orgName not set", () => {
+    const originalEnv = process.env.BRAINTRUST_ORG_NAME;
+    try {
+      // Set env var (beforeEach already ensures logged out state)
+      process.env.BRAINTRUST_ORG_NAME = "env-org-name";
+
+      // Create logger with project_id but no login
+      const logger = initLogger({ projectId: "test-project-id" });
+      const span = logger.startSpan({ name: "test-span" });
+      span.end();
+
+      const link = span.link();
+
+      // Should use env var org name
+      expect(link).toContain("/app/env-org-name/");
+      expect(link).toContain("test-project-id");
+    } finally {
+      if (originalEnv) {
+        process.env.BRAINTRUST_ORG_NAME = originalEnv;
+      } else {
+        delete process.env.BRAINTRUST_ORG_NAME;
+      }
+    }
+  });
+
+  test("span.link uses orgName passed to initLogger when not logged in", () => {
+    // beforeEach already ensures logged out state
+    // Create logger with orgName passed directly (no login, no env var)
+    const logger = initLogger({
+      projectId: "test-project-id",
+      orgName: "passed-org-name",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+
+    const link = span.link();
+
+    // Should use orgName passed to initLogger
+    expect(link).toContain("/app/passed-org-name/");
+    expect(link).toContain("test-project-id");
+  });
+
+  test("span.link uses appUrl passed to initLogger when not logged in", () => {
+    // beforeEach sets appUrl to default, clear it to test passed args
+    const state = _exportsForTestingOnly.simulateLogoutForTests();
+    state.appUrl = null;
+
+    const logger = initLogger({
+      projectId: "test-project-id",
+      orgName: "test-org",
+      appUrl: "https://custom.braintrust.dev",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+
+    const link = span.link();
+
+    // Should use appUrl passed to initLogger
+    expect(link).toContain("https://custom.braintrust.dev/app/test-org/");
+  });
+
   test("span.link works with experiment id", async () => {
     // Mock the state for testing - must be done before creating the span
     const state = await _exportsForTestingOnly.simulateLoginForTests();
