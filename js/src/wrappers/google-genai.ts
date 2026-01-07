@@ -70,6 +70,33 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
 }
 globalThis.__inherited_braintrust_wrap_google_genai = wrapGoogleGenAI;
 
+/**
+ * Helper function for auto-instrumentation that wraps Google GenAI class
+ * without creating a module-level Proxy. This is compatible with import-in-the-middle.
+ *
+ * @internal
+ */
+export function wrapGoogleGenAIIndividualExports(exports: any): void {
+  if (!exports || typeof exports !== "object") {
+    return;
+  }
+
+  // Wrap GoogleGenAI class
+  if ("GoogleGenAI" in exports && typeof exports.GoogleGenAI === "function") {
+    exports.GoogleGenAI = wrapGoogleGenAIClass(exports.GoogleGenAI);
+  }
+}
+
+// Make the individual wrapper available globally for auto-instrumentation
+declare global {
+  // eslint-disable-next-line no-var
+  var __inherited_braintrust_wrap_google_genai_individual:
+    | ((exports: any) => void)
+    | undefined;
+}
+globalThis.__inherited_braintrust_wrap_google_genai_individual =
+  wrapGoogleGenAIIndividualExports;
+
 function wrapGoogleGenAIClass(OriginalGoogleGenAI: any): any {
   return new Proxy(OriginalGoogleGenAI, {
     construct(target, args) {

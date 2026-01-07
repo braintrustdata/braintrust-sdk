@@ -3,17 +3,16 @@ import type { Config } from "./config";
 import { log } from "./util";
 import { wrapOpenAI } from "./detectors/openai";
 import { wrapAnthropic } from "./detectors/anthropic";
-// import { wrapAISDK } from "./detectors/ai-sdk";
-// import { wrapGoogleGenAI } from "./detectors/google-genai";
+import { wrapAISDK } from "./detectors/ai-sdk";
+import { wrapGoogleGenAI } from "./detectors/google-genai";
 
 type WrapperFunction = (exports: any, config: Config) => any;
 
 const SDK_MAP: Record<string, WrapperFunction> = {
   openai: wrapOpenAI,
   "@anthropic-ai/sdk": wrapAnthropic,
-  // TODO: AI SDK and Google GenAI need module-level wrapping support
-  // ai: wrapAISDK,
-  // "@google/genai": wrapGoogleGenAI,
+  ai: wrapAISDK,
+  "@google/genai": wrapGoogleGenAI,
 };
 
 export function registerHooks(config: Config): void {

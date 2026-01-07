@@ -1,14 +1,24 @@
 import type { Config } from "../config";
 import { log } from "../util";
 
-const WRAPPED_SYMBOL = Symbol.for("braintrust.wrapped.google-genai");
+// Track wrapped modules internally instead of using symbols on the exports object
+// (import-in-the-middle intercepts property assignments and doesn't support Symbols)
+const wrappedModules = new WeakSet();
+
+// Declare global for the wrapper function we'll import from braintrust
+declare global {
+  // eslint-disable-next-line no-var
+  var __inherited_braintrust_wrap_google_genai_individual:
+    | ((exports: any) => void)
+    | undefined;
+}
 
 export function wrapGoogleGenAI(exports: any, config: Config): any {
   if (!exports || typeof exports !== "object") {
     return exports;
   }
 
-  if (exports[WRAPPED_SYMBOL]) {
+  if (wrappedModules.has(exports)) {
     log(config, "info", "Google GenAI module already wrapped, skipping");
     return exports;
   }
@@ -16,22 +26,29 @@ export function wrapGoogleGenAI(exports: any, config: Config): any {
   log(config, "info", "Wrapping Google GenAI module exports");
 
   try {
-    let braintrustWrapGoogleGenAI;
+    // Use the individual wrapper function that doesn't create a module-level Proxy
     if (
-      typeof globalThis.__inherited_braintrust_wrap_google_genai === "function"
+      typeof globalThis.__inherited_braintrust_wrap_google_genai_individual ===
+      "function"
     ) {
-      braintrustWrapGoogleGenAI =
-        globalThis.__inherited_braintrust_wrap_google_genai;
+      log(config, "info", "Auto-wrapping Google GenAI module");
+
+      // Wrap exports in-place without creating a Proxy
+      globalThis.__inherited_braintrust_wrap_google_genai_individual(exports);
+
+      // Mark as wrapped
+      wrappedModules.add(exports);
+
+      log(config, "info", "Successfully wrapped Google GenAI exports");
+    } else {
+      log(
+        config,
+        "warn",
+        "Braintrust wrapGoogleGenAIIndividualExports function not found",
+      );
     }
 
-    if (typeof braintrustWrapGoogleGenAI === "function") {
-      log(config, "info", "Auto-wrapping Google GenAI module");
-      const wrapped = braintrustWrapGoogleGenAI(exports);
-      // The wrapped module already has the symbol handled by the Proxy
-      return wrapped;
-    } else {
-      log(config, "warn", "Braintrust wrapGoogleGenAI function not found");
-    }
+    return exports;
   } catch (error) {
     log(
       config,

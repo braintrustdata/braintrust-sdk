@@ -98,6 +98,80 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
 }
 globalThis.__inherited_braintrust_wrap_ai_sdk = wrapAISDK;
 
+/**
+ * Helper function for auto-instrumentation that wraps individual AI SDK exports
+ * without creating a module-level Proxy. This is compatible with import-in-the-middle.
+ *
+ * @internal
+ */
+export function wrapAISDKIndividualExports(
+  exports: any,
+  options: WrapAISDKOptions = {},
+): void {
+  if (!exports || typeof exports !== "object") {
+    return;
+  }
+
+  // Wrap functions
+  if ("generateText" in exports && typeof exports.generateText === "function") {
+    exports.generateText = wrapGenerateText(
+      exports.generateText,
+      options,
+      exports,
+    );
+  }
+  if ("streamText" in exports && typeof exports.streamText === "function") {
+    exports.streamText = wrapStreamText(exports.streamText, options, exports);
+  }
+  if (
+    "generateObject" in exports &&
+    typeof exports.generateObject === "function"
+  ) {
+    exports.generateObject = wrapGenerateObject(
+      exports.generateObject,
+      options,
+      exports,
+    );
+  }
+  if ("streamObject" in exports && typeof exports.streamObject === "function") {
+    exports.streamObject = wrapStreamObject(
+      exports.streamObject,
+      options,
+      exports,
+    );
+  }
+
+  // Wrap classes
+  if ("Agent" in exports && typeof exports.Agent === "function") {
+    exports.Agent = wrapAgentClass(exports.Agent, options);
+  }
+  if (
+    "Experimental_Agent" in exports &&
+    typeof exports.Experimental_Agent === "function"
+  ) {
+    exports.Experimental_Agent = wrapAgentClass(
+      exports.Experimental_Agent,
+      options,
+    );
+  }
+  if (
+    "ToolLoopAgent" in exports &&
+    typeof exports.ToolLoopAgent === "function"
+  ) {
+    exports.ToolLoopAgent = wrapAgentClass(exports.ToolLoopAgent, options);
+  }
+}
+
+// Make the individual wrapper available globally for auto-instrumentation
+declare global {
+  // eslint-disable-next-line no-var
+  var __inherited_braintrust_wrap_ai_sdk_individual:
+    | ((exports: any, options?: any) => void)
+    | undefined;
+}
+globalThis.__inherited_braintrust_wrap_ai_sdk_individual =
+  wrapAISDKIndividualExports;
+
 const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
   return new Proxy(AgentClass, {
     construct(target, args) {
