@@ -6,7 +6,7 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { zodToJsonSchema } from "../../zod/utils";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
@@ -133,9 +133,16 @@ const makeGenerateTextWrapper = (
   generateText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = async function (params: any) {
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
+  const wrapper = async function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     return traced(
       async (span) => {
@@ -166,15 +173,17 @@ const makeGenerateTextWrapper = (
         return result;
       },
       {
-        name,
+        name: spanName || name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
         },
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: initialModel,
-            ...(initialProvider ? { provider: initialProvider } : {}),
+            ...spanInfoMetadata,
+            model,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -230,9 +239,8 @@ const wrapModel = (model: any, ai?: any): any => {
   const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
   const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
 
-  const { model: initialModel, provider: initialProvider } =
-    serializeModelWithProvider(resolvedModel.modelId);
-  const effectiveProvider = resolvedModel.provider || initialProvider;
+  const { model: modelId, provider } =
+    serializeModelWithProvider(resolvedModel);
 
   const wrappedDoGenerate = async (options: any) => {
     return traced(
@@ -247,6 +255,9 @@ const wrapModel = (model: any, ai?: any): any => {
         }
         if (gatewayInfo?.model) {
           resolvedMetadata.model = gatewayInfo.model;
+        }
+        if (result.finishReason !== undefined) {
+          resolvedMetadata.finish_reason = result.finishReason;
         }
 
         span.log({
@@ -267,8 +278,8 @@ const wrapModel = (model: any, ai?: any): any => {
         event: {
           input: processInputAttachments(options),
           metadata: {
-            model: initialModel,
-            ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+            model: modelId,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -291,8 +302,8 @@ const wrapModel = (model: any, ai?: any): any => {
       event: {
         input: processInputAttachments(options),
         metadata: {
-          model: initialModel,
-          ...(effectiveProvider ? { provider: effectiveProvider } : {}),
+          model: modelId,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -390,6 +401,9 @@ const wrapModel = (model: any, ai?: any): any => {
             if (gatewayInfo?.model) {
               resolvedMetadata.model = gatewayInfo.model;
             }
+            if (chunk.finishReason !== undefined) {
+              resolvedMetadata.finish_reason = chunk.finishReason;
+            }
 
             span.log({
               output: await processOutput(output),
@@ -440,9 +454,16 @@ const wrapGenerateObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return async function generateObjectWrapper(params: any) {
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
+  return async function generateObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     return traced(
       async (span) => {
@@ -475,15 +496,17 @@ const wrapGenerateObject = (
         return result;
       },
       {
-        name: "generateObject",
+        name: spanName || "generateObject",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
         },
         event: {
           input: processInputAttachments(params),
           metadata: {
-            model: initialModel,
-            ...(initialProvider ? { provider: initialProvider } : {}),
+            ...spanInfoMetadata,
+            model,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -501,20 +524,29 @@ const makeStreamTextWrapper = (
   streamText: any,
   aiSDK?: any,
 ) => {
-  const wrapper = function (params: any) {
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
+  const wrapper = function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     const span = startSpan({
-      name,
+      name: spanName || name,
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
       },
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: initialModel,
-          ...(initialProvider ? { provider: initialProvider } : {}),
+          ...spanInfoMetadata,
+          model,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -641,20 +673,29 @@ const wrapStreamObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
-  return function streamObjectWrapper(params: any) {
-    const { model: initialModel, provider: initialProvider } =
-      serializeModelWithProvider(params.model);
+  return function streamObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
 
     const span = startSpan({
-      name: "streamObject",
+      name: spanName || "streamObject",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
       },
       event: {
         input: processInputAttachments(params),
         metadata: {
-          model: initialModel,
-          ...(initialProvider ? { provider: initialProvider } : {}),
+          ...spanInfoMetadata,
+          model,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -796,6 +837,22 @@ const wrapTools = (tools: any) => {
   return wrappedTools;
 };
 
+/**
+ * Checks if a value is an AsyncGenerator.
+ * AsyncGenerators are returned by async generator functions (async function* () {})
+ * and must be iterated to consume their yielded values.
+ */
+const isAsyncGenerator = (value: any): value is AsyncGenerator => {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof value[Symbol.asyncIterator] === "function" &&
+    typeof value.next === "function" &&
+    typeof value.return === "function" &&
+    typeof value.throw === "function"
+  );
+};
+
 const wrapToolExecute = (tool: any, name: string) => {
   // Only wrap tools that have an execute function (created with tool() helper)
   // AI SDK v3-v6: tool({ description, inputSchema/parameters, execute })
@@ -811,13 +868,50 @@ const wrapToolExecute = (tool: any, name: string) => {
     return new Proxy(tool, {
       get(target, prop) {
         if (prop === "execute") {
-          return (...args: any[]) =>
-            traced(
+          // Return a function that handles both regular async functions and async generators
+          const wrappedExecute = (...args: any[]) => {
+            const result = originalExecute.apply(target, args);
+
+            // Check if the result is an async generator (from async function* () {})
+            // AI SDK v5 supports async generator tools that yield intermediate status updates
+            if (isAsyncGenerator(result)) {
+              // Return a wrapper async generator that:
+              // 1. Iterates through the original generator
+              // 2. Yields all intermediate values (so consumers see status updates)
+              // 3. Tracks and logs the final yielded value as the tool output
+              return (async function* () {
+                const span = startSpan({
+                  name,
+                  spanAttributes: {
+                    type: SpanTypeAttribute.TOOL,
+                  },
+                });
+                span.log({ input: args.length === 1 ? args[0] : args });
+
+                try {
+                  let lastValue: any;
+                  for await (const value of result) {
+                    lastValue = value;
+                    yield value;
+                  }
+                  // Log the final yielded value as the output
+                  span.log({ output: lastValue });
+                } catch (error) {
+                  span.log({ error: serializeError(error) });
+                  throw error;
+                } finally {
+                  span.end();
+                }
+              })();
+            }
+
+            // For regular async functions, use traced as before
+            return traced(
               async (span) => {
                 span.log({ input: args.length === 1 ? args[0] : args });
-                const result = await originalExecute.apply(target, args);
-                span.log({ output: result });
-                return result;
+                const awaitedResult = await result;
+                span.log({ output: awaitedResult });
+                return awaitedResult;
               },
               {
                 name,
@@ -826,6 +920,8 @@ const wrapToolExecute = (tool: any, name: string) => {
                 },
               },
             );
+          };
+          return wrappedExecute;
         }
         return target[prop];
       },
@@ -911,17 +1007,29 @@ function parseGatewayModelString(modelString: string): {
 }
 
 /**
- * Extracts model and provider info from a model, parsing gateway-style strings.
+ * Extracts model ID and effective provider from a model object or string.
+ * Provider precedence: model.provider > parsed from gateway-style modelId string.
+ *
+ * @param model - Either a model object (with modelId and optional provider) or a model string
  */
 function serializeModelWithProvider(model: any): {
   model: string;
   provider?: string;
 } {
   const modelId = typeof model === "string" ? model : model?.modelId;
+  // Provider can be set directly on the model object (e.g., AI SDK model instances)
+  const explicitProvider =
+    typeof model === "object" ? model?.provider : undefined;
+
   if (!modelId) {
-    return { model: modelId };
+    return { model: modelId, provider: explicitProvider };
   }
-  return parseGatewayModelString(modelId);
+
+  const parsed = parseGatewayModelString(modelId);
+  return {
+    model: parsed.model,
+    provider: explicitProvider || parsed.provider,
+  };
 }
 
 /**
@@ -1054,6 +1162,11 @@ const processInputAttachments = (input: any) => {
   // Process tools to convert Zod schemas to JSON Schema
   if (input.tools) {
     processed.tools = processTools(input.tools);
+  }
+
+  // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
+  if (input.schema && isZodSchema(input.schema)) {
+    processed.schema = serializeZodSchema(input.schema);
   }
 
   // Process callOptionsSchema (used by ToolLoopAgent and other agents)

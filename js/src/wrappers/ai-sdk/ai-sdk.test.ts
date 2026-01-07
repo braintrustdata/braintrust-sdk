@@ -592,6 +592,215 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(Array.isArray(wrapperSpan.output.object.steps)).toBe(true);
   });
 
+  test("generateObject logs schema in input", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const storySchema = z.object({
+      title: z.string().describe("The title of the story"),
+      mainCharacter: z.string().describe("The name of the main character"),
+      plotPoints: z
+        .array(z.string())
+        .length(3)
+        .describe("Three key plot points in the story"),
+    });
+
+    const result = await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema: storySchema,
+      prompt: "Generate a short story about a robot.",
+    });
+
+    expect(result.object).toBeTruthy();
+    expect(result.object.title).toBeTruthy();
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateObject",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+
+    // Verify output contains the structured object
+    expect(generateObjectSpan.output).toBeTruthy();
+    expect(generateObjectSpan.output.object).toBeTruthy();
+    expect(generateObjectSpan.output.object.title).toBeTruthy();
+
+    // Verify input contains the schema (converted from Zod to JSON Schema)
+    expect(generateObjectSpan.input).toBeTruthy();
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty("title");
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "mainCharacter",
+    );
+    expect(generateObjectSpan.input.schema.properties).toHaveProperty(
+      "plotPoints",
+    );
+    // Verify the prompt is also in input
+    expect(generateObjectSpan.input.prompt).toBe(
+      "Generate a short story about a robot.",
+    );
+  });
+
+  test("generateText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "My Custom Prompt",
+      spanAttributes: { customAttr: "test-value" },
+      metadata: {
+        prompt: {
+          id: "prompt-abc123",
+          project_id: "proj-xyz789",
+          version: "1.0.0",
+          variables: { topic: "testing" },
+        },
+      },
+    };
+
+    await wrappedAI.generateText({
+      model: openai(TEST_MODEL),
+      prompt: "Say hello",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "My Custom Prompt",
+    );
+
+    expect(generateTextSpan).toBeTruthy();
+    // Verify span name was overridden
+    expect(generateTextSpan.span_attributes.name).toBe("My Custom Prompt");
+    // Verify custom span attributes were merged
+    expect(generateTextSpan.span_attributes.customAttr).toBe("test-value");
+    // Verify prompt metadata was included
+    expect(generateTextSpan.metadata.prompt).toBeTruthy();
+    expect(generateTextSpan.metadata.prompt.id).toBe("prompt-abc123");
+    expect(generateTextSpan.metadata.prompt.project_id).toBe("proj-xyz789");
+    expect(generateTextSpan.metadata.prompt.version).toBe("1.0.0");
+    expect(generateTextSpan.metadata.prompt.variables).toEqual({
+      topic: "testing",
+    });
+    // Verify span_info is not in input (should be stripped)
+    expect(generateTextSpan.input.span_info).toBeUndefined();
+  });
+
+  test("streamText preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Streaming Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-stream-123",
+          project_id: "proj-stream-456",
+          version: "2.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const stream = wrappedAI.streamText({
+      model: openai(TEST_MODEL),
+      prompt: "Count to 3",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.textStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Streaming Prompt",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.span_attributes.name).toBe("Streaming Prompt");
+    expect(streamTextSpan.metadata.prompt.id).toBe("prompt-stream-123");
+    expect(streamTextSpan.metadata.prompt.project_id).toBe("proj-stream-456");
+  });
+
+  test("generateObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Object Generation Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-obj-789",
+          project_id: "proj-obj-012",
+          version: "3.0.0",
+          variables: { format: "json" },
+        },
+      },
+    };
+
+    const schema = z.object({ greeting: z.string() });
+
+    await wrappedAI.generateObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Generate a greeting",
+      span_info: spanInfo,
+    } as any);
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Object Generation Prompt",
+    );
+
+    expect(generateObjectSpan).toBeTruthy();
+    expect(generateObjectSpan.span_attributes.name).toBe(
+      "Object Generation Prompt",
+    );
+    expect(generateObjectSpan.metadata.prompt.id).toBe("prompt-obj-789");
+    expect(generateObjectSpan.metadata.prompt.project_id).toBe("proj-obj-012");
+    // Verify schema is still in input
+    expect(generateObjectSpan.input.schema).toBeTruthy();
+  });
+
+  test("streamObject preserves span_info from Braintrust-managed prompts", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const spanInfo = {
+      name: "Stream Object Prompt",
+      metadata: {
+        prompt: {
+          id: "prompt-sobj-111",
+          project_id: "proj-sobj-222",
+          version: "4.0.0",
+          variables: {},
+        },
+      },
+    };
+
+    const schema = z.object({ message: z.string() });
+
+    const stream = wrappedAI.streamObject({
+      model: openai(TEST_MODEL),
+      schema,
+      prompt: "Stream a message",
+      span_info: spanInfo,
+    } as any);
+
+    // Consume the stream
+    for await (const _ of stream.partialObjectStream) {
+      // Just consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamObjectSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Stream Object Prompt",
+    );
+
+    expect(streamObjectSpan).toBeTruthy();
+    expect(streamObjectSpan.span_attributes.name).toBe("Stream Object Prompt");
+    expect(streamObjectSpan.metadata.prompt.id).toBe("prompt-sobj-111");
+    expect(streamObjectSpan.metadata.prompt.project_id).toBe("proj-sobj-222");
+  });
+
   test("streamObject toTextStreamResponse", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -1487,6 +1696,90 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     );
   });
 
+  test("ai sdk async generator tool execution", async () => {
+    // Test for GitHub issue #1134: async generator tools should work correctly
+    // AI SDK v5 supports tools with async generator execute functions that yield
+    // intermediate status updates
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Track status updates - use a fresh array each time to handle test retries
+    const statusUpdates: string[] = [];
+
+    const streamingTool = ai.tool({
+      description: "A tool that streams status updates",
+      inputSchema: z.object({
+        name: z.string().describe("The name to greet"),
+      }),
+      execute: async function* (args: { name: string }) {
+        statusUpdates.push("starting");
+        yield { status: "starting", message: "Preparing greeting..." };
+
+        statusUpdates.push("processing");
+        yield { status: "processing", message: `Looking up ${args.name}...` };
+
+        statusUpdates.push("done");
+        yield { status: "done", greeting: `Hello, ${args.name}!` };
+      },
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      tools: {
+        greeting: streamingTool,
+      },
+      toolChoice: "required",
+      prompt: "Please use the greeting tool to greet someone named World",
+      stopWhen: ai.stepCountIs(1),
+    });
+
+    assert.ok(result);
+
+    // Verify that the async generator was actually iterated (exactly once with 3 yields)
+    expect(statusUpdates).toEqual(["starting", "processing", "done"]);
+
+    const spans = await backgroundLogger.drain();
+
+    // Find the tool execution span
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpan = spans.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (span: any) =>
+        span.span_attributes?.type === "tool" &&
+        span.span_attributes?.name === "greeting",
+    );
+
+    expect(toolSpan).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolSpanTyped = toolSpan as any;
+
+    // Verify the tool span has the correct structure
+    expect(toolSpanTyped).toMatchObject({
+      span_attributes: {
+        type: "tool",
+        name: "greeting",
+      },
+    });
+
+    // Verify input is captured
+    expect(toolSpanTyped.input).toBeDefined();
+    const inputData = Array.isArray(toolSpanTyped.input)
+      ? toolSpanTyped.input[0]
+      : toolSpanTyped.input;
+    expect(inputData).toMatchObject({
+      name: "World",
+    });
+
+    // Verify output is captured (should be the final yielded value, not {})
+    expect(toolSpanTyped.output).toBeDefined();
+    expect(toolSpanTyped.output).not.toEqual({});
+    expect(toolSpanTyped.output).toMatchObject({
+      status: "done",
+      greeting: "Hello, World!",
+    });
+  });
+
   test("ai sdk string model ID resolution with per-step spans", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
@@ -1592,6 +1885,9 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doGenSpan.metadata.braintrust).toBeDefined();
     expect(doGenSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doGenSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify finish_reason is captured in metadata
+    expect(doGenSpan.metadata.finish_reason).toBeDefined();
 
     // Verify metrics
     expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
@@ -1729,6 +2025,9 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(doStreamSpan.metadata.braintrust).toBeDefined();
     expect(doStreamSpan.metadata.braintrust.integration_name).toBe("ai-sdk");
     expect(doStreamSpan.metadata.braintrust.sdk_language).toBe("typescript");
+
+    // Verify finish_reason is captured in metadata
+    expect(doStreamSpan.metadata.finish_reason).toBeDefined();
 
     // Verify metrics including time_to_first_token
     expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);

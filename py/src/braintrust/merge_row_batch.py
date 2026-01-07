@@ -1,10 +1,11 @@
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional
 
 from .db_fields import IS_MERGE_FIELD, PARENT_ID_FIELD
 from .graph_util import UndirectedGraph, topological_sort, undirected_connected_components
 from .util import merge_dicts
 
-_MergedRowKey = Tuple[Optional[Any], ...]
+_MergedRowKey = tuple[Optional[Any], ...]
 
 
 def _generate_merged_row_key(row: Mapping[str, Any], use_parent_id_for_id: bool = False) -> _MergedRowKey:
@@ -33,7 +34,7 @@ MERGE_ROW_SKIP_FIELDS = [
 ]
 
 
-def _pop_merge_row_skip_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+def _pop_merge_row_skip_fields(row: dict[str, Any]) -> dict[str, Any]:
     popped = {}
     for field in MERGE_ROW_SKIP_FIELDS:
         if field in row:
@@ -41,14 +42,14 @@ def _pop_merge_row_skip_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     return popped
 
 
-def _restore_merge_row_skip_fields(row: Dict[str, Any], skip_fields: Dict[str, Any]):
+def _restore_merge_row_skip_fields(row: dict[str, Any], skip_fields: dict[str, Any]):
     for field in MERGE_ROW_SKIP_FIELDS:
         row.pop(field, None)
         if field in skip_fields:
             row[field] = skip_fields[field]
 
 
-def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+def merge_row_batch(rows: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Given a batch of rows, merges conflicting rows together to end up with a
     set of rows to insert. Returns a set of de-conflicted rows, as a list of
     lists, where separate lists contain "independent" rows which can be
@@ -98,7 +99,7 @@ def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]
                 "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrust.dev for help"
             )
 
-    row_groups: Dict[_MergedRowKey, Dict[str, Any]] = {}
+    row_groups: dict[_MergedRowKey, dict[str, Any]] = {}
     for row in rows:
         key = _generate_merged_row_key(row)
         existing_row = row_groups.get(key)
@@ -138,7 +139,7 @@ def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]
     # all groups of rows which each row in a group has a PARENT_ID_FIELD
     # relationship with at least one other row in the group.
     connected_components = undirected_connected_components(
-        UndirectedGraph(vertices=set(graph.keys()), edges=set((k, v) for k, vs in graph.items() for v in vs))
+        UndirectedGraph(vertices=set(graph.keys()), edges={(k, v) for k, vs in graph.items() for v in vs})
     )
 
     # For each connected row group, run topological sort over that subgraph to
@@ -148,8 +149,8 @@ def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]
 
 
 def batch_items(
-    items: List[List[str]], batch_max_num_items: Optional[int] = None, batch_max_num_bytes: Optional[int] = None
-) -> List[List[List[str]]]:
+    items: list[list[str]], batch_max_num_items: int | None = None, batch_max_num_bytes: int | None = None
+) -> list[list[list[str]]]:
     """Repartition the given list of items into sets of batches which can be
     published in parallel or in sequence.
 
