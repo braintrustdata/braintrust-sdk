@@ -38,6 +38,8 @@ declare global {
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 
+const WRAPPED_SYMBOL = Symbol.for("braintrust.wrapped.openai");
+
 /**
  * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing. If Braintrust is
  * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
@@ -50,6 +52,14 @@ declare global {
  */
 export function wrapOpenAI<T extends object>(openai: T): T {
   const oai: unknown = openai;
+  if (
+    oai &&
+    typeof oai === "object" &&
+    WRAPPED_SYMBOL in oai &&
+    (oai as any)[WRAPPED_SYMBOL]
+  ) {
+    return openai;
+  }
   if (
     oai &&
     typeof oai === "object" &&
@@ -136,6 +146,10 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
 
   return new Proxy(openai, {
     get(target, name, receiver) {
+      if (name === WRAPPED_SYMBOL) {
+        return true;
+      }
+
       switch (name) {
         case "chat":
           return chatProxy;
