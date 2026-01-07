@@ -657,11 +657,52 @@ def patch_litellm():
         import litellm
 
         if not hasattr(litellm, "_braintrust_wrapped"):
+            # Store originals for unpatch_litellm()
+            litellm._braintrust_original_completion = litellm.completion
+            litellm._braintrust_original_acompletion = litellm.acompletion
+            litellm._braintrust_original_responses = litellm.responses
+            litellm._braintrust_original_aresponses = litellm.aresponses
+
             wrapped = wrap_litellm(litellm)
             litellm.completion = wrapped.completion
             litellm.acompletion = wrapped.acompletion
             litellm.responses = wrapped.responses
             litellm.aresponses = wrapped.aresponses
             litellm._braintrust_wrapped = True
+    except ImportError:
+        pass  # litellm not available
+
+
+def unpatch_litellm():
+    """
+    Restore LiteLLM to its original state, removing Braintrust tracing.
+
+    This undoes the patching done by patch_litellm(), restoring the original
+    completion, acompletion, responses, and aresponses functions.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_litellm()
+
+        # ... use litellm with tracing ...
+
+        braintrust.unpatch_litellm()  # restore original behavior
+        ```
+    """
+    try:
+        import litellm
+
+        if hasattr(litellm, "_braintrust_wrapped"):
+            litellm.completion = litellm._braintrust_original_completion
+            litellm.acompletion = litellm._braintrust_original_acompletion
+            litellm.responses = litellm._braintrust_original_responses
+            litellm.aresponses = litellm._braintrust_original_aresponses
+
+            delattr(litellm, "_braintrust_wrapped")
+            delattr(litellm, "_braintrust_original_completion")
+            delattr(litellm, "_braintrust_original_acompletion")
+            delattr(litellm, "_braintrust_original_responses")
+            delattr(litellm, "_braintrust_original_aresponses")
     except ImportError:
         pass  # litellm not available
