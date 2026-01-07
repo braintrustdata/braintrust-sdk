@@ -2,12 +2,8 @@ name: js
 
 on:
   pull_request:
-    paths-ignore:
-      - "integrations/otel-js/**"
   push:
     branches: [main]
-    paths-ignore:
-      - "integrations/otel-js/**"
 
 permissions:
   contents: read
