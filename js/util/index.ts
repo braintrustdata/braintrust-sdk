@@ -59,7 +59,6 @@ export type { Score, Scorer, ScorerArgs } from "./score";
 export { constructJsonArray, deterministicReplacer } from "./json_util";
 
 export {
-  applyArrayDeletes,
   forEachMissingKey,
   getObjValueByPath,
   getRecordKeys,

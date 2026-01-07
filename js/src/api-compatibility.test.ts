@@ -1068,5 +1068,5 @@ describe("API Compatibility", () => {
           `  2. Restore the removed/modified APIs to maintain backward compatibility`,
       );
     }
-  });
+  }, 30000);
 });

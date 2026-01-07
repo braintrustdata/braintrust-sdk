@@ -9,7 +9,6 @@ import inspect
 import io
 import json
 import logging
-import math
 import os
 import sys
 import textwrap
@@ -46,7 +45,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps, bt_loads
+from .bt_json import bt_dumps, bt_safe_deep_copy
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -743,13 +742,6 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def _check_json_serializable(event):
-    try:
-        return bt_dumps(event)
-    except (TypeError, ValueError) as e:
-        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
 
@@ -799,6 +791,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.lock = threading.Lock()
         self.logs = []
         self.masking_function: Callable[[Any], Any] | None = None
+        self.upload_attempts: list[BaseAttachment] = []  # Track upload attempts
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
         pass
@@ -812,7 +805,21 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.masking_function = masking_function
 
     def flush(self, batch_size: int | None = None):
-        pass
+        """Flush the memory logger, extracting attachments and tracking upload attempts."""
+        with self.lock:
+            if not self.logs:
+                return
+
+            # Unwrap lazy values and extract attachments
+            logs = [l.get() for l in self.logs]
+
+            # Extract attachments from all logs
+            attachments: list[BaseAttachment] = []
+            for log in logs:
+                _extract_attachments(log, attachments)
+
+            # Track upload attempts (don't actually call upload() in tests)
+            self.upload_attempts.extend(attachments)
 
     def pop(self):
         with self.lock:
@@ -1963,24 +1970,14 @@ def get_span_parent_object(
 
 def _try_log_input(span, f_sig, f_args, f_kwargs):
     if f_sig:
-        bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
-        input_serializable = bound_args
+        input_data = f_sig.bind(*f_args, **f_kwargs).arguments
     else:
-        input_serializable = dict(args=f_args, kwargs=f_kwargs)
-    try:
-        _check_json_serializable(input_serializable)
-    except Exception as e:
-        input_serializable = "<input not json-serializable>: " + str(e)
-    span.log(input=input_serializable)
+        input_data = dict(args=f_args, kwargs=f_kwargs)
+    span.log(input=input_data)
 
 
 def _try_log_output(span, output):
-    output_serializable = output
-    try:
-        _check_json_serializable(output)
-    except Exception as e:
-        output_serializable = "<output not json-serializable>: " + str(e)
-    span.log(output=output_serializable)
+    span.log(output=output)
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -2428,91 +2425,6 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
         raise ValueError("scores must be a dictionary of names with scores")
 
     return event
-
-
-def _deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Creates a deep copy of the given event. Replaces references to user objects
-    with placeholder strings to ensure serializability, except for `Attachment`
-    and `ExternalAttachment` objects, which are preserved and not deep-copied.
-
-    Handles circular references and excessive nesting depth to prevent
-    RecursionError during serialization.
-    """
-    # Maximum depth to prevent hitting Python's recursion limit
-    # Python's default limit is ~1000, we use a conservative limit
-    # to account for existing call stack usage from pytest, application code, etc.
-    MAX_DEPTH = 200
-
-    # Track visited objects to detect circular references
-    visited: set[int] = set()
-
-    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
-        # Check depth limit - use >= to stop before exceeding
-        if depth >= MAX_DEPTH:
-            return "<max depth exceeded>"
-
-        # Check for circular references in mutable containers
-        # Use id() to track object identity
-        if isinstance(v, (Mapping, list, tuple, set)):
-            obj_id = id(v)
-            if obj_id in visited:
-                return "<circular reference>"
-            visited.add(obj_id)
-            try:
-                if isinstance(v, Mapping):
-                    # Prevent dict keys from holding references to user data. Note that
-                    # `bt_json` already coerces keys to string, a behavior that comes from
-                    # `json.dumps`. However, that runs at log upload time, while we want to
-                    # cut out all the references to user objects synchronously in this
-                    # function.
-                    result = {}
-                    for k in v:
-                        try:
-                            key_str = str(k)
-                        except Exception:
-                            # If str() fails on the key, use a fallback representation
-                            key_str = f"<non-stringifiable-key: {type(k).__name__}>"
-                        result[key_str] = _deep_copy_object(v[k], depth + 1)
-                    return result
-                elif isinstance(v, (list, tuple, set)):
-                    return [_deep_copy_object(x, depth + 1) for x in v]
-            finally:
-                # Remove from visited set after processing to allow the same object
-                # to appear in different branches of the tree
-                visited.discard(obj_id)
-
-        if isinstance(v, Span):
-            return "<span>"
-        elif isinstance(v, Experiment):
-            return "<experiment>"
-        elif isinstance(v, Dataset):
-            return "<dataset>"
-        elif isinstance(v, Logger):
-            return "<logger>"
-        elif isinstance(v, BaseAttachment):
-            return v
-        elif isinstance(v, ReadonlyAttachment):
-            return v.reference
-        elif isinstance(v, float):
-            # Handle NaN and Infinity for JSON compatibility
-            if math.isnan(v):
-                return "NaN"
-            elif math.isinf(v):
-                return "Infinity" if v > 0 else "-Infinity"
-            return v
-        elif isinstance(v, (int, str, bool)) or v is None:
-            # Skip roundtrip for primitive types.
-            return v
-        else:
-            # Note: we avoid using copy.deepcopy, because it's difficult to
-            # guarantee the independence of such copied types from their origin.
-            # E.g. the original type could have a `__del__` method that alters
-            # some shared internal state, and we need this deep copy to be
-            # fully-independent from the original.
-            return bt_loads(bt_dumps(v))
-
-    return _deep_copy_object(event)
 
 
 class ObjectIterator(Generic[T]):
@@ -3064,7 +2976,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3120,7 +3032,7 @@ def _update_span_impl(
         event=event,
     )
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3940,8 +3852,7 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        serializable_partial_record = _deep_copy_event(partial_record)
-        _check_json_serializable(serializable_partial_record)
+        serializable_partial_record = bt_safe_deep_copy(partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
@@ -4305,8 +4216,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args[IS_MERGE_FIELD] = True
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
-        _check_json_serializable(args)
-        args = _deep_copy_event(args)
+        args = bt_safe_deep_copy(args)
 
         def compute_args() -> dict[str, Any]:
             return dict(
@@ -4409,8 +4319,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
-        _check_json_serializable(partial_args)
-        partial_args = _deep_copy_event(partial_args)
+        partial_args = bt_safe_deep_copy(partial_args)
 
         def compute_args():
             return dict(
