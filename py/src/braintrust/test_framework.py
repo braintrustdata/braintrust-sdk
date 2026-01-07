@@ -344,6 +344,31 @@ async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
 
 
 @pytest.mark.asyncio
+async def test_eval_no_send_logs_with_none_score(with_memory_logger):
+    """Test that scorers returning None don't crash local mode."""
+
+    def sometimes_none_scorer(input, output, expected):
+        # Return None for first input, score for second
+        if input == "hello":
+            return {"name": "conditional", "score": None}
+        return {"name": "conditional", "score": 1.0}
+
+    result = await Eval(
+        "test-none-score",
+        data=[
+            {"input": "hello", "expected": "hello world"},
+            {"input": "test", "expected": "test world"},
+        ],
+        task=lambda input_val: input_val + " world",
+        scores=[sometimes_none_scorer],
+        no_send_logs=True,
+    )
+
+    # Should not crash and should calculate average from non-None scores only
+    assert result.summary.scores["conditional"].score == 1.0  # Only the second score counts
+
+
+@pytest.mark.asyncio
 async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple_scorer):
     """Test that hooks.tags can be appended to and logged."""
 
