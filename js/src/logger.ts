@@ -1879,6 +1879,23 @@ function _getOrgName(orgName?: string | null): string | undefined {
 }
 
 /**
+ * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+ * if we have the info, otherwise return null.
+ * Resolution order: state -> linkArgs -> env var
+ */
+function _getLinkBaseUrl(
+  state: BraintrustState,
+  linkArgs?: LinkArgs,
+): string | null {
+  const appUrl = _getAppUrl(state.appUrl || linkArgs?.app_url);
+  const orgName = _getOrgName(state.orgName || linkArgs?.org_name);
+  if (!orgName) {
+    return null;
+  }
+  return `${appUrl}/app/${orgName}`;
+}
+
+/**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
  *
@@ -2260,12 +2277,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * Resolution order: state -> linkArgs -> env var
    */
   public _getLinkBaseUrl(): string | null {
-    const appUrl = _getAppUrl(this.state.appUrl || this._linkArgs?.app_url);
-    const orgName = _getOrgName(this.state.orgName || this._linkArgs?.org_name);
-    if (!orgName) {
-      return null;
-    }
-    return `${appUrl}/app/${orgName}`;
+    return _getLinkBaseUrl(this.state, this._linkArgs);
   }
 }
 
@@ -5795,12 +5807,10 @@ export class SpanImpl implements Span {
 
       // For EXPERIMENT or if Logger not available, fall back to state -> env var
       if (!baseUrl) {
-        const appUrl = _getAppUrl(this._state.appUrl);
-        const orgName = _getOrgName(this._state.orgName);
-        if (!orgName) {
+        baseUrl = _getLinkBaseUrl(this._state);
+        if (!baseUrl) {
           throw new Error("log-in-or-provide-org-name");
         }
-        baseUrl = `${appUrl}/app/${orgName}`;
       }
 
       return this._link(baseUrl);
