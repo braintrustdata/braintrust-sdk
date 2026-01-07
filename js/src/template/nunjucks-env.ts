@@ -27,7 +27,8 @@ export function renderNunjucksString(
   strict = false,
 ): string {
   try {
-    return getNunjucksEnv(strict).renderString(template, variables);
+    const result = getNunjucksEnv(strict).renderString(template, variables);
+    return result;
   } catch (error) {
     if (
       error instanceof Error &&

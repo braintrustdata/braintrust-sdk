@@ -56,6 +56,7 @@ import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type ChatCompletionMessageParamType as Message,
   type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
+  type ChatCompletionContentPartType as ChatCompletionContentPart,
   PromptData as promptDataSchema,
   type PromptDataType as PromptData,
   Prompt as promptSchema,
@@ -4729,9 +4730,32 @@ async function resolveAttachmentsToBase64<T extends Record<string, any>>(
   state: BraintrustState | undefined,
 ): Promise<T> {
   for (const [key, value] of Object.entries(event)) {
+    // Check for inline URL marker first
+    if (
+      value &&
+      typeof value === "object" &&
+      "__inline_url__" in value &&
+      "url" in value
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = value.url;
+      continue;
+    }
+
     if (value instanceof ReadonlyAttachment) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (event as any)[key] = await value.asBase64Url();
+      continue;
+    }
+
+    if (value instanceof BaseAttachment) {
+      // Convert Attachment/ExternalAttachment to base64
+      const blob = await value.data();
+      const buf = await blob.arrayBuffer();
+      const base64 = Buffer.from(buf).toString("base64");
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] =
+        `data:${value.reference.content_type};base64,${base64}`;
       continue;
     }
 
@@ -4745,6 +4769,334 @@ async function resolveAttachmentsToBase64<T extends Record<string, any>>(
   }
 
   return event;
+}
+
+interface PromptAttachmentMetadata {
+  base64Url: string;
+  contentType: string;
+  filename: string;
+}
+
+// Map of base64 URL to attachment metadata
+type AttachmentMetadataMap = Map<string, PromptAttachmentMetadata>;
+
+function isImageContentType(contentType: string): boolean {
+  return contentType.startsWith("image/");
+}
+
+/**
+ * Converts serialized attachment references back into ReadonlyAttachment objects.
+ * This is useful when receiving attachment references from the API that need to be
+ * rendered in templates.
+ *
+ * @param value The value to hydrate (can be any type)
+ * @param state Optional BraintrustState for attachment downloads
+ * @returns The same structure with attachment references converted to ReadonlyAttachment objects
+ */
+function hydrateAttachmentReferences<T>(value: T, state?: BraintrustState): T {
+  if (!value) {
+    return value;
+  }
+
+  // Check if this is an attachment reference object (wrapped format)
+  if (
+    typeof value === "object" &&
+    "reference" in value &&
+    value.reference &&
+    typeof value.reference === "object" &&
+    "type" in value.reference &&
+    (value.reference.type === BRAINTRUST_ATTACHMENT ||
+      value.reference.type === EXTERNAL_ATTACHMENT)
+  ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return new ReadonlyAttachment(
+      value.reference as AttachmentReference,
+      state,
+    ) as T;
+  }
+
+  // Check if this is a direct attachment object from playground (unwrapped format)
+  // Format: { type: "braintrust_attachment" | "inline_attachment", content_type: "...", filename: "...", key: "..." | src: "..." }
+  if (
+    typeof value === "object" &&
+    "type" in value &&
+    "content_type" in value &&
+    "filename" in value
+  ) {
+    if (
+      value.type === "braintrust_attachment" ||
+      value.type === "inline_attachment"
+    ) {
+      // Convert the direct format to the reference format that ReadonlyAttachment expects
+      let reference: AttachmentReference;
+
+      if (value.type === "braintrust_attachment" && "key" in value) {
+        // Braintrust attachment with a key - create ReadonlyAttachment to download via API
+        reference = {
+          type: BRAINTRUST_ATTACHMENT,
+          content_type: value.content_type as string,
+          filename: value.filename as string,
+          key: value.key as string,
+        };
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        return new ReadonlyAttachment(reference, state) as T;
+      } else if (value.type === "inline_attachment" && "src" in value) {
+        // External/inline attachment with a src URL - wrap it in a special marker object
+        // that preserves metadata but doesn't try to download
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        return {
+          __inline_url__: true,
+          url: value.src,
+          content_type: value.content_type,
+          filename: value.filename,
+        } as T;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        return value;
+      }
+    }
+  }
+
+  // Recursively process arrays
+  if (Array.isArray(value)) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return value.map((item) => hydrateAttachmentReferences(item, state)) as T;
+  }
+
+  // Recursively process objects
+  if (typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = hydrateAttachmentReferences(val, state);
+    }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return result as T;
+  }
+
+  return value;
+}
+
+// Recursively collect all attachments and their base64 URLs
+async function collectAttachmentMetadata(
+  value: unknown,
+  state?: BraintrustState,
+): Promise<AttachmentMetadataMap> {
+  const metadata: AttachmentMetadataMap = new Map();
+
+  async function collect(v: unknown): Promise<void> {
+    // Check for inline URL marker first
+    if (
+      v &&
+      typeof v === "object" &&
+      "__inline_url__" in v &&
+      "url" in v &&
+      "content_type" in v &&
+      "filename" in v
+    ) {
+      const url = v.url as string;
+      metadata.set(url, {
+        base64Url: url,
+        contentType: v.content_type as string,
+        filename: v.filename as string,
+      });
+      return;
+    }
+
+    if (v instanceof ReadonlyAttachment) {
+      const base64Url = await v.asBase64Url();
+      metadata.set(base64Url, {
+        base64Url,
+        contentType: v.reference.content_type,
+        filename: v.reference.filename,
+      });
+    } else if (v instanceof BaseAttachment) {
+      // Convert Attachment/ExternalAttachment to base64
+      const blob = await v.data();
+      const buf = await blob.arrayBuffer();
+      const base64 = Buffer.from(buf).toString("base64");
+      const base64Url = `data:${v.reference.content_type};base64,${base64}`;
+      metadata.set(base64Url, {
+        base64Url,
+        contentType: v.reference.content_type,
+        filename: v.reference.filename,
+      });
+    } else if (Array.isArray(v)) {
+      for (const item of v) {
+        await collect(item);
+      }
+    } else if (v && typeof v === "object") {
+      for (const val of Object.values(v)) {
+        await collect(val);
+      }
+    }
+  }
+
+  await collect(value);
+  return metadata;
+}
+
+function transformStringToContentParts(
+  renderedString: string,
+  attachmentMetadata: AttachmentMetadataMap,
+): ChatCompletionContentPart[] {
+  const contentParts: ChatCompletionContentPart[] = [];
+  let remaining = renderedString;
+
+  // Helper to unescape HTML entities (Nunjucks escapes & to &amp; etc.)
+  const unescapeHtml = (str: string): string => {
+    return str
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'");
+  };
+
+  while (remaining.length > 0) {
+    // Find the earliest attachment URL in the remaining string
+    // We need to check both the original URL and its HTML-escaped version
+    let earliestIndex = remaining.length;
+    let earliestUrl: string | null = null;
+    let earliestMetadata: PromptAttachmentMetadata | null = null;
+    let matchedString: string | null = null;
+
+    for (const [base64Url, metadata] of attachmentMetadata.entries()) {
+      // Try to find the URL as-is first
+      let index = remaining.indexOf(base64Url);
+      let foundString = base64Url;
+
+      // If not found, try HTML-escaped version (Nunjucks escapes & to &amp;)
+      if (index === -1) {
+        const escapedUrl = base64Url.replace(/&/g, "&amp;");
+        index = remaining.indexOf(escapedUrl);
+        if (index !== -1) {
+          foundString = escapedUrl;
+        }
+      }
+
+      if (index !== -1 && index < earliestIndex) {
+        earliestIndex = index;
+        earliestUrl = base64Url; // Use original URL for content parts
+        earliestMetadata = metadata;
+        matchedString = foundString; // Use matched string for slicing
+      }
+    }
+
+    if (earliestUrl && earliestMetadata) {
+      // Add text before the attachment (if non-empty)
+      const textBefore = remaining.slice(0, earliestIndex);
+      if (textBefore.trim().length > 0) {
+        contentParts.push({ type: "text", text: textBefore });
+      }
+
+      // Add the attachment content part
+      if (isImageContentType(earliestMetadata.contentType)) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: earliestUrl },
+        });
+      } else {
+        contentParts.push({
+          type: "file",
+          file: {
+            file_data: earliestUrl,
+            filename: earliestMetadata.filename,
+          },
+        });
+      }
+
+      // Continue with the rest of the string
+      // Use matchedString length (which might be longer if HTML-escaped)
+      remaining = remaining.slice(
+        earliestIndex + (matchedString?.length || earliestUrl.length),
+      );
+    } else {
+      // No more attachments found, add remaining text
+      if (remaining.trim().length > 0) {
+        contentParts.push({ type: "text", text: remaining });
+      }
+      break;
+    }
+  }
+
+  return contentParts;
+}
+
+function transformMessageContent(
+  content: string | ChatCompletionContentPart[] | undefined,
+  attachmentMetadata: AttachmentMetadataMap,
+): string | ChatCompletionContentPart[] | undefined {
+  if (!content || attachmentMetadata.size === 0) {
+    return content;
+  }
+
+  // If already content parts, check text parts for attachment URLs
+  if (Array.isArray(content)) {
+    let hasAttachments = false;
+    const transformed: ChatCompletionContentPart[] = [];
+
+    for (const part of content) {
+      if (part.type === "text") {
+        // Check if this text part contains any of our attachment URLs
+        let containsAttachment = false;
+        for (const base64Url of attachmentMetadata.keys()) {
+          if (part.text.includes(base64Url)) {
+            containsAttachment = true;
+            break;
+          }
+        }
+
+        if (containsAttachment) {
+          // Text part contains attachment URLs, expand to multiple parts
+          const expandedParts = transformStringToContentParts(
+            part.text,
+            attachmentMetadata,
+          );
+          transformed.push(...expandedParts);
+          hasAttachments = true;
+        } else {
+          transformed.push(part);
+        }
+      } else {
+        transformed.push(part);
+      }
+    }
+
+    return hasAttachments ? transformed : content;
+  }
+
+  // String content - check for attachment URLs
+  if (typeof content === "string") {
+    // Check if any of our attachment URLs are in the content
+    for (const base64Url of attachmentMetadata.keys()) {
+      if (content.includes(base64Url)) {
+        // Contains attachment URLs, transform to content parts
+        return transformStringToContentParts(content, attachmentMetadata);
+      }
+    }
+  }
+
+  return content;
+}
+
+function renderMessageWithAttachmentTransform<T extends Message>(
+  render: (template: string) => string,
+  message: T,
+  attachmentMetadata: AttachmentMetadataMap,
+): T {
+  // First render normally
+  const rendered = renderMessage(render, message);
+
+  // Transform content if it contains attachment URLs
+  if ("content" in rendered && rendered.content) {
+    const transformedContent = transformMessageContent(
+      rendered.content,
+      attachmentMetadata,
+    );
+    return { ...rendered, content: transformedContent };
+  }
+
+  return rendered;
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -6431,6 +6783,7 @@ export class Prompt<
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
   private readonly __braintrust_prompt_marker = true;
+  private _attachmentMetadata?: AttachmentMetadataMap;
 
   constructor(
     private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
@@ -6526,17 +6879,31 @@ export class Prompt<
       templateFormat?: TemplateFormat;
     } = {},
   ): Promise<CompiledPrompt<Flavor>> {
-    const hydrated =
+    // Collect attachment metadata before converting to base64
+    this._attachmentMetadata =
       buildArgs instanceof Object
-        ? await resolveAttachmentsToBase64(buildArgs, options.state)
-        : buildArgs;
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return this.runBuild(hydrated, {
-      flavor: options.flavor ?? "chat",
-      messages: options.messages,
-      strict: options.strict,
-      templateFormat: options.templateFormat,
-    }) as CompiledPrompt<Flavor>;
+        ? await collectAttachmentMetadata(buildArgs, options.state)
+        : new Map();
+
+    try {
+      const hydrated =
+        buildArgs instanceof Object
+          ? await resolveAttachmentsToBase64(buildArgs, options.state)
+          : buildArgs;
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const result = this.runBuild(hydrated, {
+        flavor: options.flavor ?? "chat",
+        messages: options.messages,
+        strict: options.strict,
+        templateFormat: options.templateFormat,
+      }) as CompiledPrompt<Flavor>;
+
+      return result;
+    } finally {
+      // Clear metadata after build completes
+      this._attachmentMetadata = undefined;
+    }
   }
 
   private runBuild<Flavor extends "chat" | "completion">(
@@ -6608,10 +6975,9 @@ export class Prompt<
       options.templateFormat ?? promptDataTemplateFormat,
     );
 
-    const renderedPrompt = Prompt.renderPrompt({
-      prompt,
-      buildArgs,
-      options: { ...options, templateFormat: resolvedTemplateFormat },
+    const renderedPrompt = this.renderPromptWithMetadata(prompt, buildArgs, {
+      ...options,
+      templateFormat: resolvedTemplateFormat,
     });
 
     if (flavor === "chat") {
@@ -6656,27 +7022,40 @@ export class Prompt<
     }
   }
 
-  static renderPrompt({
-    prompt,
-    buildArgs,
-    options,
-  }: {
-    prompt: PromptBlockData;
-    buildArgs: unknown;
+  private renderPromptWithMetadata(
+    prompt: PromptBlockData,
+    buildArgs: unknown,
     options: {
       strict?: boolean;
       messages?: Message[];
       templateFormat?: TemplateFormat;
-    };
-  }): PromptBlockData {
+    },
+  ): PromptBlockData {
     const escape = (v: unknown) => {
       if (v === undefined) {
         throw new Error("Missing!");
       } else if (typeof v === "string") {
         return v;
-      } else if (v instanceof ReadonlyAttachment) {
+      } else if (
+        v instanceof ReadonlyAttachment ||
+        v instanceof BaseAttachment
+      ) {
         throw new Error(
           "Use buildWithAttachments() to build prompts with attachments",
+        );
+      } else if (
+        v &&
+        typeof v === "object" &&
+        "reference" in v &&
+        v.reference &&
+        typeof v.reference === "object" &&
+        "type" in v.reference &&
+        (v.reference.type === BRAINTRUST_ATTACHMENT ||
+          v.reference.type === EXTERNAL_ATTACHMENT)
+      ) {
+        // This is a serialized attachment reference that can't be rendered inline
+        throw new Error(
+          "Attachment references cannot be rendered in templates. Use buildWithAttachments() with actual Attachment objects, or access the attachment data before rendering.",
         );
       } else {
         return JSON.stringify(v);
@@ -6698,9 +7077,15 @@ export class Prompt<
           templateFormat: templateFormat,
         });
 
-      const baseMessages = (prompt.messages || []).map((m) =>
-        renderMessage(render, m),
-      );
+      const baseMessages = this._attachmentMetadata
+        ? (prompt.messages || []).map((m) =>
+            renderMessageWithAttachmentTransform(
+              render,
+              m,
+              this._attachmentMetadata!,
+            ),
+          )
+        : (prompt.messages || []).map((m) => renderMessage(render, m));
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 
       const messages: Message[] = [
@@ -6740,6 +7125,29 @@ export class Prompt<
     }
   }
 
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+      templateFormat?: TemplateFormat;
+    };
+  }): PromptBlockData {
+    // Create a temporary instance to use the instance method
+    // This maintains backward compatibility with existing code
+    const tempPrompt = new Prompt(
+      { id: "", slug: "", _xact_id: "", prompt_data: {} } as PromptRowWithId,
+      {},
+      false,
+    );
+    return tempPrompt.renderPromptWithMetadata(prompt, buildArgs, options);
+  }
+
   private getParsedPromptData(): PromptData | undefined {
     if (!this.hasParsedPromptData) {
       this.parsedPromptData = promptDataSchema.parse(this.metadata.prompt_data);
@@ -6768,6 +7176,22 @@ export class Prompt<
       {},
       false,
     );
+  }
+
+  /**
+   * Converts serialized attachment references back into ReadonlyAttachment objects.
+   * This is useful when receiving attachment references from the API that need to be
+   * rendered in templates with buildWithAttachments().
+   *
+   * @param value The value to hydrate (can be any type)
+   * @param state Optional BraintrustState for attachment downloads
+   * @returns The same structure with attachment references converted to ReadonlyAttachment objects
+   */
+  public static hydrateAttachmentReferences<T>(
+    value: T,
+    state?: BraintrustState,
+  ): T {
+    return hydrateAttachmentReferences(value, state);
   }
 }
 

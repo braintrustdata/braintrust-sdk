@@ -15,6 +15,7 @@ import {
   withParent,
   startSpan,
   Attachment,
+  ReadonlyAttachment,
   deepCopyEvent,
   renderMessage,
 } from "./logger";
@@ -1176,5 +1177,539 @@ describe("sensitive data redaction", () => {
     // I'm not entirely sure why a span may be inside of a background event, but just in case
     const copy = deepCopyEvent({ input: span });
     expect(copy.input).toBe("<span>");
+  });
+});
+
+describe("buildWithAttachments - attachment arrays in templates", () => {
+  // Helper to create a minimal 1x1 PNG image
+  const createPngBlob = () => {
+    // Minimal 1x1 transparent PNG
+    const pngBytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+      0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+      0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ]);
+    return new Blob([pngBytes], { type: "image/png" });
+  };
+
+  const createPdfBlob = () => {
+    const pdfContent =
+      "%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n149\n%EOF";
+    return new Blob([pdfContent], { type: "application/pdf" });
+  };
+
+  const createPromptWithTemplate = (
+    template: string,
+    templateFormat: "mustache" | "nunjucks",
+  ) => {
+    return new Prompt(
+      {
+        id: "test-prompt-1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: templateFormat,
+          options: { model: "gpt-4o" },
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: template,
+              },
+            ],
+          },
+        },
+      },
+      {},
+      true,
+    );
+  };
+
+  test("single image in template - mustache", async () => {
+    const pngBlob = createPngBlob();
+    const attachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate("{{image}}", "mustache");
+    const result = await prompt.buildWithAttachments({ image: attachment });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(1);
+    expect(content[0].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("single image in template - nunjucks", async () => {
+    const pngBlob = createPngBlob();
+    const attachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate("{{image}}", "nunjucks");
+    const result = await prompt.buildWithAttachments({ image: attachment });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(1);
+    expect(content[0].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("array of images with loop - mustache", async () => {
+    const pngBlob1 = createPngBlob();
+    const pngBlob2 = createPngBlob();
+    const attachment1 = new Attachment({
+      data: pngBlob1,
+      filename: "test1.png",
+      contentType: "image/png",
+    });
+    const attachment2 = new Attachment({
+      data: pngBlob2,
+      filename: "test2.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate(
+      "{{#images}}{{.}}{{/images}}",
+      "mustache",
+    );
+    const result = await prompt.buildWithAttachments({
+      images: [attachment1, attachment2],
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[1].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[1].image_url?.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("array of images with loop - nunjucks", async () => {
+    const pngBlob1 = createPngBlob();
+    const pngBlob2 = createPngBlob();
+    const attachment1 = new Attachment({
+      data: pngBlob1,
+      filename: "test1.png",
+      contentType: "image/png",
+    });
+    const attachment2 = new Attachment({
+      data: pngBlob2,
+      filename: "test2.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate(
+      "{% for img in images %}{{img}}{% endfor %}",
+      "nunjucks",
+    );
+    const result = await prompt.buildWithAttachments({
+      images: [attachment1, attachment2],
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[1].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[1].image_url?.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("mixed text and attachments - mustache", async () => {
+    const pngBlob = createPngBlob();
+    const attachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate(
+      "Here is the image: {{img}} and some text after",
+      "mustache",
+    );
+    const result = await prompt.buildWithAttachments({ img: attachment });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      text?: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(3);
+    expect(content[0].type).toBe("text");
+    expect(content[0].text).toBe("Here is the image: ");
+    expect(content[1].type).toBe("image_url");
+    expect(content[1].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[2].type).toBe("text");
+    expect(content[2].text).toBe(" and some text after");
+  });
+
+  test("mixed text and attachments - nunjucks", async () => {
+    const pngBlob = createPngBlob();
+    const attachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate(
+      "Here is the image: {{img}} and some text after",
+      "nunjucks",
+    );
+    const result = await prompt.buildWithAttachments({ img: attachment });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      text?: string;
+      image_url?: { url: string };
+    }>;
+    expect(content).toHaveLength(3);
+    expect(content[0].type).toBe("text");
+    expect(content[0].text).toBe("Here is the image: ");
+    expect(content[1].type).toBe("image_url");
+    expect(content[1].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[2].type).toBe("text");
+    expect(content[2].text).toBe(" and some text after");
+  });
+
+  test("file vs image detection - mustache", async () => {
+    const pngBlob = createPngBlob();
+    const pdfBlob = createPdfBlob();
+    const imageAttachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+    const fileAttachment = new Attachment({
+      data: pdfBlob,
+      filename: "test.pdf",
+      contentType: "application/pdf",
+    });
+
+    const prompt = createPromptWithTemplate("{{image}}{{file}}", "mustache");
+    const result = await prompt.buildWithAttachments({
+      image: imageAttachment,
+      file: fileAttachment,
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+      file?: { file_data: string; filename: string };
+    }>;
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[1].type).toBe("file");
+    expect(content[1].file?.file_data).toMatch(
+      /^data:application\/pdf;base64,/,
+    );
+    expect(content[1].file?.filename).toBe("test.pdf");
+  });
+
+  test("file vs image detection - nunjucks", async () => {
+    const pngBlob = createPngBlob();
+    const pdfBlob = createPdfBlob();
+    const imageAttachment = new Attachment({
+      data: pngBlob,
+      filename: "test.png",
+      contentType: "image/png",
+    });
+    const fileAttachment = new Attachment({
+      data: pdfBlob,
+      filename: "test.pdf",
+      contentType: "application/pdf",
+    });
+
+    const prompt = createPromptWithTemplate("{{image}}{{file}}", "nunjucks");
+    const result = await prompt.buildWithAttachments({
+      image: imageAttachment,
+      file: fileAttachment,
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{
+      type: string;
+      image_url?: { url: string };
+      file?: { file_data: string; filename: string };
+    }>;
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[0].image_url?.url).toMatch(/^data:image\/png;base64,/);
+    expect(content[1].type).toBe("file");
+    expect(content[1].file?.file_data).toMatch(
+      /^data:application\/pdf;base64,/,
+    );
+    expect(content[1].file?.filename).toBe("test.pdf");
+  });
+
+  test("empty/whitespace text filtering - mustache", async () => {
+    const pngBlob1 = createPngBlob();
+    const pngBlob2 = createPngBlob();
+    const attachment1 = new Attachment({
+      data: pngBlob1,
+      filename: "test1.png",
+      contentType: "image/png",
+    });
+    const attachment2 = new Attachment({
+      data: pngBlob2,
+      filename: "test2.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate("{{img1}}   {{img2}}", "mustache");
+    const result = await prompt.buildWithAttachments({
+      img1: attachment1,
+      img2: attachment2,
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{ type: string }>;
+    // Should only have 2 image parts, whitespace should be filtered out
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[1].type).toBe("image_url");
+  });
+
+  test("empty/whitespace text filtering - nunjucks", async () => {
+    const pngBlob1 = createPngBlob();
+    const pngBlob2 = createPngBlob();
+    const attachment1 = new Attachment({
+      data: pngBlob1,
+      filename: "test1.png",
+      contentType: "image/png",
+    });
+    const attachment2 = new Attachment({
+      data: pngBlob2,
+      filename: "test2.png",
+      contentType: "image/png",
+    });
+
+    const prompt = createPromptWithTemplate("{{img1}}   {{img2}}", "nunjucks");
+    const result = await prompt.buildWithAttachments({
+      img1: attachment1,
+      img2: attachment2,
+    });
+
+    expect(Array.isArray(result.messages[0].content)).toBe(true);
+    const content = result.messages[0].content as Array<{ type: string }>;
+    // Should only have 2 image parts, whitespace should be filtered out
+    expect(content).toHaveLength(2);
+    expect(content[0].type).toBe("image_url");
+    expect(content[1].type).toBe("image_url");
+  });
+
+  test("plain string data URLs not transformed - mustache", async () => {
+    const fakeDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    const prompt = createPromptWithTemplate(
+      "Here is a string: {{url}}",
+      "mustache",
+    );
+    const result = await prompt.buildWithAttachments({ url: fakeDataUrl });
+
+    // Since this data URL didn't come from an attachment, it should remain as text
+    expect(
+      typeof result.messages[0].content === "string" ||
+        Array.isArray(result.messages[0].content),
+    ).toBe(true);
+    if (Array.isArray(result.messages[0].content)) {
+      const content = result.messages[0].content as Array<{
+        type: string;
+        text?: string;
+      }>;
+      expect(content.every((part) => part.type === "text")).toBe(true);
+    }
+  });
+
+  test("plain string data URLs not transformed - nunjucks", async () => {
+    const fakeDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    const prompt = createPromptWithTemplate(
+      "Here is a string: {{url}}",
+      "nunjucks",
+    );
+    const result = await prompt.buildWithAttachments({ url: fakeDataUrl });
+
+    // Since this data URL didn't come from an attachment, it should remain as text
+    expect(
+      typeof result.messages[0].content === "string" ||
+        Array.isArray(result.messages[0].content),
+    ).toBe(true);
+    if (Array.isArray(result.messages[0].content)) {
+      const content = result.messages[0].content as Array<{
+        type: string;
+        text?: string;
+      }>;
+      expect(content.every((part) => part.type === "text")).toBe(true);
+    }
+  });
+
+  test("no attachments baseline - mustache", async () => {
+    const prompt = createPromptWithTemplate("Hello {{name}}", "mustache");
+    const result = await prompt.buildWithAttachments({ name: "World" });
+
+    expect(typeof result.messages[0].content).toBe("string");
+    expect(result.messages[0].content).toBe("Hello World");
+  });
+
+  test("no attachments baseline - nunjucks", async () => {
+    const prompt = createPromptWithTemplate("Hello {{name}}", "nunjucks");
+    const result = await prompt.buildWithAttachments({ name: "World" });
+
+    expect(typeof result.messages[0].content).toBe("string");
+    expect(result.messages[0].content).toBe("Hello World");
+  });
+});
+
+describe("Prompt.hydrateAttachmentReferences", () => {
+  test("handles inline_attachment format", () => {
+    const input = {
+      type: "inline_attachment",
+      content_type: "image/png",
+      filename: "test.png",
+      src: "https://example.com/image.png",
+    };
+
+    const result = Prompt.hydrateAttachmentReferences(input);
+
+    expect(result).toEqual({
+      __inline_url__: true,
+      url: "https://example.com/image.png",
+      content_type: "image/png",
+      filename: "test.png",
+    });
+  });
+
+  test("handles braintrust_attachment format", () => {
+    const state = new BraintrustState({});
+    const input = {
+      type: "braintrust_attachment",
+      content_type: "image/jpeg",
+      filename: "photo.jpg",
+      key: "s3://bucket/path/photo.jpg",
+    };
+
+    const result = Prompt.hydrateAttachmentReferences(input, state);
+
+    // Result should be a ReadonlyAttachment
+    expect(result).toBeInstanceOf(ReadonlyAttachment);
+  });
+
+  test("handles wrapped attachment reference format", () => {
+    const state = new BraintrustState({});
+    const input = {
+      reference: {
+        type: "braintrust_attachment",
+        content_type: "application/pdf",
+        filename: "document.pdf",
+        key: "s3://bucket/path/document.pdf",
+      },
+    };
+
+    const result = Prompt.hydrateAttachmentReferences(input, state);
+
+    // Result should be a ReadonlyAttachment
+    expect(result).toBeInstanceOf(ReadonlyAttachment);
+  });
+
+  test("handles arrays with mixed attachment types", () => {
+    const state = new BraintrustState({});
+    const input = [
+      {
+        type: "inline_attachment",
+        content_type: "image/png",
+        filename: "img1.png",
+        src: "https://example.com/img1.png",
+      },
+      {
+        type: "braintrust_attachment",
+        content_type: "image/jpeg",
+        filename: "img2.jpg",
+        key: "s3://bucket/img2.jpg",
+      },
+      "regular string",
+    ];
+
+    const result = Prompt.hydrateAttachmentReferences(input, state);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(3);
+    // First should be inline URL wrapper
+    expect(result[0]).toMatchObject({
+      __inline_url__: true,
+      url: "https://example.com/img1.png",
+    });
+    // Second should be ReadonlyAttachment
+    expect(result[1]).toBeInstanceOf(ReadonlyAttachment);
+    // Third should be unchanged
+    expect(result[2]).toBe("regular string");
+  });
+
+  test("handles nested objects with attachments", () => {
+    const state = new BraintrustState({});
+    const input = {
+      images: [
+        {
+          type: "inline_attachment",
+          content_type: "image/png",
+          filename: "nested.png",
+          src: "https://example.com/nested.png",
+        },
+      ],
+      text: "Some text",
+    };
+
+    const result = Prompt.hydrateAttachmentReferences(input, state);
+
+    expect(result.text).toBe("Some text");
+    expect(result.images[0]).toMatchObject({
+      __inline_url__: true,
+      url: "https://example.com/nested.png",
+    });
+  });
+
+  test("preserves non-attachment objects", () => {
+    const input = {
+      regular: "object",
+      with: "properties",
+      number: 42,
+    };
+
+    const result = Prompt.hydrateAttachmentReferences(input);
+
+    expect(result).toEqual(input);
   });
 });
