@@ -5,6 +5,9 @@ export const spanTypeAttributeValues = [
   "eval",
   "task",
   "tool",
+  "automation",
+  "facet",
+  "preprocessor",
 ] as const;
 
 // DEPRECATED: Use `spanTypeAttributeValues` instead
@@ -15,6 +18,9 @@ export enum SpanTypeAttribute {
   EVAL = "eval",
   TASK = "task",
   TOOL = "tool",
+  AUTOMATION = "automation",
+  FACET = "facet",
+  PREPROCESSOR = "preprocessor",
 }
 
 export type SpanType = (typeof spanTypeAttributeValues)[number];
