@@ -1,11 +1,11 @@
 [project]
 name = "braintrust-adk"
-version = "0.3.0"
+version = "0.3.1"
 description = "Braintrust Google ADK integration"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "braintrust>=0.2.4",
+    "braintrust>=0.4.1",
     "google-adk>=1.14.1",
     "wrapt>=1.17.3",
 ]
@@ -39,6 +39,9 @@ members = [
     "examples",
     ".",
 ]
+
+[tool.uv.sources]
+braintrust = { path = "../../py", editable = true }
 
 [dependency-groups]
 dev = [
