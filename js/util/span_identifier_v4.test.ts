@@ -1,6 +1,8 @@
 import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   SpanComponentsV4,
+  SpanComponentsV4Data,
+  makeScorerPropagatedEvent,
   parseParent,
   spanComponentsV4Schema,
 } from "./span_identifier_v4";
@@ -356,6 +358,59 @@ describe("SpanComponentsV4", () => {
       expect(playgroundDeserialized.data.object_type).toBe(
         SpanObjectTypeV3.PLAYGROUND_LOGS,
       );
+    });
+  });
+
+  describe("makeScorerPropagatedEvent", () => {
+    test("should create scorer propagated event with no parent", () => {
+      const result = makeScorerPropagatedEvent(undefined);
+      expect(result).toEqual({
+        span_attributes: { purpose: "scorer" },
+      });
+    });
+
+    test("should merge with existing propagated_event from V4 parent", () => {
+      // Create a V4-encoded parent with existing propagated_event
+      const parentData: SpanComponentsV4Data = {
+        object_type: SpanObjectTypeV3.EXPERIMENT,
+        object_id: "exp-123",
+        row_id: undefined,
+        span_id: undefined,
+        root_span_id: undefined,
+        propagated_event: {
+          existing_key: "existing_value",
+          span_attributes: { some_attr: "value" },
+        },
+      };
+      const parent = new SpanComponentsV4(parentData).toStr();
+
+      const result = makeScorerPropagatedEvent(parent);
+
+      // Should merge purpose into span_attributes while preserving existing keys
+      expect(result.existing_key).toBe("existing_value");
+      expect(result.span_attributes).toEqual({
+        some_attr: "value",
+        purpose: "scorer",
+      });
+    });
+
+    test("should correctly parse V4 parent with purpose already set", () => {
+      // Simulate the case where async scoring already set purpose='scorer' in propagated_event
+      const parentData: SpanComponentsV4Data = {
+        object_type: SpanObjectTypeV3.EXPERIMENT,
+        object_id: "exp-123",
+        row_id: undefined,
+        span_id: undefined,
+        root_span_id: undefined,
+        propagated_event: {
+          span_attributes: { purpose: "scorer" },
+        },
+      };
+      const parent = new SpanComponentsV4(parentData).toStr();
+
+      const result = makeScorerPropagatedEvent(parent);
+
+      expect(result.span_attributes).toEqual({ purpose: "scorer" });
     });
   });
 });

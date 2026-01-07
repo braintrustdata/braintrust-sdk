@@ -154,14 +154,43 @@ async def test_mcp_tool_error_handling():
 @pytest.mark.asyncio
 async def test_setup_adk_patches_mcp_tool():
     """Test that setup_adk automatically patches McpTool."""
-    with patch("braintrust_adk.init_logger"):
-        with patch("braintrust_adk.wrap_mcp_tool") as mock_wrap:
-            # Mock google-adk imports
-            mock_mcp_tool_module = MagicMock()
-            MockMcpTool = MagicMock()
-            mock_mcp_tool_module.McpTool = MockMcpTool
+    import importlib
+    import sys
 
-            with patch.dict("sys.modules", {"google.adk.tools.mcp_tool.mcp_tool": mock_mcp_tool_module}):
+    # Mock google-adk imports
+    mock_mcp_tool_module = MagicMock()
+    MockMcpTool = MagicMock()
+    mock_mcp_tool_module.McpTool = MockMcpTool
+
+    # Mock google.adk modules hierarchy
+    mock_google = MagicMock()
+    mock_google_adk = MagicMock()
+    mock_google_adk_tools = MagicMock()
+    mock_google_adk_tools_mcp_tool = MagicMock()
+    mock_google_adk_tools_mcp_tool.mcp_tool = mock_mcp_tool_module
+
+    # Clear all google.adk modules from cache
+    modules_to_remove = [
+        key
+        for key in list(sys.modules.keys())
+        if key.startswith("google.adk.tools.mcp_tool")
+    ]
+    for module in modules_to_remove:
+        del sys.modules[module]
+
+    # Critical: Also clear the mcp_tool submodule to force re-import with mock
+    sys.modules.pop("google.adk.tools.mcp_tool.mcp_tool", None)
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "google.adk.tools.mcp_tool": mock_google_adk_tools_mcp_tool,
+            "google.adk.tools.mcp_tool.mcp_tool": mock_mcp_tool_module,
+        },
+        clear=False,
+    ):
+        with patch("braintrust_adk.init_logger"):
+            with patch("braintrust_adk.wrap_mcp_tool") as mock_wrap:
                 result = setup_adk(project_name="test")
 
                 # Verify wrap_mcp_tool was called
@@ -174,7 +203,7 @@ async def test_setup_adk_graceful_fallback_when_mcp_unavailable():
     """Test that setup_adk gracefully handles MCP not being installed."""
     with patch("braintrust_adk.init_logger"):
         # This test is tricky - we need MCP import to fail but not break other imports
-        # The actual behavior is tested in integration: when Python 3.9 tries to import MCP,
+        # The actual behavior is tested in integration: when MCP is not available,
         # it gets ImportError from the google.adk.tools.mcp_tool module itself
         # For this test, we just verify setup_adk succeeds even when MCP module raises ImportError
 
@@ -183,7 +212,7 @@ async def test_setup_adk_graceful_fallback_when_mcp_unavailable():
         # Should succeed - MCP is optional
         assert result is True
 
-        # In Python 3.9 environment, MCP import fails but setup_adk continues
+        # When MCP is not available, MCP import fails but setup_adk continues
         # This is the actual graceful fallback in action
 
 
