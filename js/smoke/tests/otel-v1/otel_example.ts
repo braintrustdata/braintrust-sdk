@@ -99,7 +99,7 @@ async function main() {
           ).toISOString(),
         });
 
-        await tracer.startActiveSpan("chat.completion", async (aiSpan) => {
+        await tracer.startActiveSpan("ai.span", async (aiSpan) => {
           aiSpan.setAttributes({ model: "gpt-4o-mini" });
           aiSpan.end();
         });
@@ -126,10 +126,10 @@ async function main() {
       .map((span) => span.name)
       .filter((name): name is string => typeof name === "string");
 
-    assert.ok(names.includes("otel-v1.example"), "Root span missing");
+    assert.ok(!names.includes("otel-v1.example"), "root span included");
     assert.ok(
-      !names.includes("chat.completion"),
-      "AI span should have been filtered",
+      names.includes("ai.span"),
+      "AI span should exist in exported spans",
     );
     assert.ok(
       !names.includes("logging span"),
