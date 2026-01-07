@@ -54,7 +54,7 @@ import type { Options } from "tsup";
 async function getEntrypointsFromTsupConfig(): Promise<
   Array<{ name: string; typesPath: string }>
 > {
-  const configPath = path.join(__dirname, "..", "tsup.config.ts");
+  const configPath = path.join(__dirname, "..", "..", "tsup.config.ts");
 
   // Dynamically import the tsup config
   const configModule = await import(configPath);
@@ -1678,7 +1678,7 @@ describe("API Compatibility", () => {
     );
 
     // Get current version from package.json
-    const packageJsonPath = path.join(__dirname, "..", "package.json");
+    const packageJsonPath = path.join(__dirname, "..", "..", "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
     currentVersion = packageJson.version;
 
@@ -1758,7 +1758,12 @@ describe("API Compatibility", () => {
         "package",
         entrypoint.typesPath,
       );
-      const currentTypesPath = path.join(__dirname, "..", entrypoint.typesPath);
+      const currentTypesPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        entrypoint.typesPath,
+      );
 
       // Check if both files exist
       if (!fs.existsSync(publishedTypesPath)) {
