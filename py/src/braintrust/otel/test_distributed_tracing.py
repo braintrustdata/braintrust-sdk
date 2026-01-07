@@ -8,7 +8,6 @@ is exported from one service and imported in another service.
 import os
 
 import pytest
-
 from braintrust.logger import _internal_with_memory_background_logger
 from braintrust.otel import BraintrustSpanProcessor, context_from_span_export
 from braintrust.test_helpers import init_test_logger, preserve_env_vars
@@ -19,6 +18,7 @@ try:
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 except ImportError:
+
     class InMemorySpanExporter:
         def __init__(self):
             pass
@@ -47,10 +47,10 @@ def otel_fixture():
     if not OTEL_AVAILABLE:
         pytest.skip("OpenTelemetry not installed")
 
-    with preserve_env_vars('BRAINTRUST_OTEL_COMPAT', 'BRAINTRUST_API_KEY'):
+    with preserve_env_vars("BRAINTRUST_OTEL_COMPAT", "BRAINTRUST_API_KEY"):
         # Enable OTEL compatibility mode
-        os.environ['BRAINTRUST_OTEL_COMPAT'] = 'true'
-        os.environ['BRAINTRUST_API_KEY'] = 'test-api-key-for-fixture'
+        os.environ["BRAINTRUST_OTEL_COMPAT"] = "true"
+        os.environ["BRAINTRUST_API_KEY"] = "test-api-key-for-fixture"
 
         # Set up memory logger for BT spans
         with _internal_with_memory_background_logger() as memory_logger:
@@ -103,6 +103,7 @@ def test_bt_to_otel_simple_distributed_trace(otel_fixture):
     # ===== Service B: Import context and create OTEL child span =====
     # Simulate receiving exported_context over network (e.g., in HTTP header)
     from opentelemetry import context as otel_context
+
     ctx = context_from_span_export(exported_context)
 
     # Attach the context to make it current, then create the span
@@ -125,22 +126,24 @@ def test_bt_to_otel_simple_distributed_trace(otel_fixture):
     service_b_exported = otel_spans[0]
 
     # Convert OTEL IDs to hex for comparison
-    service_b_trace_id = format(service_b_exported.context.trace_id, '032x')
-    service_b_parent_span_id = format(service_b_exported.parent.span_id, '016x') if service_b_exported.parent else None
+    service_b_trace_id = format(service_b_exported.context.trace_id, "032x")
+    service_b_parent_span_id = format(service_b_exported.parent.span_id, "016x") if service_b_exported.parent else None
 
     # Assert unified trace ID
-    assert service_a_trace_id == service_b_trace_id, \
+    assert service_a_trace_id == service_b_trace_id, (
         f"Trace IDs should match: {service_a_trace_id} != {service_b_trace_id}"
+    )
 
     # Assert Service B span has Service A span as parent
-    assert service_b_parent_span_id == service_a_span_id, \
+    assert service_b_parent_span_id == service_a_span_id, (
         f"Service B parent should be Service A span: {service_b_parent_span_id} != {service_a_span_id}"
+    )
 
     # Assert braintrust.parent attribute is set on OTEL span
-    assert "braintrust.parent" in service_b_exported.attributes, \
-        "OTEL span should have braintrust.parent attribute"
-    assert service_b_exported.attributes["braintrust.parent"] == f"project_name:{project_name}", \
+    assert "braintrust.parent" in service_b_exported.attributes, "OTEL span should have braintrust.parent attribute"
+    assert service_b_exported.attributes["braintrust.parent"] == f"project_name:{project_name}", (
         f"braintrust.parent should be 'project_name:{project_name}'"
+    )
 
 
 if __name__ == "__main__":

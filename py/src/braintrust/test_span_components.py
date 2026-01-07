@@ -6,7 +6,6 @@ Tests serialization, deserialization, OTEL compatibility, and backward compatibi
 from uuid import uuid4
 
 import pytest
-
 from braintrust.id_gen import OTELIDGenerator
 from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from braintrust.span_identifier_v4 import SpanComponentsV4
@@ -22,7 +21,7 @@ class TestSpanComponentsV3:
             object_id=str(uuid4()),
             row_id=str(uuid4()),
             span_id=str(uuid4()),
-            root_span_id=str(uuid4())
+            root_span_id=str(uuid4()),
         )
 
         exported = components.to_str()
@@ -39,7 +38,7 @@ class TestSpanComponentsV3:
         components = SpanComponentsV3(
             object_type=SpanObjectTypeV3.EXPERIMENT,
             object_id=str(uuid4()),
-            propagated_event={"key": "value", "nested": {"a": 1}}
+            propagated_event={"key": "value", "nested": {"a": 1}},
         )
 
         exported = components.to_str()
@@ -53,15 +52,15 @@ class TestSpanComponentsV3:
         """Test that V3 fails to preserve OTEL hex strings for 16-byte IDs (converts to UUID format)."""
         otel_gen = OTELIDGenerator()
         trace_id = otel_gen.get_trace_id()  # 32-char hex (16 bytes)
-        span_id = otel_gen.get_span_id()    # 16-char hex (8 bytes)
+        span_id = otel_gen.get_span_id()  # 16-char hex (8 bytes)
 
         # Use 16-byte hex strings for object_id and root_span_id to see UUID conversion
         components = SpanComponentsV3(
             object_type=SpanObjectTypeV3.PROJECT_LOGS,
             object_id=trace_id,  # 16-byte hex should get converted to UUID format
-            row_id='test-row-id',
-            span_id=span_id,     # 8-byte hex might be preserved
-            root_span_id=trace_id  # 16-byte hex should get converted to UUID format
+            row_id="test-row-id",
+            span_id=span_id,  # 8-byte hex might be preserved
+            root_span_id=trace_id,  # 16-byte hex should get converted to UUID format
         )
 
         exported = components.to_str()
@@ -79,14 +78,14 @@ class TestSpanComponentsV4:
         """Test that V4 preserves OTEL hex strings exactly."""
         otel_gen = OTELIDGenerator()
         trace_id = otel_gen.get_trace_id()  # 32-char hex
-        span_id = otel_gen.get_span_id()    # 16-char hex
+        span_id = otel_gen.get_span_id()  # 16-char hex
 
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            object_id='test-project-id',
-            row_id='test-row-id',
+            object_id="test-project-id",
+            row_id="test-row-id",
             span_id=span_id,
-            root_span_id=trace_id
+            root_span_id=trace_id,
         )
 
         exported = components.to_str()
@@ -108,9 +107,9 @@ class TestSpanComponentsV4:
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.PROJECT_LOGS,
             object_id=uuid_object_id,
-            row_id='test-row-id',
+            row_id="test-row-id",
             span_id=uuid_span_id,
-            root_span_id=uuid_root_span_id
+            root_span_id=uuid_root_span_id,
         )
 
         exported = components.to_str()
@@ -133,9 +132,9 @@ class TestSpanComponentsV4:
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.EXPERIMENT,
             object_id=uuid_object_id,
-            row_id='test-row-id',
+            row_id="test-row-id",
             span_id=hex_span_id,
-            root_span_id=hex_trace_id
+            root_span_id=hex_trace_id,
         )
 
         exported = components.to_str()
@@ -162,10 +161,10 @@ class TestSpanComponentsV4:
         # Create equivalent Python object
         py_components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.EXPERIMENT,
-            object_id='js-test-experiment-id',
-            row_id='js-test-row-id',
-            span_id='abcdef1234567890',
-            root_span_id='fedcba0987654321fedcba0987654321'
+            object_id="js-test-experiment-id",
+            row_id="js-test-row-id",
+            span_id="abcdef1234567890",
+            root_span_id="fedcba0987654321fedcba0987654321",
         )
 
         # Python should generate the same slug
@@ -184,8 +183,8 @@ class TestSpanComponentsV4:
         """Test V4 with additional metadata."""
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.PLAYGROUND_LOGS,
-            object_id='test-session-id',
-            propagated_event={"user": "test", "data": [1, 2, 3]}
+            object_id="test-session-id",
+            propagated_event={"user": "test", "data": [1, 2, 3]},
         )
 
         exported = components.to_str()
@@ -199,14 +198,14 @@ class TestSpanComponentsV4:
         """Test that non-UUID/hex strings are stored in JSON portion."""
         components = SpanComponentsV4(
             object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            object_id='not-a-uuid-or-hex',  # Will be stored in JSON
+            object_id="not-a-uuid-or-hex",  # Will be stored in JSON
             # Don't test row_id alone - if present, span_id and root_span_id must also be present
         )
 
         exported = components.to_str()
         imported = SpanComponentsV4.from_str(exported)
 
-        assert imported.object_id == 'not-a-uuid-or-hex'
+        assert imported.object_id == "not-a-uuid-or-hex"
 
 
 class TestBackwardCompatibility:
@@ -221,7 +220,7 @@ class TestBackwardCompatibility:
             row_id=str(uuid4()),
             span_id=str(uuid4()),
             root_span_id=str(uuid4()),
-            propagated_event={"version": "v3"}
+            propagated_event={"version": "v3"},
         )
 
         # Serialize with V3
@@ -238,7 +237,6 @@ class TestBackwardCompatibility:
         assert v4_imported.propagated_event == v3_components.propagated_event
 
 
-
 class TestErrorHandling:
     """Test error handling and edge cases."""
 
@@ -247,7 +245,7 @@ class TestErrorHandling:
         with pytest.raises(AssertionError):
             SpanComponentsV4(
                 object_type="invalid_type",  # Should be SpanObjectTypeV3 enum
-                object_id="test-id"
+                object_id="test-id",
             )
 
     def test_missing_required_fields(self):
@@ -280,10 +278,7 @@ class TestErrorHandling:
         import base64
 
         # Create valid data then corrupt it
-        components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            object_id="test-id"
-        )
+        components = SpanComponentsV4(object_type=SpanObjectTypeV3.PROJECT_LOGS, object_id="test-id")
         valid_exported = components.to_str()
 
         # Decode, corrupt, re-encode
@@ -302,30 +297,21 @@ class TestObjectIdFields:
 
     def test_experiment_object_id_fields(self):
         """Test object_id_fields for experiment type."""
-        components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.EXPERIMENT,
-            object_id="test-experiment-id"
-        )
+        components = SpanComponentsV4(object_type=SpanObjectTypeV3.EXPERIMENT, object_id="test-experiment-id")
 
         fields = components.object_id_fields()
         assert fields == {"experiment_id": "test-experiment-id"}
 
     def test_project_logs_object_id_fields(self):
         """Test object_id_fields for project_logs type."""
-        components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            object_id="test-project-id"
-        )
+        components = SpanComponentsV4(object_type=SpanObjectTypeV3.PROJECT_LOGS, object_id="test-project-id")
 
         fields = components.object_id_fields()
         assert fields == {"project_id": "test-project-id", "log_id": "g"}
 
     def test_playground_logs_object_id_fields(self):
         """Test object_id_fields for playground_logs type."""
-        components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.PLAYGROUND_LOGS,
-            object_id="test-session-id"
-        )
+        components = SpanComponentsV4(object_type=SpanObjectTypeV3.PLAYGROUND_LOGS, object_id="test-session-id")
 
         fields = components.object_id_fields()
         assert fields == {"prompt_session_id": "test-session-id", "log_id": "x"}
@@ -333,8 +319,7 @@ class TestObjectIdFields:
     def test_object_id_fields_without_object_id(self):
         """Test that object_id_fields raises error without object_id."""
         components = SpanComponentsV4(
-            object_type=SpanObjectTypeV3.PROJECT_LOGS,
-            compute_object_metadata_args={"key": "value"}
+            object_type=SpanObjectTypeV3.PROJECT_LOGS, compute_object_metadata_args={"key": "value"}
         )
 
         with pytest.raises(Exception) as exc_info:

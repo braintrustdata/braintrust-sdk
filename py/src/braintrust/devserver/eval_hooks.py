@@ -7,7 +7,8 @@ for reporting progress during evaluation execution.
 
 import asyncio
 import json
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 
 class EvalHooks:
@@ -15,13 +16,13 @@ class EvalHooks:
 
     def __init__(
         self,
-        report_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        report_progress: Callable[[dict[str, Any]], None] | None = None,
+        parameters: dict[str, Any] | None = None,
     ):
         self._report_progress = report_progress
         self.parameters = parameters or {}
 
-    def report_progress(self, event: Dict[str, Any]) -> None:
+    def report_progress(self, event: dict[str, Any]) -> None:
         """Report progress during task execution."""
         if self._report_progress:
             self._report_progress(event)
@@ -45,7 +46,7 @@ class SSEQueue:
     """Simple wrapper around asyncio.Queue for SSE events."""
 
     def __init__(self):
-        self.queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        self.queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     async def put_event(self, event: str, data: Any) -> None:
         """Add an SSE event to the queue."""
@@ -56,6 +57,6 @@ class SSEQueue:
         """Signal end of stream."""
         await self.queue.put(None)
 
-    async def get(self) -> Optional[str]:
+    async def get(self) -> str | None:
         """Get the next event from the queue."""
         return await self.queue.get()

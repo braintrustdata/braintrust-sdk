@@ -12,20 +12,40 @@ console.log("Running ai sdk version:", require("ai/package.json").version);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
+const gpt5mini = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-5-mini"
+  : openai("gpt-5-mini");
+
+const gpt4o = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-4o"
+  : openai("gpt-4o");
+
+const claudeSonnet45 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-sonnet-4-5"
+  : anthropic("claude-sonnet-4-5");
+
+const claudeSonnet37 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-3-7-sonnet-latest"
+  : anthropic("claude-3-7-sonnet-latest");
+
 initLogger({
   projectName: "golden-ts-ai-sdk-v6",
 });
 
-const { generateText, streamText, Experimental_Agent: Agent } = wrapAISDK(ai);
+const {
+  generateText,
+  streamText,
+  generateObject,
+  streamObject,
+  Experimental_Agent: Agent,
+  ToolLoopAgent,
+} = wrapAISDK(ai);
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "What is the capital of France?",
@@ -46,10 +66,7 @@ async function testBasicCompletion() {
 async function testMultiTurn() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           { role: "user" as const, content: "Hi, my name is Alice." },
           {
@@ -82,10 +99,7 @@ async function testMultiTurn() {
 async function testSystemPrompt() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           system: "You are a pirate. Always respond in pirate speak.",
@@ -108,10 +122,7 @@ async function testSystemPrompt() {
 async function testStreaming() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const result = await streamText({
           model: model as LanguageModel,
           prompt: "Count from 1 to 10 slowly.",
@@ -143,10 +154,7 @@ async function testImageInput() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -185,10 +193,7 @@ async function testDocumentInput() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -241,8 +246,8 @@ async function testTemperatureVariations() {
       ];
 
       for (const [model, configs] of [
-        [openai("gpt-5-mini"), openaiConfigs],
-        [anthropic("claude-sonnet-4-5"), anthropicConfigs],
+        [gpt5mini, openaiConfigs],
+        [claudeSonnet45, anthropicConfigs],
       ]) {
         // @ts-ignore
         for (const config of configs) {
@@ -270,8 +275,8 @@ async function testStopSequences() {
   return traced(
     async () => {
       for (const [model, stopSequences] of [
-        [openai("gpt-5-mini"), ["END", "\n\n"]],
-        [anthropic("claude-sonnet-4-5"), ["END"]],
+        [gpt5mini, ["END", "\n\n"]],
+        [claudeSonnet45, ["END"]],
       ] satisfies [LanguageModel, string[]][]) {
         await generateText({
           model: model as LanguageModel,
@@ -291,14 +296,11 @@ async function testStopSequences() {
   );
 }
 
-// Test 9: Metadata
+// Test 9: Metadata with callOptionsSchema
 async function testMetadata() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "Hello!",
@@ -308,6 +310,29 @@ async function testMetadata() {
           model: model as LanguageModel,
         }).generate({
           prompt: "Hello!",
+        });
+
+        // ToolLoopAgent with callOptionsSchema for metadata
+        const supportAgent = new ToolLoopAgent({
+          model: model as LanguageModel,
+          callOptionsSchema: z.object({
+            userId: z.string(),
+            accountType: z.enum(["free", "pro", "enterprise"]),
+          }),
+          prepareCall: ({ options, ...settings }) => ({
+            ...settings,
+            system: `You are a helpful customer support agent.
+- User Account type: ${options.accountType}
+- User ID: ${options.userId}`,
+          }),
+        });
+
+        await supportAgent.generate({
+          prompt: "How do I upgrade my account?",
+          options: {
+            userId: "user_123",
+            accountType: "free",
+          },
         });
       }
     },
@@ -323,10 +348,7 @@ async function testLongContext() {
         100,
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -359,10 +381,7 @@ async function testMixedContent() {
         "base64",
       );
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           {
             role: "user" as const,
@@ -400,10 +419,7 @@ async function testMixedContent() {
 async function testPrefill() {
   return traced(
     async () => {
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         const messages = [
           { role: "user" as const, content: "Write a haiku about coding." },
           { role: "assistant" as const, content: "Here is a haiku:" },
@@ -429,7 +445,7 @@ async function testPrefill() {
 async function testShortMaxTokens() {
   return traced(
     async () => {
-      for (const model of [openai("gpt-4o"), anthropic("claude-sonnet-4-5")]) {
+      for (const model of [gpt4o, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           prompt: "What is AI?",
@@ -460,26 +476,40 @@ interface CalculateToolArgs {
   b: number;
 }
 
-// Test 14: Tool use
+// Type for store price tool args
+interface StorePriceToolArgs {
+  store: string;
+  item: string;
+}
+
+// Type for discount tool args
+interface ApplyDiscountToolArgs {
+  total: number;
+  discountCode: string;
+}
+
+// Test 14: Tool use with inputExamples
 async function testToolUse() {
   return traced(
     async () => {
       const weatherTool = ai.tool({
         description: "Get the current weather for a location",
         inputSchema: z.object({
-          location: z.string(),
+          location: z.string().describe("The location to get the weather for"),
           unit: z.enum(["celsius", "fahrenheit"]).optional(),
         }),
+        inputExamples: [
+          { input: { location: "San Francisco" } },
+          { input: { location: "London" } },
+          { input: { location: "Tokyo", unit: "celsius" } },
+        ],
         execute: async (args: unknown) => {
           const typedArgs = args as WeatherToolArgs;
           return `22 degrees ${typedArgs.unit || "celsius"} and sunny in ${typedArgs.location}`;
         },
       });
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           tools: {
@@ -489,6 +519,15 @@ async function testToolUse() {
         });
 
         await new Agent({
+          model: model as LanguageModel,
+          tools: {
+            get_weather: weatherTool,
+          },
+        }).generate({
+          prompt: "What is the weather like in Paris, France?",
+        });
+
+        await new ToolLoopAgent({
           model: model as LanguageModel,
           tools: {
             get_weather: weatherTool,
@@ -532,10 +571,17 @@ async function testToolUseWithResult() {
         },
       };
 
-      for (const model of [
-        openai("gpt-5-mini"),
-        anthropic("claude-sonnet-4-5"),
-      ]) {
+      const greetingTool = ai.tool({
+        description: "A tool that streams a personalized greeting",
+        inputSchema: z.object({ name: z.string() }),
+        execute: async function* ({ name }: { name: string }) {
+          yield { status: "starting", message: "Preparing..." };
+          yield { status: "processing", message: `Looking up ${name}...` };
+          yield { status: "done", greeting: `Hello, ${name}!` };
+        },
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
           tools: {
@@ -553,19 +599,299 @@ async function testToolUseWithResult() {
         }).generate({
           prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
         });
+
+        await new ToolLoopAgent({
+          model: model as LanguageModel,
+          tools: {
+            calculate: calculateTool,
+          },
+        }).generate({
+          prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+        });
+
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            greeting: greetingTool,
+          },
+          prompt: "Greet Alice using the greeting tool.",
+          stopWhen: ai.stepCountIs(2),
+        });
       }
     },
     { name: "test_tool_use_with_result" },
   );
 }
 
-// Test 16: Reasoning tokens generation and follow-up
+// Test 16: Multi-round tool use (to see LLM ↔ tool roundtrips)
+async function testMultiRoundToolUse() {
+  return traced(
+    async () => {
+      const getStorePriceTool = ai.tool({
+        description: "Get the price of an item from a specific store",
+        inputSchema: z.object({
+          store: z
+            .string()
+            .describe("The store name (e.g., 'StoreA', 'StoreB')"),
+          item: z.string().describe("The item to get the price for"),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as StorePriceToolArgs;
+          const prices: Record<string, Record<string, number>> = {
+            StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+            StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+          };
+          const price = prices[typedArgs.store]?.[typedArgs.item] ?? 0;
+          return JSON.stringify({
+            store: typedArgs.store,
+            item: typedArgs.item,
+            price,
+          });
+        },
+      });
+
+      const applyDiscountTool = ai.tool({
+        description: "Apply a discount code to a total amount",
+        inputSchema: z.object({
+          total: z.number().describe("The total amount before discount"),
+          discountCode: z.string().describe("The discount code to apply"),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as ApplyDiscountToolArgs;
+          const discounts: Record<string, number> = {
+            SAVE10: 0.1,
+            SAVE20: 0.2,
+            HALF: 0.5,
+          };
+          const discountRate = discounts[typedArgs.discountCode] ?? 0;
+          const discountAmount = typedArgs.total * discountRate;
+          const finalTotal = typedArgs.total - discountAmount;
+          return JSON.stringify({
+            originalTotal: typedArgs.total,
+            discountCode: typedArgs.discountCode,
+            discountRate: `${discountRate * 100}%`,
+            discountAmount,
+            finalTotal,
+          });
+        },
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
+          model: model as LanguageModel,
+          system:
+            "You are a shopping assistant. When asked about prices, always get the price from each store mentioned, then apply any discount codes. Use the tools provided.",
+          tools: {
+            get_store_price: getStorePriceTool,
+            apply_discount: applyDiscountTool,
+          },
+          toolChoice: "required",
+          prompt:
+            "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+          stopWhen: ai.stepCountIs(3),
+        });
+      }
+    },
+    { name: "test_multi_round_tool_use" },
+  );
+}
+
+// Test 17: Structured output
+async function testStructuredOutput() {
+  return traced(
+    async () => {
+      const recipeSchema = z.object({
+        name: z.string(),
+        ingredients: z.array(
+          z.object({
+            name: z.string(),
+            amount: z.string(),
+          }),
+        ),
+        steps: z.array(z.string()),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateObject({
+          model: model as LanguageModel,
+          schema: recipeSchema,
+          prompt: "Generate a simple recipe for chocolate chip cookies.",
+        });
+      }
+    },
+    { name: "test_structured_output" },
+  );
+}
+
+// Test 18: Streaming structured output
+async function testStreamingStructuredOutput() {
+  return traced(
+    async () => {
+      const productSchema = z.object({
+        name: z.string(),
+        description: z.string(),
+        price: z.number(),
+        features: z.array(z.string()),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const result = streamObject({
+          model: model as LanguageModel,
+          schema: productSchema,
+          prompt:
+            "Generate a product description for a wireless bluetooth headphone.",
+        });
+
+        for await (const _ of result.partialObjectStream) {
+        }
+      }
+    },
+    { name: "test_streaming_structured_output" },
+  );
+}
+
+// Test 19: Structured output with context (multi-turn with tools)
+async function testStructuredOutputWithContext() {
+  return traced(
+    async () => {
+      const getProductInfoTool = ai.tool({
+        description: "Get product information including price and specs",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const products: Record<
+            string,
+            { name: string; price: number; specs: string }
+          > = {
+            "phone-123": {
+              name: "SuperPhone X",
+              price: 999,
+              specs: "6.5 inch display, 128GB storage, 12MP camera",
+            },
+            "laptop-456": {
+              name: "ProBook Ultra",
+              price: 1499,
+              specs: "15 inch display, 512GB SSD, 16GB RAM",
+            },
+          };
+          return (
+            products[typedArgs.productId] || {
+              name: "Unknown",
+              price: 0,
+              specs: "N/A",
+            }
+          );
+        },
+      });
+
+      const getReviewsTool = ai.tool({
+        description: "Get customer reviews for a product",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const reviews: Record<
+            string,
+            { rating: number; comments: string[] }
+          > = {
+            "phone-123": {
+              rating: 4.5,
+              comments: [
+                "Great camera!",
+                "Battery lasts all day",
+                "A bit pricey",
+              ],
+            },
+            "laptop-456": {
+              rating: 4.2,
+              comments: ["Fast performance", "Good display", "Heavy to carry"],
+            },
+          };
+          return reviews[typedArgs.productId] || { rating: 0, comments: [] };
+        },
+      });
+
+      const comparisonSchema = z.object({
+        recommendation: z.enum(["phone-123", "laptop-456", "neither"]),
+        reasoning: z.string(),
+        priceComparison: z.object({
+          cheaper: z.string(),
+          priceDifference: z.number(),
+        }),
+        overallRating: z.object({
+          phone: z.number(),
+          laptop: z.number(),
+        }),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            get_product_info: getProductInfoTool,
+            get_reviews: getReviewsTool,
+          },
+          toolChoice: "required",
+          system:
+            "You are a helpful shopping assistant. Use the tools to gather product information before making recommendations.",
+          prompt:
+            "Compare phone-123 and laptop-456. Look up their info and reviews, then give me a structured comparison with your recommendation.",
+          experimental_output: ai.Output.object({ schema: comparisonSchema }),
+          stopWhen: ai.stepCountIs(4),
+        });
+      }
+    },
+    { name: "test_structured_output_with_context" },
+  );
+}
+
+// Test 20: ToolLoopAgent with structured output
+async function testToolLoopAgentStructuredOutput() {
+  return traced(
+    async () => {
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const weatherAgent = new ToolLoopAgent({
+          model: model as LanguageModel,
+          tools: {
+            weather: ai.tool({
+              description: "Get the weather in a location",
+              inputSchema: z.object({
+                city: z.string().describe("The city to get weather for"),
+              }),
+              execute: async ({ city }: { city: string }) => {
+                return `The weather in ${city} is 72°F and sunny`;
+              },
+            }),
+          },
+          output: ai.Output.object({
+            schema: z.object({
+              summary: z.string().describe("A brief summary of the weather"),
+              temperature: z.number().describe("The temperature in Fahrenheit"),
+              recommendation: z.string().describe("What the user should wear"),
+            }),
+          }),
+        });
+
+        await weatherAgent.generate({
+          prompt:
+            "What is the weather in San Francisco and what should I wear?",
+        });
+      }
+    },
+    { name: "test_toolloop_agent_structured_output" },
+  );
+}
+
+// Test 21: Reasoning tokens generation and follow-up
 async function testReasoning() {
   return traced(
     async () => {
       for (const [model, options] of [
         [
-          openai("gpt-5-mini"),
+          gpt5mini,
           {
             providerOptions: {
               openai: {
@@ -576,7 +902,7 @@ async function testReasoning() {
           },
         ],
         [
-          anthropic("claude-3-7-sonnet-latest"),
+          claudeSonnet37,
           {
             providerOptions: {
               anthropic: {
@@ -663,6 +989,11 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
+    testMultiRoundToolUse,
+    testStructuredOutput,
+    testStreamingStructuredOutput,
+    testStructuredOutputWithContext,
+    testToolLoopAgentStructuredOutput,
     testReasoning,
   ];
 

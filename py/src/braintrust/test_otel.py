@@ -583,49 +583,58 @@ def test_parent_from_headers_invalid_inputs():
     assert result is None
 
     # Test 2: Invalid traceparent (malformed)
-    result = parent_from_headers({'traceparent': 'invalid'})
+    result = parent_from_headers({"traceparent": "invalid"})
     assert result is None
 
     # Test 3: Valid traceparent but invalid braintrust.parent format
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=invalid_format'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=invalid_format",
+        }
+    )
     assert result is None
 
     # Test 4: Empty project_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_id:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_id:",
+        }
+    )
     assert result is None
 
     # Test 5: Empty project_name
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_name:",
+        }
+    )
     assert result is None
 
     # Test 6: Empty experiment_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=experiment_id:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=experiment_id:",
+        }
+    )
     assert result is None
 
     # Test 7: Invalid trace_id length (too short)
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:test'
-    })
+    result = parent_from_headers(
+        {"traceparent": "00-4bf92f3577b34da6-00f067aa0ba902b7-01", "baggage": "braintrust.parent=project_name:test"}
+    )
     assert result is None
 
     # Test 8: Invalid span_id length (too short)
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-01',
-        'baggage': 'braintrust.parent=project_name:test'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-01",
+            "baggage": "braintrust.parent=project_name:test",
+        }
+    )
     assert result is None
 
 
@@ -637,29 +646,35 @@ def test_parent_from_headers_valid_input():
     from braintrust.otel import parent_from_headers
 
     # Test with valid project_name
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:test-project'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_name:test-project",
+        }
+    )
     assert result is not None
     # Result is base64 encoded, so just check it's a non-empty string
     assert isinstance(result, str)
     assert len(result) > 0
 
     # Test with valid project_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_id:abc123'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_id:abc123",
+        }
+    )
     assert result is not None
     assert isinstance(result, str)
     assert len(result) > 0
 
     # Test with valid experiment_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=experiment_id:exp-456'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=experiment_id:exp-456",
+        }
+    )
     assert result is not None
     assert isinstance(result, str)
     assert len(result) > 0
@@ -678,7 +693,7 @@ def test_add_parent_to_baggage():
     assert token is not None
 
     # Verify it's in baggage
-    parent_value = baggage.get_baggage('braintrust.parent')
+    parent_value = baggage.get_baggage("braintrust.parent")
     assert parent_value == "project_name:test-project"
 
     # Clean up
@@ -707,7 +722,7 @@ def test_add_span_parent_to_baggage():
         assert token is not None
 
         # Verify it's in baggage
-        parent_value = baggage.get_baggage('braintrust.parent')
+        parent_value = baggage.get_baggage("braintrust.parent")
         assert parent_value == "project_name:test"
 
         context.detach(token)
