@@ -457,7 +457,11 @@ function areSignaturesCompatible(
 
   // Special handling for const arrays (like spanTypeAttributeValues):
   // adding new values is backwards compatible
-  if (kind === "variable" && oldNorm.includes("as const")) {
+  // These appear as either "as const" or "readonly [...]" in .d.ts files
+  if (
+    kind === "variable" &&
+    (oldNorm.includes("as const") || oldNorm.includes("readonly ["))
+  ) {
     return areConstArraySignaturesCompatible(oldNorm, newNorm);
   }
 
