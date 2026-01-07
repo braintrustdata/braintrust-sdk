@@ -77,6 +77,12 @@ export interface InvokeFunctionArgs<
   messages?: Message[];
 
   /**
+   * Context for functions that operate on spans/traces (e.g., facets). Should contain
+   * `object_type`, `object_id`, and `scope` fields.
+   */
+  context?: InvokeFunctionRequest["context"];
+
+  /**
    * Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
    * It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
    * to the function.
@@ -151,6 +157,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     fetch,
     input,
     messages,
+    context,
     parent: parentArg,
     metadata,
     tags,
@@ -198,6 +205,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     ...functionId.data,
     input,
     messages,
+    context,
     parent,
     metadata,
     tags,
