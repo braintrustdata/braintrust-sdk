@@ -92,7 +92,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         # when handlers are created inside eval tasks.
         # Only capture if there's an actual active span (not NOOP_SPAN) to support
         # handlers created at module level (e.g., with setGlobalHandler).
-        self.captured_context: Optional[Span] = None
+        self.captured_context: Span | None = None
         if not self.logger:
             current = current_span()
             if current is not NOOP_SPAN:
@@ -589,7 +589,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self,
         token: str,
         *,
-        chunk: Union["GenerationChunk", "ChatGenerationChunk"] | None = None,  # type: ignore
+        chunk: "GenerationChunk | ChatGenerationChunk | None" = None,  # type: ignore
         run_id: UUID,
         parent_run_id: UUID | None = None,
         **kwargs: Any,
