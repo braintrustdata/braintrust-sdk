@@ -2,12 +2,8 @@ name: js
 
 on:
   pull_request:
-    paths-ignore:
-      - "integrations/otel-js/**"
   push:
     branches: [main]
-    paths-ignore:
-      - "integrations/otel-js/**"
 
 permissions:
   contents: read
@@ -33,28 +29,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
-
-      - name: Get published braintrust version for cache key
-        id: published-version
-        shell: bash
-        run: |
-          PUBLISHED_VERSION=$(npm view braintrust version 2>/dev/null || echo "none")
-          echo "version=$PUBLISHED_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Published version: $PUBLISHED_VERSION"
-
-      - name: Cache API compatibility test tarball
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm/_cacache
-          key: braintrust-tarball-${{ steps.published-version.outputs.version }}-${{ runner.os }}
-          restore-keys: |
-            braintrust-tarball-${{ steps.published-version.outputs.version }}-
-            braintrust-tarball-
 
       - name: "verify ci"
         shell: bash
@@ -124,6 +104,100 @@ jobs:
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
           retention-days: 1
+
+  api-compatibility:
+    runs-on: ubuntu-latest
+    # Run in parallel with build job
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history to access main branch for baseline
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+
+      - name: Get published braintrust version for cache key
+        id: published-version
+        shell: bash
+        run: |
+          PUBLISHED_VERSION=$(npm view braintrust version 2>/dev/null || echo "none")
+          echo "version=$PUBLISHED_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Published version: $PUBLISHED_VERSION"
+
+      - name: Cache API compatibility test tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm/_cacache
+          key: braintrust-tarball-${{ steps.published-version.outputs.version }}-${{ runner.os }}
+          restore-keys: |
+            braintrust-tarball-${{ steps.published-version.outputs.version }}-
+            braintrust-tarball-
+
+      - name: Build baseline from main branch for API compatibility
+        shell: bash
+        run: |
+          # Save current state
+          CURRENT_REF=$(git rev-parse HEAD)
+          BASELINE_DIR="$HOME/braintrust-baseline"
+          mkdir -p "$BASELINE_DIR"
+
+          # Checkout main and build
+          echo "Building baseline from main branch..."
+          git checkout origin/main || { echo "Could not checkout main"; exit 0; }
+
+          # Install and build main
+          pnpm install --frozen-lockfile || { echo "Baseline install failed"; git checkout "$CURRENT_REF"; exit 0; }
+          pnpm run build || { echo "Baseline build failed"; git checkout "$CURRENT_REF"; exit 0; }
+
+          # Copy built .d.ts files to baseline directory
+          if [ -d "js/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/dist"
+            cp js/dist/*.d.ts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
+            cp js/dist/*.d.mts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
+            echo "Copied main/browser dist files"
+          fi
+
+          if [ -d "js/dev/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/dev/dist"
+            cp js/dev/dist/*.d.ts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
+            cp js/dev/dist/*.d.mts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
+            echo "Copied dev dist files"
+          fi
+
+          if [ -d "js/util/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/util/dist"
+            cp js/util/dist/*.d.ts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
+            cp js/util/dist/*.d.mts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
+            echo "Copied util dist files"
+          fi
+
+          # Return to original commit
+          git checkout "$CURRENT_REF"
+
+          # Set environment variable for test to find baseline
+          echo "BASELINE_DIR=$BASELINE_DIR" >> $GITHUB_ENV
+          echo "Baseline created at $BASELINE_DIR"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build current branch
+        run: pnpm run build
+
+      - name: Run API compatibility test
+        env:
+          BASELINE_DIR: ${{ env.BASELINE_DIR }}
+        run: |
+          cd js && pnpm test:api-compat
 
   smoke-tests-node:
     needs: build
