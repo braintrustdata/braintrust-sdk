@@ -849,6 +849,40 @@ def test_span_link_with_unresolved_experiment(with_simulate_login, with_memory_l
     assert link == "https://www.braintrust.dev/error-generating-link?msg=resolve-experiment-id"
 
 
+def test_experiment_span_link_uses_env_vars_when_logged_out(with_memory_logger):
+    """Verify EXPERIMENT spans use BRAINTRUST_ORG_NAME env var when not logged in."""
+    simulate_logout()
+    assert_logged_out()
+
+    keys = ["BRAINTRUST_APP_URL", "BRAINTRUST_ORG_NAME"]
+    originals = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["BRAINTRUST_APP_URL"] = "https://test-app.example.com"
+        os.environ["BRAINTRUST_ORG_NAME"] = "env-org-name"
+
+        experiment = braintrust.init(
+            project="test-project",
+            experiment="test-experiment",
+        )
+
+        # Create span with resolved experiment ID
+        span = experiment.start_span(name="test-span")
+        span.parent_object_id = LazyValue(lambda: "test-exp-id", use_mutex=False)
+        span.end()
+
+        link = span.link()
+
+        # Should use env var org name and app url
+        assert "env-org-name" in link
+        assert "test-app.example.com" in link
+        assert "test-exp-id" in link
+    finally:
+        for k, v in originals.items():
+            os.environ.pop(k, None)
+            if v:
+                os.environ[k] = v
+
+
 def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_logger):
     logger = init_logger(
         project="test-project",
