@@ -904,13 +904,7 @@ export const FunctionId = z.union([
   }),
 ]);
 export type FunctionIdType = z.infer<typeof FunctionId>;
-export const FunctionObjectType = z.enum([
-  "prompt",
-  "tool",
-  "scorer",
-  "task",
-  "agent",
-]);
+export const FunctionObjectType = z.enum(["prompt", "tool", "scorer", "task"]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
@@ -1506,7 +1500,6 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
     "monitor",
   ]),
   name: z.string(),
