@@ -330,39 +330,20 @@ async function testImageInput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
+        const messages = [
+          new HumanMessage({
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:image/png;base64,${imageData}` },
+              },
+              { type: "text", text: "What color is this image?" },
+            ],
+          }),
+        ];
+
         await traced(
           async () => {
-            let messages;
-            if (provider === "openai") {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    {
-                      type: "image_url",
-                      image_url: { url: `data:image/png;base64,${imageData}` },
-                    },
-                    { type: "text", text: "What color is this image?" },
-                  ],
-                }),
-              ];
-            } else {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    {
-                      type: "image",
-                      source: {
-                        type: "base64",
-                        media_type: "image/png",
-                        data: imageData,
-                      },
-                    },
-                    { type: "text", text: "What color is this image?" },
-                  ],
-                }),
-              ];
-            }
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             await model.invoke(messages);
           },
           { name: `Model (${provider})` },
@@ -375,18 +356,7 @@ async function testImageInput() {
             });
             await agent.invoke(
               {
-                messages: [
-                  {
-                    role: "user",
-                    content: [
-                      {
-                        type: "image",
-                        image: `data:image/png;base64,${imageData}`,
-                      },
-                      { type: "text", text: "What color is this image?" },
-                    ],
-                  },
-                ],
+                messages,
               },
               { callbacks: [handler] },
             );
@@ -430,42 +400,22 @@ async function testDocumentInput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
+        const messages = [
+          new HumanMessage({
+            content: [
+              {
+                type: "file",
+                file: {
+                  file_data: `data:application/pdf;base64,${pdfData}`,
+                  filename: "test-document.pdf",
+                },
+              },
+              { type: "text", text: "What is in this document?" },
+            ],
+          }),
+        ];
         await traced(
           async () => {
-            let messages;
-            if (provider === "openai") {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    {
-                      type: "file",
-                      file: {
-                        file_data: `data:application/pdf;base64,${pdfData}`,
-                        filename: "test-document.pdf",
-                      },
-                    },
-                    { type: "text", text: "What is in this document?" },
-                  ],
-                }),
-              ];
-            } else {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    {
-                      type: "document",
-                      source: {
-                        type: "base64",
-                        media_type: "application/pdf",
-                        data: pdfData,
-                      },
-                    },
-                    { type: "text", text: "What is in this document?" },
-                  ],
-                }),
-              ];
-            }
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             await model.invoke(messages);
           },
           { name: `Model (${provider})` },
@@ -478,20 +428,7 @@ async function testDocumentInput() {
             });
             await agent.invoke(
               {
-                messages: [
-                  {
-                    role: "user",
-                    content: [
-                      {
-                        type: "file",
-                        data: pdfData,
-                        mediaType: "application/pdf",
-                        filename: "test-document.pdf",
-                      },
-                      { type: "text", text: "What is in this document?" },
-                    ],
-                  },
-                ],
+                messages,
               },
               { callbacks: [handler] },
             );
@@ -799,47 +736,24 @@ async function testMixedContent() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
+        const messages = [
+          new HumanMessage({
+            content: [
+              { type: "text", text: "First, look at this image:" },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/png;base64,${imageData}` },
+              },
+              {
+                type: "text",
+                text: "Now describe what you see and explain why it matters.",
+              },
+            ],
+          }),
+        ];
+
         await traced(
           async () => {
-            let messages;
-            if (provider === "openai") {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    { type: "text", text: "First, look at this image:" },
-                    {
-                      type: "image_url",
-                      image_url: { url: `data:image/png;base64,${imageData}` },
-                    },
-                    {
-                      type: "text",
-                      text: "Now describe what you see and explain why it matters.",
-                    },
-                  ],
-                }),
-              ];
-            } else {
-              messages = [
-                new HumanMessage({
-                  content: [
-                    { type: "text", text: "First, look at this image:" },
-                    {
-                      type: "image",
-                      source: {
-                        type: "base64",
-                        media_type: "image/png",
-                        data: imageData,
-                      },
-                    },
-                    {
-                      type: "text",
-                      text: "Now describe what you see and explain why it matters.",
-                    },
-                  ],
-                }),
-              ];
-            }
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             await model.invoke(messages);
           },
           { name: `Model (${provider})` },
@@ -852,22 +766,7 @@ async function testMixedContent() {
             });
             await agent.invoke(
               {
-                messages: [
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: "First, look at this image:" },
-                      {
-                        type: "image",
-                        image: `data:image/png;base64,${imageData}`,
-                      },
-                      {
-                        type: "text",
-                        text: "Now describe what you see and explain why it matters.",
-                      },
-                    ],
-                  },
-                ],
+                messages,
               },
               { callbacks: [handler] },
             );
