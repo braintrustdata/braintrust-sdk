@@ -4784,98 +4784,6 @@ function isImageContentType(contentType: string): boolean {
   return contentType.startsWith("image/");
 }
 
-/**
- * Converts serialized attachment references back into ReadonlyAttachment objects.
- * This is useful when receiving attachment references from the API that need to be
- * rendered in templates.
- *
- * @param value The value to hydrate (can be any type)
- * @param state Optional BraintrustState for attachment downloads
- * @returns The same structure with attachment references converted to ReadonlyAttachment objects
- */
-function hydrateAttachmentReferences<T>(value: T, state?: BraintrustState): T {
-  if (!value) {
-    return value;
-  }
-
-  // Check if this is an attachment reference object (wrapped format)
-  if (
-    typeof value === "object" &&
-    "reference" in value &&
-    value.reference &&
-    typeof value.reference === "object" &&
-    "type" in value.reference &&
-    (value.reference.type === BRAINTRUST_ATTACHMENT ||
-      value.reference.type === EXTERNAL_ATTACHMENT)
-  ) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return new ReadonlyAttachment(
-      value.reference as AttachmentReference,
-      state,
-    ) as T;
-  }
-
-  // Check if this is a direct attachment object from playground (unwrapped format)
-  // Format: { type: "braintrust_attachment" | "inline_attachment", content_type: "...", filename: "...", key: "..." | src: "..." }
-  if (
-    typeof value === "object" &&
-    "type" in value &&
-    "content_type" in value &&
-    "filename" in value
-  ) {
-    if (
-      value.type === "braintrust_attachment" ||
-      value.type === "inline_attachment"
-    ) {
-      // Convert the direct format to the reference format that ReadonlyAttachment expects
-      let reference: AttachmentReference;
-
-      if (value.type === "braintrust_attachment" && "key" in value) {
-        // Braintrust attachment with a key - create ReadonlyAttachment to download via API
-        reference = {
-          type: BRAINTRUST_ATTACHMENT,
-          content_type: value.content_type as string,
-          filename: value.filename as string,
-          key: value.key as string,
-        };
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        return new ReadonlyAttachment(reference, state) as T;
-      } else if (value.type === "inline_attachment" && "src" in value) {
-        // External/inline attachment with a src URL - wrap it in a special marker object
-        // that preserves metadata but doesn't try to download
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        return {
-          __inline_url__: true,
-          url: value.src,
-          content_type: value.content_type,
-          filename: value.filename,
-        } as T;
-      } else {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        return value;
-      }
-    }
-  }
-
-  // Recursively process arrays
-  if (Array.isArray(value)) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return value.map((item) => hydrateAttachmentReferences(item, state)) as T;
-  }
-
-  // Recursively process objects
-  if (typeof value === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(value)) {
-      result[key] = hydrateAttachmentReferences(val, state);
-    }
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return result as T;
-  }
-
-  return value;
-}
-
 // Recursively collect all attachments and their base64 URLs
 async function collectAttachmentMetadata(
   value: unknown,
@@ -7176,22 +7084,6 @@ export class Prompt<
       {},
       false,
     );
-  }
-
-  /**
-   * Converts serialized attachment references back into ReadonlyAttachment objects.
-   * This is useful when receiving attachment references from the API that need to be
-   * rendered in templates with buildWithAttachments().
-   *
-   * @param value The value to hydrate (can be any type)
-   * @param state Optional BraintrustState for attachment downloads
-   * @returns The same structure with attachment references converted to ReadonlyAttachment objects
-   */
-  public static hydrateAttachmentReferences<T>(
-    value: T,
-    state?: BraintrustState,
-  ): T {
-    return hydrateAttachmentReferences(value, state);
   }
 }
 
