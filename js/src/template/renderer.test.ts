@@ -82,4 +82,74 @@ describe("renderTemplateContent", () => {
     });
     expect(result).toBe("Data: 42");
   });
+
+  test("renders objects as JSON strings in mustache (not [object Object])", () => {
+    const varsWithObject = {
+      user: { name: "Alice", age: 30 },
+      items: ["a", "b", "c"],
+    };
+    const result = renderTemplateContent(
+      "User: {{user}}, Items: {{items}}",
+      varsWithObject,
+      escape,
+      { templateFormat: "mustache" },
+    );
+    expect(result).toBe(
+      'User: {"name":"Alice","age":30}, Items: ["a","b","c"]',
+    );
+    expect(result).not.toContain("[object Object]");
+  });
+
+  test("renders objects as JSON strings in nunjucks (not [object Object])", () => {
+    const varsWithObject = {
+      user: { name: "Bob", age: 25 },
+      items: [1, 2, 3],
+    };
+    const result = renderTemplateContent(
+      "User: {{ user }}, Items: {{ items }}",
+      varsWithObject,
+      escape,
+      { templateFormat: "nunjucks" },
+    );
+    expect(result).toBe('User: {"name":"Bob","age":25}, Items: [1,2,3]');
+    expect(result).not.toContain("[object Object]");
+  });
+
+  test("renders nested objects as JSON strings in mustache", () => {
+    const varsWithNested = {
+      data: {
+        nested: {
+          value: 123,
+          items: ["x", "y"],
+        },
+      },
+    };
+    const result = renderTemplateContent(
+      "Data: {{data}}",
+      varsWithNested,
+      escape,
+      { templateFormat: "mustache" },
+    );
+    expect(result).toBe('Data: {"nested":{"value":123,"items":["x","y"]}}');
+    expect(result).not.toContain("[object Object]");
+  });
+
+  test("renders nested objects as JSON strings in nunjucks", () => {
+    const varsWithNested = {
+      config: {
+        settings: {
+          enabled: true,
+          count: 5,
+        },
+      },
+    };
+    const result = renderTemplateContent(
+      "Config: {{ config }}",
+      varsWithNested,
+      escape,
+      { templateFormat: "nunjucks" },
+    );
+    expect(result).toBe('Config: {"settings":{"enabled":true,"count":5}}');
+    expect(result).not.toContain("[object Object]");
+  });
 });
