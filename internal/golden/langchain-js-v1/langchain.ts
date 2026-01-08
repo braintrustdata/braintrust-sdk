@@ -1,8 +1,9 @@
-import { traced, initLogger, log } from "braintrust";
+import { traced, initLogger } from "braintrust";
 import { BraintrustCallbackHandler } from "@braintrust/langchain-js";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { createAgent } from "langchain";
 import {
   HumanMessage,
   AIMessage,
@@ -14,15 +15,19 @@ import { z } from "zod";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-console.log(
-  "Running @langchain/core version:",
-  require("@langchain/core/package.json").version,
-);
+const version = require("langchain/package.json").version;
+
+console.log("Running @langchain/core version:", version);
+
+if (version.startsWith("0.")) {
+  console.error("LangChain v0 is not supported");
+  process.exit(1);
+}
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 const logger = initLogger({
-  projectName: "golden-ts-langchain-v0",
+  projectName: "golden-ts-langchain-v1.0",
 });
 
 const handler = new BraintrustCallbackHandler({ logger });
@@ -33,7 +38,7 @@ async function testBasicCompletion() {
     async () => {
       console.log("\n=== Test 1: Basic Completion ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -41,6 +46,7 @@ async function testBasicCompletion() {
             maxTokens: 100,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -49,6 +55,7 @@ async function testBasicCompletion() {
             maxTokens: 100,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -61,6 +68,18 @@ async function testBasicCompletion() {
           country: "France",
         })) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            { role: "user", content: "What is the capital of France?" },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -74,7 +93,7 @@ async function testMultiTurn() {
     async () => {
       console.log("\n=== Test 2: Multi-turn Conversation ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -82,6 +101,7 @@ async function testMultiTurn() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -90,6 +110,7 @@ async function testMultiTurn() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -101,6 +122,20 @@ async function testMultiTurn() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            { role: "user", content: "Hi, my name is Alice." },
+            { role: "assistant", content: "Hello Alice! Nice to meet you." },
+            { role: "user", content: "What did I just tell you my name was?" },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -114,7 +149,7 @@ async function testSystemPrompt() {
     async () => {
       console.log("\n=== Test 3: System Prompt ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -122,6 +157,7 @@ async function testSystemPrompt() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -130,6 +166,7 @@ async function testSystemPrompt() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -144,6 +181,17 @@ async function testSystemPrompt() {
           input: "Tell me about the weather.",
         })) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          systemPrompt: systemMsg,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: "Tell me about the weather." }],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -157,7 +205,7 @@ async function testStreaming() {
     async () => {
       console.log("\n=== Test 4: Streaming ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -166,6 +214,7 @@ async function testStreaming() {
             streaming: true,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -175,6 +224,7 @@ async function testStreaming() {
             streaming: true,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -188,6 +238,21 @@ async function testStreaming() {
           const msg = chunk as BaseMessage;
           if (msg.content) {
             process.stdout.write(msg.content.toString());
+          }
+        }
+        console.log();
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentStream = await agent.stream({
+          messages: [{ role: "user", content: promptText }],
+          callbacks: [handler],
+        });
+        for await (const chunk of agentStream) {
+          if (chunk.content) {
+            process.stdout.write(chunk.content.toString());
           }
         }
         console.log("\n");
@@ -207,7 +272,7 @@ async function testImageInput() {
         "base64",
       );
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -215,6 +280,7 @@ async function testImageInput() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -223,6 +289,7 @@ async function testImageInput() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -261,6 +328,27 @@ async function testImageInput() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  image: `data:image/png;base64,${imageData}`,
+                },
+                { type: "text", text: "What color is this image?" },
+              ],
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -278,7 +366,7 @@ async function testDocumentInput() {
         "base64",
       );
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -286,6 +374,7 @@ async function testDocumentInput() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -294,6 +383,7 @@ async function testDocumentInput() {
             maxTokens: 150,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -335,6 +425,29 @@ async function testDocumentInput() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "file",
+                  data: pdfData,
+                  mediaType: "application/pdf",
+                  filename: "test-document.pdf",
+                },
+                { type: "text", text: "What is in this document?" },
+              ],
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -399,6 +512,16 @@ async function testTemperatureVariations() {
             { callbacks: [handler] },
           )) as BaseMessage;
           console.log(result.content);
+
+          const agent = createAgent({
+            model,
+            callbacks: [handler],
+          });
+          const agentResult = await agent.invoke({
+            messages: [{ role: "user", content: "Say something creative." }],
+            callbacks: [handler],
+          });
+          console.log("Agent:", agentResult.content);
           console.log();
         }
       }
@@ -446,6 +569,18 @@ async function testStopSequences() {
         console.log(
           `Response metadata: ${JSON.stringify(result.response_metadata)}`,
         );
+
+        const agent = createAgent({
+          model,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            { role: "user", content: `Write a short story about a ${topic}.` },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -459,7 +594,7 @@ async function testMetadata() {
     async () => {
       console.log("\n=== Test 9: Metadata ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -468,6 +603,7 @@ async function testMetadata() {
             modelKwargs: { user: "test_user_123" },
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -476,6 +612,7 @@ async function testMetadata() {
             maxTokens: 100,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -483,6 +620,16 @@ async function testMetadata() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: "Hello!" }],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -499,13 +646,14 @@ async function testLongContext() {
         100,
       );
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
             model: "gpt-4o",
             maxTokens: 100,
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -513,6 +661,7 @@ async function testLongContext() {
             model: "claude-sonnet-4-20250514",
             maxTokens: 100,
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -526,6 +675,21 @@ async function testLongContext() {
           { callbacks: [handler] },
         )) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content: `Here is a long text:\n\n${longText}\n\nHow many times does the word 'fox' appear?`,
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -543,7 +707,7 @@ async function testMixedContent() {
         "base64",
       );
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -551,6 +715,7 @@ async function testMixedContent() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -559,6 +724,7 @@ async function testMixedContent() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -605,6 +771,31 @@ async function testMixedContent() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "First, look at this image:" },
+                {
+                  type: "image",
+                  image: `data:image/png;base64,${imageData}`,
+                },
+                {
+                  type: "text",
+                  text: "Now describe what you see and explain why it matters.",
+                },
+              ],
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -618,7 +809,7 @@ async function testPrefill() {
     async () => {
       console.log("\n=== Test 12: Prefill ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -626,6 +817,7 @@ async function testPrefill() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -634,6 +826,7 @@ async function testPrefill() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -645,6 +838,19 @@ async function testPrefill() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await model.invoke(messages)) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            { role: "user", content: `Write a haiku about ${topic}.` },
+            { role: "assistant", content: "Here is a haiku:" },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -685,6 +891,16 @@ async function testShortMaxTokens() {
         console.log(
           `Response metadata: ${JSON.stringify(result.response_metadata)}`,
         );
+
+        const agent = createAgent({
+          model,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: "What is AI?" }],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -716,7 +932,7 @@ async function testToolUse() {
         },
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -724,6 +940,7 @@ async function testToolUse() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -732,6 +949,7 @@ async function testToolUse() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -753,6 +971,17 @@ async function testToolUse() {
             console.log(`  Input: ${JSON.stringify(call.args)}`);
           });
         }
+
+        const agent = createAgent({
+          model: agentModel,
+          tools: [getWeatherTool],
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: query }],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -792,7 +1021,7 @@ async function testToolUseWithResult() {
         },
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -800,6 +1029,7 @@ async function testToolUseWithResult() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -808,6 +1038,7 @@ async function testToolUseWithResult() {
             maxTokens: 200,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -845,6 +1076,17 @@ async function testToolUseWithResult() {
           console.log("\nSecond response (with tool result):");
           console.log(secondResult.content);
         }
+
+        const agent = createAgent({
+          model: agentModel,
+          tools: [calculateTool],
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: query }],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -858,7 +1100,7 @@ async function testAsyncGeneration() {
     async () => {
       console.log("\n=== Test 16: Async Generation ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -866,6 +1108,7 @@ async function testAsyncGeneration() {
             maxTokens: 100,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -874,6 +1117,7 @@ async function testAsyncGeneration() {
             maxTokens: 100,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -885,6 +1129,18 @@ async function testAsyncGeneration() {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const result = (await chain.invoke({ topic })) as BaseMessage;
         console.log(result.content);
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            { role: "user", content: `Tell me a joke about ${topic}.` },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -898,7 +1154,7 @@ async function testAsyncStreaming() {
     async () => {
       console.log("\n=== Test 17: Async Streaming ===");
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -907,6 +1163,7 @@ async function testAsyncStreaming() {
             streaming: true,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -916,6 +1173,7 @@ async function testAsyncStreaming() {
             streaming: true,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -929,6 +1187,21 @@ async function testAsyncStreaming() {
           const msg = chunk as BaseMessage;
           if (msg.content) {
             process.stdout.write(msg.content.toString());
+          }
+        }
+        console.log();
+
+        const agent = createAgent({
+          model: agentModel,
+          callbacks: [handler],
+        });
+        const agentStream = await agent.stream({
+          messages: [{ role: "user", content: `List 3 ${category}.` }],
+          callbacks: [handler],
+        });
+        for await (const chunk of agentStream) {
+          if (chunk.content) {
+            process.stdout.write(chunk.content.toString());
           }
         }
         console.log("\n");
@@ -962,6 +1235,22 @@ async function testReasoning() {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const result = (await chain.invoke({})) as BaseMessage;
       console.log(result.content);
+
+      const agent = createAgent({
+        model,
+        callbacks: [handler],
+      });
+      const agentResult = await agent.invoke({
+        messages: [
+          {
+            role: "user",
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+        ],
+        callbacks: [handler],
+      });
+      console.log("Agent:", agentResult.content);
       console.log();
     },
     { name: "test_reasoning" },
@@ -1135,7 +1424,7 @@ async function testMultiRoundToolUse() {
         },
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -1143,6 +1432,7 @@ async function testMultiRoundToolUse() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -1151,6 +1441,7 @@ async function testMultiRoundToolUse() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -1177,6 +1468,23 @@ async function testMultiRoundToolUse() {
             console.log(`    Args: ${JSON.stringify(call.args)}`);
           });
         }
+
+        const agent = createAgent({
+          model: agentModel,
+          tools: [getStorePriceTool, applyDiscountTool],
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content:
+                "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent:", agentResult.content);
         console.log();
       }
     },
@@ -1201,7 +1509,7 @@ async function testStructuredOutput() {
         steps: z.array(z.string()),
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -1209,6 +1517,7 @@ async function testStructuredOutput() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -1217,6 +1526,7 @@ async function testStructuredOutput() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -1230,6 +1540,25 @@ async function testStructuredOutput() {
         console.log(`Name: ${result.name}`);
         console.log(`Ingredients: ${result.ingredients.length}`);
         console.log(`Steps: ${result.steps.length}`);
+
+        const agent = createAgent({
+          model: agentModel,
+          responseFormat: recipeSchema,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [
+            {
+              role: "user",
+              content: "Generate a simple recipe for chocolate chip cookies.",
+            },
+          ],
+          callbacks: [handler],
+        });
+        console.log("Agent structured output:");
+        console.log(`Name: ${agentResult.name}`);
+        console.log(`Ingredients: ${agentResult.ingredients.length}`);
+        console.log(`Steps: ${agentResult.steps.length}`);
         console.log();
       }
     },
@@ -1250,7 +1579,7 @@ async function testStreamingStructuredOutput() {
         features: z.array(z.string()),
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -1258,6 +1587,7 @@ async function testStreamingStructuredOutput() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -1266,6 +1596,7 @@ async function testStreamingStructuredOutput() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -1283,6 +1614,31 @@ async function testStreamingStructuredOutput() {
         console.log("Final structured output:");
         console.log(`Name: ${finalResult?.name}`);
         console.log(`Price: ${finalResult?.price}`);
+
+        const agent = createAgent({
+          model: agentModel,
+          responseFormat: productSchema,
+          callbacks: [handler],
+        });
+        const agentStream = await agent.stream({
+          messages: [
+            {
+              role: "user",
+              content:
+                "Generate a product description for a wireless bluetooth headphone.",
+            },
+          ],
+          callbacks: [handler],
+        });
+
+        let agentFinalResult;
+        for await (const chunk of agentStream) {
+          agentFinalResult = chunk;
+        }
+
+        console.log("Agent streaming structured output:");
+        console.log(`Name: ${agentFinalResult?.name}`);
+        console.log(`Price: ${agentFinalResult?.price}`);
         console.log();
       }
     },
@@ -1309,7 +1665,7 @@ async function testStructuredOutputWithContext() {
         }),
       });
 
-      for (const [provider, model] of [
+      for (const [provider, model, agentModel] of [
         [
           "openai",
           new ChatOpenAI({
@@ -1317,6 +1673,7 @@ async function testStructuredOutputWithContext() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "openai:gpt-4o",
         ],
         [
           "anthropic",
@@ -1325,6 +1682,7 @@ async function testStructuredOutputWithContext() {
             maxTokens: 500,
             callbacks: [handler],
           }),
+          "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
@@ -1358,9 +1716,7 @@ async function testStructuredOutputWithContext() {
           },
         };
 
-        const structuredModel = model.withStructuredOutput(comparisonSchema);
-        const result = await structuredModel.invoke(
-          `Compare phone-123 and laptop-456. Here is the product info and reviews:
+        const prompt = `Compare phone-123 and laptop-456. Here is the product info and reviews:
 
 Product Info:
 - phone-123: ${JSON.stringify(productInfo["phone-123"])}
@@ -1370,8 +1726,10 @@ Reviews:
 - phone-123: ${JSON.stringify(reviews["phone-123"])}
 - laptop-456: ${JSON.stringify(reviews["laptop-456"])}
 
-Give me a structured comparison with your recommendation.`,
-        );
+Give me a structured comparison with your recommendation.`;
+
+        const structuredModel = model.withStructuredOutput(comparisonSchema);
+        const result = await structuredModel.invoke(prompt);
 
         console.log("Product comparison:");
         console.log(`Recommendation: ${result.recommendation}`);
@@ -1380,60 +1738,28 @@ Give me a structured comparison with your recommendation.`,
         console.log(
           `Price difference: $${result.priceComparison.priceDifference}`,
         );
+
+        const agent = createAgent({
+          model: agentModel,
+          responseFormat: comparisonSchema,
+          callbacks: [handler],
+        });
+        const agentResult = await agent.invoke({
+          messages: [{ role: "user", content: prompt }],
+          callbacks: [handler],
+        });
+
+        console.log("Agent product comparison:");
+        console.log(`Recommendation: ${agentResult.recommendation}`);
+        console.log(`Reasoning: ${agentResult.reasoning.substring(0, 100)}...`);
+        console.log(`Cheaper: ${agentResult.priceComparison.cheaper}`);
+        console.log(
+          `Price difference: $${agentResult.priceComparison.priceDifference}`,
+        );
         console.log();
       }
     },
     { name: "test_structured_output_with_context" },
-  );
-}
-
-// Test 24: Agent with createAgent (LangChain v1 only)
-async function testCreateAgent() {
-  return traced(
-    async () => {
-      console.log("\n=== Test 24: Create Agent (v1 API) ===");
-
-      // Note: createAgent is a v1-only feature
-      // This test will need to be conditionally enabled based on LangChain version
-      try {
-        // Try to import createAgent - will fail in v0
-        const { createAgent } = await import("langchain");
-
-        const weatherTool = new DynamicStructuredTool({
-          name: "get_weather",
-          description: "Get the current weather for a location",
-          schema: z.object({
-            location: z.string(),
-            unit: z.enum(["celsius", "fahrenheit"]).optional(),
-          }),
-          func: async ({ location, unit = "celsius" }) => {
-            return `22 degrees ${unit} and sunny in ${location}`;
-          },
-        });
-
-        const agent = createAgent({
-          model: "gpt-4o",
-          tools: [weatherTool],
-          systemPrompt: "You are a helpful weather assistant.",
-          callbacks: [handler],
-        });
-
-        const result = await agent.invoke({
-          messages: [
-            { role: "user", content: "What is the weather in Tokyo?" },
-          ],
-        });
-
-        console.log("Agent response:");
-        console.log(result.content);
-      } catch (error) {
-        console.log(
-          "createAgent not available (expected in v0):",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    },
-    { name: "test_create_agent" },
   );
 }
 
@@ -1466,7 +1792,6 @@ async function runAllTests() {
     testStructuredOutput,
     testStreamingStructuredOutput,
     testStructuredOutputWithContext,
-    testCreateAgent, // v1-specific test
   ];
 
   for (const test of tests) {
@@ -1474,14 +1799,7 @@ async function runAllTests() {
       await test();
       await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
-      console.error(
-        `Test ${test.name} failed:`,
-        error instanceof Error ? error.message : error,
-      );
-      if (error instanceof Error && error.stack) {
-        console.error(error.stack);
-        process.exit(1);
-      }
+      console.error(`Test ${test.name} failed:`, error.message);
     }
   }
 

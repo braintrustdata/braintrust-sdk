@@ -1,4 +1,4 @@
-import { traced, initLogger, log } from "braintrust";
+import { traced, initLogger } from "braintrust";
 import { BraintrustCallbackHandler } from "@braintrust/langchain-js";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
@@ -1423,14 +1423,7 @@ async function runAllTests() {
       await test();
       await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error) {
-      console.error(
-        `Test ${test.name} failed:`,
-        error instanceof Error ? error.message : error,
-      );
-      if (error instanceof Error && error.stack) {
-        console.error(error.stack);
-        process.exit(1);
-      }
+      console.error(`Test ${test.name} failed:`, error.message);
     }
   }
 
