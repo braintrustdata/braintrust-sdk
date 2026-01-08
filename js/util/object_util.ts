@@ -1,7 +1,12 @@
-import { isObject, isObjectOrArray } from "./type_util";
+import { isArray, isObject, isObjectOrArray } from "./type_util";
+
+// Fields that automatically use set-union merge semantics (unless in mergePaths).
+const SET_UNION_FIELDS = new Set(["tags"]);
 
 // Mutably updates `mergeInto` with the contents of `mergeFrom`, merging objects
 // deeply. Does not merge any further than `merge_paths`.
+// For fields in SET_UNION_FIELDS (like "tags"), arrays are merged as sets (union)
+// unless the field is explicitly listed in mergePaths (opt-out to replacement).
 export function mergeDictsWithPaths({
   mergeInto,
   mergeFrom,
@@ -37,7 +42,27 @@ function mergeDictsWithPathsHelper({
     const fullPath = path.concat([k]);
     const fullPathSerialized = JSON.stringify(fullPath);
     const mergeIntoV = recordFind(mergeInto, k);
-    if (
+
+    // Check if this field should use set-union merge (e.g., "tags" at top level)
+    const isSetUnionField =
+      path.length === 0 &&
+      SET_UNION_FIELDS.has(k) &&
+      !mergePaths.has(fullPathSerialized);
+
+    if (isSetUnionField && isArray(mergeIntoV) && isArray(mergeFromV)) {
+      // Set-union merge: combine arrays, deduplicate using JSON.stringify for objects
+      const seen = new Set<string>();
+      const combined: unknown[] = [];
+      for (const item of [...mergeIntoV, ...mergeFromV]) {
+        const key =
+          typeof item === "object" ? JSON.stringify(item) : String(item);
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(item);
+        }
+      }
+      mergeInto[k] = combined;
+    } else if (
       isObject(mergeIntoV) &&
       isObject(mergeFromV) &&
       !mergePaths.has(fullPathSerialized)
