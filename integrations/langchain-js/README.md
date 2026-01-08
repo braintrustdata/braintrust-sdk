@@ -15,7 +15,7 @@ pnpm add @braintrust/langchain-js
 ## Requirements
 
 - Node.js >= 16
-- LangChain.js >= 1.0.0
+- LangChain.js >= 0.3.42 (incl. 1.0.0)
 
 ## Usage
 

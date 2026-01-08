@@ -58,29 +58,36 @@ async function testBasicCompletion() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const prompt = ChatPromptTemplate.fromTemplate(
-          "What is the capital of {country}?",
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate(
+              "What is the capital of {country}?",
+            );
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({
+              country: "France",
+            });
+          },
+          { name: `Chain (${provider})` },
         );
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({
-          country: "France",
-        })) as BaseMessage;
-        console.log(result.content);
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            { role: "user", content: "What is the capital of France?" },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  { role: "user", content: "What is the capital of France?" },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_basic_completion" },
@@ -113,30 +120,43 @@ async function testMultiTurn() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const messages = [
-          new HumanMessage("Hi, my name is Alice."),
-          new AIMessage("Hello Alice! Nice to meet you."),
-          new HumanMessage("What did I just tell you my name was?"),
-        ];
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
+        await traced(
+          async () => {
+            const messages = [
+              new HumanMessage("Hi, my name is Alice."),
+              new AIMessage("Hello Alice! Nice to meet you."),
+              new HumanMessage("What did I just tell you my name was?"),
+            ];
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            { role: "user", content: "Hi, my name is Alice." },
-            { role: "assistant", content: "Hello Alice! Nice to meet you." },
-            { role: "user", content: "What did I just tell you my name was?" },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  { role: "user", content: "Hi, my name is Alice." },
+                  {
+                    role: "assistant",
+                    content: "Hello Alice! Nice to meet you.",
+                  },
+                  {
+                    role: "user",
+                    content: "What did I just tell you my name was?",
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_multi_turn" },
@@ -169,30 +189,40 @@ async function testSystemPrompt() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const systemMsg = "You are a pirate. Always respond in pirate speak.";
-        const prompt = ChatPromptTemplate.fromMessages([
-          ["system", systemMsg],
-          ["human", "{input}"],
-        ]);
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({
-          input: "Tell me about the weather.",
-        })) as BaseMessage;
-        console.log(result.content);
 
-        const agent = createAgent({
-          model: agentModel,
-          systemPrompt: systemMsg,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: "Tell me about the weather." }],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromMessages([
+              ["system", systemMsg],
+              ["human", "{input}"],
+            ]);
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({
+              input: "Tell me about the weather.",
+            });
+          },
+          { name: `Chain (${provider})` },
+        );
+
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              systemPrompt: systemMsg,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  { role: "user", content: "Tell me about the weather." },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_system_prompt" },
@@ -227,35 +257,43 @@ async function testStreaming() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const promptText = "Count from 1 to 10 slowly.";
-        const prompt = ChatPromptTemplate.fromTemplate(promptText);
-        const chain = prompt.pipe(model);
 
-        const stream = await chain.stream({});
-        for await (const chunk of stream) {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const msg = chunk as BaseMessage;
-          if (msg.content) {
-            process.stdout.write(msg.content.toString());
-          }
-        }
-        console.log();
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate(promptText);
+            const chain = prompt.pipe(model);
+            const stream = await chain.stream({});
+            for await (const chunk of stream) {
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              const msg = chunk as BaseMessage;
+              if (msg.content) {
+                process.stdout.write(msg.content.toString());
+              }
+            }
+          },
+          { name: `Chain (${provider})` },
+        );
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentStream = await agent.stream({
-          messages: [{ role: "user", content: promptText }],
-          callbacks: [handler],
-        });
-        for await (const chunk of agentStream) {
-          if (chunk.content) {
-            process.stdout.write(chunk.content.toString());
-          }
-        }
-        console.log("\n");
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            const agentStream = await agent.stream(
+              {
+                messages: [{ role: "user", content: promptText }],
+              },
+              { callbacks: [handler] },
+            );
+            for await (const chunk of agentStream) {
+              if (chunk.content) {
+                process.stdout.write(chunk.content.toString());
+              }
+            }
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_streaming" },
@@ -292,63 +330,69 @@ async function testImageInput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        await traced(
+          async () => {
+            let messages;
+            if (provider === "openai") {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:image/png;base64,${imageData}` },
+                    },
+                    { type: "text", text: "What color is this image?" },
+                  ],
+                }),
+              ];
+            } else {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    {
+                      type: "image",
+                      source: {
+                        type: "base64",
+                        media_type: "image/png",
+                        data: imageData,
+                      },
+                    },
+                    { type: "text", text: "What color is this image?" },
+                  ],
+                }),
+              ];
+            }
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        let messages;
-        if (provider === "openai") {
-          messages = [
-            new HumanMessage({
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: `data:image/png;base64,${imageData}` },
-                },
-                { type: "text", text: "What color is this image?" },
-              ],
-            }),
-          ];
-        } else {
-          messages = [
-            new HumanMessage({
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: "image/png",
-                    data: imageData,
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "image",
+                        image: `data:image/png;base64,${imageData}`,
+                      },
+                      { type: "text", text: "What color is this image?" },
+                    ],
                   },
-                },
-                { type: "text", text: "What color is this image?" },
-              ],
-            }),
-          ];
-        }
-
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
-
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  image: `data:image/png;base64,${imageData}`,
-                },
-                { type: "text", text: "What color is this image?" },
-              ],
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
         console.log();
       }
     },
@@ -386,69 +430,74 @@ async function testDocumentInput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        await traced(
+          async () => {
+            let messages;
+            if (provider === "openai") {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    {
+                      type: "file",
+                      file: {
+                        file_data: `data:application/pdf;base64,${pdfData}`,
+                        filename: "test-document.pdf",
+                      },
+                    },
+                    { type: "text", text: "What is in this document?" },
+                  ],
+                }),
+              ];
+            } else {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    {
+                      type: "document",
+                      source: {
+                        type: "base64",
+                        media_type: "application/pdf",
+                        data: pdfData,
+                      },
+                    },
+                    { type: "text", text: "What is in this document?" },
+                  ],
+                }),
+              ];
+            }
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        let messages;
-        if (provider === "openai") {
-          messages = [
-            new HumanMessage({
-              content: [
-                {
-                  type: "file",
-                  file: {
-                    file_data: `data:application/pdf;base64,${pdfData}`,
-                    filename: "test-document.pdf",
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "file",
+                        data: pdfData,
+                        mediaType: "application/pdf",
+                        filename: "test-document.pdf",
+                      },
+                      { type: "text", text: "What is in this document?" },
+                    ],
                   },
-                },
-                { type: "text", text: "What is in this document?" },
-              ],
-            }),
-          ];
-        } else {
-          messages = [
-            new HumanMessage({
-              content: [
-                {
-                  type: "document",
-                  source: {
-                    type: "base64",
-                    media_type: "application/pdf",
-                    data: pdfData,
-                  },
-                },
-                { type: "text", text: "What is in this document?" },
-              ],
-            }),
-          ];
-        }
-
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
-
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "file",
-                  data: pdfData,
-                  mediaType: "application/pdf",
-                  filename: "test-document.pdf",
-                },
-                { type: "text", text: "What is in this document?" },
-              ],
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_document_input" },
@@ -493,36 +542,43 @@ async function testTemperatureVariations() {
           ),
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         for (let i = 0; i < configs.length; i++) {
           const config = configs[i];
           const model = models[i];
-          console.log(
-            `Config: temp=${config.temperature}, top_p=${config.topP}`,
-          );
-          const prompt = ChatPromptTemplate.fromTemplate(
-            "Say something {topic}.",
-          );
-          const chain = prompt.pipe(model);
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const result = (await chain.invoke(
-            {
-              topic: "creative",
-            },
-            { callbacks: [handler] },
-          )) as BaseMessage;
-          console.log(result.content);
 
-          const agent = createAgent({
-            model,
-            callbacks: [handler],
-          });
-          const agentResult = await agent.invoke({
-            messages: [{ role: "user", content: "Say something creative." }],
-            callbacks: [handler],
-          });
-          console.log("Agent:", agentResult.content);
-          console.log();
+          await traced(
+            async () => {
+              const prompt = ChatPromptTemplate.fromTemplate(
+                "Say something {topic}.",
+              );
+              const chain = prompt.pipe(model);
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              await chain.invoke(
+                {
+                  topic: "creative",
+                },
+                { callbacks: [handler] },
+              );
+            },
+            { name: `Chain (${provider} temp=${config.temperature})` },
+          );
+
+          await traced(
+            async () => {
+              const agent = createAgent({
+                model,
+              });
+              await agent.invoke(
+                {
+                  messages: [
+                    { role: "user", content: "Say something creative." },
+                  ],
+                },
+                { callbacks: [handler] },
+              );
+            },
+            { name: `Agent (${provider} temp=${config.temperature})` },
+          );
         }
       }
     },
@@ -554,34 +610,39 @@ async function testStopSequences() {
           }),
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const topic = "robot";
-        const prompt = ChatPromptTemplate.fromTemplate(
-          `Write a short story about a ${topic}.`,
-        );
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke(
-          {},
-          { callbacks: [handler] },
-        )) as AIMessage;
-        console.log(result.content);
-        console.log(
-          `Response metadata: ${JSON.stringify(result.response_metadata)}`,
+
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate(
+              `Write a short story about a ${topic}.`,
+            );
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({}, { callbacks: [handler] });
+          },
+          { name: `Chain (${provider})` },
         );
 
-        const agent = createAgent({
-          model,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            { role: "user", content: `Write a short story about a ${topic}.` },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: `Write a short story about a ${topic}.`,
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_stop_sequences" },
@@ -615,22 +676,29 @@ async function testMetadata() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const messages = [new HumanMessage("Hello!")];
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
+        await traced(
+          async () => {
+            const messages = [new HumanMessage("Hello!")];
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: "Hello!" }],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [{ role: "user", content: "Hello!" }],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_metadata" },
@@ -664,33 +732,37 @@ async function testLongContext() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const prompt = ChatPromptTemplate.fromTemplate(
-          "Here is a long text:\n\n{text}\n\nHow many times does the word 'fox' appear?",
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate(
+              "Here is a long text:\n\n{text}\n\nHow many times does the word 'fox' appear?",
+            );
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({ text: longText }, { callbacks: [handler] });
+          },
+          { name: `Chain (${provider})` },
         );
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke(
-          { text: longText },
-          { callbacks: [handler] },
-        )) as BaseMessage;
-        console.log(result.content);
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content: `Here is a long text:\n\n${longText}\n\nHow many times does the word 'fox' appear?`,
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: `Here is a long text:\n\n${longText}\n\nHow many times does the word 'fox' appear?`,
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_long_context" },
@@ -727,75 +799,81 @@ async function testMixedContent() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        await traced(
+          async () => {
+            let messages;
+            if (provider === "openai") {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    { type: "text", text: "First, look at this image:" },
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:image/png;base64,${imageData}` },
+                    },
+                    {
+                      type: "text",
+                      text: "Now describe what you see and explain why it matters.",
+                    },
+                  ],
+                }),
+              ];
+            } else {
+              messages = [
+                new HumanMessage({
+                  content: [
+                    { type: "text", text: "First, look at this image:" },
+                    {
+                      type: "image",
+                      source: {
+                        type: "base64",
+                        media_type: "image/png",
+                        data: imageData,
+                      },
+                    },
+                    {
+                      type: "text",
+                      text: "Now describe what you see and explain why it matters.",
+                    },
+                  ],
+                }),
+              ];
+            }
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        let messages;
-        if (provider === "openai") {
-          messages = [
-            new HumanMessage({
-              content: [
-                { type: "text", text: "First, look at this image:" },
-                {
-                  type: "image_url",
-                  image_url: { url: `data:image/png;base64,${imageData}` },
-                },
-                {
-                  type: "text",
-                  text: "Now describe what you see and explain why it matters.",
-                },
-              ],
-            }),
-          ];
-        } else {
-          messages = [
-            new HumanMessage({
-              content: [
-                { type: "text", text: "First, look at this image:" },
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: "image/png",
-                    data: imageData,
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      { type: "text", text: "First, look at this image:" },
+                      {
+                        type: "image",
+                        image: `data:image/png;base64,${imageData}`,
+                      },
+                      {
+                        type: "text",
+                        text: "Now describe what you see and explain why it matters.",
+                      },
+                    ],
                   },
-                },
-                {
-                  type: "text",
-                  text: "Now describe what you see and explain why it matters.",
-                },
-              ],
-            }),
-          ];
-        }
-
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
-
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "First, look at this image:" },
-                {
-                  type: "image",
-                  image: `data:image/png;base64,${imageData}`,
-                },
-                {
-                  type: "text",
-                  text: "Now describe what you see and explain why it matters.",
-                },
-              ],
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
         console.log();
       }
     },
@@ -829,29 +907,37 @@ async function testPrefill() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const topic = "coding";
-        const messages = [
-          new HumanMessage(`Write a haiku about ${topic}.`),
-          new AIMessage("Here is a haiku:"),
-        ];
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
-        console.log(result.content);
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            { role: "user", content: `Write a haiku about ${topic}.` },
-            { role: "assistant", content: "Here is a haiku:" },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const messages = [
+              new HumanMessage(`Write a haiku about ${topic}.`),
+              new AIMessage("Here is a haiku:"),
+            ];
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await model.invoke(messages);
+          },
+          { name: `Model (${provider})` },
+        );
+
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  { role: "user", content: `Write a haiku about ${topic}.` },
+                  { role: "assistant", content: "Here is a haiku:" },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_prefill" },
@@ -882,26 +968,30 @@ async function testShortMaxTokens() {
           }),
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const prompt = ChatPromptTemplate.fromTemplate("What is AI?");
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({})) as AIMessage;
-        console.log(result.content);
-        console.log(
-          `Response metadata: ${JSON.stringify(result.response_metadata)}`,
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate("What is AI?");
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({});
+          },
+          { name: `Chain (${provider})` },
         );
 
-        const agent = createAgent({
-          model,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: "What is AI?" }],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model,
+            });
+            await agent.invoke(
+              {
+                messages: [{ role: "user", content: "What is AI?" }],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_short_max_tokens" },
@@ -952,37 +1042,32 @@ async function testToolUse() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        const modelWithTools = model.bindTools([getWeatherTool]);
         const query = "What is the weather like in Paris, France?";
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await modelWithTools.invoke(query)) as AIMessage;
 
-        console.log("Response content:");
-        if (result.content) {
-          console.log(`Text: ${result.content}`);
-        }
+        await traced(
+          async () => {
+            const modelWithTools = model.bindTools([getWeatherTool]);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await modelWithTools.invoke(query);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        if (result.tool_calls && result.tool_calls.length > 0) {
-          result.tool_calls.forEach((call, i) => {
-            console.log(`Tool use block ${i}:`);
-            console.log(`  Tool: ${call.name}`);
-            console.log(`  Input: ${JSON.stringify(call.args)}`);
-          });
-        }
-
-        const agent = createAgent({
-          model: agentModel,
-          tools: [getWeatherTool],
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: query }],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              tools: [getWeatherTool],
+            });
+            await agent.invoke(
+              {
+                messages: [{ role: "user", content: query }],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_tool_use" },
@@ -1041,52 +1126,52 @@ async function testToolUseWithResult() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        const modelWithTools = model.bindTools([calculateTool]);
         const query = "What is 127 multiplied by 49?";
 
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const firstResult = (await modelWithTools.invoke(query)) as AIMessage;
+        await traced(
+          async () => {
+            const modelWithTools = model.bindTools([calculateTool]);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            const firstResult = (await modelWithTools.invoke(
+              query,
+            )) as AIMessage;
 
-        console.log("First response:");
-        if (firstResult.tool_calls && firstResult.tool_calls.length > 0) {
-          const toolCall = firstResult.tool_calls[0];
-          console.log(`Tool called: ${toolCall.name}`);
-          console.log(`Input: ${JSON.stringify(toolCall.args)}`);
+            if (firstResult.tool_calls && firstResult.tool_calls.length > 0) {
+              const toolCall = firstResult.tool_calls[0];
+              const result = 127 * 49;
+              const messages = [
+                new HumanMessage(query),
+                new AIMessage({
+                  content: "",
+                  tool_calls: [toolCall],
+                }),
+                new ToolMessage({
+                  content: result.toString(),
+                  tool_call_id: toolCall.id!,
+                }),
+              ];
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              await modelWithTools.invoke(messages);
+            }
+          },
+          { name: `Model (${provider})` },
+        );
 
-          const result = 127 * 49;
-
-          const messages = [
-            new HumanMessage(query),
-            new AIMessage({
-              content: "",
-              tool_calls: [toolCall],
-            }),
-            new ToolMessage({
-              content: result.toString(),
-              tool_call_id: toolCall.id!,
-            }),
-          ];
-
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const secondResult = (await modelWithTools.invoke(
-            messages,
-          )) as AIMessage;
-          console.log("\nSecond response (with tool result):");
-          console.log(secondResult.content);
-        }
-
-        const agent = createAgent({
-          model: agentModel,
-          tools: [calculateTool],
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: query }],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              tools: [calculateTool],
+            });
+            await agent.invoke(
+              {
+                messages: [{ role: "user", content: query }],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
         console.log();
       }
     },
@@ -1120,28 +1205,36 @@ async function testAsyncGeneration() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const topic = "programming";
-        const prompt = ChatPromptTemplate.fromTemplate(
-          "Tell me a joke about {topic}.",
-        );
-        const chain = prompt.pipe(model);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({ topic })) as BaseMessage;
-        console.log(result.content);
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            { role: "user", content: `Tell me a joke about ${topic}.` },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const prompt = ChatPromptTemplate.fromTemplate(
+              "Tell me a joke about {topic}.",
+            );
+            const chain = prompt.pipe(model);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await chain.invoke({ topic });
+          },
+          { name: `Chain (${provider})` },
+        );
+
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  { role: "user", content: `Tell me a joke about ${topic}.` },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_async_generation" },
@@ -1176,35 +1269,44 @@ async function testAsyncStreaming() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const category = "programming languages";
-        const prompt = ChatPromptTemplate.fromTemplate("List 3 {category}.");
-        const chain = prompt.pipe(model);
 
-        const stream = await chain.stream({ category });
-        for await (const chunk of stream) {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const msg = chunk as BaseMessage;
-          if (msg.content) {
-            process.stdout.write(msg.content.toString());
-          }
-        }
-        console.log();
+        await traced(
+          async () => {
+            const prompt =
+              ChatPromptTemplate.fromTemplate("List 3 {category}.");
+            const chain = prompt.pipe(model);
+            const stream = await chain.stream({ category });
+            for await (const chunk of stream) {
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              const msg = chunk as BaseMessage;
+              if (msg.content) {
+                process.stdout.write(msg.content.toString());
+              }
+            }
+          },
+          { name: `Chain (${provider})` },
+        );
 
-        const agent = createAgent({
-          model: agentModel,
-          callbacks: [handler],
-        });
-        const agentStream = await agent.stream({
-          messages: [{ role: "user", content: `List 3 ${category}.` }],
-          callbacks: [handler],
-        });
-        for await (const chunk of agentStream) {
-          if (chunk.content) {
-            process.stdout.write(chunk.content.toString());
-          }
-        }
-        console.log("\n");
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+            });
+            const agentStream = await agent.stream(
+              {
+                messages: [{ role: "user", content: `List 3 ${category}.` }],
+              },
+              { callbacks: [handler] },
+            );
+            for await (const chunk of agentStream) {
+              if (chunk.content) {
+                process.stdout.write(chunk.content.toString());
+              }
+            }
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_async_streaming" },
@@ -1228,30 +1330,38 @@ async function testReasoning() {
         },
       });
 
-      const prompt = ChatPromptTemplate.fromTemplate(
-        "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+      await traced(
+        async () => {
+          const prompt = ChatPromptTemplate.fromTemplate(
+            "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          );
+          const chain = prompt.pipe(model);
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          await chain.invoke({});
+        },
+        { name: "Chain (anthropic)" },
       );
-      const chain = prompt.pipe(model);
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const result = (await chain.invoke({})) as BaseMessage;
-      console.log(result.content);
 
-      const agent = createAgent({
-        model,
-        callbacks: [handler],
-      });
-      const agentResult = await agent.invoke({
-        messages: [
-          {
-            role: "user",
-            content:
-              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
-          },
-        ],
-        callbacks: [handler],
-      });
-      console.log("Agent:", agentResult.content);
-      console.log();
+      await traced(
+        async () => {
+          const agent = createAgent({
+            model,
+          });
+          await agent.invoke(
+            {
+              messages: [
+                {
+                  role: "user",
+                  content:
+                    "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+                },
+              ],
+            },
+            { callbacks: [handler] },
+          );
+        },
+        { name: "Agent (anthropic)" },
+      );
     },
     { name: "test_reasoning" },
   );
@@ -1444,48 +1554,41 @@ async function testMultiRoundToolUse() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        const query =
+          "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.";
 
-        const modelWithTools = model.bindTools([
-          getStorePriceTool,
-          applyDiscountTool,
-        ]);
+        await traced(
+          async () => {
+            const modelWithTools = model.bindTools([
+              getStorePriceTool,
+              applyDiscountTool,
+            ]);
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            await modelWithTools.invoke(query);
+          },
+          { name: `Model (${provider})` },
+        );
 
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await modelWithTools.invoke(
-          "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
-        )) as AIMessage;
-
-        console.log("Response:");
-        if (result.content) {
-          console.log(`Text: ${result.content}`);
-        }
-
-        if (result.tool_calls && result.tool_calls.length > 0) {
-          console.log(`Tool calls made: ${result.tool_calls.length}`);
-          result.tool_calls.forEach((call, i) => {
-            console.log(`  Tool call ${i + 1}: ${call.name}`);
-            console.log(`    Args: ${JSON.stringify(call.args)}`);
-          });
-        }
-
-        const agent = createAgent({
-          model: agentModel,
-          tools: [getStorePriceTool, applyDiscountTool],
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content:
-                "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent:", agentResult.content);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              tools: [getStorePriceTool, applyDiscountTool],
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: query,
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_multi_round_tool_use" },
@@ -1529,37 +1632,36 @@ async function testStructuredOutput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        const query = "Generate a simple recipe for chocolate chip cookies.";
 
-        const structuredModel = model.withStructuredOutput(recipeSchema);
-        const result = await structuredModel.invoke(
-          "Generate a simple recipe for chocolate chip cookies.",
+        await traced(
+          async () => {
+            const structuredModel = model.withStructuredOutput(recipeSchema);
+            await structuredModel.invoke(query);
+          },
+          { name: `Model (${provider})` },
         );
 
-        console.log("Parsed recipe:");
-        console.log(`Name: ${result.name}`);
-        console.log(`Ingredients: ${result.ingredients.length}`);
-        console.log(`Steps: ${result.steps.length}`);
-
-        const agent = createAgent({
-          model: agentModel,
-          responseFormat: recipeSchema,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [
-            {
-              role: "user",
-              content: "Generate a simple recipe for chocolate chip cookies.",
-            },
-          ],
-          callbacks: [handler],
-        });
-        console.log("Agent structured output:");
-        console.log(`Name: ${agentResult.name}`);
-        console.log(`Ingredients: ${agentResult.ingredients.length}`);
-        console.log(`Steps: ${agentResult.steps.length}`);
-        console.log();
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              responseFormat: recipeSchema,
+            });
+            await agent.invoke(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: query,
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_structured_output" },
@@ -1599,47 +1701,44 @@ async function testStreamingStructuredOutput() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+        const query =
+          "Generate a product description for a wireless bluetooth headphone.";
 
-        const structuredModel = model.withStructuredOutput(productSchema);
-        const stream = await structuredModel.stream(
-          "Generate a product description for a wireless bluetooth headphone.",
+        await traced(
+          async () => {
+            const structuredModel = model.withStructuredOutput(productSchema);
+            const stream = await structuredModel.stream(query);
+            for await (const chunk of stream) {
+              // consume stream
+            }
+          },
+          { name: `Model (${provider})` },
         );
 
-        let finalResult;
-        for await (const chunk of stream) {
-          finalResult = chunk;
-        }
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              responseFormat: productSchema,
+            });
+            const agentStream = await agent.stream(
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: query,
+                  },
+                ],
+              },
+              { callbacks: [handler] },
+            );
 
-        console.log("Final structured output:");
-        console.log(`Name: ${finalResult?.name}`);
-        console.log(`Price: ${finalResult?.price}`);
-
-        const agent = createAgent({
-          model: agentModel,
-          responseFormat: productSchema,
-          callbacks: [handler],
-        });
-        const agentStream = await agent.stream({
-          messages: [
-            {
-              role: "user",
-              content:
-                "Generate a product description for a wireless bluetooth headphone.",
-            },
-          ],
-          callbacks: [handler],
-        });
-
-        let agentFinalResult;
-        for await (const chunk of agentStream) {
-          agentFinalResult = chunk;
-        }
-
-        console.log("Agent streaming structured output:");
-        console.log(`Name: ${agentFinalResult?.name}`);
-        console.log(`Price: ${agentFinalResult?.price}`);
-        console.log();
+            for await (const chunk of agentStream) {
+              // consume stream
+            }
+          },
+          { name: `Agent (${provider})` },
+        );
       }
     },
     { name: "test_streaming_structured_output" },
@@ -1685,8 +1784,6 @@ async function testStructuredOutputWithContext() {
           "anthropic:claude-sonnet-4-20250514",
         ],
       ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
         // Simulate data that would be gathered via tools
         const productInfo = {
           "phone-123": {
@@ -1728,35 +1825,30 @@ Reviews:
 
 Give me a structured comparison with your recommendation.`;
 
-        const structuredModel = model.withStructuredOutput(comparisonSchema);
-        const result = await structuredModel.invoke(prompt);
-
-        console.log("Product comparison:");
-        console.log(`Recommendation: ${result.recommendation}`);
-        console.log(`Reasoning: ${result.reasoning.substring(0, 100)}...`);
-        console.log(`Cheaper: ${result.priceComparison.cheaper}`);
-        console.log(
-          `Price difference: $${result.priceComparison.priceDifference}`,
+        await traced(
+          async () => {
+            const structuredModel =
+              model.withStructuredOutput(comparisonSchema);
+            await structuredModel.invoke(prompt);
+          },
+          { name: `Model (${provider})` },
         );
 
-        const agent = createAgent({
-          model: agentModel,
-          responseFormat: comparisonSchema,
-          callbacks: [handler],
-        });
-        const agentResult = await agent.invoke({
-          messages: [{ role: "user", content: prompt }],
-          callbacks: [handler],
-        });
-
-        console.log("Agent product comparison:");
-        console.log(`Recommendation: ${agentResult.recommendation}`);
-        console.log(`Reasoning: ${agentResult.reasoning.substring(0, 100)}...`);
-        console.log(`Cheaper: ${agentResult.priceComparison.cheaper}`);
-        console.log(
-          `Price difference: $${agentResult.priceComparison.priceDifference}`,
+        await traced(
+          async () => {
+            const agent = createAgent({
+              model: agentModel,
+              responseFormat: comparisonSchema,
+            });
+            await agent.invoke(
+              {
+                messages: [{ role: "user", content: prompt }],
+              },
+              { callbacks: [handler] },
+            );
+          },
+          { name: `Agent (${provider})` },
         );
-        console.log();
       }
     },
     { name: "test_structured_output_with_context" },
