@@ -520,15 +520,17 @@ def add_span_parent_to_baggage(span, ctx=None):
     return add_parent_to_baggage(parent_value, ctx=ctx)
 
 
-def parent_from_headers(headers: dict[str, str]) -> str | None:
+def parent_from_headers(headers: dict[str, str], propagator=None) -> str | None:
     """
-    Extract a Braintrust-compatible parent string from W3C Trace Context headers.
+    Extract a Braintrust-compatible parent string from trace context headers.
 
-    This converts OTEL trace context headers (traceparent/baggage) into a format
-    that can be passed as the 'parent' parameter to Braintrust's start_span() method.
+    This converts OTEL trace context headers into a format that can be passed
+    as the 'parent' parameter to Braintrust's start_span() method.
 
     Args:
-        headers: Dictionary with 'traceparent' and optionally 'baggage' keys
+        headers: Dictionary with trace context headers (e.g., 'traceparent'/'baggage' for W3C)
+        propagator: Optional custom TextMapPropagator. If not provided, uses the
+                   globally registered propagator (W3C TraceContext by default).
 
     Returns:
         Braintrust V4 export string that can be used as parent parameter,
@@ -543,6 +545,12 @@ def parent_from_headers(headers: dict[str, str]) -> str | None:
         >>> parent = parent_from_headers(headers)
         >>> with project.start_span(name="service_c", parent=parent) as span:
         >>>     span.log(input="BT span as child of OTEL parent")
+
+        >>> # Using a custom propagator (e.g., B3 format)
+        >>> from opentelemetry.propagators.b3 import B3MultiFormat
+        >>> propagator = B3MultiFormat()
+        >>> headers = {'X-B3-TraceId': '...', 'X-B3-SpanId': '...', 'baggage': '...'}
+        >>> parent = parent_from_headers(headers, propagator=propagator)
     """
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
@@ -551,8 +559,11 @@ def parent_from_headers(headers: dict[str, str]) -> str | None:
     from opentelemetry import baggage, trace
     from opentelemetry.propagate import extract
 
-    # Extract context from headers using W3C Trace Context propagator
-    ctx = extract(headers)
+    # Extract context from headers using provided propagator or global propagator
+    if propagator is not None:
+        ctx = propagator.extract(headers)
+    else:
+        ctx = extract(headers)
 
     # Get span from context
     span = trace.get_current_span(ctx)
