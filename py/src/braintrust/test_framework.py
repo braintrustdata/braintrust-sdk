@@ -240,11 +240,70 @@ async def test_hooks_trial_index_multiple_inputs():
     assert sorted(input_1_trials) == [0, 1]
     assert sorted(input_2_trials) == [0, 1]
 
+
+@pytest.mark.asyncio
+async def test_scorer_spans_have_purpose_attribute(with_memory_logger, with_simulate_login):
+    """Test that scorer spans have span_attributes.purpose='scorer' and propagate to subspans."""
+    # Define test data
+    data = [
+        EvalCase(input="hello", expected="hello"),
+    ]
+
+    def simple_task(input_value):
+        return input_value
+
+    def purpose_scorer(input_value, output, expected):
+        return 1.0 if output == expected else 0.0
+
+    evaluator = Evaluator(
+        project_name="test-project",
+        eval_name="test-scorer-purpose",
+        data=data,
+        task=simple_task,
+        scores=[purpose_scorer],
+        experiment_name="test-scorer-purpose",
+        metadata=None,
+    )
+
+    # Create experiment so spans get logged
+    exp = init_test_exp("test-scorer-purpose", "test-project")
+
+    # Run evaluator
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+
+    assert len(result.results) == 1
+    assert result.results[0].scores.get("purpose_scorer") == 1.0
+
+    # Check the logged spans
+    logs = with_memory_logger.pop()
+
+    # Find the scorer span (has type="score")
+    scorer_spans = [log for log in logs if log.get("span_attributes", {}).get("type") == "score"]
+    assert len(scorer_spans) == 1, f"Expected 1 scorer span, found {len(scorer_spans)}"
+
+    scorer_span = scorer_spans[0]
+
+    # Verify the scorer span has purpose='scorer'
+    assert scorer_span["span_attributes"].get("purpose") == "scorer", (
+        f"Scorer span should have purpose='scorer', got: {scorer_span['span_attributes']}"
+    )
+
+    # Verify that non-scorer spans (task, eval) do NOT have purpose='scorer'
+    non_scorer_spans = [log for log in logs if log.get("span_attributes", {}).get("type") != "score"]
+    assert len(non_scorer_spans) > 0, "Expected at least one non-scorer span"
+    for span in non_scorer_spans:
+        assert span.get("span_attributes", {}).get("purpose") != "scorer", (
+            f"Non-scorer span should NOT have purpose='scorer', got: {span['span_attributes']}"
+        )
+
+
 @pytest.fixture
 def simple_scorer():
     def simple_scorer_function(input, output, expected):
         return {"name": "simple_scorer", "score": 0.8}
+
     return simple_scorer_function
+
 
 @pytest.mark.asyncio
 async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
@@ -285,8 +344,33 @@ async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
 
 
 @pytest.mark.asyncio
+async def test_eval_no_send_logs_with_none_score(with_memory_logger):
+    """Test that scorers returning None don't crash local mode."""
+
+    def sometimes_none_scorer(input, output, expected):
+        # Return None for first input, score for second
+        if input == "hello":
+            return {"name": "conditional", "score": None}
+        return {"name": "conditional", "score": 1.0}
+
+    result = await Eval(
+        "test-none-score",
+        data=[
+            {"input": "hello", "expected": "hello world"},
+            {"input": "test", "expected": "test world"},
+        ],
+        task=lambda input_val: input_val + " world",
+        scores=[sometimes_none_scorer],
+        no_send_logs=True,
+    )
+
+    # Should not crash and should calculate average from non-None scores only
+    assert result.summary.scores["conditional"].score == 1.0  # Only the second score counts
+
+
+@pytest.mark.asyncio
 async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that hooks.tags can be appended to and logged. """
+    """Test that hooks.tags can be appended to and logged."""
 
     initial_tags = ["cookies n cream"]
     appended_tags = ["chocolate", "vanilla", "strawberry"]
@@ -321,9 +405,12 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("tags", "expected_tags"), [(None, None),([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])])
+@pytest.mark.parametrize(
+    ("tags", "expected_tags"),
+    [(None, None), ([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])],
+)
 async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_scorer, tags, expected_tags):
-    """ Test that hooks.tags can be set to a list. """
+    """Test that hooks.tags can be set to a list."""
 
     def task_with_hooks(input, hooks):
         hooks.tags = tags
@@ -351,9 +438,10 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_s
     assert len(root_span) == 1
     assert root_span[0].get("tags") == expected_tags
 
+
 @pytest.mark.asyncio
 async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that hooks.tags can be set to a list. """
+    """Test that hooks.tags can be set to a list."""
 
     expected_tags = ["chocolate", "vanilla", "strawberry"]
 
@@ -386,9 +474,11 @@ async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_
     assert len(root_span) == 1
     assert root_span[0].get("tags") == expected_tags
 
+
 @pytest.mark.asyncio
 async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that result contains an error for cases where hooks.tags is set to an invalid type. """
+    """Test that result contains an error for cases where hooks.tags is set to an invalid type."""
+
     def task_with_hooks(input, hooks):
         hooks.tags = 123
         return input
@@ -411,7 +501,8 @@ async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_lo
 
 @pytest.mark.asyncio
 async def test_hooks_without_setting_tags(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test where hooks.tags is not set """
+    """Test where hooks.tags is not set"""
+
     def task_with_hooks(input, hooks):
         return input
 

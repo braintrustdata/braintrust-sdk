@@ -14,10 +14,12 @@ help:
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
 	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
+	@echo "  make test-api-compat    - Run API compatibility tests"
+	@echo "  make test-smoke         - Run smoke tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -82,7 +84,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
@@ -94,6 +96,10 @@ install-optional-deps:
 test-core:
 	pnpm prune
 	pnpm test
+
+# Test API compatibility
+test-api-compat:
+	pnpm test:api-compat
 
 # Test everything
 test: test-core test-openai test-anthropic test-google-genai
@@ -137,3 +143,45 @@ endef
 
 clean:
 	npm run clean
+
+# -------------------------------------------------------------------------------------------------
+# Smoke tests
+# -------------------------------------------------------------------------------------------------
+
+# Marker file to track when smoke tests were last prepared
+SMOKE_PREPARE_MARKER := smoke/.prepare-marker
+SMOKE_DIR := smoke
+
+# Run smoke tests (prepares if source changed)
+# Usage: make test-smoke [TEST_NAME...]
+test-smoke:
+	@if [ ! -f "$(SMOKE_PREPARE_MARKER)" ]; then \
+		echo "⚠ Smoke tests not prepared, preparing..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ -n "$$(find src -type f \( -name '*.ts' -o -name '*.tsx' \) -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
+		echo "⚠ SDK source files changed, preparing smoke tests..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ -n "$$(find dist -type f -name '*.js' -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
+		echo "⚠ SDK build artifacts changed, preparing smoke tests..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ ! -d "artifacts" ] || [ -z "$$(ls artifacts/*.tgz 2>/dev/null | head -1)" ]; then \
+		echo "⚠ Smoke test artifacts missing, preparing..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	else \
+		echo "✓ Smoke tests are up to date"; \
+	fi
+	@echo "Running smoke tests..."
+	@EXIT_CODE=0; \
+	cd $(SMOKE_DIR) && ./run-tests.sh $(filter-out test-smoke,$(MAKECMDGOALS)) || EXIT_CODE=$$?; \
+	echo ""; \
+	echo "Restoring package files..."; \
+	for dir in tests/*/; do \
+		if [ -f "$$dir/package.json" ] && grep -q '"restore"' "$$dir/package.json" 2>/dev/null; then \
+			(cd "$$dir" && npm run restore >/dev/null 2>&1 && echo "  ✓ Restored $$(basename $$dir)") || true; \
+		fi; \
+	done; \
+	exit $$EXIT_CODE
+
+# Allow passing test names as make targets (they become no-ops)
+cloudflare-worker deno nextjs-instrumentation otel-v1 span span-jest:
+	@:

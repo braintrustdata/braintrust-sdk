@@ -17,7 +17,7 @@ import {
   TestBackgroundLogger,
   Attachment,
 } from "../logger";
-import { wrapOpenAI } from "../exports-node";
+import { wrapOpenAI } from "./oai";
 import { getCurrentUnixTimestamp } from "../util";
 import { parseMetricsFromUsage } from "./oai_responses";
 
@@ -136,6 +136,174 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.time_to_first_token > 0);
     assert.isTrue(m.prompt_cached_tokens >= 0);
     assert.isTrue(m.completion_reasoning_tokens >= 0);
+  });
+
+  test("openai.chat.completions with images converts to attachments", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const start = getCurrentUnixTimestamp();
+
+    // Create a simple 1x1 red PNG as base64
+    const base64Image =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
+    const result = await client.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "What's in this image?",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${base64Image}`,
+              },
+            },
+          ],
+        },
+      ],
+      model: TEST_MODEL,
+      max_tokens: 50,
+    });
+    const end = getCurrentUnixTimestamp();
+
+    expect(result).toBeTruthy();
+    expect(result.choices).toHaveLength(1);
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    expect(span.span_attributes.name).toBe("Chat Completion");
+    expect(span.span_attributes.type).toBe("llm");
+
+    // Check that the input contains the message with the image
+    expect(span.input).toBeTruthy();
+    expect(Array.isArray(span.input)).toBe(true);
+    expect(span.input.length).toBeGreaterThan(0);
+
+    // Find the message with image content
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageWithImage = span.input.find(
+      (msg: any) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Array.isArray(msg.content) &&
+        msg.content.some((c: any) => c.type === "image_url"),
+    );
+
+    expect(messageWithImage).toBeTruthy();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const imageContent = messageWithImage.content.find(
+      (c: any) => c.type === "image_url",
+    );
+    expect(imageContent).toBeTruthy();
+
+    // Check the output - for vision models, the output is just text (the model's description)
+    // not image content. But this assertion serves as documentation that if models ever
+    // return image content in outputs, those should also be converted to attachment references.
+    expect(span.output).toBeTruthy();
+
+    // The output contains the assistant's text response, not images
+    // Now check the span input for image handling
+    const imageUrlValue = imageContent.image_url.url;
+
+    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment
+    // This validates that images are properly converted to attachments before sending to Braintrust
+    expect(imageUrlValue).toBeInstanceOf(Attachment);
+    expect(imageUrlValue.reference.type).toBe("braintrust_attachment");
+    expect(imageUrlValue.reference.key).toBeTruthy(); // UUID key
+    expect(imageUrlValue.reference.content_type).toBe("image/png");
+    expect(imageUrlValue.reference.filename).toBeTruthy(); // Should have a filename
+
+    const m = span.metrics;
+    expect(start <= m.start && m.start < m.end && m.end <= end).toBe(true);
+  });
+
+  test("openai.chat.completions with PDF documents converts to attachments", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const start = getCurrentUnixTimestamp();
+
+    // Create a simple PDF as base64 (minimal valid PDF)
+    const base64Pdf =
+      "JVBERi0xLjAKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1szIDAgUl0vQ291bnQgMT4+ZW5kb2JqCjMgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXT4+ZW5kb2JqCnhyZWYKMCA0CjAwMDAwMDAwMDAgNjU1MzUgZg0KMDAwMDAwMDAxMCAwMDAwMCBuDQowMDAwMDAwMDUzIDAwMDAwIG4NCjAwMDAwMDAxMDIgMDAwMDAgbg0KdHJhaWxlcgo8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNDkKJUVPRg==";
+
+    const result = await client.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "What's in this document?",
+            },
+            {
+              type: "file",
+              file: {
+                file_data: `data:application/pdf;base64,${base64Pdf}`,
+                filename: "document.pdf",
+              },
+            },
+          ],
+        },
+      ],
+      model: TEST_MODEL,
+      max_tokens: 50,
+    });
+    const end = getCurrentUnixTimestamp();
+
+    expect(result).toBeTruthy();
+    expect(result.choices).toHaveLength(1);
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    expect(span.span_attributes.name).toBe("Chat Completion");
+    expect(span.span_attributes.type).toBe("llm");
+
+    // Check that the input contains the message with the PDF
+    expect(span.input).toBeTruthy();
+    expect(Array.isArray(span.input)).toBe(true);
+    expect(span.input.length).toBeGreaterThan(0);
+
+    // Find the message with file content
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageWithFile = span.input.find(
+      (msg: any) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Array.isArray(msg.content) &&
+        msg.content.some((c: any) => c.type === "file"),
+    );
+
+    expect(messageWithFile).toBeTruthy();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fileContent = messageWithFile.content.find(
+      (c: any) => c.type === "file",
+    );
+    expect(fileContent).toBeTruthy();
+
+    // Check the output
+    expect(span.output).toBeTruthy();
+
+    // Now check the span input for PDF/document handling
+    const fileDataValue = fileContent.file.file_data;
+
+    // EXPECTED BEHAVIOR: The data URL should be converted to a Braintrust attachment
+    // This validates that PDFs/documents are properly converted to attachments before sending to Braintrust
+    expect(fileDataValue).toBeInstanceOf(Attachment);
+    expect(fileDataValue.reference.type).toBe("braintrust_attachment");
+    expect(fileDataValue.reference.key).toBeTruthy(); // UUID key
+    expect(fileDataValue.reference.content_type).toBe("application/pdf");
+    expect(fileDataValue.reference.filename).toBeTruthy(); // Should have a filename
+
+    const m = span.metrics;
+    expect(start <= m.start && m.start < m.end && m.end <= end).toBe(true);
   });
 
   test("openai.chat.completions.tools", async () => {
@@ -662,8 +830,10 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
       const outputItem = span.output[0];
       assert.equal(outputItem.type, "image_generation_call");
 
-      // Verify that the base64 string was replaced with an Attachment
+      // Verify that the base64 string was replaced with a braintrust attachment
       assert.instanceOf(outputItem.result, Attachment);
+      assert.equal(outputItem.result.reference.type, "braintrust_attachment");
+      assert.ok(outputItem.result.reference.key); // Should have a UUID key
       assert.equal(outputItem.result.reference.content_type, "image/png");
       assert.ok(
         outputItem.result.reference.filename.includes("A_simple_test_image"),

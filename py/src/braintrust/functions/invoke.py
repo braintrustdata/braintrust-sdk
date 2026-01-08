@@ -1,38 +1,58 @@
-from typing import Any, Dict, List, Literal, Optional, TypeVar, Union, overload
+from typing import Any, Literal, TypedDict, TypeVar, overload
 
 from sseclient import SSEClient
 
+from .._generated_types import FunctionTypeEnum, InvokeContext
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
 from .constants import INVOKE_API_VERSION
 from .stream import BraintrustInvokeError, BraintrustStream
 
 T = TypeVar("T")
-ModeType = Literal["auto", "parallel"]
+ModeType = Literal["auto", "parallel", "json", "text"]
+ObjectType = Literal["project_logs", "experiment", "dataset", "playground_logs"]
+
+
+class SpanScope(TypedDict):
+    """Scope for operating on a single span."""
+
+    type: Literal["span"]
+    id: str
+    root_span_id: str
+
+
+class TraceScope(TypedDict):
+    """Scope for operating on an entire trace."""
+
+    type: Literal["trace"]
+    root_span_id: str
 
 
 @overload
 def invoke(
     # the permutations of arguments for a function id
-    function_id: Optional[str] = None,
-    version: Optional[str] = None,
-    prompt_session_id: Optional[str] = None,
-    prompt_session_function_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    slug: Optional[str] = None,
-    global_function: Optional[str] = None,
+    function_id: str | None = None,
+    version: str | None = None,
+    prompt_session_id: str | None = None,
+    prompt_session_function_id: str | None = None,
+    project_name: str | None = None,
+    project_id: str | None = None,
+    slug: str | None = None,
+    global_function: str | None = None,
+    function_type: FunctionTypeEnum | None = None,
     # arguments to the function
     input: Any = None,
-    messages: Optional[List[Any]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    tags: Optional[List[str]] = None,
-    parent: Optional[Union[Exportable, str]] = None,
-    stream: Optional[Literal[False]] = None,
-    mode: Optional[ModeType] = None,
-    strict: Optional[bool] = None,
-    org_name: Optional[str] = None,
-    api_key: Optional[str] = None,
-    app_url: Optional[str] = None,
+    messages: list[Any] | None = None,
+    context: InvokeContext | None = None,
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    parent: Exportable | str | None = None,
+    stream: Literal[False] | None = None,
+    mode: ModeType | None = None,
+    strict: bool | None = None,
+    org_name: str | None = None,
+    api_key: str | None = None,
+    app_url: str | None = None,
     force_login: bool = False,
 ) -> T: ...
 
@@ -40,52 +60,58 @@ def invoke(
 @overload
 def invoke(
     # the permutations of arguments for a function id
-    function_id: Optional[str] = None,
-    version: Optional[str] = None,
-    prompt_session_id: Optional[str] = None,
-    prompt_session_function_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    slug: Optional[str] = None,
-    global_function: Optional[str] = None,
+    function_id: str | None = None,
+    version: str | None = None,
+    prompt_session_id: str | None = None,
+    prompt_session_function_id: str | None = None,
+    project_name: str | None = None,
+    project_id: str | None = None,
+    slug: str | None = None,
+    global_function: str | None = None,
+    function_type: FunctionTypeEnum | None = None,
     # arguments to the function
     input: Any = None,
-    messages: Optional[List[Any]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    tags: Optional[List[str]] = None,
-    parent: Optional[Union[Exportable, str]] = None,
+    messages: list[Any] | None = None,
+    context: InvokeContext | None = None,
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    parent: Exportable | str | None = None,
     stream: Literal[True] = True,
-    mode: Optional[ModeType] = None,
-    strict: Optional[bool] = None,
-    org_name: Optional[str] = None,
-    api_key: Optional[str] = None,
-    app_url: Optional[str] = None,
+    mode: ModeType | None = None,
+    strict: bool | None = None,
+    org_name: str | None = None,
+    api_key: str | None = None,
+    app_url: str | None = None,
     force_login: bool = False,
 ) -> BraintrustStream: ...
 
 
 def invoke(
     # the permutations of arguments for a function id
-    function_id: Optional[str] = None,
-    version: Optional[str] = None,
-    prompt_session_id: Optional[str] = None,
-    prompt_session_function_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    slug: Optional[str] = None,
-    global_function: Optional[str] = None,
+    function_id: str | None = None,
+    version: str | None = None,
+    prompt_session_id: str | None = None,
+    prompt_session_function_id: str | None = None,
+    project_name: str | None = None,
+    project_id: str | None = None,
+    slug: str | None = None,
+    global_function: str | None = None,
+    function_type: FunctionTypeEnum | None = None,
     # arguments to the function
     input: Any = None,
-    messages: Optional[List[Any]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    tags: Optional[List[str]] = None,
-    parent: Optional[Union[Exportable, str]] = None,
+    messages: list[Any] | None = None,
+    context: InvokeContext | None = None,
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    parent: Exportable | str | None = None,
     stream: bool = False,
-    mode: Optional[ModeType] = None,
-    strict: Optional[bool] = None,
-    org_name: Optional[str] = None,
-    api_key: Optional[str] = None,
-    app_url: Optional[str] = None,
+    mode: ModeType | None = None,
+    strict: bool | None = None,
+    org_name: str | None = None,
+    api_key: str | None = None,
+    app_url: str | None = None,
     force_login: bool = False,
-) -> Union[BraintrustStream, T]:
+) -> BraintrustStream | T:
     """
     Invoke a Braintrust function, returning a `BraintrustStream` or the value as a plain
     Python object.
@@ -93,6 +119,8 @@ def invoke(
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
         messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
+        context: Context for functions that operate on spans/traces (e.g., facets). Should contain
+            `object_type`, `object_id`, and `scope` fields.
         metadata: Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
             It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
             to the function.
@@ -118,8 +146,12 @@ def invoke(
         prompt_session_id: The ID of the prompt session to invoke the function from.
         prompt_session_function_id: The ID of the function in the prompt session to invoke.
         project_name: The name of the project containing the function to invoke.
+        project_id: The ID of the project to use for execution context (API keys, project defaults, etc.).
+            This is not the project the function belongs to, but the project context for the invocation.
         slug: The slug of the function to invoke.
         global_function: The name of the global function to invoke.
+        function_type: The type of the global function to invoke. If unspecified, defaults to 'scorer'
+            for backward compatibility.
 
     Returns:
         The output of the function. If `stream` is True, returns a `BraintrustStream`,
@@ -149,6 +181,8 @@ def invoke(
         function_id_args["slug"] = slug
     if global_function is not None:
         function_id_args["global_function"] = global_function
+    if function_type is not None:
+        function_id_args["function_type"] = function_type
 
     request = dict(
         input=input,
@@ -161,12 +195,18 @@ def invoke(
     )
     if messages is not None:
         request["messages"] = messages
+    if context is not None:
+        request["context"] = context
     if mode is not None:
         request["mode"] = mode
     if strict is not None:
         request["strict"] = strict
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
+    if project_id is not None:
+        headers["x-bt-project-id"] = project_id
+    if org_name is not None:
+        headers["x-bt-org-name"] = org_name
 
     resp = proxy_conn().post("function/invoke", json=request, headers=headers, stream=stream)
     if resp.status_code == 500:
@@ -180,7 +220,7 @@ def invoke(
         return resp.json()
 
 
-def init_function(project_name: str, slug: str, version: Optional[str] = None):
+def init_function(project_name: str, slug: str, version: str | None = None):
     """
     Creates a function that can be used as either a task or scorer in the Eval framework.
     When used as a task, it will invoke the specified Braintrust function with the input.

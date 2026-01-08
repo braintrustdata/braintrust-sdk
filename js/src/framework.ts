@@ -1,4 +1,9 @@
-import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
+import {
+  makeScorerPropagatedEvent,
+  mergeDicts,
+  Score,
+  SpanTypeAttribute,
+} from "../util/index";
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type ObjectReferenceType as ObjectReference,
@@ -7,11 +12,7 @@ import {
 } from "./generated_types";
 import { queue } from "async";
 
-import chalk from "chalk";
-import { terminalLink } from "termi-link";
-import boxen from "boxen";
-import pluralize from "pluralize";
-import Table from "cli-table3";
+import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
 import {
@@ -35,7 +36,13 @@ import {
   withCurrent,
   withParent,
 } from "./logger";
-import { BarProgressReporter, ProgressReporter } from "./progress";
+import type { ProgressReporter } from "./reporters/types";
+import { SimpleProgressReporter } from "./reporters/progress";
+import type {
+  ReporterOpts,
+  ReporterBody,
+  ReporterDef,
+} from "./reporters/types";
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
@@ -325,8 +332,11 @@ export class EvalResultWithSummary<
     public results: EvalResult<Input, Output, Expected, Metadata>[],
   ) {}
 
+  /**
+   * @deprecated Use `summary` instead.
+   */
   toString(): string {
-    return formatExperimentSummary(this.summary);
+    return JSON.stringify(this.summary);
   }
 
   [Symbol.for("nodejs.util.inspect.custom")](): string {
@@ -344,42 +354,11 @@ export class EvalResultWithSummary<
   }
 }
 
-export interface ReporterOpts {
-  verbose: boolean;
-  jsonl: boolean;
-}
-
-export interface ReporterBody<EvalReport> {
-  /**
-   * A function that takes an evaluator and its result and returns a report.
-   *
-   * @param evaluator
-   * @param result
-   * @param opts
-   */
-  reportEval(
-    // These any's are required because these function specifications don't know
-    // or need to know the types of the input/output/etc for the evaluator.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any, any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result: EvalResultWithSummary<any, any, any, any>,
-    opts: ReporterOpts,
-  ): Promise<EvalReport> | EvalReport;
-
-  /**
-   * A function that takes all evaluator results and returns a boolean indicating
-   * whether the run was successful. If you return false, the `braintrust eval`
-   * command will exit with a non-zero status code.
-   *
-   * @param reports
-   */
-  reportRun(reports: EvalReport[]): boolean | Promise<boolean>;
-}
-
-export type ReporterDef<EvalReport> = {
-  name: string;
-} & ReporterBody<EvalReport>;
+export type {
+  ReporterOpts,
+  ReporterBody,
+  ReporterDef,
+} from "./reporters/types";
 
 function makeEvalName(projectName: string, experimentName?: string) {
   let out = projectName;
@@ -625,7 +604,7 @@ export async function Eval<
     );
   }
 
-  const progressReporter = options.progress ?? new BarProgressReporter();
+  const progressReporter = options.progress ?? new SimpleProgressReporter();
   const shouldCollectResults = options.returnResults ?? true;
 
   if (typeof options.reporter === "string") {
@@ -1110,7 +1089,11 @@ async function runEvaluatorInternal(
                   name: scorerNames[score_idx],
                   spanAttributes: {
                     type: SpanTypeAttribute.SCORE,
+                    purpose: "scorer",
                   },
+                  propagatedEvent: makeScorerPropagatedEvent(
+                    await rootSpan.export(),
+                  ),
                   event: { input: scoringArgs },
                 });
                 return { kind: "score", value: results } as const;
@@ -1289,7 +1272,7 @@ async function runEvaluatorInternal(
 
     if (e instanceof InternalAbortError) {
       // Log cancellation for debugging
-      if (process.env.BRAINTRUST_VERBOSE) {
+      if (iso.getEnv("BRAINTRUST_VERBOSE")) {
         console.warn("Evaluator cancelled:", (e as Error).message);
       }
     }
@@ -1316,8 +1299,8 @@ async function runEvaluatorInternal(
   );
 }
 
-export const error = chalk.red;
-export const warning = chalk.yellow;
+export const error = (text: string) => `Error: ${text}`;
+export const warning = (text: string) => `Warning: ${text}`;
 
 export function logError(e: unknown, verbose: boolean) {
   if (!verbose) {
@@ -1400,13 +1383,7 @@ export function reportFailures<
     // of their tasks.
     console.error(
       warning(
-        `Evaluator ${evaluator.evalName} failed with ${pluralize(
-          "error",
-          failingResults.length,
-          true,
-        )}. This evaluation ("${
-          evaluator.evalName
-        }") will not be fully logged.`,
+        `Evaluator ${evaluator.evalName} failed with ${failingResults.length} error${failingResults.length === 1 ? "" : "s"}. This evaluation ("${evaluator.evalName}") will not be fully logged.`,
       ),
     );
     if (jsonl) {
@@ -1434,6 +1411,9 @@ export function reportFailures<
  * of each evaluation to the console, and will return false (i.e. fail) if any of the
  * evaluations return an error.
  */
+/**
+ * Simple plain-text reporter for framework - no fancy formatting dependencies
+ */
 export const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
@@ -1452,179 +1432,103 @@ export const defaultReporter: ReporterDef<boolean> = {
       reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
-    // process.stdout.write will not do intelligent formatting, like cut off long lines
-    process.stdout.write(
-      jsonl ? JSON.stringify(summary) : formatExperimentSummary(summary),
-    );
-    process.stdout.write("\n");
+    if (jsonl) {
+      iso.writeln(JSON.stringify(summary));
+    } else {
+      // Simple plain-text output without fancy formatting
+      iso.writeln("Experiment summary");
+      iso.writeln("==================");
+
+      if (summary.comparisonExperimentName) {
+        iso.writeln(
+          `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)`,
+        );
+        iso.writeln("");
+      }
+
+      const hasScores = Object.keys(summary.scores).length > 0;
+      const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
+      const hasComparison = !!summary.comparisonExperimentName;
+
+      if (hasScores || hasMetrics) {
+        if (hasComparison) {
+          iso.writeln(
+            "Name                Value      Change     Improvements Regressions",
+          );
+          iso.writeln(
+            "----------------------------------------------------------------",
+          );
+        }
+
+        // Scores
+        for (const score of Object.values(summary.scores)) {
+          const scorePercent = (score.score * 100).toFixed(2);
+          const scoreValue = `${scorePercent}%`;
+
+          if (hasComparison) {
+            let diffString = "-";
+            if (!isEmpty(score.diff)) {
+              const diffPercent = (score.diff! * 100).toFixed(2);
+              const diffSign = score.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
+            }
+
+            const improvements =
+              score.improvements > 0 ? score.improvements.toString() : "-";
+            const regressions =
+              score.regressions > 0 ? score.regressions.toString() : "-";
+
+            iso.writeln(
+              `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(`${score.name.padEnd(20)} ${scoreValue.padStart(15)}`);
+          }
+        }
+
+        // Metrics
+        for (const metric of Object.values(summary.metrics ?? {})) {
+          const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
+          const formattedValue = metric.metric.toFixed(fractionDigits);
+          const metricValue =
+            metric.unit === "$"
+              ? `${metric.unit}${formattedValue}`
+              : `${formattedValue}${metric.unit}`;
+
+          if (hasComparison) {
+            let diffString = "-";
+            if (!isEmpty(metric.diff)) {
+              const diffPercent = (metric.diff! * 100).toFixed(2);
+              const diffSign = metric.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
+            }
+
+            const improvements =
+              metric.improvements > 0 ? metric.improvements.toString() : "-";
+            const regressions =
+              metric.regressions > 0 ? metric.regressions.toString() : "-";
+
+            iso.writeln(
+              `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(
+              `${metric.name.padEnd(20)} ${metricValue.padStart(15)}`,
+            );
+          }
+        }
+      }
+
+      if (summary.experimentUrl) {
+        iso.writeln("");
+        iso.writeln(`View results for ${summary.experimentName}`);
+        iso.writeln(`See results at ${summary.experimentUrl}`);
+      }
+    }
+    iso.writeln("");
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {
     return evalReports.every((r) => r);
   },
 };
-
-export function formatExperimentSummary(summary: ExperimentSummary) {
-  let comparisonLine = "";
-  if (summary.comparisonExperimentName) {
-    comparisonLine = `${summary.comparisonExperimentName} ${chalk.gray("(baseline)")} ← ${summary.experimentName} ${chalk.gray("(comparison)")}\n\n`;
-  }
-
-  const tableParts: string[] = [];
-
-  // Create combined table for scores and metrics
-  const hasScores = Object.keys(summary.scores).length > 0;
-  const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
-  const hasComparison = !!summary.comparisonExperimentName;
-
-  if (hasScores || hasMetrics) {
-    const headers = [chalk.gray("Name"), chalk.gray("Value")];
-
-    if (hasComparison) {
-      headers.push(
-        chalk.gray("Change"),
-        chalk.gray("Improvements"),
-        chalk.gray("Regressions"),
-      );
-    }
-
-    const combinedTable = new Table({
-      head: hasComparison ? headers : [],
-      style: { head: [], "padding-left": 0, "padding-right": 0, border: [] },
-      chars: {
-        top: "",
-        "top-mid": "",
-        "top-left": "",
-        "top-right": "",
-        bottom: "",
-        "bottom-mid": "",
-        "bottom-left": "",
-        "bottom-right": "",
-        left: "",
-        "left-mid": "",
-        mid: "",
-        "mid-mid": "",
-        right: "",
-        "right-mid": "",
-        middle: " ",
-      },
-      colWidths: hasComparison ? [18, 10, 10, 13, 12] : [20, 15],
-      colAligns: hasComparison
-        ? ["left", "right", "right", "right", "right"]
-        : ["left", "right"],
-      wordWrap: false,
-    });
-
-    // Add empty row at the top of the table
-    // const emptyTopRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
-    // combinedTable.push(emptyTopRow);
-
-    // Add scores first
-    const scoreValues = Object.values(summary.scores);
-    for (let i = 0; i < scoreValues.length; i++) {
-      const score = scoreValues[i];
-      const scorePercent = (score.score * 100).toFixed(2);
-      const scoreValue = chalk.white(`${scorePercent}%`);
-
-      let diffString = "";
-      if (!isEmpty(score.diff)) {
-        const diffPercent = (score.diff! * 100).toFixed(2);
-        const diffSign = score.diff! > 0 ? "+" : "";
-        const diffColor = score.diff! > 0 ? chalk.green : chalk.red;
-        diffString = diffColor(`${diffSign}${diffPercent}%`);
-      } else {
-        diffString = chalk.gray("-");
-      }
-
-      const improvements =
-        score.improvements > 0
-          ? chalk.dim.green(score.improvements)
-          : chalk.gray("-");
-      const regressions =
-        score.regressions > 0
-          ? chalk.dim.red(score.regressions)
-          : chalk.gray("-");
-
-      const row = [`${chalk.blue("◯")} ${score.name}`, scoreValue];
-      if (hasComparison) {
-        row.push(diffString, improvements, regressions);
-      }
-      combinedTable.push(row);
-
-      // Add spacing between rows (except after the last score if there are metrics)
-      // if (i < scoreValues.length - 1 || hasMetrics) {
-      //   const emptyRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
-      //   combinedTable.push(emptyRow);
-      // }
-    }
-
-    // Add metrics after scores
-    const metricValues = Object.values(summary.metrics ?? {});
-    for (let i = 0; i < metricValues.length; i++) {
-      const metric = metricValues[i];
-      const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
-      const formattedValue = metric.metric.toFixed(fractionDigits);
-      const metricValue = chalk.white(
-        metric.unit === "$"
-          ? `${metric.unit}${formattedValue}`
-          : `${formattedValue}${metric.unit}`,
-      );
-
-      let diffString = "";
-      if (!isEmpty(metric.diff)) {
-        const diffPercent = (metric.diff! * 100).toFixed(2);
-        const diffSign = metric.diff! > 0 ? "+" : "";
-        const diffColor = metric.diff! > 0 ? chalk.green : chalk.red;
-        diffString = diffColor(`${diffSign}${diffPercent}%`);
-      } else {
-        diffString = chalk.gray("-");
-      }
-
-      const improvements =
-        metric.improvements > 0
-          ? chalk.dim.green(metric.improvements)
-          : chalk.gray("-");
-      const regressions =
-        metric.regressions > 0
-          ? chalk.dim.red(metric.regressions)
-          : chalk.gray("-");
-
-      const row = [`${chalk.magenta("◯")} ${metric.name}`, metricValue];
-      if (hasComparison) {
-        row.push(diffString, improvements, regressions);
-      }
-      combinedTable.push(row);
-
-      // Add spacing between rows (except after the last metric)
-      // if (i < metricValues.length - 1) {
-      //   const emptyRow = hasComparison ? ["", "", "", "", ""] : ["", ""];
-      //   combinedTable.push(emptyRow);
-      // }
-    }
-
-    tableParts.push(combinedTable.toString());
-  }
-
-  const content = [comparisonLine, ...tableParts].filter(Boolean).join("\n");
-
-  const footer = summary.experimentUrl
-    ? terminalLink(
-        `View results for ${summary.experimentName}`,
-        summary.experimentUrl,
-        { fallback: () => `See results at ${summary.experimentUrl}` },
-      )
-    : "";
-
-  const boxContent = [content, footer].filter(Boolean).join("\n\n");
-
-  return (
-    "\n" +
-    boxen(boxContent, {
-      title: chalk.gray("Experiment summary"),
-      titleAlignment: "left",
-      padding: 0.5,
-      borderColor: "gray",
-      borderStyle: "round",
-    })
-  );
-}

@@ -6,7 +6,6 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Dict, Optional, Union
 from uuid import UUID
 
 from .span_identifier_v2 import SpanComponentsV2
@@ -59,16 +58,16 @@ class SpanComponentsV3:
     object_type: SpanObjectTypeV3
 
     # Must provide one or the other.
-    object_id: Optional[str] = None
-    compute_object_metadata_args: Optional[Dict] = None
+    object_id: str | None = None
+    compute_object_metadata_args: dict | None = None
 
     # Either all of these must be provided or none.
-    row_id: Optional[str] = None
-    span_id: Optional[str] = None
-    root_span_id: Optional[str] = None
+    row_id: str | None = None
+    span_id: str | None = None
+    root_span_id: str | None = None
 
     # Additional span properties.
-    propagated_event: Optional[Dict] = None
+    propagated_event: dict | None = None
 
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectTypeV3)
@@ -173,7 +172,7 @@ class SpanComponentsV3:
         except Exception:
             raise Exception(INVALID_ENCODING_ERRMSG)
 
-    def object_id_fields(self) -> Dict[str, str]:
+    def object_id_fields(self) -> dict[str, str]:
         if not self.object_id:
             raise Exception(
                 "Impossible: cannot invoke `object_id_fields` unless SpanComponentsV3 is initialized with an `object_id`"
@@ -192,7 +191,7 @@ class SpanComponentsV3:
         return self.to_str()
 
     @staticmethod
-    def _from_json_obj(json_obj: Dict) -> "SpanComponentsV3":
+    def _from_json_obj(json_obj: dict) -> "SpanComponentsV3":
         kwargs = {
             **json_obj,
             "object_type": SpanObjectTypeV3(json_obj["object_type"]),
@@ -200,7 +199,7 @@ class SpanComponentsV3:
         return SpanComponentsV3(**kwargs)
 
 
-def parse_parent(parent: Union[str, Dict, None]) -> Optional[str]:
+def parse_parent(parent: str | dict | None) -> str | None:
     """
     Parse a parent object into a string representation.
 
@@ -235,17 +234,21 @@ def parse_parent(parent: Union[str, Dict, None]) -> Optional[str]:
         # Handle row_ids if present
         row_ids = parent.get("row_ids")
         if row_ids:
-            kwargs.update({
-                "row_id": row_ids.get("id"),
-                "span_id": row_ids.get("span_id"),
-                "root_span_id": row_ids.get("root_span_id"),
-            })
+            kwargs.update(
+                {
+                    "row_id": row_ids.get("id"),
+                    "span_id": row_ids.get("span_id"),
+                    "root_span_id": row_ids.get("root_span_id"),
+                }
+            )
         else:
-            kwargs.update({
-                "row_id": None,
-                "span_id": None,
-                "root_span_id": None,
-            })
+            kwargs.update(
+                {
+                    "row_id": None,
+                    "span_id": None,
+                    "root_span_id": None,
+                }
+            )
 
         # Include propagated_event if present
         if "propagated_event" in parent:

@@ -55,7 +55,6 @@ import { configureNode } from "./node";
 
 configureNode();
 
-export * from "./exports-node";
-export * from "./exports-types";
-import * as braintrust from "./exports-node";
-export default braintrust;
+// eslint-disable-next-line no-restricted-syntax -- already enforced in exports
+export * from "./exports";
+export * as default from "./exports";

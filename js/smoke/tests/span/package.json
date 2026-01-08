@@ -4,6 +4,9 @@
   "description": "Integration tests for Braintrust with OpenTelemetry NodeSDK",
   "main": "simple_span_example.ts",
   "scripts": {
+    "test": "npm run test:shared && npm run test:legacy",
+    "test:shared": "tsx shared_suite_test.ts",
+    "test:legacy": "tsx simple_span_example.ts",
     "start": "tsx simple_span_example.ts",
     "backup": "npx tsx ../../backup-and-restore.ts backup",
     "restore": "npx tsx ../../backup-and-restore.ts restore",
@@ -11,11 +14,12 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "latest",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
     "@types/node": "^20.10.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.4.4"
   }
 }

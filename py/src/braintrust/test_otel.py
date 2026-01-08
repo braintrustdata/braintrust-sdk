@@ -274,11 +274,10 @@ class TestSpanFiltering:
         except ImportError:
             pytest.skip("OpenTelemetry SDK not fully installed, skipping AISpanProcessor tests")
 
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         self.memory_exporter = InMemorySpanExporter()
         self.provider = TracerProvider()
@@ -295,13 +294,12 @@ class TestSpanFiltering:
             self.provider.shutdown()
             self.memory_exporter.clear()
 
-    def test_keeps_root_spans(self):
+    def test_filters_out_root_spans(self):
         with self.tracer.start_as_current_span("root_operation"):
             pass
 
         spans = self.memory_exporter.get_finished_spans()
-        assert len(spans) == 1
-        assert spans[0].name == "root_operation"
+        assert len(spans) == 0
 
     def test_keeps_gen_ai_spans(self):
         with self.tracer.start_as_current_span("root"):
@@ -313,7 +311,7 @@ class TestSpanFiltering:
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "gen_ai.completion" in span_names
         assert "regular_operation" not in span_names
 
@@ -329,6 +327,19 @@ class TestSpanFiltering:
 
         assert "braintrust.eval" in span_names
         assert "database_query" not in span_names
+
+    def test_keeps_traceloop_spans(self):
+        with self.tracer.start_as_current_span("root"):
+            with self.tracer.start_as_current_span("traceloop.agent"):
+                pass
+            with self.tracer.start_as_current_span("traceloop.workflow.step"):
+                pass
+
+        spans = self.memory_exporter.get_finished_spans()
+        span_names = [span.name for span in spans]
+        assert "root" not in span_names
+        assert "traceloop.agent" in span_names
+        assert "traceloop.workflow.step" in span_names
 
     def test_keeps_llm_spans(self):
         with self.tracer.start_as_current_span("root"):
@@ -346,19 +357,8 @@ class TestSpanFiltering:
 
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
+        assert "root" not in span_names
         assert "ai.model_call" in span_names
-
-    def test_keeps_traceloop_spans(self):
-        with self.tracer.start_as_current_span("root"):
-            with self.tracer.start_as_current_span("traceloop.agent"):
-                pass
-            with self.tracer.start_as_current_span("traceloop.workflow.step"):
-                pass
-
-        spans = self.memory_exporter.get_finished_spans()
-        span_names = [span.name for span in spans]
-        assert "traceloop.agent" in span_names
-        assert "traceloop.workflow.step" in span_names
 
     def test_keeps_spans_with_llm_attributes(self):
         with self.tracer.start_as_current_span("root"):
@@ -375,7 +375,7 @@ class TestSpanFiltering:
         spans = self.memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "some_operation" in span_names  # has gen_ai.model attribute
         assert "another_operation" in span_names  # has llm.tokens attribute
         assert "traceloop_operation" in span_names  # has traceloop.agent_id attribute
@@ -391,10 +391,7 @@ class TestSpanFiltering:
                 pass
 
         spans = self.memory_exporter.get_finished_spans()
-
-        # Only root should be kept
-        assert len(spans) == 1
-        assert spans[0].name == "root"
+        assert len(spans) == 0
 
     def test_custom_filter_keeps_spans(self):
         def custom_filter(span):
@@ -403,11 +400,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -424,9 +420,9 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
         assert "custom_keep" in span_names  # kept by custom filter
         assert "regular_operation" not in span_names  # dropped by default logic
+        assert "root" not in span_names
 
     def test_custom_filter_drops_spans(self):
         def custom_filter(span):
@@ -435,11 +431,10 @@ class TestSpanFiltering:
             return None  # Don't influence decision
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -456,20 +451,19 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
         assert "gen_ai.drop_this" not in span_names  # dropped by custom filter
         assert "gen_ai.keep_this" in span_names  # kept by default LLM logic
+        assert "root" not in span_names
 
     def test_custom_filter_none_uses_default_logic(self):
         def custom_filter(span):
             return None  # Always defer to default logic
 
         # Create processor with custom filter
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
         processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
@@ -486,17 +480,16 @@ class TestSpanFiltering:
         spans = memory_exporter.get_finished_spans()
         span_names = [span.name for span in spans]
 
-        assert "root" in span_names
+        assert "root" not in span_names
         assert "gen_ai.completion" in span_names  # kept by default LLM logic
         assert "regular_operation" not in span_names  # dropped by default logic
 
     def test_filtering_vs_unfiltered_comparison(self):
         # Set up two separate exporters and processors
+        from braintrust.otel import AISpanProcessor
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-        from braintrust.otel import AISpanProcessor
 
         all_spans_exporter = InMemorySpanExporter()
         filtered_spans_exporter = InMemorySpanExporter()
@@ -551,11 +544,32 @@ class TestSpanFiltering:
         filtered_spans = filtered_spans_exporter.get_finished_spans()
         filtered_span_names = [span.name for span in filtered_spans]
 
-        assert len(filtered_spans) == 3
-        assert "user_request" in filtered_span_names  # root span
+        assert len(filtered_spans) == 2
+        assert "user_request" not in filtered_span_names  # root span
         assert "gen_ai.completion" in filtered_span_names  # LLM name
         assert "response_formatting" in filtered_span_names  # LLM attribute
 
+    def test_custom_filter_is_root_span(self):
+        from braintrust.otel import AISpanProcessor, is_root_span
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+        memory_exporter = InMemorySpanExporter()
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=is_root_span)
+        provider = TracerProvider()
+        provider.add_span_processor(processor)
+        tracer = provider.get_tracer("test-braintrust-root-filter")
+
+        with tracer.start_as_current_span("root_span"):
+            with tracer.start_as_current_span("child_span"):
+                pass
+
+        provider.shutdown()
+        spans = memory_exporter.get_finished_spans()
+        names = [span.name for span in spans]
+        assert "root_span" in names
+        assert "child_span" not in names
 
 def test_parent_from_headers_invalid_inputs():
     """Test parent_from_headers with various invalid inputs."""
@@ -569,49 +583,58 @@ def test_parent_from_headers_invalid_inputs():
     assert result is None
 
     # Test 2: Invalid traceparent (malformed)
-    result = parent_from_headers({'traceparent': 'invalid'})
+    result = parent_from_headers({"traceparent": "invalid"})
     assert result is None
 
     # Test 3: Valid traceparent but invalid braintrust.parent format
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=invalid_format'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=invalid_format",
+        }
+    )
     assert result is None
 
     # Test 4: Empty project_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_id:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_id:",
+        }
+    )
     assert result is None
 
     # Test 5: Empty project_name
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_name:",
+        }
+    )
     assert result is None
 
     # Test 6: Empty experiment_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=experiment_id:'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=experiment_id:",
+        }
+    )
     assert result is None
 
     # Test 7: Invalid trace_id length (too short)
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:test'
-    })
+    result = parent_from_headers(
+        {"traceparent": "00-4bf92f3577b34da6-00f067aa0ba902b7-01", "baggage": "braintrust.parent=project_name:test"}
+    )
     assert result is None
 
     # Test 8: Invalid span_id length (too short)
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-01',
-        'baggage': 'braintrust.parent=project_name:test'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-01",
+            "baggage": "braintrust.parent=project_name:test",
+        }
+    )
     assert result is None
 
 
@@ -623,29 +646,35 @@ def test_parent_from_headers_valid_input():
     from braintrust.otel import parent_from_headers
 
     # Test with valid project_name
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_name:test-project'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_name:test-project",
+        }
+    )
     assert result is not None
     # Result is base64 encoded, so just check it's a non-empty string
     assert isinstance(result, str)
     assert len(result) > 0
 
     # Test with valid project_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=project_id:abc123'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=project_id:abc123",
+        }
+    )
     assert result is not None
     assert isinstance(result, str)
     assert len(result) > 0
 
     # Test with valid experiment_id
-    result = parent_from_headers({
-        'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-        'baggage': 'braintrust.parent=experiment_id:exp-456'
-    })
+    result = parent_from_headers(
+        {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "baggage": "braintrust.parent=experiment_id:exp-456",
+        }
+    )
     assert result is not None
     assert isinstance(result, str)
     assert len(result) > 0
@@ -656,16 +685,15 @@ def test_add_parent_to_baggage():
     if not _check_otel_installed():
         pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
-    from opentelemetry import baggage, context
-
     from braintrust.otel import add_parent_to_baggage
+    from opentelemetry import baggage, context
 
     # Test adding parent to baggage
     token = add_parent_to_baggage("project_name:test-project")
     assert token is not None
 
     # Verify it's in baggage
-    parent_value = baggage.get_baggage('braintrust.parent')
+    parent_value = baggage.get_baggage("braintrust.parent")
     assert parent_value == "project_name:test-project"
 
     # Clean up
@@ -677,10 +705,9 @@ def test_add_span_parent_to_baggage():
     if not _check_otel_installed():
         pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
 
+    from braintrust.otel import add_span_parent_to_baggage
     from opentelemetry import baggage, context, trace
     from opentelemetry.sdk.trace import TracerProvider
-
-    from braintrust.otel import add_span_parent_to_baggage
 
     # Setup tracer
     provider = TracerProvider()
@@ -695,7 +722,7 @@ def test_add_span_parent_to_baggage():
         assert token is not None
 
         # Verify it's in baggage
-        parent_value = baggage.get_baggage('braintrust.parent')
+        parent_value = baggage.get_baggage("braintrust.parent")
         assert parent_value == "project_name:test"
 
         context.detach(token)
@@ -708,3 +735,76 @@ def test_add_span_parent_to_baggage():
     # Test with None span (should return None and warn)
     token = add_span_parent_to_baggage(None)
     assert token is None
+
+
+def test_parent_from_headers_with_custom_propagator():
+    """Test parent_from_headers with a custom propagator."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from braintrust.otel import parent_from_headers
+    from opentelemetry import baggage as otel_baggage
+    from opentelemetry import context as otel_context
+    from opentelemetry import trace
+    from opentelemetry.propagators.textmap import CarrierT, Getter, TextMapPropagator, default_getter
+    from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
+
+    class CustomHeaderPropagator(TextMapPropagator):
+        """Custom propagator that reads trace context from X-Custom-* headers."""
+
+        def extract(
+            self,
+            carrier: CarrierT,
+            context: otel_context.Context | None = None,
+            getter: Getter = default_getter,
+        ) -> otel_context.Context:
+            if context is None:
+                context = otel_context.get_current()
+
+            trace_id = getter.get(carrier, "X-Custom-Trace-Id")
+            span_id = getter.get(carrier, "X-Custom-Span-Id")
+
+            if trace_id and span_id:
+                trace_id_list = trace_id if isinstance(trace_id, list) else [trace_id]
+                span_id_list = span_id if isinstance(span_id, list) else [span_id]
+
+                span_context = SpanContext(
+                    trace_id=int(trace_id_list[0], 16),
+                    span_id=int(span_id_list[0], 16),
+                    is_remote=True,
+                    trace_flags=TraceFlags.SAMPLED,
+                )
+                span = NonRecordingSpan(span_context)
+                context = trace.set_span_in_context(span, context)
+
+            # Also extract baggage from standard baggage header
+            baggage_header = getter.get(carrier, "baggage")
+            if baggage_header:
+                baggage_list = baggage_header if isinstance(baggage_header, list) else [baggage_header]
+                for item in baggage_list[0].split(","):
+                    if "=" in item:
+                        key, value = item.split("=", 1)
+                        context = otel_baggage.set_baggage(key.strip(), value.strip(), context)
+
+            return context
+
+        def inject(self, carrier, context=None, setter=None):
+            pass  # Not needed for this test
+
+        @property
+        def fields(self):
+            return {"X-Custom-Trace-Id", "X-Custom-Span-Id", "baggage"}
+
+    propagator = CustomHeaderPropagator()
+
+    # Custom header format
+    headers = {
+        "X-Custom-Trace-Id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "X-Custom-Span-Id": "00f067aa0ba902b7",
+        "baggage": "braintrust.parent=project_name:test-project",
+    }
+
+    result = parent_from_headers(headers, propagator=propagator)
+    assert result is not None
+    assert isinstance(result, str)
+    assert len(result) > 0

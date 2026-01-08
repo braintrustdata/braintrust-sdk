@@ -15,7 +15,7 @@ import {
 } from "./framework";
 import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
-import { BarProgressReporter, type ProgressReporter } from "./progress";
+import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
 
 beforeAll(() => {
@@ -294,7 +294,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: () => ({ error_score: 1 }),
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
             true,
@@ -811,6 +811,61 @@ test("tags remain empty when not set", async () => {
   expect((rootSpans[0] as any).tags).toEqual(undefined);
 });
 
+test("scorer spans have purpose='scorer' attribute", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-scorer-purpose");
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "test-scorer-purpose",
+      evalName: "scorer-purpose-eval",
+      data: [{ input: "hello", expected: "hello" }],
+      task: async (input: string) => input,
+      scores: [
+        (args: { input: string; output: string; expected: string }) => ({
+          name: "simple_scorer",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+      ],
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+    undefined,
+    true,
+  );
+
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].scores.simple_scorer).toBe(1);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+
+  // Find scorer spans (type="score")
+  const scorerSpans = logs.filter(
+    (l: any) => l["span_attributes"]?.["type"] === "score",
+  );
+  expect(scorerSpans).toHaveLength(1);
+
+  // Verify the scorer span has purpose='scorer'
+  expect((scorerSpans[0] as any).span_attributes.purpose).toBe("scorer");
+
+  // Verify that non-scorer spans (task, eval) do NOT have purpose='scorer'
+  const nonScorerSpans = logs.filter(
+    (l: any) => l["span_attributes"]?.["type"] !== "score",
+  );
+  expect(nonScorerSpans.length).toBeGreaterThan(0);
+  for (const span of nonScorerSpans) {
+    expect((span as any).span_attributes?.purpose).not.toBe("scorer");
+  }
+
+  _exportsForTestingOnly.clearTestBackgroundLogger();
+  _exportsForTestingOnly.simulateLogoutForTests();
+});
+
 // ========== framework2 metadata tests ==========
 import { z } from "zod/v3";
 import { projects, CodePrompt } from "./framework2";
@@ -1003,6 +1058,26 @@ describe("framework2 metadata support", () => {
       const prompts = (project as any)._publishablePrompts;
       expect(prompts).toHaveLength(1);
       expect(prompts[0].metadata).toEqual(metadata);
+    });
+
+    test("prompt with templateFormat stores it at top level", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const prompt = project.prompts.create({
+        name: "nunjucks-prompt",
+        messages: [
+          { role: "user", content: "Hello {% if name %}{{name}}{% endif %}" },
+        ],
+        model: "gpt-4",
+        templateFormat: "nunjucks",
+      });
+
+      // Check that template_format is stored at the top level of prompt data
+      expect(prompt.templateFormat).toBe("nunjucks");
+
+      // Verify it renders correctly
+      const result = prompt.build({ name: "World" });
+      expect(result.messages[0].content).toBe("Hello World");
     });
   });
 });

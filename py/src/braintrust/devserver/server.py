@@ -2,7 +2,7 @@ import asyncio
 import json
 import sys
 import textwrap
-from typing import Any, Optional, Union
+from typing import Any
 
 try:
     import uvicorn
@@ -40,7 +40,7 @@ _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
 
 
 class CheckAuthorizedMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, allowed_org_name: Optional[str] = None):
+    def __init__(self, app, allowed_org_name: str | None = None):
         super().__init__(app)
         self.allowed_org_name = allowed_org_name
         self.protected_paths = ["/list", "/eval"]
@@ -100,7 +100,7 @@ async def list_evaluators(request: Request) -> JSONResponse:
     return JSONResponse(evaluator_list)
 
 
-async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
+async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     """Handle eval execution requests."""
     try:
         # Get request body
@@ -157,12 +157,14 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
             result = await evaluator.task(input, hooks)
         else:
             result = evaluator.task(input, hooks)
-        hooks.report_progress({
-            "format": "code",
-            "output_type": "completion",
-            "event": "json_delta",
-            "data": json.dumps(result),
-        })
+        hooks.report_progress(
+            {
+                "format": "code",
+                "output_type": "completion",
+                "event": "json_delta",
+                "data": json.dumps(result),
+            }
+        )
         return result
 
     def on_start_fn(summary: ExperimentSummary):
@@ -214,6 +216,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
 
             async def event_generator():
                 """Generate SSE events from the queue."""
+
                 # Create a task to run the eval and signal completion
                 async def run_and_complete():
                     try:
@@ -255,7 +258,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
 
 
-def create_app(evaluators: list[Evaluator[Any, Any]], org_name: Optional[str] = None):
+def create_app(evaluators: list[Evaluator[Any, Any]], org_name: str | None = None):
     """Create and configure the Starlette app for the dev server.
 
     Args:
@@ -283,7 +286,9 @@ def create_app(evaluators: list[Evaluator[Any, Any]], org_name: Optional[str] = 
     return app
 
 
-def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: Optional[str] = None):
+def run_dev_server(
+    evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300, org_name: str | None = None
+):
     """Start the dev server.
 
     Args:
@@ -305,7 +310,9 @@ def snake_to_camel(snake_str: str) -> str:
     return components[0] + "".join(x.title() for x in components[1:]) if components else snake_str
 
 
-def make_scorer(state: BraintrustState, name: str, score: FunctionId, project_id: Optional[str] = None) -> EvalScorer[Any, Any]:
+def make_scorer(
+    state: BraintrustState, name: str, score: FunctionId, project_id: str | None = None
+) -> EvalScorer[Any, Any]:
     def scorer_fn(input, output, expected, metadata):
         request = {
             **score,
