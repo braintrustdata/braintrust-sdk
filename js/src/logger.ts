@@ -5660,10 +5660,6 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
-      throw new Error("Tags can only be logged to the root span");
-    }
-
     const computeRecord = async () => ({
       ...partialRecord,
       ...Object.fromEntries(
