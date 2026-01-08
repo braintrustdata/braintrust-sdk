@@ -1139,9 +1139,17 @@ interface OrgProjectMetadata {
   project: ObjectMetadata;
 }
 
+export interface LinkArgs {
+  org_name?: string;
+  app_url?: string;
+  project_name?: string;
+  project_id?: string;
+}
+
 export interface LogOptions<IsAsyncFlush> {
   asyncFlush?: IsAsyncFlush;
   computeMetadataArgs?: Record<string, any>;
+  linkArgs?: LinkArgs;
 }
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
@@ -1869,6 +1877,33 @@ function getErrPermlink(msg: string) {
   return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
 }
 
+function _getAppUrl(appUrl?: string | null): string {
+  return (
+    appUrl || iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev"
+  );
+}
+
+function _getOrgName(orgName?: string | null): string | undefined {
+  return orgName || iso.getEnv("BRAINTRUST_ORG_NAME") || undefined;
+}
+
+/**
+ * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+ * if we have the info, otherwise return null.
+ * Resolution order: state -> linkArgs -> env var
+ */
+function _getLinkBaseUrl(
+  state: BraintrustState,
+  linkArgs?: LinkArgs,
+): string | null {
+  const appUrl = _getAppUrl(state.appUrl || linkArgs?.app_url);
+  const orgName = _getOrgName(state.orgName || linkArgs?.org_name);
+  if (!orgName) {
+    return null;
+  }
+  return `${appUrl}/app/${orgName}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -2021,6 +2056,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
   private computeMetadataArgs: Record<string, any> | undefined;
+  private _linkArgs: LinkArgs | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -2036,6 +2072,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     this.lazyMetadata = lazyMetadata;
     this._asyncFlush = logOptions.asyncFlush;
     this.computeMetadataArgs = logOptions.computeMetadataArgs;
+    this._linkArgs = logOptions.linkArgs;
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -2241,6 +2278,15 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   get asyncFlush(): IsAsyncFlush | undefined {
     return this._asyncFlush;
+  }
+
+  /**
+   * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+   * if we have the info, otherwise return null.
+   * Resolution order: state -> linkArgs -> env var
+   */
+  public _getLinkBaseUrl(): string | null {
+    return _getLinkBaseUrl(this.state, this._linkArgs);
   }
 }
 
@@ -3475,6 +3521,13 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_id: projectId,
   };
 
+  const linkArgs = {
+    org_name: orgName,
+    app_url: appUrl,
+    project_name: projectName,
+    project_id: projectId,
+  };
+
   const state = stateArg ?? _globalState;
 
   // Enable queue size limit enforcement for initLogger() calls
@@ -3497,6 +3550,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
+    linkArgs,
   });
   if (options.setCurrent ?? true) {
     state.currentLogger = ret as Logger<false>;
@@ -5615,10 +5669,6 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
-      throw new Error("Tags can only be logged to the root span");
-    }
-
     const computeRecord = async () => ({
       ...partialRecord,
       ...Object.fromEntries(
@@ -5749,21 +5799,32 @@ export class SpanImpl implements Span {
     }
 
     try {
-      const orgName = this._state.orgName;
-      if (!orgName) {
-        throw new Error("log-in-or-provide-org-name");
+      let baseUrl: string | null = null;
+
+      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
+        // For PROJECT_LOGS, use Logger's _getLinkBaseUrl which checks
+        // state -> linkArgs -> env var (matches Python)
+        const curLogger = this._state.currentLogger;
+        if (curLogger) {
+          baseUrl = curLogger._getLinkBaseUrl();
+        }
       }
 
-      return this._link(orgName);
+      // For EXPERIMENT or if Logger not available, fall back to state -> env var
+      if (!baseUrl) {
+        baseUrl = _getLinkBaseUrl(this._state);
+        if (!baseUrl) {
+          throw new Error("log-in-or-provide-org-name");
+        }
+      }
+
+      return this._link(baseUrl);
     } catch (e) {
       return getErrPermlink(e instanceof Error ? e.message : String(e));
     }
   }
 
-  _link(orgName: string): string {
-    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
-    const baseUrl = `${appUrl}/app/${orgName}`;
-
+  _link(baseUrl: string): string {
     // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
     // Nothing in this module should have the possibility of blocking with the lone exception of
     // flush() which should be a clear exception. We shouldn't build on it and

@@ -1,10 +1,11 @@
+import asyncio
 import logging
 import sys
 import time
-from collections.abc import AsyncGenerator, Iterable
 from contextlib import AbstractAsyncContextManager
-from typing import Any, TypeVar
+from typing import Any
 
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
 from wrapt import wrap_function_wrapper
@@ -74,7 +75,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=f"agent_run [{instance.name}]" if hasattr(instance, "name") and instance.name else "agent_run",
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -98,7 +99,7 @@ def wrap_agent(Agent: Any) -> Any:
             else "agent_run_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             result = wrapped(*args, **kwargs)
@@ -138,7 +139,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=span_name,
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         )
         span = span_cm.__enter__()
         start_time = time.time()
@@ -170,7 +171,7 @@ def wrap_agent(Agent: Any) -> Any:
             name=span_name,
             type=SpanTypeAttribute.LLM,
             input=input_data if input_data else None,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as agent_span:
             start_time = time.time()
             event_count = 0
@@ -216,7 +217,7 @@ def _create_direct_model_request_wrapper():
             name="model_request",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -241,7 +242,7 @@ def _create_direct_model_request_sync_wrapper():
             name="model_request_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = wrapped(*args, **kwargs)
@@ -296,7 +297,7 @@ def wrap_model_request(original_func: Any) -> Any:
             name="model_request",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await original_func(*args, **kwargs)
@@ -319,7 +320,7 @@ def wrap_model_request_sync(original_func: Any) -> Any:
             name="model_request_sync",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = original_func(*args, **kwargs)
@@ -391,7 +392,7 @@ def _build_model_class_input_and_metadata(instance: Any, args: Any, kwargs: Any)
         Tuple of (model_name, display_name, input_data, metadata)
     """
     model_name, provider = _extract_model_info_from_model_instance(instance)
-    display_name = model_name or str(instance)
+    display_name = model_name or type(instance).__name__
 
     messages = args[0] if len(args) > 0 else kwargs.get("messages")
     model_settings = args[1] if len(args) > 1 else kwargs.get("model_settings")
@@ -400,7 +401,7 @@ def _build_model_class_input_and_metadata(instance: Any, args: Any, kwargs: Any)
 
     input_data = {"messages": serialized_messages}
     if model_settings is not None:
-        input_data["model_settings"] = _try_dict(model_settings)
+        input_data["model_settings"] = bt_safe_deep_copy(model_settings)
 
     metadata = _build_model_metadata(model_name, provider, model_settings=None)
 
@@ -419,7 +420,7 @@ def _wrap_concrete_model_class(model_class: Any):
             name=f"chat {display_name}",
             type=SpanTypeAttribute.LLM,
             input=input_data,
-            metadata=_try_dict(metadata),
+            metadata=metadata,
         ) as span:
             start_time = time.time()
             result = await wrapped(*args, **kwargs)
@@ -457,22 +458,28 @@ class _AgentStreamWrapper(AbstractAsyncContextManager):
         self.span_cm = None
         self.start_time = None
         self.stream_result = None
+        self._enter_task = None
+        self._first_token_time = None
 
     async def __aenter__(self):
+        self._enter_task = asyncio.current_task()
+
         # Use context manager properly so span stays current
         # DON'T pass start_time here - we'll set it via metrics in __aexit__
         self.span_cm = start_span(
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
-        span = self.span_cm.__enter__()
+        self.span_cm.__enter__()
 
         # Capture start time right before entering the stream (API call initiation)
         self.start_time = time.time()
         self.stream_result = await self.stream_cm.__aenter__()
-        return self.stream_result  # Return actual stream result object
+
+        # Wrap the stream result to capture first token time
+        return _StreamResultProxy(self.stream_result, self)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         try:
@@ -482,14 +489,45 @@ class _AgentStreamWrapper(AbstractAsyncContextManager):
                 end_time = time.time()
 
                 output = _serialize_stream_output(self.stream_result)
-                metrics = _extract_stream_usage_metrics(self.stream_result, self.start_time, end_time, None)
+                metrics = _extract_stream_usage_metrics(
+                    self.stream_result, self.start_time, end_time, self._first_token_time
+                )
                 self.span_cm.log(output=output, metrics=metrics)
 
-            # Always clean up span context
+            # Clean up span context
             if self.span_cm:
-                self.span_cm.__exit__(None, None, None)
+                if asyncio.current_task() is self._enter_task:
+                    self.span_cm.__exit__(None, None, None)
+                else:
+                    self.span_cm.end()
 
         return False
+
+
+class _StreamResultProxy:
+    """Proxy for stream result that captures first token time."""
+
+    def __init__(self, stream_result: Any, wrapper: _AgentStreamWrapper):
+        self._stream_result = stream_result
+        self._wrapper = wrapper
+
+    def __getattr__(self, name: str):
+        """Delegate all attribute access to the wrapped stream result."""
+        attr = getattr(self._stream_result, name)
+
+        # Wrap streaming methods to capture first token time
+        if callable(attr) and name in ("stream_text", "stream_output"):
+
+            async def wrapped_method(*args, **kwargs):
+                result = attr(*args, **kwargs)
+                async for item in result:
+                    if self._wrapper._first_token_time is None:
+                        self._wrapper._first_token_time = time.time()
+                    yield item
+
+            return wrapped_method
+
+        return attr
 
 
 class _DirectStreamWrapper(AbstractAsyncContextManager):
@@ -503,22 +541,28 @@ class _DirectStreamWrapper(AbstractAsyncContextManager):
         self.span_cm = None
         self.start_time = None
         self.stream = None
+        self._enter_task = None
+        self._first_token_time = None
 
     async def __aenter__(self):
+        self._enter_task = asyncio.current_task()
+
         # Use context manager properly so span stays current
         # DON'T pass start_time here - we'll set it via metrics in __aexit__
         self.span_cm = start_span(
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
-        span = self.span_cm.__enter__()
+        self.span_cm.__enter__()
 
         # Capture start time right before entering the stream (API call initiation)
         self.start_time = time.time()
         self.stream = await self.stream_cm.__aenter__()
-        return self.stream  # Return actual stream object
+
+        # Wrap the stream to capture first token time
+        return _DirectStreamIteratorProxy(self.stream, self)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         try:
@@ -530,16 +574,51 @@ class _DirectStreamWrapper(AbstractAsyncContextManager):
                 try:
                     final_response = self.stream.get()
                     output = _serialize_model_response(final_response)
-                    metrics = _extract_response_metrics(final_response, self.start_time, end_time, None)
+                    metrics = _extract_response_metrics(
+                        final_response, self.start_time, end_time, self._first_token_time
+                    )
                     self.span_cm.log(output=output, metrics=metrics)
                 except Exception as e:
                     logger.debug(f"Failed to extract stream output/metrics: {e}")
 
-            # Always clean up span context
+            # Clean up span context
             if self.span_cm:
-                self.span_cm.__exit__(None, None, None)
+                if asyncio.current_task() is self._enter_task:
+                    self.span_cm.__exit__(None, None, None)
+                else:
+                    self.span_cm.end()
 
         return False
+
+
+class _DirectStreamIteratorProxy:
+    """Proxy for direct stream that captures first token time."""
+
+    def __init__(self, stream: Any, wrapper: _DirectStreamWrapper):
+        self._stream = stream
+        self._wrapper = wrapper
+        self._iterator = None
+
+    def __getattr__(self, name: str):
+        """Delegate all attribute access to the wrapped stream."""
+        return getattr(self._stream, name)
+
+    def __aiter__(self):
+        """Return async iterator that captures first token time."""
+        # Get the actual async iterator from the stream
+        self._iterator = self._stream.__aiter__() if hasattr(self._stream, "__aiter__") else self._stream
+        return self
+
+    async def __anext__(self):
+        """Capture first token time on first iteration."""
+        if self._iterator is None:
+            # In case __aiter__ wasn't called, initialize it
+            self._iterator = self._stream.__aiter__() if hasattr(self._stream, "__aiter__") else self._stream
+
+        item = await self._iterator.__anext__()
+        if self._wrapper._first_token_time is None:
+            self._wrapper._first_token_time = time.time()
+        return item
 
 
 class _AgentStreamResultSyncProxy:
@@ -552,20 +631,25 @@ class _AgentStreamResultSyncProxy:
         self._start_time = start_time
         self._logged = False
         self._finalize_on_del = True
+        self._first_token_time = None
 
     def __getattr__(self, name: str):
         """Delegate all attribute access to the wrapped stream result."""
         attr = getattr(self._stream_result, name)
 
         # Wrap any method that returns an iterator to auto-finalize when exhausted
-        if callable(attr) and name in ('stream_text', 'stream_output', '__iter__'):
+        if callable(attr) and name in ("stream_text", "stream_output", "__iter__"):
+
             def wrapped_method(*args, **kwargs):
                 try:
                     iterator = attr(*args, **kwargs)
                     # If it's an iterator, wrap it
-                    if hasattr(iterator, '__iter__') or hasattr(iterator, '__next__'):
+                    if hasattr(iterator, "__iter__") or hasattr(iterator, "__next__"):
                         try:
-                            yield from iterator
+                            for item in iterator:
+                                if self._first_token_time is None:
+                                    self._first_token_time = time.time()
+                                yield item
                         finally:
                             self._finalize()
                             self._finalize_on_del = False  # Don't finalize again in __del__
@@ -575,6 +659,7 @@ class _AgentStreamResultSyncProxy:
                     self._finalize()
                     self._finalize_on_del = False
                     raise
+
             return wrapped_method
 
         return attr
@@ -585,7 +670,9 @@ class _AgentStreamResultSyncProxy:
             try:
                 end_time = time.time()
                 output = _serialize_stream_output(self._stream_result)
-                metrics = _extract_stream_usage_metrics(self._stream_result, self._start_time, end_time, None)
+                metrics = _extract_stream_usage_metrics(
+                    self._stream_result, self._start_time, end_time, self._first_token_time
+                )
                 self._span.log(output=output, metrics=metrics)
                 self._logged = True
             finally:
@@ -611,6 +698,7 @@ class _DirectStreamWrapperSync:
         self.span_cm = None
         self.start_time = None
         self.stream = None
+        self._first_token_time = None
 
     def __enter__(self):
         # Use context manager properly so span stays current
@@ -619,14 +707,16 @@ class _DirectStreamWrapperSync:
             name=self.span_name,
             type=SpanTypeAttribute.LLM,
             input=self.input_data if self.input_data else None,
-            metadata=_try_dict(self.metadata),
+            metadata=self.metadata,
         )
         span = self.span_cm.__enter__()
 
         # Capture start time right before entering the stream (API call initiation)
         self.start_time = time.time()
         self.stream = self.stream_cm.__enter__()
-        return self.stream  # Return actual stream object
+
+        # Wrap the stream to capture first token time
+        return _DirectStreamIteratorSyncProxy(self.stream, self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
@@ -638,7 +728,9 @@ class _DirectStreamWrapperSync:
                 try:
                     final_response = self.stream.get()
                     output = _serialize_model_response(final_response)
-                    metrics = _extract_response_metrics(final_response, self.start_time, end_time, None)
+                    metrics = _extract_response_metrics(
+                        final_response, self.start_time, end_time, self._first_token_time
+                    )
                     self.span_cm.log(output=output, metrics=metrics)
                 except Exception as e:
                     logger.debug(f"Failed to extract stream output/metrics: {e}")
@@ -648,6 +740,36 @@ class _DirectStreamWrapperSync:
                 self.span_cm.__exit__(None, None, None)
 
         return False
+
+
+class _DirectStreamIteratorSyncProxy:
+    """Proxy for direct stream (sync) that captures first token time."""
+
+    def __init__(self, stream: Any, wrapper: _DirectStreamWrapperSync):
+        self._stream = stream
+        self._wrapper = wrapper
+        self._iterator = None
+
+    def __getattr__(self, name: str):
+        """Delegate all attribute access to the wrapped stream."""
+        return getattr(self._stream, name)
+
+    def __iter__(self):
+        """Return iterator that captures first token time."""
+        # Get the actual iterator from the stream
+        self._iterator = self._stream.__iter__() if hasattr(self._stream, "__iter__") else self._stream
+        return self
+
+    def __next__(self):
+        """Capture first token time on first iteration."""
+        if self._iterator is None:
+            # In case __iter__ wasn't called, initialize it
+            self._iterator = self._stream.__iter__() if hasattr(self._stream, "__iter__") else self._stream
+
+        item = self._iterator.__next__()
+        if self._wrapper._first_token_time is None:
+            self._wrapper._first_token_time = time.time()
+        return item
 
 
 def _serialize_user_prompt(user_prompt: Any) -> Any:
@@ -665,7 +787,14 @@ def _serialize_user_prompt(user_prompt: Any) -> Any:
 
 
 def _serialize_content_part(part: Any) -> Any:
-    """Serialize a content part, handling BinaryContent specially."""
+    """Serialize a content part, handling BinaryContent specially.
+
+    This function handles:
+    - BinaryContent: converts to Braintrust Attachment
+    - Parts with nested content (UserPromptPart): recursively serializes content items
+    - Strings: passes through unchanged
+    - Other objects: converts to dict via model_dump
+    """
     if part is None:
         return None
 
@@ -680,10 +809,25 @@ def _serialize_content_part(part: Any) -> Any:
             attachment = Attachment(data=data, filename=filename, content_type=media_type)
             return {"type": "binary", "attachment": attachment, "media_type": media_type}
 
+    if hasattr(part, "content"):
+        content = part.content
+        if isinstance(content, list):
+            serialized_content = [_serialize_content_part(item) for item in content]
+            result = bt_safe_deep_copy(part)
+            if isinstance(result, dict):
+                result["content"] = serialized_content
+            return result
+        elif content is not None:
+            serialized_content = _serialize_content_part(content)
+            result = bt_safe_deep_copy(part)
+            if isinstance(result, dict):
+                result["content"] = serialized_content
+            return result
+
     if isinstance(part, str):
         return part
 
-    return _try_dict(part)
+    return bt_safe_deep_copy(part)
 
 
 def _serialize_messages(messages: Any) -> Any:
@@ -693,10 +837,24 @@ def _serialize_messages(messages: Any) -> Any:
 
     result = []
     for msg in messages:
-        serialized_msg = _try_dict(msg)
+        if hasattr(msg, "parts") and msg.parts:
+            original_parts = msg.parts
+            serialized_parts = [_serialize_content_part(p) for p in original_parts]
 
-        if isinstance(serialized_msg, dict) and "parts" in serialized_msg:
-            serialized_msg["parts"] = [_serialize_content_part(p) for p in msg.parts]
+            # Use model_dump with exclude to avoid serializing parts field prematurely
+            if hasattr(msg, "model_dump"):
+                try:
+                    serialized_msg = msg.model_dump(exclude={"parts"}, exclude_none=True)
+                except (TypeError, ValueError):
+                    # If exclude parameter not supported, fall back to bt_safe_deep_copy
+                    serialized_msg = bt_safe_deep_copy(msg)
+            else:
+                serialized_msg = bt_safe_deep_copy(msg)
+
+            if isinstance(serialized_msg, dict):
+                serialized_msg["parts"] = serialized_parts
+        else:
+            serialized_msg = bt_safe_deep_copy(msg)
 
         result.append(serialized_msg)
 
@@ -711,12 +869,12 @@ def _serialize_result_output(result: Any) -> Any:
     output_dict = {}
 
     if hasattr(result, "output"):
-        output_dict["output"] = _try_dict(result.output)
+        output_dict["output"] = bt_safe_deep_copy(result.output)
 
     if hasattr(result, "response"):
         output_dict["response"] = _serialize_model_response(result.response)
 
-    return output_dict if output_dict else _try_dict(result)
+    return output_dict if output_dict else bt_safe_deep_copy(result)
 
 
 def _serialize_stream_output(stream_result: Any) -> Any:
@@ -737,11 +895,10 @@ def _serialize_model_response(response: Any) -> Any:
     if not response:
         return None
 
-    response_dict = _try_dict(response)
+    response_dict = bt_safe_deep_copy(response)
 
-    if isinstance(response_dict, dict) and "parts" in response_dict:
-        if hasattr(response, "parts"):
-            response_dict["parts"] = [_serialize_content_part(p) for p in response.parts]
+    if hasattr(response, "parts") and isinstance(response_dict, dict):
+        response_dict["parts"] = [_serialize_content_part(p) for p in response.parts]
 
     return response_dict
 
@@ -801,9 +958,7 @@ def _extract_model_info(agent: Any) -> tuple[str | None, str | None]:
     return _extract_model_info_from_model_instance(agent.model)
 
 
-def _build_model_metadata(
-    model_name: str | None, provider: str | None, model_settings: Any = None
-) -> dict[str, Any]:
+def _build_model_metadata(model_name: str | None, provider: str | None, model_settings: Any = None) -> dict[str, Any]:
     """Build metadata dictionary with model info.
 
     Args:
@@ -820,7 +975,7 @@ def _build_model_metadata(
     if provider:
         metadata["provider"] = provider
     if model_settings:
-        metadata["model_settings"] = _try_dict(model_settings)
+        metadata["model_settings"] = bt_safe_deep_copy(model_settings)
     return metadata
 
 
@@ -986,24 +1141,6 @@ def _is_patched(obj: Any) -> bool:
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _try_dict(obj: Any) -> Iterable[Any] | dict[str, Any]:
-    """Try to convert object to dict, handling Pydantic models and circular references."""
-    if hasattr(obj, "model_dump"):
-        try:
-            obj = obj.model_dump(exclude_none=True)
-        except ValueError as e:
-            if "Circular reference" in str(e):
-                return {}
-            raise
-
-    if isinstance(obj, dict):
-        return {k: _try_dict(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [_try_dict(item) for item in obj]
-
-    return obj
-
-
 def _serialize_type(obj: Any) -> Any:
     """Serialize a type/class for logging, handling Pydantic models and other types.
 
@@ -1047,32 +1184,7 @@ def _serialize_type(obj: Any) -> Any:
         return obj.__name__
 
     # Try standard serialization
-    return _try_dict(obj)
-
-
-G = TypeVar("G", bound=AsyncGenerator[Any, None])
-
-
-class aclosing(AbstractAsyncContextManager[G]):
-    """Context manager for closing async generators."""
-
-    def __init__(self, async_generator: G):
-        self.async_generator = async_generator
-
-    async def __aenter__(self):
-        return self.async_generator
-
-    async def __aexit__(self, *exc_info: Any):
-        try:
-            await self.async_generator.aclose()
-        except ValueError as e:
-            if "was created in a different Context" not in str(e):
-                raise
-            else:
-                logger.debug(
-                    f"Suppressed ContextVar error during async cleanup: {e}. "
-                    "This is expected when async generators yield across context boundaries."
-                )
+    return bt_safe_deep_copy(obj)
 
 
 def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1097,9 +1209,9 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
             input_data[key] = _serialize_type(value) if value is not None else None
         elif key == "model_settings":
             # model_settings passed to run() goes in INPUT (it's a run() parameter)
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
         else:
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     if "model" in kwargs:
         model_name, provider = _parse_model_string(kwargs["model"])
@@ -1155,7 +1267,9 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
                             if hasattr(tool_obj, "description") and tool_obj.description:
                                 tool_dict["description"] = tool_obj.description
                             # Extract JSON schema for parameters
-                            if hasattr(tool_obj, "function_schema") and hasattr(tool_obj.function_schema, "json_schema"):
+                            if hasattr(tool_obj, "function_schema") and hasattr(
+                                tool_obj.function_schema, "json_schema"
+                            ):
                                 tool_dict["parameters"] = tool_obj.function_schema.json_schema
                             tools_list.append(tool_dict)
                         ts_info["tools"] = tools_list
@@ -1196,7 +1310,7 @@ def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[dict
 
     for key, value in kwargs.items():
         if key not in ["model", "messages"]:
-            input_data[key] = _try_dict(value) if value is not None else None
+            input_data[key] = bt_safe_deep_copy(value) if value is not None else None
 
     model_name, provider = _parse_model_string(model)
     metadata = _build_model_metadata(model_name, provider)

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA d2eca897666af49c11b326a9dcc6643824279cf8) -- do not modify
+// Auto-generated file (internal git SHA 547fa17c0937e0e25fdf9214487be6f31c91a37a) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -585,9 +585,28 @@ export const ExperimentEvent = z.object({
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
+export const NullableFunctionTypeEnum = z.union([
+  z.enum([
+    "llm",
+    "scorer",
+    "task",
+    "tool",
+    "custom_view",
+    "preprocessor",
+    "facet",
+  ]),
+  z.null(),
+]);
+export type NullableFunctionTypeEnumType = z.infer<
+  typeof NullableFunctionTypeEnum
+>;
 export const ExtendedSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     type: z.literal("slug"),
     project_id: z.string(),
@@ -599,7 +618,11 @@ export type ExtendedSavedFunctionIdType = z.infer<
 >;
 export const NullableSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.null(),
 ]);
 export type NullableSavedFunctionIdType = z.infer<
@@ -720,7 +743,11 @@ export const PromptParserNullish = z.union([
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
 export const SavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
 ]);
 export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
@@ -901,6 +928,7 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("global"),
     name: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
     config: z
       .union([z.object({}).partial().passthrough(), z.null()])
       .optional(),
@@ -1004,7 +1032,10 @@ export const FunctionId = z.union([
     slug: z.string(),
     version: z.string().optional(),
   }),
-  z.object({ global_function: z.string() }),
+  z.object({
+    global_function: z.string(),
+    function_type: NullableFunctionTypeEnum.optional(),
+  }),
   z.object({
     prompt_session_id: z.string(),
     prompt_session_function_id: z.string(),
@@ -1036,7 +1067,6 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
-  "agent",
   "custom_view",
   "preprocessor",
   "facet",
@@ -1246,6 +1276,7 @@ export const Project = z.object({
   id: z.string().uuid(),
   org_id: z.string().uuid(),
   name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
@@ -1712,7 +1743,6 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
     "monitor",
     "for_review",
   ]),
