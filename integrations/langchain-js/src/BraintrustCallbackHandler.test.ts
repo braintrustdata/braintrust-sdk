@@ -1307,7 +1307,7 @@ it("should handle nested tool calls within a chain", async () => {
 
   // End the parent chain
   await handler.handleChainEnd({ result: "30" }, "chain-run-1", undefined, [
-    "parent-chain"
+    "parent-chain",
   ]);
 
   await flush();
