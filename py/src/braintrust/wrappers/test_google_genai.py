@@ -48,6 +48,8 @@ def _assert_metrics_are_valid(metrics, start=None, end=None):
     assert metrics["tokens"] > 0
     assert metrics["prompt_tokens"] > 0
     assert metrics["completion_tokens"] > 0
+    assert "time_to_first_token" in metrics, "time_to_first_token should be present in metrics"
+    assert metrics["time_to_first_token"] >= 0, "time_to_first_token should be non-negative"
     if start and end:
         assert start <= metrics["start"] <= metrics["end"] <= end
     else:

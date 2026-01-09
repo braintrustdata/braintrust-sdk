@@ -262,10 +262,12 @@ def get_args_kwargs(args: list[str], kwargs: dict[str, Any], keys: Iterable[str]
 def _extract_generate_content_metrics(response: Any, start: float) -> dict[str, Any]:
     """Extract metrics from a non-streaming generate_content response."""
     end_time = time.time()
+    duration = end_time - start
     metrics = dict(
         start=start,
         end=end_time,
-        duration=end_time - start,
+        duration=duration,
+        time_to_first_token=duration,  # For non-streaming, TTFT equals total duration
     )
 
     # Extract usage metadata if available
