@@ -689,7 +689,7 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet'
+    'prompt', 'tool', 'scorer', 'task', 'custom_view', 'preprocessor', 'facet'
 ]
 
 
@@ -3127,7 +3127,6 @@ class View(TypedDict):
         'tools',
         'scorers',
         'logs',
-        'agents',
         'monitor',
         'for_review',
     ]

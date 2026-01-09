@@ -49,6 +49,38 @@ function isReadableSpan(span: Span | ReadableSpan): span is ReadableSpan {
 }
 
 /**
+ * Returns true if the span is a root span (no parent).
+ * Checks both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x).
+ */
+export function isRootSpan(span: ReadableSpan): boolean {
+  const hasParent =
+    ("parentSpanId" in span && (span as any).parentSpanId) ||
+    ("parentSpanContext" in span && (span as any).parentSpanContext);
+  return !hasParent;
+}
+
+/**
+ * Returns true if the span is an AI span (name or attribute matches AI prefixes).
+ */
+export function isAISpan(span: ReadableSpan): boolean {
+  if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
+    return true;
+  }
+  const attributes = span.attributes;
+  if (attributes) {
+    const attributeNames = Object.keys(attributes);
+    if (
+      attributeNames.some((name) =>
+        FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * A span processor that filters spans to only export filtered telemetry.
  *
  * Only filtered spans and root spans will be forwarded to the inner processor.
@@ -63,7 +95,7 @@ function isReadableSpan(span: Span | ReadableSpan): span is ReadableSpan {
  */
 export class AISpanProcessor {
   private readonly processor: SpanProcessor;
-  private readonly customFilter: CustomSpanFilter | undefined;
+  private readonly customFilter: CustomSpanFilter;
 
   /**
    * Initialize the filter span processor.
@@ -75,7 +107,7 @@ export class AISpanProcessor {
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
     this.processor = processor;
-    this.customFilter = customFilter;
+    this.customFilter = customFilter || isAISpan;
   }
 
   /**
@@ -113,56 +145,20 @@ export class AISpanProcessor {
    * Determine if a span should be kept based on filtering criteria.
    *
    * Keep spans if:
-   * 1. It's a root span (no parent)
-   * 2. Custom filter returns true/false (if provided)
-   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
-   * 4. Any attribute name starts with those prefixes
+   * 1. Custom filter returns true/false (if provided)
+   * 2. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
+   * 3. Any attribute name starts with those prefixes
    */
   private shouldKeepFilteredSpan(span: ReadableSpan): boolean {
     if (!span) {
       return false;
     }
-
-    // Always keep root spans (no parent)
-    // Check both parentSpanId (OTel 1.x) and parentSpanContext (OTel 2.x)
-    const hasParent =
-      ("parentSpanId" in span && span.parentSpanId) ||
-      ("parentSpanContext" in span && span.parentSpanContext);
-
-    if (!hasParent) {
-      return true;
+    const result = this.customFilter(span);
+    if (typeof result === "boolean") {
+      return result;
     }
-
-    // Apply custom filter if provided
-    if (this.customFilter) {
-      const customResult = this.customFilter(span);
-      if (customResult === true) {
-        return true;
-      } else if (customResult === false) {
-        return false;
-      }
-      // customResult is null/undefined - continue with default logic
-    }
-
-    // Check span name
-    if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
-      return true;
-    }
-
-    // Check attribute names
-    const attributes = span.attributes;
-    if (attributes) {
-      const attributeNames = Object.keys(attributes);
-      if (
-        attributeNames.some((name) =>
-          FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
-        )
-      ) {
-        return true;
-      }
-    }
-
-    return false;
+    // Fallback: if customFilter returns undefined or null, use isAISpan
+    return isAISpan(span);
   }
 }
 

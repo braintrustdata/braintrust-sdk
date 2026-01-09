@@ -5,6 +5,7 @@ export const ID_FIELD = "id";
 
 export const IS_MERGE_FIELD = "_is_merge";
 export const MERGE_PATHS_FIELD = "_merge_paths";
+export const ARRAY_DELETE_FIELD = "_array_delete";
 
 export const AUDIT_SOURCE_FIELD = "_audit_source";
 export const AUDIT_METADATA_FIELD = "_audit_metadata";
