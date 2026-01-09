@@ -1,5 +1,14 @@
 # Python SDK
 
+## Setup
+
+To run examples or use optional integrations, install the extra dependencies:
+
+```bash
+make install-dev        # Development dependencies
+make install-optional   # Optional integration dependencies
+```
+
 ## Running Tests
 
 ```bash

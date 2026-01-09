@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypeAlias, TypedDict
 
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired
 
 AclObjectType: TypeAlias = Literal[
     'organization',
@@ -484,10 +484,6 @@ class Dataset(TypedDict):
     """
     User-controlled metadata about the dataset
     """
-    url_slug: str
-    """
-    URL slug for the dataset. used to construct dataset URLs
-    """
 
 
 class DatasetEventMetadata(TypedDict):
@@ -543,7 +539,7 @@ class ExperimentEventMetadata(TypedDict):
     """
 
 
-class ExperimentEventMetrics(TypedDict, extra_items=float):
+class ExperimentEventMetrics(TypedDict):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the experiment event started
@@ -753,27 +749,23 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'prompt', 'tool', 'scorer', 'task', 'custom_view', 'preprocessor', 'facet'
 ]
 
 
 FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
 
 
-FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
-]
+FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 """
 The type of global function. Defaults to 'scorer'.
 """
 
 
-FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
-]
+FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
 
 
-class GitMetadataSettings(TypedDict, closed=True):
+class GitMetadataSettings(TypedDict):
     collect: Literal['all', 'none', 'some']
     fields: NotRequired[
         Sequence[
@@ -1521,7 +1513,7 @@ class ProjectLogsEventMetadata(TypedDict):
     """
 
 
-class ProjectLogsEventMetrics(TypedDict, extra_items=float):
+class ProjectLogsEventMetrics(TypedDict):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the project logs event started
@@ -1682,14 +1674,7 @@ class PromptDataNullishOrigin(TypedDict):
 class PromptParserNullish(TypedDict):
     type: Literal['llm_classifier']
     use_cot: bool
-    choice_scores: NotRequired[Mapping[str, float] | None]
-    """
-    Map of choices to scores (0-1). Used by scorers.
-    """
-    choice: NotRequired[Sequence[str] | None]
-    """
-    List of valid choices without score mapping. Used by classifiers that deposit output to tags.
-    """
+    choice_scores: Mapping[str, float]
 
 
 class PromptSessionEvent(TypedDict):
@@ -2119,7 +2104,7 @@ class SpanScope(TypedDict):
 
 
 SpanType: TypeAlias = Literal[
-    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor'
 ]
 """
 Type of the span, for display purposes only
@@ -3244,7 +3229,6 @@ class View(TypedDict):
         'tools',
         'scorers',
         'logs',
-        'agents',
         'monitor',
         'for_review',
     ]
