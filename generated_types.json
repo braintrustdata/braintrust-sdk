@@ -1934,7 +1934,7 @@
           },
           "span_id": {
             "type": "string",
-            "description": "A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing"
+            "description": "A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing"
           },
           "root_span_id": {
             "type": "string",
@@ -2050,6 +2050,125 @@
           "object_id",
           "name"
         ]
+      },
+      "EvalStatusPage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the eval status page"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the project that the eval status page belongs under"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Identifies the user who created the eval status page"
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of eval status page creation"
+          },
+          "deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of eval status page deletion, or null if the eval status page is still active"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the eval status page"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the eval status page"
+          },
+          "logo_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL of the logo to display on the page"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/EvalStatusPageTheme"
+          },
+          "config": {
+            "$ref": "#/components/schemas/EvalStatusPageConfig"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "theme",
+          "config"
+        ],
+        "description": "A public eval status page that displays aggregate experiment results"
+      },
+      "EvalStatusPageConfig": {
+        "type": "object",
+        "properties": {
+          "score_columns": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The score columns to display on the page"
+          },
+          "metric_columns": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The metric columns to display on the page"
+          },
+          "grouping_field": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The metadata field to use for grouping experiments (model)"
+          },
+          "api_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The API key used for fetching experiment data"
+          }
+        },
+        "description": "Configuration for what data to display"
+      },
+      "EvalStatusPageTheme": {
+        "type": "string",
+        "enum": [
+          "light",
+          "dark"
+        ],
+        "description": "The theme for the page"
       },
       "Experiment": {
         "type": "object",
@@ -2338,7 +2457,7 @@
           },
           "span_id": {
             "type": "string",
-            "description": "A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing"
+            "description": "A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing"
           },
           "span_parents": {
             "type": [
@@ -3043,6 +3162,7 @@
           "tool",
           "scorer",
           "task",
+          "workflow",
           "custom_view",
           "preprocessor",
           "facet",
@@ -5046,7 +5166,7 @@
           },
           "span_id": {
             "type": "string",
-            "description": "A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing"
+            "description": "A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing"
           },
           "span_parents": {
             "type": [
@@ -7519,7 +7639,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "8fc73777e3e76bbc3c9e2ac1a337a21dd6f97481"
+    "x-internal-git-sha": "793ece047b7e146f22f12deffc39fb8b9111e825"
   },
   "paths": {},
   "webhooks": {}

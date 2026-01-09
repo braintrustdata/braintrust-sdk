@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 8fc73777e3e76bbc3c9e2ac1a337a21dd6f97481) -- do not modify
+// Auto-generated file (internal git SHA 793ece047b7e146f22f12deffc39fb8b9111e825) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -557,6 +557,30 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalStatusPageTheme = z.enum(["light", "dark"]);
+export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
+export const EvalStatusPageConfig = z
+  .object({
+    score_columns: z.union([z.array(z.string()), z.null()]),
+    metric_columns: z.union([z.array(z.string()), z.null()]),
+    grouping_field: z.union([z.string(), z.null()]),
+    api_key: z.union([z.string(), z.null()]),
+  })
+  .partial();
+export type EvalStatusPageConfigType = z.infer<typeof EvalStatusPageConfig>;
+export const EvalStatusPage = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  logo_url: z.union([z.string(), z.null()]).optional(),
+  theme: EvalStatusPageTheme,
+  config: EvalStatusPageConfig,
+});
+export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -1114,6 +1138,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
+  "workflow",
   "custom_view",
   "preprocessor",
   "facet",
