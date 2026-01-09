@@ -108,6 +108,8 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.tokens).toBeGreaterThan(0);
     expect(metrics.prompt_tokens).toBeGreaterThan(0);
     expect(metrics.completion_tokens).toBeGreaterThan(0);
+
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
   });
 
   test("google genai streaming completion", async () => {
@@ -237,6 +239,8 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.tokens).toBeGreaterThan(0);
     expect(metrics.prompt_tokens).toBeGreaterThan(0);
 
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
+
     if (result.functionCalls && result.functionCalls.length > 0) {
       const functionCall = result.functionCalls[0];
       expect(functionCall.name).toBe("get_weather");
@@ -313,6 +317,8 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.tokens).toBeGreaterThan(0);
     expect(metrics.prompt_tokens).toBeGreaterThan(0);
 
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
+
     if (result.functionCalls) {
       expect(result.functionCalls.length).toBeGreaterThan(0);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -353,6 +359,9 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
         systemInstruction: "You are a pirate. Always respond in pirate speak.",
       }),
     });
+
+    const { metrics } = span;
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
   });
 
   test("google genai multi-turn conversation", async () => {
@@ -390,5 +399,7 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
 
     expect(span.input.contents).toHaveLength(3);
     expect(span.metrics.tokens).toBeGreaterThan(0);
+
+    expect(span.metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
   });
 });

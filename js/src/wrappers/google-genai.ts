@@ -348,10 +348,12 @@ function extractMetadata(params: any): any {
 
 function extractGenerateContentMetrics(response: any, start: number): any {
   const end = getCurrentUnixTimestamp();
+  const duration = end - start;
   const metrics: any = {
     start,
     end,
-    duration: end - start,
+    duration,
+    time_to_first_token: duration, // For non-streaming, TTFT equals total duration
   };
 
   if (response.usageMetadata) {
