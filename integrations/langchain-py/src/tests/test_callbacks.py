@@ -57,12 +57,6 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
                     "additional_kwargs": ANY,
                     "response_metadata": ANY,
                     "type": "ai",
-                    "name": ANY,
-                    "id": ANY,
-                    "example": ANY,
-                    "tool_calls": ANY,
-                    "invalid_tool_calls": ANY,
-                    "usage_metadata": ANY,
                 },
                 "metadata": {"tags": []},
                 "span_id": root_span_id,
@@ -121,7 +115,6 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
                         },
                         "model_name": "gpt-4o-mini-2024-07-18",
                     },
-                    "run": None,
                     "type": "LLMResult",
                 },
                 "metrics": {
@@ -235,7 +228,6 @@ def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
                         },
                         "model_name": "gpt-4o-mini-2024-07-18",
                     },
-                    "run": None,
                     "type": "LLMResult",
                 },
                 "metrics": {
@@ -360,7 +352,6 @@ def test_tool_usage(logger_memory_logger: LoggerMemoryLogger):
                         },
                         "model_name": "gpt-4o-mini-2024-07-18",
                     },
-                    "run": None,
                     "type": "LLMResult",
                 },
                 "metrics": {
@@ -596,7 +587,6 @@ def test_langgraph_state_management(logger_memory_logger: LoggerMemoryLogger):
                     },
                     "model_name": "gpt-4o-mini-2024-07-18",
                 },
-                "run": None,
                 "type": "LLMResult",
             },
             "metrics": {

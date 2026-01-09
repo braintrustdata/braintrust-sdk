@@ -6,6 +6,12 @@ resolution-markers = [
     "platform_python_implementation == 'PyPy'",
 ]
 
+[manifest]
+members = [
+    "braintrust-langchain",
+    "examples",
+]
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -113,8 +119,8 @@ wheels = [
 
 [[package]]
 name = "braintrust"
-version = "0.2.9"
-source = { registry = "https://pypi.org/simple" }
+version = "0.4.2"
+source = { editable = "../../py" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -125,15 +131,49 @@ dependencies = [
     { name = "sseclient-py" },
     { name = "tqdm" },
     { name = "typing-extensions" },
+    { name = "wrapt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/32/40/d9931b0233f36fcf41316941022c44e8664d97a2ea6e8b973dee4ebf0749/braintrust-0.2.9.tar.gz", hash = "sha256:6874ab7aae8f9463c63ae8297927995f745807e2aed25c90f4c28dd11a5a90b6", size = 185157, upload-time = "2025-09-22T23:28:01.975Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/31/8a5e6534b53bf0a2e81ec008cce6d8e1cccd53912c404c008214b29684f5/braintrust-0.2.9-py3-none-any.whl", hash = "sha256:b0b9c50900f6cc44d997b58f33f3f1e4f2cd82e40f4557a625156bd31d042c78", size = 214728, upload-time = "2025-09-22T23:28:00.415Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", marker = "extra == 'all'" },
+    { name = "boto3", marker = "extra == 'cli'" },
+    { name = "chevron" },
+    { name = "exceptiongroup", specifier = ">=1.2.0" },
+    { name = "gitpython" },
+    { name = "openai-agents", marker = "extra == 'all'" },
+    { name = "openai-agents", marker = "extra == 'openai-agents'" },
+    { name = "opentelemetry-api", marker = "extra == 'all'" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'all'" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'all'" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'" },
+    { name = "psycopg2-binary", marker = "extra == 'all'" },
+    { name = "psycopg2-binary", marker = "extra == 'cli'" },
+    { name = "pydoc-markdown", marker = "extra == 'all'" },
+    { name = "pydoc-markdown", marker = "extra == 'doc'" },
+    { name = "python-dotenv" },
+    { name = "python-slugify" },
+    { name = "requests" },
+    { name = "sseclient-py" },
+    { name = "starlette", marker = "extra == 'all'" },
+    { name = "starlette", marker = "extra == 'cli'" },
+    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'all'", specifier = ">=1.19.0" },
+    { name = "temporalio", marker = "python_full_version >= '3.10' and extra == 'temporal'", specifier = ">=1.19.0" },
+    { name = "tqdm" },
+    { name = "typing-extensions", specifier = ">=4.1.0" },
+    { name = "uv", marker = "extra == 'all'" },
+    { name = "uv", marker = "extra == 'cli'" },
+    { name = "uvicorn", marker = "extra == 'all'" },
+    { name = "uvicorn", marker = "extra == 'cli'" },
+    { name = "wrapt" },
 ]
+provides-extras = ["cli", "doc", "openai-agents", "otel", "temporal", "all"]
 
 [[package]]
 name = "braintrust-langchain"
-version = "0.1.5"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "braintrust" },
@@ -162,7 +202,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", specifier = ">=0.2.1" },
+    { name = "braintrust", editable = "../../py" },
     { name = "langchain", specifier = ">=0.3.27" },
 ]
 
@@ -450,6 +490,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4a/c0/89fe6215b443b919cb98a5002e107cb5026854ed1ccb6b5833e0768419d1/docutils-0.22.2.tar.gz", hash = "sha256:9fdb771707c8784c8f2728b67cb2c691305933d68137ef95a75db5f4dfbc213d", size = 2289092, upload-time = "2025-09-20T17:55:47.994Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/66/dd/f95350e853a4468ec37478414fc04ae2d61dad7a947b3015c3dcc51a09b9/docutils-0.22.2-py3-none-any.whl", hash = "sha256:b0e98d679283fc3bb0ead8a5da7f501baa632654e7056e9c5846842213d674d8", size = 632667, upload-time = "2025-09-20T17:55:43.052Z" },
+]
+
+[[package]]
+name = "examples"
+version = "0.1.0"
+source = { virtual = "examples" }
+dependencies = [
+    { name = "braintrust-langchain" },
+    { name = "langchain" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braintrust-langchain", editable = "." },
+    { name = "langchain", specifier = ">=0.3.27" },
 ]
 
 [[package]]
