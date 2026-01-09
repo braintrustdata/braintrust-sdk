@@ -571,6 +571,16 @@ async function testToolUseWithResult() {
         },
       };
 
+      const greetingTool = ai.tool({
+        description: "A tool that streams a personalized greeting",
+        inputSchema: z.object({ name: z.string() }),
+        execute: async function* ({ name }: { name: string }) {
+          yield { status: "starting", message: "Preparing..." };
+          yield { status: "processing", message: `Looking up ${name}...` };
+          yield { status: "done", greeting: `Hello, ${name}!` };
+        },
+      });
+
       for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
@@ -597,6 +607,15 @@ async function testToolUseWithResult() {
           },
         }).generate({
           prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+        });
+
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            greeting: greetingTool,
+          },
+          prompt: "Greet Alice using the greeting tool.",
+          stopWhen: ai.stepCountIs(2),
         });
       }
     },

@@ -3,6 +3,7 @@
 # pyright: reportUnknownParameterType=none
 # pyright: reportUnknownArgumentType=none
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import braintrust
@@ -285,6 +286,51 @@ async def test_streaming():
         except Exception as e:
             print(f"✗ Error occurred: {type(e).__name__}: {e}")
             generator_status = f"error: {type(e).__name__}"
+
+    # Group 3: _stream_single/_buffer_stream pattern (call 7)
+    with braintrust.start_span(name="_stream_single/_buffer_stream pattern (call 7)"):
+        # Customer pattern 2: _stream_single/_buffer_stream pattern
+        # This pattern uses an async generator that yields chunks AND a final response,
+        # with a consumer that returns early when it sees the final ModelResponse
+        print("\n--- CUSTOMER PATTERN 2: _stream_single/_buffer_stream (call 7) ---")
+        print("(Generator yields chunks + final response, consumer returns on ModelResponse)")
+
+        class LLMStreamResponse:
+            """Simple wrapper for streaming responses."""
+
+            def __init__(self, llm_response: object, is_final: bool = False):
+                self.llm_response = llm_response
+                self.is_final = is_final
+
+        # @traced
+        async def _stream_single() -> AsyncIterator[LLMStreamResponse]:
+            """Async generator that yields streaming chunks and final response."""
+            model_stream = OpenAIChatModel("gpt-4o-mini")
+            messages_stream: list[ModelMessage] = [
+                ModelRequest(parts=[UserPromptPart(content=IDENTICAL_PROMPT)])
+            ]
+
+            async with model_request_stream(
+                model=model_stream, messages=messages_stream, model_settings=IDENTICAL_SETTINGS
+            ) as stream:
+                async for chunk in stream:
+                    yield LLMStreamResponse(llm_response=chunk, is_final=False)
+
+                response = stream.get()
+                yield LLMStreamResponse(llm_response=response, is_final=True)
+
+        async def _buffer_stream() -> LLMStreamResponse:
+            """Consumer that returns early when it gets a ModelResponse."""
+            async for event in _stream_single():
+                if isinstance(event.llm_response, ModelResponse):
+                    return event
+            raise RuntimeError("No ModelResponse received")
+
+        try:
+            result = await _buffer_stream()
+            print(f"✓ Received final response: {type(result.llm_response).__name__}")
+        except Exception as e:
+            print(f"✗ Error occurred: {type(e).__name__}: {e}")
 
 
 # Test 5: Image input
@@ -728,12 +774,6 @@ Give me a structured comparison with your recommendation."""
     print(f"Price difference: ${comparison.price_comparison.price_difference}")
     print(f"Phone rating: {comparison.phone_rating}")
     print(f"Laptop rating: {comparison.laptop_rating}")
-
-
-# Test 24: Error handling
-@traced
-async def test_error_handling():
-    print("\n=== Test 24: Error Handling ===")
 
 
 # Test 24: Error handling

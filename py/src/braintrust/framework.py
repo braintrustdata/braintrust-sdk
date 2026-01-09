@@ -1559,9 +1559,9 @@ def build_local_summary(
     scores_by_name = defaultdict(lambda: (0, 0))
     for result in results:
         for name, score in result.scores.items():
-            curr = scores_by_name[name]
-            if curr is None:
+            if score is None:
                 continue
+            curr = scores_by_name[name]
             scores_by_name[name] = (curr[0] + score, curr[1] + 1)
     longest_score_name = max(len(name) for name in scores_by_name) if scores_by_name else 0
     avg_scores = {

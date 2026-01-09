@@ -90,17 +90,12 @@ class AISpanProcessor:
     def _should_keep_filtered_span(self, span):
         """
         Keep spans if:
-        1. It's a root span (no parent)
-        2. Custom filter returns True/False (if provided)
-        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
-        4. Any attribute name starts with those prefixes
+        1. Custom filter returns True/False (if provided)
+        2. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
+        3. Any attribute name starts with those prefixes
         """
         if not span:
             return False
-
-        # Braintrust requires root spans, so always keep them
-        if span.parent is None:
-            return True
 
         # Apply custom filter if provided
         if self._custom_filter:
@@ -384,6 +379,9 @@ def _get_braintrust_parent(object_type, object_id: str | None = None, compute_ar
 
     return None
 
+def is_root_span(span) -> bool:
+    """Returns True if the span is a root span (no parent span)."""
+    return getattr(span, "parent", None) is None
 
 def context_from_span_export(export_str: str):
     """
@@ -522,15 +520,17 @@ def add_span_parent_to_baggage(span, ctx=None):
     return add_parent_to_baggage(parent_value, ctx=ctx)
 
 
-def parent_from_headers(headers: dict[str, str]) -> str | None:
+def parent_from_headers(headers: dict[str, str], propagator=None) -> str | None:
     """
-    Extract a Braintrust-compatible parent string from W3C Trace Context headers.
+    Extract a Braintrust-compatible parent string from trace context headers.
 
-    This converts OTEL trace context headers (traceparent/baggage) into a format
-    that can be passed as the 'parent' parameter to Braintrust's start_span() method.
+    This converts OTEL trace context headers into a format that can be passed
+    as the 'parent' parameter to Braintrust's start_span() method.
 
     Args:
-        headers: Dictionary with 'traceparent' and optionally 'baggage' keys
+        headers: Dictionary with trace context headers (e.g., 'traceparent'/'baggage' for W3C)
+        propagator: Optional custom TextMapPropagator. If not provided, uses the
+                   globally registered propagator (W3C TraceContext by default).
 
     Returns:
         Braintrust V4 export string that can be used as parent parameter,
@@ -545,6 +545,12 @@ def parent_from_headers(headers: dict[str, str]) -> str | None:
         >>> parent = parent_from_headers(headers)
         >>> with project.start_span(name="service_c", parent=parent) as span:
         >>>     span.log(input="BT span as child of OTEL parent")
+
+        >>> # Using a custom propagator (e.g., B3 format)
+        >>> from opentelemetry.propagators.b3 import B3MultiFormat
+        >>> propagator = B3MultiFormat()
+        >>> headers = {'X-B3-TraceId': '...', 'X-B3-SpanId': '...', 'baggage': '...'}
+        >>> parent = parent_from_headers(headers, propagator=propagator)
     """
     if not OTEL_AVAILABLE:
         raise ImportError(INSTALL_ERR_MSG)
@@ -553,8 +559,11 @@ def parent_from_headers(headers: dict[str, str]) -> str | None:
     from opentelemetry import baggage, trace
     from opentelemetry.propagate import extract
 
-    # Extract context from headers using W3C Trace Context propagator
-    ctx = extract(headers)
+    # Extract context from headers using provided propagator or global propagator
+    if propagator is not None:
+        ctx = propagator.extract(headers)
+    else:
+        ctx = extract(headers)
 
     # Get span from context
     span = trace.get_current_span(ctx)

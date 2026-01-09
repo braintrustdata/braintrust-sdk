@@ -2,6 +2,7 @@
 # pyright: reportUnknownMemberType=false
 # pyright: reportUnknownParameterType=false
 # pyright: reportPrivateUsage=false
+import asyncio
 import time
 
 import pytest
@@ -378,29 +379,27 @@ async def test_agent_run_stream(memory_logger):
     assert chat_span["metadata"]["provider"] == "openai"
     _assert_metrics_are_valid(chat_span["metrics"], start, end)
 
-    # CRITICAL: Check that the chat span's start time is close to agent span start
-    # The offset/time-to-first-token should be small (typically < 2 seconds)
-    agent_start = agent_span["metrics"]["start"]
-    chat_start = chat_span["metrics"]["start"]
-    time_to_first_token = chat_start - agent_start
+    # CRITICAL: Check that time_to_first_token is captured
+    assert "time_to_first_token" in agent_span["metrics"], "agent_run_stream span should have time_to_first_token metric"
+    ttft = agent_span["metrics"]["time_to_first_token"]
+    duration = agent_span["metrics"]["duration"]
+
+    # time_to_first_token should be reasonable: > 0 and < duration
+    assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
+    assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
 
     # Debug: Print full span data
     print(f"\n=== AGENT SPAN ===")
     print(f"ID: {agent_span['id']}")
     print(f"span_id: {agent_span['span_id']}")
     print(f"metrics: {agent_span['metrics']}")
+    print(f"time_to_first_token: {ttft}s")
     print(f"\n=== CHAT SPAN ===")
     print(f"ID: {chat_span['id']}")
     print(f"span_id: {chat_span['span_id']}")
     print(f"span_parents: {chat_span['span_parents']}")
     print(f"metrics: {chat_span['metrics']}")
-
-    # Time to first token should be reasonable (< 3 seconds for API call initiation)
-    assert time_to_first_token < 3.0, f"Time to first token too large: {time_to_first_token}s - suggests start_time is being reused incorrectly"
-
-    # Both spans should have started during our test timeframe
-    assert agent_start >= start, "Agent span started before test"
-    assert chat_start >= start, "Chat span started before test"
 
     # Agent spans should have token metrics
     assert "prompt_tokens" in agent_span["metrics"]
@@ -550,7 +549,7 @@ async def test_direct_model_request_with_settings(memory_logger, direct):
 @pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_direct_model_request_stream(memory_logger, direct):
-    """Test direct API model_request_stream()."""
+    """Test direct API model_request_stream() - verifies time_to_first_token is captured."""
     assert not memory_logger.pop()
 
     messages = [ModelRequest(parts=[UserPromptPart(content="Count from 1 to 3")])]
@@ -577,6 +576,18 @@ async def test_direct_model_request_stream(memory_logger, direct):
     assert direct_span["span_attributes"]["type"] == SpanTypeAttribute.LLM
     assert direct_span["metadata"]["model"] == "gpt-4o-mini"
     _assert_metrics_are_valid(direct_span["metrics"], start, end)
+
+    # CRITICAL: Verify time_to_first_token is captured in direct streaming
+    assert "time_to_first_token" in direct_span["metrics"], "model_request_stream span should have time_to_first_token metric"
+    ttft = direct_span["metrics"]["time_to_first_token"]
+    duration = direct_span["metrics"]["duration"]
+
+    # time_to_first_token should be reasonable: > 0 and < duration
+    assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
+    assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
+
+    print(f"✓ Direct stream time_to_first_token: {ttft}s (duration: {duration}s)")
 
 
 @pytest.mark.vcr
@@ -1131,7 +1142,7 @@ async def test_agent_with_custom_settings(memory_logger):
 
 @pytest.mark.vcr
 def test_agent_run_stream_sync(memory_logger):
-    """Test Agent.run_stream_sync() synchronous streaming method."""
+    """Test Agent.run_stream_sync() synchronous streaming method - verifies time_to_first_token."""
     assert not memory_logger.pop()
 
     agent = Agent(MODEL, model_settings=ModelSettings(max_tokens=100))
@@ -1163,6 +1174,18 @@ def test_agent_run_stream_sync(memory_logger):
     assert agent_span["metadata"]["model"] == "gpt-4o-mini"
     assert "Count from 1 to 3" in str(agent_span["input"])
     _assert_metrics_are_valid(agent_span["metrics"], start, end)
+
+    # CRITICAL: Verify time_to_first_token is captured in sync streaming
+    assert "time_to_first_token" in agent_span["metrics"], "agent_run_stream_sync span should have time_to_first_token metric"
+    ttft = agent_span["metrics"]["time_to_first_token"]
+    duration = agent_span["metrics"]["duration"]
+
+    # time_to_first_token should be reasonable: > 0 and < duration
+    assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
+    assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
+
+    print(f"✓ Sync stream time_to_first_token: {ttft}s (duration: {duration}s)")
 
     # Check chat span is a descendant of agent_run_stream_sync
     span_by_id = {s["span_id"]: s for s in spans}
@@ -1227,7 +1250,7 @@ async def test_agent_run_stream_events(memory_logger):
 
 @pytest.mark.vcr
 def test_direct_model_request_stream_sync(memory_logger, direct):
-    """Test direct API model_request_stream_sync()."""
+    """Test direct API model_request_stream_sync() - verifies time_to_first_token."""
     assert not memory_logger.pop()
 
     messages = [ModelRequest(parts=[UserPromptPart(content="Count from 1 to 3")])]
@@ -1251,6 +1274,18 @@ def test_direct_model_request_stream_sync(memory_logger, direct):
     assert span["span_attributes"]["name"] == "model_request_stream_sync"
     assert span["metadata"]["model"] == "gpt-4o-mini"
     _assert_metrics_are_valid(span["metrics"], start, end)
+
+    # CRITICAL: Verify time_to_first_token is captured in sync direct streaming
+    assert "time_to_first_token" in span["metrics"], "model_request_stream_sync span should have time_to_first_token metric"
+    ttft = span["metrics"]["time_to_first_token"]
+    duration = span["metrics"]["duration"]
+
+    # time_to_first_token should be reasonable: > 0 and < duration
+    assert ttft > 0, f"time_to_first_token should be > 0, got {ttft}"
+    assert ttft <= duration, f"time_to_first_token ({ttft}s) should be <= duration ({duration}s)"
+    assert ttft < 3.0, f"time_to_first_token should be < 3s for API call, got {ttft}s"
+
+    print(f"✓ Direct sync stream time_to_first_token: {ttft}s (duration: {duration}s)")
 
 
 @pytest.mark.vcr
@@ -1343,17 +1378,166 @@ async def test_agent_stream_early_break(memory_logger):
 
 @pytest.mark.vcr
 @pytest.mark.asyncio
+async def test_stream_buffer_pattern_early_return(memory_logger, direct):
+    """Test the _stream_single/_buffer_stream pattern with early return.
+
+    This tests a common customer pattern where:
+    1. An async generator wraps a stream and yields chunks + final response
+    2. A consumer function returns early when it sees the final ModelResponse
+    3. The generator cleanup happens in a different async context
+
+    This pattern would trigger 'Token was created in a different Context' errors
+    before the task-tracking fix, because the consumer's early return causes
+    the generator to be cleaned up in a different task context.
+    """
+    from collections.abc import AsyncIterator
+
+    from pydantic_ai.messages import ModelResponse
+
+    assert not memory_logger.pop()
+
+    messages = [ModelRequest(parts=[UserPromptPart(content="Count from 1 to 5")])]
+
+    class LLMStreamResponse:
+        """Wrapper for streaming responses."""
+
+        def __init__(self, llm_response, is_final=False):
+            self.llm_response = llm_response
+            self.is_final = is_final
+
+    async def _stream_single() -> AsyncIterator[LLMStreamResponse]:
+        """Async generator that yields streaming chunks and final response."""
+        async with direct.model_request_stream(model=MODEL, messages=messages) as stream:
+            async for chunk in stream:
+                yield LLMStreamResponse(llm_response=chunk, is_final=False)
+
+            # Yield the final response after streaming completes
+            response = stream.get()
+            yield LLMStreamResponse(llm_response=response, is_final=True)
+
+    async def _buffer_stream() -> LLMStreamResponse:
+        """Consumer that returns early when it gets a ModelResponse.
+
+        This early return causes the generator to be cleaned up in a different
+        async context than where it was created, triggering the context issue.
+        """
+        async for event in _stream_single():
+            if isinstance(event.llm_response, ModelResponse):
+                # Early return - generator cleanup happens in different context
+                return event
+        raise RuntimeError("No ModelResponse received")
+
+    start = time.time()
+
+    # This should NOT raise ValueError about "different Context"
+    result = await _buffer_stream()
+    end = time.time()
+
+    # Verify we got the final response
+    assert isinstance(result.llm_response, ModelResponse)
+    assert result.is_final
+
+    # Check spans - should have created a span despite early generator cleanup
+    spans = memory_logger.pop()
+    assert len(spans) >= 1, "Should have at least one span even with early return"
+
+    span = spans[0]
+    assert span["span_attributes"]["type"] == SpanTypeAttribute.LLM
+    assert span["span_attributes"]["name"] == "model_request_stream"
+    assert "start" in span["metrics"]
+    assert span["metrics"]["start"] >= start
+    # "end" may not be present if span was terminated early, but if present it should be valid
+    if "end" in span["metrics"]:
+        assert span["metrics"]["end"] <= end
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_agent_stream_buffer_pattern_early_return(memory_logger):
+    """Test the _stream_single/_buffer_stream pattern with agent.run_stream().
+
+    This tests the same buffer/stream pattern but with the high-level Agent API
+    to ensure _AgentStreamWrapper also handles context cleanup correctly.
+
+    Pattern:
+    1. An async generator wraps agent.run_stream() and yields events + final result
+    2. A consumer returns early when it sees the final result
+    3. Generator cleanup happens in a different context
+
+    This verifies both _AgentStreamWrapper and _DirectStreamWrapper handle
+    task context changes correctly.
+    """
+    from collections.abc import AsyncIterator
+
+    assert not memory_logger.pop()
+
+    agent = Agent(MODEL, model_settings=ModelSettings(max_tokens=100))
+
+    class StreamEvent:
+        """Wrapper for stream events."""
+
+        def __init__(self, data, is_final=False):
+            self.data = data
+            self.is_final = is_final
+
+    async def _agent_stream_wrapper() -> AsyncIterator[StreamEvent]:
+        """Async generator that wraps agent streaming."""
+        async with agent.run_stream("Count from 1 to 5") as result:
+            # Yield text chunks
+            async for text in result.stream_text(delta=True):
+                yield StreamEvent(data=text, is_final=False)
+
+            # Yield final result after streaming
+            # Note: We can't call result.output here as it's consumed during streaming,
+            # so we yield a marker for the final event
+            yield StreamEvent(data="FINAL", is_final=True)
+
+    async def _consume_until_final() -> StreamEvent:
+        """Consumer that returns early when it sees final event.
+
+        This early return causes generator cleanup in different context.
+        """
+        async for event in _agent_stream_wrapper():
+            if event.is_final:
+                # Early return - generator cleanup in different context
+                return event
+        raise RuntimeError("No final event received")
+
+    start = time.time()
+
+    # This should NOT raise ValueError about "different Context"
+    result = await _consume_until_final()
+    end = time.time()
+
+    # Verify we got the final event
+    assert result.is_final
+    assert result.data == "FINAL"
+
+    # Check spans - should have created spans despite early generator cleanup
+    spans = memory_logger.pop()
+    assert len(spans) >= 1, "Should have at least one span"
+
+    # Find agent_run_stream span
+    agent_span = next((s for s in spans if "agent_run_stream" in s["span_attributes"]["name"]), None)
+    assert agent_span is not None, "agent_run_stream span should exist"
+    assert agent_span["span_attributes"]["type"] == SpanTypeAttribute.LLM
+    assert "start" in agent_span["metrics"]
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
 async def test_agent_with_binary_content(memory_logger):
     """Test that agents with binary content (images) work correctly.
 
-    Note: Full binary content serialization with attachment references is a complex feature.
-    This test verifies basic functionality - that binary content doesn't break tracing.
+    Verifies that BinaryContent is properly converted to Braintrust attachments
+    in both the agent_run span (parent) and chat span (child).
     """
+    from braintrust.logger import Attachment
     from pydantic_ai.models.function import BinaryContent
 
     assert not memory_logger.pop()
 
-    # Use a small test image
+    # Use a small test image (1x1 PNG)
     image_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
 
     agent = Agent(MODEL, model_settings=ModelSettings(max_tokens=50))
@@ -1370,20 +1554,184 @@ async def test_agent_with_binary_content(memory_logger):
     assert result.output
     assert isinstance(result.output, str)
 
-    # Check spans - verify basic tracing works
+    # Check spans - should have both agent_run and chat spans
     spans = memory_logger.pop()
-    assert len(spans) >= 1, f"Expected at least 1 span, got {len(spans)}"
+    assert len(spans) >= 2, f"Expected at least 2 spans (agent_run + chat), got {len(spans)}"
 
-    # Find agent_run span
+    # Find agent_run span (parent)
     agent_span = next((s for s in spans if "agent_run" in s["span_attributes"]["name"] and "chat" not in s["span_attributes"]["name"]), None)
     assert agent_span is not None, "agent_run span not found"
+
+    # Find chat span (child)
+    chat_span = next((s for s in spans if "chat" in s["span_attributes"]["name"]), None)
+    assert chat_span is not None, "chat span not found"
 
     # Verify basic span structure
     assert agent_span["span_attributes"]["type"] == SpanTypeAttribute.LLM
     assert agent_span["metadata"]["model"] == "gpt-4o-mini"
     _assert_metrics_are_valid(agent_span["metrics"], start, end)
 
-    # TODO: Future enhancement - add full binary content serialization with attachment references
+    # CRITICAL: Verify that BOTH spans properly serialize BinaryContent to attachments
+    def has_attachment_in_input(span_input):
+        """Check if span input contains a Braintrust Attachment object."""
+        if not span_input:
+            return False
+
+        def check_item(item):
+            """Recursively check an item for attachments."""
+            if isinstance(item, dict):
+                if item.get("type") == "binary" and isinstance(item.get("attachment"), Attachment):
+                    return True
+                # Check nested content field (for UserPromptPart-like structures)
+                if "content" in item:
+                    content = item["content"]
+                    if isinstance(content, list):
+                        for sub_item in content:
+                            if check_item(sub_item):
+                                return True
+            return False
+
+        # Check user_prompt (agent_run span)
+        if "user_prompt" in span_input:
+            user_prompt = span_input["user_prompt"]
+            if isinstance(user_prompt, list):
+                for item in user_prompt:
+                    if check_item(item):
+                        return True
+
+        # Check messages (chat span)
+        if "messages" in span_input:
+            messages = span_input["messages"]
+            if isinstance(messages, list):
+                for msg in messages:
+                    if isinstance(msg, dict) and "parts" in msg:
+                        parts = msg["parts"]
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if check_item(part):
+                                    return True
+
+        return False
+
+    # Verify agent_run span has attachment
+    agent_has_attachment = has_attachment_in_input(agent_span.get("input", {}))
+    assert agent_has_attachment, (
+        "agent_run span should have BinaryContent converted to Braintrust Attachment. "
+        f"Input: {agent_span.get('input', {})}"
+    )
+
+    # Verify chat span has attachment (this is the key test for the bug)
+    chat_has_attachment = has_attachment_in_input(chat_span.get("input", {}))
+    assert chat_has_attachment, (
+        "chat span should have BinaryContent converted to Braintrust Attachment. "
+        "The child span should process attachments the same way as the parent. "
+        f"Input: {chat_span.get('input', {})}"
+    )
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_agent_with_document_input(memory_logger):
+    """Test that agents with document input (PDF) properly serialize attachments.
+
+    This specifically tests the scenario from test_document_input in the golden tests,
+    verifying that both agent_run and chat spans convert BinaryContent to Braintrust
+    attachments for document files like PDFs.
+    """
+    from braintrust.logger import Attachment
+    from pydantic_ai.models.function import BinaryContent
+
+    assert not memory_logger.pop()
+
+    # Create a minimal PDF (this is a valid but minimal PDF structure)
+    pdf_data = b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R>>endobj 4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 100 700 Td (Test Document) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\n0000000115 00000 n\n0000000214 00000 n\ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n307\n%%EOF'
+
+    agent = Agent(MODEL, model_settings=ModelSettings(max_tokens=150))
+
+    start = time.time()
+    result = await agent.run(
+        [
+            BinaryContent(data=pdf_data, media_type="application/pdf"),
+            "What is in this document?",
+        ]
+    )
+    end = time.time()
+
+    assert result.output
+    assert isinstance(result.output, str)
+
+    # Check spans
+    spans = memory_logger.pop()
+    assert len(spans) >= 2, f"Expected at least 2 spans (agent_run + chat), got {len(spans)}"
+
+    # Find spans
+    agent_span = next((s for s in spans if "agent_run" in s["span_attributes"]["name"] and "chat" not in s["span_attributes"]["name"]), None)
+    chat_span = next((s for s in spans if "chat" in s["span_attributes"]["name"]), None)
+
+    assert agent_span is not None, "agent_run span not found"
+    assert chat_span is not None, "chat span not found"
+
+    # Helper to check for PDF attachment
+    def has_pdf_attachment(span_input):
+        """Check if span input contains a PDF Braintrust Attachment."""
+        if not span_input:
+            return False
+
+        def check_item(item):
+            """Recursively check an item for PDF attachments."""
+            if isinstance(item, dict):
+                if item.get("type") == "binary" and item.get("media_type") == "application/pdf":
+                    attachment = item.get("attachment")
+                    if isinstance(attachment, Attachment):
+                        if attachment._reference.get("content_type") == "application/pdf":
+                            return True
+                # Check nested content field (for UserPromptPart-like structures)
+                if "content" in item:
+                    content = item["content"]
+                    if isinstance(content, list):
+                        for sub_item in content:
+                            if check_item(sub_item):
+                                return True
+            return False
+
+        # Check user_prompt (agent_run span)
+        if "user_prompt" in span_input:
+            user_prompt = span_input["user_prompt"]
+            if isinstance(user_prompt, list):
+                for item in user_prompt:
+                    if check_item(item):
+                        return True
+
+        # Check messages (chat span)
+        if "messages" in span_input:
+            messages = span_input["messages"]
+            if isinstance(messages, list):
+                for msg in messages:
+                    if isinstance(msg, dict) and "parts" in msg:
+                        parts = msg["parts"]
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if check_item(part):
+                                    return True
+
+        return False
+
+    # Verify agent_run span has PDF attachment
+    assert has_pdf_attachment(agent_span.get("input", {})), (
+        "agent_run span should have PDF BinaryContent converted to Braintrust Attachment"
+    )
+
+    # Verify chat span has PDF attachment (critical for document input)
+    assert has_pdf_attachment(chat_span.get("input", {})), (
+        "chat span should have PDF BinaryContent converted to Braintrust Attachment. "
+        "This ensures documents are properly traced in the low-level model call. "
+        f"Chat span input: {chat_span.get('input', {})}"
+    )
+
+    # Verify metrics
+    _assert_metrics_are_valid(agent_span["metrics"], start, end)
+    _assert_metrics_are_valid(chat_span["metrics"], start, end)
+
 
 @pytest.mark.vcr
 @pytest.mark.asyncio
@@ -1459,6 +1807,7 @@ async def test_agent_with_tool_execution(memory_logger):
     assert "toolsets" not in agent_span["metadata"], "toolsets should NOT be in metadata"
 
 
+@pytest.mark.vcr
 def test_tool_execution_creates_spans(memory_logger):
     """Test that executing tools with agents works and creates traced spans.
 
@@ -1786,3 +2135,451 @@ async def test_agent_run_stream_structured_output(memory_logger):
     assert chat_span["span_parents"] == [agent_span["span_id"]], "chat span should be nested under agent_run_stream"
     assert chat_span["metadata"]["model"] == "gpt-4o-mini"
     _assert_metrics_are_valid(chat_span["metrics"], start, end)
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_model_class_span_names(memory_logger):
+    """Test that model class spans have proper names.
+
+    Verifies that the nested chat span from the model class wrapper has a
+    meaningful name (either the model name or class name), not a misleading
+    string like 'log'.
+
+    This test ensures that when model_name is None, we fall back to the
+    class name (e.g., 'OpenAIChatModel') rather than str(instance) which
+    could return unexpected values.
+    """
+    assert not memory_logger.pop()
+
+    agent = Agent(MODEL, model_settings=ModelSettings(max_tokens=50))
+
+    start = time.time()
+    result = await agent.run("What is 2+2?")
+    end = time.time()
+
+    assert result.output
+
+    # Check spans
+    spans = memory_logger.pop()
+    assert len(spans) == 2, f"Expected 2 spans (agent_run + chat), got {len(spans)}"
+
+    # Find chat span (the nested model class span)
+    chat_span = next((s for s in spans if "chat" in s["span_attributes"]["name"]), None)
+    assert chat_span is not None, "chat span not found"
+
+    span_name = chat_span["span_attributes"]["name"]
+
+    # Verify the span name is meaningful
+    # It should be either "chat <model_name>" or "chat <ClassName>"
+    # but NOT "chat log" or other misleading names
+    assert span_name.startswith("chat "), f"Chat span should start with 'chat ', got: {span_name}"
+
+    # Extract the model/class identifier part after "chat "
+    identifier = span_name[5:]  # Skip "chat "
+
+    # Should not be empty or misleading values
+    assert identifier, "Chat span should have a model name or class name after 'chat '"
+    assert identifier != "log", "Chat span should not be named 'log' - should use model name or class name"
+    assert len(identifier) > 2, f"Chat span identifier seems too short: {identifier}"
+
+    # Common valid patterns:
+    # - "chat gpt-4o-mini" (model name extracted)
+    # - "chat OpenAIChatModel" (class name fallback)
+    # - "chat gpt-4o" (model name)
+    valid_patterns = [
+        "gpt-" in identifier,  # OpenAI model names
+        "claude" in identifier.lower(),  # Anthropic models
+        "Model" in identifier,  # Class name fallback (e.g., OpenAIChatModel)
+        "-" in identifier,  # Model names typically have hyphens
+    ]
+
+    assert any(valid_patterns), (
+        f"Chat span name '{span_name}' doesn't match expected patterns. "
+        f"Should contain model name (e.g., 'gpt-4o-mini') or class name (e.g., 'OpenAIChatModel')"
+    )
+
+    # Verify span has proper structure
+    assert chat_span["span_attributes"]["type"] == SpanTypeAttribute.LLM
+    assert chat_span["metadata"]["model"] == "gpt-4o-mini"
+    _assert_metrics_are_valid(chat_span["metrics"], start, end)
+
+
+def test_serialize_content_part_with_binary_content():
+    """Unit test to verify _serialize_content_part handles BinaryContent correctly.
+
+    This tests the direct serialization of BinaryContent objects and verifies
+    they are converted to Braintrust Attachment objects.
+    """
+    from braintrust.logger import Attachment
+    from braintrust.wrappers.pydantic_ai import _serialize_content_part
+    from pydantic_ai.models.function import BinaryContent
+
+    # Test 1: Direct BinaryContent serialization
+    binary = BinaryContent(data=b"test pdf data", media_type="application/pdf")
+    result = _serialize_content_part(binary)
+
+    assert result is not None, "Should serialize BinaryContent"
+    assert result["type"] == "binary", "Should have type 'binary'"
+    assert result["media_type"] == "application/pdf", "Should preserve media_type"
+    assert isinstance(result["attachment"], Attachment), "Should convert to Braintrust Attachment"
+
+    # Verify attachment has correct content_type
+    assert result["attachment"]._reference["content_type"] == "application/pdf"
+
+
+def test_serialize_content_part_with_user_prompt_part():
+    """Unit test to verify _serialize_content_part handles UserPromptPart with nested BinaryContent.
+
+    This is the critical test for the bug: when a UserPromptPart has a content list
+    containing BinaryContent, we need to recursively serialize the content items
+    so that BinaryContent is converted to Braintrust Attachment.
+    """
+    from braintrust.logger import Attachment
+    from braintrust.wrappers.pydantic_ai import _serialize_content_part
+    from pydantic_ai.messages import UserPromptPart
+    from pydantic_ai.models.function import BinaryContent
+
+    # Create a UserPromptPart with mixed content (BinaryContent + string)
+    pdf_data = b"%PDF-1.4 test document content"
+    binary = BinaryContent(data=pdf_data, media_type="application/pdf")
+    user_prompt_part = UserPromptPart(content=[binary, "What is in this document?"])
+
+    # Serialize the UserPromptPart
+    result = _serialize_content_part(user_prompt_part)
+
+    # Verify the result is a dict with serialized content
+    assert isinstance(result, dict), f"Should return dict, got {type(result)}"
+    assert "content" in result, f"Should have 'content' key. Keys: {result.keys()}"
+
+    content = result["content"]
+    assert isinstance(content, list), f"Content should be a list, got {type(content)}"
+    assert len(content) == 2, f"Should have 2 content items, got {len(content)}"
+
+    # CRITICAL: First item should be serialized BinaryContent with Attachment
+    binary_item = content[0]
+    assert isinstance(binary_item, dict), f"Binary item should be dict, got {type(binary_item)}"
+    assert binary_item.get("type") == "binary", (
+        f"Binary item should have type='binary'. Got: {binary_item}"
+    )
+    assert "attachment" in binary_item, (
+        f"Binary item should have 'attachment' key. Keys: {binary_item.keys()}"
+    )
+    assert isinstance(binary_item["attachment"], Attachment), (
+        f"Should be Braintrust Attachment, got {type(binary_item.get('attachment'))}"
+    )
+    assert binary_item["media_type"] == "application/pdf"
+
+    # Second item should be the string
+    assert content[1] == "What is in this document?"
+
+
+def test_serialize_messages_with_binary_content():
+    """Unit test to verify _serialize_messages handles ModelRequest with BinaryContent in parts.
+
+    This tests the full message serialization path that's used for the chat span,
+    ensuring that nested BinaryContent in UserPromptPart is properly converted.
+    """
+    from braintrust.logger import Attachment
+    from braintrust.wrappers.pydantic_ai import _serialize_messages
+    from pydantic_ai.messages import ModelRequest, UserPromptPart
+    from pydantic_ai.models.function import BinaryContent
+
+    # Create a ModelRequest with UserPromptPart containing BinaryContent
+    pdf_data = b"%PDF-1.4 test document content"
+    binary = BinaryContent(data=pdf_data, media_type="application/pdf")
+    user_prompt_part = UserPromptPart(content=[binary, "What is in this document?"])
+    model_request = ModelRequest(parts=[user_prompt_part])
+
+    # Serialize the messages
+    messages = [model_request]
+    result = _serialize_messages(messages)
+
+    # Verify structure
+    assert len(result) == 1, f"Should have 1 message, got {len(result)}"
+    msg = result[0]
+    assert "parts" in msg, f"Message should have 'parts'. Keys: {msg.keys()}"
+
+    parts = msg["parts"]
+    assert len(parts) == 1, f"Should have 1 part, got {len(parts)}"
+
+    part = parts[0]
+    assert isinstance(part, dict), f"Part should be dict, got {type(part)}"
+    assert "content" in part, f"Part should have 'content'. Keys: {part.keys()}"
+
+    content = part["content"]
+    assert isinstance(content, list), f"Content should be list, got {type(content)}"
+    assert len(content) == 2, f"Should have 2 content items, got {len(content)}"
+
+    # CRITICAL: First content item should be serialized BinaryContent with Attachment
+    binary_item = content[0]
+    assert isinstance(binary_item, dict), f"Binary item should be dict, got {type(binary_item)}"
+    assert binary_item.get("type") == "binary", (
+        f"Binary item should have type='binary'. Got: {binary_item}"
+    )
+    assert "attachment" in binary_item, (
+        f"Binary item should have 'attachment'. Keys: {binary_item.keys()}"
+    )
+    assert isinstance(binary_item["attachment"], Attachment), (
+        f"Should be Braintrust Attachment, got {type(binary_item.get('attachment'))}"
+    )
+    assert binary_item["media_type"] == "application/pdf"
+
+    # Second content item should be the string
+    assert content[1] == "What is in this document?"
+
+
+@pytest.mark.asyncio
+async def test_streaming_wrappers_capture_time_to_first_token():
+    """Unit test verifying all streaming wrappers capture time_to_first_token.
+
+    This test uses mocks to verify the internal wrapper logic without requiring
+    API calls. It ensures that _first_token_time is tracked correctly in:
+    - _AgentStreamWrapper (async agent streaming)
+    - _DirectStreamWrapper (async direct API streaming)
+    - _AgentStreamResultSyncProxy (sync agent streaming)
+    - _DirectStreamWrapperSync (sync direct API streaming)
+    """
+    from unittest.mock import AsyncMock, MagicMock, Mock
+
+    from braintrust.wrappers.pydantic_ai import (
+        _AgentStreamResultSyncProxy,
+        _AgentStreamWrapper,
+        _DirectStreamIteratorProxy,
+        _DirectStreamIteratorSyncProxy,
+        _DirectStreamWrapper,
+        _DirectStreamWrapperSync,
+        _StreamResultProxy,
+    )
+
+    # Test 1: _AgentStreamWrapper captures first token time
+    print("\n--- Testing _AgentStreamWrapper ---")
+
+    class MockStreamResult:
+        async def stream_text(self, delta=True):
+            for i in range(3):
+                await asyncio.sleep(0.001)
+                yield f"token{i} "
+
+        def usage(self):
+            usage_mock = Mock(input_tokens=50, output_tokens=20, total_tokens=70)
+            usage_mock.cache_read_tokens = None
+            usage_mock.cache_write_tokens = None
+            return usage_mock
+
+    mock_stream_result = MockStreamResult()
+    wrapper = _AgentStreamWrapper(
+        stream_cm=AsyncMock(),
+        span_name="test_stream",
+        input_data={"prompt": "test"},
+        metadata={"model": "gpt-4o"},
+    )
+
+    wrapper.span_cm = MagicMock()
+    wrapper.span_cm.__enter__ = MagicMock()
+    wrapper.start_time = time.time()
+    wrapper.stream_result = mock_stream_result
+
+    proxy = _StreamResultProxy(mock_stream_result, wrapper)
+
+    assert wrapper._first_token_time is None
+
+    chunk_count = 0
+    async for text in proxy.stream_text(delta=True):
+        chunk_count += 1
+        if chunk_count == 1:
+            assert wrapper._first_token_time is not None
+            assert wrapper._first_token_time > wrapper.start_time
+
+    assert chunk_count == 3
+    assert wrapper._first_token_time is not None
+    print("✓ _AgentStreamWrapper captures first token time")
+
+    # Test 2: _DirectStreamWrapper captures first token time
+    print("\n--- Testing _DirectStreamWrapper ---")
+
+    class MockStream:
+        def __init__(self):
+            self.chunks = []
+
+        async def __anext__(self):
+            if len(self.chunks) < 3:
+                await asyncio.sleep(0.001)
+                chunk = Mock(delta=Mock(content_delta=f"chunk{len(self.chunks)}"))
+                self.chunks.append(chunk)
+                return chunk
+            raise StopAsyncIteration
+
+        def __aiter__(self):
+            return self
+
+        def get(self):
+            usage_mock = Mock(input_tokens=50, output_tokens=20, total_tokens=70)
+            usage_mock.cache_read_tokens = None
+            usage_mock.cache_write_tokens = None
+            return Mock(usage=usage_mock)
+
+    mock_stream = MockStream()
+    direct_wrapper = _DirectStreamWrapper(
+        stream_cm=AsyncMock(),
+        span_name="test_direct_stream",
+        input_data={"messages": []},
+        metadata={"model": "gpt-4o"},
+    )
+
+    direct_wrapper.span_cm = MagicMock()
+    direct_wrapper.start_time = time.time()
+    direct_wrapper.stream = mock_stream
+
+    proxy = _DirectStreamIteratorProxy(mock_stream, direct_wrapper)
+
+    assert direct_wrapper._first_token_time is None
+
+    chunk_count = 0
+    async for chunk in proxy:
+        chunk_count += 1
+        if chunk_count == 1:
+            assert direct_wrapper._first_token_time is not None
+            assert direct_wrapper._first_token_time > direct_wrapper.start_time
+
+    assert chunk_count == 3
+    assert direct_wrapper._first_token_time is not None
+    print("✓ _DirectStreamWrapper captures first token time")
+
+    # Test 3: _AgentStreamResultSyncProxy captures first token time
+    print("\n--- Testing _AgentStreamResultSyncProxy ---")
+
+    class MockSyncStreamResult:
+        def stream_text(self, delta=True):
+            for i in range(3):
+                time.sleep(0.001)
+                yield f"token{i} "
+
+        def usage(self):
+            usage_mock = Mock(input_tokens=50, output_tokens=20, total_tokens=70)
+            usage_mock.cache_read_tokens = None
+            usage_mock.cache_write_tokens = None
+            return usage_mock
+
+    mock_sync_result = MockSyncStreamResult()
+    sync_proxy = _AgentStreamResultSyncProxy(
+        stream_result=mock_sync_result,
+        span=MagicMock(),
+        span_cm=MagicMock(),
+        start_time=time.time(),
+    )
+
+    assert sync_proxy._first_token_time is None
+
+    chunk_count = 0
+    for text in sync_proxy.stream_text(delta=True):
+        chunk_count += 1
+        if chunk_count == 1:
+            assert sync_proxy._first_token_time is not None
+
+    assert chunk_count == 3
+    assert sync_proxy._first_token_time is not None
+    print("✓ _AgentStreamResultSyncProxy captures first token time")
+
+    # Test 4: _DirectStreamWrapperSync captures first token time
+    print("\n--- Testing _DirectStreamWrapperSync ---")
+
+    class MockSyncStream:
+        def __init__(self):
+            self.chunks = []
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if len(self.chunks) < 3:
+                time.sleep(0.001)
+                chunk = Mock(delta=Mock(content_delta=f"chunk{len(self.chunks)}"))
+                self.chunks.append(chunk)
+                return chunk
+            raise StopIteration
+
+        def get(self):
+            usage_mock = Mock(input_tokens=50, output_tokens=20, total_tokens=70)
+            usage_mock.cache_read_tokens = None
+            usage_mock.cache_write_tokens = None
+            return Mock(usage=usage_mock)
+
+    mock_sync_stream = MockSyncStream()
+    sync_wrapper = _DirectStreamWrapperSync(
+        stream_cm=MagicMock(),
+        span_name="test_sync_stream",
+        input_data={"messages": []},
+        metadata={"model": "gpt-4o"},
+    )
+
+    sync_wrapper.start_time = time.time()
+    sync_wrapper.stream = mock_sync_stream
+
+    sync_proxy = _DirectStreamIteratorSyncProxy(mock_sync_stream, sync_wrapper)
+
+    assert sync_wrapper._first_token_time is None
+
+    chunk_count = 0
+    for chunk in sync_proxy:
+        chunk_count += 1
+        if chunk_count == 1:
+            assert sync_wrapper._first_token_time is not None
+            assert sync_wrapper._first_token_time > sync_wrapper.start_time
+
+    assert chunk_count == 3
+    assert sync_wrapper._first_token_time is not None
+    print("✓ _DirectStreamWrapperSync captures first token time")
+
+    print("\n✅ All streaming wrapper unit tests passed!")
+
+
+@pytest.mark.asyncio
+async def test_attachment_preserved_in_model_settings(memory_logger):
+    """Test that attachments in model_settings are preserved through serialization."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+
+    attachment = Attachment(data=b"config data", filename="config.txt", content_type="text/plain")
+
+    # Simulate model_settings with attachment
+    settings = {"temperature": 0.7, "context_file": attachment}
+
+    # Test bt_safe_deep_copy preserves attachment
+    copied = bt_safe_deep_copy(settings)
+    assert copied["context_file"] is attachment
+    assert copied["temperature"] == 0.7
+
+
+@pytest.mark.asyncio
+async def test_attachment_in_message_part(memory_logger):
+    """Test that attachment in custom message part is preserved."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+
+    attachment = Attachment(data=b"message data", filename="msg.txt", content_type="text/plain")
+
+    # Simulate message part with attachment
+    message_part = {"type": "file", "content": attachment, "metadata": {"source": "upload"}}
+
+    copied = bt_safe_deep_copy(message_part)
+    assert copied["content"] is attachment
+    assert copied["type"] == "file"
+
+
+@pytest.mark.asyncio
+async def test_attachment_in_result_data(memory_logger):
+    """Test that attachment in custom result data is preserved."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import ExternalAttachment
+
+    ext_attachment = ExternalAttachment(
+        url="s3://bucket/result.pdf", filename="result.pdf", content_type="application/pdf"
+    )
+
+    # Simulate agent result with attachment
+    result_data = {"success": True, "output_file": ext_attachment, "metadata": {"processed": True}}
+
+    copied = bt_safe_deep_copy(result_data)
+    assert copied["output_file"] is ext_attachment
+    assert copied["success"] is True
