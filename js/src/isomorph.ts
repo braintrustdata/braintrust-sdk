@@ -46,7 +46,7 @@ export interface Common {
   basename: (filepath: string) => string;
   writeln: (text: string) => void;
 
-  // Filesystem operations.
+  // Filesystem operations (async).
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
   mkdir?: (
@@ -61,6 +61,14 @@ export interface Common {
   stat?: (path: string) => Promise<any>; // type-erased
   statSync?: (path: string) => any; // type-erased
   homedir?: () => string;
+  tmpdir?: () => string;
+
+  // Filesystem operations (sync) - for span cache.
+  writeFileSync?: (filename: string, data: string) => void;
+  appendFileSync?: (filename: string, data: string) => void;
+  readFileSync?: (filename: string, encoding: string) => string;
+  unlinkSync?: (path: string) => void;
+  openFile?: (path: string, flags: string) => Promise<any>; // fs.promises.FileHandle, type-erased
 
   // zlib (promisified and type-erased).
   gunzip?: (data: any) => Promise<any>;

@@ -15,7 +15,11 @@ import {
   BatchSpanProcessor,
   type Span as SDKSpan,
 } from "@opentelemetry/sdk-trace-base";
-import { IDGenerator, type Span as BraintrustSpan } from "braintrust";
+import {
+  IDGenerator,
+  registerOtelFlush,
+  type Span as BraintrustSpan,
+} from "braintrust";
 
 interface ExportResult {
   code: number;
@@ -247,6 +251,8 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       } else {
         this.aiSpanProcessor = this.processor;
       }
+      // Register forceFlush callback with main SDK
+      registerOtelFlush(() => this.forceFlush());
       return;
     }
 
@@ -307,6 +313,10 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       // Use the batch processor directly without filtering (default behavior)
       this.aiSpanProcessor = this.processor;
     }
+
+    // Register forceFlush callback with main SDK so OTEL spans get flushed
+    // when scorers call trace.getSpans() and need to query BTQL
+    registerOtelFlush(() => this.forceFlush());
   }
 
   onStart(span: SDKSpan, parentContext: Context): void {
