@@ -2036,6 +2036,269 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(typeof doStreamSpan.metrics.time_to_first_token).toBe("number");
   });
 
+  test("streamText with Output.object logs schema correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const schema = z.object({
+      scratchpad: z.string().describe("A scratchpad for notes"),
+      answer: z.string().describe("The final answer"),
+    });
+
+    const outputSchema = ai.Output.object({
+      schema,
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const stream = wrappedAI.streamText({
+      model,
+      output: outputSchema,
+      messages: [
+        {
+          role: "user",
+          content: "What is 2+2? Think step by step in scratchpad.",
+        },
+      ],
+      maxOutputTokens: 200,
+    });
+
+    let fullText = "";
+    for await (const chunk of stream.textStream) {
+      fullText += chunk;
+    }
+
+    await stream.text;
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "streamText",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+
+    // Verify input contains the output schema
+    expect(streamTextSpan.input).toBeTruthy();
+    expect(streamTextSpan.input.output).toBeTruthy();
+
+    console.log({
+      response_format: streamTextSpan.input.output.response_format,
+    });
+
+    // The schema should be serialized with response_format containing the schema
+    // Note: The AI SDK may transform the output object, so we check for response_format
+    // which is set by our serialization, not the original responseFormat
+    expect(streamTextSpan.input.output.response_format).toBeTruthy();
+    // response_format should have type "json" and the schema
+    expect(streamTextSpan.input.output.response_format.type).toBe("json");
+    expect(streamTextSpan.input.output.response_format.schema).toBeTruthy();
+    expect(
+      streamTextSpan.input.output.response_format.schema.properties,
+    ).toHaveProperty("scratchpad");
+    expect(
+      streamTextSpan.input.output.response_format.schema.properties,
+    ).toHaveProperty("answer");
+  });
+
+  test("generateText with Output.object logs schema correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const schema = z.object({
+      result: z.number().describe("The numerical result"),
+    });
+
+    const outputSchema = ai.Output.object({
+      schema,
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      output: outputSchema,
+      messages: [
+        {
+          role: "user",
+          content: "What is 5 multiplied by 7?",
+        },
+      ],
+      maxOutputTokens: 100,
+    });
+
+    expect(result).toBeTruthy();
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateText",
+    );
+
+    expect(generateTextSpan).toBeTruthy();
+
+    // Verify input contains the output schema
+    expect(generateTextSpan.input).toBeTruthy();
+    expect(generateTextSpan.input.output).toBeTruthy();
+
+    // The schema should be serialized with response_format containing the schema
+    expect(generateTextSpan.input.output.response_format).toBeTruthy();
+    expect(generateTextSpan.input.output.response_format.type).toBe("json");
+    expect(generateTextSpan.input.output.response_format.schema).toBeTruthy();
+    expect(
+      generateTextSpan.input.output.response_format.schema.properties,
+    ).toHaveProperty("result");
+  });
+
+  test("streamText with Output.object using complex schema", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const schema = z.object({
+      analysis: z.string().describe("Analysis of the problem"),
+      result: z.number().describe("The numerical result"),
+      confidence: z.number().min(0).max(1).describe("Confidence in the result"),
+    });
+
+    const outputSchema = ai.Output.object({
+      schema,
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const stream = wrappedAI.streamText({
+      model,
+      output: outputSchema,
+      messages: [
+        {
+          role: "user",
+          content: "What is 7 * 8? Provide analysis, result, and confidence.",
+        },
+      ],
+      maxOutputTokens: 200,
+    });
+
+    for await (const chunk of stream.textStream) {
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "streamText",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.input.output).toBeTruthy();
+    expect(streamTextSpan.input.output.response_format).toBeTruthy();
+    expect(streamTextSpan.input.output.response_format.type).toBe("json");
+    expect(streamTextSpan.input.output.response_format.schema).toBeTruthy();
+
+    const schemaProps =
+      streamTextSpan.input.output.response_format.schema.properties;
+    expect(schemaProps).toHaveProperty("analysis");
+    expect(schemaProps).toHaveProperty("result");
+    expect(schemaProps).toHaveProperty("confidence");
+
+    expect(schemaProps.analysis.description).toBe("Analysis of the problem");
+    expect(schemaProps.result.description).toBe("The numerical result");
+    expect(schemaProps.confidence.description).toBe("Confidence in the result");
+  });
+
+  test("generateText with Output.object using nested schema", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const schema = z.object({
+      city: z.string().describe("The city name"),
+      country: z.string().describe("The country name"),
+      population: z.number().describe("Approximate population"),
+      coordinates: z.object({
+        latitude: z.number(),
+        longitude: z.number(),
+      }),
+    });
+
+    const outputSchema = ai.Output.object({
+      schema,
+    });
+
+    const model = openai(TEST_MODEL);
+
+    const result = await wrappedAI.generateText({
+      model,
+      output: outputSchema,
+      messages: [
+        {
+          role: "user",
+          content: "Tell me about Paris including coordinates",
+        },
+      ],
+      maxOutputTokens: 200,
+    });
+
+    expect(result).toBeTruthy();
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const generateTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "generateText",
+    );
+
+    expect(generateTextSpan).toBeTruthy();
+    expect(generateTextSpan.input.output).toBeTruthy();
+    expect(generateTextSpan.input.output.response_format).toBeTruthy();
+    expect(generateTextSpan.input.output.response_format.type).toBe("json");
+    expect(generateTextSpan.input.output.response_format.schema).toBeTruthy();
+
+    const schemaProps =
+      generateTextSpan.input.output.response_format.schema.properties;
+    expect(schemaProps).toHaveProperty("city");
+    expect(schemaProps).toHaveProperty("country");
+    expect(schemaProps).toHaveProperty("population");
+    expect(schemaProps).toHaveProperty("coordinates");
+
+    expect(schemaProps.coordinates.type).toBe("object");
+    expect(schemaProps.coordinates.properties).toHaveProperty("latitude");
+    expect(schemaProps.coordinates.properties).toHaveProperty("longitude");
+  });
+
+  test("streamText with Output.object and string model (gateway-style)", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const schema = z.object({
+      answer: z.string().describe("The answer"),
+      reasoning: z.string().describe("Step by step reasoning"),
+    });
+
+    const outputSchema = ai.Output.object({
+      schema,
+    });
+
+    const stream = wrappedAI.streamText({
+      model: "openai/gpt-4o-mini" as any,
+      output: outputSchema,
+      messages: [
+        {
+          role: "user",
+          content: "What is 5 + 5?",
+        },
+      ],
+      maxOutputTokens: 100,
+    });
+
+    for await (const chunk of stream.textStream) {
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "streamText",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.input.output).toBeTruthy();
+    expect(streamTextSpan.input.output.response_format).toBeTruthy();
+    expect(streamTextSpan.input.output.response_format.type).toBe("json");
+    expect(streamTextSpan.input.output.response_format.schema).toBeTruthy();
+    expect(
+      streamTextSpan.input.output.response_format.schema.properties,
+    ).toHaveProperty("answer");
+    expect(
+      streamTextSpan.input.output.response_format.schema.properties,
+    ).toHaveProperty("reasoning");
+  });
+
   test("model/provider separation from gateway-style model string", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 

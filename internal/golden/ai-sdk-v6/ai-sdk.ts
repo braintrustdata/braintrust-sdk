@@ -750,6 +750,53 @@ async function testStreamingStructuredOutput() {
   );
 }
 
+// Test 18b: streamText with Output.object (structured output via output parameter)
+async function testStreamTextWithOutputObject() {
+  return traced(
+    async () => {
+      const analysisSchema = z.object({
+        scratchpad: z.string().describe("Thinking through the problem"),
+        answer: z.string().describe("The final answer"),
+        confidence: z.number().describe("Confidence level from 0 to 1"),
+      });
+
+      const outputSchema = ai.Output.object({
+        schema: analysisSchema,
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        // streamText with output parameter
+        const streamResult = streamText({
+          model: model as LanguageModel,
+          output: outputSchema,
+          messages: [
+            {
+              role: "user",
+              content: "What is 15 * 23? Think through it step by step.",
+            },
+          ],
+        });
+
+        for await (const _ of streamResult.textStream) {
+        }
+
+        // Also test generateText with output parameter
+        await generateText({
+          model: model as LanguageModel,
+          output: outputSchema,
+          messages: [
+            {
+              role: "user",
+              content: "What is 42 + 58? Think through it step by step.",
+            },
+          ],
+        });
+      }
+    },
+    { name: "test_stream_text_with_output_object" },
+  );
+}
+
 // Test 19: Structured output with context (multi-turn with tools)
 async function testStructuredOutputWithContext() {
   return traced(
@@ -995,6 +1042,7 @@ async function runAllTests() {
     testStructuredOutputWithContext,
     testToolLoopAgentStructuredOutput,
     testReasoning,
+    testStreamTextWithOutputObject,
   ];
 
   for (const test of tests) {
