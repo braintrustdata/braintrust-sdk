@@ -261,17 +261,24 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  * @param options.projectName The project name containing the function.
  * @param options.slug The slug of the function to invoke.
  * @param options.version Optional version of the function to use. Defaults to latest.
+ * @param options.state Optional Braintrust state to use.
  * @returns A function that can be used as a task or scorer in Eval().
  */
 export function initFunction({
   projectName,
   slug,
   version,
+  state,
 }: {
   projectName: string;
   slug: string;
   version?: string;
+  state?: BraintrustState;
 }) {
+  // Disable span cache since remote function spans won't be in the local cache
+  const s = state ?? _internalGetGlobalState();
+  s?.spanCache?.disable();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
     return await invoke({

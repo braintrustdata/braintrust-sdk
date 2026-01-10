@@ -15,6 +15,7 @@ import { queue } from "async";
 import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
+import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
@@ -35,6 +36,7 @@ import {
   traced,
   withCurrent,
   withParent,
+  _internalGetGlobalState,
 } from "./logger";
 import type { ProgressReporter } from "./reporters/types";
 import { SimpleProgressReporter } from "./reporters/progress";
@@ -165,6 +167,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
+  trace?: Trace;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -705,6 +708,8 @@ export async function Eval<
     }
   } finally {
     progressReporter.stop();
+    // Clean up disk-based span cache after eval completes
+    evaluator.state?.spanCache?.dispose();
   }
 }
 
@@ -896,6 +901,18 @@ async function runEvaluatorInternal(
   })();
 
   progressReporter.start(evaluator.evalName, 0);
+
+  const experimentIdPromise: Promise<string | undefined> | undefined =
+    experiment
+      ? (async () => {
+          try {
+            return await experiment.id;
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined;
+
   const collectedResults: EvalResult<any, any, any, any>[] = [];
   const localScoreAccumulator: ScoreAccumulator | null = experiment ? null : {};
   let cancelled = false;
@@ -942,6 +959,34 @@ async function runEvaluatorInternal(
       };
 
       const callback = async (rootSpan: Span) => {
+        const state = evaluator.state ?? _internalGetGlobalState();
+        const ensureSpansFlushed = async () => {
+          // Flush native Braintrust spans
+          if (experiment) {
+            await flush({ state: experiment.loggingState });
+          } else if (state) {
+            await flush({ state });
+          } else {
+            await flush();
+          }
+
+          // Also flush OTEL spans if registered
+          if (state) {
+            await state.flushOtel();
+          }
+        };
+
+        const trace = state
+          ? new LocalTrace({
+              objectType: "experiment",
+              objectId: experimentIdPromise
+                ? (await experimentIdPromise) ?? ""
+                : "",
+              rootSpanId: rootSpan.rootSpanId,
+              ensureSpansFlushed,
+              state,
+            })
+          : undefined;
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
@@ -1009,6 +1054,7 @@ async function runEvaluatorInternal(
             expected: "expected" in datum ? datum.expected : undefined,
             metadata,
             output,
+            trace,
           };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
@@ -1085,6 +1131,9 @@ async function runEvaluatorInternal(
                   return results;
                 };
 
+                // Exclude trace from logged input since it contains internal state
+                // that shouldn't be serialized (spansFlushPromise, spansFlushed, etc.)
+                const { trace: _trace, ...scoringArgsForLogging } = scoringArgs;
                 const results = await rootSpan.traced(runScorer, {
                   name: scorerNames[score_idx],
                   spanAttributes: {
@@ -1094,7 +1143,7 @@ async function runEvaluatorInternal(
                   propagatedEvent: makeScorerPropagatedEvent(
                     await rootSpan.export(),
                   ),
-                  event: { input: scoringArgs },
+                  event: { input: scoringArgsForLogging },
                 });
                 return { kind: "score", value: results } as const;
               } catch (e) {
