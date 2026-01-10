@@ -18,6 +18,7 @@ describe("SpanCache (disk-based)", () => {
 
   beforeEach(() => {
     cache = new SpanCache();
+    cache.start(); // Start for testing (cache is disabled by default)
   });
 
   afterEach(() => {
@@ -157,7 +158,7 @@ describe("SpanCache (disk-based)", () => {
       expect(cache.size).toBe(0);
       expect(cache.has("root-1")).toBe(false);
 
-      // Should be able to write again after dispose
+      // Should be able to write again after dispose (cache is still enabled)
       cache.writeSync("root-2", "span-2", { span_id: "span-2" });
       expect(cache.size).toBe(1);
     });
@@ -186,9 +187,15 @@ describe("SpanCache (disk-based)", () => {
     });
 
     test("disabled getter should reflect disabled state", () => {
+      // Cache is enabled in beforeEach, so starts as not disabled
       expect(cache.disabled).toBe(false);
       cache.disable();
       expect(cache.disabled).toBe(true);
+
+      // Creating a new cache without enable() should be disabled by default
+      const newCache = new SpanCache();
+      expect(newCache.disabled).toBe(true);
+      newCache.dispose();
     });
 
     test("should be disabled from constructor option", () => {
@@ -201,6 +208,76 @@ describe("SpanCache (disk-based)", () => {
       expect(disabledCache.getByRootSpanId("root-1")).toBeUndefined();
 
       disabledCache.dispose();
+    });
+  });
+
+  describe("start/stop lifecycle", () => {
+    test("stop() allows start() to work again", () => {
+      const freshCache = new SpanCache();
+
+      // Initially disabled by default
+      expect(freshCache.disabled).toBe(true);
+
+      // Start for first "eval"
+      freshCache.start();
+      expect(freshCache.disabled).toBe(false);
+      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(freshCache.size).toBe(1);
+
+      // Stop after first "eval" (like calling stop() in finally block)
+      freshCache.dispose();
+      freshCache.stop();
+      expect(freshCache.disabled).toBe(true);
+
+      // Start for second "eval" - should work!
+      freshCache.start();
+      expect(freshCache.disabled).toBe(false);
+      freshCache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      expect(freshCache.size).toBe(1);
+
+      freshCache.dispose();
+    });
+
+    test("disable() prevents start() from working", () => {
+      const freshCache = new SpanCache();
+
+      // Simulate OTEL/initFunction calling disable()
+      freshCache.disable();
+      expect(freshCache.disabled).toBe(true);
+
+      // start() should be a no-op after disable()
+      freshCache.start();
+      expect(freshCache.disabled).toBe(true);
+
+      // Writes should still be no-ops
+      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(freshCache.size).toBe(0);
+
+      freshCache.dispose();
+    });
+
+    test("disable() during active cache prevents future start()", () => {
+      const freshCache = new SpanCache();
+
+      // Start for "eval"
+      freshCache.start();
+      expect(freshCache.disabled).toBe(false);
+      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      expect(freshCache.size).toBe(1);
+
+      // Simulate OTEL being registered mid-eval
+      freshCache.disable();
+      expect(freshCache.disabled).toBe(true);
+
+      // Stop after eval
+      freshCache.dispose();
+      freshCache.stop();
+
+      // Future start() should be blocked because disable() was called
+      freshCache.start();
+      expect(freshCache.disabled).toBe(true);
+
+      freshCache.dispose();
     });
   });
 });

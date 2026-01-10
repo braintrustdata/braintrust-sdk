@@ -61,14 +61,18 @@ export class SpanCache {
   private fileHandle: any | null = null; // type-erased fs.promises.FileHandle
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  // Tracks whether the cache was explicitly disabled (via constructor or disable())
   private _explicitlyDisabled: boolean;
+  // Tracks whether the cache has been enabled (for evals only)
+  private _enabled: boolean = false;
 
   // Small in-memory index tracking which rootSpanIds have data
   private rootSpanIndex: Set<string> = new Set();
 
   constructor(options?: { disabled?: boolean }) {
-    // Only track explicit disable from constructor - platform check is done at runtime
+    // Track if user explicitly disabled the cache
     this._explicitlyDisabled = options?.disabled ?? false;
+    // Cache is disabled by default until enable() is called (e.g., during Eval)
     // Initialization is lazy - file is created on first write
   }
 
@@ -80,8 +84,29 @@ export class SpanCache {
     this._explicitlyDisabled = true;
   }
 
+  /**
+   * Start caching spans for use during evaluations.
+   * This only starts caching if the cache wasn't permanently disabled.
+   * Called by Eval() to turn on caching for the duration of the eval.
+   */
+  start(): void {
+    if (!this._explicitlyDisabled) {
+      this._enabled = true;
+    }
+  }
+
+  /**
+   * Stop caching spans and return to the default disabled state.
+   * Unlike disable(), this allows start() to work again for future evals.
+   * Called after an eval completes to return to the default state.
+   */
+  stop(): void {
+    this._enabled = false;
+  }
+
   get disabled(): boolean {
-    return this._explicitlyDisabled || !canUseSpanCache();
+    // Disabled if: explicitly disabled, not enabled, or platform doesn't support it
+    return this._explicitlyDisabled || !this._enabled || !canUseSpanCache();
   }
 
   private async ensureInitialized(): Promise<void> {

@@ -16,8 +16,8 @@ describe("initFunction", () => {
   test("should disable span cache when called", async () => {
     const state = _internalGetGlobalState();
 
-    // Cache should not be disabled initially
-    expect(state.spanCache.disabled).toBe(false);
+    // Cache should be disabled by default (it's only enabled during evals)
+    expect(state.spanCache.disabled).toBe(true);
 
     // Call initFunction
     initFunction({
@@ -25,7 +25,7 @@ describe("initFunction", () => {
       slug: "test-function",
     });
 
-    // Cache should now be disabled
+    // Cache should still be disabled (initFunction also explicitly disables it)
     expect(state.spanCache.disabled).toBe(true);
   });
 

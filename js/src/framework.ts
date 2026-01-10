@@ -617,6 +617,8 @@ export async function Eval<
   }
 
   const resolvedReporter = options.reporter || defaultReporter;
+  // Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
+  (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
   try {
     const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
       evaluator.data,
@@ -708,8 +710,10 @@ export async function Eval<
     }
   } finally {
     progressReporter.stop();
-    // Clean up disk-based span cache after eval completes
-    evaluator.state?.spanCache?.dispose();
+    // Clean up disk-based span cache after eval completes and stop caching
+    const spanCache = (evaluator.state ?? _internalGetGlobalState())?.spanCache;
+    spanCache?.dispose();
+    spanCache?.stop();
   }
 }
 
