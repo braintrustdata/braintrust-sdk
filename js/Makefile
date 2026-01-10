@@ -12,14 +12,16 @@ help:
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
-	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests"
+	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests (v5 + v6)"
+	@echo "  make test-ai-sdk-v5     - Run AI SDK v5 wrapper tests"
+	@echo "  make test-ai-sdk-v6     - Run AI SDK v6 wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make test-api-compat    - Run API compatibility tests"
 	@echo "  make test-smoke         - Run smoke tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -51,8 +53,13 @@ test-google-genai-latest:
 # AI SDK testing
 # -------------------------------------------------------------------------------------------------
 
-test-ai-sdk:
-	cd src/wrappers/ai-sdk && pnpm install && pnpm test
+test-ai-sdk: test-ai-sdk-v5 test-ai-sdk-v6
+
+test-ai-sdk-v5:
+	cd src/wrappers/ai-sdk/tests/v5 && pnpm install --ignore-workspace && pnpm test
+
+test-ai-sdk-v6:
+	cd src/wrappers/ai-sdk/tests/v6 && pnpm install --ignore-workspace && pnpm test
 
 # -------------------------------------------------------------------------------------------------
 # Claude Agent SDK testing
@@ -102,10 +109,10 @@ test-api-compat:
 	pnpm test:api-compat
 
 # Test everything
-test: test-core test-openai test-anthropic test-google-genai
+test: test-core test-openai test-anthropic test-google-genai test-ai-sdk
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk
 
 
 prune:
