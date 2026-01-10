@@ -373,7 +373,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       runId,
       parentRunId,
       name: runName ?? tool.name ?? tool.id.at(-1)?.toString() ?? "Tool",
-      type: "llm",
+      type: "tool",
       event: {
         input: safeJsonParse(input),
         tags,
