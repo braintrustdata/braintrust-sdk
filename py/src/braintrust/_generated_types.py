@@ -421,6 +421,10 @@ class Dataset(TypedDict):
     """
     User-controlled metadata about the dataset
     """
+    url_slug: str
+    """
+    URL slug for the dataset. used to construct dataset URLs
+    """
 
 
 class DatasetEventMetadata(TypedDict):
@@ -467,6 +471,28 @@ class EnvVar(TypedDict):
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
+
+
+class EvalStatusPageConfig(TypedDict):
+    score_columns: NotRequired[Sequence[str] | None]
+    """
+    The score columns to display on the page
+    """
+    metric_columns: NotRequired[Sequence[str] | None]
+    """
+    The metric columns to display on the page
+    """
+    grouping_field: NotRequired[str | None]
+    """
+    The metadata field to use for grouping experiments (model)
+    """
+    api_key: NotRequired[str | None]
+    """
+    The API key used for fetching experiment data
+    """
+
+
+EvalStatusPageTheme = Literal['light', 'dark']
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -672,7 +698,7 @@ class FunctionIdFunctionId4(TypedDict):
 FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet']
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet']
 
 
 FunctionOutputType = Literal['completion', 'score', 'any']
@@ -2150,7 +2176,7 @@ class DatasetEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     root_span_id: str
     """
@@ -2169,6 +2195,43 @@ class DatasetEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+
+
+class EvalStatusPage(TypedDict):
+    id: str
+    """
+    Unique identifier for the eval status page
+    """
+    project_id: str
+    """
+    Unique identifier for the project that the eval status page belongs under
+    """
+    user_id: NotRequired[str | None]
+    """
+    Identifies the user who created the eval status page
+    """
+    created: NotRequired[str | None]
+    """
+    Date of eval status page creation
+    """
+    deleted_at: NotRequired[str | None]
+    """
+    Date of eval status page deletion, or null if the eval status page is still active
+    """
+    name: str
+    """
+    Name of the eval status page
+    """
+    description: NotRequired[str | None]
+    """
+    Textual description of the eval status page
+    """
+    logo_url: NotRequired[str | None]
+    """
+    URL of the logo to display on the page
+    """
+    theme: EvalStatusPageTheme
+    config: EvalStatusPageConfig
 
 
 class Experiment(TypedDict):
@@ -2543,7 +2606,7 @@ class ExperimentEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
@@ -2673,7 +2736,7 @@ class ProjectLogsEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
@@ -2776,7 +2839,6 @@ class View(TypedDict):
         'tools',
         'scorers',
         'logs',
-        'agents',
         'monitor',
         'for_review',
     ]

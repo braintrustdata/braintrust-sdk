@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 997381eb601f7b13ae1161dcc6b6ef7ae159f2c8) -- do not modify
+// Auto-generated file (internal git SHA 99aa7ca3ad55fc001a828d506f7732173c617890) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -425,6 +425,7 @@ export const Dataset = z.object({
   metadata: z
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
+  url_slug: z.string(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -489,6 +490,30 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalStatusPageTheme = z.enum(["light", "dark"]);
+export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
+export const EvalStatusPageConfig = z
+  .object({
+    score_columns: z.union([z.array(z.string()), z.null()]),
+    metric_columns: z.union([z.array(z.string()), z.null()]),
+    grouping_field: z.union([z.string(), z.null()]),
+    api_key: z.union([z.string(), z.null()]),
+  })
+  .partial();
+export type EvalStatusPageConfigType = z.infer<typeof EvalStatusPageConfig>;
+export const EvalStatusPage = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  logo_url: z.union([z.string(), z.null()]).optional(),
+  theme: EvalStatusPageTheme,
+  config: EvalStatusPageConfig,
+});
+export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -1074,7 +1099,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
-  "agent",
+  "workflow",
   "custom_view",
   "preprocessor",
   "facet",
@@ -1751,7 +1776,6 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
     "monitor",
     "for_review",
   ]),

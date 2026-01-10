@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 997381eb601f7b13ae1161dcc6b6ef7ae159f2c8) -- do not modify"""
+"""Auto-generated file (internal git SHA 99aa7ca3ad55fc001a828d506f7732173c617890) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -28,6 +28,9 @@ from ._generated_types import (
     Dataset,
     DatasetEvent,
     EnvVar,
+    EvalStatusPage,
+    EvalStatusPageConfig,
+    EvalStatusPageTheme,
     Experiment,
     ExperimentEvent,
     ExtendedSavedFunctionId,
@@ -135,6 +138,9 @@ __all__ = [
     "Dataset",
     "DatasetEvent",
     "EnvVar",
+    "EvalStatusPage",
+    "EvalStatusPageConfig",
+    "EvalStatusPageTheme",
     "Experiment",
     "ExperimentEvent",
     "ExtendedSavedFunctionId",
