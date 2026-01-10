@@ -1,4 +1,5 @@
 import inspect
+import json
 import sys
 import threading
 import urllib.parse
@@ -29,11 +30,16 @@ def coalesce(*args):
     return None
 
 
+# Fields that automatically use set-union merge semantics (unless in merge_paths).
+_SET_UNION_FIELDS = frozenset(["tags"])
+
+
 def merge_dicts_with_paths(
-    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str]]
+    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str, ...]]
 ) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
-    merge_paths."""
+    merge_paths. For fields in _SET_UNION_FIELDS (like "tags"), arrays are merged as sets (union)
+    unless the field is explicitly listed in merge_paths (opt-out to replacement)."""
 
     if not isinstance(merge_into, dict):
         raise ValueError("merge_into must be a dictionary")
@@ -43,7 +49,22 @@ def merge_dicts_with_paths(
     for k, merge_from_v in merge_from.items():
         full_path = path + (k,)
         merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
+
+        # Check if this field should use set-union merge (e.g., "tags" at top level)
+        is_set_union_field = len(path) == 0 and k in _SET_UNION_FIELDS and full_path not in merge_paths
+
+        if is_set_union_field and isinstance(merge_into_v, list) and isinstance(merge_from_v, list):
+            # Set-union merge: combine arrays, deduplicate using JSON for objects
+            seen: set[str] = set()
+            combined = []
+            for item in merge_into_v + list(merge_from_v):
+                # Use JSON serialization for consistent object comparison
+                item_key = json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item)
+                if item_key not in seen:
+                    seen.add(item_key)
+                    combined.append(item)
+            merge_into[k] = combined
+        elif isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
             merge_dicts_with_paths(merge_into_v, merge_from_v, full_path, merge_paths)
         else:
             merge_into[k] = merge_from_v

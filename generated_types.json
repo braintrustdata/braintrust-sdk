@@ -2890,7 +2890,6 @@
           "tool",
           "scorer",
           "task",
-          "agent",
           "custom_view",
           "preprocessor",
           "facet"
@@ -6862,7 +6861,6 @@
               "tools",
               "scorers",
               "logs",
-              "agents",
               "monitor",
               "for_review"
             ],

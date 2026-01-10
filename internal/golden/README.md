@@ -8,6 +8,7 @@ These test files validate the Braintrust SDK's integration with different AI pro
 - `openai.ts` - Tests for OpenAI integration
 - `google_genai.py` - Tests for Google Generative AI integration
 - `ai-sdk.ts` - Tests for AI SDK (Vercel) integration across multiple versions
+- `langchain.ts` - Tests for LangChain.js integration across multiple versions
 
 Each test suite validates:
 
@@ -33,6 +34,29 @@ Additionally, OTEL (OpenTelemetry) tests are available for certain versions. OTE
 
 - `ai-sdk-v5-otel/` - AI SDK v5.x with OTEL integration
 - `ai-sdk-v6-otel/` - AI SDK v6.x with OTEL integration
+
+## LangChain.js Version Testing
+
+The `langchain.ts` test file can be run against multiple versions of LangChain.js to ensure compatibility across versions. Each version has its own directory with compatible packages:
+
+- `langchain-js-v0/` - LangChain.js v0.3.x with `@langchain/core` 0.3.x
+- `langchain-js-v1/` - LangChain.js v1.x with `@langchain/core` 1.x
+
+### Running LangChain Version Tests
+
+```bash
+# Install dependencies for a specific version
+cd langchain-js-v0
+pnpm install --ignore-workspace
+
+# Run the tests
+npx tsx langchain.ts
+
+# Or test version 1.x
+cd ../langchain-js-v1
+pnpm install --ignore-workspace
+npx tsx langchain.ts
+```
 
 ### Running AI SDK Version Tests
 

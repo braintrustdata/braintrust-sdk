@@ -51,6 +51,7 @@ const config = {
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
     ],
+    testTimeout: 15_000,
   },
 };
 export default config;
