@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 547fa17c0937e0e25fdf9214487be6f31c91a37a) -- do not modify
+// Auto-generated file (internal git SHA 99aa7ca3ad55fc001a828d506f7732173c617890) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -118,6 +118,7 @@ export const AnyModelParams = z.object({
   topP: z.number().optional(),
   topK: z.number().optional(),
   use_cache: z.boolean().optional(),
+  use_native_inference: z.boolean().optional(),
 });
 export type AnyModelParamsType = z.infer<typeof AnyModelParams>;
 export const ApiKey = z.object({
@@ -184,6 +185,7 @@ export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
+    use_native_inference: z.boolean(),
     reasoning_enabled: z.boolean(),
     reasoning_budget: z.number(),
   })
@@ -423,6 +425,7 @@ export const Dataset = z.object({
   metadata: z
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
+  url_slug: z.string(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -487,6 +490,30 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalStatusPageTheme = z.enum(["light", "dark"]);
+export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
+export const EvalStatusPageConfig = z
+  .object({
+    score_columns: z.union([z.array(z.string()), z.null()]),
+    metric_columns: z.union([z.array(z.string()), z.null()]),
+    grouping_field: z.union([z.string(), z.null()]),
+    api_key: z.union([z.string(), z.null()]),
+  })
+  .partial();
+export type EvalStatusPageConfigType = z.infer<typeof EvalStatusPageConfig>;
+export const EvalStatusPage = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  logo_url: z.union([z.string(), z.null()]).optional(),
+  theme: EvalStatusPageTheme,
+  config: EvalStatusPageConfig,
+});
+export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -650,6 +677,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -683,6 +711,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean().optional(),
+      use_native_inference: z.boolean().optional(),
       reasoning_enabled: z.boolean().optional(),
       reasoning_budget: z.number().optional(),
       max_tokens: z.number(),
@@ -696,6 +725,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -708,6 +738,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -718,6 +749,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
     })
@@ -1067,6 +1099,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
+  "workflow",
   "custom_view",
   "preprocessor",
   "facet",
