@@ -3020,7 +3020,7 @@
           "tool",
           "scorer",
           "task",
-          "workflow",
+          "agent",
           "custom_view",
           "preprocessor",
           "facet"
@@ -6762,7 +6762,10 @@
           "function",
           "eval",
           "task",
-          "tool"
+          "tool",
+          "automation",
+          "facet",
+          "preprocessor"
         ],
         "description": "Type of the span, for display purposes only"
       },
@@ -7007,6 +7010,7 @@
               "tools",
               "scorers",
               "logs",
+              "agents",
               "monitor",
               "for_review"
             ],
@@ -7446,7 +7450,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "99aa7ca3ad55fc001a828d506f7732173c617890"
+    "x-internal-git-sha": "3de528fd4ffa8d070fb27587ec0248cf32d2abdc"
   },
   "paths": {},
   "webhooks": {}

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 99aa7ca3ad55fc001a828d506f7732173c617890) -- do not modify
+// Auto-generated file (internal git SHA 3de528fd4ffa8d070fb27587ec0248cf32d2abdc) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -552,7 +552,17 @@ export const Experiment = z.object({
 });
 export type ExperimentType = z.infer<typeof Experiment>;
 export const SpanType = z.union([
-  z.enum(["llm", "score", "function", "eval", "task", "tool"]),
+  z.enum([
+    "llm",
+    "score",
+    "function",
+    "eval",
+    "task",
+    "tool",
+    "automation",
+    "facet",
+    "preprocessor",
+  ]),
   z.null(),
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
@@ -1099,7 +1109,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
-  "workflow",
+  "agent",
   "custom_view",
   "preprocessor",
   "facet",
@@ -1776,6 +1786,7 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
+    "agents",
     "monitor",
     "for_review",
   ]),

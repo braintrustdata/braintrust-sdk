@@ -698,7 +698,7 @@ class FunctionIdFunctionId4(TypedDict):
 FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet']
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet']
 
 
 FunctionOutputType = Literal['completion', 'score', 'any']
@@ -1834,7 +1834,7 @@ class SpanScope(TypedDict):
     """
 
 
-SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
+SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor']
 
 
 class SSEConsoleEventData(TypedDict):
@@ -2839,6 +2839,7 @@ class View(TypedDict):
         'tools',
         'scorers',
         'logs',
+        'agents',
         'monitor',
         'for_review',
     ]
