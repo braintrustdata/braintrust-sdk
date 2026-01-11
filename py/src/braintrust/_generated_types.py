@@ -102,7 +102,7 @@ class ApiKey(TypedDict):
 
 class AsyncScoringControlAsyncScoringControl(TypedDict):
     kind: Literal['score_update']
-    token: str
+    token: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl2(TypedDict):
@@ -113,11 +113,44 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
     kind: Literal['state_enabled_force_rescore']
 
 
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope(TypedDict):
+    type: Literal['span']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1(TypedDict):
+    type: Literal['trace']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
+    function_id: NotRequired[Any | None]
+    scope: (
+        AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+        | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
+    )
+
+
+class AsyncScoringControlAsyncScoringControl4(TypedDict):
+    kind: Literal['trigger_functions']
+    triggered_functions: Sequence[AsyncScoringControlAsyncScoringControl4TriggeredFunction]
+
+
+class AsyncScoringControlAsyncScoringControl5(TypedDict):
+    kind: Literal['complete_triggered_functions']
+    function_ids: Sequence
+    triggered_xact_id: str
+
+
+class AsyncScoringControlAsyncScoringControl6(TypedDict):
+    kind: Literal['mark_attempt_failed']
+    function_ids: Sequence
+
+
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
     function_ids: Sequence
     skip_logging: NotRequired[bool | None]
+    triggered_functions: NotRequired[Mapping[str, Any] | None]
 
 
 class AsyncScoringStateAsyncScoringState1(TypedDict):
@@ -125,6 +158,25 @@ class AsyncScoringStateAsyncScoringState1(TypedDict):
 
 
 AsyncScoringState = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
+
+
+class BatchedFacetDataFacet(TypedDict):
+    name: str
+    """
+    The name of the facet
+    """
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[str | None]
+    """
+    The model to use for facet extraction
+    """
+    no_match_pattern: NotRequired[str | None]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
+    """
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -698,7 +750,7 @@ class FunctionIdFunctionId4(TypedDict):
 FunctionIdRef = Mapping[str, Any]
 
 
-FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'agent', 'custom_view', 'preprocessor', 'facet']
+FunctionObjectType = Literal['prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet']
 
 
 FunctionOutputType = Literal['completion', 'score', 'any']
@@ -988,6 +1040,18 @@ class Group(TypedDict):
     """
 
 
+class GroupScope(TypedDict):
+    type: Literal['group']
+    group_by: str
+    """
+    Field path to group by, e.g. metadata.session_id
+    """
+    idle_seconds: NotRequired[float | None]
+    """
+    Optional: trigger after this many seconds of inactivity
+    """
+
+
 IfExists = Literal['error', 'ignore', 'replace']
 
 
@@ -1126,9 +1190,6 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[float | None]
 
 
-NullableFunctionTypeEnum = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
-
-
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -1137,7 +1198,7 @@ class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 NullableSavedFunctionId = (
@@ -1745,7 +1806,7 @@ class SavedFunctionIdSavedFunctionId(TypedDict):
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 SavedFunctionId = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
@@ -1824,14 +1885,6 @@ class SpanIFrame(TypedDict):
 
 class SpanScope(TypedDict):
     type: Literal['span']
-    root_span_id: str
-    """
-    The root span id is a unique identifier for the trace.
-    """
-    id: str
-    """
-    A unique identifier for the span.
-    """
 
 
 SpanType = Literal['llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor']
@@ -1873,9 +1926,42 @@ class ToolFunctionDefinition(TypedDict):
 
 class TraceScope(TypedDict):
     type: Literal['trace']
-    root_span_id: str
+    idle_seconds: NotRequired[float | None]
     """
-    The root span id is a unique identifier for the trace.
+    Consider trace complete after this many seconds of inactivity (default: 30)
+    """
+
+
+class TriggeredFunctionStateScope(TypedDict):
+    type: Literal['span']
+
+
+class TriggeredFunctionStateScope1(TypedDict):
+    type: Literal['trace']
+
+
+class TriggeredFunctionStateScope2(TypedDict):
+    type: Literal['group']
+    key: str
+    value: str
+
+
+class TriggeredFunctionState(TypedDict):
+    triggered_xact_id: str
+    """
+    The xact_id when this function was triggered
+    """
+    completed_xact_id: NotRequired[str | None]
+    """
+    The xact_id when this function completed (matches triggered_xact_id if done)
+    """
+    attempts: NotRequired[int | None]
+    """
+    Number of execution attempts (for retry tracking)
+    """
+    scope: TriggeredFunctionStateScope | TriggeredFunctionStateScope1 | TriggeredFunctionStateScope2
+    """
+    The scope of data this function operates on
     """
 
 
@@ -2070,6 +2156,9 @@ AsyncScoringControl = (
     | AsyncScoringControlAsyncScoringControl1
     | AsyncScoringControlAsyncScoringControl2
     | AsyncScoringControlAsyncScoringControl3
+    | AsyncScoringControlAsyncScoringControl4
+    | AsyncScoringControlAsyncScoringControl5
+    | AsyncScoringControlAsyncScoringControl6
 )
 
 
@@ -2082,6 +2171,12 @@ class AttachmentStatus(TypedDict):
     """
     Describes the error encountered while uploading.
     """
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[NullableSavedFunctionId | None]
+    facets: Sequence[BatchedFacetDataFacet]
 
 
 ChatCompletionContentPart = (
@@ -2297,7 +2392,7 @@ class Experiment(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 ExtendedSavedFunctionId = (
@@ -2327,7 +2422,7 @@ class FacetData(TypedDict):
 class FunctionDataFunctionData3(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
     config: NotRequired[Mapping[str, Any] | None]
     """
     Configuration options to pass to the global function (e.g., for preprocessor customization)
@@ -2339,10 +2434,7 @@ class FunctionIdFunctionId2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
-
-
-InvokeScope = SpanScope | TraceScope
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class ModelParamsModelParams(TypedDict):
@@ -2386,7 +2478,7 @@ class OnlineScoreConfig(TypedDict):
     """
     scorers: Sequence[SavedFunctionId]
     """
-    The list of scorers to use for online scoring
+    The list of functions to run for online scoring. Can include scorers, facets, or other function types.
     """
     btql_filter: NotRequired[str | None]
     """
@@ -2394,15 +2486,19 @@ class OnlineScoreConfig(TypedDict):
     """
     apply_to_root_span: NotRequired[bool | None]
     """
-    Whether to trigger online scoring on the root span of each trace
+    Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset.
     """
     apply_to_span_names: NotRequired[Sequence[str] | None]
     """
-    Trigger online scoring on any spans with a name in this list
+    Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset.
     """
     skip_logging: NotRequired[bool | None]
     """
     Whether to skip adding scorer spans when computing scores
+    """
+    scope: NotRequired[SpanScope | TraceScope | GroupScope | None]
+    """
+    The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets.
     """
 
 
@@ -2657,18 +2753,6 @@ GraphNode = (
 )
 
 
-class InvokeContext(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'dataset', 'playground_logs']
-    """
-    The type of object containing the span data
-    """
-    object_id: str
-    """
-    The ID of the object containing the span data
-    """
-    scope: InvokeScope
-
-
 class ProjectLogsEvent(TypedDict):
     id: str
     """
@@ -2839,7 +2923,6 @@ class View(TypedDict):
         'tools',
         'scorers',
         'logs',
-        'agents',
         'monitor',
         'for_review',
     ]
@@ -2923,7 +3006,6 @@ class InvokeFunction(TypedDict):
     """
     If the function is an LLM, additional messages to pass along to it
     """
-    context: NotRequired[InvokeContext | None]
     parent: NotRequired[InvokeParent | None]
     stream: NotRequired[bool | None]
     """
@@ -3072,6 +3154,7 @@ FunctionData = (
     | FunctionDataFunctionData2
     | FunctionDataFunctionData3
     | FacetData
+    | BatchedFacetData
 )
 
 
