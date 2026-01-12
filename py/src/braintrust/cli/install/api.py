@@ -326,7 +326,7 @@ def main(args):
             textwrap.dedent(
                 f"""\
             Stack with name {args.name} does not exist. Either create it manually by following
-            https://www.braintrust.dev/docs/guides/self-hosting/aws or use the --create flag."""
+            https://www.braintrust.dev/docs/admin/self-hosting/aws or use the --create flag."""
             )
         )
         exit(1)
