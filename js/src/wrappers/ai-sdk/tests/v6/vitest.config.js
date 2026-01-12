@@ -14,7 +14,7 @@ const config = {
     },
   },
   test: {
-    include: ["../../ai-sdk.test.ts"],
+    include: ["../../ai-sdk.test.ts", "./ai-sdk.v6.test.ts"],
     exclude: ["**/node_modules/**", "**/dist/**"],
   },
 };
