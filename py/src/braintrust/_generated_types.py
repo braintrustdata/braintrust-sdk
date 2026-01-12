@@ -2509,7 +2509,7 @@ class DatasetEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     root_span_id: str
     """
@@ -2978,7 +2978,7 @@ class ExperimentEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
@@ -3096,7 +3096,7 @@ class ProjectLogsEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
