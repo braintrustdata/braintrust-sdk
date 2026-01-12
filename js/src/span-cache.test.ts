@@ -40,8 +40,8 @@ describe("SpanCache (disk-based)", () => {
         output: { response: "bar" },
       };
 
-      cache.writeSync(rootSpanId, span1.span_id, span1);
-      cache.writeSync(rootSpanId, span2.span_id, span2);
+      cache.queueWrite(rootSpanId, span1.span_id, span1);
+      cache.queueWrite(rootSpanId, span2.span_id, span2);
 
       const spans = cache.getByRootSpanId(rootSpanId);
       expect(spans).toHaveLength(2);
@@ -58,12 +58,12 @@ describe("SpanCache (disk-based)", () => {
       const rootSpanId = "root-123";
       const spanId = "span-1";
 
-      cache.writeSync(rootSpanId, spanId, {
+      cache.queueWrite(rootSpanId, spanId, {
         span_id: spanId,
         input: { text: "hello" },
       });
 
-      cache.writeSync(rootSpanId, spanId, {
+      cache.queueWrite(rootSpanId, spanId, {
         span_id: spanId,
         output: { response: "world" },
       });
@@ -81,12 +81,12 @@ describe("SpanCache (disk-based)", () => {
       const rootSpanId = "root-123";
       const spanId = "span-1";
 
-      cache.writeSync(rootSpanId, spanId, {
+      cache.queueWrite(rootSpanId, spanId, {
         span_id: spanId,
         metadata: { key1: "value1" },
       });
 
-      cache.writeSync(rootSpanId, spanId, {
+      cache.queueWrite(rootSpanId, spanId, {
         span_id: spanId,
         metadata: { key2: "value2" },
       });
@@ -101,7 +101,7 @@ describe("SpanCache (disk-based)", () => {
 
   describe("has", () => {
     test("should return true when rootSpanId exists", () => {
-      cache.writeSync("root-123", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-123", "span-1", { span_id: "span-1" });
       expect(cache.has("root-123")).toBe(true);
     });
 
@@ -112,8 +112,8 @@ describe("SpanCache (disk-based)", () => {
 
   describe("clear", () => {
     test("should remove spans for a specific rootSpanId from index", () => {
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
-      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-2", "span-2", { span_id: "span-2" });
 
       cache.clear("root-1");
 
@@ -124,8 +124,8 @@ describe("SpanCache (disk-based)", () => {
 
   describe("clearAll", () => {
     test("should remove all cached spans", () => {
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
-      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-2", "span-2", { span_id: "span-2" });
 
       cache.clearAll();
 
@@ -137,20 +137,20 @@ describe("SpanCache (disk-based)", () => {
     test("should return the number of root spans tracked", () => {
       expect(cache.size).toBe(0);
 
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(cache.size).toBe(1);
 
-      cache.writeSync("root-1", "span-2", { span_id: "span-2" }); // Same root
+      cache.queueWrite("root-1", "span-2", { span_id: "span-2" }); // Same root
       expect(cache.size).toBe(1);
 
-      cache.writeSync("root-2", "span-3", { span_id: "span-3" }); // Different root
+      cache.queueWrite("root-2", "span-3", { span_id: "span-3" }); // Different root
       expect(cache.size).toBe(2);
     });
   });
 
   describe("dispose", () => {
     test("should clean up and allow reuse", () => {
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(cache.size).toBe(1);
 
       cache.dispose();
@@ -159,25 +159,25 @@ describe("SpanCache (disk-based)", () => {
       expect(cache.has("root-1")).toBe(false);
 
       // Should be able to write again after dispose (cache is still enabled)
-      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      cache.queueWrite("root-2", "span-2", { span_id: "span-2" });
       expect(cache.size).toBe(1);
     });
   });
 
   describe("disable", () => {
     test("should prevent writes after disable() is called", () => {
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(cache.size).toBe(1);
 
       cache.disable();
 
       // Writes after disable should be no-ops
-      cache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      cache.queueWrite("root-2", "span-2", { span_id: "span-2" });
       expect(cache.size).toBe(1); // Still 1, not 2
     });
 
     test("should return undefined from getByRootSpanId after disable()", () => {
-      cache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(cache.getByRootSpanId("root-1")).toBeDefined();
 
       cache.disable();
@@ -203,7 +203,7 @@ describe("SpanCache (disk-based)", () => {
       expect(disabledCache.disabled).toBe(true);
 
       // Writes should be no-ops
-      disabledCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      disabledCache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(disabledCache.size).toBe(0);
       expect(disabledCache.getByRootSpanId("root-1")).toBeUndefined();
 
@@ -221,7 +221,7 @@ describe("SpanCache (disk-based)", () => {
       // Start for first "eval"
       freshCache.start();
       expect(freshCache.disabled).toBe(false);
-      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      freshCache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(freshCache.size).toBe(1);
 
       // Stop after first "eval" (like calling stop() in finally block)
@@ -232,7 +232,7 @@ describe("SpanCache (disk-based)", () => {
       // Start for second "eval" - should work!
       freshCache.start();
       expect(freshCache.disabled).toBe(false);
-      freshCache.writeSync("root-2", "span-2", { span_id: "span-2" });
+      freshCache.queueWrite("root-2", "span-2", { span_id: "span-2" });
       expect(freshCache.size).toBe(1);
 
       freshCache.dispose();
@@ -250,7 +250,7 @@ describe("SpanCache (disk-based)", () => {
       expect(freshCache.disabled).toBe(true);
 
       // Writes should still be no-ops
-      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      freshCache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(freshCache.size).toBe(0);
 
       freshCache.dispose();
@@ -262,7 +262,7 @@ describe("SpanCache (disk-based)", () => {
       // Start for "eval"
       freshCache.start();
       expect(freshCache.disabled).toBe(false);
-      freshCache.writeSync("root-1", "span-1", { span_id: "span-1" });
+      freshCache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(freshCache.size).toBe(1);
 
       // Simulate OTEL being registered mid-eval

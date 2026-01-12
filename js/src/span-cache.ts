@@ -206,16 +206,6 @@ export class SpanCache {
   }
 
   /**
-   * @deprecated Use queueWrite instead - writeSync blocks the event loop.
-   * Synchronous write - fire and forget.
-   * Uses sync file operations to avoid blocking the caller.
-   */
-  writeSync(rootSpanId: string, spanId: string, data: CachedSpan): void {
-    // Delegate to the non-blocking version
-    this.queueWrite(rootSpanId, spanId, data);
-  }
-
-  /**
    * Get all cached spans for a given rootSpanId.
    *
    * This reads the file and merges all records for the given rootSpanId.
