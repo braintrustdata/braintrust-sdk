@@ -6,7 +6,7 @@ An isomorphic JS library for logging data to Braintrust.
 
 ### Upgrading from 0.x
 
-If you're on version **0.4.10 or earlier**, we recommend upgrading to **1.x**. See the [TypeScript SDK upgrade guide](https://www.braintrust.dev/docs/reference/sdks/typescript-upgrade-guide) for migration instructions.
+If you're on version **0.4.10 or earlier**, we recommend upgrading to **1.x**. See the [TypeScript SDK upgrade guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v0-to-v1) for migration instructions.
 
 ### Quickstart
 
