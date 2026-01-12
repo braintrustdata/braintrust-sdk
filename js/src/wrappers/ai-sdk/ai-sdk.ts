@@ -29,6 +29,47 @@ interface WrapAISDKOptions {
 }
 
 /**
+ * Detects if an object is an ES module namespace (ModuleRecord).
+ *
+ * ES module namespaces have immutable, non-configurable properties that cause
+ * Proxy invariant violations when trying to return wrapped versions of functions.
+ *
+ * Detection strategy:
+ * 1. Check constructor.name === 'Module' (most reliable, suggested by Stephen)
+ * 2. Fallback: Check if properties are non-configurable (catches edge cases)
+ *
+ * @param obj - Object to check
+ * @returns true if obj appears to be an ES module namespace
+ */
+function isModuleNamespace(obj: any): boolean {
+  if (!obj || typeof obj !== "object") {
+    return false;
+  }
+
+  // Primary detection: Check if constructor is 'Module'
+  // ES module namespaces have constructor.name === 'Module'
+  if (obj.constructor?.name === "Module") {
+    return true;
+  }
+
+  // Fallback: Check if properties are non-configurable
+  // This catches cases where constructor check might not work
+  try {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return false;
+
+    const firstKey = keys[0];
+    const descriptor = Object.getOwnPropertyDescriptor(obj, firstKey);
+    // Module namespace properties are non-configurable and non-writable
+    return descriptor
+      ? !descriptor.configurable && !descriptor.writable
+      : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
  * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
  * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
@@ -53,8 +94,19 @@ interface WrapAISDKOptions {
  * ```
  */
 export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // Handle null/undefined early - can't create Proxy with non-objects
+  if (!aiSDK || typeof aiSDK !== "object") {
+    return aiSDK;
+  }
+
+  // Handle ES module namespaces (ModuleRecords) that have non-configurable properties.
+  // These cause Proxy invariant violations because we return wrapped functions instead
+  // of the original values. Spreading creates a new object with configurable properties.
+  // See: https://github.com/braintrustdata/braintrust-sdk/issues/xxx
+  const target = isModuleNamespace(aiSDK) ? { ...aiSDK } : aiSDK;
+
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(aiSDK as unknown as any, {
+  return new Proxy(target as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
