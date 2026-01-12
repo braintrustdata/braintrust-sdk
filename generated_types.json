@@ -2178,6 +2178,31 @@
             ],
             "description": "The metadata field to use for grouping experiments (model)"
           },
+          "filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BTQL filter to apply to experiment data"
+          },
+          "sort_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Field to sort results by (format: 'score:<name>' or 'metric:<name>')"
+          },
+          "sort_order": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort order (ascending or descending)"
+          },
           "api_key": {
             "type": [
               "string",
@@ -7669,7 +7694,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "fc91c29e7df0864dc9c9c3c86600563156f13803"
+    "x-internal-git-sha": "33ab31eaa0c3d1873a3b877c52d0a3a20015f939"
   },
   "paths": {},
   "webhooks": {}

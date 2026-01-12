@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA fc91c29e7df0864dc9c9c3c86600563156f13803) -- do not modify
+// Auto-generated file (internal git SHA 33ab31eaa0c3d1873a3b877c52d0a3a20015f939) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -569,6 +569,9 @@ export const EvalStatusPageConfig = z
     score_columns: z.union([z.array(z.string()), z.null()]),
     metric_columns: z.union([z.array(z.string()), z.null()]),
     grouping_field: z.union([z.string(), z.null()]),
+    filter: z.union([z.string(), z.null()]),
+    sort_by: z.union([z.string(), z.null()]),
+    sort_order: z.union([z.enum(["asc", "desc"]), z.null()]),
     api_key: z.union([z.string(), z.null()]),
   })
   .partial();

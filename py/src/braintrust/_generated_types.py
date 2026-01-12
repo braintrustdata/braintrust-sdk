@@ -538,6 +538,18 @@ class EvalStatusPageConfig(TypedDict):
     """
     The metadata field to use for grouping experiments (model)
     """
+    filter: NotRequired[str | None]
+    """
+    BTQL filter to apply to experiment data
+    """
+    sort_by: NotRequired[str | None]
+    """
+    Field to sort results by (format: 'score:<name>' or 'metric:<name>')
+    """
+    sort_order: NotRequired[Literal['asc', 'desc'] | None]
+    """
+    Sort order (ascending or descending)
+    """
     api_key: NotRequired[str | None]
     """
     The API key used for fetching experiment data
