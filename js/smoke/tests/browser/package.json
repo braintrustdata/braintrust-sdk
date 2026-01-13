@@ -16,7 +16,8 @@
     "install-build": "npm install --legacy-peer-deps && npx tsx ../../install-build.ts ../../../artifacts braintrust"
   },
   "dependencies": {
-    "braintrust": "latest"
+    "braintrust": "latest",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.1",
