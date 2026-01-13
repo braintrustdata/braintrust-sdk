@@ -285,21 +285,18 @@ async function initFile({
   bundleFile,
   tsconfig,
   plugins,
-  externalPackages,
 }: {
   inFile: string;
   outFile: string;
   bundleFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
-  externalPackages?: string[];
 }): Promise<FileHandle> {
   const buildOptions = buildOpts({
     fileName: inFile,
     outFile,
     tsconfig,
     plugins,
-    externalPackages,
   });
   const ctx = await esbuild.context(buildOptions);
 
@@ -336,7 +333,6 @@ async function initFile({
           outFile: bundleFile,
           tsconfig,
           plugins,
-          externalPackages,
         }),
         external: [],
         write: true,
@@ -692,71 +688,6 @@ async function collectFiles(
   return files;
 }
 
-import { createMarkKnownPackagesExternalPlugin } from "./util/external-packages-plugin";
-
-// Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
-const nativeNodeModulesPlugin = {
-  name: "native-node-modules",
-  setup(build: esbuild.PluginBuild) {
-    // Keep track of packages that contain .node files
-    const nativePackages = new Set<string>();
-
-    // Helper to add a package and its platform-specific variants
-    const addNativePackage = (pkgName: string) => {
-      nativePackages.add(pkgName);
-      if (pkgName.includes("@")) {
-        const [scope, name] = pkgName.split("/");
-        const platformPkgs = [
-          `${scope}/${name}-darwin-arm64`,
-          `${scope}/${name}-darwin-x64`,
-          `${scope}/${name}-linux-x64-gnu`,
-          `${scope}/${name}-win32-x64-msvc`,
-        ];
-        platformPkgs.forEach((pkg) => nativePackages.add(pkg));
-      }
-    };
-
-    // When a .node file is imported, mark its package as native
-    build.onResolve({ filter: /\.node$/ }, (args) => {
-      try {
-        const path = require.resolve(args.path, { paths: [args.resolveDir] });
-        const match = path.match(
-          /node_modules[/\\]((?:@[^/\\]+[/\\])?[^/\\]+)/,
-        );
-        if (match) {
-          addNativePackage(match[1]);
-        }
-      } catch {
-        // Ignore errors
-      }
-      return { path: args.path, external: true };
-    });
-
-    // Handle direct imports of native packages
-    build.onResolve(
-      { filter: /@[^/]+\/[^/]+-(?:darwin|linux|win32)/ },
-      (args) => {
-        const match = args.path.match(/^(@[^/]+\/[^/]+)/);
-        if (match) {
-          addNativePackage(match[1]);
-        }
-        return { path: args.path, external: true };
-      },
-    );
-
-    // Mark all imports from native packages as external
-    build.onResolve({ filter: /.*/ }, (args) => {
-      if (!args.path.startsWith(".") && !args.path.startsWith("/")) {
-        const match = args.path.match(/^(?:@[^/]+\/)?[^/]+/);
-        if (match && nativePackages.has(match[0])) {
-          return { path: require.resolve(args.path), external: true };
-        }
-      }
-      return null;
-    });
-  },
-};
-
 export type PluginMaker = (fileName: string) => esbuild.Plugin;
 
 function buildOpts({
@@ -764,19 +695,13 @@ function buildOpts({
   outFile,
   tsconfig,
   plugins: argPlugins,
-  externalPackages,
 }: {
   fileName: string;
   outFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
-  externalPackages?: string[];
 }): esbuild.BuildOptions {
-  const plugins = [
-    nativeNodeModulesPlugin,
-    createMarkKnownPackagesExternalPlugin(externalPackages),
-    ...(argPlugins || []).map((fn) => fn(fileName)),
-  ];
+  const plugins = [...(argPlugins || []).map((fn) => fn(fileName))];
   return {
     entryPoints: [fileName],
     bundle: true,
@@ -787,7 +712,7 @@ function buildOpts({
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
     tsconfig,
-    external: ["node_modules/*", "fsevents"],
+    packages: "external", // Mark all node_modules as external
     plugins: plugins,
   };
 }
@@ -797,13 +722,11 @@ export async function initializeHandles({
   mode,
   plugins,
   tsconfig,
-  externalPackages,
 }: {
   files: string[];
   mode: "eval" | "bundle";
   plugins?: PluginMaker[];
   tsconfig?: string;
-  externalPackages?: string[];
 }): Promise<Record<string, FileHandle>> {
   const files: Record<string, boolean> = {};
   const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
@@ -846,7 +769,6 @@ export async function initializeHandles({
         bundleFile,
         plugins,
         tsconfig,
-        externalPackages,
       }),
     );
   }
@@ -907,7 +829,6 @@ async function run(args: RunArgs) {
     mode: "eval",
     tsconfig: args.tsconfig,
     plugins,
-    externalPackages: args.external_packages,
   });
 
   if (args.dev) {
