@@ -8,8 +8,13 @@ import type {
 import type { WorkflowClientInterceptor } from "@temporalio/client";
 import { defaultPayloadConverter } from "@temporalio/common";
 import * as braintrust from "../../logger";
+import { SpanComponentsV3 } from "../../../util";
 import { getWorkflowSpanExport } from "./sinks";
-import { BRAINTRUST_SPAN_HEADER, deserializeHeaderValue } from "./utils";
+import {
+  BRAINTRUST_SPAN_HEADER,
+  BRAINTRUST_WORKFLOW_SPAN_ID_HEADER,
+  deserializeHeaderValue,
+} from "./utils";
 
 /**
  * Create a client interceptor that propagates Braintrust span context to workflows.
@@ -87,9 +92,44 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
       }
     }
 
-    // Fall back to original client context from headers
-    if (!parent && input.headers && BRAINTRUST_SPAN_HEADER in input.headers) {
-      parent = deserializeHeaderValue(input.headers[BRAINTRUST_SPAN_HEADER]);
+    // For cross-worker activities: construct parent from workflow span ID + client context
+    if (!parent && input.headers) {
+      const workflowSpanId = deserializeHeaderValue(
+        input.headers[BRAINTRUST_WORKFLOW_SPAN_ID_HEADER],
+      );
+      const clientContext = deserializeHeaderValue(
+        input.headers[BRAINTRUST_SPAN_HEADER],
+      );
+
+      if (workflowSpanId && clientContext) {
+        try {
+          // Parse client context and replace span_id with workflow span ID
+          const clientComponents = SpanComponentsV3.fromStr(clientContext);
+          const clientData = clientComponents.data;
+
+          // Only construct new parent if client context has required row_id fields
+          if (clientData.row_id && clientData.root_span_id) {
+            const workflowComponents = new SpanComponentsV3({
+              object_type: clientData.object_type,
+              object_id: clientData.object_id,
+              propagated_event: clientData.propagated_event,
+              row_id: clientData.row_id,
+              root_span_id: clientData.root_span_id,
+              span_id: workflowSpanId,
+            });
+            parent = workflowComponents.toStr();
+          } else {
+            // Client context doesn't have row IDs, use it directly
+            parent = clientContext;
+          }
+        } catch {
+          // Fall back to client context if parsing fails
+          parent = clientContext;
+        }
+      } else if (clientContext) {
+        // No workflow span ID, use client context directly
+        parent = clientContext;
+      }
     }
 
     const span = braintrust.startSpan({

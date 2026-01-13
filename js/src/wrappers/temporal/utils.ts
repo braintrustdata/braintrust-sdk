@@ -2,6 +2,8 @@ import type { Payload } from "@temporalio/common";
 
 export const BRAINTRUST_SPAN_HEADER = "_braintrust-span";
 export const BRAINTRUST_WORKFLOW_SPAN_HEADER = "_braintrust-workflow-span";
+export const BRAINTRUST_WORKFLOW_SPAN_ID_HEADER =
+  "_braintrust-workflow-span-id";
 
 export function serializeHeaderValue(value: string): Payload {
   return {

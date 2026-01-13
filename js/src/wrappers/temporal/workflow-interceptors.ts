@@ -25,6 +25,7 @@ import type { BraintrustSinks } from "./sinks";
 import {
   BRAINTRUST_SPAN_HEADER,
   BRAINTRUST_WORKFLOW_SPAN_HEADER,
+  BRAINTRUST_WORKFLOW_SPAN_ID_HEADER,
   serializeHeaderValue,
   deserializeHeaderValue,
 } from "./utils";
@@ -83,7 +84,13 @@ class BraintrustWorkflowOutboundInterceptor
     // Pass runId so activity can look up workflow span on same worker
     headers[BRAINTRUST_WORKFLOW_SPAN_HEADER] = serializeHeaderValue(info.runId);
 
-    // Pass parent context (client span) as fallback for cross-worker activities
+    // Pass workflow span ID for cross-worker activities to construct parent
+    if (workflowSpanId) {
+      headers[BRAINTRUST_WORKFLOW_SPAN_ID_HEADER] =
+        serializeHeaderValue(workflowSpanId);
+    }
+
+    // Pass client context for cross-worker activities to construct parent
     if (storedParentContext) {
       headers[BRAINTRUST_SPAN_HEADER] =
         serializeHeaderValue(storedParentContext);
