@@ -195,7 +195,7 @@ export {
 } from "./framework2";
 
 export type { Trace, SpanData } from "./trace";
-export { SpanFetcher } from "./trace";
+export { SpanFetcher, CachedSpanFetcher } from "./trace";
 
 export type {
   ParentExperimentIds,

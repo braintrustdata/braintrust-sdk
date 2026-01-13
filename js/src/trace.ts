@@ -103,6 +103,125 @@ export interface SpanData {
   [key: string]: unknown;
 }
 
+/** Function signature for fetching spans by type */
+export type SpanFetchFn = (
+  spanType: string[] | undefined,
+) => Promise<SpanData[]>;
+
+/**
+ * Cached span fetcher that handles fetching and caching spans by type.
+ *
+ * Caching strategy:
+ * - Cache spans by span type (Map<spanType, SpanData[]>)
+ * - Track if all spans have been fetched (allFetched flag)
+ * - When filtering by spanType, only fetch types not already in cache
+ */
+export class CachedSpanFetcher {
+  private spanCache = new Map<string, SpanData[]>();
+  private allFetched = false;
+  private fetchFn: SpanFetchFn;
+
+  constructor(
+    objectType: "experiment" | "project_logs",
+    objectId: string,
+    rootSpanId: string,
+    getState: () => Promise<BraintrustState>,
+  );
+  constructor(fetchFn: SpanFetchFn);
+  constructor(
+    objectTypeOrFetchFn: "experiment" | "project_logs" | SpanFetchFn,
+    objectId?: string,
+    rootSpanId?: string,
+    getState?: () => Promise<BraintrustState>,
+  ) {
+    if (typeof objectTypeOrFetchFn === "function") {
+      // Direct fetch function injection (for testing)
+      this.fetchFn = objectTypeOrFetchFn;
+    } else {
+      // Standard constructor with SpanFetcher
+      const objectType = objectTypeOrFetchFn;
+      this.fetchFn = async (spanType) => {
+        const state = await getState!();
+        const fetcher = new SpanFetcher(
+          objectType,
+          objectId!,
+          rootSpanId!,
+          state,
+          spanType,
+        );
+        const rows: WithTransactionId<SpanRecord>[] =
+          await fetcher.fetchedData();
+        return rows
+          .filter((row) => row.span_attributes?.purpose !== "scorer")
+          .map((row) => ({
+            input: row.input,
+            output: row.output,
+            metadata: row.metadata,
+            span_id: row.span_id,
+            span_parents: row.span_parents,
+            span_attributes: row.span_attributes,
+            id: row.id,
+            _xact_id: row._xact_id,
+            _pagination_key: row._pagination_key,
+            root_span_id: row.root_span_id,
+          }));
+      };
+    }
+  }
+
+  async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<
+    SpanData[]
+  > {
+    // If we've fetched all spans, just filter from cache
+    if (this.allFetched) {
+      return this.getFromCache(spanType);
+    }
+
+    // If no filter requested, fetch everything
+    if (!spanType || spanType.length === 0) {
+      await this.fetchSpans(undefined);
+      this.allFetched = true;
+      return this.getFromCache(undefined);
+    }
+
+    // Find which spanTypes we don't have in cache yet
+    const missingTypes = spanType.filter((t) => !this.spanCache.has(t));
+
+    // If all requested types are cached, return from cache
+    if (missingTypes.length === 0) {
+      return this.getFromCache(spanType);
+    }
+
+    // Fetch only the missing types
+    await this.fetchSpans(missingTypes);
+    return this.getFromCache(spanType);
+  }
+
+  private async fetchSpans(spanType: string[] | undefined): Promise<void> {
+    const spans = await this.fetchFn(spanType);
+
+    for (const span of spans) {
+      const type = span.span_attributes?.type ?? "";
+      const existing = this.spanCache.get(type) ?? [];
+      existing.push(span);
+      this.spanCache.set(type, existing);
+    }
+  }
+
+  private getFromCache(spanType: string[] | undefined): SpanData[] {
+    if (!spanType || spanType.length === 0) {
+      return Array.from(this.spanCache.values()).flat();
+    }
+
+    const result: SpanData[] = [];
+    for (const type of spanType) {
+      const spans = this.spanCache.get(type);
+      if (spans) result.push(...spans);
+    }
+    return result;
+  }
+}
+
 /**
  * Interface for trace objects that can be used by scorers.
  * Both the SDK's LocalTrace class and the API wrapper's WrapperTrace implement this.
@@ -122,7 +241,6 @@ export interface Trace {
  * richer logging or side effects.
  */
 export class LocalTrace implements Trace {
-  // Store values privately so future helper methods can expose them safely.
   private readonly objectType: "experiment" | "project_logs";
   private readonly objectId: string;
   private readonly rootSpanId: string;
@@ -130,6 +248,7 @@ export class LocalTrace implements Trace {
   private readonly state: BraintrustState;
   private spansFlushed = false;
   private spansFlushPromise: Promise<void> | null = null;
+  private cachedFetcher: CachedSpanFetcher;
 
   constructor({
     objectType,
@@ -143,6 +262,16 @@ export class LocalTrace implements Trace {
     this.rootSpanId = rootSpanId;
     this.ensureSpansFlushed = ensureSpansFlushed;
     this.state = state;
+    this.cachedFetcher = new CachedSpanFetcher(
+      objectType,
+      objectId,
+      rootSpanId,
+      async () => {
+        await this.ensureSpansReady();
+        await state.login({});
+        return state;
+      },
+    );
   }
 
   getConfiguration() {
@@ -156,21 +285,18 @@ export class LocalTrace implements Trace {
   /**
    * Fetch all rows for this root span from its parent object (experiment or project logs).
    * First checks the local span cache for recently logged spans, then falls
-   * back to BTQL API if not found in cache.
+   * back to CachedSpanFetcher which handles BTQL fetching and caching.
    */
   async getSpans({ spanType }: { spanType?: string[] } = {}): Promise<
     SpanData[]
   > {
-    const state = this.state;
-
-    // Try local cache first
-    const cachedSpans = state.spanCache.getByRootSpanId(this.rootSpanId);
+    // Try local span cache first (for recently logged spans not yet flushed)
+    const cachedSpans = this.state.spanCache.getByRootSpanId(this.rootSpanId);
     if (cachedSpans && cachedSpans.length > 0) {
       let spans = cachedSpans.filter(
         (span) => span.span_attributes?.purpose !== "scorer",
       );
 
-      // Apply spanType filter if specified
       if (spanType && spanType.length > 0) {
         spans = spans.filter((span) =>
           spanType.includes(span.span_attributes?.type ?? ""),
@@ -187,30 +313,8 @@ export class LocalTrace implements Trace {
       }));
     }
 
-    // Cache miss - fall back to BTQL via ObjectFetcher pattern
-    await this.ensureSpansReady();
-    await state.login({});
-
-    const fetcher = new SpanFetcher(
-      this.objectType,
-      this.objectId,
-      this.rootSpanId,
-      state,
-      spanType,
-    );
-
-    const rows: WithTransactionId<SpanRecord>[] = await fetcher.fetchedData();
-
-    return rows
-      .filter((row) => row.span_attributes?.purpose !== "scorer")
-      .map((row) => ({
-        input: row.input,
-        output: row.output,
-        metadata: row.metadata,
-        span_id: row.span_id,
-        span_parents: row.span_parents,
-        span_attributes: row.span_attributes,
-      }));
+    // Fall back to CachedSpanFetcher for BTQL fetching with caching
+    return this.cachedFetcher.getSpans({ spanType });
   }
 
   private async ensureSpansReady() {
