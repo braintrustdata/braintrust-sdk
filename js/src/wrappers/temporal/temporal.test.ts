@@ -7,6 +7,10 @@ import {
   BRAINTRUST_WORKFLOW_SPAN_ID_HEADER,
 } from "./utils";
 import { SpanComponentsV3, SpanObjectTypeV3 } from "../../../util";
+import {
+  BraintrustTemporalPlugin,
+  createBraintrustTemporalPlugin,
+} from "./plugin";
 
 describe("temporal header utilities", () => {
   test("serializeHeaderValue encodes string correctly", () => {
@@ -178,5 +182,62 @@ describe("SpanComponentsV3 cross-worker reconstruction", () => {
     });
 
     expect(reconstructed.data.propagated_event).toEqual(propagatedEvent);
+  });
+});
+
+describe("BraintrustTemporalPlugin", () => {
+  test("createBraintrustTemporalPlugin returns a plugin instance", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    expect(plugin).toBeInstanceOf(BraintrustTemporalPlugin);
+    expect(plugin.name).toBe("braintrust");
+  });
+
+  test("plugin has configureClient method", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    expect(typeof plugin.configureClient).toBe("function");
+  });
+
+  test("plugin has configureWorker method", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    expect(typeof plugin.configureWorker).toBe("function");
+  });
+
+  test("configureClient adds workflow interceptor", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    const options = {};
+    const configured = plugin.configureClient(options);
+
+    expect(configured.interceptors).toBeDefined();
+    expect(configured.interceptors?.workflow).toBeDefined();
+    expect(Array.isArray(configured.interceptors?.workflow)).toBe(true);
+    expect(configured.interceptors?.workflow?.length).toBe(1);
+  });
+
+  test("configureClient preserves existing interceptors", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    const existingInterceptor = { start: async (i: unknown, n: unknown) => n };
+    const options = {
+      interceptors: {
+        workflow: [existingInterceptor],
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const configured = plugin.configureClient(options as any);
+
+    expect(configured.interceptors?.workflow?.length).toBe(2);
+  });
+
+  test("configureWorker adds activity interceptor and sinks", () => {
+    const plugin = createBraintrustTemporalPlugin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const options = {} as any;
+    const configured = plugin.configureWorker(options);
+
+    expect(configured.interceptors).toBeDefined();
+    expect(configured.interceptors?.activity).toBeDefined();
+    expect(Array.isArray(configured.interceptors?.activity)).toBe(true);
+    expect(configured.interceptors?.activity?.length).toBe(1);
+    expect(configured.sinks).toBeDefined();
+    expect(configured.sinks?.braintrust).toBeDefined();
   });
 });

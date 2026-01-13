@@ -107,8 +107,12 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
           const clientComponents = SpanComponentsV3.fromStr(clientContext);
           const clientData = clientComponents.data;
 
-          // Only construct new parent if client context has required row_id fields
-          if (clientData.row_id && clientData.root_span_id) {
+          // Only construct new parent if client context has required fields
+          if (
+            clientData.object_id &&
+            clientData.row_id &&
+            clientData.root_span_id
+          ) {
             const workflowComponents = new SpanComponentsV3({
               object_type: clientData.object_type,
               object_id: clientData.object_id,
@@ -119,7 +123,7 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
             });
             parent = workflowComponents.toStr();
           } else {
-            // Client context doesn't have row IDs, use it directly
+            // Client context doesn't have required fields, use it directly
             parent = clientContext;
           }
         } catch {

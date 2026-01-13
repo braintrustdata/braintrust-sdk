@@ -1,7 +1,7 @@
 import { Client, Connection } from "@temporalio/client";
 import { v4 as uuid } from "uuid";
 import * as braintrust from "braintrust";
-import { createBraintrustClientInterceptor } from "braintrust";
+import { createBraintrustTemporalPlugin } from "braintrust";
 import { simpleWorkflow } from "./workflows";
 import type { TaskInput } from "./activities";
 
@@ -17,9 +17,7 @@ async function main() {
   const client = new Client({
     connection,
     namespace: "default",
-    interceptors: {
-      workflow: [createBraintrustClientInterceptor()],
-    },
+    plugins: [createBraintrustTemporalPlugin()],
   });
 
   const inputData: TaskInput = { value: 5 };

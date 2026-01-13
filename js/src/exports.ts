@@ -140,12 +140,8 @@ export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
 export {
-  createBraintrustClientInterceptor,
-  createBraintrustActivityInterceptor,
-  createBraintrustSinks,
-  getWorkflowSpanExport,
-  BRAINTRUST_SPAN_HEADER,
-  BRAINTRUST_WORKFLOW_SPAN_HEADER,
+  BraintrustTemporalPlugin,
+  createBraintrustTemporalPlugin,
 } from "./wrappers/temporal";
 export type { BraintrustSinks } from "./wrappers/temporal";
 

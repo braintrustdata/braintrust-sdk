@@ -1,53 +1,43 @@
 /**
  * Braintrust integration for Temporal workflows and activities.
  *
- * This module provides interceptors and sinks that automatically create
- * Braintrust spans for Temporal workflows and activities, with proper
- * parent-child relationships across distributed workers.
+ * This module provides a plugin that automatically creates Braintrust spans
+ * for Temporal workflows and activities, with proper parent-child relationships
+ * across distributed workers.
  *
  * @example
  * ```typescript
  * import { Client, Connection } from "@temporalio/client";
  * import { Worker } from "@temporalio/worker";
  * import * as braintrust from "braintrust";
- * import {
- *   createBraintrustClientInterceptor,
- *   createBraintrustActivityInterceptor,
- *   createBraintrustSinks,
- * } from "braintrust/wrappers/temporal";
+ * import { createBraintrustTemporalPlugin } from "braintrust/wrappers/temporal";
  *
  * // Initialize Braintrust logger
  * braintrust.initLogger({ projectName: "my-project" });
  *
- * // Create client with Braintrust interceptor
+ * // Create the plugin
+ * const braintrustPlugin = createBraintrustTemporalPlugin();
+ *
+ * // Create client with the plugin
  * const client = new Client({
  *   connection: await Connection.connect(),
- *   interceptors: {
- *     workflow: [createBraintrustClientInterceptor()],
- *   },
+ *   plugins: [braintrustPlugin],
  * });
  *
- * // Create worker with Braintrust interceptors and sinks
+ * // Create worker with the plugin
  * const worker = await Worker.create({
  *   taskQueue: "my-queue",
  *   workflowsPath: require.resolve("./workflows"),
  *   activities,
+ *   plugins: [braintrustPlugin],
  *   interceptors: {
- *     activity: [createBraintrustActivityInterceptor],
- *     workflowModules: [require.resolve("braintrust/wrappers/temporal/workflow-interceptors")],
+ *     // Workflow interceptors must be bundled with workflow code
+ *     workflowModules: [require.resolve("braintrust/temporal/workflow-interceptors")],
  *   },
- *   sinks: createBraintrustSinks(),
  * });
  *
- * // Start a workflow from within a Braintrust span
- * await braintrust.traced(async (span) => {
- *   const handle = await client.workflow.start("myWorkflow", {
- *     taskQueue: "my-queue",
- *     workflowId: "my-workflow-id",
- *     args: [42],
- *   });
- *   return await handle.result();
- * }, { name: "trigger-workflow" });
+ * // In your workflows.ts, export the workflow interceptors:
+ * export { interceptors } from "braintrust/wrappers/temporal/workflow-interceptors";
  * ```
  *
  * The resulting trace will show:
@@ -60,15 +50,8 @@
  */
 
 export {
-  createBraintrustClientInterceptor,
-  createBraintrustActivityInterceptor,
-} from "./interceptors";
-
-export { createBraintrustSinks, getWorkflowSpanExport } from "./sinks";
+  BraintrustTemporalPlugin,
+  createBraintrustTemporalPlugin,
+} from "./plugin";
 
 export type { BraintrustSinks } from "./sinks";
-
-export {
-  BRAINTRUST_SPAN_HEADER,
-  BRAINTRUST_WORKFLOW_SPAN_HEADER,
-} from "./utils";

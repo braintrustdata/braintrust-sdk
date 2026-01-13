@@ -1,9 +1,6 @@
 import { Worker, NativeConnection } from "@temporalio/worker";
 import * as braintrust from "braintrust";
-import {
-  createBraintrustActivityInterceptor,
-  createBraintrustSinks,
-} from "braintrust";
+import { createBraintrustTemporalPlugin } from "braintrust";
 import * as activities from "./activities";
 
 const TASK_QUEUE = "braintrust-example-task-queue";
@@ -21,13 +18,12 @@ async function main() {
     taskQueue: TASK_QUEUE,
     workflowsPath: require.resolve("./workflows"),
     activities,
+    plugins: [createBraintrustTemporalPlugin()],
     interceptors: {
-      activity: [createBraintrustActivityInterceptor],
       workflowModules: [
         require.resolve("braintrust/temporal/workflow-interceptors"),
       ],
     },
-    sinks: createBraintrustSinks(),
   });
 
   console.log(`Worker started on task queue: ${TASK_QUEUE}`);
