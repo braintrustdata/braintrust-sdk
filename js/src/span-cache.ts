@@ -10,6 +10,7 @@
  */
 
 import iso from "./isomorph";
+import { mergeDicts } from "../util/object_util";
 
 // Global registry of active span caches for process exit cleanup
 const activeCaches = new Set<SpanCache>();
@@ -307,7 +308,10 @@ export class SpanCache {
             if (existing) {
               spanMap.set(
                 record.spanId,
-                this.mergeSpanData(existing, record.data),
+                mergeDicts(
+                  { ...existing } as Record<string, unknown>,
+                  record.data as unknown as Record<string, unknown>,
+                ) as unknown as CachedSpan,
               );
             } else {
               spanMap.set(record.spanId, record.data);
@@ -328,7 +332,13 @@ export class SpanCache {
       }
       const existing = spanMap.get(record.spanId);
       if (existing) {
-        spanMap.set(record.spanId, this.mergeSpanData(existing, record.data));
+        spanMap.set(
+          record.spanId,
+          mergeDicts(
+            { ...existing } as Record<string, unknown>,
+            record.data as unknown as Record<string, unknown>,
+          ) as unknown as CachedSpan,
+        );
       } else {
         spanMap.set(record.spanId, record.data);
       }
@@ -410,27 +420,5 @@ export class SpanCache {
     this.initialized = false;
     this.initPromise = null;
     this.rootSpanIndex.clear();
-  }
-
-  private mergeSpanData(
-    existing: CachedSpan,
-    incoming: CachedSpan,
-  ): CachedSpan {
-    // Merge strategy: incoming values override existing ONLY if defined.
-    // Undefined values in incoming should not overwrite existing values.
-    return {
-      span_id: incoming.span_id,
-      span_parents: incoming.span_parents ?? existing.span_parents,
-      input: incoming.input !== undefined ? incoming.input : existing.input,
-      output: incoming.output !== undefined ? incoming.output : existing.output,
-      metadata:
-        existing.metadata || incoming.metadata
-          ? { ...existing.metadata, ...incoming.metadata }
-          : undefined,
-      span_attributes:
-        existing.span_attributes || incoming.span_attributes
-          ? { ...existing.span_attributes, ...incoming.span_attributes }
-          : undefined,
-    };
   }
 }
