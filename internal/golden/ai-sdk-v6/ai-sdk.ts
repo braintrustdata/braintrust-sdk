@@ -9,6 +9,11 @@ import { join } from "path";
 import type { LanguageModel } from "ai";
 
 console.log("Running ai sdk version:", require("ai/package.json").version);
+console.log(
+  process.env.AI_GATEWAY_API_KEY
+    ? "using ai gateway"
+    : "using ai provider directly",
+);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
