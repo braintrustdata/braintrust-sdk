@@ -153,12 +153,15 @@ describe("SpanCache (disk-based)", () => {
       cache.queueWrite("root-1", "span-1", { span_id: "span-1" });
       expect(cache.size).toBe(1);
 
+      // Stop first to decrement refcount, then dispose
+      cache.stop();
       cache.dispose();
 
       expect(cache.size).toBe(0);
       expect(cache.has("root-1")).toBe(false);
 
-      // Should be able to write again after dispose (cache is still enabled)
+      // Should be able to write again after dispose (if we start again)
+      cache.start();
       cache.queueWrite("root-2", "span-2", { span_id: "span-2" });
       expect(cache.size).toBe(1);
     });
@@ -225,8 +228,8 @@ describe("SpanCache (disk-based)", () => {
       expect(freshCache.size).toBe(1);
 
       // Stop after first "eval" (like calling stop() in finally block)
-      freshCache.dispose();
       freshCache.stop();
+      freshCache.dispose();
       expect(freshCache.disabled).toBe(true);
 
       // Start for second "eval" - should work!
@@ -235,6 +238,7 @@ describe("SpanCache (disk-based)", () => {
       freshCache.queueWrite("root-2", "span-2", { span_id: "span-2" });
       expect(freshCache.size).toBe(1);
 
+      freshCache.stop();
       freshCache.dispose();
     });
 
@@ -278,6 +282,121 @@ describe("SpanCache (disk-based)", () => {
       expect(freshCache.disabled).toBe(true);
 
       freshCache.dispose();
+    });
+  });
+
+  describe("parallel eval support with reference counting", () => {
+    test("should not dispose cache while evals are still running", () => {
+      const sharedCache = new SpanCache();
+
+      // Simulate two evals starting
+      sharedCache.start(); // Eval 1
+      expect(sharedCache.disabled).toBe(false);
+      expect(sharedCache["_activeEvalCount"]).toBe(1);
+
+      sharedCache.start(); // Eval 2
+      expect(sharedCache.disabled).toBe(false);
+      expect(sharedCache["_activeEvalCount"]).toBe(2);
+
+      // Write data from both evals
+      sharedCache.queueWrite("root-1", "span-1", { span_id: "span-1" });
+      sharedCache.queueWrite("root-2", "span-2", { span_id: "span-2" });
+      expect(sharedCache.size).toBe(2);
+
+      // Eval 1 finishes first
+      sharedCache.dispose(); // Should NOT dispose (refcount = 2)
+      sharedCache.stop(); // Decrements to 1
+
+      // Cache should still be enabled and data intact
+      expect(sharedCache.disabled).toBe(false);
+      expect(sharedCache["_activeEvalCount"]).toBe(1);
+      expect(sharedCache.size).toBe(2);
+      expect(sharedCache.getByRootSpanId("root-1")).toBeDefined();
+      expect(sharedCache.getByRootSpanId("root-2")).toBeDefined();
+
+      // Eval 2 finishes
+      sharedCache.dispose(); // Should NOT dispose yet (refcount = 1)
+      sharedCache.stop(); // Decrements to 0, disables cache
+
+      // Now cache should be disabled but data still exists
+      expect(sharedCache.disabled).toBe(true);
+      expect(sharedCache["_activeEvalCount"]).toBe(0);
+
+      // Final dispose should now work
+      sharedCache.dispose(); // NOW it disposes (refcount = 0)
+      expect(sharedCache.size).toBe(0);
+    });
+
+    test("should not increment refcount when explicitly disabled", () => {
+      const disabledCache = new SpanCache({ disabled: true });
+
+      disabledCache.start();
+      expect(disabledCache["_activeEvalCount"]).toBe(0);
+      expect(disabledCache.disabled).toBe(true);
+
+      disabledCache.start();
+      expect(disabledCache["_activeEvalCount"]).toBe(0);
+      expect(disabledCache.disabled).toBe(true);
+
+      disabledCache.dispose();
+    });
+
+    test("should handle refcount underflow gracefully", () => {
+      const cache = new SpanCache();
+
+      // Call stop without start
+      cache.stop();
+      expect(cache["_activeEvalCount"]).toBe(0);
+
+      cache.stop();
+      expect(cache["_activeEvalCount"]).toBe(0); // Should not go negative
+
+      // Should still work normally after
+      cache.start();
+      expect(cache["_activeEvalCount"]).toBe(1);
+
+      cache.dispose();
+    });
+
+    test("should simulate realistic parallel eval scenario", async () => {
+      const sharedCache = new SpanCache();
+
+      // Simulate Eval 1 starting
+      sharedCache.start();
+      sharedCache.queueWrite("eval1-root", "span-1", {
+        span_id: "span-1",
+        input: "eval1-input",
+      });
+
+      // Simulate Eval 2 starting (before Eval 1 finishes)
+      sharedCache.start();
+      sharedCache.queueWrite("eval2-root", "span-2", {
+        span_id: "span-2",
+        input: "eval2-input",
+      });
+
+      // Both evals should see their data
+      expect(sharedCache.getByRootSpanId("eval1-root")).toBeDefined();
+      expect(sharedCache.getByRootSpanId("eval2-root")).toBeDefined();
+
+      // Eval 1 finishes
+      sharedCache.dispose();
+      sharedCache.stop();
+
+      // Eval 2 should still have access
+      expect(sharedCache.disabled).toBe(false);
+      expect(sharedCache.getByRootSpanId("eval2-root")).toBeDefined();
+      expect(sharedCache.getByRootSpanId("eval1-root")).toBeDefined();
+
+      // Eval 2 finishes
+      sharedCache.dispose();
+      sharedCache.stop();
+
+      // Now cache is disabled
+      expect(sharedCache.disabled).toBe(true);
+
+      // Final cleanup
+      sharedCache.dispose();
     });
   });
 });

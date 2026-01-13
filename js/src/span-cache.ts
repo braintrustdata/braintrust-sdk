@@ -69,6 +69,8 @@ export class SpanCache {
   private _explicitlyDisabled: boolean;
   // Tracks whether the cache has been enabled (for evals only)
   private _enabled: boolean = false;
+  // Reference count of active evals using this cache
+  private _activeEvalCount: number = 0;
 
   // Small in-memory index tracking which rootSpanIds have data
   private rootSpanIndex: Set<string> = new Set();
@@ -92,10 +94,12 @@ export class SpanCache {
    * Start caching spans for use during evaluations.
    * This only starts caching if the cache wasn't permanently disabled.
    * Called by Eval() to turn on caching for the duration of the eval.
+   * Uses reference counting to support parallel evals.
    */
   start(): void {
     if (!this._explicitlyDisabled) {
       this._enabled = true;
+      this._activeEvalCount++;
     }
   }
 
@@ -103,9 +107,14 @@ export class SpanCache {
    * Stop caching spans and return to the default disabled state.
    * Unlike disable(), this allows start() to work again for future evals.
    * Called after an eval completes to return to the default state.
+   * Uses reference counting - only disables when all evals are complete.
    */
   stop(): void {
-    this._enabled = false;
+    this._activeEvalCount--;
+    if (this._activeEvalCount <= 0) {
+      this._activeEvalCount = 0;
+      this._enabled = false;
+    }
   }
 
   get disabled(): boolean {
@@ -370,8 +379,14 @@ export class SpanCache {
 
   /**
    * Clean up the cache file. Call this when the eval is complete.
+   * Only performs cleanup when all active evals have completed (refcount = 0).
    */
   dispose(): void {
+    // Only dispose if no active evals are using this cache
+    if (this._activeEvalCount > 0) {
+      return;
+    }
+
     // Remove from global registry
     activeCaches.delete(this);
 
