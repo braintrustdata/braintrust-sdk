@@ -3,11 +3,11 @@
  * Tests that Eval can run end-to-end in the current runtime without making real API calls.
  */
 
-import type { TestAdapters, TestResult } from "../helpers/types";
+import type { EvalFn, TestAdapters, TestResult } from "../helpers/types";
 import { assertDefined, assertType } from "../helpers/assertions";
 
 type BraintrustEvalModule = {
-  Eval?: unknown;
+  Eval?: EvalFn;
 };
 
 function simpleLevenshtein({
@@ -52,7 +52,7 @@ export async function runEvalSmokeTest(
     ];
 
     // Call signature in the JS SDK is: Eval(name, config, options)
-    const result = await (braintrust.Eval as any)(
+    const result = await braintrust.Eval(
       "smoke-eval-test",
       {
         data: evalData,
