@@ -4,6 +4,7 @@ packages:
   - integrations/*
   - internal/golden
   - js/src/wrappers/*
+  - js/examples/*
   - "!js/vendor/**"
   - "!internal/golden/*"
 

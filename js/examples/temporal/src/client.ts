@@ -1,11 +1,15 @@
 import { Client, Connection } from "@temporalio/client";
 import { v4 as uuid } from "uuid";
+import * as braintrust from "braintrust";
+import { createBraintrustClientInterceptor } from "braintrust";
 import { simpleWorkflow } from "./workflows";
 import type { TaskInput } from "./activities";
 
 const TASK_QUEUE = "braintrust-example-task-queue";
 
 async function main() {
+  braintrust.initLogger({ projectName: "temporal-example" });
+
   const connection = await Connection.connect({
     address: "localhost:7233",
   });
@@ -13,6 +17,9 @@ async function main() {
   const client = new Client({
     connection,
     namespace: "default",
+    interceptors: {
+      workflow: [createBraintrustClientInterceptor()],
+    },
   });
 
   const inputData: TaskInput = { value: 5 };
@@ -21,14 +28,25 @@ async function main() {
   console.log(`Starting workflow with value: ${inputData.value}`);
   console.log(`Workflow ID: ${workflowId}`);
 
-  const handle = await client.workflow.start(simpleWorkflow, {
-    args: [inputData],
-    taskQueue: TASK_QUEUE,
-    workflowId,
-  });
+  // Wrap in a Braintrust span
+  await braintrust.traced(
+    async (span) => {
+      const handle = await client.workflow.start(simpleWorkflow, {
+        args: [inputData],
+        taskQueue: TASK_QUEUE,
+        workflowId,
+      });
 
-  const result = await handle.result();
-  console.log(`\nResult: ${result}`);
+      const result = await handle.result();
+      span.log({ output: result });
+      console.log(`\nResult: ${result}`);
+      console.log(`\nView trace: ${span.link()}`);
+      return result;
+    },
+    { name: "temporal.client.simpleWorkflow" },
+  );
+
+  await braintrust.flush();
 }
 
 main().catch((err) => {

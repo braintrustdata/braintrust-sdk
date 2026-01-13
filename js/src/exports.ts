@@ -139,6 +139,16 @@ export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 
+export {
+  createBraintrustClientInterceptor,
+  createBraintrustActivityInterceptor,
+  createBraintrustSinks,
+  getWorkflowSpanExport,
+  BRAINTRUST_SPAN_HEADER,
+  BRAINTRUST_WORKFLOW_SPAN_HEADER,
+} from "./wrappers/temporal";
+export type { BraintrustSinks } from "./wrappers/temporal";
+
 export * as graph from "./graph-framework";
 
 export type {

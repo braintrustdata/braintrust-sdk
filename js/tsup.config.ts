@@ -5,7 +5,14 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    external: ["zod"],
+    external: [
+      "zod",
+      "@temporalio/activity",
+      "@temporalio/client",
+      "@temporalio/common",
+      "@temporalio/worker",
+      "@temporalio/workflow",
+    ],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -14,6 +21,22 @@ export default defineConfig([
     },
     splitting: true,
     clean: true,
+  },
+  {
+    entry: {
+      "temporal/workflow-interceptors":
+        "src/wrappers/temporal/workflow-interceptors.ts",
+    },
+    format: ["cjs", "esm"],
+    outDir: "dist",
+    external: ["zod", "@temporalio/common", "@temporalio/workflow"],
+    dts: {
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
+    splitting: false,
+    clean: false,
   },
   {
     entry: ["src/browser.ts"],

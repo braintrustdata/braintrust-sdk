@@ -29,3 +29,12 @@ run = "pnpm exec ts-node src/client.ts"
 [tasks.stop]
 description = "Stop temporal server and workers"
 run = "overmind quit || true"
+
+[tasks.kill]
+description = "Force kill temporal server and workers"
+run = """
+pkill -f 'examples/temporal.*ts-node' 2>/dev/null || true
+pkill -f 'overmind.*temporal' 2>/dev/null || true
+rm -f .overmind.sock
+echo 'Server killed'
+"""

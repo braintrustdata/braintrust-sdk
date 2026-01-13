@@ -44,6 +44,12 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
+    },
+    "./temporal/workflow-interceptors": {
+      "types": "./dist/temporal/workflow-interceptors.d.ts",
+      "import": "./dist/temporal/workflow-interceptors.mjs",
+      "module": "./dist/temporal/workflow-interceptors.mjs",
+      "require": "./dist/temporal/workflow-interceptors.js"
     }
   },
   "files": [
@@ -81,6 +87,11 @@
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
     "@openai/agents": "^0.0.14",
+    "@temporalio/activity": "^1.14.1",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/common": "^1.14.1",
+    "@temporalio/worker": "^1.14.1",
+    "@temporalio/workflow": "^1.14.1",
     "@types/argparse": "^2.0.14",
     "@types/async": "^3.2.24",
     "@types/cli-progress": "^3.11.5",
@@ -142,6 +153,28 @@
     "zod-to-json-schema": "^3.25.0"
   },
   "peerDependencies": {
+    "@temporalio/activity": "^1.11.0",
+    "@temporalio/client": "^1.11.0",
+    "@temporalio/common": "^1.11.0",
+    "@temporalio/worker": "^1.11.0",
+    "@temporalio/workflow": "^1.11.0",
     "zod": "^3.25.34 || ^4.0"
+  },
+  "peerDependenciesMeta": {
+    "@temporalio/activity": {
+      "optional": true
+    },
+    "@temporalio/client": {
+      "optional": true
+    },
+    "@temporalio/common": {
+      "optional": true
+    },
+    "@temporalio/worker": {
+      "optional": true
+    },
+    "@temporalio/workflow": {
+      "optional": true
+    }
   }
 }
