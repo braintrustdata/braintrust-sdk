@@ -78,8 +78,8 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
 
 const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
   return new Proxy(AgentClass, {
-    construct(target, args) {
-      const instance = new target(...args);
+    construct(target, args, newTarget) {
+      const instance = Reflect.construct(target, args, newTarget);
       return new Proxy(instance, {
         get(instanceTarget, prop, instanceReceiver) {
           const original = Reflect.get(instanceTarget, prop, instanceReceiver);
