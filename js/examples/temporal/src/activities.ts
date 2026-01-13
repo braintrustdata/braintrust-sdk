@@ -1,11 +1,26 @@
+import * as braintrust from "braintrust";
+
 export interface TaskInput {
   value: number;
 }
 
 export async function addTen(input: TaskInput): Promise<number> {
   console.log(`Adding 10 to ${input.value}`);
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const result = input.value + 10;
+
+  // Test child span within activity
+  const result = await braintrust.traced(
+    async (span) => {
+      span.log({
+        input: { value: input.value, operation: "add", operand: 10 },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const sum = input.value + 10;
+      span.log({ output: sum });
+      return sum;
+    },
+    { name: "compute.addition" },
+  );
+
   console.log(`Result: ${input.value} + 10 = ${result}`);
   return result;
 }
