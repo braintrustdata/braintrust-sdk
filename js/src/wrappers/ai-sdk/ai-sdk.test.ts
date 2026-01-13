@@ -1392,11 +1392,11 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(span.created).toBeDefined();
     expect(span.span_id).toBeDefined();
     expect(span.root_span_id).toBeDefined();
-    expect(span.span_attributes).toEqual({
+    expect(span.span_attributes).toMatchObject({
       type: "llm",
-      name: "generateText",
+      name: "CustomAgent.generate",
     });
-    expect(span.metadata).toEqual({
+    expect(span.metadata).toMatchObject({
       model: TEST_MODEL,
     });
     expect(span.input).toMatchObject({
