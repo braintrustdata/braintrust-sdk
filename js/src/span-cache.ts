@@ -11,6 +11,10 @@
 
 import iso from "./isomorph";
 
+// Global registry of active span caches for process exit cleanup
+const activeCaches = new Set<SpanCache>();
+let exitHandlersRegistered = false;
+
 /**
  * Check if the span cache can be used (requires filesystem APIs).
  * This is called at runtime, not at module load time, to allow
@@ -129,13 +133,66 @@ export class SpanCache {
         tmpDir,
         `braintrust-span-cache-${uniqueId}.jsonl`,
       );
+      console.log("WRITING TO FILE:");
+      console.log(this.cacheFilePath);
 
       // Open file for append+read
       this.fileHandle = await iso.openFile!(this.cacheFilePath, "a+");
       this.initialized = true;
+
+      // Register cleanup handler on first initialization
+      this.registerExitHandler();
     })();
 
     return this.initPromise;
+  }
+
+  /**
+   * Register a handler to clean up the temp file on process exit.
+   * Uses a global registry to avoid registering multiple handlers.
+   */
+  private registerExitHandler(): void {
+    // Add this cache to the global registry
+    activeCaches.add(this);
+
+    // Only register process handlers once globally
+    if (
+      typeof process !== "undefined" &&
+      process.on &&
+      !exitHandlersRegistered
+    ) {
+      exitHandlersRegistered = true;
+
+      const cleanupAllCaches = () => {
+        // Clean up all active caches
+        for (const cache of activeCaches) {
+          // Close file handle if open
+          if (cache.fileHandle) {
+            try {
+              cache.fileHandle.close().catch(() => {});
+              cache.fileHandle = null;
+            } catch {
+              // Ignore errors during exit cleanup
+            }
+          }
+
+          // Delete the temp file
+          if (cache.cacheFilePath && canUseSpanCache()) {
+            try {
+              iso.unlinkSync!(cache.cacheFilePath);
+            } catch {
+              // Ignore cleanup errors - file might not exist or already deleted
+            }
+          }
+        }
+      };
+
+      // Register for multiple exit scenarios
+      process.on("exit", cleanupAllCaches);
+      process.on("SIGINT", cleanupAllCaches);
+      process.on("SIGTERM", cleanupAllCaches);
+      process.on("beforeExit", cleanupAllCaches);
+    }
   }
 
   // Buffer for pending writes - flushed asynchronously
@@ -315,6 +372,9 @@ export class SpanCache {
    * Clean up the cache file. Call this when the eval is complete.
    */
   dispose(): void {
+    // Remove from global registry
+    activeCaches.delete(this);
+
     // Clear pending writes
     this.writeBuffer = [];
     this.flushScheduled = false;
