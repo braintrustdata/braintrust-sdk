@@ -2269,7 +2269,7 @@ describe("extractTokenMetrics", () => {
 describe("wrapAISDK with ES module namespace objects", () => {
   test("BEFORE FIX: reproduces Proxy invariant violation with non-configurable properties", () => {
     // NOTE: This test documents what WOULD happen without the fix.
-    // With the fix in place, wrapAISDK detects the namespace and spreads it,
+    // With the fix in place, wrapAISDK detects the namespace and uses prototype chain,
     // so this test now expects NO error.
 
     // Simulate an ES module namespace object with non-configurable properties
@@ -2300,7 +2300,7 @@ describe("wrapAISDK with ES module namespace objects", () => {
     expect(descriptor?.writable).toBe(false);
 
     // WITH THE FIX: This should NOT throw because wrapAISDK detects
-    // non-configurable properties and spreads the object
+    // non-configurable properties and uses prototype chain
     expect(() => {
       const wrapped = wrapAISDK(mockAISDK);
       // Try to access the wrapped property - this triggers the Proxy get trap
@@ -2308,8 +2308,8 @@ describe("wrapAISDK with ES module namespace objects", () => {
     }).not.toThrow();
   });
 
-  test("workaround: spreading namespace object creates configurable properties", () => {
-    // Simulate an ES module namespace object
+  test("prototype chain approach preserves all properties including non-enumerable", () => {
+    // Simulate an ES module namespace object with both enumerable and non-enumerable properties
     const mockAISDK = {};
 
     Object.defineProperty(mockAISDK, "generateText", {
@@ -2326,20 +2326,34 @@ describe("wrapAISDK with ES module namespace objects", () => {
       configurable: false,
     });
 
-    // Spreading creates a new object with configurable properties
+    // Add a non-enumerable property (like Symbol.toStringTag or hidden internals)
+    Object.defineProperty(mockAISDK, "hiddenProperty", {
+      value: "secret",
+      writable: false,
+      enumerable: false, // Non-enumerable!
+      configurable: false,
+    });
+
+    // Approach 1: Spreading (loses non-enumerable properties)
     const spreadSDK = { ...mockAISDK };
+    expect("generateText" in spreadSDK).toBe(true);
+    expect("hiddenProperty" in spreadSDK).toBe(false); // Lost!
 
-    // Verify the spread object has configurable properties
-    const descriptor = Object.getOwnPropertyDescriptor(
-      spreadSDK,
-      "generateText",
-    );
-    expect(descriptor?.configurable).toBe(true); // Now configurable!
+    // Approach 2: Prototype chain (preserves everything)
+    const protoSDK = Object.setPrototypeOf({}, mockAISDK);
+    expect("generateText" in protoSDK).toBe(true);
+    expect("hiddenProperty" in protoSDK).toBe(true); // Preserved!
+    expect(protoSDK.hiddenProperty).toBe("secret");
 
-    // This should NOT throw because properties are now configurable
+    // Verify the target has no own properties, avoiding invariant issues
+    expect(Object.keys(protoSDK).length).toBe(0);
+    expect(Object.getOwnPropertyNames(protoSDK).length).toBe(0);
+
+    // This should NOT throw because target has no non-configurable properties
     expect(() => {
-      const wrapped = wrapAISDK(spreadSDK);
+      const wrapped = wrapAISDK(protoSDK);
       wrapped.generateText;
+      expect(wrapped.hiddenProperty).toBe("secret"); // Still accessible
     }).not.toThrow();
   });
 
@@ -2378,7 +2392,7 @@ describe("wrapAISDK with ES module namespace objects", () => {
     );
     expect(moduleDescriptor?.configurable).toBe(false);
 
-    // WITH THE FIX: Should also work - detected and spread automatically
+    // WITH THE FIX: Should also work - detected and handled via prototype chain
     expect(() => {
       const wrapped = wrapAISDK(moduleRecord);
       wrapped.generateText;
@@ -2401,7 +2415,7 @@ describe("wrapAISDK with ES module namespace objects", () => {
     // Verify it has the 'Module' constructor name
     expect(mockModule.constructor.name).toBe("Module");
 
-    // Should not throw - detection via constructor.name should trigger spreading
+    // Should not throw - detection via constructor.name should trigger prototype chain
     expect(() => {
       const wrapped = wrapAISDK(mockModule);
       wrapped.generateText;

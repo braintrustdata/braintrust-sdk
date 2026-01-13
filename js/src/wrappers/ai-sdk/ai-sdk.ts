@@ -101,9 +101,12 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
 
   // Handle ES module namespaces (ModuleRecords) that have non-configurable properties.
   // These cause Proxy invariant violations because we return wrapped functions instead
-  // of the original values. Spreading creates a new object with configurable properties.
-  // See: https://github.com/braintrustdata/braintrust-sdk/issues/xxx
-  const target = isModuleNamespace(aiSDK) ? { ...aiSDK } : aiSDK;
+  // of the original values. Using prototype chain preserves all properties (enumerable
+  // and non-enumerable) while avoiding invariants since the target has no own properties.
+  // See: https://github.com/braintrustdata/braintrust-sdk/pull/1259
+  const target = isModuleNamespace(aiSDK)
+    ? Object.setPrototypeOf({}, aiSDK)
+    : aiSDK;
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy(target as unknown as any, {
