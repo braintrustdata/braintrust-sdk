@@ -306,12 +306,9 @@ export class SpanCache {
 
             const existing = spanMap.get(record.spanId);
             if (existing) {
-              spanMap.set(
-                record.spanId,
-                mergeDicts(
-                  { ...existing } as Record<string, unknown>,
-                  record.data as unknown as Record<string, unknown>,
-                ) as unknown as CachedSpan,
+              mergeDicts(
+                existing as unknown as Record<string, unknown>,
+                record.data as unknown as Record<string, unknown>,
               );
             } else {
               spanMap.set(record.spanId, record.data);
@@ -332,12 +329,9 @@ export class SpanCache {
       }
       const existing = spanMap.get(record.spanId);
       if (existing) {
-        spanMap.set(
-          record.spanId,
-          mergeDicts(
-            { ...existing } as Record<string, unknown>,
-            record.data as unknown as Record<string, unknown>,
-          ) as unknown as CachedSpan,
+        mergeDicts(
+          existing as unknown as Record<string, unknown>,
+          record.data as unknown as Record<string, unknown>,
         );
       } else {
         spanMap.set(record.spanId, record.data);
