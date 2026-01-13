@@ -8,6 +8,7 @@ import {
   setupTestEnvironment,
   cleanupTestEnvironment,
   runBasicLoggingTests,
+  runEvalSmokeTest,
   runImportVerificationTests,
   runPromptTemplatingTests,
 } from "../../../../../../shared/dist/index.mjs";
@@ -55,6 +56,9 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       // Run functional tests
       const functionalResults = await runBasicLoggingTests(adapters);
 
+      // Run eval smoke test
+      const evalResult = await runEvalSmokeTest(adapters, braintrust);
+
       // Run prompt templating tests
       const promptTemplatingResults = await runPromptTemplatingTests({
         Prompt: braintrust.Prompt,
@@ -64,6 +68,7 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       const results = [
         ...importResults,
         ...functionalResults,
+        evalResult,
         ...promptTemplatingResults,
       ];
 

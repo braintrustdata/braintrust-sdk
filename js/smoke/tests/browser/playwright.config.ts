@@ -4,7 +4,6 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// Config file is in the browser test directory, so __dirname is already the correct path
 
 export default defineConfig({
   testDir: "./tests",
@@ -23,6 +22,9 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
+  // Build happens in globalSetup before tests run
+  globalSetup: "./global-setup.ts",
+  // Start web server after build (globalSetup runs first)
   webServer: {
     command: "npx http-server . -p 3001 -c-1 --cors",
     port: 3001,

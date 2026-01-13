@@ -44,16 +44,11 @@ test.describe("Braintrust SDK Browser Tests", () => {
 
     console.log("Page loaded, waiting for all tests to complete...");
 
-    // Wait for both test suites to complete
+    // Wait for browser bundle to finish
     try {
       await page.waitForFunction(
         () => {
-          return (
-            (window as any).testResults !== undefined &&
-            (window as any).testResults.completed === true &&
-            (window as any).evalTestResults !== undefined &&
-            (window as any).evalTestResults.completed === true
-          );
+          return (window as any).__btBrowserSmokeResults?.completed === true;
         },
         { timeout: 60000 },
       );
@@ -61,10 +56,7 @@ test.describe("Braintrust SDK Browser Tests", () => {
       // Get current state for debugging
       const testState = await page.evaluate(() => {
         return {
-          hasTestResults: (window as any).testResults !== undefined,
-          testResults: (window as any).testResults,
-          hasEvalTestResults: (window as any).evalTestResults !== undefined,
-          evalTestResults: (window as any).evalTestResults,
+          smoke: (window as any).__btBrowserSmokeResults,
           documentReady: document.readyState,
           bodyContent: document.body?.innerText?.substring(0, 500),
         };
@@ -82,32 +74,30 @@ test.describe("Braintrust SDK Browser Tests", () => {
       throw error;
     }
 
-    // Get test results from the page
-    const generalResults = await page.evaluate(
-      () => (window as any).testResults,
-    );
-    const evalResults = await page.evaluate(
-      () => (window as any).evalTestResults,
+    // Get smoke results from the page
+    const smoke = await page.evaluate(
+      () => (window as any).__btBrowserSmokeResults,
     );
 
-    // Verify general tests
-    expect(generalResults.completed).toBe(true);
-    expect(generalResults.failed).toBe(0);
-    expect(generalResults.passed).toBeGreaterThan(0);
+    expect(smoke).toBeTruthy();
+    expect(smoke.completed).toBe(true);
+    expect(smoke.unhandledErrors?.length ?? 0).toBe(0);
 
-    // Verify eval test
-    expect(evalResults.completed).toBe(true);
-    expect(evalResults.success).toBe(true);
+    // Sections should exist and be clean
+    expect(smoke.sections.shared.completed).toBe(true);
+    expect(smoke.sections.shared.failed).toBe(0);
+    expect(smoke.sections.shared.passed).toBeGreaterThan(0);
+
+    expect(smoke.sections.eval.completed).toBe(true);
+    expect(smoke.sections.eval.failed).toBe(0);
+    expect(smoke.sections.eval.passed).toBeGreaterThan(0);
 
     // Log test summary
-    console.log(`General tests passed: ${generalResults.passed}`);
-    console.log(`General tests failed: ${generalResults.failed}`);
-    console.log(`Eval test success: ${evalResults.success}`);
-    if (generalResults.errors && generalResults.errors.length > 0) {
-      console.error("Test errors:", generalResults.errors);
-    }
-    if (evalResults.error) {
-      console.error("Eval test error:", evalResults.error);
-    }
+    console.log(
+      `Shared suite: ${smoke.sections.shared.passed} passed, ${smoke.sections.shared.failed} failed`,
+    );
+    console.log(
+      `Eval suite: ${smoke.sections.eval.passed} passed, ${smoke.sections.eval.failed} failed`,
+    );
   });
 });

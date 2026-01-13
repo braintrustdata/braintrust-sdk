@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.js",
-    "test": "npm run build && playwright test",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
     "postinstall": "npx playwright install --with-deps chromium",
     "backup": "npx tsx ../../backup-and-restore.ts backup",
     "restore": "npx tsx ../../backup-and-restore.ts restore",
