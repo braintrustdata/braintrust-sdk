@@ -5705,20 +5705,23 @@ export class SpanImpl implements Span {
     }
 
     // Write to local span cache for scorer access
-    const cachedSpan: CachedSpan = {
-      input: partialRecord.input,
-      output: partialRecord.output,
-      metadata: partialRecord.metadata as Record<string, unknown> | undefined,
-      span_id: this._spanId,
-      span_parents: this._spanParents,
-      span_attributes:
-        partialRecord.span_attributes as CachedSpan["span_attributes"],
-    };
-    this._state.spanCache.queueWrite(
-      this._rootSpanId,
-      this._spanId,
-      cachedSpan,
-    );
+    // Only cache experiment spans - regular logs don't need caching
+    if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const cachedSpan: CachedSpan = {
+        input: partialRecord.input,
+        output: partialRecord.output,
+        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        span_id: this._spanId,
+        span_parents: this._spanParents,
+        span_attributes:
+          partialRecord.span_attributes as CachedSpan["span_attributes"],
+      };
+      this._state.spanCache.queueWrite(
+        this._rootSpanId,
+        this._spanId,
+        cachedSpan,
+      );
+    }
 
     const computeRecord = async () => ({
       ...partialRecord,
