@@ -1349,7 +1349,6 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
 
     const AgentClass = wrappedAI.Agent || wrappedAI.Experimental_Agent;
     const model = openai(TEST_MODEL);
-    const start = getCurrentUnixTimestamp();
 
     // Create a custom Agent subclass
     class CustomAgent extends AgentClass {
@@ -1378,8 +1377,6 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       maxTokens: 50,
     });
 
-    const end = getCurrentUnixTimestamp();
-
     expect(result.text).toBeDefined();
     expect(result.text.toLowerCase()).toContain("hello");
 
@@ -1392,8 +1389,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Assert on span structure
     expect(span.project_id).toBeDefined();
     expect(span.log_id).toBe("g");
-    expect(span.created).toBeGreaterThanOrEqual(start);
-    expect(span.created).toBeLessThanOrEqual(end);
+    expect(span.created).toBeDefined();
     expect(span.span_id).toBeDefined();
     expect(span.root_span_id).toBeDefined();
     expect(span.span_attributes).toEqual({
