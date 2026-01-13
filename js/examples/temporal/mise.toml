@@ -1,0 +1,31 @@
+# Mise will automatically read and use .tool-versions files as well as this file.
+[settings]
+experimental=true
+
+[env]
+# See env.example to configure API keys.
+_.file = ".env"
+
+[tools]
+node = "20"
+temporal = "latest"
+overmind = "latest"
+
+[hooks]
+postinstall = "mise run install"
+
+[tasks.install]
+description = "Install dependencies"
+run = "pnpm install"
+
+[tasks.server]
+description = "Run temporal server and workers"
+run = "overmind s"
+
+[tasks.workflow]
+description = "Run workflow client"
+run = "pnpm exec ts-node src/client.ts"
+
+[tasks.stop]
+description = "Stop temporal server and workers"
+run = "overmind quit || true"
