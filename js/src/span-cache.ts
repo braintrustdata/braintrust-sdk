@@ -142,8 +142,6 @@ export class SpanCache {
         tmpDir,
         `braintrust-span-cache-${uniqueId}.jsonl`,
       );
-      console.log("WRITING TO FILE:");
-      console.log(this.cacheFilePath);
 
       // Open file for append+read
       this.fileHandle = await iso.openFile!(this.cacheFilePath, "a+");
