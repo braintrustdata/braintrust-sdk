@@ -18,18 +18,15 @@ import { createBraintrustSinks } from "./sinks";
  * import { Client, Connection } from "@temporalio/client";
  * import { Worker } from "@temporalio/worker";
  * import * as braintrust from "braintrust";
- * import { BraintrustTemporalPlugin } from "braintrust/wrappers/temporal";
+ * import { BraintrustTemporalPlugin } from "braintrust";
  *
  * // Initialize Braintrust logger
  * braintrust.initLogger({ projectName: "my-project" });
  *
- * // Create the plugin (use the same instance for client and worker)
- * const braintrustPlugin = new BraintrustTemporalPlugin();
- *
  * // Create client with the plugin
  * const client = new Client({
  *   connection: await Connection.connect(),
- *   plugins: [braintrustPlugin],
+ *   plugins: [new BraintrustTemporalPlugin()],
  * });
  *
  * // Create worker with the plugin
@@ -37,14 +34,8 @@ import { createBraintrustSinks } from "./sinks";
  *   taskQueue: "my-queue",
  *   workflowsPath: require.resolve("./workflows"),
  *   activities,
- *   plugins: [braintrustPlugin],
+ *   plugins: [new BraintrustTemporalPlugin()],
  * });
- * ```
- *
- * Note: You still need to register the workflow interceptors in your workflow code:
- * ```typescript
- * // In your workflows.ts
- * export { interceptors } from "braintrust/wrappers/temporal/workflow-interceptors";
  * ```
  */
 export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
@@ -87,13 +78,21 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
 
   /**
    * Configure the Temporal Worker with Braintrust interceptors and sinks.
-   * Adds the activity interceptor for creating spans, and the sinks for workflow spans.
+   * Adds the activity interceptor for creating spans, the sinks for workflow spans,
+   * and the workflow interceptor modules for bundling.
    */
   configureWorker(options: WorkerOptions): WorkerOptions {
     const existingActivityInterceptors = options.interceptors?.activity ?? [];
+    const existingWorkflowModules = options.interceptors?.workflowModules ?? [];
     const existingSinks = options.sinks ?? {};
 
     const braintrustSinks = createBraintrustSinks();
+
+    // Resolve the workflow interceptors module path
+    // This needs to be resolved at runtime to get the actual file path
+    const workflowInterceptorsPath = require.resolve(
+      "braintrust/temporal/workflow-interceptors",
+    );
 
     return {
       ...options,
@@ -103,6 +102,7 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
           ...existingActivityInterceptors,
           createBraintrustActivityInterceptor,
         ],
+        workflowModules: [...existingWorkflowModules, workflowInterceptorsPath],
       },
       sinks: {
         ...existingSinks,
