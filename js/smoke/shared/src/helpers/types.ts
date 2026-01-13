@@ -45,19 +45,15 @@ export interface TestResult {
   error?: Error;
 }
 
-// ---- Braintrust module surface types (minimal, runtime-agnostic) ----
+// ---- Braintrust module surface types ----
 
-export type EvalScoreFn = (args: { output: string; expected: string }) => {
-  name: string;
-  score: number;
-};
+export type EvalScoreFn = (args: {
+  output: string;
+  expected: string;
+}) =>
+  | { name: string; score: number }
+  | Promise<{ name: string; score: number }>;
 
-/**
- * Minimal callable type for the Braintrust `Eval` API, used in smoke tests.
- *
- * Intentionally avoids importing SDK-internal typings so it can be used across
- * Node, browser, and Deno-imported builds.
- */
 export type EvalFn = (
   name: string,
   config: {

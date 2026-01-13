@@ -5,27 +5,24 @@
 
 import type { EvalFn, TestAdapters, TestResult } from "../helpers/types";
 import { assertDefined, assertType } from "../helpers/assertions";
+import { Levenshtein } from "autoevals";
 
 type BraintrustEvalModule = {
   Eval?: EvalFn;
 };
 
-function simpleLevenshtein({
+async function autoevalsLevenshteinScore({
   output,
   expected,
 }: {
   output: string;
   expected: string;
 }) {
-  if (!output || !expected) return { name: "levenshtein", score: 0 };
-  const s1 = String(output).toLowerCase();
-  const s2 = String(expected).toLowerCase();
-  if (s1 === s2) return { name: "levenshtein", score: 1 };
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-  const editDistance = longer.length - shorter.length;
-  const similarity = Math.max(0, 1 - editDistance / longer.length);
-  return { name: "levenshtein", score: similarity };
+  const r: any = await (Levenshtein as any)({ output, expected });
+  // autoevals scorers typically return { score, ... }, but be defensive.
+  const score =
+    typeof r === "number" ? r : typeof r?.score === "number" ? r.score : 0;
+  return { name: "levenshtein", score };
 }
 
 /**
@@ -57,7 +54,7 @@ export async function runEvalSmokeTest(
       {
         data: evalData,
         task: async (input: string) => `Hi ${input}`,
-        scores: [simpleLevenshtein],
+        scores: [autoevalsLevenshteinScore],
       },
       {
         noSendLogs: true,
