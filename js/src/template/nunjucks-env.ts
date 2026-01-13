@@ -1,72 +1,77 @@
 import { nunjucks } from "./nunjucks";
-import type {
-  Environment as NunjucksEnvironment,
-  ConfigureOptions,
-} from "nunjucks";
+import type { Environment as NunjucksEnvironment } from "nunjucks";
 import { SyncLazyValue } from "../util";
 
-function wrapObjectWithStringify(obj: object): object {
+type UnknownRecord = Record<PropertyKey, unknown>;
+
+const isObject = (v: unknown): v is object =>
+  typeof v === "object" && v !== null;
+const isPlainObject = (v: unknown): v is UnknownRecord =>
+  isObject(v) && !Array.isArray(v);
+
+const toJsonString = (target: object) => () => JSON.stringify(target);
+
+function wrapObjectWithStringify<T extends object>(obj: T): T {
   return new Proxy(obj, {
-    get(target, prop) {
-      if (prop === "toString" || prop === "valueOf") {
-        return () => JSON.stringify(target);
+    get(target, prop, receiver) {
+      if (
+        prop === "toString" ||
+        prop === "valueOf" ||
+        prop === Symbol.toPrimitive
+      ) {
+        return toJsonString(target);
       }
-      if (prop === Symbol.toPrimitive) {
-        return () => JSON.stringify(target);
+
+      const value = Reflect.get(target as UnknownRecord, prop, receiver);
+
+      if (Array.isArray(value)) {
+        return value.map((item) =>
+          isPlainObject(item) ? wrapObjectWithStringify(item) : item,
+        );
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const value = (target as any)[prop];
-      if (typeof value === "object" && value !== null) {
-        if (Array.isArray(value)) {
-          // Wrap objects inside arrays so {% for item in array %} works
-          return value.map((item) =>
-            typeof item === "object" && item !== null && !Array.isArray(item)
-              ? wrapObjectWithStringify(item)
-              : item,
-          );
-        } else {
-          // Recursively wrap nested objects
-          return wrapObjectWithStringify(value);
-        }
-      }
-      return value;
+
+      return isPlainObject(value) ? wrapObjectWithStringify(value) : value;
     },
   });
 }
 
+function wrapContextValues(
+  context: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(context).map(([key, value]) => [
+      key,
+      isPlainObject(value)
+        ? wrapObjectWithStringify(value)
+        : Array.isArray(value)
+          ? value.map((item) =>
+              isPlainObject(item) ? wrapObjectWithStringify(item) : item,
+            )
+          : value,
+    ]),
+  );
+}
+
 const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
+  // html autoescape is turned off
   const env = new nunjucks.Environment(null, {
     autoescape: false,
     throwOnUndefined,
   });
 
-  // Intercept renderString to wrap objects with custom toString
-  const originalRenderString = env.renderString.bind(env);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (env as any).renderString = function (template: string, context: any) {
-    // Wrap context values with custom toString
-    const wrappedContext: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(context || {})) {
-      if (typeof val === "object" && val !== null) {
-        if (Array.isArray(val)) {
-          // Wrap objects inside arrays so {% for item in array %} {{ item }} works
-          wrappedContext[key] = val.map((item) =>
-            typeof item === "object" && item !== null && !Array.isArray(item)
-              ? wrapObjectWithStringify(item)
-              : item,
+  return new Proxy(env, {
+    get(target, prop, receiver) {
+      if (prop === "renderString") {
+        return (template: string, context: Record<string, unknown> = {}) =>
+          Reflect.get(target, prop, receiver).call(
+            target,
+            template,
+            wrapContextValues(context),
           );
-        } else {
-          // Wrap objects with custom toString to prevent [object Object]
-          wrappedContext[key] = wrapObjectWithStringify(val);
-        }
-      } else {
-        wrappedContext[key] = val;
       }
-    }
-    return originalRenderString(template, wrappedContext);
-  };
-
-  return env;
+      return Reflect.get(target as unknown as UnknownRecord, prop, receiver);
+    },
+  });
 };
 
 const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
@@ -77,7 +82,10 @@ const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
   createNunjucksEnv(true),
 );
 
-export function getNunjucksEnv(strict = false): NunjucksEnvironment {
+export function getNunjucksEnv(options?: {
+  strict?: boolean;
+}): NunjucksEnvironment {
+  const strict = options?.strict ?? false;
   return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
 }
 
@@ -87,7 +95,7 @@ export function renderNunjucksString(
   strict = false,
 ): string {
   try {
-    return getNunjucksEnv(strict).renderString(template, variables);
+    return getNunjucksEnv({ strict }).renderString(template, variables);
   } catch (error) {
     if (
       error instanceof Error &&

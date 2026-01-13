@@ -1,14 +1,13 @@
 import { describe, test, expect } from "vitest";
 import { lintTemplate } from "./nunjucks-utils";
-import { nunjucks } from "./nunjucks";
 import { getNunjucksEnv } from "./nunjucks-env";
 
 function getEnv() {
-  return getNunjucksEnv(false);
+  return getNunjucksEnv({ strict: false });
 }
 
 function getStrictEnv() {
-  return getNunjucksEnv(true);
+  return getNunjucksEnv({ strict: true });
 }
 
 describe("nunjucks rendering", () => {

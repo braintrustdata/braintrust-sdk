@@ -1,9 +1,6 @@
-import * as nunjucks from "nunjucks";
+import { getNunjucksEnv } from "./nunjucks-env";
 
 export function lintTemplate(template: string, context: any): void {
-  const env = new nunjucks.Environment(null, {
-    autoescape: false,
-    throwOnUndefined: true,
-  });
+  const env = getNunjucksEnv({ strict: true });
   env.renderString(template, context);
 }
