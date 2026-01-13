@@ -1,18 +1,14 @@
 import esbuild from "esbuild";
-import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const isProduction = process.env.NODE_ENV === "production";
-
 async function build() {
   const baseConfig = {
     bundle: true,
-    minify: isProduction,
-    sourcemap: !isProduction,
+    minify: true,
     target: "es2020",
     format: "esm",
     platform: "browser",

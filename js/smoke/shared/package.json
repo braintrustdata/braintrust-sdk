@@ -27,6 +27,7 @@
     "typescript": "^5.4.4"
   },
   "dependencies": {
-    "autoevals": "^0.0.131"
+    "autoevals": "^0.0.131",
+    "zod": "^4.3.5"
   }
 }
