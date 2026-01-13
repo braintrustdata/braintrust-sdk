@@ -5,24 +5,21 @@
 
 import type { EvalFn, TestAdapters, TestResult } from "../helpers/types";
 import { assertDefined, assertType } from "../helpers/assertions";
-import { Levenshtein } from "autoevals";
 
 type BraintrustEvalModule = {
   Eval?: EvalFn;
 };
 
-async function autoevalsLevenshteinScore({
+// Incredibly simple scorer for smoke tests: exact string match.
+// Deterministic, no dependencies, no network/LLM calls.
+function exactMatchScore({
   output,
   expected,
 }: {
   output: string;
   expected: string;
 }) {
-  const r: any = await (Levenshtein as any)({ output, expected });
-  // autoevals scorers typically return { score, ... }, but be defensive.
-  const score =
-    typeof r === "number" ? r : typeof r?.score === "number" ? r.score : 0;
-  return { name: "levenshtein", score };
+  return { name: "exact_match", score: output === expected ? 1 : 0 };
 }
 
 /**
@@ -54,7 +51,7 @@ export async function runEvalSmokeTest(
       {
         data: evalData,
         task: async (input: string) => `Hi ${input}`,
-        scores: [autoevalsLevenshteinScore],
+        scores: [exactMatchScore],
       },
       {
         noSendLogs: true,
