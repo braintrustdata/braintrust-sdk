@@ -42,7 +42,7 @@ VENDOR_PACKAGES = (
     "dspy",
     "openai",
     "openai-agents",
-    "pydantic_ai",
+    # pydantic_ai is NOT included here - it has dedicated test sessions with version-specific handling
     "autoevals",
     "braintrust_core",
     "litellm",
@@ -56,14 +56,17 @@ VENDOR_PACKAGES = (
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+# litellm latest requires Python >= 3.10
 LITELLM_VERSIONS = (LATEST, "1.74.0")
-CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.0")
+# CLI bundling started in 0.1.10 - older versions require external Claude Code installation
+CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.10")
 AGNO_VERSIONS = (LATEST, "2.1.0")
 # pydantic_ai 1.x requires Python >= 3.10
-if sys.version_info >= (3, 10):
-    PYDANTIC_AI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
-else:
-    PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")  # latest will resolve to 0.1.9 for Python 3.9
+# Two test suites with different version requirements:
+# 1. wrap_openai approach: works with older versions (0.1.9+)
+# 2. Direct wrapper (setup_pydantic_ai): requires 1.10.0+ for all features
+PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
+PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
 
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 GENAI_VERSIONS = (LATEST,)
@@ -82,11 +85,25 @@ def test_core(session):
 
 
 @nox.session()
-@nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
-def test_pydantic_ai(session, version):
+@nox.parametrize("version", PYDANTIC_AI_WRAP_OPENAI_VERSIONS, ids=PYDANTIC_AI_WRAP_OPENAI_VERSIONS)
+def test_pydantic_ai_wrap_openai(session, version):
+    """Test pydantic_ai with wrap_openai() approach - supports older versions."""
     _install_test_deps(session)
     _install(session, "pydantic_ai", version)
-    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_wrap_openai.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
+def test_pydantic_ai_integration(session, version):
+    """Test pydantic_ai with setup_pydantic_ai() wrapper - requires 1.10.0+."""
+    # Skip on Python 3.9 - pydantic_ai 1.10.0+ requires Python 3.10+
+    if sys.version_info < (3, 10):
+        session.skip("pydantic_ai integration tests require Python >= 3.10 (pydantic_ai 1.10.0+)")
+    _install_test_deps(session)
+    _install(session, "pydantic_ai", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_integration.py")
     _run_core_tests(session)
 
 
@@ -94,13 +111,10 @@ def test_pydantic_ai(session, version):
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install_test_deps(session)
-        npm_bin = _install_npm_in_session(session)
-        session.run(npm_bin, "install", "-g", "@anthropic-ai/claude-code", external=True)
-        _install(session, "claude_agent_sdk", version)
-        _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
-        _run_core_tests(session)
+    _install_test_deps(session)
+    _install(session, "claude_agent_sdk", version)
+    _run_tests(session, f"{WRAPPER_DIR}/claude_agent_sdk/test_wrapper.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -136,8 +150,7 @@ def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     # openai-agents requires Python >= 3.10
-    if sys.version_info >= (3, 10):
-        _install(session, "openai-agents")
+    _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
@@ -153,11 +166,17 @@ def test_openrouter(session):
 @nox.session()
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
+    # litellm latest requires Python >= 3.10
+    if version == LATEST and sys.version_info < (3, 10):
+        session.skip("litellm latest requires Python >= 3.10")
     _install_test_deps(session)
     # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
     # https://github.com/BerriAI/litellm/issues/13711
     session.install("openai<=1.99.9", "--force-reinstall")
     _install(session, "litellm", version)
+    # Install fastapi and orjson as they're required by litellm for proxy/responses operations
+    session.install("fastapi")
+    session.install("orjson")
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
 
@@ -165,6 +184,9 @@ def test_litellm(session, version):
 @nox.session()
 @nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
 def test_dspy(session, version):
+    # dspy latest depends on litellm which requires Python >= 3.10
+    if sys.version_info < (3, 10):
+        session.skip("dspy latest requires Python >= 3.10 (litellm dependency)")
     _install_test_deps(session)
     _install(session, "dspy", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_dspy.py")
@@ -238,6 +260,9 @@ def pylint(session):
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
+    # pydantic_ai is not in VENDOR_PACKAGES (has dedicated test sessions),
+    # but pylint needs it with minimum version constraint for proper API checking
+    session.install("pydantic_ai>=1.10.0")
     session.install("opentelemetry.instrumentation.openai")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
@@ -257,7 +282,8 @@ def test_latest_wrappers_novcr(session):
         args.append("--disable-vcr")
     session.notify("test_openai(latest)", posargs=args)
     session.notify("test_anthropic(latest)", posargs=args)
-    session.notify("test_pydantic_ai(latest)", posargs=args)
+    session.notify("test_pydantic_ai_wrap_openai(latest)", posargs=args)
+    session.notify("test_pydantic_ai_integration(latest)", posargs=args)
     session.notify("test_claude_agent_sdk(latest)", posargs=args)
 
 

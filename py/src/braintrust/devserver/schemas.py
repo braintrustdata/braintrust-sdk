@@ -1,7 +1,8 @@
 import json
-from typing import Any, Dict, List, Optional, Sequence, Union, get_args, get_origin
+from collections.abc import Sequence
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
-from typing_extensions import TypedDict, get_type_hints
+from typing_extensions import TypedDict
 
 # This is not beautiful code, but it saves us from introducing Pydantic as a dependency, and it is fairly
 # straightforward for an LLM to keep it up to date with runEvalBodySchema in JS.
@@ -16,12 +17,12 @@ class ValidationError(Exception):
 class ParsedFunctionId(TypedDict, total=False):
     """Parsed function identifier."""
 
-    function_id: Optional[str]
-    version: Optional[str]
-    name: Optional[str]
-    prompt_session_id: Optional[str]
-    inline_code: Optional[str]
-    global_function: Optional[str]
+    function_id: str | None
+    version: str | None
+    name: str | None
+    prompt_session_id: str | None
+    inline_code: str | None
+    global_function: str | None
 
 
 class ParsedParent(TypedDict):
@@ -35,16 +36,16 @@ class ParsedEvalBody(TypedDict, total=False):
     """Type for parsed eval request body."""
 
     name: str  # Required
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     data: Any
-    scores: List[ParsedFunctionId]
+    scores: list[ParsedFunctionId]
     experiment_name: str
     project_id: str
-    parent: Union[str, ParsedParent]
+    parent: str | ParsedParent
     stream: bool
 
 
-def validate_typed_dict(data: Any, typed_dict_class: type, path: str = "") -> Dict[str, Any]:
+def validate_typed_dict(data: Any, typed_dict_class: type, path: str = "") -> dict[str, Any]:
     """Validate data against a TypedDict definition."""
     if not isinstance(data, dict):
         raise ValidationError(f"{path or 'Root'} must be a dictionary, got {type(data).__name__}")
@@ -107,7 +108,7 @@ def validate_value(value: Any, expected_type: type, path: str) -> Any:
         return validate_value(value, inner_type, path)
 
     # Handle List/Sequence
-    if origin in (list, List, Sequence):
+    if origin in (list, list, Sequence):
         if not isinstance(value, list):
             raise ValidationError(f"{path} must be a list, got {type(value).__name__}")
 
@@ -115,7 +116,7 @@ def validate_value(value: Any, expected_type: type, path: str) -> Any:
         return [validate_value(item, item_type, f"{path}[{i}]") for i, item in enumerate(value)]
 
     # Handle Dict/Mapping
-    if origin in (dict, Dict):
+    if origin in (dict, dict):
         if not isinstance(value, dict):
             raise ValidationError(f"{path} must be a dict, got {type(value).__name__}")
 
@@ -172,7 +173,7 @@ def parse_function_id(data: Any, path: str = "function") -> ParsedFunctionId:
     raise ValidationError(f"{path} must specify function_id, name, prompt_session_id, or inline_code")
 
 
-def parse_eval_body(request_data: Union[str, bytes, dict]) -> ParsedEvalBody:
+def parse_eval_body(request_data: str | bytes | dict) -> ParsedEvalBody:
     """
     Parse request body for eval execution.
 
@@ -221,10 +222,12 @@ def parse_eval_body(request_data: Union[str, bytes, dict]) -> ParsedEvalBody:
         parsed_scores = []
         for i, score in enumerate(scores_data):
             try:
-                parsed_scores.append({
-                    "name": score["name"],
-                    "function_id": parse_function_id(score["function_id"], f"scores[{i}]"),
-                })
+                parsed_scores.append(
+                    {
+                        "name": score["name"],
+                        "function_id": parse_function_id(score["function_id"], f"scores[{i}]"),
+                    }
+                )
             except ValidationError as e:
                 raise ValidationError(f"Invalid score at index {i}: {e}")
 

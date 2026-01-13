@@ -45,7 +45,7 @@ import {
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
-import zodToJsonSchema from "zod-to-json-schema";
+import { zodToJsonSchema } from "../src/zod/utils";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -209,7 +209,12 @@ export function runDevServer(
             data: evalData.data,
             scores: evaluator.scores.concat(
               scores?.map((score) =>
-                makeScorer(state, score.name, score.function_id),
+                makeScorer(
+                  state,
+                  score.name,
+                  score.function_id,
+                  req.ctx?.projectId,
+                ),
               ) ?? [],
             ),
             task,
@@ -351,6 +356,7 @@ function makeScorer(
   state: BraintrustState,
   name: string,
   score: FunctionId,
+  projectId: string | undefined,
 ): EvalScorer<unknown, unknown, unknown, BaseMetadata> {
   const ret = async (input: EvalCase<unknown, unknown, BaseMetadata>) => {
     const request: InvokeFunctionRequest = {
@@ -361,10 +367,14 @@ function makeScorer(
       mode: "auto",
       strict: true,
     };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (projectId) {
+      headers["x-bt-project-id"] = projectId;
+    }
     const result = await state.proxyConn().post(`function/invoke`, request, {
-      headers: {
-        Accept: "application/json",
-      },
+      headers,
     });
     const data = await result.json();
     // NOTE: Ideally we can parse this value with a zod schema.
@@ -379,7 +389,7 @@ function makeScorer(
   return ret;
 }
 
-function makeEvalParametersSchema(
+export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
   return Object.fromEntries(
@@ -402,14 +412,14 @@ function makeEvalParametersSchema(
         // just using `any` to turn off the typesystem.
         //
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schema = zodToJsonSchema(value as any);
+        const schemaObj = zodToJsonSchema(value as any);
         return [
           name,
           {
             type: "data",
-            schema,
-            default: value.default,
-            description: value.description,
+            schema: schemaObj,
+            default: schemaObj.default,
+            description: schemaObj.description,
           },
         ];
       }

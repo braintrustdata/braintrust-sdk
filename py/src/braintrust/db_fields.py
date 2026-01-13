@@ -5,6 +5,7 @@ ID_FIELD = "id"
 
 IS_MERGE_FIELD = "_is_merge"
 MERGE_PATHS_FIELD = "_merge_paths"
+ARRAY_DELETE_FIELD = "_array_delete"
 
 AUDIT_SOURCE_FIELD = "_audit_source"
 AUDIT_METADATA_FIELD = "_audit_metadata"

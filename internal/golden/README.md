@@ -8,6 +8,7 @@ These test files validate the Braintrust SDK's integration with different AI pro
 - `openai.ts` - Tests for OpenAI integration
 - `google_genai.py` - Tests for Google Generative AI integration
 - `ai-sdk.ts` - Tests for AI SDK (Vercel) integration across multiple versions
+- `langchain.ts` - Tests for LangChain.js integration across multiple versions
 
 Each test suite validates:
 
@@ -29,6 +30,34 @@ The `ai-sdk.ts` test file can be run against multiple versions of the Vercel AI 
 - `ai-sdk-v5/` - AI SDK v5.x with compatible providers
 - `ai-sdk-v6/` - AI SDK v6.x beta with compatible providers
 
+Additionally, OTEL (OpenTelemetry) tests are available for certain versions. OTEL test directories and files end with `-otel`:
+
+- `ai-sdk-v5-otel/` - AI SDK v5.x with OTEL integration
+- `ai-sdk-v6-otel/` - AI SDK v6.x with OTEL integration
+
+## LangChain.js Version Testing
+
+The `langchain.ts` test file can be run against multiple versions of LangChain.js to ensure compatibility across versions. Each version has its own directory with compatible packages:
+
+- `langchain-js-v0/` - LangChain.js v0.3.x with `@langchain/core` 0.3.x
+- `langchain-js-v1/` - LangChain.js v1.x with `@langchain/core` 1.x
+
+### Running LangChain Version Tests
+
+```bash
+# Install dependencies for a specific version
+cd langchain-js-v0
+pnpm install --ignore-workspace
+
+# Run the tests
+npx tsx langchain.ts
+
+# Or test version 1.x
+cd ../langchain-js-v1
+pnpm install --ignore-workspace
+npx tsx langchain.ts
+```
+
 ### Running AI SDK Version Tests
 
 ```bash
@@ -44,6 +73,28 @@ cd ../ai-sdk-v3
 pnpm install --ignore-workspace
 npx tsx ai-sdk.ts
 ```
+
+### Running OTEL Tests
+
+OTEL tests validate OpenTelemetry integration with the AI SDK. These tests use folders and test files ending with `-otel` (e.g., `ai-sdk-v5-otel/` and `ai-sdk-otel.ts`).
+
+```bash
+# Install dependencies for a specific OTEL version
+cd ai-sdk-v5-otel
+pnpm install --ignore-workspace
+
+# Set required environment variables
+export OTEL_EXPORTER_OTLP_ENDPOINT=<your-otlp-endpoint>
+export BRAINTRUST_PARENT=project_name:golden-ts-ai-sdk-v5-otel
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <secret>, x-bt-parent=project_name:golden-ts-ai-sdk-v5-otel"
+
+# Also set the AI provider keys (e.g., OPENAI_API_KEY, ANTHROPIC_API_KEY)
+
+# Run the OTEL tests
+npx tsx ai-sdk-otel.ts
+```
+
+**Note**: Replace `<version>` in the environment variables with the actual version number (e.g., `v5`, `v6`). For example, for `ai-sdk-v6-otel`, use `golden-ts-ai-sdk-v6-otel`.
 
 ### Updating Test Files
 
@@ -86,6 +137,16 @@ Before running the tests, ensure you have the appropriate API keys set as enviro
 - `GOOGLE_API_KEY` for Google Generative AI tests
 
 The tests will automatically log traces to Braintrust projects named `golden-ts-anthropic`, `golden-ts-openai`, and `golden-python-genai` respectively.
+
+### OTEL Test Requirements
+
+For OTEL tests (folders and files ending with `-otel`), you need additional environment variables:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - The OTLP endpoint URL
+- `BRAINTRUST_PARENT` - Set to `project_name:golden-ts-ai-sdk-<version>-otel` (replace `<version>` with the actual version, e.g., `v5` or `v6`)
+- `OTEL_EXPORTER_OTLP_HEADERS` - Set to `"Authorization=Bearer <secret>, x-bt-parent=project_name:golden-ts-ai-sdk-<version>-otel"` (replace `<secret>` with your Braintrust API key and `<version>` with the actual version)
+
+In addition to these OTEL-specific variables, you still need to set the AI provider keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) as required by the test.
 
 ## Contributing
 

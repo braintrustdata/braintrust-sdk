@@ -16,9 +16,11 @@
     "mustache": "npm:mustache@^4.2.0",
     "uuid": "npm:uuid@^13.0.0",
     "zod": "npm:zod@^4.1.12",
+    "nunjucks": "npm:nunjucks@^3.2.4",
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.0"
   },
   "tasks": {
-    "test": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net span_test.ts"
+    "test:shared": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net shared_suite_test.ts",
+    "test:legacy": "deno test --config ./deno.json --allow-env --allow-read=.,$BRAINTRUST_BUILD_DIR --allow-net span_test.ts"
   }
 }

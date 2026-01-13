@@ -1,9 +1,10 @@
 import os
 import re
-from typing import Any, Awaitable, Callable, Dict, List, Union
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 # CORS configuration
-ALLOWED_ORIGINS: List[Union[str, re.Pattern]] = [
+ALLOWED_ORIGINS: list[str | re.Pattern] = [
     "https://www.braintrust.dev",
     "https://www.braintrustdata.com",
     re.compile(r"https://.*\.preview\.braintrust\.dev"),
@@ -18,6 +19,7 @@ ALLOWED_HEADERS = [
     "x-bt-auth-token",
     "x-bt-parent",
     "x-bt-org-name",
+    "x-bt-project-id",
     "x-bt-stream-fmt",
     "x-bt-use-cache",
     "x-stainless-os",
@@ -69,9 +71,9 @@ def create_cors_middleware() -> type:
 
         async def __call__(
             self,
-            scope: Dict[str, Any],
-            receive: Callable[[], Awaitable[Dict[str, Any]]],
-            send: Callable[[Dict[str, Any]], Awaitable[None]],
+            scope: dict[str, Any],
+            receive: Callable[[], Awaitable[dict[str, Any]]],
+            send: Callable[[dict[str, Any]], Awaitable[None]],
         ) -> None:
             if scope["type"] == "http":
                 headers = dict(scope["headers"])
@@ -80,7 +82,7 @@ def create_cors_middleware() -> type:
                 # Handle OPTIONS requests
                 if scope["method"] == "OPTIONS":
 
-                    async def send_options_wrapper(message: Dict[str, Any]) -> None:
+                    async def send_options_wrapper(message: dict[str, Any]) -> None:
                         if message["type"] == "http.response.start":
                             headers_dict = dict(message.get("headers", []))
 
@@ -119,7 +121,7 @@ def create_cors_middleware() -> type:
                     return
 
                 # For other requests, add CORS headers if origin is valid
-                async def send_wrapper(message: Dict[str, Any]) -> None:
+                async def send_wrapper(message: dict[str, Any]) -> None:
                     if message["type"] == "http.response.start" and origin and check_origin(origin):
                         headers_dict = dict(message.get("headers", []))
 

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 8e9c0a96b3cf291360978c17580f72f6817bd6c8) -- do not modify
+// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -132,12 +132,26 @@ export const ApiKey = z.object({
   org_id: z.union([z.string(), z.null()]).optional(),
 });
 export type ApiKeyType = z.infer<typeof ApiKey>;
+export const TriggeredFunctionState = z.object({
+  triggered_xact_id: z.string(),
+  completed_xact_id: z.union([z.string(), z.null()]).optional(),
+  attempts: z.number().int().gte(0).optional().default(0),
+  scope: z.union([
+    z.object({ type: z.literal("span") }),
+    z.object({ type: z.literal("trace") }),
+    z.object({ type: z.literal("group"), key: z.string(), value: z.string() }),
+  ]),
+});
+export type TriggeredFunctionStateType = z.infer<typeof TriggeredFunctionState>;
 export const AsyncScoringState = z.union([
   z.object({
     status: z.literal("enabled"),
     token: z.string(),
-    function_ids: z.array(z.unknown()).min(1),
+    function_ids: z.array(z.unknown()),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
+    triggered_functions: z
+      .union([z.record(TriggeredFunctionState), z.null()])
+      .optional(),
   }),
   z.object({ status: z.literal("disabled") }),
   z.null(),
@@ -145,10 +159,29 @@ export const AsyncScoringState = z.union([
 ]);
 export type AsyncScoringStateType = z.infer<typeof AsyncScoringState>;
 export const AsyncScoringControl = z.union([
-  z.object({ kind: z.literal("score_update"), token: z.string() }),
+  z.object({ kind: z.literal("score_update"), token: z.string().optional() }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
+  z.object({
+    kind: z.literal("trigger_functions"),
+    triggered_functions: z
+      .array(
+        z.object({
+          function_id: z.unknown().optional(),
+          scope: z.union([
+            z.object({ type: z.literal("span") }),
+            z.object({ type: z.literal("trace") }),
+          ]),
+        }),
+      )
+      .min(1),
+  }),
+  z.object({
+    kind: z.literal("complete_triggered_functions"),
+    function_ids: z.array(z.unknown()).min(1),
+    triggered_xact_id: z.string(),
+  }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
 export const BraintrustAttachmentReference = z.object({
@@ -181,6 +214,41 @@ export const AttachmentStatus = z.object({
   error_message: z.string().optional(),
 });
 export type AttachmentStatusType = z.infer<typeof AttachmentStatus>;
+export const FunctionTypeEnum = z.enum([
+  "llm",
+  "scorer",
+  "task",
+  "tool",
+  "custom_view",
+  "preprocessor",
+  "facet",
+]);
+export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
+export const NullableSavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
+  z.null(),
+]);
+export type NullableSavedFunctionIdType = z.infer<
+  typeof NullableSavedFunctionId
+>;
+export const BatchedFacetData = z.object({
+  type: z.literal("batched_facet"),
+  preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
+  facets: z.array(
+    z.object({
+      name: z.string(),
+      prompt: z.string(),
+      model: z.string().optional(),
+      no_match_pattern: z.string().optional(),
+    }),
+  ),
+});
+export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
@@ -394,7 +462,7 @@ export const ChatCompletionTool = z.object({
 export type ChatCompletionToolType = z.infer<typeof ChatCompletionTool>;
 export const CodeBundle = z.object({
   runtime_context: z.object({
-    runtime: z.enum(["node", "python", "browser"]),
+    runtime: z.enum(["node", "python", "browser", "quickjs"]),
     version: z.string(),
   }),
   location: z.union([
@@ -477,6 +545,14 @@ export const EnvVar = z.object({
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
   used: z.union([z.string(), z.null()]).optional(),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+  secret_type: z.union([z.string(), z.null()]).optional(),
+  secret_category: z
+    .enum(["env_var", "ai_provider"])
+    .optional()
+    .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
 export const RepoInfo = z.union([
@@ -517,7 +593,17 @@ export const Experiment = z.object({
 });
 export type ExperimentType = z.infer<typeof Experiment>;
 export const SpanType = z.union([
-  z.enum(["llm", "score", "function", "eval", "task", "tool"]),
+  z.enum([
+    "llm",
+    "score",
+    "function",
+    "eval",
+    "task",
+    "tool",
+    "automation",
+    "facet",
+    "preprocessor",
+  ]),
   z.null(),
 ]);
 export type SpanTypeType = z.infer<typeof SpanType>;
@@ -579,7 +665,11 @@ export const ExperimentEvent = z.object({
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
   z.object({
     type: z.literal("slug"),
     project_id: z.string(),
@@ -589,6 +679,14 @@ export const ExtendedSavedFunctionId = z.union([
 export type ExtendedSavedFunctionIdType = z.infer<
   typeof ExtendedSavedFunctionId
 >;
+export const FacetData = z.object({
+  type: z.literal("facet"),
+  preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
+  prompt: z.string(),
+  model: z.string().optional(),
+  no_match_pattern: z.string().optional(),
+});
+export type FacetDataType = z.infer<typeof FacetData>;
 export const PromptBlockDataNullish = z.union([
   z.object({
     type: z.literal("chat"),
@@ -696,7 +794,11 @@ export const PromptParserNullish = z.union([
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
 export const SavedFunctionId = z.union([
   z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
 ]);
 export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
@@ -706,6 +808,33 @@ export const PromptDataNullish = z.union([
       options: PromptOptionsNullish,
       parser: PromptParserNullish,
       tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+      template_format: z.union([
+        z.enum(["mustache", "nunjucks", "none"]),
+        z.null(),
+      ]),
+      mcp: z.union([
+        z.record(
+          z.union([
+            z.object({
+              type: z.literal("id"),
+              id: z.string().uuid(),
+              is_disabled: z.boolean().optional(),
+              enabled_tools: z
+                .union([z.array(z.string()), z.null()])
+                .optional(),
+            }),
+            z.object({
+              type: z.literal("url"),
+              url: z.string(),
+              is_disabled: z.boolean().optional(),
+              enabled_tools: z
+                .union([z.array(z.string()), z.null()])
+                .optional(),
+            }),
+          ]),
+        ),
+        z.null(),
+      ]),
       origin: z.union([
         z
           .object({
@@ -722,7 +851,15 @@ export const PromptDataNullish = z.union([
 ]);
 export type PromptDataNullishType = z.infer<typeof PromptDataNullish>;
 export const FunctionTypeEnumNullish = z.union([
-  z.enum(["llm", "scorer", "task", "tool", "custom_view"]),
+  z.enum([
+    "llm",
+    "scorer",
+    "task",
+    "tool",
+    "custom_view",
+    "preprocessor",
+    "facet",
+  ]),
   z.null(),
 ]);
 export type FunctionTypeEnumNullishType = z.infer<
@@ -824,10 +961,11 @@ export const FunctionData = z.union([
       z.object({
         type: z.literal("inline"),
         runtime_context: z.object({
-          runtime: z.enum(["node", "python", "browser"]),
+          runtime: z.enum(["node", "python", "browser", "quickjs"]),
           version: z.string(),
         }),
         code: z.string(),
+        code_hash: z.string().optional(),
       }),
     ]),
   }),
@@ -838,7 +976,16 @@ export const FunctionData = z.union([
     eval_name: z.string(),
     parameters: z.object({}).partial().passthrough(),
   }),
-  z.object({ type: z.literal("global"), name: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+    config: z
+      .union([z.object({}).partial().passthrough(), z.null()])
+      .optional(),
+  }),
+  FacetData,
+  BatchedFacetData,
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -884,6 +1031,29 @@ export const PromptData = z
     options: PromptOptionsNullish,
     parser: PromptParserNullish,
     tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
+    mcp: z.union([
+      z.record(
+        z.union([
+          z.object({
+            type: z.literal("id"),
+            id: z.string().uuid(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+          z.object({
+            type: z.literal("url"),
+            url: z.string(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+        ]),
+      ),
+      z.null(),
+    ]),
     origin: z.union([
       z
         .object({
@@ -897,14 +1067,6 @@ export const PromptData = z
   })
   .partial();
 export type PromptDataType = z.infer<typeof PromptData>;
-export const FunctionTypeEnum = z.enum([
-  "llm",
-  "scorer",
-  "task",
-  "tool",
-  "custom_view",
-]);
-export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
   z.object({
@@ -912,7 +1074,10 @@ export const FunctionId = z.union([
     slug: z.string(),
     version: z.string().optional(),
   }),
-  z.object({ global_function: z.string() }),
+  z.object({
+    global_function: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
   z.object({
     prompt_session_id: z.string(),
     prompt_session_function_id: z.string(),
@@ -920,7 +1085,7 @@ export const FunctionId = z.union([
   }),
   z.object({
     inline_context: z.object({
-      runtime: z.enum(["node", "python", "browser"]),
+      runtime: z.enum(["node", "python", "browser", "quickjs"]),
       version: z.string(),
     }),
     code: z.string(),
@@ -929,12 +1094,12 @@ export const FunctionId = z.union([
   z.object({
     inline_prompt: PromptData.optional(),
     inline_function: z.object({}).partial().passthrough(),
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
     inline_prompt: PromptData,
-    function_type: FunctionTypeEnum.optional(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
     name: z.union([z.string(), z.null()]).optional(),
   }),
 ]);
@@ -944,8 +1109,9 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
-  "agent",
   "custom_view",
+  "preprocessor",
+  "facet",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
@@ -981,6 +1147,12 @@ export const Group = z.object({
   member_groups: z.union([z.array(z.string().uuid()), z.null()]).optional(),
 });
 export type GroupType = z.infer<typeof Group>;
+export const GroupScope = z.object({
+  type: z.literal("group"),
+  group_by: z.string(),
+  idle_seconds: z.number().optional(),
+});
+export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
 export const InvokeParent = z.union([
@@ -1004,7 +1176,10 @@ export const InvokeParent = z.union([
   z.string(),
 ]);
 export type InvokeParentType = z.infer<typeof InvokeParent>;
-export const StreamingMode = z.union([z.enum(["auto", "parallel"]), z.null()]);
+export const StreamingMode = z.union([
+  z.enum(["auto", "parallel", "json", "text"]),
+  z.null(),
+]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
 export const InvokeFunction = FunctionId.and(
   z
@@ -1018,10 +1193,23 @@ export const InvokeFunction = FunctionId.and(
       stream: z.union([z.boolean(), z.null()]),
       mode: StreamingMode,
       strict: z.union([z.boolean(), z.null()]),
+      mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
+      overrides: z.union([z.object({}).partial().passthrough(), z.null()]),
     })
     .partial(),
 );
 export type InvokeFunctionType = z.infer<typeof InvokeFunction>;
+export const MCPServer = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  url: z.string(),
+});
+export type MCPServerType = z.infer<typeof MCPServer>;
 export const MessageRole = z.enum([
   "system",
   "user",
@@ -1047,6 +1235,13 @@ export const ObjectReference = z.object({
   created: z.union([z.string(), z.null()]).optional(),
 });
 export type ObjectReferenceType = z.infer<typeof ObjectReference>;
+export const SpanScope = z.object({ type: z.literal("span") });
+export type SpanScopeType = z.infer<typeof SpanScope>;
+export const TraceScope = z.object({
+  type: z.literal("trace"),
+  idle_seconds: z.number().optional(),
+});
+export type TraceScopeType = z.infer<typeof TraceScope>;
 export const OnlineScoreConfig = z.union([
   z.object({
     sampling_rate: z.number().gte(0).lte(1),
@@ -1055,6 +1250,7 @@ export const OnlineScoreConfig = z.union([
     apply_to_root_span: z.union([z.boolean(), z.null()]).optional(),
     apply_to_span_names: z.union([z.array(z.string()), z.null()]).optional(),
     skip_logging: z.union([z.boolean(), z.null()]).optional(),
+    scope: z.union([SpanScope, TraceScope, GroupScope, z.null()]).optional(),
   }),
   z.null(),
 ]);
@@ -1098,6 +1294,7 @@ export const ProjectSettings = z.union([
         z.null(),
       ]),
       disable_realtime_queries: z.union([z.boolean(), z.null()]),
+      default_preprocessor: NullableSavedFunctionId,
     })
     .partial(),
   z.null(),
@@ -1107,6 +1304,7 @@ export const Project = z.object({
   id: z.string().uuid(),
   org_id: z.string().uuid(),
   name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
   user_id: z.union([z.string(), z.null()]).optional(),
@@ -1131,7 +1329,15 @@ export const ProjectAutomation = z.object({
       event_type: z.literal("logs"),
       btql_filter: z.string(),
       interval_seconds: z.number().gte(1).lte(2592000),
-      action: z.object({ type: z.literal("webhook"), url: z.string() }),
+      action: z.union([
+        z.object({ type: z.literal("webhook"), url: z.string() }),
+        z.object({
+          type: z.literal("slack"),
+          workspace_id: z.string(),
+          channel: z.string(),
+          message_template: z.string().optional(),
+        }),
+      ]),
     }),
     z.object({
       event_type: z.literal("btql_export"),
@@ -1154,6 +1360,19 @@ export const ProjectAutomation = z.object({
       event_type: z.literal("retention"),
       object_type: RetentionObjectType,
       retention_days: z.number().gte(0),
+    }),
+    z.object({
+      event_type: z.literal("environment_update"),
+      environment_filter: z.array(z.string()).optional(),
+      action: z.union([
+        z.object({ type: z.literal("webhook"), url: z.string() }),
+        z.object({
+          type: z.literal("slack"),
+          workspace_id: z.string(),
+          channel: z.string(),
+          message_template: z.string().optional(),
+        }),
+      ]),
     }),
   ]),
 });
@@ -1372,6 +1591,9 @@ export const RunEval = z.object({
   stop_token: z.union([z.string(), z.null()]).optional(),
   extra_messages: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  mcp_auth: z
+    .record(z.object({ oauth_token: z.string() }).partial())
+    .optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
 export const ServiceToken = z.object({
@@ -1474,6 +1696,7 @@ export const ViewOptions = z.union([
         groupBy: z.union([z.string(), z.null()]),
       })
       .partial(),
+    freezeColumns: z.union([z.boolean(), z.null()]).optional(),
   }),
   z
     .object({
@@ -1526,6 +1749,7 @@ export const ViewOptions = z.union([
         z.null(),
       ]),
       queryShape: z.union([z.enum(["traces", "spans"]), z.null()]),
+      freezeColumns: z.union([z.boolean(), z.null()]),
     })
     .partial(),
   z.null(),
@@ -1547,7 +1771,6 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
     "monitor",
     "for_review",
   ]),

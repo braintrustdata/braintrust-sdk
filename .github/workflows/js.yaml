@@ -2,12 +2,8 @@ name: js
 
 on:
   pull_request:
-    paths-ignore:
-      - "integrations/otel-js/**"
   push:
     branches: [main]
-    paths-ignore:
-      - "integrations/otel-js/**"
 
 permissions:
   contents: read
@@ -33,11 +29,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
+
       - name: "verify ci"
         shell: bash
         run: |
@@ -107,6 +105,100 @@ jobs:
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
           retention-days: 1
 
+  api-compatibility:
+    runs-on: ubuntu-latest
+    # Run in parallel with build job
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history to access main branch for baseline
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+
+      - name: Get published braintrust version for cache key
+        id: published-version
+        shell: bash
+        run: |
+          PUBLISHED_VERSION=$(npm view braintrust version 2>/dev/null || echo "none")
+          echo "version=$PUBLISHED_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Published version: $PUBLISHED_VERSION"
+
+      - name: Cache API compatibility test tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm/_cacache
+          key: braintrust-tarball-${{ steps.published-version.outputs.version }}-${{ runner.os }}
+          restore-keys: |
+            braintrust-tarball-${{ steps.published-version.outputs.version }}-
+            braintrust-tarball-
+
+      - name: Build baseline from main branch for API compatibility
+        shell: bash
+        run: |
+          # Save current state
+          CURRENT_REF=$(git rev-parse HEAD)
+          BASELINE_DIR="$HOME/braintrust-baseline"
+          mkdir -p "$BASELINE_DIR"
+
+          # Checkout main and build
+          echo "Building baseline from main branch..."
+          git checkout origin/main || { echo "Could not checkout main"; exit 0; }
+
+          # Install and build main
+          pnpm install --frozen-lockfile || { echo "Baseline install failed"; git checkout "$CURRENT_REF"; exit 0; }
+          pnpm run build || { echo "Baseline build failed"; git checkout "$CURRENT_REF"; exit 0; }
+
+          # Copy built .d.ts files to baseline directory
+          if [ -d "js/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/dist"
+            cp js/dist/*.d.ts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
+            cp js/dist/*.d.mts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
+            echo "Copied main/browser dist files"
+          fi
+
+          if [ -d "js/dev/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/dev/dist"
+            cp js/dev/dist/*.d.ts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
+            cp js/dev/dist/*.d.mts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
+            echo "Copied dev dist files"
+          fi
+
+          if [ -d "js/util/dist" ]; then
+            mkdir -p "$BASELINE_DIR/js/util/dist"
+            cp js/util/dist/*.d.ts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
+            cp js/util/dist/*.d.mts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
+            echo "Copied util dist files"
+          fi
+
+          # Return to original commit
+          git checkout "$CURRENT_REF"
+
+          # Set environment variable for test to find baseline
+          echo "BASELINE_DIR=$BASELINE_DIR" >> $GITHUB_ENV
+          echo "Baseline created at $BASELINE_DIR"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build current branch
+        run: pnpm run build
+
+      - name: Run API compatibility test
+        env:
+          BASELINE_DIR: ${{ env.BASELINE_DIR }}
+        run: |
+          cd js && pnpm test:api-compat
+
   smoke-tests-node:
     needs: build
     runs-on: ${{ matrix.os }}
@@ -121,9 +213,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.workflow_run.repository.full_name }}
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -143,49 +232,99 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Temporarily point braintrust dependency to local build ${{ matrix.integration }}
+      - name: Install SDK artifacts for ${{ matrix.integration }}
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        shell: bash
         run: |
-          npm run install-build
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
 
-      - name: Run integration test (CJS) for ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+            npm install
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
+          else
+            npm install --legacy-peer-deps
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
+            npx tsx ../../install-build.ts ../../../artifacts otel
+          fi
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run smoke test for ${{ matrix.integration }}
+        working-directory: js/smoke
         shell: bash
         env:
           BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
           BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
         run: |
-          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm ci
-          else
-            npm ci --legacy-peer-deps
-            npx tsx ../../install-build.ts ../../../artifacts otel
-          fi
-          npm start
-
-      - name: Enable ESM for integrations tests
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        run: |
-          npm run enable-esm
-
-      - name: Run integration test (ESM) for ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        shell: bash
-        env:
-          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
-          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
-        run: |
-          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm ci
-          else
-            npm ci --legacy-peer-deps
-            npx tsx ../../install-build.ts ../../../artifacts otel
-          fi
-          npm start
+          ./run-tests.sh ${{ matrix.integration }}
 
       - name: Restore original package.json files
         if: always()
         working-directory: js/smoke/tests/${{ matrix.integration }}
+        run: |
+          npm run restore
+
+  smoke-tests-jest:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original span-jest package manifests
+        working-directory: js/smoke/tests/span-jest
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build for Jest span smoke test
+        working-directory: js/smoke/tests/span-jest
+        shell: bash
+        run: |
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Jest span smoke test
+        working-directory: js/smoke
+        shell: bash
+        run: |
+          ./run-tests.sh span-jest
+
+      - name: Restore original span-jest package.json files
+        if: always()
+        working-directory: js/smoke/tests/span-jest
         run: |
           npm run restore
 
@@ -225,15 +364,25 @@ jobs:
         working-directory: js/smoke/tests/nextjs-instrumentation
         shell: bash
         run: |
-          npm ci --legacy-peer-deps
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install --legacy-peer-deps
           npx tsx ../../install-build.ts ../../../artifacts braintrust
           npx tsx ../../install-build.ts ../../../artifacts otel
 
-      - name: Run Next.js build test
-        working-directory: js/smoke/tests/nextjs-instrumentation
-        shell: bash
+      - name: Build shared test package
+        working-directory: js/smoke/shared
         run: |
-          npm test
+          npm ci
+          npm run build
+
+      - name: Run Next.js smoke test
+        working-directory: js/smoke
+        shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: |
+          ./run-tests.sh nextjs-instrumentation
 
       - name: Restore original package.json files
         if: always()
@@ -276,14 +425,22 @@ jobs:
         working-directory: js/smoke/tests/cloudflare-worker
         shell: bash
         run: |
-          npm ci
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install
           npx tsx ../../install-build.ts ../../../artifacts braintrust
 
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
       - name: Run Cloudflare Worker smoke test
-        working-directory: js/smoke/tests/cloudflare-worker
+        working-directory: js/smoke
         shell: bash
         run: |
-          npm test
+          ./run-tests.sh cloudflare-worker
 
       - name: Restore original package.json files
         if: always()
@@ -332,9 +489,20 @@ jobs:
           tar -xzf "$TARBALL" -C build
           [ -d build/package ] && mv build/package build/braintrust
 
-      - name: Run logger test
+      - name: Install Deno dependencies
         working-directory: js/smoke/tests/deno
+        run: |
+          deno install
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Deno smoke test
+        working-directory: js/smoke
         env:
           BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
         run: |
-          deno task test
+          ./run-tests.sh deno

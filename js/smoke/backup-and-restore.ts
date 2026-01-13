@@ -1,6 +1,9 @@
 import fs from "fs";
-const path = "package.json";
-const backupPath = "package.json.bak";
+
+const files = [
+  { path: "package.json", backupPath: "package.json.bak" },
+  { path: "package-lock.json", backupPath: "package-lock.json.bak" },
+];
 
 const command = process.argv[2];
 
@@ -10,15 +13,25 @@ if (!command) {
 }
 
 if (command === "backup") {
-  fs.copyFileSync(path, backupPath);
-  console.log("package.json backed up to package.json.bak");
+  for (const { path, backupPath } of files) {
+    if (fs.existsSync(path)) {
+      fs.copyFileSync(path, backupPath);
+      console.log(`${path} backed up to ${backupPath}`);
+    }
+  }
 } else if (command === "restore") {
-  if (!fs.existsSync(backupPath)) {
-    console.error("Backup file does not exist.");
+  let restored = 0;
+  for (const { path, backupPath } of files) {
+    if (fs.existsSync(backupPath)) {
+      fs.renameSync(backupPath, path);
+      console.log(`${path} restored from ${backupPath}`);
+      restored++;
+    }
+  }
+  if (restored === 0) {
+    console.error("No backup files found.");
     process.exit(1);
   }
-  fs.renameSync(backupPath, path);
-  console.log("package.json restored from package.json.bak");
 } else {
   console.error('Invalid argument. Use "backup" or "restore".');
   process.exit(1);

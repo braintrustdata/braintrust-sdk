@@ -1,5 +1,5 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Dict, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -10,17 +10,19 @@ from ..logger import BraintrustState
 ORIGIN_HEADER = "origin"
 BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token"
 BRAINTRUST_ORG_NAME_HEADER = "x-bt-org-name"
+BRAINTRUST_PROJECT_ID_HEADER = "x-bt-project-id"
 
 
 @dataclass
 class RequestContext:
-    app_origin: Optional[str]
-    token: Optional[str]
-    org_name: Optional[str]
-    state: Optional[BraintrustState]
+    app_origin: str | None
+    token: str | None
+    org_name: str | None
+    project_id: str | None
+    state: BraintrustState | None
 
 
-def extract_allowed_origin(origin: Optional[str]) -> Optional[str]:
+def extract_allowed_origin(origin: str | None) -> str | None:
     """Extract and validate the origin header."""
     # This should use the same check_origin logic from cors.py
     from .cors import check_origin
@@ -30,7 +32,7 @@ def extract_allowed_origin(origin: Optional[str]) -> Optional[str]:
     return None
 
 
-def parse_braintrust_auth_header(headers: Dict[str, str]) -> Optional[str]:
+def parse_braintrust_auth_header(headers: dict[str, str]) -> str | None:
     """Parse the authorization token from headers."""
     # Check x-bt-auth-token first
     token = headers.get(BRAINTRUST_AUTH_TOKEN_HEADER)
@@ -56,6 +58,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 app_origin=extract_allowed_origin(request.headers.get(ORIGIN_HEADER)),
                 token=None,
                 org_name=request.headers.get(BRAINTRUST_ORG_NAME_HEADER),
+                project_id=request.headers.get(BRAINTRUST_PROJECT_ID_HEADER),
                 state=None,
             )
 
