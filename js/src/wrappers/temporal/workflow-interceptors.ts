@@ -32,33 +32,38 @@ import {
 
 const { braintrust } = proxySinks<BraintrustSinks>();
 
-// Store info for propagation to activities
-let storedParentContext: string | undefined;
-let workflowSpanId: string | undefined;
+/**
+ * Shared state between inbound and outbound interceptors for a single workflow.
+ * Created per-workflow by the factory function to avoid global state issues.
+ */
+interface WorkflowSpanState {
+  parentContext: string | undefined;
+  spanId: string | undefined;
+}
 
 class BraintrustWorkflowInboundInterceptor
   implements WorkflowInboundCallsInterceptor
 {
+  constructor(private state: WorkflowSpanState) {}
+
   async execute(
     input: WorkflowExecuteInput,
     next: Next<WorkflowInboundCallsInterceptor, "execute">,
   ): Promise<unknown> {
-    const info = workflowInfo();
-
     // Extract parent context from headers
     const parentContext = input.headers
       ? deserializeHeaderValue(input.headers[BRAINTRUST_SPAN_HEADER])
       : undefined;
 
     // Store for the outbound interceptor to forward to activities
-    storedParentContext = parentContext;
+    this.state.parentContext = parentContext;
 
     // Generate a deterministic spanId for the workflow span
-    workflowSpanId = uuid4();
+    this.state.spanId = uuid4();
 
     // Create workflow span via sink (only called if not replaying)
     // NOTE: WorkflowInfo is injected automatically by the runtime
-    braintrust.workflowStarted(parentContext, workflowSpanId);
+    braintrust.workflowStarted(parentContext, this.state.spanId);
 
     try {
       const result = await next(input);
@@ -67,9 +72,6 @@ class BraintrustWorkflowInboundInterceptor
     } catch (e) {
       braintrust.workflowCompleted(e instanceof Error ? e.message : String(e));
       throw e;
-    } finally {
-      storedParentContext = undefined;
-      workflowSpanId = undefined;
     }
   }
 }
@@ -77,6 +79,8 @@ class BraintrustWorkflowInboundInterceptor
 class BraintrustWorkflowOutboundInterceptor
   implements WorkflowOutboundCallsInterceptor
 {
+  constructor(private state: WorkflowSpanState) {}
+
   private getHeaders(): Record<string, Payload> {
     const info = workflowInfo();
     const headers: Record<string, Payload> = {};
@@ -85,15 +89,17 @@ class BraintrustWorkflowOutboundInterceptor
     headers[BRAINTRUST_WORKFLOW_SPAN_HEADER] = serializeHeaderValue(info.runId);
 
     // Pass workflow span ID for cross-worker activities to construct parent
-    if (workflowSpanId) {
-      headers[BRAINTRUST_WORKFLOW_SPAN_ID_HEADER] =
-        serializeHeaderValue(workflowSpanId);
+    if (this.state.spanId) {
+      headers[BRAINTRUST_WORKFLOW_SPAN_ID_HEADER] = serializeHeaderValue(
+        this.state.spanId,
+      );
     }
 
     // Pass client context for cross-worker activities to construct parent
-    if (storedParentContext) {
-      headers[BRAINTRUST_SPAN_HEADER] =
-        serializeHeaderValue(storedParentContext);
+    if (this.state.parentContext) {
+      headers[BRAINTRUST_SPAN_HEADER] = serializeHeaderValue(
+        this.state.parentContext,
+      );
     }
 
     return headers;
@@ -139,7 +145,15 @@ class BraintrustWorkflowOutboundInterceptor
   }
 }
 
-export const interceptors: WorkflowInterceptorsFactory = () => ({
-  inbound: [new BraintrustWorkflowInboundInterceptor()],
-  outbound: [new BraintrustWorkflowOutboundInterceptor()],
-});
+export const interceptors: WorkflowInterceptorsFactory = () => {
+  // Create shared state for this workflow instance
+  const state: WorkflowSpanState = {
+    parentContext: undefined,
+    spanId: undefined,
+  };
+
+  return {
+    inbound: [new BraintrustWorkflowInboundInterceptor(state)],
+    outbound: [new BraintrustWorkflowOutboundInterceptor(state)],
+  };
+};

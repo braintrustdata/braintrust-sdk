@@ -363,43 +363,6 @@ importers:
         specifier: ^3.25.34
         version: 3.25.76
 
-  js/examples/temporal:
-    dependencies:
-      '@temporalio/activity':
-        specifier: ^1.11.0
-        version: 1.14.1
-      '@temporalio/client':
-        specifier: ^1.11.0
-        version: 1.14.1
-      '@temporalio/common':
-        specifier: ^1.11.0
-        version: 1.14.1
-      '@temporalio/worker':
-        specifier: ^1.11.0
-        version: 1.14.1
-      '@temporalio/workflow':
-        specifier: ^1.11.0
-        version: 1.14.1
-      braintrust:
-        specifier: workspace:*
-        version: link:../..
-      uuid:
-        specifier: ^9.0.0
-        version: 9.0.1
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.16
-      '@types/uuid':
-        specifier: ^9.0.0
-        version: 9.0.7
-      ts-node:
-        specifier: ^10.9.0
-        version: 10.9.2(@swc/core@1.15.8)(@types/node@20.19.16)(typescript@5.5.4)
-      typescript:
-        specifier: ^5.0.0
-        version: 5.5.4
-
   js/src/wrappers/ai-sdk:
     devDependencies:
       '@ai-sdk/anthropic':
@@ -6719,6 +6682,7 @@ snapshots:
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
+    optional: true
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
@@ -7246,7 +7210,7 @@ snapshots:
   '@jest/console@29.7.0':
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       jest-message-util: 29.7.0
       jest-util: 29.7.0
@@ -7259,14 +7223,14 @@ snapshots:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 3.9.0
       exit: 0.1.2
       graceful-fs: 4.2.11
       jest-changed-files: 29.7.0
-      jest-config: 29.7.0(@types/node@20.19.16)(ts-node@10.9.2(@swc/core@1.15.8)(@types/node@20.10.5)(typescript@5.4.4))
+      jest-config: 29.7.0(@types/node@22.19.1)(ts-node@10.9.2(@swc/core@1.15.8)(@types/node@20.10.5)(typescript@5.4.4))
       jest-haste-map: 29.7.0
       jest-message-util: 29.7.0
       jest-regex-util: 29.6.3
@@ -7331,7 +7295,7 @@ snapshots:
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       collect-v8-coverage: 1.0.2
       exit: 0.1.2
@@ -7458,6 +7422,7 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+    optional: true
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
@@ -7999,36 +7964,6 @@ snapshots:
       long: 5.3.2
       protobufjs: 7.5.4
 
-  '@temporalio/worker@1.14.1':
-    dependencies:
-      '@grpc/grpc-js': 1.14.3
-      '@swc/core': 1.15.8
-      '@temporalio/activity': 1.14.1
-      '@temporalio/client': 1.14.1
-      '@temporalio/common': 1.14.1
-      '@temporalio/core-bridge': 1.14.1
-      '@temporalio/nexus': 1.14.1
-      '@temporalio/proto': 1.14.1
-      '@temporalio/workflow': 1.14.1
-      abort-controller: 3.0.0
-      heap-js: 2.7.1
-      memfs: 4.51.1
-      nexus-rpc: 0.0.1
-      proto3-json-serializer: 2.0.2
-      protobufjs: 7.5.4
-      rxjs: 7.8.2
-      source-map: 0.7.6
-      source-map-loader: 4.0.2(webpack@5.104.1(@swc/core@1.15.8))
-      supports-color: 8.1.1
-      swc-loader: 0.2.6(@swc/core@1.15.8)(webpack@5.104.1(@swc/core@1.15.8))
-      unionfs: 4.6.0
-      webpack: 5.104.1(@swc/core@1.15.8)
-    transitivePeerDependencies:
-      - '@swc/helpers'
-      - esbuild
-      - uglify-js
-      - webpack-cli
-
   '@temporalio/worker@1.14.1(esbuild@0.27.0)':
     dependencies:
       '@grpc/grpc-js': 1.14.3
@@ -8065,13 +8000,17 @@ snapshots:
       '@temporalio/proto': 1.14.1
       nexus-rpc: 0.0.1
 
-  '@tsconfig/node10@1.0.12': {}
+  '@tsconfig/node10@1.0.12':
+    optional: true
 
-  '@tsconfig/node12@1.0.11': {}
+  '@tsconfig/node12@1.0.11':
+    optional: true
 
-  '@tsconfig/node14@1.0.3': {}
+  '@tsconfig/node14@1.0.3':
+    optional: true
 
-  '@tsconfig/node16@1.0.4': {}
+  '@tsconfig/node16@1.0.4':
+    optional: true
 
   '@types/argparse@2.0.14': {}
 
@@ -8579,6 +8518,7 @@ snapshots:
   acorn-walk@8.3.4:
     dependencies:
       acorn: 8.15.0
+    optional: true
 
   acorn@8.15.0: {}
 
@@ -8693,7 +8633,8 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.1
 
-  arg@4.1.3: {}
+  arg@4.1.3:
+    optional: true
 
   argparse@1.0.10:
     dependencies:
@@ -9155,7 +9096,8 @@ snapshots:
       - supports-color
       - ts-node
 
-  create-require@1.1.1: {}
+  create-require@1.1.1:
+    optional: true
 
   cross-env@7.0.3:
     dependencies:
@@ -9229,7 +9171,8 @@ snapshots:
 
   diff-sequences@29.6.3: {}
 
-  diff@4.0.2: {}
+  diff@4.0.2:
+    optional: true
 
   dotenv@16.4.5: {}
 
@@ -10208,7 +10151,7 @@ snapshots:
       '@jest/expect': 29.7.0
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.0
@@ -10278,7 +10221,7 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-config@29.7.0(@types/node@20.19.16)(ts-node@10.9.2(@swc/core@1.15.8)(@types/node@20.10.5)(typescript@5.4.4)):
+  jest-config@29.7.0(@types/node@22.19.1)(ts-node@10.9.2(@swc/core@1.15.8)(@types/node@20.10.5)(typescript@5.4.4)):
     dependencies:
       '@babel/core': 7.28.4
       '@jest/test-sequencer': 29.7.0
@@ -10303,7 +10246,7 @@ snapshots:
       slash: 3.0.0
       strip-json-comments: 3.1.1
     optionalDependencies:
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       ts-node: 10.9.2(@swc/core@1.15.8)(@types/node@20.10.5)(typescript@5.4.4)
     transitivePeerDependencies:
       - babel-plugin-macros
@@ -10333,7 +10276,7 @@ snapshots:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       jest-mock: 29.7.0
       jest-util: 29.7.0
 
@@ -10417,7 +10360,7 @@ snapshots:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       emittery: 0.13.1
       graceful-fs: 4.2.11
@@ -10445,7 +10388,7 @@ snapshots:
       '@jest/test-result': 29.7.0
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       chalk: 4.1.2
       cjs-module-lexer: 1.4.3
       collect-v8-coverage: 1.0.2
@@ -10510,7 +10453,7 @@ snapshots:
     dependencies:
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.19.16
+      '@types/node': 22.19.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -11649,12 +11592,6 @@ snapshots:
       source-map-js: 1.2.1
       webpack: 5.104.1(@swc/core@1.15.8)(esbuild@0.27.0)
 
-  source-map-loader@4.0.2(webpack@5.104.1(@swc/core@1.15.8)):
-    dependencies:
-      iconv-lite: 0.6.3
-      source-map-js: 1.2.1
-      webpack: 5.104.1(@swc/core@1.15.8)
-
   source-map-support@0.5.13:
     dependencies:
       buffer-from: 1.1.2
@@ -11818,12 +11755,6 @@ snapshots:
       '@swc/counter': 0.1.3
       webpack: 5.104.1(@swc/core@1.15.8)(esbuild@0.27.0)
 
-  swc-loader@0.2.6(@swc/core@1.15.8)(webpack@5.104.1(@swc/core@1.15.8)):
-    dependencies:
-      '@swc/core': 1.15.8
-      '@swc/counter': 0.1.3
-      webpack: 5.104.1(@swc/core@1.15.8)
-
   swr@2.2.0(react@19.1.1):
     dependencies:
       react: 19.1.1
@@ -11869,17 +11800,6 @@ snapshots:
     optionalDependencies:
       '@swc/core': 1.15.8
       esbuild: 0.27.0
-
-  terser-webpack-plugin@5.3.16(@swc/core@1.15.8)(webpack@5.104.1(@swc/core@1.15.8)):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      jest-worker: 27.5.1
-      schema-utils: 4.3.3
-      serialize-javascript: 6.0.2
-      terser: 5.44.1
-      webpack: 5.104.1(@swc/core@1.15.8)
-    optionalDependencies:
-      '@swc/core': 1.15.8
 
   terser@5.44.1:
     dependencies:
@@ -12006,26 +11926,6 @@ snapshots:
     optionalDependencies:
       '@swc/core': 1.15.8
     optional: true
-
-  ts-node@10.9.2(@swc/core@1.15.8)(@types/node@20.19.16)(typescript@5.5.4):
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      '@tsconfig/node10': 1.0.12
-      '@tsconfig/node12': 1.0.11
-      '@tsconfig/node14': 1.0.3
-      '@tsconfig/node16': 1.0.4
-      '@types/node': 20.19.16
-      acorn: 8.15.0
-      acorn-walk: 8.3.4
-      arg: 4.1.3
-      create-require: 1.1.1
-      diff: 4.0.2
-      make-error: 1.3.6
-      typescript: 5.5.4
-      v8-compile-cache-lib: 3.0.1
-      yn: 3.1.1
-    optionalDependencies:
-      '@swc/core': 1.15.8
 
   ts-pattern@5.8.0: {}
 
@@ -12334,7 +12234,8 @@ snapshots:
 
   uuid@9.0.1: {}
 
-  v8-compile-cache-lib@3.0.1: {}
+  v8-compile-cache-lib@3.0.1:
+    optional: true
 
   v8-to-istanbul@9.3.0:
     dependencies:
@@ -12630,38 +12531,6 @@ snapshots:
 
   webpack-sources@3.3.3: {}
 
-  webpack@5.104.1(@swc/core@1.15.8):
-    dependencies:
-      '@types/eslint-scope': 3.7.7
-      '@types/estree': 1.0.8
-      '@types/json-schema': 7.0.15
-      '@webassemblyjs/ast': 1.14.1
-      '@webassemblyjs/wasm-edit': 1.14.1
-      '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.15.0
-      acorn-import-phases: 1.0.4(acorn@8.15.0)
-      browserslist: 4.28.1
-      chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.18.4
-      es-module-lexer: 2.0.0
-      eslint-scope: 5.1.1
-      events: 3.3.0
-      glob-to-regexp: 0.4.1
-      graceful-fs: 4.2.11
-      json-parse-even-better-errors: 2.3.1
-      loader-runner: 4.3.1
-      mime-types: 2.1.35
-      neo-async: 2.6.2
-      schema-utils: 4.3.3
-      tapable: 2.3.0
-      terser-webpack-plugin: 5.3.16(@swc/core@1.15.8)(webpack@5.104.1(@swc/core@1.15.8))
-      watchpack: 2.5.0
-      webpack-sources: 3.3.3
-    transitivePeerDependencies:
-      - '@swc/core'
-      - esbuild
-      - uglify-js
-
   webpack@5.104.1(@swc/core@1.15.8)(esbuild@0.27.0):
     dependencies:
       '@types/eslint-scope': 3.7.7
@@ -12802,7 +12671,8 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 21.1.1
 
-  yn@3.1.1: {}
+  yn@3.1.1:
+    optional: true
 
   yocto-queue@0.1.0: {}
 
