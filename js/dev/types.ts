@@ -52,8 +52,20 @@ export type EvalParameterSerializedSchema = z.infer<
   typeof evalParametersSerializedSchema
 >;
 
+export const configSourceSchema = z.object({
+  configId: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  projectId: z.string(),
+  projectName: z.string(),
+  version: z.string(),
+  environment: z.string().optional(),
+});
+export type ConfigSource = z.infer<typeof configSourceSchema>;
+
 export const evaluatorDefinitionSchema = z.object({
   parameters: evalParametersSerializedSchema.optional(),
+  configSource: configSourceSchema.optional(),
 });
 export type EvaluatorDefinition = z.infer<typeof evaluatorDefinitionSchema>;
 

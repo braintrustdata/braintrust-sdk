@@ -49,8 +49,10 @@ import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
   InferParameters,
+  ResolveParameters,
   validateParameters,
 } from "./eval-parameters";
+import { Config } from "./logger";
 
 export type BaseExperiment<
   Input,
@@ -103,15 +105,15 @@ export type EvalTask<
   Output,
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends EvalParameters,
+  ResolvedParams extends Record<string, unknown>,
 > =
   | ((
       input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
+      hooks: EvalHooks<Expected, Metadata, ResolvedParams>,
     ) => Promise<Output>)
   | ((
       input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
+      hooks: EvalHooks<Expected, Metadata, ResolvedParams>,
     ) => Output);
 
 export type TaskProgressEvent = Omit<
@@ -122,7 +124,7 @@ export type TaskProgressEvent = Omit<
 export interface EvalHooks<
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends EvalParameters,
+  ResolvedParams extends Record<string, unknown>,
 > {
   /**
    * @deprecated Use `metadata` instead.
@@ -144,7 +146,7 @@ export interface EvalHooks<
    * The current parameters being used for this specific task execution.
    * Array parameters are converted to single values.
    */
-  parameters: InferParameters<Parameters>;
+  parameters: ResolvedParams;
   /**
    * Report progress that will show up in the playground.
    */
@@ -205,7 +207,7 @@ export interface Evaluator<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends EvalParameters = EvalParameters,
+  Params = Record<string, unknown>,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -215,7 +217,7 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output, Expected, Metadata, Parameters>;
+  task: EvalTask<Input, Output, Expected, Metadata, ResolveParameters<Params>>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
@@ -225,9 +227,9 @@ export interface Evaluator<
   /**
    * A set of parameters that will be passed to the evaluator.
    * Can contain array values that will be converted to single values in the task.
+   * Can be a Promise that resolves to the parameters (e.g. from loadConfig).
    */
-
-  parameters?: Parameters;
+  parameters?: Params | Promise<Params>;
 
   /**
    * An optional name for the experiment.
@@ -376,11 +378,11 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends EvalParameters = EvalParameters,
+  Params = Record<string, unknown>,
 > = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected, Metadata, Parameters>;
+} & Evaluator<Input, Output, Expected, Metadata, Params>;
 
 export type EvaluatorFile = {
   functions: CodeFunction<
@@ -476,7 +478,10 @@ globalThis._evals = {
   reporters: {},
 };
 
-export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
+export interface EvalOptions<
+  EvalReport,
+  ResolvedParams extends Record<string, unknown> = Record<string, unknown>,
+> {
   /**
    * A `Reporter` which you can use to summarize progress after an Eval() runs.
    */
@@ -512,7 +517,7 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * The parameters to use for the evaluator.
    */
-  parameters?: InferParameters<Parameters>;
+  parameters?: ResolvedParams;
   /**
    * Whether to retain the per-example Eval results and return them from Eval().
    *
@@ -555,16 +560,18 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
-  Parameters extends EvalParameters = EvalParameters,
+  Params = Record<string, unknown>,
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
+  evaluator: Evaluator<Input, Output, Expected, Metadata, Params>,
   reporterOrOpts?:
     | ReporterDef<EvalReport>
     | string
-    | EvalOptions<EvalReport, Parameters>,
+    | EvalOptions<EvalReport, ResolveParameters<Params>>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  const options: EvalOptions<EvalReport, Parameters> = isEmpty(reporterOrOpts)
+  const options: EvalOptions<EvalReport, ResolveParameters<Params>> = isEmpty(
+    reporterOrOpts,
+  )
     ? {}
     : typeof reporterOrOpts === "string"
       ? { reporter: reporterOrOpts }
@@ -660,12 +667,18 @@ export async function Eval<
     }
 
     try {
+      // Type assertion needed at the boundary between the generic public API and
+      // the any-typed internal implementation. ResolveParameters<Params> appears
+      // in contravariant position (EvalHooks.parameters), making it incompatible
+      // with any types without explicit cast. This is safe because the internal
+      // implementation doesn't rely on specific parameter types.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const evalDef = {
         evalName,
         projectName: name,
         ...evaluator,
         data,
-      };
+      } as EvaluatorDef<Input, Output, Expected, Metadata, EvalParameters>;
       let ret;
       if (options.parent) {
         ret = await withParent(
@@ -803,7 +816,8 @@ export async function runEvaluator(
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
-  parameters?: InferParameters<EvalParameters>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parameters?: Record<string, any>,
   collectResults = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
@@ -831,11 +845,12 @@ export const defaultErrorScoreHandler: ErrorScoreHandler = ({
 async function runEvaluatorInternal(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
-  parameters: InferParameters<EvalParameters> | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parameters: Record<string, any> | undefined,
   collectResults: boolean,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
@@ -848,9 +863,13 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
+    // Await parameters if it's a Promise (e.g. from loadConfig)
+    const resolvedEvaluatorParameters = await Promise.resolve(
+      evaluator.parameters,
+    );
     parameters = validateParameters(
       parameters ?? {},
-      evaluator.parameters ?? {},
+      resolvedEvaluatorParameters ?? {},
     );
 
     if ("_type" in dataResult) {

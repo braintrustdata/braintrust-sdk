@@ -80,6 +80,8 @@ import {
 import { renderNunjucksString } from "./template/nunjucks-env";
 
 import { z, ZodError } from "zod/v3";
+import { zodToJsonSchema } from "./zod/utils";
+import { promptDefinitionToPromptData } from "./framework2";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -102,6 +104,11 @@ import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils"
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
+import {
+  EvalParameters,
+  InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -3782,6 +3789,472 @@ export async function loadPrompt({
     console.warn("Failed to set prompt in cache:", e);
   }
   return prompt;
+}
+
+/**
+ * Options for loading a config. Schema is required to define the expected structure
+ * of the config data, which enables type-safe parameter access.
+ */
+export type LoadConfigOptions<S extends EvalParameters> = FullLoginOptions & {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  id?: string;
+  environment?: string;
+  state?: BraintrustState;
+  /** Schema defining the expected structure of the config. Required. */
+  schema: S;
+};
+
+/**
+ * Metadata about a loaded config.
+ */
+export interface ConfigMetadata {
+  /** The unique ID of the config */
+  configId: string;
+  /** The slug (URL-friendly name) of the config */
+  slug: string;
+  /** The name of the config */
+  name: string;
+  /** The project ID containing this config */
+  projectId: string;
+  /** The project name containing this config (if available) */
+  projectName?: string;
+  /** The version (transaction ID) of this config */
+  version: string;
+  /** The environment this config was loaded from (if specified) */
+  environment?: string;
+  /** JSON Schema for validating and describing the config data structure */
+  schema?: Record<string, unknown>;
+}
+
+/**
+ * A config loaded from Braintrust. This class wraps the config data and includes
+ * metadata about the config (id, slug, version, etc.).
+ *
+ * The config data can be accessed via the `data` property, or by accessing properties
+ * directly on this object (which forwards to the underlying data for backward compatibility).
+ *
+ * @example
+ * ```typescript
+ * const config = await loadConfig({ projectName: "My Project", slug: "my-config" });
+ *
+ * // Access metadata
+ * console.log(config.configId, config.slug, config.version);
+ *
+ * // Access config data (both work)
+ * console.log(config.data.someKey);
+ * console.log(config.someKey); // backward compatible
+ * ```
+ */
+export class Config<T extends Record<string, unknown> = Record<string, unknown>> {
+  private readonly __braintrust_config_marker = true;
+
+  constructor(
+    private readonly metadata: ConfigMetadata,
+    private readonly _data: T,
+  ) {
+    // Return a Proxy to forward unknown property access to _data
+    // This maintains backward compatibility with code that accesses config.someKey directly
+    return new Proxy(this, {
+      get(target, prop, receiver) {
+        // First check if it's a known property on the class
+        if (prop in target || typeof prop === "symbol") {
+          return Reflect.get(target, prop, receiver);
+        }
+        // Forward to _data for backward compatibility
+        return target._data[prop as string];
+      },
+      has(target, prop) {
+        return prop in target || prop in target._data;
+      },
+      ownKeys(target) {
+        // Only return data keys for enumeration (backward compatibility)
+        // Metadata properties are still accessible but not enumerable
+        return Object.keys(target._data);
+      },
+      getOwnPropertyDescriptor(target, prop) {
+        // For data keys, return enumerable descriptors
+        if (prop in target._data) {
+          return {
+            value: target._data[prop as string],
+            writable: false,
+            enumerable: true,
+            configurable: true,
+          };
+        }
+        // For class properties, return non-enumerable descriptors
+        if (prop in target) {
+          const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+          if (desc) {
+            return { ...desc, enumerable: false };
+          }
+        }
+        return undefined;
+      },
+    });
+  }
+
+  /** The unique ID of the config */
+  public get configId(): string {
+    return this.metadata.configId;
+  }
+
+  /** The slug (URL-friendly name) of the config */
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  /** The name of the config */
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  /** The project ID containing this config */
+  public get projectId(): string {
+    return this.metadata.projectId;
+  }
+
+  /** The project name containing this config (if available) */
+  public get projectName(): string | undefined {
+    return this.metadata.projectName;
+  }
+
+  /** The version (transaction ID) of this config */
+  public get version(): string {
+    return this.metadata.version;
+  }
+
+  /** The environment this config was loaded from (if specified) */
+  public get environment(): string | undefined {
+    return this.metadata.environment;
+  }
+
+  /** The raw config data */
+  public get data(): T {
+    return this._data;
+  }
+
+  /** JSON Schema for validating and describing the config data structure */
+  public get schema(): Record<string, unknown> | undefined {
+    return this.metadata.schema;
+  }
+
+  /**
+   * Check if a value is a Config instance.
+   */
+  public static isConfig(
+    value: unknown,
+  ): value is Config<Record<string, unknown>> {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "__braintrust_config_marker" in value
+    );
+  }
+}
+
+/**
+ * Check if a value looks like a Zod schema
+ * @internal
+ */
+function isZodSchema(value: unknown): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  // Zod schemas have specific internal properties
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const v = value as any;
+  return (
+    "_def" in v || // Zod v3
+    "_zod" in v || // Zod v4
+    (typeof v.parse === "function" && typeof v.safeParse === "function")
+  );
+}
+
+/**
+ * Type guard to check if a value is a prompt parameter definition
+ * @internal
+ */
+function isPromptParameter(
+  value: unknown,
+): value is { type: "prompt"; default?: unknown; description?: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "type" in value &&
+    value.type === "prompt"
+  );
+}
+
+/**
+ * Helper function to create a new config with default values from the schema.
+ * @internal
+ */
+async function _createConfig<S extends EvalParameters>({
+  state,
+  projectName,
+  projectId,
+  slug,
+  schema,
+}: {
+  state: BraintrustState;
+  projectName?: string;
+  projectId?: string;
+  slug: string;
+  schema: S;
+}): Promise<Config<InferParameters<S>> & InferParameters<S>> {
+  // Extract default values from schema
+  const defaultData: Record<string, unknown> = {};
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required: string[] = [];
+
+  for (const [name, paramSchema] of Object.entries(schema)) {
+    if (isPromptParameter(paramSchema)) {
+      // Prompt parameter definition
+      if (paramSchema.default) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const defaultPrompt = paramSchema.default as any;
+        defaultData[name] = promptDefinitionToPromptData(
+          defaultPrompt,
+          defaultPrompt.tools,
+        );
+      } else {
+        required.push(name);
+      }
+      properties[name] = {
+        type: "object",
+        description: paramSchema.description,
+      };
+    } else if (isZodSchema(paramSchema)) {
+      // Zod schema - extract default and convert to JSON schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const jsonSchema = zodToJsonSchema(paramSchema as any);
+      properties[name] = jsonSchema;
+      if ("default" in jsonSchema && jsonSchema.default !== undefined) {
+        defaultData[name] = jsonSchema.default;
+      } else {
+        required.push(name);
+      }
+    }
+  }
+
+  // Build the JSON schema
+  const configSchema: Record<string, unknown> = {
+    type: "object",
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+  };
+
+  // Resolve project ID if not provided
+  let resolvedProjectId = projectId;
+  if (!resolvedProjectId && projectName) {
+    const projectResponse = await state.apiConn().get_json("v1/project", {
+      project_name: projectName,
+    });
+    if ("objects" in projectResponse && projectResponse.objects.length > 0) {
+      resolvedProjectId = projectResponse.objects[0].id;
+    } else {
+      throw new Error(`Project ${projectName} not found`);
+    }
+  }
+  if (!resolvedProjectId) {
+    throw new Error("Must specify either projectName or projectId");
+  }
+
+  // Create the config via the API
+  const createResponse = await state.apiConn().post_json("v1/function", {
+    project_id: resolvedProjectId,
+    slug,
+    name: slug,
+    function_type: "config",
+    function_data: {
+      type: "config",
+      data: defaultData,
+      __schema: configSchema,
+    },
+  });
+
+  // Build metadata from the created config
+  const metadata: ConfigMetadata = {
+    configId: createResponse.id,
+    slug: slug,
+    name: slug,
+    projectId: resolvedProjectId,
+    projectName: projectName,
+    version: createResponse[TRANSACTION_ID_FIELD] ?? "",
+    environment: undefined,
+    schema: configSchema,
+  };
+
+  // Validate and transform the data according to the schema
+  const validatedParams = validateParameters(defaultData, schema);
+  // The Proxy in Config forwards property access to the data, so it acts as both Config and T
+  return new Config(metadata, validatedParams) as Config<InferParameters<S>> &
+    InferParameters<S>;
+}
+
+/**
+ * Load a config from the specified project.
+ *
+ * When called with a `schema` parameter, the config data is validated and transformed
+ * according to the schema, and the return type is inferred from the schema.
+ *
+ * @param options Options for configuring loadConfig().
+ * @param options.projectName The name of the project to load the config from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the config from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the config to load.
+ * @param options.version An optional version of the config (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the config assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.id The id of a specific config to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.schema A schema defining the expected structure of the config. The config data is validated
+ *                       and transformed according to the schema, and the return type is inferred from the schema.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+ * key is specified, will prompt the user to login.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns A Config object containing the validated parameters and metadata.
+ * @throws If the config is not found when loading by ID.
+ * @throws If multiple configs are found with the same slug in the same project (this should never happen).
+ *
+ * @remarks
+ * If the config doesn't exist, it will be automatically created with default values from the schema.
+ *
+ * @example
+ * ```typescript
+ * const config = await loadConfig({
+ *   projectName: "My Project",
+ *   slug: "my-config",
+ *   schema: {
+ *     main: { type: "prompt", default: { messages: [...], model: "gpt-4o" } },
+ *     prefix: z.string().default("hello"),
+ *   },
+ * });
+ * // config.data.main is Prompt, config.data.prefix is string
+ * // Access via proxy: config.main, config.prefix also work
+ * const response = await config.main.invoke({ input: "hello" });
+ * ```
+ */
+export async function loadConfig<S extends EvalParameters>(
+  options: LoadConfigOptions<S>,
+): Promise<Config<InferParameters<S>> & InferParameters<S>> {
+  const {
+    projectName,
+    projectId,
+    slug,
+    version,
+    environment,
+    id,
+    appUrl,
+    apiKey,
+    orgName,
+    fetch,
+    forceLogin,
+    state: stateArg,
+    schema,
+  } = options;
+
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
+    throw new Error("Must specify either projectName or projectId");
+  } else if (isEmpty(slug)) {
+    throw new Error("Must specify slug");
+  }
+
+  const state = stateArg ?? _globalState;
+  let response;
+  await state.login({
+    orgName,
+    apiKey,
+    appUrl,
+    fetch,
+    forceLogin,
+  });
+  if (id) {
+    // Load config by ID using the /v1/function/{id} endpoint
+    response = await state.apiConn().get_json(`v1/function/${id}`, {
+      ...(version && { version }),
+      ...(environment && { environment }),
+    });
+    // Wrap single config response in objects array to match list API format
+    if (response) {
+      response = { objects: [response] };
+    }
+  } else {
+    response = await state.apiConn().get_json("v1/function", {
+      project_name: projectName,
+      project_id: projectId,
+      slug,
+      function_type: "config",
+      version,
+      ...(environment && { environment }),
+    });
+  }
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    // Auto-create config if not found (unless loading by ID)
+    if (!id) {
+      return await _createConfig({
+        state,
+        projectName,
+        projectId,
+        slug: slug!,
+        schema,
+      });
+    }
+
+    throw new Error(`Config with id ${id} not found.`);
+  } else if (response.objects.length > 1) {
+    if (id) {
+      throw new Error(
+        `Multiple configs found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple configs found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
+  }
+
+  const configObject = response["objects"][0];
+  // Extract the config data from function_data.data
+  const functionData = configObject?.function_data;
+  const configData: Record<string, unknown> =
+    functionData?.type === "config" && functionData?.data
+      ? functionData.data
+      : configObject;
+
+  // Build metadata from the config object
+  // Read schema from function_data.__schema (preferred) or fall back to metadata.schema (legacy)
+  const storedSchema =
+    (functionData?.type === "config" && functionData?.__schema) ||
+    configObject.metadata?.schema;
+
+  const metadata: ConfigMetadata = {
+    configId: configObject.id,
+    slug: configObject.slug ?? slug ?? "",
+    name: configObject.name ?? configObject.slug ?? slug ?? "",
+    projectId: configObject.project_id ?? projectId ?? "",
+    projectName: projectName,
+    version: configObject[TRANSACTION_ID_FIELD] ?? "",
+    environment: environment,
+    schema: storedSchema,
+  };
+
+  // Validate and transform the data according to the schema
+  const validatedParams = validateParameters(configData, schema);
+  // The Proxy in Config forwards property access to the data, so it acts as both Config and T
+  return new Config(metadata, validatedParams) as Config<InferParameters<S>> &
+    InferParameters<S>;
 }
 
 /**

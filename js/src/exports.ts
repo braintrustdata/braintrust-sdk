@@ -23,6 +23,7 @@ export type {
   InitDatasetOptions,
   InitLoggerOptions,
   InitOptions,
+  LoadConfigOptions,
   LoadPromptOptions,
   LogOptions,
   LoginOptions,
@@ -77,6 +78,9 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  Config,
+  type ConfigMetadata,
+  loadConfig,
   loadPrompt,
   log,
   logError,
@@ -220,11 +224,13 @@ export type {
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
+  ConfigSource,
 } from "../dev/types";
 
-export type { EvalParameters } from "./eval-parameters";
+export type { EvalParameters, InferParameters } from "./eval-parameters";
 
 export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
+  configSourceSchema,
 } from "../dev/types";
