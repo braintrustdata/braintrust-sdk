@@ -1281,6 +1281,29 @@ async def _run_evaluator_internal(
     stream: Callable[[SSEProgressEvent], None] | None = None,
     state: BraintrustState | None = None,
 ):
+    # Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
+    if state is None:
+        from braintrust.logger import _internal_get_global_state
+
+        state = _internal_get_global_state()
+
+    state.span_cache.start()
+    try:
+        return await _run_evaluator_internal_impl(experiment, evaluator, position, filters, stream, state)
+    finally:
+        # Clean up disk-based span cache after eval completes and stop caching
+        state.span_cache.dispose()
+        state.span_cache.stop()
+
+
+async def _run_evaluator_internal_impl(
+    experiment,
+    evaluator: Evaluator,
+    position: int | None,
+    filters: list[Filter],
+    stream: Callable[[SSEProgressEvent], None] | None = None,
+    state: BraintrustState | None = None,
+):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -1415,6 +1438,57 @@ async def _run_evaluator_internal(
                 tags = hooks.tags if hooks.tags else None
                 root_span.log(output=output, metadata=metadata, tags=tags)
 
+                # Create trace object for scorers
+                from braintrust.trace import LocalTrace
+
+                async def ensure_spans_flushed():
+                    # Flush native Braintrust spans
+                    if experiment:
+                        from braintrust.logger import flush as flush_logger
+
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: flush_logger(state=experiment._state)
+                        )
+                    elif state:
+                        from braintrust.logger import flush as flush_logger
+
+                        await asyncio.get_event_loop().run_in_executor(None, lambda: flush_logger(state=state))
+                    else:
+                        from braintrust.logger import flush as flush_logger
+
+                        await asyncio.get_event_loop().run_in_executor(None, flush_logger)
+
+                experiment_id = None
+                if experiment:
+                    try:
+                        experiment_id = experiment.id
+                    except:
+                        experiment_id = None
+
+                trace = None
+                if state or experiment:
+                    # Get the state to use
+                    trace_state = state
+                    if not trace_state and experiment:
+                        trace_state = experiment._state
+                    if not trace_state:
+                        # Fall back to global state
+                        from braintrust.logger import _internal_get_global_state
+
+                        trace_state = _internal_get_global_state()
+
+                    # Access root_span_id from the concrete SpanImpl instance
+                    # The Span interface doesn't expose this but SpanImpl has it
+                    root_span_id_value = getattr(root_span, "root_span_id", root_span.id)
+
+                    trace = LocalTrace(
+                        object_type="experiment",
+                        object_id=experiment_id or "",
+                        root_span_id=root_span_id_value,
+                        ensure_spans_flushed=ensure_spans_flushed,
+                        state=trace_state,
+                    )
+
                 score_promises = [
                     asyncio.create_task(
                         await_or_run_scorer(
@@ -1426,6 +1500,7 @@ async def _run_evaluator_internal(
                                 "expected": datum.expected,
                                 "metadata": metadata,
                                 "output": output,
+                                "trace": trace,
                             },
                         )
                     )
