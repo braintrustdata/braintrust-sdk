@@ -181,7 +181,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         },
       ],
       max_tokens: 200,
-      tools: tools,
+      tools,
       temperature: 0.01,
     });
 
@@ -201,6 +201,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     const span = spans[0] as any;
 
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+
     expect(span.output).toBeDefined();
     expect(span.output.content).toBeDefined();
 
@@ -210,6 +211,15 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     expect(outputToolUse).toBeDefined();
     expect(outputToolUse.name).toBe("get_weather");
     expect(outputToolUse.input).toBeDefined();
+
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
   });
 
   test("test client.messages.create with tools and stream=true", async () => {
@@ -241,13 +251,14 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         },
       ],
       max_tokens: 200,
-      tools: tools,
+      tools,
       temperature: 0.01,
       stream: true,
     });
 
-    expect(response).toBeDefined();
-    expect(response.content).toBeDefined();
+    for await (const event of response) {
+      // Just consume the events
+    }
 
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
@@ -255,14 +266,24 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
 
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
 
-    expect(span.output).toBeDefined();
-    expect(typeof span.output).toBe("string");
+    const outputToolUse = span.output.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(outputToolUse).toBeDefined();
+    expect(outputToolUse.name).toBe("calculate");
+    expect(outputToolUse.input).toBeDefined();
+    expect(outputToolUse.input.operation).toBe("add");
+    expect(outputToolUse.input.a).toBe(15);
+    expect(outputToolUse.input.b).toBe(27);
 
-    const parsed = JSON.parse(span.output);
-    expect(parsed).toBeDefined();
-    expect(parsed.operation).toBe("add");
-    expect(parsed.a).toBe(15);
-    expect(parsed.b).toBe(27);
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
   });
 
   test("test client.beta.messages.create with tools and stream=true", async () => {
@@ -283,7 +304,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
       },
     ];
 
-    await client.beta.messages.create({
+    const response = await client.beta.messages.create({
       model: TEST_MODEL,
       messages: [
         {
@@ -292,10 +313,14 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         },
       ],
       max_tokens: 200,
-      tools: tools,
+      tools,
       temperature: 0.01,
       stream: true,
     });
+
+    for await (const event of response) {
+      // Just consume the events
+    }
 
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
@@ -304,10 +329,23 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     expect(span.output).toBeDefined();
 
-    const parsed = JSON.parse(span.output);
-    expect(parsed).toBeDefined();
-    expect(parsed.symbol).toBeDefined();
-    expect(typeof parsed.symbol).toBe("string");
+    const outputToolUse = span.output.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(outputToolUse).toBeDefined();
+    expect(outputToolUse.name).toBe("get_stock_price");
+    expect(outputToolUse.input).toBeDefined();
+    expect(outputToolUse.input.symbol).toBeDefined();
+    expect(typeof outputToolUse.input.symbol).toBe("string");
+
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
   });
 
   test("test client.message.create with stream=true", async () => {

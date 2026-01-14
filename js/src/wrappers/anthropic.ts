@@ -310,14 +310,26 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
         }
         break;
       case "content_block_stop":
-        const deltas = contentBlockDeltas[blockIndex] || [];
-        const output = deltas.join("");
-        if (output) {
-          span.log({
-            output: output,
-          });
+        const text = contentBlockDeltas[blockIndex]?.join("");
+        if (!text) break;
+
+        const block = contentBlocks[blockIndex];
+        if (block?.type === "tool_use") {
+          try {
+            span.log({
+              output: {
+                role: item.role,
+                content: [{ ...block, input: JSON.parse(text) }],
+              },
+            });
+          } catch {
+            span.log({ output: text });
+          }
+        } else {
+          span.log({ output: text });
         }
         break;
+
       case "message_delta":
         // Collect stats + metadata about the message.
         const usage = item?.usage;
