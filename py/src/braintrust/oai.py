@@ -986,3 +986,105 @@ def _is_not_given(value: Any) -> bool:
         return type_name == "NotGiven"
     except Exception:
         return False
+
+
+def patch_openai():
+    """
+    Patch OpenAI to add Braintrust tracing globally.
+
+    After calling this, all new OpenAI() and AsyncOpenAI() clients
+    will automatically have tracing enabled.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_openai()
+
+        import openai
+        client = openai.OpenAI()
+        # All calls are now traced!
+        ```
+    """
+    try:
+        import openai
+
+        if hasattr(openai, "_braintrust_wrapped"):
+            return  # Already patched
+
+        # Store originals for unpatch
+        openai._braintrust_original_OpenAI = openai.OpenAI
+        openai._braintrust_original_AsyncOpenAI = openai.AsyncOpenAI
+
+        # Create patched classes
+        class PatchedOpenAI(openai._braintrust_original_OpenAI):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                _apply_openai_wrapper(self)
+
+        class PatchedAsyncOpenAI(openai._braintrust_original_AsyncOpenAI):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                _apply_async_openai_wrapper(self)
+
+        # Replace classes
+        openai.OpenAI = PatchedOpenAI
+        openai.AsyncOpenAI = PatchedAsyncOpenAI
+        openai._braintrust_wrapped = True
+
+    except ImportError:
+        pass
+
+
+def unpatch_openai():
+    """
+    Restore OpenAI to its original state, removing Braintrust tracing.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_openai()
+        # ... use traced clients ...
+        braintrust.unpatch_openai()  # Restore original behavior
+        ```
+    """
+    try:
+        import openai
+
+        if hasattr(openai, "_braintrust_wrapped"):
+            openai.OpenAI = openai._braintrust_original_OpenAI
+            openai.AsyncOpenAI = openai._braintrust_original_AsyncOpenAI
+
+            delattr(openai, "_braintrust_wrapped")
+            delattr(openai, "_braintrust_original_OpenAI")
+            delattr(openai, "_braintrust_original_AsyncOpenAI")
+
+    except ImportError:
+        pass
+
+
+def _apply_openai_wrapper(client):
+    """Apply tracing wrapper to an OpenAI client instance in-place."""
+    wrapped = wrap_openai(client)
+    client.chat = wrapped.chat
+    if hasattr(wrapped, "responses"):
+        client.responses = wrapped.responses
+    if hasattr(wrapped, "embeddings"):
+        client.embeddings = wrapped.embeddings
+    if hasattr(wrapped, "moderations"):
+        client.moderations = wrapped.moderations
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _apply_async_openai_wrapper(client):
+    """Apply tracing wrapper to an AsyncOpenAI client instance in-place."""
+    wrapped = wrap_openai(client)
+    client.chat = wrapped.chat
+    if hasattr(wrapped, "responses"):
+        client.responses = wrapped.responses
+    if hasattr(wrapped, "embeddings"):
+        client.embeddings = wrapped.embeddings
+    if hasattr(wrapped, "moderations"):
+        client.moderations = wrapped.moderations
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
