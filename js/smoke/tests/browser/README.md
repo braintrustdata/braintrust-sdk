@@ -4,16 +4,7 @@ This package contains smoke tests for the Braintrust SDK running in a browser en
 
 ## What It Tests
 
-- **General SDK Tests**: Uses shared test suites to verify:
-
-  - Export verification (all expected exports are available)
-  - Basic logging functionality (initLogger, spans, flush)
-  - Multiple span creation and logging
-
-- **Eval Tests**: Tests the `Eval` function in browser environment:
-  - Running evaluations with test data
-  - Scoring functions
-  - Local execution (no API calls)
+The browser tests run **all shared test suites** from `sdk/js/smoke/shared` to ensure full SDK compatibility in the browser.
 
 ## Prerequisites
 

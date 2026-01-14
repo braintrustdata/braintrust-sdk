@@ -6,6 +6,7 @@ import {
   runBasicLoggingTests,
   runEvalSmokeTest,
   runImportVerificationTests,
+  runPromptTemplatingTests,
   withTestEnvironment,
 } from "../../../shared/dist/index.mjs";
 import { createBrowserHarness, type BrowserSmokeResults } from "./harness";
@@ -26,20 +27,19 @@ window.__btBrowserSmokeResults = harness.results;
 
 const SHARED_SECTION = "shared";
 const EVAL_SECTION = "eval";
+const PROMPT_SECTION = "prompt";
 
-async function runSharedSuites() {
-  harness.log("=== Running shared suites ===");
-
+async function runAllTestSuites() {
   if (!braintrust._exportsForTestingOnly) {
     harness.fail(
-      SHARED_SECTION,
+      "runtime",
       "preflight",
       new Error("_exportsForTestingOnly not available"),
     );
-    harness.completeSection(SHARED_SECTION);
     return;
   }
 
+  // Create a single test environment for all test suites
   await withTestEnvironment(
     {
       initLogger: braintrust.initLogger,
@@ -49,6 +49,9 @@ async function runSharedSuites() {
       environment: "browser",
     },
     async (adapters) => {
+      // Run shared suites (import verification + basic logging)
+      harness.log("=== Running shared suites ===");
+
       const importResults = await runImportVerificationTests(braintrust);
       for (const r of importResults) {
         if (r.success) harness.pass(SHARED_SECTION, r.testName, r.message);
@@ -60,41 +63,40 @@ async function runSharedSuites() {
         if (r.success) harness.pass(SHARED_SECTION, r.testName, r.message);
         else harness.fail(SHARED_SECTION, r.testName, r.error, r.message);
       }
+
+      harness.completeSection(SHARED_SECTION);
+
+      // Run eval suite
+      harness.log("\n=== Running eval suite ===");
+
+      const evalResult = await runEvalSmokeTest(adapters, braintrust);
+      if (evalResult.success)
+        harness.pass(EVAL_SECTION, evalResult.testName, evalResult.message);
+      else
+        harness.fail(
+          EVAL_SECTION,
+          evalResult.testName,
+          evalResult.error,
+          evalResult.message,
+        );
+
+      harness.completeSection(EVAL_SECTION);
+
+      // Run prompt templating suite
+      harness.log("\n=== Running prompt templating suite ===");
+
+      const promptResults = await runPromptTemplatingTests(
+        { Prompt: braintrust.Prompt },
+        "browser",
+      );
+      for (const r of promptResults) {
+        if (r.success) harness.pass(PROMPT_SECTION, r.testName, r.message);
+        else harness.fail(PROMPT_SECTION, r.testName, r.error, r.message);
+      }
+
+      harness.completeSection(PROMPT_SECTION);
     },
   );
-
-  harness.completeSection(SHARED_SECTION);
-}
-
-async function runEvalSuite() {
-  harness.log("\n=== Running eval suite ===");
-
-  if (!braintrust._exportsForTestingOnly) {
-    harness.fail(
-      EVAL_SECTION,
-      "preflight",
-      new Error("_exportsForTestingOnly not available"),
-    );
-    harness.completeSection(EVAL_SECTION);
-    return;
-  }
-
-  await withTestEnvironment(
-    {
-      initLogger: braintrust.initLogger,
-      testingExports: braintrust._exportsForTestingOnly,
-      canUseFileSystem: false,
-      canUseCLI: false,
-      environment: "browser",
-    },
-    async (adapters) => {
-      const r = await runEvalSmokeTest(adapters, braintrust);
-      if (r.success) harness.pass(EVAL_SECTION, r.testName, r.message);
-      else harness.fail(EVAL_SECTION, r.testName, r.error, r.message);
-    },
-  );
-
-  harness.completeSection(EVAL_SECTION);
 }
 
 async function main() {
@@ -112,8 +114,7 @@ async function main() {
   }, timeoutMs);
 
   try {
-    await runSharedSuites();
-    await runEvalSuite();
+    await runAllTestSuites();
   } catch (err) {
     harness.fail("runtime", "fatal", err);
   } finally {

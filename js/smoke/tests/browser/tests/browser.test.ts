@@ -79,25 +79,37 @@ test.describe("Braintrust SDK Browser Tests", () => {
       () => (window as any).__btBrowserSmokeResults,
     );
 
+    // Log test summary
+    console.log("\n=== Browser Test Results ===");
+    console.log(`Overall completed: ${smoke.completed}`);
+    console.log(`Unhandled errors: ${smoke.unhandledErrors?.length ?? 0}`);
+
+    // Verify all tests passed
     expect(smoke).toBeTruthy();
     expect(smoke.completed).toBe(true);
     expect(smoke.unhandledErrors?.length ?? 0).toBe(0);
 
-    // Sections should exist and be clean
+    // Shared suite
     expect(smoke.sections.shared.completed).toBe(true);
     expect(smoke.sections.shared.failed).toBe(0);
-    expect(smoke.sections.shared.passed).toBeGreaterThan(0);
+    expect(smoke.sections.shared.passed).toBe(16);
+    console.log(
+      `\nShared suite: ${smoke.sections.shared.passed} passed, ${smoke.sections.shared.failed} failed`,
+    );
 
+    // Eval suite
     expect(smoke.sections.eval.completed).toBe(true);
     expect(smoke.sections.eval.failed).toBe(0);
-    expect(smoke.sections.eval.passed).toBeGreaterThan(0);
-
-    // Log test summary
-    console.log(
-      `Shared suite: ${smoke.sections.shared.passed} passed, ${smoke.sections.shared.failed} failed`,
-    );
+    expect(smoke.sections.eval.passed).toBe(1);
     console.log(
       `Eval suite: ${smoke.sections.eval.passed} passed, ${smoke.sections.eval.failed} failed`,
+    );
+    // Prompt suite
+    expect(smoke.sections.prompt.completed).toBe(true);
+    expect(smoke.sections.prompt.failed).toBe(0);
+    expect(smoke.sections.prompt.passed).toBe(2);
+    console.log(
+      `Prompt suite: ${smoke.sections.prompt.passed} passed, ${smoke.sections.prompt.failed} failed`,
     );
   });
 });
