@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Span, startSpan, Attachment } from "../logger";
-import { SpanTypeAttribute } from "../../util/index";
+import { Attachment, Span, startSpan } from "../logger";
+import { isObject, SpanTypeAttribute } from "../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
-import { isObject } from "../../util/index";
 
 declare global {
   // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
@@ -274,13 +273,12 @@ function streamProxy<T>(
 function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
   // this is where we actually do the business of iterating the message stream
   let ttft = -1;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deltas: any[] = [];
   let metadata = {};
   let totals: Metrics = {};
   const span = sspan.span;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contentBlocks: any[] = [];
+  const contentBlockDeltas: Record<number, string[]> = {};
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
@@ -292,9 +290,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     if (result.done) {
-      const output = deltas.join("");
       span.log({
-        output: output,
         metrics: finalizeAnthropicTokens(totals),
         metadata: metadata,
       });
@@ -303,6 +299,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     const item = result.value;
+    const blockIndex = item.index;
     switch (item?.type) {
       case "message_start":
         const msg = item?.message;
@@ -315,18 +312,47 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
       case "content_block_start":
         // Track content blocks including images
         if (item.content_block) {
-          contentBlocks[item.index] = item.content_block;
+          contentBlocks[blockIndex] = item.content_block;
+          contentBlockDeltas[blockIndex] = [];
         }
         break;
       case "content_block_delta":
-        // Collect the running output.
-        if (item.delta?.type === "text_delta") {
+        if (!contentBlockDeltas[blockIndex]) {
+          contentBlockDeltas[blockIndex] = [];
+        }
+        if (item?.delta?.type === "text_delta") {
           const text = item?.delta?.text;
           if (text) {
-            deltas.push(text);
+            contentBlockDeltas[blockIndex].push(text);
+          }
+        } else if (item?.delta?.type === "input_json_delta") {
+          const partialJson = item?.delta?.partial_json;
+          if (partialJson) {
+            contentBlockDeltas[blockIndex].push(partialJson);
           }
         }
         break;
+      case "content_block_stop":
+        const text = contentBlockDeltas[blockIndex]?.join("");
+        if (!text) break;
+
+        const block = contentBlocks[blockIndex];
+        if (block?.type === "tool_use") {
+          try {
+            span.log({
+              output: {
+                role: item.role,
+                content: [{ ...block, input: JSON.parse(text) }],
+              },
+            });
+          } catch {
+            span.log({ output: text });
+          }
+        } else {
+          span.log({ output: text });
+        }
+        break;
+
       case "message_delta":
         // Collect stats + metadata about the message.
         const usage = item?.usage;

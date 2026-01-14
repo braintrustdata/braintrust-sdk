@@ -454,24 +454,22 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update(
-            {
-                k: v
-                for (k, v) in other.__dict__.items()
-                if k
-                not in (
-                    "current_experiment",
-                    "current_logger",
-                    "current_parent",
-                    "current_span",
-                    "_global_bg_logger",
-                    "_override_bg_logger",
-                    "_context_manager",
-                    "_last_otel_setting",
-                    "_context_manager_lock",
-                )
-            }
-        )
+        self.__dict__.update({
+            k: v
+            for (k, v) in other.__dict__.items()
+            if k
+            not in (
+                "current_experiment",
+                "current_logger",
+                "current_parent",
+                "current_span",
+                "_global_bg_logger",
+                "_override_bg_logger",
+                "_context_manager",
+                "_last_otel_setting",
+                "_context_manager_lock",
+            )
+        })
 
     def login(
         self,
@@ -2344,6 +2342,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         SKIP_ASYNC_SCORING_FIELD,
         "span_id",
         "root_span_id",
+        "_bt_internal_override_pagination_key",
     }
     if forbidden_keys:
         raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
@@ -3856,9 +3855,6 @@ class SpanImpl(Span):
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
-
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
             return dict(
@@ -4406,24 +4402,20 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append(
-                        {
-                            **c,
-                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                        }
-                    )
+                    rendered_content.append({
+                        **c,
+                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                    })
                 elif c["type"] == "file":
-                    rendered_content.append(
-                        {
-                            **c,
-                            "file": {
-                                **c["file"],
-                                "file_data": render(c["file"]["file_data"]),
-                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
-                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
-                            },
-                        }
-                    )
+                    rendered_content.append({
+                        **c,
+                        "file": {
+                            **c["file"],
+                            "file_data": render(c["file"]["file_data"]),
+                            **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                            **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                        },
+                    })
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
