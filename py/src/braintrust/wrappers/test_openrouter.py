@@ -19,15 +19,6 @@ PROJECT_NAME = "test-openrouter"
 TEST_MODEL = "openai/gpt-4o-mini"
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)

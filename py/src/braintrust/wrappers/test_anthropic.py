@@ -15,17 +15,6 @@ PROJECT_NAME = "test-anthropic-app"
 MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-        ],
-        "match_on": ["method", "scheme", "host", "port", "path", "body"],
-    }
-
-
 def _get_client():
     return anthropic.Anthropic()
 

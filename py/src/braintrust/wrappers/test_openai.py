@@ -18,16 +18,6 @@ TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "openai-organization",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)
@@ -943,8 +933,6 @@ async def test_openai_streaming_with_break(memory_logger):
         model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
     )
 
-    time.sleep(0.2)  # time to first token sleep
-
     # Only process the first few chunks
     counter = 0
     async for chunk in stream:
@@ -1331,6 +1319,7 @@ def _is_wrapped(client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_braintrust_tracing_processor_current_span_detection(memory_logger):
     """Test that BraintrustTracingProcessor currentSpan() detection works with OpenAI Agents SDK."""
     pytest.importorskip("agents", reason="agents package not available")
@@ -1440,6 +1429,7 @@ async def test_braintrust_tracing_processor_current_span_detection(memory_logger
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
     """Test that reproduces the concurrency bug where overlapping traces mix up first_input/last_output."""
     pytest.importorskip("agents", reason="agents package not available")
@@ -1546,6 +1536,7 @@ async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_agents_tool_openai_nested_spans(memory_logger):
     """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
     pytest.importorskip("agents", reason="agents package not available")
