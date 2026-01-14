@@ -40,7 +40,10 @@ pnpm watch
 pnpm test
 
 # Integration test
-BRAINTRUST_AUTO_INSTRUMENT=1 node --import ./dist/register.mjs test-integration.mjs
+node --import ./dist/register.mjs test-openai.mjs
+node --import ./dist/register.mjs test-anthropic.mjs
+node --import ./dist/register.mjs test-ai-sdk.mjs
+node --import ./dist/register.mjs test-otel-integration.mjs
 ```
 
 ## How It Works

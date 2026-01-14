@@ -38,7 +38,3 @@ export function setupAutoInstrumentation(config?: Partial<Config>): void {
     }
   }
 }
-
-if (process.env.BRAINTRUST_AUTO_INSTRUMENT === "1") {
-  setupAutoInstrumentation();
-}

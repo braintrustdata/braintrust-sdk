@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Test OpenAI SDK auto-instrumentation
- * Run with: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import @braintrust/auto-instrument/register test-openai.mjs
- * Or from package: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-openai.mjs
+ * Run with: node --import @braintrust/auto-instrument/register test-openai.mjs
+ * Or from package: node --import ./dist/register.mjs test-openai.mjs
+ * Optional debug: BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-openai.mjs
  */
 
 console.log("\n========================================");

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Test OpenTelemetry auto-detection and integration
- * Run with: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import @braintrust/auto-instrument/register test-otel-integration.mjs
- * Or from package: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-otel-integration.mjs
+ * Run with: node --import @braintrust/auto-instrument/register test-otel-integration.mjs
+ * Or from package: node --import ./dist/register.mjs test-otel-integration.mjs
+ * Optional debug: BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-otel-integration.mjs
  */
 
 console.log("\n========================================");

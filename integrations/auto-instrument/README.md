@@ -25,10 +25,10 @@ yarn add @braintrust/auto-instrument braintrust
 ### 1. Node.js --import Flag (Recommended)
 
 ```bash
-BRAINTRUST_AUTO_INSTRUMENT=1 node --import @braintrust/auto-instrument/register app.js
+node --import @braintrust/auto-instrument/register app.js
 ```
 
-This is the cleanest approach - no code changes required!
+This is the cleanest approach - no code changes or environment variables required!
 
 ### 2. Programmatic API
 
@@ -73,12 +73,11 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // Client is automatically instrumented!
 ```
 
-### 3. Environment Variables
+### 3. Environment Variables (Optional)
+
+Configuration via environment variables (all optional):
 
 ```bash
-# Enable auto-instrumentation
-BRAINTRUST_AUTO_INSTRUMENT=1
-
 # Only instrument specific SDKs
 BRAINTRUST_AUTO_INSTRUMENT_INCLUDE=openai,anthropic
 
@@ -88,6 +87,8 @@ BRAINTRUST_AUTO_INSTRUMENT_EXCLUDE=@google/genai
 # Enable debug logging
 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1
 ```
+
+**Note:** `BRAINTRUST_AUTO_INSTRUMENT=1` is no longer required when using the `--import` flag!
 
 ## Configuration
 

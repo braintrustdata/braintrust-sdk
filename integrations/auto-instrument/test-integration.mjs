@@ -1,5 +1,5 @@
 // Integration test for auto-instrumentation
-// Run with: BRAINTRUST_AUTO_INSTRUMENT=1 node --import @braintrust/auto-instrument/register test-integration.mjs
+// Run with: node --import @braintrust/auto-instrument/register test-integration.mjs
 
 import OpenAI from "openai";
 

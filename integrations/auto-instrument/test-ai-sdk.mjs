@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Test Vercel AI SDK auto-instrumentation
- * Run with: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import @braintrust/auto-instrument/register test-ai-sdk.mjs
- * Or from package: BRAINTRUST_AUTO_INSTRUMENT=1 BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-ai-sdk.mjs
+ * Run with: node --import @braintrust/auto-instrument/register test-ai-sdk.mjs
+ * Or from package: node --import ./dist/register.mjs test-ai-sdk.mjs
+ * Optional debug: BRAINTRUST_AUTO_INSTRUMENT_DEBUG=1 node --import ./dist/register.mjs test-ai-sdk.mjs
  */
 
 console.log("\n========================================");
