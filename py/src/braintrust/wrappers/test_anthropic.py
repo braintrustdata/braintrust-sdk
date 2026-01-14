@@ -447,7 +447,7 @@ async def test_anthropic_beta_messages_create_async(memory_logger):
     assert "10" in span["output"]["content"][0]["text"]
 
 
-@pytest.mark.vcr
+@pytest.mark.vcr(match_on=["method", "scheme", "host", "port", "path", "body"])  # exclude query - varies by SDK version
 @pytest.mark.asyncio
 async def test_anthropic_beta_messages_streaming_async(memory_logger):
     assert not memory_logger.pop()
