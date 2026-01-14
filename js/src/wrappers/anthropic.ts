@@ -297,12 +297,12 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
         if (!contentBlockDeltas[blockIndex]) {
           contentBlockDeltas[blockIndex] = [];
         }
-        if (item.delta?.type === "text_delta") {
-          const text = item.delta?.text;
+        if (item?.delta?.type === "text_delta") {
+          const text = item?.delta?.text;
           if (text) {
             contentBlockDeltas[blockIndex].push(text);
           }
-        } else if (item.delta?.type === "input_json_delta") {
+        } else if (item?.delta?.type === "input_json_delta") {
           const partialJson = item?.delta?.partial_json;
           if (partialJson) {
             contentBlockDeltas[blockIndex].push(partialJson);
