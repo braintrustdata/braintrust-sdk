@@ -1,22 +1,19 @@
 {
   "name": "@braintrust/auto-instrument",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Automatic instrumentation for AI SDKs using ESM import hooks",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.mjs"
     },
     "./register": {
       "types": "./dist/register.d.ts",
-      "import": "./dist/register.mjs",
-      "require": "./dist/register.js"
+      "import": "./dist/register.mjs"
     }
   },
   "files": [

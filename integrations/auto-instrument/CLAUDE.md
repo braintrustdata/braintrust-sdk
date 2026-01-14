@@ -10,6 +10,7 @@ This package provides automatic instrumentation for AI SDKs using ESM import hoo
 - **Wrapper delegation**: Detectors call wrapper functions from main braintrust package
 - **Global function pattern**: Wrappers registered on globalThis by main package
 - **Single version testing**: Tests with latest import-in-the-middle
+- **Build configuration**: ESM only (no CommonJS build)
 
 ## Dependencies
 
