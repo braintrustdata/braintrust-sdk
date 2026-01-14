@@ -1313,11 +1313,13 @@ async def _run_evaluator_internal_impl(
             {**parent_propagated},
             {"span_attributes": {"purpose": "scorer"}},
         )
+        # Strip trace from logged input - it's internal plumbing that shouldn't appear in spans
+        logged_input = {k: v for k, v in kwargs.items() if k != "trace"}
         with root_span.start_span(
             name=name,
             span_attributes={"type": SpanTypeAttribute.SCORE, "purpose": "scorer"},
             propagated_event=merged_propagated,
-            input=dict(**kwargs),
+            input=logged_input,
         ) as span:
             score = scorer
             if hasattr(scorer, "eval_async"):
