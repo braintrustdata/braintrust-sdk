@@ -137,15 +137,20 @@ export class SpanCache {
     }
 
     this.initPromise = (async () => {
-      const tmpDir = iso.tmpdir!();
+      if (!iso.tmpdir || !iso.pathJoin || !iso.openFile) {
+        // Filesystem not available - silently skip initialization
+        return;
+      }
+
+      const tmpDir = iso.tmpdir();
       const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      this.cacheFilePath = iso.pathJoin!(
+      this.cacheFilePath = iso.pathJoin(
         tmpDir,
         `braintrust-span-cache-${uniqueId}.jsonl`,
       );
 
       // Open file for append+read
-      this.fileHandle = await iso.openFile!(this.cacheFilePath, "a+");
+      this.fileHandle = await iso.openFile(this.cacheFilePath, "a+");
       this.initialized = true;
 
       // Register cleanup handler on first initialization
@@ -185,9 +190,9 @@ export class SpanCache {
           }
 
           // Delete the temp file
-          if (cache.cacheFilePath && canUseSpanCache()) {
+          if (cache.cacheFilePath && canUseSpanCache() && iso.unlinkSync) {
             try {
-              iso.unlinkSync!(cache.cacheFilePath);
+              iso.unlinkSync(cache.cacheFilePath);
             } catch {
               // Ignore cleanup errors - file might not exist or already deleted
             }
@@ -292,9 +297,9 @@ export class SpanCache {
     const spanMap = new Map<string, CachedSpan>();
 
     // First, read from disk if initialized
-    if (this.initialized && this.cacheFilePath) {
+    if (this.initialized && this.cacheFilePath && iso.readFileSync) {
       try {
-        const content = iso.readFileSync!(this.cacheFilePath, "utf8");
+        const content = iso.readFileSync(this.cacheFilePath, "utf8");
         const lines = content.trim().split("\n").filter(Boolean);
 
         for (const line of lines) {
@@ -402,9 +407,9 @@ export class SpanCache {
       this.fileHandle = null;
     }
 
-    if (this.cacheFilePath && canUseSpanCache()) {
+    if (this.cacheFilePath && canUseSpanCache() && iso.unlinkSync) {
       try {
-        iso.unlinkSync!(this.cacheFilePath);
+        iso.unlinkSync(this.cacheFilePath);
       } catch {
         // Ignore cleanup errors
       }
