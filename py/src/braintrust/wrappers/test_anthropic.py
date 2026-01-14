@@ -21,7 +21,8 @@ def vcr_config():
         "filter_headers": [
             "authorization",
             "x-api-key",
-        ]
+        ],
+        "match_on": ["method", "scheme", "host", "port", "path", "body"],
     }
 
 
