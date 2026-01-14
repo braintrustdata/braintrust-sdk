@@ -66,30 +66,4 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
-  {
-    entry: ["src/auto-instrument/index.ts"],
-    format: ["cjs", "esm"],
-    outDir: "dist/auto-instrument",
-    external: ["braintrust", "import-in-the-middle"],
-    dts: {
-      compilerOptions: {
-        skipLibCheck: true,
-      },
-    },
-    splitting: false,
-    clean: true,
-  },
-  {
-    entry: ["src/auto-instrument/register.ts"],
-    format: ["cjs", "esm"],
-    outDir: "dist/auto-instrument",
-    external: ["braintrust", "import-in-the-middle"],
-    dts: {
-      compilerOptions: {
-        skipLibCheck: true,
-      },
-    },
-    splitting: false,
-    clean: false,
-  },
 ]);

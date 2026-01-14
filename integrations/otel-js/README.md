@@ -119,6 +119,8 @@ const logger = initLogger({ projectName: "my_project" });
 - Configures Braintrust to use OpenTelemetry-compatible span and trace IDs
 - Enables seamless mixing of Braintrust and OpenTelemetry spans in the same trace
 
+**Note**: If you're using `@braintrust/auto-instrument`, you don't need to call this manually - it will be automatically detected and called for you when auto-instrumentation is set up.
+
 ## Distributed Tracing Helpers
 
 These utilities enable distributed tracing across services that use different tracing systems (Braintrust and OpenTelemetry).
