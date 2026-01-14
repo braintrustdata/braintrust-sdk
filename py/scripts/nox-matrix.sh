@@ -62,7 +62,7 @@ if [ "$DRY_RUN" = true ]; then
   exit 0
 fi
 
-# Build -s flags for all sessions and run nox once
+# Build session list and run nox once
 # Quote each session name to handle parentheses in names like test_openai(latest)
-session_args=$(echo "$matches" | sed 's/.*/-s "&"/' | tr '\n' ' ')
-eval "nox -f $NOXFILE $session_args"
+session_list=$(echo "$matches" | sed 's/.*/"&"/' | tr '\n' ' ')
+eval "nox -f $NOXFILE -s $session_list"
