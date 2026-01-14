@@ -6302,6 +6302,26 @@ export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
 >;
 
+/**
+ * Try to parse a string as a JSON array.
+ * This handles cases where template engines stringify arrays when rendering template variables.
+ * @param value The value to parse
+ * @returns The parsed array, or null if not a valid JSON array
+ */
+function tryParseStringAsArray(value: string): unknown[] | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function renderMessage<T extends Message>(
   render: (template: string) => string,
   message: T,
@@ -6314,41 +6334,99 @@ export function renderMessage<T extends Message>(
             ? undefined
             : typeof message.content === "string"
               ? render(message.content)
-              : message.content.map((c) => {
-                  switch (c.type) {
-                    case "text":
-                      return { ...c, text: render(c.text) };
-                    case "image_url":
-                      if (isObject(c.image_url.url)) {
-                        throw new Error(
-                          "Attachments must be replaced with URLs before calling `build()`",
-                        );
-                      }
-                      return {
-                        ...c,
-                        image_url: {
-                          ...c.image_url,
-                          url: render(c.image_url.url),
-                        },
-                      };
-                    case "file":
-                      return {
-                        ...c,
-                        file: {
-                          file_data: render(c.file.file_data || ""),
-                          ...(c.file.file_id && {
-                            file_id: render(c.file.file_id),
-                          }),
-                          ...(c.file.filename && {
-                            filename: render(c.file.filename),
-                          }),
-                        },
-                      };
-                    default:
-                      const _exhaustiveCheck: never = c;
-                      return _exhaustiveCheck;
-                  }
-                }),
+              : message.content
+                  .map((c) => {
+                    switch (c.type) {
+                      case "text":
+                        return [{ ...c, text: render(c.text) }];
+                      case "image_url":
+                        if (isObject(c.image_url.url)) {
+                          throw new Error(
+                            "Attachments must be replaced with URLs before calling `build()`",
+                          );
+                        }
+                        const renderedUrl = render(c.image_url.url);
+
+                        // Check if the rendered URL is a stringified array
+                        // This happens when template variables contain arrays of URLs
+                        // e.g., {{images}} where images = ["url1", "url2"]
+                        const parsedUrls = tryParseStringAsArray(renderedUrl);
+
+                        if (parsedUrls !== null) {
+                          // Expand array into multiple image_url blocks
+                          return parsedUrls.map((url) => ({
+                            type: "image_url" as const,
+                            image_url: { url: String(url) },
+                          }));
+                        }
+
+                        return [
+                          {
+                            ...c,
+                            image_url: {
+                              ...c.image_url,
+                              url: renderedUrl,
+                            },
+                          },
+                        ];
+                      case "file":
+                        // Check if file_data or file_id contains an array
+                        const renderedFileData = render(c.file.file_data || "");
+                        const renderedFileId = c.file.file_id
+                          ? render(c.file.file_id)
+                          : undefined;
+
+                        // Try to parse file_data as array (for base64 data arrays)
+                        const parsedFileData =
+                          tryParseStringAsArray(renderedFileData);
+                        // Try to parse file_id as array (for file ID arrays)
+                        const parsedFileId = renderedFileId
+                          ? tryParseStringAsArray(renderedFileId)
+                          : null;
+
+                        // If either is an array, expand to multiple file blocks
+                        if (parsedFileData !== null) {
+                          return parsedFileData.map((data) => ({
+                            type: "file" as const,
+                            file: {
+                              file_data: String(data),
+                              ...(c.file.filename && {
+                                filename: render(c.file.filename),
+                              }),
+                            },
+                          }));
+                        } else if (parsedFileId !== null) {
+                          return parsedFileId.map((id) => ({
+                            type: "file" as const,
+                            file: {
+                              file_id: String(id),
+                              ...(c.file.filename && {
+                                filename: render(c.file.filename),
+                              }),
+                            },
+                          }));
+                        }
+
+                        return [
+                          {
+                            ...c,
+                            file: {
+                              file_data: renderedFileData,
+                              ...(renderedFileId && {
+                                file_id: renderedFileId,
+                              }),
+                              ...(c.file.filename && {
+                                filename: render(c.file.filename),
+                              }),
+                            },
+                          },
+                        ];
+                      default:
+                        const _exhaustiveCheck: never = c;
+                        return _exhaustiveCheck;
+                    }
+                  })
+                  .flat(),
         }
       : {}),
     ...("tool_calls" in message
