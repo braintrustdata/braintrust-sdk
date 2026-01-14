@@ -148,7 +148,7 @@ test("renderMessage expands file array from JSON string (file_data)", () => {
         type: "file" as const,
         file: {
           file_data: "{{files}}",
-          filename: "documents.txt",
+          filename: "{{filenames}}",
         },
       },
     ],
@@ -156,10 +156,12 @@ test("renderMessage expands file array from JSON string (file_data)", () => {
 
   const rendered = renderMessage(
     (template) =>
-      template.replace(
-        "{{files}}",
-        '["data:text/plain;base64,SGVsbG8=","data:text/plain;base64,V29ybGQ="]',
-      ),
+      template
+        .replace(
+          "{{files}}",
+          '["data:text/plain;base64,SGVsbG8=","data:text/plain;base64,V29ybGQ="]',
+        )
+        .replace("{{filenames}}", '["hello.txt","world.txt"]'),
     message,
   );
 
@@ -168,14 +170,14 @@ test("renderMessage expands file array from JSON string (file_data)", () => {
       type: "file",
       file: {
         file_data: "data:text/plain;base64,SGVsbG8=",
-        filename: "documents.txt",
+        filename: "hello.txt",
       },
     },
     {
       type: "file",
       file: {
         file_data: "data:text/plain;base64,V29ybGQ=",
-        filename: "documents.txt",
+        filename: "world.txt",
       },
     },
   ]);
@@ -189,7 +191,7 @@ test("renderMessage expands file array from JSON string (file_id)", () => {
         type: "file" as const,
         file: {
           file_id: "{{fileIds}}",
-          filename: "attachments",
+          filename: "{{filenames}}",
         },
       },
     ],
@@ -197,7 +199,9 @@ test("renderMessage expands file array from JSON string (file_id)", () => {
 
   const rendered = renderMessage(
     (template) =>
-      template.replace("{{fileIds}}", '["file-abc123","file-def456"]'),
+      template
+        .replace("{{fileIds}}", '["file-abc123","file-def456"]')
+        .replace("{{filenames}}", '["document1.pdf","document2.pdf"]'),
     message,
   );
 
@@ -206,14 +210,14 @@ test("renderMessage expands file array from JSON string (file_id)", () => {
       type: "file",
       file: {
         file_id: "file-abc123",
-        filename: "attachments",
+        filename: "document1.pdf",
       },
     },
     {
       type: "file",
       file: {
         file_id: "file-def456",
-        filename: "attachments",
+        filename: "document2.pdf",
       },
     },
   ]);

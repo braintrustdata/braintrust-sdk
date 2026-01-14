@@ -6370,57 +6370,71 @@ export function renderMessage<T extends Message>(
                           },
                         ];
                       case "file":
-                        // Check if file_data or file_id contains an array
-                        const renderedFileData = render(c.file.file_data || "");
-                        const renderedFileId = c.file.file_id
+                        const fileData = render(c.file.file_data || "");
+                        const fileId = c.file.file_id
                           ? render(c.file.file_id)
                           : undefined;
+                        const filename = c.file.filename
+                          ? render(c.file.filename)
+                          : undefined;
 
-                        // Try to parse file_data as array (for base64 data arrays)
-                        const parsedFileData =
-                          tryParseStringAsArray(renderedFileData);
-                        // Try to parse file_id as array (for file ID arrays)
-                        const parsedFileId = renderedFileId
-                          ? tryParseStringAsArray(renderedFileId)
+                        const dataArr =
+                          tryParseStringAsArray(fileData)?.map(String) ?? null;
+                        const idArr = fileId
+                          ? tryParseStringAsArray(fileId)?.map(String) ?? null
+                          : null;
+                        const nameArr = filename
+                          ? tryParseStringAsArray(filename)?.map(String) ?? null
                           : null;
 
-                        // If either is an array, expand to multiple file blocks
-                        if (parsedFileData !== null) {
-                          return parsedFileData.map((data) => ({
-                            type: "file" as const,
-                            file: {
-                              file_data: String(data),
-                              ...(c.file.filename && {
-                                filename: render(c.file.filename),
-                              }),
+                        const arrays = [dataArr, idArr, nameArr].filter(
+                          (a): a is string[] => a !== null,
+                        );
+
+                        if (arrays.length === 0) {
+                          return [
+                            {
+                              ...c,
+                              file: {
+                                ...(c.file.file_data && {
+                                  file_data: fileData,
+                                }),
+                                ...(c.file.file_id && { file_id: fileId }),
+                                ...(c.file.filename && { filename }),
+                              },
                             },
-                          }));
-                        } else if (parsedFileId !== null) {
-                          return parsedFileId.map((id) => ({
-                            type: "file" as const,
-                            file: {
-                              file_id: String(id),
-                              ...(c.file.filename && {
-                                filename: render(c.file.filename),
-                              }),
-                            },
-                          }));
+                          ];
                         }
 
-                        return [
-                          {
-                            ...c,
-                            file: {
-                              file_data: renderedFileData,
-                              ...(renderedFileId && {
-                                file_id: renderedFileId,
-                              }),
-                              ...(c.file.filename && {
-                                filename: render(c.file.filename),
-                              }),
-                            },
+                        const len = arrays[0].length;
+                        if (!arrays.every((a) => a.length === len)) {
+                          throw new Error(
+                            `file field array lengths must match (expected ${len})`,
+                          );
+                        }
+
+                        return Array.from({ length: len }, (_, i) => ({
+                          type: "file" as const,
+                          file: {
+                            ...(dataArr
+                              ? { file_data: dataArr[i] }
+                              : c.file.file_data
+                                ? { file_data: fileData }
+                                : {}),
+
+                            ...(idArr
+                              ? { file_id: idArr[i] }
+                              : c.file.file_id
+                                ? { file_id: fileId! }
+                                : {}),
+
+                            ...(nameArr
+                              ? { filename: nameArr[i] }
+                              : c.file.filename
+                                ? { filename }
+                                : {}),
                           },
-                        ];
+                        }));
                       default:
                         const _exhaustiveCheck: never = c;
                         return _exhaustiveCheck;
