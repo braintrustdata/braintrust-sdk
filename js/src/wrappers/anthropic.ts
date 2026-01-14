@@ -298,7 +298,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
           contentBlockDeltas[blockIndex] = [];
         }
         if (item.delta?.type === "text_delta") {
-          const text = item?.delta?.text;
+          const text = item.delta?.text;
           if (text) {
             contentBlockDeltas[blockIndex].push(text);
           }
