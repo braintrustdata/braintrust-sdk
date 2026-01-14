@@ -1024,7 +1024,7 @@ def patch_openai():
         class PatchedAsyncOpenAI(openai._braintrust_original_AsyncOpenAI):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
-                _apply_async_openai_wrapper(self)
+                _apply_openai_wrapper(self)
 
         # Replace classes
         openai.OpenAI = PatchedOpenAI
@@ -1065,26 +1065,6 @@ def unpatch_openai():
 def _apply_openai_wrapper(client):
     """Apply tracing wrapper to an OpenAI client instance in-place."""
     wrapped = wrap_openai(client)
-    client.chat = wrapped.chat
-    if hasattr(wrapped, "responses"):
-        client.responses = wrapped.responses
-    if hasattr(wrapped, "embeddings"):
-        client.embeddings = wrapped.embeddings
-    if hasattr(wrapped, "moderations"):
-        client.moderations = wrapped.moderations
-    if hasattr(wrapped, "beta"):
-        client.beta = wrapped.beta
-
-
-def _apply_async_openai_wrapper(client):
-    """Apply tracing wrapper to an AsyncOpenAI client instance in-place."""
-    wrapped = wrap_openai(client)
-    client.chat = wrapped.chat
-    if hasattr(wrapped, "responses"):
-        client.responses = wrapped.responses
-    if hasattr(wrapped, "embeddings"):
-        client.embeddings = wrapped.embeddings
-    if hasattr(wrapped, "moderations"):
-        client.moderations = wrapped.moderations
-    if hasattr(wrapped, "beta"):
-        client.beta = wrapped.beta
+    for attr in ("chat", "responses", "embeddings", "moderations", "beta"):
+        if hasattr(wrapped, attr):
+            setattr(client, attr, getattr(wrapped, attr))

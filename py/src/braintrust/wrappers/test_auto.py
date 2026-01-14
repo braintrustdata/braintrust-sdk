@@ -263,6 +263,39 @@ class TestPatchOpenAI:
         assert result.returncode == 0, f"Failed: {result.stderr}"
         assert "SUCCESS" in result.stdout
 
+    def test_patch_openai_chains_async_client(self):
+        """patch_openai() should chain with other libraries for AsyncOpenAI too."""
+        result = run_in_subprocess("""
+            import openai
+
+            # Simulate another library patching AsyncOpenAI first
+            other_library_init_called = []
+
+            class OtherLibraryAsyncOpenAI(openai.AsyncOpenAI):
+                def __init__(self, *args, **kwargs):
+                    other_library_init_called.append(True)
+                    super().__init__(*args, **kwargs)
+
+            openai.AsyncOpenAI = OtherLibraryAsyncOpenAI
+
+            # Now apply our patch
+            from braintrust.oai import patch_openai
+            patch_openai()
+
+            # Create an async client - both patches should run
+            client = openai.AsyncOpenAI(api_key="test-key")
+
+            # Verify other library's __init__ was called
+            assert len(other_library_init_called) == 1, "Other library's patch should have run"
+
+            # Verify our patch was applied
+            assert hasattr(client, "chat"), "Client should have chat attribute"
+
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
 
 class TestPatchAnthropic:
     """Tests for patch_anthropic() / unpatch_anthropic()."""

@@ -32,6 +32,7 @@ print()
 logger = braintrust.init_logger(project="auto-instrument-demo")
 
 # Now import and use AI libraries normally - all calls are traced!
+# IMPORTANT: Import AI libraries AFTER calling auto_instrument()
 import anthropic
 import openai
 
