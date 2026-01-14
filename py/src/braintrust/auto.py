@@ -6,7 +6,7 @@ Provides one-line instrumentation for supported libraries.
 
 from __future__ import annotations
 
-__all__ = ["auto_instrument"]
+__all__ = ["auto_instrument", "auto_uninstrument"]
 
 
 def auto_instrument(
@@ -162,6 +162,98 @@ def _instrument_dspy() -> bool:
         from braintrust.wrappers.dspy import patch_dspy
 
         patch_dspy()
+        return True
+    except ImportError:
+        return False
+
+
+def auto_uninstrument(
+    *,
+    openai: bool = True,
+    anthropic: bool = True,
+    litellm: bool = True,
+    dspy: bool = True,
+) -> dict[str, bool]:
+    """
+    Remove auto-instrumentation from supported AI/ML libraries.
+
+    This undoes the patching done by auto_instrument() for libraries that
+    support unpatching (OpenAI, Anthropic, LiteLLM, DSPy).
+
+    Note: Some libraries (Pydantic AI, Google GenAI, Agno, Claude Agent SDK)
+    use setup-style instrumentation that cannot be reversed.
+
+    Args:
+        openai: Disable OpenAI instrumentation (default: True)
+        anthropic: Disable Anthropic instrumentation (default: True)
+        litellm: Disable LiteLLM instrumentation (default: True)
+        dspy: Disable DSPy instrumentation (default: True)
+
+    Returns:
+        Dict mapping integration name to whether it was successfully uninstrumented.
+
+    Example:
+        ```python
+        import braintrust
+
+        braintrust.auto_instrument()
+        # ... use traced clients ...
+        braintrust.auto_uninstrument()  # Restore original behavior
+        ```
+    """
+    results = {}
+
+    if openai:
+        results["openai"] = _uninstrument_openai()
+    if anthropic:
+        results["anthropic"] = _uninstrument_anthropic()
+    if litellm:
+        results["litellm"] = _uninstrument_litellm()
+    if dspy:
+        results["dspy"] = _uninstrument_dspy()
+
+    return results
+
+
+def _uninstrument_openai() -> bool:
+    """Uninstrument OpenAI if it was patched."""
+    try:
+        from braintrust.oai import unpatch_openai
+
+        unpatch_openai()
+        return True
+    except ImportError:
+        return False
+
+
+def _uninstrument_anthropic() -> bool:
+    """Uninstrument Anthropic if it was patched."""
+    try:
+        from braintrust.wrappers.anthropic import unpatch_anthropic
+
+        unpatch_anthropic()
+        return True
+    except ImportError:
+        return False
+
+
+def _uninstrument_litellm() -> bool:
+    """Uninstrument LiteLLM if it was patched."""
+    try:
+        from braintrust.wrappers.litellm import unpatch_litellm
+
+        unpatch_litellm()
+        return True
+    except ImportError:
+        return False
+
+
+def _uninstrument_dspy() -> bool:
+    """Uninstrument DSPy if it was patched."""
+    try:
+        from braintrust.wrappers.dspy import unpatch_dspy
+
+        unpatch_dspy()
         return True
     except ImportError:
         return False
