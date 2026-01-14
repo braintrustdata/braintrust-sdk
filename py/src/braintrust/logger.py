@@ -1678,13 +1678,14 @@ def load_prompt(
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
                 if id:
-                    return _state._prompt_cache.get(id=id)
+                    return _state._prompt_cache.get(id=id, org_id=_state.org_id)
                 else:
                     return _state._prompt_cache.get(
                         slug,
                         version=str(version) if version else "latest",
                         project_id=project_id,
                         project_name=project,
+                        org_id=_state.org_id,
                     )
             except Exception as cache_error:
                 if id:
@@ -1714,6 +1715,7 @@ def load_prompt(
                 _state._prompt_cache.set(
                     prompt,
                     id=id,
+                    org_id=_state.org_id,
                 )
             elif slug:
                 _state._prompt_cache.set(
@@ -1722,6 +1724,7 @@ def load_prompt(
                     version=str(version) if version else "latest",
                     project_id=project_id,
                     project_name=project,
+                    org_id=_state.org_id,
                 )
         except Exception as e:
             eprint(f"Failed to store prompt in cache: {e}")
