@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "AI SDK v5 OTEL golden testing with BraintrustExporter",
   "private": true,
+  "scripts": {
+    "build": "cd ../../.. && pnpm turbo run build --filter=braintrust",
+    "test": "pnpm run build && pnpm dlx tsx ${DEBUG:+--inspect-brk=9999} ai-sdk-otel.ts"
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.39",
     "@ai-sdk/openai": "^2.0.56",
