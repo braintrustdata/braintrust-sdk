@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "AI SDK v3 testing",
   "private": true,
+  "scripts": {
+    "build": "cd ../../../js && pnpm build",
+    "test": "pnpm run build && pnpm dlx tsx ${DEBUG:+--inspect-brk=9999} ai-sdk.ts"
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^0.0.56",
     "@ai-sdk/openai": "^0.0.62",
