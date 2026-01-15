@@ -1,6 +1,6 @@
 import type { WorkflowInfo, Sinks } from "@temporalio/workflow";
 import type { InjectedSinks } from "@temporalio/worker";
-import * as braintrust from "../../logger";
+import * as braintrust from "braintrust";
 
 // Sink interface (used in workflow code via proxySinks)
 // NOTE: WorkflowInfo is NOT included here - it's automatically injected by the runtime

@@ -18,7 +18,7 @@ import { createBraintrustSinks } from "./sinks";
  * import { Client, Connection } from "@temporalio/client";
  * import { Worker } from "@temporalio/worker";
  * import * as braintrust from "braintrust";
- * import { BraintrustTemporalPlugin } from "braintrust";
+ * import { BraintrustTemporalPlugin } from "braintrust/wrappers/temporal";
  *
  * // Initialize Braintrust logger
  * braintrust.initLogger({ projectName: "my-project" });

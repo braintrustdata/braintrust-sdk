@@ -50,12 +50,19 @@
       "import": "./dist/temporal/workflow-interceptors.mjs",
       "module": "./dist/temporal/workflow-interceptors.mjs",
       "require": "./dist/temporal/workflow-interceptors.js"
+    },
+    "./wrappers/temporal": {
+      "types": "./src/wrappers/temporal/index.d.ts",
+      "import": "./dist/wrappers/temporal/index.mjs",
+      "module": "./dist/wrappers/temporal/index.mjs",
+      "require": "./dist/wrappers/temporal/index.js"
     }
   },
   "files": [
     "dist/**/*",
     "dev/dist/**/*",
-    "util/dist/**/*"
+    "util/dist/**/*",
+    "src/wrappers/temporal/index.d.ts"
   ],
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",

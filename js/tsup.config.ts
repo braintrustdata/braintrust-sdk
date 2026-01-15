@@ -39,6 +39,28 @@ export default defineConfig([
     clean: false,
   },
   {
+    entry: {
+      "wrappers/temporal/index": "src/wrappers/temporal/index.ts",
+    },
+    format: ["cjs", "esm"],
+    outDir: "dist",
+    external: [
+      "braintrust",
+      "zod",
+      "@temporalio/activity",
+      "@temporalio/client",
+      "@temporalio/common",
+      "@temporalio/worker",
+      "@temporalio/workflow",
+    ],
+    // DTS generation disabled: types are resolved via the main braintrust package
+    // since we import from "braintrust" at runtime. Users get types from the
+    // installed braintrust package which includes all necessary type definitions.
+    dts: false,
+    splitting: false,
+    clean: false,
+  },
+  {
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",

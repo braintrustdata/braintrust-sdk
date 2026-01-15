@@ -7,7 +7,7 @@ import type {
 } from "@temporalio/worker";
 import type { WorkflowClientInterceptor } from "@temporalio/client";
 import { defaultPayloadConverter } from "@temporalio/common";
-import * as braintrust from "../../logger";
+import * as braintrust from "braintrust";
 import { SpanComponentsV3 } from "../../../util";
 import { getWorkflowSpanExport } from "./sinks";
 import {
