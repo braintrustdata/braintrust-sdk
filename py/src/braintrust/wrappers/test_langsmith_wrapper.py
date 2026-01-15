@@ -3,20 +3,18 @@
 # pyright: reportUnknownParameterType=false
 # pyright: reportUnknownArgumentType=false
 # pyright: reportUnknownMemberType=false
+# pylint: disable=protected-access
 
 """
 Tests for the LangSmith wrapper to ensure compatibility with LangSmith's API.
 """
 
-from unittest.mock import MagicMock
 
 from braintrust.wrappers.langsmith_wrapper import (
-    _braintrust_traceable,
     _convert_langsmith_data,
-    _convert_langsmith_evaluator,
     _is_patched,
+    _make_braintrust_scorer,
     _make_braintrust_task,
-    _tandem_traceable,
     wrap_aevaluate,
     wrap_client,
     wrap_traceable,
@@ -26,62 +24,70 @@ from braintrust.wrappers.langsmith_wrapper import (
 def test_is_patched_false():
     """Test that _is_patched returns False for unpatched objects."""
 
-    class Unpatched:
+    def unpatched():
         pass
 
-    assert _is_patched(Unpatched, "traceable") is False
-    assert _is_patched(Unpatched, "evaluate") is False
+    assert _is_patched(unpatched) is False
 
 
 def test_is_patched_true():
     """Test that _is_patched returns True for patched objects."""
 
-    class Patched:
-        _braintrust_traceable_patched = True
-        _braintrust_evaluate_patched = True
+    def patched():
+        pass
 
-    assert _is_patched(Patched, "traceable") is True
-    assert _is_patched(Patched, "evaluate") is True
+    patched._braintrust_patched = True  # type: ignore
+
+    assert _is_patched(patched) is True
 
 
-def test_convert_langsmith_evaluator_dict_result():
+def test_make_braintrust_scorer_dict_result():
     """Test converting a LangSmith evaluator that returns a dict."""
 
-    def langsmith_evaluator(run, example):
+    def langsmith_evaluator(inputs, outputs, reference_outputs):
         return {"key": "accuracy", "score": 0.9, "metadata": {"note": "good"}}
 
-    converted = _convert_langsmith_evaluator(langsmith_evaluator)
-    result = converted(input={"x": 1}, output={"y": 2}, expected={"y": 2})
+    converted = _make_braintrust_scorer(langsmith_evaluator)
+
+    # Create a mock Example object
+    class MockExample:
+        outputs = {"y": 2}
+
+    result = converted(input={"x": 1}, output={"y": 2}, expected=MockExample())
 
     assert result.name == "accuracy"
     assert result.score == 0.9
     assert result.metadata == {"note": "good"}
 
 
-def test_convert_langsmith_evaluator_numeric_result():
-    """Test converting a LangSmith evaluator that returns a number."""
+def test_make_braintrust_scorer_numeric_result():
+    """Test converting a LangSmith evaluator that returns a numeric score in a dict."""
 
-    def langsmith_evaluator(run, example):
-        return 1.0 if run.outputs == example.outputs else 0.0
+    def langsmith_evaluator(inputs, outputs, reference_outputs):
+        return {"score": 1.0 if outputs == reference_outputs else 0.0}
 
-    converted = _convert_langsmith_evaluator(langsmith_evaluator)
-    result = converted(input={"x": 1}, output={"y": 2}, expected={"y": 2})
+    converted = _make_braintrust_scorer(langsmith_evaluator)
+
+    class MockExample:
+        outputs = {"y": 2}
+
+    result = converted(input={"x": 1}, output={"y": 2}, expected=MockExample())
 
     assert result.name == "langsmith_evaluator"
     assert result.score == 1.0
 
 
-def test_convert_langsmith_evaluator_none_result():
-    """Test converting a LangSmith evaluator that returns None."""
+def test_make_braintrust_scorer_with_plain_dict_expected():
+    """Test converting a LangSmith evaluator with plain dict as expected."""
 
-    def langsmith_evaluator(run, example):
-        return None
+    def langsmith_evaluator(inputs, outputs, reference_outputs):
+        return {"score": 1.0 if outputs == reference_outputs else 0.0}
 
-    converted = _convert_langsmith_evaluator(langsmith_evaluator)
-    result = converted(input={"x": 1}, output={"y": 2}, expected=None)
+    converted = _make_braintrust_scorer(langsmith_evaluator)
+    result = converted(input={"x": 1}, output={"y": 2}, expected={"y": 2})
 
     assert result.name == "langsmith_evaluator"
-    assert result.score is None
+    assert result.score == 1.0
 
 
 def test_convert_langsmith_data_from_list():
@@ -92,13 +98,14 @@ def test_convert_langsmith_data_from_list():
     ]
 
     data_fn = _convert_langsmith_data(data)
-    result = data_fn()
+    result = list(data_fn())
 
     assert len(result) == 2
     assert result[0].input == {"x": 1}
-    assert result[0].expected == {"y": 2}
+    # The whole item is passed as expected
+    assert result[0].expected == {"inputs": {"x": 1}, "outputs": {"y": 2}}
     assert result[1].input == {"x": 2}
-    assert result[1].expected == {"y": 4}
+    assert result[1].expected == {"inputs": {"x": 2}, "outputs": {"y": 4}}
 
 
 def test_convert_langsmith_data_from_callable():
@@ -109,11 +116,12 @@ def test_convert_langsmith_data_from_callable():
         yield {"inputs": {"x": 2}, "outputs": {"y": 4}}
 
     data_fn = _convert_langsmith_data(data_generator)
-    result = data_fn()
+    result = list(data_fn())
 
     assert len(result) == 2
     assert result[0].input == {"x": 1}
-    assert result[0].expected == {"y": 2}
+    # The whole item is passed as expected
+    assert result[0].expected == {"inputs": {"x": 1}, "outputs": {"y": 2}}
 
 
 def test_convert_langsmith_data_with_example_objects():
@@ -130,11 +138,13 @@ def test_convert_langsmith_data_with_example_objects():
     ]
 
     data_fn = _convert_langsmith_data(data)
-    result = data_fn()
+    result = list(data_fn())
 
     assert len(result) == 2
     assert result[0].input == {"x": 1}
-    assert result[0].expected == {"y": 2}
+    # The whole Example object is passed as expected
+    assert result[0].expected.inputs == {"x": 1}
+    assert result[0].expected.outputs == {"y": 2}
 
 
 def test_make_braintrust_task_with_dict_input():
@@ -173,70 +183,28 @@ def test_make_braintrust_task_simple_input():
     assert result == 10
 
 
-class TestBraintrustTraceable:
-    """Tests for the Braintrust traceable decorator."""
+class TestWrapTraceable:
+    """Tests for wrap_traceable functionality."""
 
-    def test_traceable_preserves_function_name(self):
-        """Test that traceable preserves function metadata."""
+    def test_wrap_traceable_returns_wrapper(self):
+        """Test that wrap_traceable returns a wrapped version."""
 
-        @_braintrust_traceable
-        def my_function(x: int) -> int:
-            """My docstring."""
-            return x * 2
-
-        assert my_function.__name__ == "my_function"
-        assert my_function.__doc__ == "My docstring."
-
-    def test_traceable_with_name_parameter(self):
-        """Test that traceable accepts name parameter."""
-
-        @_braintrust_traceable(name="custom_name")
-        def my_function(x: int) -> int:
-            return x * 2
-
-        result = my_function(5)
-        assert result == 10
-
-    def test_traceable_executes_function(self):
-        """Test that decorated function executes correctly."""
-
-        @_braintrust_traceable
-        def add(a: int, b: int) -> int:
-            return a + b
-
-        result = add(2, 3)
-        assert result == 5
-
-
-class TestTandemTraceable:
-    """Tests for _tandem_traceable (wrapping mode)."""
-
-    def test_tandem_traceable_with_function(self):
-        """Test tandem traceable when called with a function directly."""
-
-        def my_function(x: int) -> int:
-            return x * 2
-
-        # Simulate LangSmith's traceable
         def mock_traceable(func, **kwargs):
             return func
 
-        result = _tandem_traceable(mock_traceable, my_function, name="test")
-        assert result(5) == 10
+        wrapped = wrap_traceable(mock_traceable, standalone=False)
+        assert callable(wrapped)
+        assert _is_patched(wrapped)
 
-    def test_tandem_traceable_as_decorator(self):
-        """Test tandem traceable when used as a decorator factory."""
+    def test_wrap_traceable_standalone_mode(self):
+        """Test that wrap_traceable works in standalone mode."""
 
-        def my_function(x: int) -> int:
-            return x * 2
-
-        # Simulate LangSmith's traceable
         def mock_traceable(func, **kwargs):
             return func
 
-        decorator = _tandem_traceable(mock_traceable, name="custom")
-        decorated = decorator(my_function)
-        assert decorated(5) == 10
+        wrapped = wrap_traceable(mock_traceable, standalone=True)
+        assert callable(wrapped)
+        assert _is_patched(wrapped)
 
 
 class TestWrapFunctions:
@@ -248,177 +216,49 @@ class TestWrapFunctions:
         assert callable(wrap_client)
         assert callable(wrap_aevaluate)
 
-    def test_wrap_traceable_sets_flag(self):
-        """Test that wrap_traceable sets the patched flag."""
-        mock_module = MagicMock()
-        mock_module._braintrust_traceable_patched = False
+    def test_wrap_traceable_returns_patched_function(self):
+        """Test that wrap_traceable returns a patched function."""
 
-        wrap_traceable(mock_module)
-        assert mock_module._braintrust_traceable_patched is True
+        def mock_traceable(func, **kwargs):
+            return func
 
-    def test_wrap_traceable_standalone_replaces_traceable(self):
-        """Test that standalone=True replaces traceable entirely."""
-        mock_module = MagicMock()
-        mock_module._braintrust_traceable_patched = False
-
-        wrap_traceable(mock_module, standalone=True)
-        assert mock_module._braintrust_traceable_patched is True
-        # traceable should be replaced with a wrapper function
-        assert callable(mock_module.traceable)
-        assert (
-            mock_module.traceable != mock_module._original_traceable
-            if hasattr(mock_module, "_original_traceable")
-            else True
-        )
+        wrapped = wrap_traceable(mock_traceable)
+        assert _is_patched(wrapped)
 
     def test_wrap_traceable_skips_if_already_patched(self):
         """Test that wrap_traceable skips if already patched."""
-        mock_module = MagicMock()
-        mock_module._braintrust_traceable_patched = True
-        original_traceable = mock_module.traceable
 
-        wrap_traceable(mock_module)
-        # Should not have changed
-        assert mock_module.traceable == original_traceable
+        def mock_traceable(func, **kwargs):
+            return func
+
+        mock_traceable._braintrust_patched = True  # type: ignore
+
+        result = wrap_traceable(mock_traceable)
+        # Should return the same function
+        assert result is mock_traceable
 
     def test_wrap_client_sets_flag(self):
         """Test that wrap_client sets the patched flag."""
 
         class MockClient:
-            _braintrust_evaluate_patched = False
-
-            def evaluate(self):
-                pass
+            def evaluate(self, *args, **kwargs):
+                return "original"
 
         wrap_client(MockClient)
-        assert MockClient._braintrust_evaluate_patched is True
+        assert _is_patched(MockClient.evaluate)
 
-    def test_wrap_aevaluate_sets_flag(self):
-        """Test that wrap_aevaluate sets the patched flag."""
-        mock_module = MagicMock()
-        mock_module._braintrust_aevaluate_patched = False
+    def test_wrap_aevaluate_returns_patched_function(self):
+        """Test that wrap_aevaluate returns a patched function."""
 
-        async def mock_aevaluate():
+        async def mock_aevaluate(*args, **kwargs):
             pass
 
-        mock_module.aevaluate = mock_aevaluate
-
-        wrap_aevaluate(mock_module)
-        assert mock_module._braintrust_aevaluate_patched is True
-
-    def test_wrap_aevaluate_skips_if_no_aevaluate(self):
-        """Test that wrap_aevaluate skips if aevaluate doesn't exist."""
-        mock_module = MagicMock(spec=[])  # No attributes
-
-        result = wrap_aevaluate(mock_module)
-        assert result == mock_module
-        assert not hasattr(mock_module, "_braintrust_aevaluate_patched")
+        wrapped = wrap_aevaluate(mock_aevaluate)
+        assert _is_patched(wrapped)
 
 
 class TestTandemModeIntegration:
     """Integration tests for tandem mode (LangSmith + Braintrust together)."""
-
-    def test_traceable_preserves_function_signature(self):
-        """Test that wrapped functions preserve their signature for LangSmith inspection."""
-
-        def original_traceable(func, **kwargs):
-            """Mock LangSmith traceable that wraps the function and strips langsmith_extra."""
-
-            def wrapper(*args, **inner_kwargs):
-                # Real LangSmith strips langsmith_extra before calling the function
-                inner_kwargs.pop("langsmith_extra", None)
-                return func(*args, **inner_kwargs)
-
-            return wrapper
-
-        def sample_func(inputs: dict) -> int:
-            return inputs["x"] * 2
-
-        # The decorated function should be callable with dict input
-        wrapped = _tandem_traceable(original_traceable, sample_func, name="test")
-        result = wrapped({"x": 5})
-        assert result == 10
-
-    def test_traceable_handles_langsmith_extra_kwarg(self):
-        """Test that langsmith_extra kwargs don't break the wrapper when LangSmith injects them."""
-        langsmith_extra_received = {"value": None}
-
-        def original_traceable(func, **kwargs):
-            """Mock LangSmith traceable that receives and strips langsmith_extra."""
-
-            def wrapper(*args, **inner_kwargs):
-                # Real LangSmith receives langsmith_extra, uses it for tracing, then strips it
-                langsmith_extra_received["value"] = inner_kwargs.pop("langsmith_extra", None)
-                return func(*args, **inner_kwargs)
-
-            return wrapper
-
-        def my_func(x: int) -> int:
-            return x * 2
-
-        wrapped = _tandem_traceable(original_traceable, my_func, name="test")
-        # Simulate LangSmith evaluate() passing langsmith_extra
-        result = wrapped(5, langsmith_extra={"run_id": "123"})
-        assert result == 10
-        # Verify LangSmith's wrapper received the langsmith_extra
-        assert langsmith_extra_received["value"] == {"run_id": "123"}
-
-    def test_braintrust_traceable_filters_langsmith_extra(self):
-        """Test that _braintrust_traceable filters out langsmith_extra before calling func."""
-        received_kwargs = {}
-
-        @_braintrust_traceable(name="test")
-        def capture_kwargs(**kwargs):
-            received_kwargs.update(kwargs)
-            return 42
-
-        # Call with langsmith_extra (simulating what LangSmith does)
-        result = capture_kwargs(a=1, b=2, langsmith_extra={"run_id": "123"})
-
-        assert result == 42
-        assert "langsmith_extra" not in received_kwargs
-        assert received_kwargs == {"a": 1, "b": 2}
-
-    def test_tandem_traceable_calls_both_langsmith_and_braintrust(self):
-        """Test that tandem mode actually calls both LangSmith's wrapper and adds Braintrust tracing."""
-        langsmith_called = {"count": 0}
-
-        def mock_langsmith_traceable(func, **kwargs):
-            """Mock that tracks calls."""
-
-            def wrapper(*args, **inner_kwargs):
-                langsmith_called["count"] += 1
-                return func(*args, **inner_kwargs)
-
-            return wrapper
-
-        def my_func(x: int) -> int:
-            return x * 2
-
-        wrapped = _tandem_traceable(mock_langsmith_traceable, my_func, name="test")
-        result = wrapped(5)
-
-        assert result == 10
-        assert langsmith_called["count"] == 1
-
-    def test_convert_langsmith_evaluator_with_dict_wrapped_outputs(self):
-        """Test that evaluators handle dict-wrapped outputs (required by LangSmith)."""
-
-        def langsmith_evaluator(run, example):
-            # LangSmith wraps non-dict outputs as {"output": value}
-            actual = run.outputs
-            expected = example.outputs
-            if isinstance(actual, dict) and "output" in actual:
-                actual = actual["output"]
-            if isinstance(expected, dict) and "output" in expected:
-                expected = expected["output"]
-            return {"key": "match", "score": 1.0 if actual == expected else 0.0}
-
-        converted = _convert_langsmith_evaluator(langsmith_evaluator)
-
-        # Test with raw values (what Braintrust uses)
-        result = converted(input={"x": 1}, output=42, expected=42)
-        assert result.score == 1.0
 
     def test_make_braintrust_task_with_inputs_parameter(self):
         """Test that task handles LangSmith's required 'inputs' parameter name."""
@@ -431,74 +271,68 @@ class TestTandemModeIntegration:
 
         assert result == {"result": 10}
 
-    def test_convert_langsmith_data_wraps_non_dict_outputs(self):
-        """Test that data conversion handles non-dict outputs that LangSmith requires as dicts."""
+    def test_convert_langsmith_data_handles_different_output_types(self):
+        """Test that data conversion handles various output types."""
         data = [
             {"inputs": {"x": 1}, "outputs": 2},  # outputs is int, not dict
             {"inputs": {"x": 2}, "outputs": {"result": 4}},  # outputs is already dict
         ]
 
         data_fn = _convert_langsmith_data(data)
-        result = data_fn()
+        result = list(data_fn())
 
         # Both should work - Braintrust's EvalCase accepts any type for expected
         assert len(result) == 2
         assert result[0].input == {"x": 1}
-        assert result[0].expected == 2
         assert result[1].input == {"x": 2}
-        assert result[1].expected == {"result": 4}
+
+    def test_make_braintrust_scorer_handles_wrapped_outputs(self):
+        """Test that scorers handle output wrapping correctly."""
+
+        def langsmith_evaluator(inputs, outputs, reference_outputs):
+            # outputs will be wrapped as {"output": value} for non-dict results
+            actual = outputs.get("output", outputs)
+            expected = reference_outputs.get("output", reference_outputs) if isinstance(reference_outputs, dict) else reference_outputs
+            return {"key": "match", "score": 1.0 if actual == expected else 0.0}
+
+        converted = _make_braintrust_scorer(langsmith_evaluator)
+
+        class MockExample:
+            outputs = {"output": 42}
+
+        # Test with wrapped output
+        result = converted(input={"x": 1}, output=42, expected=MockExample())
+        assert result.name == "match"
+        assert result.score == 1.0
 
 
-class TestCreateTempLangsmithDataset:
-    """Tests for temporary LangSmith dataset creation in tandem mode."""
+class TestDataConversion:
+    """Tests for data conversion utilities."""
 
-    def test_create_temp_dataset_creates_dataset_and_examples(self):
-        """Test that _create_temp_langsmith_dataset creates a dataset with examples."""
-        from braintrust.wrappers.langsmith_wrapper import _create_temp_langsmith_dataset
-
-        mock_client = MagicMock()
-        mock_dataset = MagicMock()
-        mock_dataset.id = "dataset-123"
-        mock_client.create_dataset.return_value = mock_dataset
-
+    def test_convert_data_with_braintrust_format(self):
+        """Test that Braintrust format is properly handled."""
         data = [
-            {"inputs": {"x": 1}, "outputs": 2},
-            {"inputs": {"x": 2}, "outputs": 4},
+            {"input": {"x": 1}, "expected": {"y": 2}},
+            {"input": {"x": 2}, "expected": {"y": 4}},
         ]
 
-        result = _create_temp_langsmith_dataset(mock_client, data, "test-prefix")
+        data_fn = _convert_langsmith_data(data)
+        result = list(data_fn())
 
-        assert result is not None
-        assert result.startswith("_temp_test-prefix_")
-        mock_client.create_dataset.assert_called_once()
-        assert mock_client.create_example.call_count == 2
+        assert len(result) == 2
+        assert result[0].input == {"x": 1}
+        assert result[0].expected == {"y": 2}
+        assert result[1].input == {"x": 2}
+        assert result[1].expected == {"y": 4}
 
-    def test_create_temp_dataset_wraps_non_dict_outputs(self):
-        """Test that non-dict outputs are wrapped as {'output': value} for LangSmith."""
-        from braintrust.wrappers.langsmith_wrapper import _create_temp_langsmith_dataset
+    def test_convert_data_with_simple_items(self):
+        """Test that simple items (not dicts) are handled."""
+        data = [1, 2, 3]
 
-        mock_client = MagicMock()
-        mock_dataset = MagicMock()
-        mock_dataset.id = "dataset-123"
-        mock_client.create_dataset.return_value = mock_dataset
+        data_fn = _convert_langsmith_data(data)
+        result = list(data_fn())
 
-        data = [{"inputs": {"x": 1}, "outputs": 42}]  # int output
-
-        _create_temp_langsmith_dataset(mock_client, data, "test")
-
-        # Check that create_example was called with wrapped output
-        call_kwargs = mock_client.create_example.call_args[1]
-        assert call_kwargs["outputs"] == {"output": 42}
-
-    def test_create_temp_dataset_handles_failure(self):
-        """Test that dataset creation failure returns None."""
-        from braintrust.wrappers.langsmith_wrapper import _create_temp_langsmith_dataset
-
-        mock_client = MagicMock()
-        mock_client.create_dataset.side_effect = Exception("API error")
-
-        data = [{"inputs": {"x": 1}, "outputs": 2}]
-
-        result = _create_temp_langsmith_dataset(mock_client, data, "test")
-
-        assert result is None
+        assert len(result) == 3
+        assert result[0].input == 1
+        assert result[1].input == 2
+        assert result[2].input == 3

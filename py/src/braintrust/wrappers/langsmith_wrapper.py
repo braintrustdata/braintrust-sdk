@@ -446,7 +446,7 @@ def _convert_langsmith_data(data: Any) -> Callable[[], Iterator[EvalCase[Any, An
         elif isinstance(data, str):
             # Load examples from LangSmith dataset by name
             try:
-                from langsmith import Client
+                from langsmith import Client  # pylint: disable=import-error
 
                 client = Client()
                 source = client.list_examples(dataset_name=data)
