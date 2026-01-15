@@ -254,7 +254,7 @@ class Trace(Protocol):
     """
 
     def get_configuration(self) -> dict[str, str]:
-        """Get the trace configuration (objectType, objectId, rootSpanId)."""
+        """Get the trace configuration (object_type, object_id, root_span_id)."""
         ...
 
     async def get_spans(self, span_type: Optional[list[str]] = None) -> list[SpanData]:
@@ -270,11 +270,15 @@ class Trace(Protocol):
         ...
 
 
-class LocalTrace:
+class LocalTrace(dict):
     """
     SDK implementation of Trace that uses local span cache and falls back to BTQL.
     Carries identifying information about the evaluation so scorers can perform
     richer logging or side effects.
+
+    Inherits from dict so that it serializes to {"trace_ref": {...}} when passed
+    to json.dumps(). This allows LocalTrace to be transparently serialized when
+    passed through invoke() or other JSON-serializing code paths.
     """
 
     def __init__(
@@ -285,6 +289,15 @@ class LocalTrace:
         ensure_spans_flushed: Optional[Callable[[], Awaitable[None]]],
         state: BraintrustState,
     ):
+        # Initialize dict with trace_ref for JSON serialization
+        super().__init__({
+            "trace_ref": {
+                "object_type": object_type,
+                "object_id": object_id,
+                "root_span_id": root_span_id,
+            }
+        })
+
         self._object_type = object_type
         self._object_id = object_id
         self._root_span_id = root_span_id
@@ -309,9 +322,9 @@ class LocalTrace:
     def get_configuration(self) -> dict[str, str]:
         """Get the trace configuration."""
         return {
-            "objectType": self._object_type,
-            "objectId": self._object_id,
-            "rootSpanId": self._root_span_id,
+            "object_type": self._object_type,
+            "object_id": self._object_id,
+            "root_span_id": self._root_span_id,
         }
 
     async def get_spans(self, span_type: Optional[list[str]] = None) -> list[SpanData]:
