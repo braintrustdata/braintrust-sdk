@@ -39,6 +39,20 @@ COMMIT=$(git rev-parse --short HEAD)
 VERSION=$(bash "$ROOT_DIR/py/scripts/get_version.sh")
 TAG="${TAG_PREFIX}${VERSION}"
 
+# Check if version already exists on PyPI when using --force
+if [ "$FORCE" = true ]; then
+  echo "Checking if version ${VERSION} exists on PyPI..."
+  if curl -s "https://pypi.org/pypi/braintrust/${VERSION}/json" | grep -q "\"version\""; then
+    echo ""
+    echo "Error: Version ${VERSION} already exists on PyPI"
+    echo "Cannot force-replace a tag that has already been published to PyPI"
+    echo "Please bump the version number instead"
+    exit 1
+  fi
+  echo "Version ${VERSION} not found on PyPI, safe to proceed"
+  echo ""
+fi
+
 # Find the most recent version tag for comparison
 # If forcing and the tag exists, skip to the previous tag for changeset comparison
 if [ "$FORCE" = true ] && git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -54,11 +68,6 @@ echo "version:      ${TAG}"
 echo "commit:       ${COMMIT}"
 echo "code:         ${REPO_URL}/commit/${COMMIT}"
 echo "changeset:    ${REPO_URL}/compare/${LAST_RELEASE}...${COMMIT}"
-
-if [ "$FORCE" = true ]; then
-  echo ""
-  echo "⚠️  WARNING: Force mode enabled - will overwrite existing tag if present"
-fi
 
 if [ "$DRY_RUN" = true ]; then
   exit 0
