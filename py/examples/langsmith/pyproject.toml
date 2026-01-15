@@ -1,0 +1,18 @@
+[project]
+name = "langsmith-migration-example"
+version = "0.1.0"
+description = "Example showing LangSmith to Braintrust migration"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "braintrust",
+    "langsmith",
+]
+
+[tool.uv.sources]
+braintrust = { path = "../..", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

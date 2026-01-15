@@ -380,7 +380,12 @@ function compareExports(
 } {
   const removed: ExportedSymbol[] = [];
   const added: ExportedSymbol[] = [];
-  const modified: Array<{ name: string; before: string; after: string }> = [];
+  const modified: Array<{
+    name: string;
+    before: string;
+    after: string;
+    kind: string;
+  }> = [];
 
   // Check for removed or modified exports
   for (const [name, publishedSymbol] of publishedExports) {
@@ -463,6 +468,10 @@ function areSignaturesCompatible(
       // Special handling for Zod schemas
       if (oldNorm.includes("ZodObject") && newNorm.includes("ZodObject")) {
         return areZodSchemaSignaturesCompatible(oldNorm, newNorm);
+      }
+      // Special handling for const arrays (tuples) - adding values is compatible
+      if (oldNorm.includes("readonly [") && newNorm.includes("readonly [")) {
+        return areConstArraySignaturesCompatible(oldNorm, newNorm);
       }
       // For other variables, use conservative check (exact match)
       return oldNorm === newNorm;
@@ -924,8 +933,10 @@ function areEnumSignaturesCompatible(
 ): boolean {
   // Extract enum name and members
   const parseEnumSig = (sig: string) => {
-    // Match: export enum Name { members }
-    const match = sig.match(/export\s+enum\s+(\w+)\s*\{([^}]*)\}/);
+    // Match: export enum Name { members } or declare enum Name { members } or enum Name { members }
+    const match = sig.match(
+      /(?:export\s+|declare\s+)?enum\s+(\w+)\s*\{([^}]*)\}/,
+    );
     if (!match) return null;
 
     const name = match[1];
@@ -1136,6 +1147,73 @@ function areInterfaceSignaturesCompatible(
   }
 
   // All checks passed - interfaces are compatible
+  return true;
+}
+
+/**
+ * Compares const array (tuple) signatures to determine if changes are backwards compatible.
+ * Adding new values at the end of a const array is backwards compatible.
+ * Example: readonly ["a", "b"] -> readonly ["a", "b", "c"] is compatible
+ */
+function areConstArraySignaturesCompatible(
+  oldSig: string,
+  newSig: string,
+): boolean {
+  // Extract tuple members from signatures like:
+  // declare const foo: readonly ["a", "b", "c"];
+  // or: export const foo: readonly ["a", "b", "c"];
+  const parseTupleMembers = (sig: string): string[] | null => {
+    // Match: readonly ["value1", "value2", ...] or readonly [value1, value2, ...]
+    const match = sig.match(/readonly\s*\[([^\]]*)\]/);
+    if (!match) return null;
+
+    const body = match[1];
+    const members: string[] = [];
+    let depth = 0;
+    let current = "";
+
+    for (let i = 0; i < body.length; i++) {
+      const char = body[i];
+
+      if (char === "<" || char === "{" || char === "(" || char === "[") {
+        depth++;
+        current += char;
+      } else if (char === ">" || char === "}" || char === ")" || char === "]") {
+        depth--;
+        current += char;
+      } else if (char === "," && depth === 0) {
+        if (current.trim()) {
+          members.push(current.trim());
+        }
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    if (current.trim()) {
+      members.push(current.trim());
+    }
+
+    return members;
+  };
+
+  const oldMembers = parseTupleMembers(oldSig);
+  const newMembers = parseTupleMembers(newSig);
+
+  if (!oldMembers || !newMembers) {
+    return false; // Can't parse as tuple
+  }
+
+  // Check that all old members exist in the same position in new
+  for (let i = 0; i < oldMembers.length; i++) {
+    if (newMembers[i] !== oldMembers[i]) {
+      // Member changed or removed - breaking change
+      return false;
+    }
+  }
+
+  // New members at the end are allowed (widening the tuple type)
   return true;
 }
 
@@ -1568,6 +1646,12 @@ describe("areEnumSignaturesCompatible", () => {
     expect(areEnumSignaturesCompatible(oldEnum, newEnum)).toBe(true);
   });
 
+  test("should allow adding new enum value with declare syntax", () => {
+    const oldEnum = `declare enum SpanTypeAttribute { LLM = "llm", SCORE = "score", FUNCTION = "function", EVAL = "eval", TASK = "task", TOOL = "tool" }`;
+    const newEnum = `declare enum SpanTypeAttribute { LLM = "llm", SCORE = "score", FUNCTION = "function", EVAL = "eval", TASK = "task", TOOL = "tool", AUTOMATION = "automation", FACET = "facet", PREPROCESSOR = "preprocessor" }`;
+    expect(areEnumSignaturesCompatible(oldEnum, newEnum)).toBe(true);
+  });
+
   test("should reject removing enum value", () => {
     const oldEnum = `export enum Color { Red = "red", Blue = "blue", Green = "green" }`;
     const newEnum = `export enum Color { Red = "red", Blue = "blue" }`;
@@ -1584,6 +1668,44 @@ describe("areEnumSignaturesCompatible", () => {
     const oldEnum = `export enum Status { Pending = 0, Complete = 1 }`;
     const newEnum = `export enum Status { Pending = "pending", Complete = 1 }`;
     expect(areEnumSignaturesCompatible(oldEnum, newEnum)).toBe(false);
+  });
+});
+
+describe("areConstArraySignaturesCompatible", () => {
+  test("should allow adding new values at the end of const array", () => {
+    const oldSig = `declare const spanTypeAttributeValues: readonly ["llm", "score", "function", "eval", "task", "tool"];`;
+    const newSig = `declare const spanTypeAttributeValues: readonly ["llm", "score", "function", "eval", "task", "tool", "automation", "facet", "preprocessor"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(true);
+  });
+
+  test("should allow adding single value at end", () => {
+    const oldSig = `export const values: readonly ["a", "b"];`;
+    const newSig = `export const values: readonly ["a", "b", "c"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(true);
+  });
+
+  test("should reject removing values from const array", () => {
+    const oldSig = `declare const values: readonly ["a", "b", "c"];`;
+    const newSig = `declare const values: readonly ["a", "b"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(false);
+  });
+
+  test("should reject reordering values in const array", () => {
+    const oldSig = `declare const values: readonly ["a", "b", "c"];`;
+    const newSig = `declare const values: readonly ["a", "c", "b"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(false);
+  });
+
+  test("should reject changing existing values", () => {
+    const oldSig = `declare const values: readonly ["a", "b"];`;
+    const newSig = `declare const values: readonly ["a", "x"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(false);
+  });
+
+  test("should handle identical arrays", () => {
+    const oldSig = `declare const values: readonly ["a", "b"];`;
+    const newSig = `declare const values: readonly ["a", "b"];`;
+    expect(areConstArraySignaturesCompatible(oldSig, newSig)).toBe(true);
   });
 });
 
