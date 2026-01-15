@@ -5534,6 +5534,21 @@ export class SpanImpl implements Span {
     this.parentObjectId = args.parentObjectId;
     this.parentComputeObjectMetadataArgs = args.parentComputeObjectMetadataArgs;
 
+    // Check for override pagination key from env var (set by api-ts for
+    // backwards compat with old SDKs that don't whitelist this key).
+    // Must be done before validation/merging.
+    const overridePaginationKey = iso.getEnv("BT_OVERRIDE_PAGINATION_KEY");
+    if (overridePaginationKey) {
+      if (!args.propagatedEvent) {
+        args.propagatedEvent = {};
+      }
+      // Use type assertion since _bt_internal_override_pagination_key is an
+      // internal field not in the public type definition.
+      (
+        args.propagatedEvent as Record<string, unknown>
+      )._bt_internal_override_pagination_key = overridePaginationKey;
+    }
+
     // Merge propagatedEvent into event. The propagatedEvent data will get
     // propagated-and-merged into every subspan.
     this.propagatedEvent = args.propagatedEvent;

@@ -1178,3 +1178,84 @@ describe("sensitive data redaction", () => {
     expect(copy.input).toBe("<span>");
   });
 });
+
+describe("BT_OVERRIDE_PAGINATION_KEY env var", () => {
+  let originalEnv: string | undefined;
+
+  beforeEach(async () => {
+    originalEnv = process.env.BT_OVERRIDE_PAGINATION_KEY;
+  });
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.BT_OVERRIDE_PAGINATION_KEY = originalEnv;
+    } else {
+      delete process.env.BT_OVERRIDE_PAGINATION_KEY;
+    }
+  });
+
+  test("env var is read and added to propagatedEvent", async () => {
+    const testPaginationKey = "p00000000000000012345";
+    process.env.BT_OVERRIDE_PAGINATION_KEY = testPaginationKey;
+
+    const logger = initLogger({ projectName: "test-project" });
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Access private propagatedEvent for testing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const propagatedEvent = (span as any).propagatedEvent;
+
+    expect(propagatedEvent).toBeDefined();
+    expect(propagatedEvent._bt_internal_override_pagination_key).toBe(
+      testPaginationKey,
+    );
+
+    span.end();
+  });
+
+  test("env var merges with existing propagatedEvent", async () => {
+    const testPaginationKey = "p00000000000000054321";
+    process.env.BT_OVERRIDE_PAGINATION_KEY = testPaginationKey;
+
+    const logger = initLogger({ projectName: "test-project" });
+    const parentSpan = logger.startSpan({ name: "parent-span" });
+
+    const childSpan = parentSpan.startSpan({
+      name: "child-span",
+      propagatedEvent: { existing_key: "existing_value" },
+    });
+
+    // Access private propagatedEvent for testing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const propagatedEvent = (childSpan as any).propagatedEvent;
+
+    expect(propagatedEvent).toBeDefined();
+    expect(propagatedEvent._bt_internal_override_pagination_key).toBe(
+      testPaginationKey,
+    );
+    expect(propagatedEvent.existing_key).toBe("existing_value");
+
+    childSpan.end();
+    parentSpan.end();
+  });
+
+  test("spans work normally when env var is not set", async () => {
+    delete process.env.BT_OVERRIDE_PAGINATION_KEY;
+
+    const logger = initLogger({ projectName: "test-project" });
+    const span = logger.startSpan({ name: "test-span" });
+
+    // Access private propagatedEvent for testing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const propagatedEvent = (span as any).propagatedEvent;
+
+    // propagatedEvent should be undefined or not contain the pagination key
+    if (propagatedEvent) {
+      expect(
+        propagatedEvent._bt_internal_override_pagination_key,
+      ).toBeUndefined();
+    }
+
+    span.end();
+  });
+});

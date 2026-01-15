@@ -3732,6 +3732,15 @@ class SpanImpl(Span):
         if type is None and not parent_span_ids:
             type = default_root_type
 
+        # Check for override pagination key from env var (set by api-ts for
+        # backwards compat with old SDKs that don't whitelist this key).
+        # Must be done before validation/merging.
+        override_pagination_key = os.environ.get("BT_OVERRIDE_PAGINATION_KEY")
+        if override_pagination_key:
+            if propagated_event is None:
+                propagated_event = {}
+            propagated_event["_bt_internal_override_pagination_key"] = override_pagination_key
+
         self.state = state or _state
 
         self.can_set_current = cast(bool, coalesce(set_current, True))

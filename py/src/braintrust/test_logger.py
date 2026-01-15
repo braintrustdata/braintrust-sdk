@@ -2884,3 +2884,64 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
     assert attachment in with_memory_logger.upload_attempts
     assert json_attachment in with_memory_logger.upload_attempts
     assert ext_attachment in with_memory_logger.upload_attempts
+
+
+def test_override_pagination_key_env_var(with_memory_logger):
+    """Test that BT_OVERRIDE_PAGINATION_KEY env var is read and added to propagated_event."""
+    test_pagination_key = "p00000000000000012345"
+
+    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
+        os.environ["BT_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
+
+        logger = init_test_logger(__name__)
+        span = logger.start_span(name="test_span")
+
+        # Verify the pagination key was added to propagated_event
+        assert span.propagated_event is not None
+        assert "_bt_internal_override_pagination_key" in span.propagated_event
+        assert span.propagated_event["_bt_internal_override_pagination_key"] == test_pagination_key
+
+        span.end()
+
+
+def test_override_pagination_key_env_var_merges_with_existing(with_memory_logger):
+    """Test that BT_OVERRIDE_PAGINATION_KEY merges with existing propagated_event."""
+    test_pagination_key = "p00000000000000054321"
+
+    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
+        os.environ["BT_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
+
+        logger = init_test_logger(__name__)
+        # Create a parent span first
+        parent_span = logger.start_span(name="parent_span")
+
+        # Create a child span with its own propagated_event using valid keys
+        child_span = parent_span.start_span(
+            name="child_span",
+            propagated_event={"span_attributes": {"purpose": "test"}},
+        )
+
+        # Verify both the env var key and existing key are present
+        assert child_span.propagated_event is not None
+        assert "_bt_internal_override_pagination_key" in child_span.propagated_event
+        assert child_span.propagated_event["_bt_internal_override_pagination_key"] == test_pagination_key
+        assert child_span.propagated_event.get("span_attributes") == {"purpose": "test"}
+
+        child_span.end()
+        parent_span.end()
+
+
+def test_override_pagination_key_env_var_not_set(with_memory_logger):
+    """Test that spans work normally when BT_OVERRIDE_PAGINATION_KEY is not set."""
+    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
+        # Ensure env var is not set
+        os.environ.pop("BT_OVERRIDE_PAGINATION_KEY", None)
+
+        logger = init_test_logger(__name__)
+        span = logger.start_span(name="test_span")
+
+        # propagated_event should be None or not contain the pagination key
+        if span.propagated_event is not None:
+            assert "_bt_internal_override_pagination_key" not in span.propagated_event
+
+        span.end()
