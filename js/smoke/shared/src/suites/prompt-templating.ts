@@ -143,6 +143,21 @@ export async function testNunjucksTemplate(
       const errorMessage =
         buildError instanceof Error ? buildError.message : String(buildError);
 
+      // Some builds/environments intentionally do not ship nunjucks support.
+      if (
+        (environment === "browser" || environment === "cloudflare-worker") &&
+        errorMessage.includes(
+          "Nunjucks templating is not supported in this build",
+        )
+      ) {
+        return {
+          success: true,
+          testName,
+          message:
+            "Nunjucks template test passed - threw expected unsupported error",
+        };
+      }
+
       // Special handling for Cloudflare Workers environment, they disallow code generation
       if (
         environment === "cloudflare-worker" &&

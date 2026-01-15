@@ -25,13 +25,17 @@ async function waitForServer() {
   return false;
 }
 
-async function runTest() {
+async function runWranglerTest({ config, label }) {
   killPort(PORT);
 
-  const wrangler = spawn("npx", ["wrangler", "dev", "--port", String(PORT)], {
-    stdio: ["ignore", "pipe", "pipe"],
-    shell: true,
-  });
+  const wrangler = spawn(
+    "npx",
+    ["wrangler", "dev", "--config", config, "--port", String(PORT)],
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: true,
+    },
+  );
 
   let output = "";
   wrangler.stdout.on("data", (d) => (output += d));
@@ -57,7 +61,7 @@ async function runTest() {
 
   try {
     if (!(await waitForServer())) {
-      console.error("Server failed to start:\n", output);
+      console.error(`[${label}] Server failed to start:\n`, output);
       await killWrangler();
       return 1;
     }
@@ -65,10 +69,11 @@ async function runTest() {
     const response = await fetch(`http://localhost:${PORT}/test`);
     const result = await response.json();
 
+    console.log(`\n=== ${label} ===\n`);
     console.log(JSON.stringify(result, null, 2));
     exitCode = result.success ? 0 : 1;
   } catch (error) {
-    console.error("Error:", error.message, "\n", output);
+    console.error(`[${label}] Error:`, error.message, "\n", output);
     exitCode = 1;
   }
 
@@ -76,4 +81,21 @@ async function runTest() {
   return exitCode;
 }
 
-runTest().then((code) => process.exit(code));
+async function main() {
+  const a = await runWranglerTest({
+    config: "wrangler.node.toml",
+    label: "nodejs_compat_v2 + braintrust",
+  });
+  if (a !== 0) process.exit(a);
+
+  const b = await runWranglerTest({
+    config: "wrangler.browser.toml",
+    label: "no compatibility_flags + braintrust/browser",
+  });
+  process.exit(b);
+}
+
+main().catch((err) => {
+  console.error("Fatal:", err);
+  process.exit(1);
+});
