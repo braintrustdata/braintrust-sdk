@@ -264,6 +264,7 @@ async def test_scorer_spans_have_purpose_attribute(with_memory_logger, with_simu
         scores=[purpose_scorer],
         experiment_name="test-scorer-purpose",
         metadata=None,
+        summarize_scores=False,
     )
 
     # Create experiment so spans get logged
