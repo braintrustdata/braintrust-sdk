@@ -1,4 +1,4 @@
 server: temporal server start-dev
-worker1: npm run worker
-worker2: npm run worker
-worker3: npm run worker
+worker1: pnpm run worker
+worker2: pnpm run worker
+worker3: pnpm run worker

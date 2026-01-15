@@ -4,17 +4,20 @@ This example demonstrates how to integrate Braintrust tracing with Temporal work
 
 ## Prerequisites
 
-- [mise](https://mise.jdx.dev/) installed
+- Node.js
+- `pnpm`
+- Temporal CLI (`temporal`)
+- Optional: [`overmind`](https://github.com/DarthSim/overmind) (only if you want to use the included `Procfile`)
 
 ## Setup
 
 ```bash
-# Install tools (node, temporal, overmind)
-mise install
-
 # Copy and configure environment
 cp .env.example .env
 # Edit .env with your BRAINTRUST_API_KEY
+
+# Install dependencies
+pnpm install
 ```
 
 This example uses the separate Temporal integration package:
@@ -30,13 +33,13 @@ pnpm add @braintrust/temporal braintrust @temporalio/client @temporalio/worker @
 Start the temporal server and workers together:
 
 ```bash
-mise run server
+overmind start
 ```
 
 Then in another terminal, run the workflow:
 
 ```bash
-mise run workflow
+pnpm run client
 ```
 
 ### Option 2: Manual
@@ -50,16 +53,16 @@ temporal server start-dev
 2. Start the worker:
 
 ```bash
-npm run worker
+pnpm run worker
 ```
 
 3. Run the client:
 
 ```bash
-npm run client
+pnpm run client
 
 # Or with a signal:
-npm run client -- --signal
+pnpm run client -- --signal
 ```
 
 ## What Gets Traced
