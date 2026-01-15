@@ -281,33 +281,11 @@ export function initFunction({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
-    // When used as a scorer, input contains { input, output, expected, metadata, trace }
-    // Strip trace (not serializable) and convert to trace_ref for the remote function
-    let invokeInput = input;
-    if (input && typeof input === "object" && "trace" in input) {
-      const { trace, ...rest } = input;
-      // Duck-type check for Trace interface (has getConfiguration method)
-      if (trace && typeof trace.getConfiguration === "function") {
-        const configuration = trace.getConfiguration();
-        invokeInput = {
-          ...rest,
-          trace_ref: {
-            object_type: configuration.objectType,
-            object_id: configuration.objectId,
-            root_span_id: configuration.rootSpanId,
-          },
-        };
-      } else {
-        // trace exists but isn't a Trace object, just strip it
-        invokeInput = rest;
-      }
-    }
-
     return await invoke({
       projectName,
       slug,
       version,
-      input: invokeInput,
+      input,
     });
   };
 
