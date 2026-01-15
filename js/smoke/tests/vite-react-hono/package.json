@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node run-test.mjs",
+    "test:vite-dev": "node test-vite-dev.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "backup": "npx tsx ../../backup-and-restore.ts backup",

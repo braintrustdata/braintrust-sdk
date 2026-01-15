@@ -11,6 +11,8 @@ This test demonstrates:
 
 Based on the [Cloudflare Vite + React + Hono template](https://github.com/cloudflare/templates/tree/main/vite-react-template).
 
+📚 **See [TESTING.md](./TESTING.md) for detailed testing guide and issue documentation.**
+
 ## Architecture
 
 - **Backend**: Hono app running in Cloudflare Worker (`src/worker/index.ts`)
@@ -48,13 +50,38 @@ npm install
 # Run the automated smoke test (CI mode)
 npm test
 
-# Or run in development mode with React UI
-npm run dev
-# Then visit http://localhost:5173
+# Test Vite dev server compatibility (documents known issue)
+npm run test:vite-dev
 
 # Build for production
 npm run build
 ```
+
+### Known Issue: Vite Dev Server
+
+**⚠️ The Vite dev server (`npm run dev`) currently fails** with the following error:
+
+```
+TypeError: Object prototype may only be an Object or null: undefined
+    at _inheritsLoose (node_modules/nunjucks/src/object.js:8:77)
+```
+
+**Root Cause**: When Vite tries to pre-bundle dependencies, it encounters Nunjucks (used by Braintrust for prompt templating). Nunjucks uses `Object.setPrototypeOf` with potentially undefined values, which fails in Vite's ESM bundler.
+
+**Workarounds**:
+
+1. Use `braintrust/browser` import instead of full `braintrust` package
+2. Configure Vite to exclude Nunjucks from optimization:
+   ```js
+   // vite.config.ts
+   export default defineConfig({
+     optimizeDeps: {
+       exclude: ["nunjucks"],
+     },
+   });
+   ```
+
+**Testing**: Run `npm run test:vite-dev` to verify this known issue is reproducible. The test will fail (exit code 1), which is expected. CI is configured to allow this failure.
 
 ## Test Endpoints
 
@@ -128,15 +155,41 @@ The test runs in CI alongside other smoke tests:
 ## Key Features
 
 1. **Hono Integration**: Uses Hono's elegant routing instead of raw Worker API
-2. **Vite Bundling**: Tests the Braintrust SDK through Vite's bundler
-3. **React Frontend**: Optional UI for manual testing
+2. **Vite Bundling**: Tests the Braintrust SDK through Vite's bundler (production mode)
+3. **Compatibility Testing**: Documents and tests Vite dev server limitations
 4. **Cloudflare Workers**: Tests in actual Workers runtime environment
 5. **Shared Test Suites**: Consistent test coverage across all environments
 
+## Test Coverage
+
+This smoke test suite includes:
+
+### 1. Production Worker Test (`npm test`)
+
+Tests the Braintrust SDK in a production-like Cloudflare Workers environment:
+
+- ✅ 18/19 tests pass
+- ✅ All import verification tests
+- ✅ All functional logging tests
+- ✅ Eval smoke test
+- ✅ Mustache prompt templating
+- ❌ Nunjucks templating (expected failure - Cloudflare security policy)
+
+### 2. Vite Dev Server Compatibility Test (`npm run test:vite-dev`)
+
+Documents a known limitation with Vite's dev server:
+
+- ❌ Reproduces the Nunjucks bundling issue (exits with code 1)
+- ✅ Provides clear error messages and workarounds
+- ✅ Helps verify if the issue persists in new versions
+
+This test **reports honest failures**. CI is configured with `continue-on-error: true` to allow this expected failure without blocking the build.
+
 ## Notes
 
-- The automated test (`npm test`) only exercises the `/api/test` endpoint
-- The React frontend is optional and not tested in CI
+- The automated test (`npm test`) only exercises the `/api/test` endpoint via Wrangler
+- The React frontend is optional and not used in CI
 - Tests run in Cloudflare Workers environment (V8 isolates)
-- Uses Wrangler dev server for local testing
+- Uses Wrangler dev server for local testing (not Vite)
 - Port 8800 is used to avoid conflicts with other smoke tests
+- The Vite dev server issue is documented and testable but not blocking

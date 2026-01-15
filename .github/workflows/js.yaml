@@ -397,6 +397,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        integration: [cloudflare-worker, vite-react-hono]
         node-version: [20, 22]
 
     steps:
@@ -409,7 +410,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Backup original package manifests
-        working-directory: js/smoke/tests/cloudflare-worker
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run backup
 
@@ -422,7 +423,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies and local build
-        working-directory: js/smoke/tests/cloudflare-worker
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         shell: bash
         run: |
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
@@ -436,15 +437,23 @@ jobs:
           npm ci
           npm run build
 
-      - name: Run Cloudflare Worker smoke test
+      - name: Run ${{ matrix.integration }} smoke test
         working-directory: js/smoke
         shell: bash
         run: |
-          ./run-tests.sh cloudflare-worker
+          ./run-tests.sh ${{ matrix.integration }}
+
+      - name: Run Vite dev server compatibility test (allowed to fail)
+        if: matrix.integration == 'vite-react-hono'
+        continue-on-error: true
+        working-directory: js/smoke/tests/vite-react-hono
+        shell: bash
+        run: |
+          npm run test:vite-dev
 
       - name: Restore original package.json files
         if: always()
-        working-directory: js/smoke/tests/cloudflare-worker
+        working-directory: js/smoke/tests/${{ matrix.integration }}
         run: |
           npm run restore
 
