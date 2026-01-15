@@ -18,6 +18,8 @@ export function createMarkKnownPackagesExternalPlugin(
         "config",
         "lightningcss",
         "@mapbox/node-pre-gyp",
+        "fsevents",
+        "chokidar",
         ...additionalPackages,
       ];
       const escapedPackages = knownPackages.map((pkg) => {
