@@ -249,20 +249,8 @@ def init_function(project_name: str, slug: str, version: str | None = None):
             # Task.
             return invoke(project_name=project_name, slug=slug, version=version, input=args[0])
         else:
-            # Scorer - convert trace to trace_ref for remote invocation
-            scorer_input = {}
-            for k, v in kwargs.items():
-                if k == "trace" and v is not None:
-                    # Convert LocalTrace to trace_ref dict for remote invocation
-                    config = v.get_configuration()
-                    scorer_input["_trace_ref"] = {
-                        "object_type": config.get("objectType"),
-                        "object_id": config.get("objectId"),
-                        "root_span_id": config.get("rootSpanId"),
-                    }
-                else:
-                    scorer_input[k] = v
-            return invoke(project_name=project_name, slug=slug, version=version, input=scorer_input)
+            # Scorer.
+            return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
 
     f.__name__ = f"init_function-{project_name}-{slug}-{version or 'latest'}"
     return f
