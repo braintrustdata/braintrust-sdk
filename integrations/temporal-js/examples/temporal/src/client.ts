@@ -1,7 +1,7 @@
 import { Client, Connection } from "@temporalio/client";
 import { v4 as uuid } from "uuid";
 import * as braintrust from "braintrust";
-import { BraintrustTemporalPlugin } from "braintrust";
+import { BraintrustTemporalPlugin } from "@braintrust/temporal";
 import { simpleWorkflow } from "./workflows";
 import type { TaskInput } from "./activities";
 

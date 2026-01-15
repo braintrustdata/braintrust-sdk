@@ -6,7 +6,7 @@ import {
   BRAINTRUST_WORKFLOW_SPAN_HEADER,
   BRAINTRUST_WORKFLOW_SPAN_ID_HEADER,
 } from "./utils";
-import { SpanComponentsV3, SpanObjectTypeV3 } from "../../../util";
+import { SpanComponentsV3, SpanObjectTypeV3 } from "braintrust/util";
 import {
   BraintrustTemporalPlugin,
   createBraintrustTemporalPlugin,

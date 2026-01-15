@@ -5,7 +5,7 @@
   "tsconfig": "./tsconfig.json",
   "excludeExternals": true,
   "externalPattern": ["**/node_modules/**"],
-  "exclude": ["**/examples/**", "**/smoke/**", "**/wrappers/temporal/**"],
+  "exclude": ["**/examples/**", "**/smoke/**"],
   "plugin": ["typedoc-plugin-markdown"],
   "out": "../../docs/reference/sdks/ts-api",
   "githubPages": false,

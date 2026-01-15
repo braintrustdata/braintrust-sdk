@@ -18,7 +18,7 @@ import { createBraintrustSinks } from "./sinks";
  * import { Client, Connection } from "@temporalio/client";
  * import { Worker } from "@temporalio/worker";
  * import * as braintrust from "braintrust";
- * import { BraintrustTemporalPlugin } from "braintrust/wrappers/temporal";
+ * import { BraintrustTemporalPlugin } from "@braintrust/temporal";
  *
  * // Initialize Braintrust logger
  * braintrust.initLogger({ projectName: "my-project" });
@@ -91,7 +91,7 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
     // Resolve the workflow interceptors module path
     // This needs to be resolved at runtime to get the actual file path
     const workflowInterceptorsPath = require.resolve(
-      "braintrust/temporal/workflow-interceptors",
+      "@braintrust/temporal/workflow-interceptors",
     );
 
     return {

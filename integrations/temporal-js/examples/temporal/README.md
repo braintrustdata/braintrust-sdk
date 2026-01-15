@@ -17,6 +17,12 @@ cp .env.example .env
 # Edit .env with your BRAINTRUST_API_KEY
 ```
 
+This example uses the separate Temporal integration package:
+
+```bash
+pnpm add @braintrust/temporal braintrust @temporalio/client @temporalio/worker @temporalio/workflow @temporalio/activity @temporalio/common
+```
+
 ## Running the Example
 
 ### Option 1: Using overmind (recommended)

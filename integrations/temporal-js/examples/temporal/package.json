@@ -8,6 +8,7 @@
     "client": "pnpm exec ts-node src/client.ts"
   },
   "dependencies": {
+    "@braintrust/temporal": "^0.1.0",
     "@temporalio/activity": "^1.11.0",
     "@temporalio/client": "^1.11.0",
     "@temporalio/common": "^1.11.0",

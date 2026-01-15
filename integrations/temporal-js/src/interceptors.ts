@@ -8,7 +8,7 @@ import type {
 import type { WorkflowClientInterceptor } from "@temporalio/client";
 import { defaultPayloadConverter } from "@temporalio/common";
 import * as braintrust from "braintrust";
-import { SpanComponentsV3 } from "../../../util";
+import { SpanComponentsV3 } from "braintrust/util";
 import { getWorkflowSpanExport } from "./sinks";
 import {
   BRAINTRUST_SPAN_HEADER,

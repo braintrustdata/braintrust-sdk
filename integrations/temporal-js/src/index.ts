@@ -10,7 +10,7 @@
  * import { Client, Connection } from "@temporalio/client";
  * import { Worker } from "@temporalio/worker";
  * import * as braintrust from "braintrust";
- * import { createBraintrustTemporalPlugin } from "braintrust/wrappers/temporal";
+ * import { createBraintrustTemporalPlugin } from "@braintrust/temporal";
  *
  * // Initialize Braintrust logger
  * braintrust.initLogger({ projectName: "my-project" });
@@ -30,14 +30,7 @@
  *   workflowsPath: require.resolve("./workflows"),
  *   activities,
  *   plugins: [braintrustPlugin],
- *   interceptors: {
- *     // Workflow interceptors must be bundled with workflow code
- *     workflowModules: [require.resolve("braintrust/temporal/workflow-interceptors")],
- *   },
  * });
- *
- * // In your workflows.ts, export the workflow interceptors:
- * export { interceptors } from "braintrust/wrappers/temporal/workflow-interceptors";
  * ```
  *
  * The resulting trace will show:

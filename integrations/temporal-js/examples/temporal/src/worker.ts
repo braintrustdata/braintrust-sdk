@@ -1,6 +1,6 @@
 import { Worker, NativeConnection } from "@temporalio/worker";
 import * as braintrust from "braintrust";
-import { BraintrustTemporalPlugin } from "braintrust";
+import { BraintrustTemporalPlugin } from "@braintrust/temporal";
 import * as activities from "./activities";
 
 const TASK_QUEUE = "braintrust-example-task-queue";
