@@ -7,6 +7,7 @@ import {
   setupTestEnvironment,
   cleanupTestEnvironment,
   runBasicLoggingTests,
+  runEvalSmokeTest,
   runImportVerificationTests,
   runPromptTemplatingTests,
   type TestResult,
@@ -41,6 +42,10 @@ async function runSharedTestSuites() {
     console.log("\nRunning functional tests...");
     const functionalResults = await runBasicLoggingTests(adapters);
 
+    // Run eval smoke test
+    console.log("\nRunning eval smoke test...");
+    const evalResult = await runEvalSmokeTest(adapters, braintrust);
+
     // Run prompt templating tests
     console.log("\nRunning prompt templating tests...");
     const promptTemplatingResults = await runPromptTemplatingTests({
@@ -51,6 +56,7 @@ async function runSharedTestSuites() {
     const results = [
       ...importResults,
       ...functionalResults,
+      evalResult,
       ...promptTemplatingResults,
     ];
 

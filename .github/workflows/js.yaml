@@ -448,6 +448,70 @@ jobs:
         run: |
           npm run restore
 
+  smoke-tests-browser:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        working-directory: js/smoke/tests/browser
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build
+        working-directory: js/smoke/tests/browser
+        shell: bash
+        run: |
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Install Playwright Chromium (with OS deps)
+        working-directory: js/smoke/tests/browser
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Browser (Playwright) smoke test
+        working-directory: js/smoke
+        shell: bash
+        run: |
+          ./run-tests.sh browser
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/browser
+        run: |
+          npm run restore
+
   smoke-tests-deno:
     needs: build
     runs-on: ubuntu-latest
