@@ -41,8 +41,9 @@ fi
 
 # Nox formats the sessions like:
 # * test_foo
-# * test_bar
-all_sessions=$(nox -l -f $NOXFILE | grep "^\* " | cut -c 3- | sort)
+# * test_bar -> Optional description
+# We need to strip the description part after " -> "
+all_sessions=$(nox -l -f $NOXFILE | grep "^\* " | cut -c 3- | sed 's/ ->.*$//' | sort)
 matches=$(echo "$all_sessions" | awk "NR % $TOTAL == $INDEX")
 misses=$(echo "$all_sessions" | awk "NR % $TOTAL != $INDEX")
 n_matches=$(echo "$matches" | wc -l | xargs)
@@ -61,4 +62,7 @@ if [ "$DRY_RUN" = true ]; then
   exit 0
 fi
 
-echo "$matches" | xargs nox -f $NOXFILE
+# Build session list and run nox once
+# Quote each session name to handle parentheses in names like test_openai(latest)
+session_list=$(echo "$matches" | sed 's/.*/"&"/' | tr '\n' ' ')
+eval "nox -f $NOXFILE -s $session_list"

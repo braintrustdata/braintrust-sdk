@@ -11,16 +11,6 @@ PROJECT_NAME = "test-project-openai-attachment-processing"
 TEST_MODEL = "gpt-4o-mini"
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "openai-organization",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)
