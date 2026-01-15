@@ -2887,11 +2887,11 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
 
 
 def test_override_pagination_key_env_var(with_memory_logger):
-    """Test that BT_OVERRIDE_PAGINATION_KEY env var is read and added to propagated_event."""
+    """Test that BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY env var is read and added to propagated_event."""
     test_pagination_key = "p00000000000000012345"
 
-    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
-        os.environ["BT_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
+    with preserve_env_vars("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY"):
+        os.environ["BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
 
         logger = init_test_logger(__name__)
         span = logger.start_span(name="test_span")
@@ -2905,11 +2905,11 @@ def test_override_pagination_key_env_var(with_memory_logger):
 
 
 def test_override_pagination_key_env_var_merges_with_existing(with_memory_logger):
-    """Test that BT_OVERRIDE_PAGINATION_KEY merges with existing propagated_event."""
+    """Test that BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY merges with existing propagated_event."""
     test_pagination_key = "p00000000000000054321"
 
-    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
-        os.environ["BT_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
+    with preserve_env_vars("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY"):
+        os.environ["BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY"] = test_pagination_key
 
         logger = init_test_logger(__name__)
         # Create a parent span first
@@ -2932,10 +2932,10 @@ def test_override_pagination_key_env_var_merges_with_existing(with_memory_logger
 
 
 def test_override_pagination_key_env_var_not_set(with_memory_logger):
-    """Test that spans work normally when BT_OVERRIDE_PAGINATION_KEY is not set."""
-    with preserve_env_vars("BT_OVERRIDE_PAGINATION_KEY"):
+    """Test that spans work normally when BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY is not set."""
+    with preserve_env_vars("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY"):
         # Ensure env var is not set
-        os.environ.pop("BT_OVERRIDE_PAGINATION_KEY", None)
+        os.environ.pop("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY", None)
 
         logger = init_test_logger(__name__)
         span = logger.start_span(name="test_span")

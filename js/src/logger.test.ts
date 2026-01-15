@@ -1179,24 +1179,24 @@ describe("sensitive data redaction", () => {
   });
 });
 
-describe("BT_OVERRIDE_PAGINATION_KEY env var", () => {
+describe("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY env var", () => {
   let originalEnv: string | undefined;
 
   beforeEach(async () => {
-    originalEnv = process.env.BT_OVERRIDE_PAGINATION_KEY;
+    originalEnv = process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY;
   });
 
   afterEach(() => {
     if (originalEnv !== undefined) {
-      process.env.BT_OVERRIDE_PAGINATION_KEY = originalEnv;
+      process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY = originalEnv;
     } else {
-      delete process.env.BT_OVERRIDE_PAGINATION_KEY;
+      delete process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY;
     }
   });
 
   test("env var is read and added to propagatedEvent", async () => {
     const testPaginationKey = "p00000000000000012345";
-    process.env.BT_OVERRIDE_PAGINATION_KEY = testPaginationKey;
+    process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY = testPaginationKey;
 
     const logger = initLogger({ projectName: "test-project" });
     const span = logger.startSpan({ name: "test-span" });
@@ -1215,7 +1215,7 @@ describe("BT_OVERRIDE_PAGINATION_KEY env var", () => {
 
   test("env var merges with existing propagatedEvent", async () => {
     const testPaginationKey = "p00000000000000054321";
-    process.env.BT_OVERRIDE_PAGINATION_KEY = testPaginationKey;
+    process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY = testPaginationKey;
 
     const logger = initLogger({ projectName: "test-project" });
     const parentSpan = logger.startSpan({ name: "parent-span" });
@@ -1240,7 +1240,7 @@ describe("BT_OVERRIDE_PAGINATION_KEY env var", () => {
   });
 
   test("spans work normally when env var is not set", async () => {
-    delete process.env.BT_OVERRIDE_PAGINATION_KEY;
+    delete process.env.BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY;
 
     const logger = initLogger({ projectName: "test-project" });
     const span = logger.startSpan({ name: "test-span" });

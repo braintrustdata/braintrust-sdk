@@ -3735,7 +3735,7 @@ class SpanImpl(Span):
         # Check for override pagination key from env var (set by api-ts for
         # backwards compat with old SDKs that don't whitelist this key).
         # Must be done before validation/merging.
-        override_pagination_key = os.environ.get("BT_OVERRIDE_PAGINATION_KEY")
+        override_pagination_key = os.environ.get("BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY")
         if override_pagination_key:
             if propagated_event is None:
                 propagated_event = {}

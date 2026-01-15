@@ -5537,7 +5537,9 @@ export class SpanImpl implements Span {
     // Check for override pagination key from env var (set by api-ts for
     // backwards compat with old SDKs that don't whitelist this key).
     // Must be done before validation/merging.
-    const overridePaginationKey = iso.getEnv("BT_OVERRIDE_PAGINATION_KEY");
+    const overridePaginationKey = iso.getEnv(
+      "BRAINTRUST_INTERNAL_OVERRIDE_PAGINATION_KEY",
+    );
     if (overridePaginationKey) {
       if (!args.propagatedEvent) {
         args.propagatedEvent = {};
