@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 
@@ -15,12 +16,16 @@ FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "internal/gol
 
 @pytest.fixture(scope="module")
 def vcr_config():
+    """Google-specific VCR config - needs to uppercase HTTP methods."""
+    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+
     def before_record_request(request):
-        # Normalize HTTP method to uppercase for consistency
+        # Normalize HTTP method to uppercase for consistency (Google API quirk)
         request.method = request.method.upper()
         return request
 
     return {
+        "record_mode": record_mode,
         "filter_headers": [
             "authorization",
             "x-api-key",

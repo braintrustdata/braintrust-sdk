@@ -40,6 +40,8 @@
       "Bash(jq:*)",
       "Bash(source:*)",
       "Bash(cd:*)",
+      "Bash(set:*)",
+      "Bash(sort:*)",
       "Bash(.nox/*/bin/pytest:*)",
       "Bash(.nox/*/bin/python:*)",
       "Bash(.nox/*/bin/pip:*)",
