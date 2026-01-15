@@ -161,11 +161,18 @@ run_test() {
 
     cd "$test_dir"
 
-    log_info "Running: npm test"
+    local npm_script="test"
+
+    # Allow CI to run Cloudflare Worker variants as separate pipeline jobs
+    if [ "$test_name" = "cloudflare-worker" ] && [ -n "${CLOUDFLARE_WORKER_MODE:-}" ]; then
+        npm_script="test:${CLOUDFLARE_WORKER_MODE}"
+    fi
+
+    log_info "Running: npm run $npm_script"
 
     # Set BRAINTRUST_BUILD_DIR for Deno tests if not already set
     if [ "$test_name" = "deno" ] && [ -z "${BRAINTRUST_BUILD_DIR:-}" ]; then
-        local deno_build_file="$TESTS_DIR/deno/build/braintrust/dist/browser.mjs"
+        local deno_build_file="$TESTS_DIR/deno/build/braintrust/dist/index.mjs"
         if [ -f "$deno_build_file" ]; then
             # Convert to absolute path for Deno file:// imports
             local abs_dir="$(cd "$(dirname "$deno_build_file")" && pwd)"
@@ -178,7 +185,7 @@ run_test() {
     local test_output
     local test_exit_code
 
-    if test_output=$(npm test 2>&1); then
+    if test_output=$(npm run "$npm_script" 2>&1); then
         test_exit_code=0
     else
         test_exit_code=$?

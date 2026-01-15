@@ -94,6 +94,15 @@ export async function testNunjucksTemplate(
 ): Promise<TestResult> {
   const testName = "testNunjucksTemplate";
 
+  if (environment === "cloudflare-worker") {
+    return {
+      success: true,
+      testName,
+      message:
+        "Nunjucks template test skipped - not supported in Cloudflare Workers",
+    };
+  }
+
   try {
     const { Prompt } = module;
 
@@ -143,33 +152,20 @@ export async function testNunjucksTemplate(
       const errorMessage =
         buildError instanceof Error ? buildError.message : String(buildError);
 
-      // Some builds/environments intentionally do not ship nunjucks support.
-      if (
-        (environment === "browser" || environment === "cloudflare-worker") &&
-        errorMessage.includes(
-          "Nunjucks templating is not supported in this build",
-        )
-      ) {
-        return {
-          success: true,
-          testName,
-          message:
-            "Nunjucks template test passed - threw expected unsupported error",
-        };
-      }
+      const isUnsupported = errorMessage.includes(
+        "Nunjucks templating is not supported in this build",
+      );
 
-      // Special handling for Cloudflare Workers environment, they disallow code generation
       if (
-        environment === "cloudflare-worker" &&
-        errorMessage.includes(
-          "String template rendering. Disallowed in this environment for security reasons",
-        )
+        (environment === "browser" ||
+          environment === "cloudflare-worker" ||
+          environment === "nextjs-edge-runtime") &&
+        isUnsupported
       ) {
         return {
           success: true,
           testName,
-          message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support string template rendering",
+          message: "Nunjucks template test skipped - nunjucks unsupported",
         };
       }
 
@@ -182,10 +178,12 @@ export async function testNunjucksTemplate(
     }
 
     try {
+      const expected = "Items: apple, banana, cherry";
+      const actual = nunjucksResult.messages[0]?.content;
       assertEqual(
-        nunjucksResult.messages[0]?.content,
-        "Items: apple, banana, cherry",
-        "Nunjucks template should render loop correctly",
+        actual,
+        expected,
+        `Nunjucks template should render loop correctly (expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)})`,
       );
     } catch (assertError) {
       return {

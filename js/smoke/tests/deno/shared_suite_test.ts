@@ -49,9 +49,12 @@ export async function runSharedTestSuites() {
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
     // Run prompt templating tests
-    const promptTemplatingResults = await runPromptTemplatingTests({
-      Prompt: braintrust.Prompt,
-    });
+    const promptTemplatingResults = await runPromptTemplatingTests(
+      {
+        Prompt: braintrust.Prompt,
+      },
+      adapters.environment,
+    );
 
     // Combine results
     const results = [

@@ -9,7 +9,7 @@ import {
 /**
  * This is a simple test to send a span to the braintrust API
  * Uses BRAINTRUST_BUILD_DIR environment variable to import the braintrust package
- * ie. BRAINTRUST_BUILD_DIR=./package/dist/browser.mjs
+ * ie. BRAINTRUST_BUILD_DIR=./package/dist/index.mjs
  */
 export async function runBrowserLoggerSmokeTest() {
   const buildDir = Deno.env.get("BRAINTRUST_BUILD_DIR");
