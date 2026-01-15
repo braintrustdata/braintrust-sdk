@@ -6,6 +6,21 @@ const RETRY_DELAY_MS = 250;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--config") {
+      const v = argv[i + 1];
+      if (!v) throw new Error("Missing value for --config");
+      out.config = v;
+      i++;
+      continue;
+    }
+  }
+  return out;
+}
+
 function killPort(port) {
   try {
     execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, {
@@ -82,6 +97,21 @@ async function runWranglerTest({ config, label }) {
 }
 
 async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.config) {
+    const label =
+      args.config === "wrangler.node.toml"
+        ? "nodejs_compat_v2 + braintrust"
+        : args.config === "wrangler.browser.toml"
+          ? "no compatibility_flags + braintrust/browser"
+          : args.config;
+    const code = await runWranglerTest({
+      config: args.config,
+      label,
+    });
+    process.exit(code);
+  }
+
   const a = await runWranglerTest({
     config: "wrangler.node.toml",
     label: "nodejs_compat_v2 + braintrust",

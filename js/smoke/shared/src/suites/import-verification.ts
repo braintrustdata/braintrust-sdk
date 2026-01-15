@@ -150,6 +150,7 @@ export async function testCoreLoggingExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -183,6 +184,7 @@ export async function testDatasetExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -219,6 +221,7 @@ export async function testPromptExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -263,6 +266,7 @@ export async function testExperimentExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -333,6 +337,7 @@ export async function testEvalExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -375,6 +380,7 @@ export async function testTracingExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -424,6 +430,7 @@ export async function testClientWrapperExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -467,6 +474,7 @@ export async function testUtilityExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -500,6 +508,7 @@ export async function testFunctionExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -536,6 +545,7 @@ export async function testFramework2Exports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -566,6 +576,7 @@ export async function testIDGeneratorExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -599,6 +610,7 @@ export async function testTestingExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -632,6 +644,7 @@ export async function testStateManagementExports(
       success: false,
       testName,
       error: error as Error,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
