@@ -10,11 +10,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      # As of 2024-11-08, this test takes roughly 60 seconds. There is not much benefit to fail-fast.
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         os: [ubuntu-latest, windows-latest]
+        shard: [0, 1]
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -38,9 +38,10 @@ jobs:
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
-      - name: Run nox tests
+      - name: Run nox tests (shard ${{ matrix.shard }}/2)
+        shell: bash
         run: |
-          make nox
+          cd py && ./scripts/nox-matrix.sh ${{ matrix.shard }} 2
 
   adk-py:
     uses: ./.github/workflows/adk-py-test.yaml

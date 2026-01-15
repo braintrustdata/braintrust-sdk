@@ -66,6 +66,7 @@ def _assert_metrics_are_valid(metrics: Dict[str, Any]):
     assert "time_to_first_token" in metrics
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_pydantic_wrapped_stream(memory_logger):
     """Test that Pydantic AI streaming operations work with Braintrust wrapping."""
@@ -108,6 +109,7 @@ async def test_pydantic_wrapped_stream(memory_logger):
     assert span["root_span_id"]
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_pydantic_wrapped_completion(memory_logger):
     """Test that Pydantic AI completion operations work with Braintrust wrapping."""
