@@ -17,7 +17,10 @@ const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
   createNunjucksEnv(true),
 );
 
-export function getNunjucksEnv(strict = false): NunjucksEnvironment {
+export function getNunjucksEnv(options?: {
+  strict?: boolean;
+}): NunjucksEnvironment {
+  const strict = options?.strict ?? false;
   return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
 }
 
@@ -27,7 +30,7 @@ export function renderNunjucksString(
   strict = false,
 ): string {
   try {
-    return getNunjucksEnv(strict).renderString(template, variables);
+    return getNunjucksEnv({ strict }).renderString(template, variables);
   } catch (error) {
     if (
       error instanceof Error &&

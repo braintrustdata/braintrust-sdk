@@ -1,6 +1,9 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, vi } from "vitest";
+import { configureNode } from "./node";
 import { Prompt } from "./logger";
 import { type PromptDataType as PromptData } from "./generated_types";
+
+configureNode();
 
 describe("prompt strict mode", () => {
   test("strict mode", () => {
@@ -255,5 +258,86 @@ describe("prompt template_format", () => {
 
     const result = prompt.build({ text: "Hello" }, { flavor: "completion" });
     expect(result.prompt).toBe("Complete this: Hello");
+  });
+});
+
+describe("prompt template_format (unconfigured/browser-like)", () => {
+  test("throws unsupported error for nunjucks template_format when not configured", async () => {
+    vi.resetModules();
+    const { Prompt: UnconfiguredPrompt } = await import("./logger");
+
+    const prompt = new UnconfiguredPrompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: "Hello {% if name %}{{name}}{% endif %}",
+              },
+            ],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    expect(() => prompt.build({ name: "World" })).toThrowError(
+      /Nunjucks templating is not supported in this build/,
+    );
+  });
+
+  test("throws unsupported error after configureBrowser()", async () => {
+    vi.resetModules();
+    const { configureBrowser } = await import("./browser-config");
+    const { Prompt: BrowserConfiguredPrompt } = await import("./logger");
+
+    configureBrowser();
+
+    const prompt = new BrowserConfiguredPrompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: "Hello {% if name %}{{name}}{% endif %}",
+              },
+            ],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    expect(() => prompt.build({ name: "World" })).toThrowError(
+      /Nunjucks templating is not supported in this build/,
+    );
   });
 });
