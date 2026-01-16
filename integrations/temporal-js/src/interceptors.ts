@@ -107,23 +107,21 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
           const clientComponents = SpanComponentsV3.fromStr(clientContext);
           const clientData = clientComponents.data;
 
-          // Only construct new parent if client context has required fields
-          if (
-            clientData.object_id &&
-            clientData.row_id &&
-            clientData.root_span_id
-          ) {
+          // Construct workflow parent if we have root_span_id (object_id is optional)
+          if (clientData.root_span_id) {
+            // IMPORTANT: row_id must match span_id for the parent span
+            // The workflow span's row_id IS its span_id
             const workflowComponents = new SpanComponentsV3({
               object_type: clientData.object_type,
-              object_id: clientData.object_id,
+              object_id: clientData.object_id, // May be undefined, that's ok
               propagated_event: clientData.propagated_event,
-              row_id: clientData.row_id,
+              row_id: workflowSpanId, // Use workflow span ID, not client row_id
               root_span_id: clientData.root_span_id,
               span_id: workflowSpanId,
             });
             parent = workflowComponents.toStr();
           } else {
-            // Client context doesn't have required fields, use it directly
+            // Client context doesn't have root_span_id, use it directly
             parent = clientContext;
           }
         } catch {
