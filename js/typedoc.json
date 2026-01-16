@@ -1,20 +1,18 @@
 {
-    "compilerOptions": {
-      "skipLibCheck": true
-    },
-    "tsconfig": "./tsconfig.json",
-    "excludeExternals": true,
-    "externalPattern": [
-        "**/node_modules/**"
-    ],
-    "exclude": ["**/examples/**", "**/smoke/**"],
-    "plugin": ["typedoc-plugin-markdown"],
-    "out": "../../docs/reference/sdks/ts-api",
-    "githubPages": false,
-    "disableSources": true,
-    "excludePrivate": true,
-    "hideBreadcrumbs": true,
-    "excludeInternal": true,
-    "theme": "markdown",
-    "groupOrder": ["Functions", "*"]
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
+  "tsconfig": "./tsconfig.json",
+  "excludeExternals": true,
+  "externalPattern": ["**/node_modules/**"],
+  "exclude": ["**/examples/**", "**/smoke/**"],
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "../../docs/reference/sdks/ts-api",
+  "githubPages": false,
+  "disableSources": true,
+  "excludePrivate": true,
+  "hideBreadcrumbs": true,
+  "excludeInternal": true,
+  "theme": "markdown",
+  "groupOrder": ["Functions", "*"]
 }

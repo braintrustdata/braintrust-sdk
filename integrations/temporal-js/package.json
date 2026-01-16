@@ -1,0 +1,71 @@
+{
+  "name": "@braintrust/temporal",
+  "version": "0.1.0",
+  "description": "SDK for integrating Braintrust with Temporal",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./workflow-interceptors": {
+      "types": "./dist/workflow-interceptors.d.ts",
+      "import": "./dist/workflow-interceptors.mjs",
+      "module": "./dist/workflow-interceptors.mjs",
+      "require": "./dist/workflow-interceptors.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -r dist/*",
+    "test": "vitest run"
+  },
+  "author": "Braintrust Data Inc.",
+  "license": "MIT",
+  "devDependencies": {
+    "@temporalio/activity": "^1.14.1",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/common": "^1.14.1",
+    "@temporalio/worker": "^1.14.1",
+    "@temporalio/workflow": "^1.14.1",
+    "@types/node": "^22.15.21",
+    "braintrust": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "5.5.4",
+    "vitest": "^2.1.9"
+  },
+  "peerDependencies": {
+    "@temporalio/activity": ">=1.11.0",
+    "@temporalio/client": ">=1.11.0",
+    "@temporalio/common": ">=1.11.0",
+    "@temporalio/worker": ">=1.11.0",
+    "@temporalio/workflow": ">=1.11.0",
+    "braintrust": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "braintrust": {
+      "optional": false
+    },
+    "@temporalio/activity": {
+      "optional": false
+    },
+    "@temporalio/client": {
+      "optional": false
+    },
+    "@temporalio/common": {
+      "optional": false
+    },
+    "@temporalio/worker": {
+      "optional": false
+    },
+    "@temporalio/workflow": {
+      "optional": false
+    }
+  }
+}
