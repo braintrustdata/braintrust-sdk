@@ -47,12 +47,9 @@ from urllib3.util.retry import Retry
 from . import context, id_gen
 from .bt_json import bt_dumps, bt_safe_deep_copy
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -2327,30 +2324,6 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
 
 
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-        "_bt_internal_override_pagination_key",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
     scores = event.get("scores")
     if scores:
         for name, score in scores.items():

@@ -12,17 +12,6 @@ PROJECT_NAME = "test-dspy-app"
 MODEL = "openai/gpt-4o-mini"
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-            "openai-api-key",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)

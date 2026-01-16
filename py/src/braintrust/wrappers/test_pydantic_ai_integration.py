@@ -32,17 +32,6 @@ def direct():
     return direct_module
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "openai-organization",
-            "x-api-key",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)
