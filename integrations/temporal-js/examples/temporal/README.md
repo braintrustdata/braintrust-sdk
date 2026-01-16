@@ -4,12 +4,54 @@ This example demonstrates how to integrate Braintrust tracing with Temporal work
 
 ## Prerequisites
 
-- Node.js
-- `pnpm`
-- Temporal CLI (`temporal`)
-- Optional: [`overmind`](https://github.com/DarthSim/overmind) (only if you want to use the included `Procfile`)
+- [mise](https://mise.jdx.dev/) (recommended) - automatically installs all dependencies
+- OR manually install:
+  - Node.js 20+
+  - `pnpm`
+  - Temporal CLI (`temporal`)
+  - Optional: [`overmind`](https://github.com/DarthSim/overmind) (only if you want to use the included `Procfile`)
 
-### Installing Temporal CLI
+### Option 1: Using mise (recommended)
+
+[mise](https://mise.jdx.dev/) will automatically install and manage all required tools (Node.js, Temporal CLI, overmind, and dependencies):
+
+**Install mise:**
+
+```bash
+# macOS/Linux
+curl https://mise.run | sh
+
+# Or using Homebrew
+brew install mise
+```
+
+**Setup and run:**
+
+```bash
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your BRAINTRUST_API_KEY
+
+# mise will automatically install tools and dependencies
+mise run server  # Start temporal server and workers
+
+# In another terminal:
+mise run workflow  # Run the workflow client
+```
+
+**Available mise tasks:**
+
+```bash
+mise run install   # Install dependencies
+mise run server    # Run temporal server and workers
+mise run workflow  # Run workflow client
+mise run stop      # Stop temporal server and workers
+mise run kill      # Force kill all processes
+```
+
+### Option 2: Manual installation
+
+#### Installing Temporal CLI
 
 The Temporal CLI is required to run the local Temporal server:
 
@@ -45,7 +87,7 @@ Verify the installation:
 temporal --version
 ```
 
-### Installing overmind (optional)
+#### Installing overmind (optional)
 
 Overmind is a process manager that makes it easy to run multiple services together. If you want to use `overmind start` to run everything at once, install it for your platform:
 
@@ -65,7 +107,7 @@ brew install overmind
 ```
 
 **Windows:**
-Overmind is not officially supported on Windows. Use the manual approach (Option 2 in "Running the Example" below) instead.
+Overmind is not officially supported on Windows. Use the manual approach below instead.
 
 ## Setup
 
@@ -80,7 +122,7 @@ pnpm install
 
 ## Running the Example
 
-### Option 1: Using overmind (recommended)
+### Option 1: Using overmind
 
 Start the temporal server and workers together:
 

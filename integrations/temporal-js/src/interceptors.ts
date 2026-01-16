@@ -103,22 +103,32 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
 
       if (workflowSpanId && clientContext) {
         try {
-          // Parse client context and replace span_id with workflow span ID
           const clientComponents = SpanComponentsV3.fromStr(clientContext);
           const clientData = clientComponents.data;
 
-          // Construct workflow parent if we have root_span_id (object_id is optional)
-          if (clientData.root_span_id) {
+          // We can only construct a workflow parent if we have:
+          // 1. Tracing context (root_span_id)
+          // 2. Object metadata (object_id or compute_object_metadata_args)
+          const hasTracingContext = !!clientData.root_span_id;
+          const hasObjectMetadata =
+            !!clientData.object_id || !!clientData.compute_object_metadata_args;
+
+          if (hasTracingContext && hasObjectMetadata) {
+            // Construct workflow parent with the workflow's span ID
             // IMPORTANT: row_id must match span_id for the parent span
-            // The workflow span's row_id IS its span_id
+            // Must provide EITHER object_id OR compute_object_metadata_args, not both
             const workflowComponents = new SpanComponentsV3({
               object_type: clientData.object_type,
-              object_id: clientData.object_id, // May be undefined, that's ok
+              object_id: clientData.object_id || undefined,
+              compute_object_metadata_args: clientData.object_id
+                ? undefined
+                : clientData.compute_object_metadata_args || undefined,
               propagated_event: clientData.propagated_event,
-              row_id: workflowSpanId, // Use workflow span ID, not client row_id
-              root_span_id: clientData.root_span_id,
-              span_id: workflowSpanId,
+              row_id: workflowSpanId, // Use workflow's row_id, not client's
+              span_id: workflowSpanId, // Use workflow's span_id, not client's
+              root_span_id: clientData.root_span_id, // Keep same trace
             });
+
             parent = workflowComponents.toStr();
           } else {
             // Client context doesn't have root_span_id, use it directly
