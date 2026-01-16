@@ -15,15 +15,18 @@
       "require": "./dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r dist/*"
+    "clean": "rm -r dist/*",
+    "prepack": "npm run build"
   },
   "author": "Braintrust Data Inc.",
   "license": "MIT",
   "dependencies": {
-    "braintrust": "workspace:*",
     "nunjucks": "^3.2.4"
   },
   "peerDependencies": {
@@ -32,6 +35,7 @@
   "devDependencies": {
     "@types/nunjucks": "^3.2.6",
     "@types/node": "^20.10.5",
+    "braintrust": "workspace:*",
     "tsup": "^8.5.1",
     "typescript": "5.5.4"
   }

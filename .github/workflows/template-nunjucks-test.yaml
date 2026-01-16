@@ -1,0 +1,66 @@
+name: template-nunjucks
+
+on:
+  pull_request:
+    paths:
+      - "integrations/template-nunjucks/**"
+      - "js/**"
+      - ".github/workflows/template-nunjucks-test.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/template-nunjucks/**"
+      - "js/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build braintrust + template-nunjucks
+        shell: bash
+        run: |
+          cd js
+          pnpm run build
+          cd ../integrations/template-nunjucks
+          pnpm run build
+
+      - name: Pack tarballs
+        shell: bash
+        run: |
+          rm -rf /tmp/template-nunjucks-artifacts
+          mkdir -p /tmp/template-nunjucks-artifacts
+          cd js
+          npm pack --pack-destination /tmp/template-nunjucks-artifacts
+          cd ../integrations/template-nunjucks
+          npm pack --pack-destination /tmp/template-nunjucks-artifacts
+
+      - name: Install tarballs into a throwaway project and run integration check
+        shell: bash
+        run: |
+          rm -rf /tmp/template-nunjucks-proj
+          mkdir -p /tmp/template-nunjucks-proj
+          cd /tmp/template-nunjucks-proj
+          npm init -y
+          npm install --legacy-peer-deps \
+            /tmp/template-nunjucks-artifacts/braintrust-*.tgz \
+            /tmp/template-nunjucks-artifacts/braintrust-template-nunjucks-*.tgz
+
+          node -e "import('@braintrust/template-nunjucks'); import('braintrust').then(({Prompt}) => { const p = new Prompt({name:'t',slug:'t',prompt_data:{prompt:{type:'chat',messages:[{role:'user',content:'Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}'}]},options:{model:'gpt-4'}}},{},false); const r = p.build({items:[{name:'apple'},{name:'banana'},{name:'cherry'}]},{templateFormat:'nunjucks'}); if(r.messages[0].content !== 'Items: apple, banana, cherry'){ throw new Error('Unexpected render: '+r.messages[0].content);} console.log('ok'); })"

@@ -3,7 +3,7 @@ import path from "path";
 import { execSync } from "child_process";
 
 const artifactsDir = path.resolve(process.argv[2] || "../../artifacts");
-const packageToInstall = process.argv[3] || "both"; // "braintrust", "otel", or "both"
+const packageToInstall = process.argv[3] || "both"; // "braintrust", "otel", "template-nunjucks", or "both"
 
 function findLatestTarball(prefixes: string[]): string | null {
   if (!fs.existsSync(artifactsDir)) {
@@ -44,6 +44,7 @@ if (packageToInstall === "braintrust") {
       (f) =>
         f.startsWith("braintrust-") &&
         !f.startsWith("braintrust-otel-") &&
+        !f.startsWith("braintrust-template-nunjucks-") &&
         f.endsWith(".tgz"),
     )
     .map((f) => ({
@@ -74,4 +75,26 @@ if (packageToInstall === "otel") {
     process.exit(1);
   }
   installTarball("@braintrust/otel", path.join(artifactsDir, otelTar));
+}
+
+// Install @braintrust/template-nunjucks
+if (packageToInstall === "template-nunjucks") {
+  const nunjucksTar = findLatestTarball(["braintrust-template-nunjucks-"]);
+  if (!nunjucksTar) {
+    console.error(
+      `No @braintrust/template-nunjucks tarball found in ${artifactsDir}.`,
+    );
+    console.error(
+      "Build it first: cd integrations/template-nunjucks && npm run build && npm pack --pack-destination ../../js/artifacts",
+    );
+    process.exit(1);
+  }
+  installTarball(
+    "@braintrust/template-nunjucks",
+    path.join(artifactsDir, nunjucksTar),
+  );
+}
+
+if (packageToInstall === "both") {
+  process.exit(0);
 }

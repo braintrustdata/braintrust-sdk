@@ -1,5 +1,4 @@
 import { defineConfig } from "tsup";
-import path from "node:path";
 
 export default defineConfig([
   {

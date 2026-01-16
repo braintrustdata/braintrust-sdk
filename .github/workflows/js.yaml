@@ -89,11 +89,21 @@ jobs:
           PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
+      - name: Build and pack @braintrust/template-nunjucks
+        id: prepare_template_nunjucks_artifact
+        shell: bash
+        run: |
+          cd integrations/template-nunjucks
+          pnpm run build
+          PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          echo "packed_nunjucks_tarball=$PACKED_NUNJUCKS_TARBALL" >> "$GITHUB_OUTPUT"
+
       - name: List artifacts before upload
         shell: bash
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
+          echo "Template-nunjucks tarball: ${{ steps.prepare_template_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
           ls -la js/artifacts/
 
       - name: Upload build artifacts
@@ -103,6 +113,7 @@ jobs:
           path: |
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
+            js/artifacts/${{ steps.prepare_template_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
           retention-days: 1
 
   api-compatibility:
@@ -206,7 +217,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        integration: [otel-v1, span]
+        integration: [otel-v1, span, template-nunjucks]
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
 
@@ -239,7 +250,11 @@ jobs:
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
           rm -f package-lock.json
 
-          if [ "${{ matrix.integration }}" != "otel-v1" ]; then
+          if [ "${{ matrix.integration }}" = "template-nunjucks" ]; then
+            npm install
+            npx tsx ../../install-build.ts ../../../artifacts braintrust
+            npx tsx ../../install-build.ts ../../../artifacts template-nunjucks
+          elif [ "${{ matrix.integration }}" != "otel-v1" ]; then
             npm install
             npx tsx ../../install-build.ts ../../../artifacts braintrust
           else
