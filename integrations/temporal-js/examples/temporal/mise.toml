@@ -16,7 +16,7 @@ postinstall = "mise run install"
 
 [tasks.install]
 description = "Install dependencies"
-run = "pnpm install"
+run = "pnpm install --ignore-workspace"
 
 [tasks.server]
 description = "Run temporal server and workers"
