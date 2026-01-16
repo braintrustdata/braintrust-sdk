@@ -6405,10 +6405,7 @@ function renderTemplatedObject(
   if (typeof obj === "string") {
     const strict = !!options.strict;
     if (options.templateFormat === "nunjucks") {
-      if (strict) {
-        iso.lintNunjucksTemplate(obj, args);
-      }
-      return iso.renderNunjucksString(obj, args, strict);
+      return iso.renderNunjucksString(obj, args, { strict });
     }
     if (options.templateFormat === "mustache") {
       if (strict) {

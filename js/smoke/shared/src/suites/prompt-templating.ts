@@ -191,7 +191,7 @@ export async function testNunjucksTemplate(
       assertEqual(
         actual,
         expected,
-        `Nunjucks template should render loop correctly (expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)})`,
+        `Nunjucks template should render loop correctly`,
       );
     } catch (assertError) {
       return {

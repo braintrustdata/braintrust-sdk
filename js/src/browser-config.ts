@@ -35,11 +35,6 @@ export function configureBrowser() {
       "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
     );
   };
-  iso.lintNunjucksTemplate = () => {
-    throw new Error(
-      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
-    );
-  };
 
   // Implement browser-compatible hash function using a simple hash algorithm
   iso.hash = (data: string): string => {

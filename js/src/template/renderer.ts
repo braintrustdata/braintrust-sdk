@@ -24,10 +24,7 @@ export function renderTemplateContent(
   const strict = !!options.strict;
   const templateFormat = parseTemplateFormat(options.templateFormat);
   if (templateFormat === "nunjucks") {
-    if (strict) {
-      iso.lintNunjucksTemplate(template, variables);
-    }
-    return iso.renderNunjucksString(template, variables, strict);
+    return iso.renderNunjucksString(template, variables, { strict });
   } else if (templateFormat === "mustache") {
     if (strict) {
       lintMustacheTemplate(template, variables);
