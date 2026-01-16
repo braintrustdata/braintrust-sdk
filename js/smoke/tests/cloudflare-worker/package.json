@@ -8,7 +8,7 @@
     "test:braintrust-node-compat": "node run-test.mjs --config wrangler.node.toml",
     "test:braintrust-browser-node-compat": "node run-test.mjs --config wrangler.browser-node-compat.toml",
     "test:braintrust-browser-no-compat": "node run-test.mjs --config wrangler.browser.toml",
-    "test:braintrust-no-compat": "node run-test.mjs --config wrangler.node-no-compat.toml --expect-start-fail",
+    "test:braintrust-no-compat": "node run-test.mjs --config wrangler.node-no-compat.toml",
     "backup": "npx tsx ../../backup-and-restore.ts backup",
     "restore": "npx tsx ../../backup-and-restore.ts restore",
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts braintrust"
