@@ -162,18 +162,15 @@ export async function testNunjucksTemplate(
         };
       }
 
-      // In Cloudflare Workers (even with nodejs_compat), string-based template codegen is disallowed.
-      if (
-        environment === "cloudflare-worker-node-node-compat" &&
-        errorMessage.includes(
-          "String template rendering. Disallowed in this environment for security reasons",
-        )
-      ) {
+      const isAddonRequired = errorMessage.includes(
+        "Nunjucks templating requires @braintrust/template-nunjucks",
+      );
+
+      if (isAddonRequired) {
         return {
           success: true,
           testName,
-          message:
-            "Nunjucks template test passed - threw expected codegen-disallowed error",
+          message: "Nunjucks template test passed - addon required error",
         };
       }
 
