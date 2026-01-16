@@ -908,7 +908,7 @@ describe(
               output_tokens: 50,
               total_tokens: 150,
               input_tokens_details: {
-                cached_tokens: 80, // check for this later
+                cached_tokens: 80,  // check for this later
               },
             },
           },
@@ -934,17 +934,9 @@ describe(
       const metrics = (responseSpanLog as any).metrics;
       assert.ok(metrics, "Response span should have metrics");
       assert.equal(metrics.prompt_tokens, 100, "Should have prompt_tokens");
-      assert.equal(
-        metrics.completion_tokens,
-        50,
-        "Should have completion_tokens",
-      );
+      assert.equal(metrics.completion_tokens, 50, "Should have completion_tokens");
       assert.equal(metrics.tokens, 150, "Should have total tokens");
-      assert.equal(
-        metrics.prompt_cached_tokens,
-        80,
-        "Should extract cached_tokens to prompt_cached_tokens",
-      );
+      assert.equal(metrics.prompt_cached_tokens, 80, "Should extract cached_tokens to prompt_cached_tokens");
     });
 
     test("Response span handles zero cached tokens correctly", async () => {
@@ -973,7 +965,7 @@ describe(
               input_tokens: 100,
               output_tokens: 50,
               input_tokens_details: {
-                cached_tokens: 0, // Zero is a valid value
+                cached_tokens: 0,  // Zero is a valid value
               },
             },
           },
@@ -985,9 +977,7 @@ describe(
       await processor.onSpanEnd(responseSpan);
 
       const spans = await backgroundLogger.drain();
-      const responseSpanLog = spans.find(
-        (s: any) => s.span_attributes?.type === "llm",
-      );
+      const responseSpanLog = spans.find((s: any) => s.span_attributes?.type === "llm");
       const metrics = (responseSpanLog as any).metrics;
 
       // Zero should be logged, not skipped
@@ -1034,16 +1024,11 @@ describe(
       await processor.onSpanEnd(responseSpan);
 
       const spans = await backgroundLogger.drain();
-      const responseSpanLog = spans.find(
-        (s: any) => s.span_attributes?.type === "llm",
-      );
+      const responseSpanLog = spans.find((s: any) => s.span_attributes?.type === "llm");
       const metrics = (responseSpanLog as any).metrics;
 
       // Should not have prompt_cached_tokens if not present in usage
-      assert.isUndefined(
-        metrics.prompt_cached_tokens,
-        "Should not add prompt_cached_tokens if not in usage",
-      );
+      assert.isUndefined(metrics.prompt_cached_tokens, "Should not add prompt_cached_tokens if not in usage");
     });
 
     test("Generation span extracts cached tokens from usage", async () => {
@@ -1075,7 +1060,7 @@ describe(
             output_tokens: 75,
             total_tokens: 275,
             input_tokens_details: {
-              cached_tokens: 150, // Test Generation span extraction
+              cached_tokens: 150,  // Test Generation span extraction
             },
           },
         },
@@ -1095,16 +1080,8 @@ describe(
       const metrics = (generationSpanLog as any).metrics;
       assert.ok(metrics, "Generation span should have metrics");
       assert.equal(metrics.prompt_tokens, 200, "Should have prompt_tokens");
-      assert.equal(
-        metrics.completion_tokens,
-        75,
-        "Should have completion_tokens",
-      );
-      assert.equal(
-        metrics.prompt_cached_tokens,
-        150,
-        "Should extract cached_tokens from Generation span",
-      );
+      assert.equal(metrics.completion_tokens, 75, "Should have completion_tokens");
+      assert.equal(metrics.prompt_cached_tokens, 150, "Should extract cached_tokens from Generation span");
     });
   },
 );

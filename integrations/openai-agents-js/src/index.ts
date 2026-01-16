@@ -382,8 +382,7 @@ export class OpenAIAgentsTraceProcessor {
       if (!data.metrics.completion_tokens && usage.completionTokens)
         data.metrics.completion_tokens = usage.completionTokens;
       if (usage.input_tokens_details?.cached_tokens != null)
-        data.metrics.prompt_cached_tokens =
-          usage.input_tokens_details.cached_tokens;
+        data.metrics.prompt_cached_tokens = usage.input_tokens_details.cached_tokens;
     }
 
     return data;
