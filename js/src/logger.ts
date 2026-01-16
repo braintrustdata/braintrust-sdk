@@ -2915,10 +2915,18 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
+/**
+ * Reference to a dataset by ID and optional version.
+ */
+export interface DatasetRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
-  dataset?: AnyDataset | { id: string; version?: string };
+  dataset?: AnyDataset | DatasetRef;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;

@@ -98,6 +98,14 @@ from .xact_ids import prettify_xact
 Metadata = dict[str, Any]
 DATA_API_VERSION = 2
 
+
+class DatasetRef(TypedDict, total=False):
+    """Reference to a dataset by ID and optional version."""
+
+    id: str
+    version: str
+
+
 T = TypeVar("T")
 TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
 TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
@@ -1294,7 +1302,7 @@ def init(
     project: str | None = None,
     experiment: str | None = None,
     description: str | None = None,
-    dataset: Optional[Union["Dataset", dict[str, str]]] = None,
+    dataset: Optional["Dataset"] | DatasetRef = None,
     open: bool = False,
     base_experiment: str | None = None,
     is_public: bool = False,
