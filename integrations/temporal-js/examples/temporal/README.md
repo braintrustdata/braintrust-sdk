@@ -9,6 +9,64 @@ This example demonstrates how to integrate Braintrust tracing with Temporal work
 - Temporal CLI (`temporal`)
 - Optional: [`overmind`](https://github.com/DarthSim/overmind) (only if you want to use the included `Procfile`)
 
+### Installing Temporal CLI
+
+The Temporal CLI is required to run the local Temporal server:
+
+**macOS:**
+
+```bash
+brew install temporal
+```
+
+**Linux:**
+
+```bash
+# Using Homebrew
+brew install temporal
+
+# Or using curl
+curl -sSf https://temporal.download/cli.sh | sh
+```
+
+**Windows:**
+
+```powershell
+# Using Scoop
+scoop install temporal
+
+# Or download from releases
+# https://github.com/temporalio/cli/releases
+```
+
+Verify the installation:
+
+```bash
+temporal --version
+```
+
+### Installing overmind (optional)
+
+Overmind is a process manager that makes it easy to run multiple services together. If you want to use `overmind start` to run everything at once, install it for your platform:
+
+**macOS:**
+
+```bash
+brew install overmind
+```
+
+**Linux:**
+
+```bash
+brew install overmind
+
+# Or download from releases
+# https://github.com/DarthSim/overmind/releases
+```
+
+**Windows:**
+Overmind is not officially supported on Windows. Use the manual approach (Option 2 in "Running the Example" below) instead.
+
 ## Setup
 
 ```bash
@@ -18,12 +76,6 @@ cp .env.example .env
 
 # Install dependencies
 pnpm install
-```
-
-This example uses the separate Temporal integration package:
-
-```bash
-pnpm add @braintrust/temporal braintrust @temporalio/client @temporalio/worker @temporalio/workflow @temporalio/activity @temporalio/common
 ```
 
 ## Running the Example
