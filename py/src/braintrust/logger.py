@@ -1297,7 +1297,7 @@ def init(
     project: str | None = None,
     experiment: str | None = None,
     description: str | None = None,
-    dataset: Optional["Dataset"] = None,
+    dataset: Optional[Union["Dataset", dict[str, str]]] = None,
     open: bool = False,
     base_experiment: str | None = None,
     is_public: bool = False,
@@ -1414,8 +1414,15 @@ def init(
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
+            if isinstance(dataset, dict):
+                # Simple {"id": ..., "version": ...} dict
+                args["dataset_id"] = dataset["id"]
+                if "version" in dataset:
+                    args["dataset_version"] = dataset["version"]
+            else:
+                # Full Dataset object
+                args["dataset_id"] = dataset.id
+                args["dataset_version"] = dataset.version
 
         if is_public is not None:
             args["public"] = is_public
@@ -1446,7 +1453,11 @@ def init(
     # For experiments, disable queue size limit enforcement (unlimited queue)
     state.enforce_queue_size_limit(False)
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
+    ret = Experiment(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        dataset=dataset if isinstance(dataset, Dataset) else None,
+        state=state,
+    )
     if set_current:
         state.current_experiment = ret
     return ret
