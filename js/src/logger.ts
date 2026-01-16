@@ -2915,10 +2915,18 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
+/**
+ * Reference to a dataset by ID and optional version.
+ */
+export interface DatasetRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
-  dataset?: AnyDataset;
+  dataset?: AnyDataset | DatasetRef;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3129,8 +3137,21 @@ export function init<IsOpen extends boolean = false>(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = await dataset.id;
-        args["dataset_version"] = await dataset.version();
+        if (
+          "id" in dataset &&
+          typeof dataset.id === "string" &&
+          !("__braintrust_dataset_marker" in dataset)
+        ) {
+          // Simple {id: ..., version?: ...} object
+          args["dataset_id"] = dataset.id;
+          if ("version" in dataset && dataset.version !== undefined) {
+            args["dataset_version"] = dataset.version;
+          }
+        } else {
+          // Full Dataset object
+          args["dataset_id"] = await (dataset as AnyDataset).id;
+          args["dataset_version"] = await (dataset as AnyDataset).version();
+        }
       }
 
       if (isPublic !== undefined) {
@@ -3179,7 +3200,13 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const ret = new Experiment(state, lazyMetadata, dataset);
+  const ret = new Experiment(
+    state,
+    lazyMetadata,
+    dataset !== undefined && "version" in dataset
+      ? (dataset as AnyDataset)
+      : undefined,
+  );
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
