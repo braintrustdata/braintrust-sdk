@@ -13,18 +13,6 @@ TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-agno-app"
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-            "api-key",
-            "openai-api-key",
-        ]
-    }
-
-
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)

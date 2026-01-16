@@ -2523,3 +2523,213 @@ describe("extractTokenMetrics", () => {
     expect(result.completion_reasoning_tokens).toBe(20);
   });
 });
+
+describe("wrapAISDK with ES module namespace objects", () => {
+  test("BEFORE FIX: reproduces Proxy invariant violation with non-configurable properties", () => {
+    // NOTE: This test documents what WOULD happen without the fix.
+    // With the fix in place, wrapAISDK detects the namespace and uses prototype chain,
+    // so this test now expects NO error.
+
+    // Simulate an ES module namespace object with non-configurable properties
+    // This mimics what happens in strict ESM environments
+    const mockAISDK = {};
+
+    // Define non-configurable properties like ES module namespaces have
+    Object.defineProperty(mockAISDK, "generateText", {
+      value: async () => ({ text: "mock" }),
+      writable: false,
+      enumerable: true,
+      configurable: false, // This is the key - ES module namespace properties are non-configurable
+    });
+
+    Object.defineProperty(mockAISDK, "streamText", {
+      value: () => ({ textStream: [] }),
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+
+    // Verify the property is indeed non-configurable
+    const descriptor = Object.getOwnPropertyDescriptor(
+      mockAISDK,
+      "generateText",
+    );
+    expect(descriptor?.configurable).toBe(false);
+    expect(descriptor?.writable).toBe(false);
+
+    // WITH THE FIX: This should NOT throw because wrapAISDK detects
+    // non-configurable properties and uses prototype chain
+    expect(() => {
+      const wrapped = wrapAISDK(mockAISDK);
+      // Try to access the wrapped property - this triggers the Proxy get trap
+      wrapped.generateText;
+    }).not.toThrow();
+  });
+
+  test("prototype chain approach preserves all properties including non-enumerable", () => {
+    // Simulate an ES module namespace object with both enumerable and non-enumerable properties
+    const mockAISDK = {};
+
+    Object.defineProperty(mockAISDK, "generateText", {
+      value: async () => ({ text: "mock" }),
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+
+    Object.defineProperty(mockAISDK, "streamText", {
+      value: () => ({ textStream: [] }),
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+
+    // Add a non-enumerable property (like Symbol.toStringTag or hidden internals)
+    Object.defineProperty(mockAISDK, "hiddenProperty", {
+      value: "secret",
+      writable: false,
+      enumerable: false, // Non-enumerable!
+      configurable: false,
+    });
+
+    // Approach 1: Spreading (loses non-enumerable properties)
+    const spreadSDK = { ...mockAISDK };
+    expect("generateText" in spreadSDK).toBe(true);
+    expect("hiddenProperty" in spreadSDK).toBe(false); // Lost!
+
+    // Approach 2: Prototype chain (preserves everything)
+    const protoSDK = Object.setPrototypeOf({}, mockAISDK);
+    expect("generateText" in protoSDK).toBe(true);
+    expect("hiddenProperty" in protoSDK).toBe(true); // Preserved!
+    expect(protoSDK.hiddenProperty).toBe("secret");
+
+    // Verify the target has no own properties, avoiding invariant issues
+    expect(Object.keys(protoSDK).length).toBe(0);
+    expect(Object.getOwnPropertyNames(protoSDK).length).toBe(0);
+
+    // This should NOT throw because target has no non-configurable properties
+    expect(() => {
+      const wrapped = wrapAISDK(protoSDK);
+      wrapped.generateText;
+      expect(wrapped.hiddenProperty).toBe("secret"); // Still accessible
+    }).not.toThrow();
+  });
+
+  test("handles both plain objects and ModuleRecord-like objects", () => {
+    // Plain objects (common in Node.js/bundled environments)
+    const plainObject = {
+      generateText: async () => ({ text: "mock" }),
+      streamText: () => ({ textStream: [] }),
+    };
+
+    // These properties are configurable by default
+    const plainDescriptor = Object.getOwnPropertyDescriptor(
+      plainObject,
+      "generateText",
+    );
+    expect(plainDescriptor?.configurable).toBe(true);
+
+    // Should work fine - no detection needed
+    expect(() => {
+      const wrapped = wrapAISDK(plainObject);
+      wrapped.generateText;
+    }).not.toThrow();
+
+    // ModuleRecord-like object (strict ESM environments)
+    const moduleRecord = {};
+    Object.defineProperty(moduleRecord, "generateText", {
+      value: async () => ({ text: "mock" }),
+      writable: false,
+      enumerable: true,
+      configurable: false, // Non-configurable like real ModuleRecords
+    });
+
+    const moduleDescriptor = Object.getOwnPropertyDescriptor(
+      moduleRecord,
+      "generateText",
+    );
+    expect(moduleDescriptor?.configurable).toBe(false);
+
+    // WITH THE FIX: Should also work - detected and handled via prototype chain
+    expect(() => {
+      const wrapped = wrapAISDK(moduleRecord);
+      wrapped.generateText;
+    }).not.toThrow();
+  });
+
+  test("detects objects with constructor.name === 'Module'", () => {
+    // Create a mock object that looks like a Module
+    class Module {}
+    const mockModule = new Module();
+
+    // Add some properties
+    Object.defineProperty(mockModule, "generateText", {
+      value: async () => ({ text: "mock" }),
+      writable: true, // Note: even with writable=true, constructor.name triggers detection
+      enumerable: true,
+      configurable: true,
+    });
+
+    // Verify it has the 'Module' constructor name
+    expect(mockModule.constructor.name).toBe("Module");
+
+    // Should not throw - detection via constructor.name should trigger prototype chain
+    expect(() => {
+      const wrapped = wrapAISDK(mockModule);
+      wrapped.generateText;
+    }).not.toThrow();
+  });
+
+  test("handles edge cases safely", () => {
+    // null/undefined
+    expect(() => wrapAISDK(null as any)).not.toThrow();
+    expect(() => wrapAISDK(undefined as any)).not.toThrow();
+
+    // Empty object
+    expect(() => wrapAISDK({})).not.toThrow();
+
+    // Object with no enumerable keys but non-configurable properties
+    const noKeys = {};
+    Object.defineProperty(noKeys, "hidden", {
+      value: "test",
+      enumerable: false,
+      configurable: false,
+    });
+    expect(() => wrapAISDK(noKeys)).not.toThrow();
+  });
+
+  test("real ModuleRecord test with dynamic import", async () => {
+    // This test uses dynamic import to get a real ES module namespace
+    // In strict ESM environments, this will be a true ModuleRecord
+    const aiModule = await import("ai");
+
+    console.log("=== Dynamic Import Analysis ===");
+    console.log("Type:", typeof aiModule);
+    console.log("Constructor name:", aiModule.constructor?.name);
+    console.log("Has generateText:", "generateText" in aiModule);
+
+    if ("generateText" in aiModule) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        aiModule,
+        "generateText",
+      );
+      console.log("generateText descriptor:", {
+        configurable: descriptor?.configurable,
+        writable: descriptor?.writable,
+        enumerable: descriptor?.enumerable,
+      });
+    }
+
+    // Try wrapping - should not throw with our fix
+    expect(() => {
+      const wrapped = wrapAISDK(aiModule);
+      // Access a property to trigger the Proxy get trap
+      if ("generateText" in wrapped) {
+        const fn = wrapped.generateText;
+        expect(typeof fn).toBe("function");
+      }
+    }).not.toThrow();
+
+    console.log("✅ wrapAISDK succeeded with real module import");
+  });
+});

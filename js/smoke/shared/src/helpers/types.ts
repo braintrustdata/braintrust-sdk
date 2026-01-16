@@ -44,3 +44,25 @@ export interface TestResult {
   message?: string;
   error?: Error;
 }
+
+// ---- Braintrust module surface types ----
+
+export type EvalScoreFn = (args: {
+  output: string;
+  expected: string;
+}) =>
+  | { name: string; score: number }
+  | Promise<{ name: string; score: number }>;
+
+export type EvalFn = (
+  name: string,
+  config: {
+    data: Array<{ input: string; expected: string }>;
+    task: (input: string) => Promise<string>;
+    scores: EvalScoreFn[];
+  },
+  options?: {
+    noSendLogs?: boolean;
+    returnResults?: boolean;
+  },
+) => Promise<unknown>;
