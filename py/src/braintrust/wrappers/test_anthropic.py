@@ -15,17 +15,6 @@ PROJECT_NAME = "test-anthropic-app"
 MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-        ],
-        "match_on": ["method", "scheme", "host", "port", "path", "body"],
-    }
-
-
 def _get_client():
     return anthropic.Anthropic()
 
@@ -458,7 +447,7 @@ async def test_anthropic_beta_messages_create_async(memory_logger):
     assert "10" in span["output"]["content"][0]["text"]
 
 
-@pytest.mark.vcr
+@pytest.mark.vcr(match_on=["method", "scheme", "host", "port", "path", "body"])  # exclude query - varies by SDK version
 @pytest.mark.asyncio
 async def test_anthropic_beta_messages_streaming_async(memory_logger):
     assert not memory_logger.pop()
