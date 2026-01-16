@@ -14,7 +14,7 @@ import {
   type TestResult,
 } from "../../../../shared/dist/index.mjs";
 
-import * as braintrust from "braintrust";
+import * as braintrust from "braintrust/browser";
 const { initLogger, _exportsForTestingOnly } = braintrust;
 
 const app = new Hono<{ Bindings: Env }>();
