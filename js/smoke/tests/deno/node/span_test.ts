@@ -4,7 +4,7 @@ import {
   runSpanSmokeTest,
   runMustacheTemplateTest,
   runNunjucksTemplateTest,
-} from "../span/span_test_helper.ts";
+} from "../../span/span_test_helper.ts";
 
 /**
  * This is a simple test to send a span to the braintrust API

@@ -4,11 +4,8 @@
   "description": "Smoke test for Braintrust SDK in Deno runtime",
   "private": true,
   "scripts": {
-    "test": "npm run test:shared && npm run test:legacy",
-    "test:shared": "deno task test:shared",
-    "test:legacy": "deno task test:legacy",
-    "backup": "npx tsx ../../backup-and-restore.ts backup",
-    "restore": "npx tsx ../../backup-and-restore.ts restore",
-    "install-build": "npx tsx ../../install-build.ts ../../../artifacts braintrust"
+    "test": "npm run test:node && npm run test:browser",
+    "test:node": "cd node && npm test",
+    "test:browser": "cd browser && npm test"
   }
 }

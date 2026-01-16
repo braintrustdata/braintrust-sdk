@@ -12,7 +12,7 @@ import {
   runImportVerificationTests,
   runPromptTemplatingTests,
   type TestResult,
-} from "../../shared/dist/index.mjs";
+} from "../../../shared/dist/index.mjs";
 import * as braintrust from "braintrust/browser";
 
 export async function runSharedTestSuites(): Promise<TestResult[]> {

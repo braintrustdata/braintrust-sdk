@@ -1,0 +1,12 @@
+{
+  "name": "braintrust-deno-node-smoke-test",
+  "version": "1.0.0",
+  "description": "Smoke test for Braintrust Node build in Deno runtime",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:shared && npm run test:legacy",
+    "test:shared": "deno task test:shared",
+    "test:legacy": "deno task test:legacy",
+    "install-build": "npx tsx ../../../install-build.ts ../../../../artifacts braintrust"
+  }
+}
