@@ -17,6 +17,10 @@ function parseArgs(argv) {
       i++;
       continue;
     }
+    if (a === "--expect-start-fail") {
+      out.expectStartFail = true;
+      continue;
+    }
   }
   return out;
 }
@@ -40,7 +44,7 @@ async function waitForServer() {
   return false;
 }
 
-async function runWranglerTest({ config, label }) {
+async function runWranglerTest({ config, label, expectStartFail = false }) {
   killPort(PORT);
 
   const wrangler = spawn(
@@ -76,6 +80,12 @@ async function runWranglerTest({ config, label }) {
 
   try {
     if (!(await waitForServer())) {
+      if (expectStartFail) {
+        console.log(`\n=== ${label} (expected startup failure) ===\n`);
+        console.log(output.trim() ? output : "(no output)");
+        await killWrangler();
+        return 0;
+      }
       console.error(`[${label}] Server failed to start:\n`, output);
       await killWrangler();
       return 1;
@@ -104,10 +114,15 @@ async function main() {
         ? "nodejs_compat_v2 + braintrust"
         : args.config === "wrangler.browser.toml"
           ? "no compatibility_flags + braintrust/browser"
-          : args.config;
+          : args.config === "wrangler.browser-node-compat.toml"
+            ? "nodejs_compat_v2 + braintrust/browser"
+            : args.config === "wrangler.node-no-compat.toml"
+              ? "no compatibility_flags + braintrust"
+              : args.config;
     const code = await runWranglerTest({
       config: args.config,
       label,
+      expectStartFail: !!args.expectStartFail,
     });
     process.exit(code);
   }
