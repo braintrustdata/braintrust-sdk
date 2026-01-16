@@ -94,15 +94,6 @@ export async function testNunjucksTemplate(
 ): Promise<TestResult> {
   const testName = "testNunjucksTemplate";
 
-  if (environment === "cloudflare-worker") {
-    return {
-      success: true,
-      testName,
-      message:
-        "Nunjucks template test skipped - not supported in Cloudflare Workers",
-    };
-  }
-
   try {
     const { Prompt } = module;
 
@@ -158,14 +149,30 @@ export async function testNunjucksTemplate(
 
       if (
         (environment === "browser" ||
-          environment === "cloudflare-worker" ||
+          environment === "cloudflare-worker-browser" ||
           environment === "nextjs-edge-runtime") &&
         isUnsupported
       ) {
         return {
           success: true,
           testName,
-          message: "Nunjucks template test skipped - nunjucks unsupported",
+          message:
+            "Nunjucks template test passed - threw expected unsupported error",
+        };
+      }
+
+      // In Cloudflare Workers (even with nodejs_compat), string-based template codegen is disallowed.
+      if (
+        environment === "cloudflare-worker-node" &&
+        errorMessage.includes(
+          "Code generation from strings disallowed for this context",
+        )
+      ) {
+        return {
+          success: true,
+          testName,
+          message:
+            "Nunjucks template test passed - threw expected codegen-disallowed error",
         };
       }
 

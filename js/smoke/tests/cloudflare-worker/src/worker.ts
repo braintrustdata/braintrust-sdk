@@ -23,6 +23,7 @@ interface TestResponse {
 
 export function createWorker(
   braintrust: typeof import("braintrust") | typeof import("braintrust/browser"),
+  environment: string,
 ): {
   fetch(request: Request, _env: Env): Promise<Response>;
 } {
@@ -35,7 +36,7 @@ export function createWorker(
         testingExports: _exportsForTestingOnly,
         canUseFileSystem: false,
         canUseCLI: false,
-        environment: "cloudflare-worker",
+        environment,
       });
 
       try {
