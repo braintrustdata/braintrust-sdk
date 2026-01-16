@@ -14,19 +14,12 @@ import {
   runPromptTemplatingTests,
   type TestResult,
 } from "../../shared/dist/index.mjs";
+import * as braintrust from "braintrust";
 
 /**
  * Run the shared test suites in Deno environment
  */
 export async function runSharedTestSuites() {
-  const buildDir = Deno.env.get("BRAINTRUST_BUILD_DIR");
-  if (!buildDir) {
-    throw new Error("BRAINTRUST_BUILD_DIR environment variable is not set");
-  }
-
-  // Dynamically import Braintrust from the build directory
-  // Import as namespace to get all exports for verification
-  const braintrust = await import(`file://${buildDir}`);
   const { initLogger, _exportsForTestingOnly } = braintrust;
 
   // Setup test environment

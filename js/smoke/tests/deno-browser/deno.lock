@@ -1,21 +1,20 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@std/assert@^1.0.14": "1.0.16",
+    "jsr:@std/assert@^1.0.14": "1.0.15",
     "jsr:@std/internal@^1.0.12": "1.0.12",
-    "npm:@types/node@*": "24.2.0",
     "npm:@vercel/functions@^3.3.0": "3.3.4",
     "npm:eventsource-parser@^3.0.6": "3.0.6",
     "npm:mustache@^4.2.0": "4.2.0",
     "npm:nunjucks@^3.2.4": "3.2.4",
     "npm:simple-git@^3.21.0": "3.30.0",
     "npm:uuid@13": "13.0.0",
-    "npm:zod-to-json-schema@^3.25.0": "3.25.0_zod@4.1.13",
-    "npm:zod@^4.1.12": "4.1.13"
+    "npm:zod-to-json-schema@^3.25.0": "3.25.0_zod@4.2.1",
+    "npm:zod@^4.1.12": "4.2.1"
   },
   "jsr": {
-    "@std/assert@1.0.16": {
-      "integrity": "6a7272ed1eaa77defe76e5ff63ca705d9c495077e2d5fd0126d2b53fc5bd6532",
+    "@std/assert@1.0.15": {
+      "integrity": "d64018e951dbdfab9777335ecdb000c0b4e3df036984083be219ce5941e4703b",
       "dependencies": [
         "jsr:@std/internal"
       ]
@@ -33,12 +32,6 @@
     },
     "@kwsites/promise-deferred@1.1.1": {
       "integrity": "sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw=="
-    },
-    "@types/node@24.2.0": {
-      "integrity": "sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw==",
-      "dependencies": [
-        "undici-types"
-      ]
     },
     "@vercel/functions@3.3.4": {
       "integrity": "sha512-IoP8Xfr1QeCm+Dv5od3bfPiw/VgLKsA7IBd/88M/Wr421HdbH4b6bW5z8CTxiz1QRpalrPFZcLdMdxu+2hAjZg==",
@@ -91,25 +84,19 @@
         "debug"
       ]
     },
-    "undici-types@7.10.0": {
-      "integrity": "sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag=="
-    },
     "uuid@13.0.0": {
       "integrity": "sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==",
       "bin": true
     },
-    "zod-to-json-schema@3.25.0_zod@4.1.13": {
+    "zod-to-json-schema@3.25.0_zod@4.2.1": {
       "integrity": "sha512-HvWtU2UG41LALjajJrML6uQejQhNJx+JBO9IflpSja4R03iNWfKXrj6W2h7ljuLyc1nKS+9yDyL/9tD1U/yBnQ==",
       "dependencies": [
         "zod"
       ]
     },
-    "zod@4.1.13": {
-      "integrity": "sha512-AvvthqfqrAhNH9dnfmrfKzX5upOdjUVJYFqNSlkmGf64gRaTzlPwz99IHYnVs28qYAybvAlBV+H7pn0saFY4Ig=="
+    "zod@4.2.1": {
+      "integrity": "sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw=="
     }
-  },
-  "remote": {
-    "https://mozilla.github.io/nunjucks/files/nunjucks.min.js": "36b31fabed0b7d923a840f963d9c7465ce390d3a6e71a2fe29b8287fad35dbd6"
   },
   "workspace": {
     "dependencies": [

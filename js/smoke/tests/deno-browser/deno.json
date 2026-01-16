@@ -26,13 +26,12 @@
     "simple-git": "npm:simple-git@^3.21.0",
     "zod": "npm:zod@^4.1.12",
     "nunjucks": "npm:nunjucks@^3.2.4",
-    "braintrust": "./build/braintrust/dist/index.mjs",
     "util": "node:util",
     "zlib": "node:zlib",
+    "braintrust/browser": "./build/braintrust/dist/browser.mjs",
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.0"
   },
   "tasks": {
-    "test:shared": "deno test --config ./deno.json --allow-env --allow-read=.,./build --allow-net shared_suite_test.ts",
-    "test:legacy": "deno test --config ./deno.json --allow-env --allow-read=.,./build --allow-net span_test.ts"
+    "test:shared": "deno test --config ./deno.json --allow-env --allow-read=.,./build --allow-net shared_suite_test.ts"
   }
 }

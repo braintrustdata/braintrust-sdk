@@ -12,13 +12,8 @@ import {
  * ie. BRAINTRUST_BUILD_DIR=./package/dist/index.mjs
  */
 export async function runBrowserLoggerSmokeTest() {
-  const buildDir = Deno.env.get("BRAINTRUST_BUILD_DIR");
-  if (!buildDir) {
-    throw new Error("BRAINTRUST_BUILD_DIR environment variable is not set");
-  }
-
   const { initLogger, _exportsForTestingOnly, Prompt } = await import(
-    `file://${Deno.env.get("BRAINTRUST_BUILD_DIR")}`
+    "braintrust"
   );
 
   const events = await runSpanSmokeTest({

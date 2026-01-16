@@ -586,8 +586,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
+        mode: [deno, deno-browser]
 
     steps:
       - uses: actions/checkout@v4
@@ -604,24 +604,8 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract build artifact
-        working-directory: js/smoke/tests/deno
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARTIFACT_DIR=../../../artifacts
-          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
-          if [ -z "$TARBALL" ]; then
-            echo "No braintrust build found"
-            exit 1
-          fi
-          rm -rf build
-          mkdir -p build
-          tar -xzf "$TARBALL" -C build
-          [ -d build/package ] && mv build/package build/braintrust
-
       - name: Install Deno dependencies
-        working-directory: js/smoke/tests/deno
+        working-directory: js/smoke/tests/${{ matrix.mode }}
         run: |
           deno install
 
@@ -631,9 +615,7 @@ jobs:
           npm ci
           npm run build
 
-      - name: Run Deno smoke test
+      - name: Run Deno smoke test (${{ matrix.mode }})
         working-directory: js/smoke
-        env:
-          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/index.mjs
         run: |
-          ./run-tests.sh deno
+          ./run-tests.sh ${{ matrix.mode }}
