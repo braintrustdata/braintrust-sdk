@@ -2911,3 +2911,53 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
     assert attachment in with_memory_logger.upload_attempts
     assert json_attachment in with_memory_logger.upload_attempts
     assert ext_attachment in with_memory_logger.upload_attempts
+
+@patch("braintrust.logger.get_past_n_ancestors")
+def test_git_metadata_settings_none_skips_ancestor_collection(
+        mock_get_ancestors, with_memory_logger, with_simulate_login
+):
+    """Test that git_metadata_settings with collect='none' skips git operations."""
+    from braintrust.git_fields import GitMetadataSettings
+
+    mock_get_ancestors.return_value = iter(["commit1", "commit2"])
+
+    braintrust.Eval(
+        project="test-project",
+        experiment="test-experiment",
+        git_metadata_settings=GitMetadataSettings(collect="none"),
+    )
+
+    mock_get_ancestors.assert_not_called()
+
+
+@patch("braintrust.logger.get_past_n_ancestors")
+def test_git_metadata_settings_default_collects_ancestors(
+        mock_get_ancestors, with_memory_logger, with_simulate_login
+):
+    """Test that default git_metadata_settings collects ancestor commits."""
+    mock_get_ancestors.return_value = iter(["commit1", "commit2"])
+
+    braintrust.Eval(
+        project="test-project",
+        experiment="test-experiment",
+    )
+
+    mock_get_ancestors.assert_called_once()
+
+
+@patch("braintrust.logger.get_past_n_ancestors")
+def test_git_metadata_settings_all_collects_ancestors(
+        mock_get_ancestors, with_memory_logger, with_simulate_login
+):
+    """Test that git_metadata_settings with collect='all' collects ancestor commits."""
+    from braintrust.git_fields import GitMetadataSettings
+
+    mock_get_ancestors.return_value = iter(["commit1", "commit2"])
+
+    braintrust.Eval(
+        project="test-project",
+        experiment="test-experiment",
+        git_metadata_settings=GitMetadataSettings(collect="all"),
+    )
+
+    mock_get_ancestors.assert_called_once()
