@@ -151,7 +151,8 @@ export async function testNunjucksTemplate(
         (environment === "browser" ||
           environment === "cloudflare-worker-browser-no-compat" ||
           environment === "cloudflare-worker-browser-node-compat" ||
-          environment === "nextjs-edge-runtime") &&
+          environment === "nextjs-edge-runtime" ||
+          environment === "vite-react-hono") &&
         isUnsupported
       ) {
         return {
