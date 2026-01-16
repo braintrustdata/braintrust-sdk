@@ -283,6 +283,20 @@ export class LocalTrace implements Trace {
   }
 
   /**
+   * Custom JSON serialization - returns trace_ref format so LocalTrace
+   * can be safely passed through JSON.stringify() (e.g., in invoke()).
+   */
+  toJSON() {
+    return {
+      trace_ref: {
+        object_type: this.objectType,
+        object_id: this.objectId,
+        root_span_id: this.rootSpanId,
+      },
+    };
+  }
+
+  /**
    * Fetch all rows for this root span from its parent object (experiment or project logs).
    * First checks the local span cache for recently logged spans, then falls
    * back to CachedSpanFetcher which handles BTQL fetching and caching.
