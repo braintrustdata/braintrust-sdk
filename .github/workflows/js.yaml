@@ -398,7 +398,13 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [20, 22]
-        mode: [node, browser]
+        mode:
+          [
+            braintrust-node-compat,
+            braintrust-browser-node-compat,
+            braintrust-browser-no-compat,
+            braintrust-no-compat,
+          ]
 
     steps:
       - name: Checkout repository
