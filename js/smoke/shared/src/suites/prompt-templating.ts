@@ -149,7 +149,8 @@ export async function testNunjucksTemplate(
 
       if (
         (environment === "browser" ||
-          environment === "cloudflare-worker-browser" ||
+          environment === "cloudflare-worker-browser-no-compat" ||
+          environment === "cloudflare-worker-browser-node-compat" ||
           environment === "nextjs-edge-runtime") &&
         isUnsupported
       ) {
@@ -163,7 +164,7 @@ export async function testNunjucksTemplate(
 
       // In Cloudflare Workers (even with nodejs_compat), string-based template codegen is disallowed.
       if (
-        environment === "cloudflare-worker-node" &&
+        environment === "cloudflare-worker-node-node-compat" &&
         errorMessage.includes(
           "Code generation from strings disallowed for this context",
         )
