@@ -30,7 +30,7 @@ export function configureNode() {
       nunjucksLint(template, variables);
     }
 
-    return nunjucksRender(template, variables, strict);
+    return nunjucksRender(template, variables, { strict });
   };
   iso.basename = path.basename;
   iso.writeln = (text: string) => process.stdout.write(text + "\n");

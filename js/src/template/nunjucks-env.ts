@@ -27,8 +27,9 @@ export function getNunjucksEnv(options?: {
 export function renderNunjucksString(
   template: string,
   variables: Record<string, unknown>,
-  strict = false,
+  options?: { strict?: boolean },
 ): string {
+  const strict = options?.strict ?? false;
   try {
     return getNunjucksEnv({ strict }).renderString(template, variables);
   } catch (error) {

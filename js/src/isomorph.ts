@@ -38,15 +38,6 @@ export interface Common {
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
-  renderNunjucksString: (
-    template: string,
-    variables: Record<string, unknown>,
-    strict?: boolean,
-  ) => string;
-  lintNunjucksTemplate: (
-    template: string,
-    context: Record<string, unknown>,
-  ) => void;
 
   // hash a string. not guaranteed to be crypto safe.
   hash?: (data: string) => string;
