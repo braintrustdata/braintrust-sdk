@@ -48,15 +48,21 @@ export async function runBrowserLoggerSmokeTest() {
   console.log("Mustache template test passed");
 
   // Test nunjucks template with loop
-  const nunjucksResult = runNunjucksTemplateTest(Prompt);
+  try {
+    runNunjucksTemplateTest(Prompt);
+    throw new Error("Expected nunjucks templating to require addon");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    assertEquals(
+      msg.includes(
+        "Nunjucks templating requires @braintrust/template-nunjucks",
+      ),
+      true,
+      "Nunjucks templating should require the addon by default",
+    );
+  }
 
-  assertEquals(
-    nunjucksResult.messages[0]?.content,
-    "Items: apple, banana, cherry",
-    "Nunjucks template should render loop correctly",
-  );
-
-  console.log("Nunjucks template test passed");
+  console.log("Nunjucks template test passed (addon required)");
 }
 
 Deno.test("Create a span", async () => {
