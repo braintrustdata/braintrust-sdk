@@ -34,33 +34,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build braintrust + template-nunjucks
+      - name: Build and pack braintrust
         shell: bash
         run: |
           cd js
           pnpm run build
-          cd ../integrations/template-nunjucks
+          mkdir -p artifacts
+          npm pack --pack-destination artifacts
+
+      - name: Build and pack @braintrust/template-nunjucks
+        shell: bash
+        run: |
+          cd integrations/template-nunjucks
           pnpm run build
+          npm pack --pack-destination ../../js/artifacts
 
-      - name: Pack tarballs
+      - name: Run Braintrust + template-nunjucks integration smoke test
         shell: bash
         run: |
-          rm -rf /tmp/template-nunjucks-artifacts
-          mkdir -p /tmp/template-nunjucks-artifacts
-          cd js
-          npm pack --pack-destination /tmp/template-nunjucks-artifacts
-          cd ../integrations/template-nunjucks
-          npm pack --pack-destination /tmp/template-nunjucks-artifacts
-
-      - name: Install tarballs into a throwaway project and run integration check
-        shell: bash
-        run: |
-          rm -rf /tmp/template-nunjucks-proj
-          mkdir -p /tmp/template-nunjucks-proj
-          cd /tmp/template-nunjucks-proj
-          npm init -y
-          npm install --legacy-peer-deps \
-            /tmp/template-nunjucks-artifacts/braintrust-*.tgz \
-            /tmp/template-nunjucks-artifacts/braintrust-template-nunjucks-*.tgz
-
-          node -e "import('@braintrust/template-nunjucks'); import('braintrust').then(({Prompt}) => { const p = new Prompt({name:'t',slug:'t',prompt_data:{prompt:{type:'chat',messages:[{role:'user',content:'Items: {% for item in items %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}'}]},options:{model:'gpt-4'}}},{},false); const r = p.build({items:[{name:'apple'},{name:'banana'},{name:'cherry'}]},{templateFormat:'nunjucks'}); if(r.messages[0].content !== 'Items: apple, banana, cherry'){ throw new Error('Unexpected render: '+r.messages[0].content);} console.log('ok'); })"
+          cd js/smoke/tests/template-nunjucks
+          rm -f package-lock.json
+          npm install --legacy-peer-deps
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+          npx tsx ../../install-build.ts ../../../artifacts template-nunjucks
+          npm test
