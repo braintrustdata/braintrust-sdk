@@ -11,8 +11,8 @@ import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
 import { renderNunjucksString as nunjucksRender } from "./template/nunjucks-env";
 import { lintTemplate as nunjucksLint } from "./template/nunjucks-utils";
-import { promisify } from "util";
-import * as zlib from "zlib";
+import { promisify } from "node:util";
+import * as zlib from "node:zlib";
 
 export function configureNode() {
   iso.getRepoInfo = getRepoInfo;
@@ -20,7 +20,7 @@ export function configureNode() {
   iso.getEnv = (name) => process.env[name];
   iso.getCallerLocation = getCallerLocation;
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-  iso.processOn = (event: string, handler: (code: any) => void) => {
+  iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);
   };
   iso.renderNunjucksString = (template, variables, options = {}) => {
