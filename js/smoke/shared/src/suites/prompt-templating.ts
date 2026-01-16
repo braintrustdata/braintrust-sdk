@@ -166,7 +166,7 @@ export async function testNunjucksTemplate(
       if (
         environment === "cloudflare-worker-node-node-compat" &&
         errorMessage.includes(
-          "Code generation from strings disallowed for this context",
+          "String template rendering. Disallowed in this environment for security reasons",
         )
       ) {
         return {
