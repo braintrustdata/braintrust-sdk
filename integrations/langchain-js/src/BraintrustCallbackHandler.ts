@@ -47,6 +47,8 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
   private skippedRuns: Set<string>;
   private parent?: Span | (() => Span);
   private rootRunId?: string;
+  private rootSpanContext: Map<string, Span>;
+  private capturedContext?: Span;
   private options: BraintrustCallbackHandlerOptions<IsAsyncFlush>;
   private startTimes: Map<string, number>;
   private firstTokenTimes: Map<string, number>;
@@ -58,6 +60,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     super();
     this.skippedRuns = new Set();
     this.spans = new Map();
+    this.rootSpanContext = new Map();
     this.startTimes = new Map();
     this.firstTokenTimes = new Map();
     this.ttftMs = new Map();
@@ -71,6 +74,18 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
         /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/,
       logger: options?.logger,
     };
+
+    // Capture the current span context at construction time if no explicit
+    // logger or parent is provided. This ensures correct context in concurrent scenarios
+    // when handlers are created inside eval tasks.
+    // Only capture if there's an actual active span (not NOOP_SPAN) to support
+    // handlers created at module level (e.g., with setGlobalHandler).
+    if (!this.parent && !this.options.logger) {
+      const current = currentSpan();
+      if (!Object.is(current, NOOP_SPAN)) {
+        this.capturedContext = current;
+      }
+    }
   }
 
   protected startSpan({
@@ -89,8 +104,23 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       return;
     }
 
-    if (!parentRunId) {
+    if (!parentRunId || parentRunId === runId) {
       this.rootRunId = runId;
+
+      // Capture the current span context once per root run to avoid
+      // async context issues in concurrent scenarios
+      if (!this.rootSpanContext.has(runId)) {
+        const contextSpan = this.parent
+          ? typeof this.parent === "function"
+            ? this.parent()
+            : this.parent
+          : this.options.logger
+            ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              (this.options.logger as unknown as Span)
+            : this.capturedContext ?? currentSpan();
+
+        this.rootSpanContext.set(runId, contextSpan);
+      }
     }
 
     const tags = args.event?.tags;
@@ -100,22 +130,25 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 
     args.type = spanAttributes.type;
 
-    const currentParent =
-      (typeof this.parent === "function" ? this.parent() : this.parent) ??
-      currentSpan();
     let parentSpan: Span;
     if (parentRunId && this.spans.has(parentRunId)) {
+      // Use the parent span from the spans map for child operations
       parentSpan = this.spans.get(parentRunId)!;
-    } else if (!Object.is(currentParent, NOOP_SPAN)) {
-      parentSpan = currentParent;
-    } else if (this.options.logger) {
-      // If provided, use the logger as the parent span.
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      parentSpan = this.options.logger as unknown as Span;
     } else {
-      // Fallback to creating a new span.
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      parentSpan = { startSpan } as unknown as Span;
+      // For root spans, use the captured context for this root run
+      // This avoids async context issues in concurrent scenarios
+      const rootId = this.rootRunId || runId;
+      const capturedContext = this.rootSpanContext.get(rootId);
+
+      if (capturedContext) {
+        // Use the captured context, even if it's NOOP_SPAN
+        // This ensures NOOP_SPAN is respected when explicitly provided
+        parentSpan = capturedContext;
+      } else {
+        // Fallback to creating a new span.
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        parentSpan = { startSpan } as unknown as Span;
+      }
     }
 
     args.event = {
@@ -174,6 +207,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     this.spans.delete(runId);
     if (runId === this.rootRunId) {
       this.rootRunId = undefined;
+    }
+
+    // Clean up root span context when root run ends
+    if (this.rootSpanContext.has(runId)) {
+      this.rootSpanContext.delete(runId);
     }
 
     span.log({ ...args, metadata: { tags, ...metadata } });
