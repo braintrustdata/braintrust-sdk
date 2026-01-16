@@ -2919,11 +2919,21 @@ def test_git_metadata_settings_none_skips_ancestor_collection(
     """Test that git_metadata_settings with collect='none' skips git operations."""
     from braintrust.git_fields import GitMetadataSettings
 
+    def task(input):
+        return "world"
+
+    def exact_match(output, expected):
+        return output == expected
+
     mock_get_ancestors.return_value = iter(["commit1", "commit2"])
 
     braintrust.Eval(
-        project="test-project",
-        experiment="test-experiment",
+        data=[
+            {"input": "hello", "expected": "hello world"},
+            {"input": "test", "expected": "test world"},
+        ],
+        task=task,
+        scores=[exact_match],
         git_metadata_settings=GitMetadataSettings(collect="none"),
     )
 
@@ -2935,11 +2945,22 @@ def test_git_metadata_settings_default_collects_ancestors(
         mock_get_ancestors, with_memory_logger, with_simulate_login
 ):
     """Test that default git_metadata_settings collects ancestor commits."""
+    def task(input):
+        return "world"
+
+    def exact_match(output, expected):
+        return output == expected
+
     mock_get_ancestors.return_value = iter(["commit1", "commit2"])
 
     braintrust.Eval(
-        project="test-project",
-        experiment="test-experiment",
+        "test",
+        data=[
+            {"input": "hello", "expected": "hello world"},
+            {"input": "test", "expected": "test world"},
+        ],
+        task=task,
+        scores=[exact_match],
     )
 
     mock_get_ancestors.assert_called_once()
@@ -2952,11 +2973,22 @@ def test_git_metadata_settings_all_collects_ancestors(
     """Test that git_metadata_settings with collect='all' collects ancestor commits."""
     from braintrust.git_fields import GitMetadataSettings
 
+    def task(input):
+        return "world"
+
+    def exact_match(output, expected):
+        return output == expected
+
     mock_get_ancestors.return_value = iter(["commit1", "commit2"])
 
     braintrust.Eval(
-        project="test-project",
-        experiment="test-experiment",
+        "test",
+        data=[
+            {"input": "hello", "expected": "hello world"},
+            {"input": "test", "expected": "test world"},
+        ],
+        task=task,
+        scores=[exact_match],
         git_metadata_settings=GitMetadataSettings(collect="all"),
     )
 
