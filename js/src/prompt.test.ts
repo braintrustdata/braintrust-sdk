@@ -1,9 +1,7 @@
-import { describe, test, expect, vi } from "vitest";
+import { beforeAll, describe, test, expect, vi } from "vitest";
 import { configureNode } from "./node";
 import { Prompt } from "./logger";
 import { type PromptDataType as PromptData } from "./generated_types";
-
-configureNode();
 
 describe("prompt strict mode", () => {
   test("strict mode", () => {
@@ -136,6 +134,10 @@ function testPromptBuild({
 }
 
 describe("prompt template_format", () => {
+  beforeAll(() => {
+    configureNode();
+  });
+
   test("uses template_format when building", () => {
     const prompt = new Prompt(
       {
