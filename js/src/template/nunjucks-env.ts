@@ -29,6 +29,16 @@ export function renderNunjucksString(
   try {
     return getNunjucksEnv(strict).renderString(template, variables);
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes(
+        "Code generation from strings disallowed for this context",
+      )
+    ) {
+      throw new Error(
+        `String template rendering. Disallowed in this environment for security reasons. Try a different template renderer. Original error: ${error.message}`,
+      );
+    }
     throw error;
   }
 }
