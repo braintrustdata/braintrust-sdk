@@ -390,14 +390,13 @@ jobs:
         run: |
           npm run restore
 
-  smoke-tests-cloudflare:
+  smoke-tests-cloudflare-worker:
     needs: build
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        integration: [cloudflare-worker, vite-react-hono]
         node-version: [20, 22]
 
     steps:
@@ -410,7 +409,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Backup original package manifests
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+        working-directory: js/smoke/tests/cloudflare-worker
         run: |
           npm run backup
 
@@ -423,7 +422,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies and local build
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+        working-directory: js/smoke/tests/cloudflare-worker
         shell: bash
         run: |
           # Remove package-lock.json to avoid version mismatch with downloaded artifacts
@@ -437,14 +436,71 @@ jobs:
           npm ci
           npm run build
 
-      - name: Run ${{ matrix.integration }} smoke test
+      - name: Run cloudflare-worker smoke test
         working-directory: js/smoke
         shell: bash
         run: |
-          ./run-tests.sh ${{ matrix.integration }}
+          ./run-tests.sh cloudflare-worker
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run restore
+
+  smoke-tests-vite-react-hono:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        working-directory: js/smoke/tests/vite-react-hono
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build
+        working-directory: js/smoke/tests/vite-react-hono
+        shell: bash
+        run: |
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run vite-react-hono smoke test
+        working-directory: js/smoke
+        shell: bash
+        run: |
+          ./run-tests.sh vite-react-hono
 
       - name: Run Vite dev server compatibility test (allowed to fail)
-        if: matrix.integration == 'vite-react-hono'
         continue-on-error: true
         working-directory: js/smoke/tests/vite-react-hono
         shell: bash
@@ -453,7 +509,7 @@ jobs:
 
       - name: Restore original package.json files
         if: always()
-        working-directory: js/smoke/tests/${{ matrix.integration }}
+        working-directory: js/smoke/tests/vite-react-hono
         run: |
           npm run restore
 
