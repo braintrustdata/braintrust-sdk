@@ -38,6 +38,15 @@ export interface Common {
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
+  renderNunjucksString: (
+    template: string,
+    variables: Record<string, unknown>,
+    strict?: boolean,
+  ) => string;
+  lintNunjucksTemplate: (
+    template: string,
+    context: Record<string, unknown>,
+  ) => void;
 
   // hash a string. not guaranteed to be crypto safe.
   hash?: (data: string) => string;
@@ -74,6 +83,16 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
+  renderNunjucksString: () => {
+    throw new Error(
+      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
+    );
+  },
+  lintNunjucksTemplate: () => {
+    throw new Error(
+      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
+    );
+  },
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
   writeln: (text: string) => console.log(text),
 };

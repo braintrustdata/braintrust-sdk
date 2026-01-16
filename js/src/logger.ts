@@ -77,7 +77,6 @@ import {
   renderTemplateContent,
   type TemplateFormat,
 } from "./template/renderer";
-import { renderNunjucksString } from "./template/nunjucks-env";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -99,7 +98,6 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
-import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 
 // Context management interfaces
@@ -6408,9 +6406,9 @@ function renderTemplatedObject(
     const strict = !!options.strict;
     if (options.templateFormat === "nunjucks") {
       if (strict) {
-        lintNunjucksTemplate(obj, args);
+        iso.lintNunjucksTemplate(obj, args);
       }
-      return renderNunjucksString(obj, args, strict);
+      return iso.renderNunjucksString(obj, args, strict);
     }
     if (options.templateFormat === "mustache") {
       if (strict) {

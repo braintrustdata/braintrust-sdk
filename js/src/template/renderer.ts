@@ -1,7 +1,6 @@
 import Mustache from "mustache";
 import { lintTemplate as lintMustacheTemplate } from "./mustache-utils";
-import { lintTemplate as lintNunjucksTemplate } from "./nunjucks-utils";
-import { renderNunjucksString } from "./nunjucks-env";
+import iso from "../isomorph";
 
 export type TemplateFormat = "mustache" | "nunjucks" | "none";
 
@@ -26,9 +25,9 @@ export function renderTemplateContent(
   const templateFormat = parseTemplateFormat(options.templateFormat);
   if (templateFormat === "nunjucks") {
     if (strict) {
-      lintNunjucksTemplate(template, variables);
+      iso.lintNunjucksTemplate(template, variables);
     }
-    return renderNunjucksString(template, variables, strict);
+    return iso.renderNunjucksString(template, variables, strict);
   } else if (templateFormat === "mustache") {
     if (strict) {
       lintMustacheTemplate(template, variables);

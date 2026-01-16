@@ -9,6 +9,8 @@ import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
+import { renderNunjucksString } from "./template/nunjucks-env";
+import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { promisify } from "util";
 import * as zlib from "zlib";
 
@@ -21,6 +23,8 @@ export function configureNode() {
   iso.processOn = (event: string, handler: (code: any) => void) => {
     process.on(event, handler);
   };
+  iso.renderNunjucksString = renderNunjucksString;
+  iso.lintNunjucksTemplate = lintNunjucksTemplate;
   iso.basename = path.basename;
   iso.writeln = (text: string) => process.stdout.write(text + "\n");
   iso.pathJoin = path.join;
