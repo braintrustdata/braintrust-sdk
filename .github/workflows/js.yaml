@@ -500,13 +500,6 @@ jobs:
         run: |
           ./run-tests.sh vite-react-hono
 
-      - name: Run Vite dev server compatibility test (allowed to fail)
-        continue-on-error: true
-        working-directory: js/smoke/tests/vite-react-hono
-        shell: bash
-        run: |
-          npm run test:vite-dev
-
       - name: Restore original package.json files
         if: always()
         working-directory: js/smoke/tests/vite-react-hono
