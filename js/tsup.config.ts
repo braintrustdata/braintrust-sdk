@@ -8,6 +8,12 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist",
     external: ["zod"],
+    noExternal: [
+      "mustache",
+      "eventsource-parser",
+      "zod-to-json-schema",
+      "@vercel/functions",
+    ],
     removeNodeProtocol: false,
     dts: {
       // Split DTS generation to reduce memory usage
@@ -23,7 +29,14 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist",
     removeNodeProtocol: false,
-    external: ["zod", "nunjucks"],
+    external: ["zod"],
+    noExternal: [
+      "mustache",
+      "eventsource-parser",
+      "zod-to-json-schema",
+      "@vercel/functions",
+    ],
+    platform: "browser",
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
