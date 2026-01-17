@@ -1,0 +1,18 @@
+{
+  "name": "smoke-v2-playwright-browser",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright browser smoke test for Braintrust SDK",
+  "dependencies": {
+    "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@types/node": "^20.10.5",
+    "esbuild": "^0.27.2",
+    "http-server": "^14.1.1",
+    "typescript": "^5.4.4"
+  }
+}
