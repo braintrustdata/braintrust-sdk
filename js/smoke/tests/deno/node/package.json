@@ -4,7 +4,6 @@
   "description": "Smoke test for Braintrust Node build in Deno runtime",
   "private": true,
   "scripts": {
-    "test": "deno test --no-config --import-map=./deno.json --lock=deno.lock --allow-env --allow-read=.,../build --allow-net shared_suite_test.ts span_test.ts",
-    "install-build": "npx tsx ../../../install-build.ts ../../../../artifacts braintrust"
+    "test": "deno test --no-config --import-map=./deno.json --lock=deno.lock --allow-env --allow-read=.,../build --allow-net shared_suite_test.ts span_test.ts"
   }
 }

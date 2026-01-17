@@ -587,7 +587,7 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [20, 22]
-        mode: [deno, deno-browser]
+        mode: [deno-node, deno-browser]
 
     steps:
       - uses: actions/checkout@v4
@@ -613,8 +613,4 @@ jobs:
       - name: Run Deno smoke test (${{ matrix.mode }})
         working-directory: js/smoke
         run: |
-          if [ "${{ matrix.mode }}" = "deno" ]; then
-            ./run-tests.sh deno
-          else
-            cd tests/deno/browser && npm test
-          fi
+          ./run-tests.sh ${{ matrix.mode }}

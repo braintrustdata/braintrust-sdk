@@ -70,8 +70,19 @@ discover_tests() {
     local -a tests
     for dir in "$TESTS_DIR"/*/; do
         [ -d "$dir" ] || continue
+        local dirname=$(basename "$dir")
+        # deno-node and deno-browser
+        if [ "$dirname" = "deno" ]; then
+            continue
+        fi
         if [ -f "$dir/package.json" ]; then
-            tests+=("$(basename "$dir")")
+            tests+=("$dirname")
+        fi
+    done
+    # Add deno nested tests (deno-node, deno-browser, etc.)
+    for nested in node browser; do
+        if [ -d "$TESTS_DIR/deno/$nested" ] && [ -f "$TESTS_DIR/deno/$nested/package.json" ]; then
+            tests+=("deno-$nested")
         fi
     done
     echo "${tests[@]}"
@@ -89,6 +100,11 @@ list_tests() {
 
         # Show description from package.json if available
         local pkg="$TESTS_DIR/$test_name/package.json"
+        # Handle nested deno tests (deno-node, deno-browser, etc.)
+        if [[ "$test_name" =~ ^deno- ]]; then
+            local nested="${test_name#deno-}"
+            pkg="$TESTS_DIR/deno/$nested/package.json"
+        fi
         if [ -f "$pkg" ]; then
             local desc=$(jq -r '.description // ""' "$pkg" 2>/dev/null || echo "")
             if [ -n "$desc" ]; then
@@ -147,6 +163,12 @@ run_test() {
     local test_name=$1
     local test_dir="$TESTS_DIR/$test_name"
 
+    # Handle nested deno tests (deno-node, deno-browser, etc.)
+    if [[ "$test_name" =~ ^deno- ]]; then
+        local nested="${test_name#deno-}"
+        test_dir="$TESTS_DIR/deno/$nested"
+    fi
+
     if [ ! -d "$test_dir" ]; then
         log_error "Test directory not found: $test_name"
         FAILED_TESTS+=("$test_name (not found)")
@@ -171,8 +193,9 @@ run_test() {
     log_info "Running: npm run $npm_script"
 
     # Ensure Deno has a local file:// module to import (deno.json maps `braintrust` to ./build/braintrust/dist/index.mjs)
-    if [ "$test_name" = "deno" ] || [ "$test_name" = "deno-browser" ]; then
-        local deno_dir="$TESTS_DIR/$test_name"
+    # All deno tests (deno, deno-node, deno-browser, etc.) extract build to tests/deno/build/ (shared location)
+    if [ "$test_name" = "deno" ] || [[ "$test_name" =~ ^deno- ]]; then
+        local deno_dir="$TESTS_DIR/deno"
         local deno_build_file="$deno_dir/build/braintrust/dist/index.mjs"
         if [ ! -f "$deno_build_file" ]; then
             log_info "Preparing Deno build directory from packed braintrust tarball..."
