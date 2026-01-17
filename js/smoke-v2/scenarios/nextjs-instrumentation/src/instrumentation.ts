@@ -20,7 +20,7 @@ import {
   setupTestEnvironment,
   runBasicLoggingTests,
   runImportVerificationTests,
-} from "../../../shared/dist/index.mjs";
+} from "../../../shared";
 
 export async function register() {
   // Log that imports succeeded (build-time verification passed)

@@ -11,7 +11,7 @@ import {
   runEvalSmokeTest,
   runImportVerificationTests,
   runPromptTemplatingTests,
-} from "../../../../../../../shared/dist/index.mjs";
+} from "../../../../../../../shared";
 
 import * as braintrust from "braintrust";
 const { initLogger, _exportsForTestingOnly } = braintrust;

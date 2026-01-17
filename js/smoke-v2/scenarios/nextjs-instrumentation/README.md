@@ -1,77 +1,40 @@
 # Next.js Instrumentation Scenario
 
-Tests Braintrust SDK with @braintrust/otel in Next.js application across multiple runtimes.
+Tests Braintrust SDK integration in Next.js with multiple runtimes.
 
-## What This Tests
+## Design Decisions
 
-### Build-Time Tests
+### Tarball Installation
 
-- Webpack bundling and import resolution
-- Static analysis of imports (catches missing exports)
-- ESM/CJS interoperability in Next.js environment
-- Tree-shaking issues with the shared test package
+Uses `file:` dependencies pointing to pre-built tarballs:
 
-### Runtime Tests
+- `"braintrust": "file:../../../artifacts/braintrust-latest.tgz"`
+- `"@braintrust/otel": "file:../../../artifacts/braintrust-otel-latest.tgz"`
+- More realistic test of how Next.js bundles published packages
+- Catches webpack bundling issues that local linking might miss
 
-**Edge Runtime** (`/api/smoke-test/edge`):
+### Build + Runtime Testing
 
-- Runs in V8 isolates (same as Cloudflare Workers)
-- No filesystem, no Node.js APIs
-- Tests: 16+ (13 import verification + 3 functional)
+Tests at two stages:
 
-**Node.js Runtime** (`/api/smoke-test/node`):
+1. **Build-time** (`npx next build`) - Catches static issues (imports, exports, bundling)
+2. **Runtime** (dev server + HTTP requests) - Catches execution issues in both runtimes
 
-- Full Node.js environment
-- Standard Next.js API route runtime
-- Tests: 16+ (13 import verification + 3 functional)
+Both needed because Next.js can build successfully but fail at runtime, or vice versa.
 
-## Requirements
+### Multiple Runtime Testing
 
-- Node.js 22 (managed by mise)
-- Next.js 14.2.x
-- @braintrust/otel package
+Tests both Next.js runtimes in separate API routes:
 
-## Running Locally
+- **Edge Runtime** (`/api/smoke-test/edge`) - V8 isolates, no Node.js APIs (like Cloudflare Workers)
+- **Node.js Runtime** (`/api/smoke-test/node`) - Full Node.js environment
 
-```bash
-# From smoke-v2/ root
-make test nextjs-instrumentation    # Run this scenario
+Different runtimes have different capabilities - Edge can't use nunjucks, filesystem, etc.
 
-# Or from scenarios/nextjs-instrumentation/ directory
-make test                           # Runs both build and runtime tests
-make test:build                     # Build-time test only
-make test:runtime                   # Runtime tests only (Edge + Node.js)
-```
+### Shared Package Import
 
-**Note**: All test execution happens via Makefile commands, not npm scripts.
+Uses long relative path to shared package:
 
-## Test Approach
-
-### Build-Time Test (`make test:build`)
-
-Runs `npx next build` to verify webpack can bundle SDK correctly. This catches:
-
-- Export issues that runtime tests might miss
-- ESM/CJS interoperability problems
-- Tree-shaking issues
-
-### Runtime Tests (`make test:runtime`)
-
-Starts Next.js dev server, hits API endpoints, verifies tests run in both runtimes:
-
-- **Edge Runtime** - V8 isolates (like Cloudflare Workers), no Node.js APIs
-- **Node.js Runtime** - Full Node.js environment
-
-All tests are realistic:
-
-- Real Next.js dev server (not build preview)
-- Real API routes in both runtimes
-- Real SDK integration
-- No mocks - tests exactly how users would integrate
-
-### Why Both Build and Runtime?
-
-Build-time catches **static issues** (imports, exports, bundling).
-Runtime catches **execution issues** (actually running the code in different environments).
-
-Both are needed for comprehensive Next.js testing.
+- `from "../../../../../../../shared/dist/index.mjs"`
+- Next.js webpack handles this correctly despite the deep nesting
+- Alternative would be adding shared to dependencies, but relative import is simpler
