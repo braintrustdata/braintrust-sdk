@@ -9,7 +9,7 @@ setup:
 		cd ../../.. && pnpm build; \
 	fi
 
-	deno add ../../../
+	deno install
 
 test: setup
 	deno test --allow-all tests/*.test.ts
