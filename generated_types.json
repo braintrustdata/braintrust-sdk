@@ -558,6 +558,26 @@
               "function_ids",
               "triggered_xact_id"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "mark_attempt_failed"
+                ]
+              },
+              "function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "function_ids"
+            ]
           }
         ]
       },
@@ -2152,6 +2172,31 @@
             ],
             "description": "The metadata field to use for grouping experiments (model)"
           },
+          "filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BTQL filter to apply to experiment data"
+          },
+          "sort_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Field to sort results by (format: 'score:<name>' or 'metric:<name>')"
+          },
+          "sort_order": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort order (ascending or descending)"
+          },
           "api_key": {
             "type": [
               "string",
@@ -3174,6 +3219,8 @@
         "enum": [
           "completion",
           "score",
+          "facet",
+          "classification",
           "any"
         ]
       },
@@ -6041,6 +6088,10 @@
               "type": "string"
             },
             "description": "List of valid choices without score mapping. Used by classifiers that deposit output to tags."
+          },
+          "allow_no_match": {
+            "type": "boolean",
+            "description": "If true, adds a 'None of the above' option. When selected, no tag is deposited."
           }
         },
         "required": [
@@ -7199,6 +7250,7 @@
               "prompts",
               "tools",
               "scorers",
+              "classifiers",
               "logs",
               "monitor",
               "for_review"
@@ -7639,7 +7691,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "793ece047b7e146f22f12deffc39fb8b9111e825"
+    "x-internal-git-sha": "21146f64bf5ad1eadd3a99d186274728e25e5399"
   },
   "paths": {},
   "webhooks": {}

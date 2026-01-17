@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 793ece047b7e146f22f12deffc39fb8b9111e825) -- do not modify
+// Auto-generated file (internal git SHA 21146f64bf5ad1eadd3a99d186274728e25e5399) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -181,6 +181,10 @@ export const AsyncScoringControl = z.union([
     kind: z.literal("complete_triggered_functions"),
     function_ids: z.array(z.unknown()).min(1),
     triggered_xact_id: z.string(),
+  }),
+  z.object({
+    kind: z.literal("mark_attempt_failed"),
+    function_ids: z.array(z.unknown()).min(1),
   }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
@@ -564,6 +568,9 @@ export const EvalStatusPageConfig = z
     score_columns: z.union([z.array(z.string()), z.null()]),
     metric_columns: z.union([z.array(z.string()), z.null()]),
     grouping_field: z.union([z.string(), z.null()]),
+    filter: z.union([z.string(), z.null()]),
+    sort_by: z.union([z.string(), z.null()]),
+    sort_order: z.union([z.enum(["asc", "desc"]), z.null()]),
     api_key: z.union([z.string(), z.null()]),
   })
   .partial();
@@ -816,6 +823,7 @@ export const PromptParserNullish = z.union([
     use_cot: z.boolean(),
     choice_scores: z.record(z.number().gte(0).lte(1)).optional(),
     choice: z.array(z.string()).optional(),
+    allow_no_match: z.boolean().optional(),
   }),
   z.null(),
 ]);
@@ -1145,7 +1153,13 @@ export const FunctionObjectType = z.enum([
   "classifier",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
-export const FunctionOutputType = z.enum(["completion", "score", "any"]);
+export const FunctionOutputType = z.enum([
+  "completion",
+  "score",
+  "facet",
+  "classification",
+  "any",
+]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
 export const GitMetadataSettings = z.object({
   collect: z.enum(["all", "none", "some"]),
@@ -1801,6 +1815,7 @@ export const View = z.object({
     "prompts",
     "tools",
     "scorers",
+    "classifiers",
     "logs",
     "monitor",
     "for_review",

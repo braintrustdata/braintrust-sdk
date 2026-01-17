@@ -144,6 +144,11 @@ class AsyncScoringControlAsyncScoringControl5(TypedDict):
     triggered_xact_id: str
 
 
+class AsyncScoringControlAsyncScoringControl6(TypedDict):
+    kind: Literal['mark_attempt_failed']
+    function_ids: Sequence[Any]
+
+
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
@@ -549,6 +554,18 @@ class EvalStatusPageConfig(TypedDict):
     """
     The metadata field to use for grouping experiments (model)
     """
+    filter: NotRequired[str | None]
+    """
+    BTQL filter to apply to experiment data
+    """
+    sort_by: NotRequired[str | None]
+    """
+    Field to sort results by (format: 'score:<name>' or 'metric:<name>')
+    """
+    sort_order: NotRequired[Literal['asc', 'desc'] | None]
+    """
+    Sort order (ascending or descending)
+    """
     api_key: NotRequired[str | None]
     """
     The API key used for fetching experiment data
@@ -782,7 +799,7 @@ FunctionObjectType: TypeAlias = Literal[
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal[
@@ -1715,6 +1732,10 @@ class PromptParserNullish(TypedDict):
     """
     List of valid choices without score mapping. Used by classifiers that deposit output to tags.
     """
+    allow_no_match: NotRequired[bool | None]
+    """
+    If true, adds a 'None of the above' option. When selected, no tag is deposited.
+    """
 
 
 class PromptSessionEvent(TypedDict):
@@ -2424,6 +2445,7 @@ AsyncScoringControl: TypeAlias = (
     | AsyncScoringControlAsyncScoringControl3
     | AsyncScoringControlAsyncScoringControl4
     | AsyncScoringControlAsyncScoringControl5
+    | AsyncScoringControlAsyncScoringControl6
 )
 
 
@@ -3305,6 +3327,7 @@ class View(TypedDict):
         'prompts',
         'tools',
         'scorers',
+        'classifiers',
         'logs',
         'monitor',
         'for_review',
