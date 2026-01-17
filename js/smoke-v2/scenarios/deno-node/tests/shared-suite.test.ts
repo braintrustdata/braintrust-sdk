@@ -58,12 +58,12 @@ export async function runSharedTestSuites() {
     ];
 
     // Verify all tests passed
-    const failures = results.filter((r) => !r.success);
+    const failures = results.filter((r) => r.status === "fail");
 
     if (failures.length > 0) {
       console.error("Test failures:");
       for (const failure of failures) {
-        console.error(`  ❌ ${failure.testName}: ${failure.error?.message}`);
+        console.error(`  ❌ ${failure.name}: ${failure.error?.message}`);
       }
       throw new Error(`${failures.length} test(s) failed`);
     }
@@ -72,15 +72,15 @@ export async function runSharedTestSuites() {
     console.log("✅ All shared test suites passed:");
     console.log("\nImport Verification:");
     for (const result of importResults) {
-      console.log(`  ✓ ${result.testName}: ${result.message}`);
+      console.log(`  ✓ ${result.name}: ${result.message}`);
     }
     console.log("\nFunctional Tests:");
     for (const result of functionalResults) {
-      console.log(`  ✓ ${result.testName}: ${result.message}`);
+      console.log(`  ✓ ${result.name}: ${result.message}`);
     }
     console.log("\nPrompt Templating Tests:");
     for (const result of promptTemplatingResults) {
-      console.log(`  ✓ ${result.testName}: ${result.message}`);
+      console.log(`  ✓ ${result.name}: ${result.message}`);
     }
 
     return results;
@@ -95,7 +95,7 @@ Deno.test("Run shared test suites", async () => {
 
   // Assert all tests passed
   assertEquals(
-    results.filter((r) => !r.success).length,
+    results.filter((r) => r.status === "fail").length,
     0,
     "All tests should pass",
   );

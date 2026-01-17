@@ -47,7 +47,7 @@ async function runSharedTestSuites(): Promise<TestResponse> {
         ...promptTemplatingResults,
       ];
 
-      const failures = results.filter((r) => !r.success);
+      const failures = results.filter((r) => r.status === "fail");
       if (failures.length > 0) {
         return {
           success: false,

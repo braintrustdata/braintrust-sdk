@@ -42,10 +42,10 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
       ...promptTemplatingResults,
     ];
 
-    const failures = results.filter((r) => !r.success);
+    const failures = results.filter((r) => r.status === "fail");
     if (failures.length > 0) {
       for (const failure of failures) {
-        console.error(`  ❌ ${failure.testName}: ${failure.error?.message}`);
+        console.error(`  ❌ ${failure.name}: ${failure.error?.message}`);
       }
       throw new Error(`${failures.length} test(s) failed`);
     }
@@ -58,6 +58,6 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
 
 Deno.test("Run shared test suites (browser build)", async () => {
   const results = await runSharedTestSuites();
-  assertEquals(results.filter((r) => !r.success).length, 0);
+  assertEquals(results.filter((r) => r.status === "fail").length, 0);
   console.log(`\n✅ All ${results.length} tests passed`);
 });

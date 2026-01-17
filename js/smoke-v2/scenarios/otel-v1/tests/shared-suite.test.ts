@@ -39,12 +39,12 @@ async function runSharedTestSuites() {
     const results = [...importResults, ...functionalResults];
 
     // Verify all tests passed
-    const failures = results.filter((r) => !r.success);
+    const failures = results.filter((r) => r.status === "fail");
 
     if (failures.length > 0) {
       console.error("\n❌ Test failures:");
       for (const failure of failures) {
-        console.error(`  ${failure.testName}: ${failure.error?.message}`);
+        console.error(`  ${failure.name}: ${failure.error?.message}`);
         if (failure.error?.stack) {
           console.error(`    ${failure.error.stack}`);
         }
@@ -56,11 +56,11 @@ async function runSharedTestSuites() {
     console.log("\n✅ All shared test suites passed!\n");
     console.log("Import Verification Tests:");
     for (const result of importResults) {
-      console.log(`  ✓ ${result.testName}: ${result.message}`);
+      console.log(`  ✓ ${result.name}: ${result.message}`);
     }
     console.log("\nFunctional Tests:");
     for (const result of functionalResults) {
-      console.log(`  ✓ ${result.testName}: ${result.message}`);
+      console.log(`  ✓ ${result.name}: ${result.message}`);
     }
 
     console.log(`\nTotal: ${results.length} tests passed`);

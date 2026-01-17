@@ -5,7 +5,8 @@ import {
   runBasicLoggingTests,
   runEvalSmokeTest,
   runImportVerificationTests,
-  runPromptTemplatingTests,
+  testMustacheTemplate,
+  testNunjucksTemplate,
   type TestResult,
 } from "../../../shared";
 
@@ -35,19 +36,39 @@ async function runSharedTestSuites(): Promise<TestResponse> {
       const importResults = await runImportVerificationTests(braintrust);
       const functionalResults = await runBasicLoggingTests(adapters);
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
-      const promptTemplatingResults = await runPromptTemplatingTests(
-        { Prompt: braintrust.Prompt },
-        adapters.environment,
-      );
+
+      // Test Mustache template (should always work)
+      const mustacheResult = await testMustacheTemplate({
+        Prompt: braintrust.Prompt,
+      });
+
+      // Test Nunjucks template - expected to fail in browser builds (even with nodejs_compat_v2)
+      const nunjucksResult = await testNunjucksTemplate({
+        Prompt: braintrust.Prompt,
+      });
+      const nunjucksResultHandled =
+        nunjucksResult.status === "fail" &&
+        nunjucksResult.error?.message.includes(
+          "Nunjucks templating is not supported",
+        )
+          ? {
+              ...nunjucksResult,
+              status: "xfail" as const,
+              message:
+                "Expected failure: Nunjucks not supported in browser build",
+            }
+          : nunjucksResult;
 
       const results = [
         ...importResults,
         ...functionalResults,
         evalResult,
-        ...promptTemplatingResults,
+        mustacheResult,
+        nunjucksResultHandled,
       ];
 
-      const failures = results.filter((r) => !r.success);
+      // Filter out expected failures when counting actual failures
+      const failures = results.filter((r) => r.status === "fail");
       if (failures.length > 0) {
         return {
           success: false,

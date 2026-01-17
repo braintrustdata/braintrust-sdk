@@ -39,10 +39,13 @@ export interface TestAdapters {
 }
 
 export interface TestResult {
-  success: boolean;
-  testName: string;
+  status: "pass" | "fail" | "xfail"; // xfail = expected failure
+  name: string;
   message?: string;
-  error?: Error;
+  error?: {
+    message: string;
+    stack?: string;
+  };
 }
 
 // ---- Braintrust module surface types ----

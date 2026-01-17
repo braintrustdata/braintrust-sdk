@@ -53,15 +53,18 @@ export async function testBasicSpanLogging(
     assertEqual(event.expected, "Paris");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Basic span logging test passed",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -103,15 +106,18 @@ export async function testMultipleSpans(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: `Multiple spans test passed (${events.length} events captured)`,
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -145,22 +151,25 @@ export async function testDirectLogging(
       assertNotEmpty(events, "No events were captured from direct logging");
 
       return {
-        success: true,
-        testName,
+        status: "pass" as const,
+        name: testName,
         message: "Direct logging test passed",
       };
     } else {
       return {
-        success: true,
-        testName,
+        status: "pass" as const,
+        name: testName,
         message: "Direct logging not supported, skipped",
       };
     }
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }

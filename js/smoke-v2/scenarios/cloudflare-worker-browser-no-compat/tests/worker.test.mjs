@@ -34,19 +34,29 @@ function displayTestResults(testResult) {
     );
 
     for (const result of testResult.results) {
-      const status = result.success ? "✓" : "✗";
-      const statusColor = result.success ? "\x1b[32m" : "\x1b[31m";
+      const statusSymbol =
+        result.status === "pass" ? "✓" : result.status === "xfail" ? "⊘" : "✗";
+      const statusColor =
+        result.status === "pass"
+          ? "\x1b[32m"
+          : result.status === "xfail"
+            ? "\x1b[33m"
+            : "\x1b[31m";
       const resetColor = "\x1b[0m";
 
-      console.log(`${statusColor}${status}${resetColor} ${result.testName}`);
+      console.log(`${statusColor}${statusSymbol}${resetColor} ${result.name}`);
 
-      if (!result.success && result.error) {
+      if (result.status === "fail" && result.error) {
         const errorMsg = result.error.message || String(result.error);
         console.log(`  Error: ${errorMsg}`);
         if (result.error.stack) {
           const stackLines = result.error.stack.split("\n").slice(0, 3);
           console.log(`  ${stackLines.join("\n  ")}`);
         }
+      }
+
+      if (result.status === "xfail" && result.message) {
+        console.log(`  ${result.message}`);
       }
     }
   } else {

@@ -97,7 +97,7 @@ async function testEndpoint(url, name) {
     if (result.failures && result.failures.length > 0) {
       console.log(`  Failures:`);
       for (const failure of result.failures) {
-        console.log(`    - ${failure.testName}: ${failure.error}`);
+        console.log(`    - ${failure.name}: ${failure.error}`);
       }
     }
 

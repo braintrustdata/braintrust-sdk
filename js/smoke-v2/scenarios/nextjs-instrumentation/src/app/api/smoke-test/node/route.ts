@@ -76,7 +76,7 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       ];
 
       // Check for failures
-      const failures = results.filter((r) => !r.success);
+      const failures = results.filter((r) => r.status === "fail");
 
       if (failures.length > 0) {
         const response: TestResponse = {
@@ -88,7 +88,7 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
           failedTests: failures.length,
           timestamp,
           failures: failures.map((f) => ({
-            testName: f.testName,
+            testName: f.name,
             error: f.error?.message || "Unknown error",
           })),
         };
