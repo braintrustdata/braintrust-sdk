@@ -12,4 +12,4 @@ setup:
 	deno install
 
 test: setup
-	deno test --allow-all tests/*.test.ts
+	deno test --sloppy-imports --allow-all tests/*.test.ts

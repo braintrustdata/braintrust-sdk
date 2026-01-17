@@ -13,7 +13,7 @@ import {
   runImportVerificationTests,
   runPromptTemplatingTests,
   type TestResult,
-} from "../../../shared/dist/index.mjs";
+} from "@braintrust/smoke-test-shared";
 import * as braintrust from "braintrust";
 
 /**
