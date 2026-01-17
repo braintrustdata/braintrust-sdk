@@ -337,6 +337,9 @@
           },
           "use_cache": {
             "type": "boolean"
+          },
+          "use_native_inference": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -558,6 +561,26 @@
               "function_ids",
               "triggered_xact_id"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "mark_attempt_failed"
+                ]
+              },
+              "function_ids": {
+                "type": "array",
+                "items": {},
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "function_ids"
+            ]
           }
         ]
       },
@@ -746,6 +769,9 @@
         "type": "object",
         "properties": {
           "use_cache": {
+            "type": "boolean"
+          },
+          "use_native_inference": {
             "type": "boolean"
           },
           "reasoning_enabled": {
@@ -1853,12 +1879,17 @@
             ],
             "additionalProperties": {},
             "description": "User-controlled metadata about the dataset"
+          },
+          "url_slug": {
+            "type": "string",
+            "description": "URL slug for the dataset. used to construct dataset URLs"
           }
         },
         "required": [
           "id",
           "project_id",
-          "name"
+          "name",
+          "url_slug"
         ]
       },
       "DatasetEvent": {
@@ -2045,6 +2076,150 @@
           "object_id",
           "name"
         ]
+      },
+      "EvalStatusPage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the eval status page"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the project that the eval status page belongs under"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Identifies the user who created the eval status page"
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of eval status page creation"
+          },
+          "deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of eval status page deletion, or null if the eval status page is still active"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the eval status page"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Textual description of the eval status page"
+          },
+          "logo_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL of the logo to display on the page"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/EvalStatusPageTheme"
+          },
+          "config": {
+            "$ref": "#/components/schemas/EvalStatusPageConfig"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "theme",
+          "config"
+        ],
+        "description": "A public eval status page that displays aggregate experiment results"
+      },
+      "EvalStatusPageConfig": {
+        "type": "object",
+        "properties": {
+          "score_columns": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The score columns to display on the page"
+          },
+          "metric_columns": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The metric columns to display on the page"
+          },
+          "grouping_field": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The metadata field to use for grouping experiments (model)"
+          },
+          "filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BTQL filter to apply to experiment data"
+          },
+          "sort_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Field to sort results by (format: 'score:<name>' or 'metric:<name>')"
+          },
+          "sort_order": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort order (ascending or descending)"
+          },
+          "api_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The API key used for fetching experiment data"
+          }
+        },
+        "description": "Configuration for what data to display"
+      },
+      "EvalStatusPageTheme": {
+        "type": "string",
+        "enum": [
+          "light",
+          "dark"
+        ],
+        "description": "The theme for the page"
       },
       "Experiment": {
         "type": "object",
@@ -3038,6 +3213,7 @@
           "tool",
           "scorer",
           "task",
+          "workflow",
           "custom_view",
           "preprocessor",
           "facet"
@@ -3903,6 +4079,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -4050,6 +4229,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -4092,6 +4274,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -4120,6 +4305,9 @@
               "use_cache": {
                 "type": "boolean"
               },
+              "use_native_inference": {
+                "type": "boolean"
+              },
               "reasoning_enabled": {
                 "type": "boolean"
               },
@@ -4140,6 +4328,9 @@
             "type": "object",
             "properties": {
               "use_cache": {
+                "type": "boolean"
+              },
+              "use_native_inference": {
                 "type": "boolean"
               },
               "reasoning_enabled": {
@@ -7503,7 +7694,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "87ac73f4945a47eff2d4e42775ba4dbc58854c73"
+    "x-internal-git-sha": "33ab31eaa0c3d1873a3b877c52d0a3a20015f939"
   },
   "paths": {},
   "webhooks": {}

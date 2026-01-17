@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
+// Auto-generated file (internal git SHA 33ab31eaa0c3d1873a3b877c52d0a3a20015f939) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -118,6 +118,7 @@ export const AnyModelParams = z.object({
   topP: z.number().optional(),
   topK: z.number().optional(),
   use_cache: z.boolean().optional(),
+  use_native_inference: z.boolean().optional(),
 });
 export type AnyModelParamsType = z.infer<typeof AnyModelParams>;
 export const ApiKey = z.object({
@@ -181,6 +182,10 @@ export const AsyncScoringControl = z.union([
     kind: z.literal("complete_triggered_functions"),
     function_ids: z.array(z.unknown()).min(1),
     triggered_xact_id: z.string(),
+  }),
+  z.object({
+    kind: z.literal("mark_attempt_failed"),
+    function_ids: z.array(z.unknown()).min(1),
   }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
@@ -252,6 +257,7 @@ export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
   .object({
     use_cache: z.boolean(),
+    use_native_inference: z.boolean(),
     reasoning_enabled: z.boolean(),
     reasoning_budget: z.number(),
   })
@@ -491,6 +497,7 @@ export const Dataset = z.object({
   metadata: z
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
+  url_slug: z.string(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -555,6 +562,33 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalStatusPageTheme = z.enum(["light", "dark"]);
+export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
+export const EvalStatusPageConfig = z
+  .object({
+    score_columns: z.union([z.array(z.string()), z.null()]),
+    metric_columns: z.union([z.array(z.string()), z.null()]),
+    grouping_field: z.union([z.string(), z.null()]),
+    filter: z.union([z.string(), z.null()]),
+    sort_by: z.union([z.string(), z.null()]),
+    sort_order: z.union([z.enum(["asc", "desc"]), z.null()]),
+    api_key: z.union([z.string(), z.null()]),
+  })
+  .partial();
+export type EvalStatusPageConfigType = z.infer<typeof EvalStatusPageConfig>;
+export const EvalStatusPage = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  logo_url: z.union([z.string(), z.null()]).optional(),
+  theme: EvalStatusPageTheme,
+  config: EvalStatusPageConfig,
+});
+export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -701,6 +735,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -734,6 +769,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean().optional(),
+      use_native_inference: z.boolean().optional(),
       reasoning_enabled: z.boolean().optional(),
       reasoning_budget: z.number().optional(),
       max_tokens: z.number(),
@@ -747,6 +783,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -759,6 +796,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
       temperature: z.number(),
@@ -769,6 +807,7 @@ export const ModelParams = z.union([
   z
     .object({
       use_cache: z.boolean(),
+      use_native_inference: z.boolean(),
       reasoning_enabled: z.boolean(),
       reasoning_budget: z.number(),
     })
@@ -1109,6 +1148,7 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
+  "workflow",
   "custom_view",
   "preprocessor",
   "facet",
