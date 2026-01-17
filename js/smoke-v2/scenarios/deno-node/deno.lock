@@ -863,10 +863,13 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@braintrust/smoke-test-shared@*",
       "jsr:@std/assert@^1.0.14",
       "npm:braintrust@^2.0.2"
     ],
     "links": {
+      "jsr:@braintrust/smoke-test-shared": {},
+      "npm:@braintrust/smoke-test-shared@1.0.0": {},
       "npm:braintrust-sdk-js@0.0.1": {},
       "npm:braintrust@2.0.2": {
         "dependencies": [
