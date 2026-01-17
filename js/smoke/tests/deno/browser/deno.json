@@ -10,6 +10,6 @@
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.0"
   },
   "tasks": {
-    "test:shared": "deno test --no-config --import-map=./deno.json --allow-env --allow-read=.,./build --allow-net shared_suite_test.ts"
+    "test:shared": "deno test --no-config --import-map=./deno.json --allow-env --allow-read=.,../build --allow-net shared_suite_test.ts"
   }
 }
