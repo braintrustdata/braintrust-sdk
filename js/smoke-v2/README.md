@@ -39,9 +39,22 @@ test: setup
 
 **Dependency declaration:** package.json, deno.json, import_map.json, etc.
 
-**Documentation:** README.md explaining what this tests and how to run it
+**Documentation:** README.md explaining design decisions (see below)
 
 **Ignore patterns:** .gitignore (ignore artifacts, track lock files)
+
+### README.md Guidelines
+
+Keep scenario READMEs minimal and focused on **design decisions only**:
+
+- Explain architectural choices (e.g., why use `links` vs tarballs)
+- Document non-obvious patterns (e.g., why `--sloppy-imports` is needed)
+- Skip usage instructions (that's what Makefile is for)
+- Skip test descriptions (code should be self-documenting)
+
+**Good examples:** `scenarios/deno-node/README.md`, `scenarios/deno-browser/README.md`, `scenarios/otel-v1/README.md`
+
+Typical length: 15-25 lines
 
 ### 2. Choose Your Pattern
 
@@ -121,12 +134,15 @@ pnpm = "10.26.2"
 
 **When:** Testing Deno runtime
 
-**Example:** See `js/smoke/tests/deno-*` (v1)
+**Example:** `scenarios/deno-node/`, `scenarios/deno-browser/`
 
 **Key requirements:**
 
-- Use `npm:` specifier or import maps
-- Use `deno.lock` for dependency tracking
+- Use `nodeModulesDir: "auto"` for npm package resolution
+- Use `links` array to point to local workspace packages
+- Use `npm:` specifiers in imports (e.g., `npm:braintrust@^2.0.2`)
+- May need `--sloppy-imports` if dependencies use extensionless imports
+- Track `deno.lock` for dependency resolution
 - Never use `--no-check` (exposes real issues)
 
 **Makefile template:**
@@ -138,20 +154,36 @@ setup:
 	@echo "==> Setting up deno-scenario"
 	mise install
 
-	# Build SDK if needed
-	@if [ ! -f ../../../artifacts/braintrust-latest.tgz ]; then \
-		cd ../../.. && pnpm build && npm pack --pack-destination artifacts; \
-		for f in artifacts/braintrust-*.tgz; do \
-			[ "$$(basename $$f)" = "braintrust-latest.tgz" ] && continue; \
-			cp "$$f" artifacts/braintrust-latest.tgz; break; \
-		done; \
+	# Build SDK (Deno will use dist/ directly via links)
+	@if [ ! -d ../../../dist ]; then \
+		cd ../../.. && pnpm build; \
 	fi
 
-	# Cache dependencies
-	deno cache tests/*.test.ts
+	deno install
 
 test: setup
-	deno test --allow-all tests/*.test.ts
+	deno test --sloppy-imports --allow-all tests/*.test.ts
+```
+
+**deno.json:**
+
+```json
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.14",
+    "braintrust": "npm:braintrust@^2.0.2"
+  },
+  "nodeModulesDir": "auto",
+  "links": ["../../.."]
+}
+```
+
+**mise.toml:**
+
+```toml
+[tools]
+deno = "latest"
+pnpm = "10.26.2"
 ```
 
 ### 3. Additional Packages (If Needed)
@@ -307,19 +339,25 @@ Any folder in `scenarios/` with a `Makefile` is automatically discovered. No reg
 
 ## Reference Implementations
 
-**Basic Node.js + OTEL:** `scenarios/otel-v1/`
+**Node.js + OTEL:** `scenarios/otel-v1/`
 
 - Tests OpenTelemetry integration
-- Shows realistic HTTP server for capturing OTLP exports
+- Shows tarball-based installation pattern
 - Demonstrates scenario-specific helpers in `src/`
+- Shows realistic HTTP server for capturing OTLP exports
+
+**Deno + Local Linking:** `scenarios/deno-node/`, `scenarios/deno-browser/`
+
+- Shows `nodeModulesDir: "auto"` + `links` pattern
+- Demonstrates npm compatibility in Deno
+- Shows when `--sloppy-imports` is needed
+- Examples of Node vs Browser build testing
 
 **Next.js + Multiple Runtimes:** `scenarios/nextjs-instrumentation/`
 
 - Tests Edge and Node.js runtimes
 - Shows build-time + runtime testing
 - Demonstrates framework integration testing
-
-**Deno:** See `js/smoke/tests/deno-*` (v1) for examples
 
 ## Migration from v1
 

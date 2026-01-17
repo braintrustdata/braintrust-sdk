@@ -1,50 +1,35 @@
 # Deno Browser Build Test
 
-This scenario tests the browser-specific build (`braintrust/browser` package) running in Deno.
+Tests the browser-specific build (`braintrust/browser` export) in Deno runtime.
 
-## What This Tests
+## Design Decisions
 
-- Browser SDK build works in Deno runtime
-- All exports are accessible via npm: specifier with /browser subpath
-- Shared test suites pass (import verification, basic logging, evals, prompts)
-- Template rendering works with mustache (nunjucks not supported in browser build)
+### Local Package Linking
 
-## Dependencies
+Uses Deno's `links` feature in `deno.json` to test against local SDK builds:
 
-The browser build requires these npm packages (installed via Deno's npm: specifier):
+- `"links": ["../../..", "../../shared"]` ensures we use the workspace versions
+- No need to publish or pack - Deno reads from `../../../dist/` directly
 
-- `uuid` - UUID generation for spans and traces
-- `zod` (v3 and v4) - Schema validation
-- `@std/assert` - Deno standard library assertions
+### Sloppy Imports
 
-## Running Tests
+Requires `--sloppy-imports` flag because the shared test package uses extensionless imports:
 
-```bash
-# From smoke-v2/ directory
-make test deno-browser
+- Shared package: `import { foo } from "./helpers/types"` (no `.ts`)
+- This is standard for TypeScript/Node.js but requires `--sloppy-imports` in Deno
+- Alternative would be adding `.ts` extensions, but that may break Node.js tooling
 
-# Or directly in this directory
-make test
-```
+### npm Compatibility
 
-## Test Files
+Uses `nodeModulesDir: "auto"` to enable Deno's npm package resolution:
 
-- `tests/shared-suite.test.ts` - Runs shared test suites from smoke-v2/shared
+- Allows `npm:braintrust@^2.0.2/browser` imports
+- Combined with `links`, resolves to local workspace packages
 
-## Differences from Node Build
+### Browser vs Node Build
 
-Unlike the Node.js build (`deno-node`), this build:
+Uses `braintrust/browser` export instead of main `braintrust`:
 
-- Only supports mustache template engine (nunjucks throws error)
-- Does not include Node.js-specific dependencies (nunjucks, simple-git)
-- Uses the `braintrust/browser` export instead of main `braintrust` export
-- Browser-optimized bundle with platform-specific implementations
-
-## Browser Build Features
-
-The browser build (`braintrust/browser`) is configured with:
-
-- `platform: "browser"` in tsup config
-- Browser-specific `.browser.ts` file variants
-- External dependencies marked but still importable (uuid, zod, mustache)
-- No nunjucks support (stub implementations that throw errors)
+- Browser-optimized bundle (no nunjucks, simple-git, etc.)
+- Only mustache templates supported
+- Platform-specific `.browser.ts` implementations

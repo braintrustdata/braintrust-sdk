@@ -1,43 +1,27 @@
 # Deno Node Build Test
 
-This scenario tests the main Node.js-compatible build (`braintrust` package) running in Deno.
+Tests the main Node.js-compatible build (`braintrust` package) in Deno runtime.
 
-## What This Tests
+## Design Decisions
 
-- Main SDK build works in Deno runtime
-- All exports are accessible via npm: specifier
-- Shared test suites pass (import verification, basic logging, evals, prompts)
-- Legacy span tests pass (basic span creation, template rendering)
-- Both mustache and nunjucks template engines work
+### Local Package Linking
 
-## Dependencies
+Uses Deno's `links` feature in `deno.json` to test against local SDK builds:
 
-The Node.js build requires these npm packages (installed via Deno's npm: specifier):
+- `"links": ["../../..", "../../shared"]` ensures we use the workspace versions
+- No need to publish or pack - Deno reads from `../../../dist/` directly
 
-- `uuid` - UUID generation for spans and traces
-- `zod` (v3 and v4) - Schema validation
-- `nunjucks` - Template rendering (Nunjucks format)
-- `simple-git` - Git operations
-- `@std/assert` - Deno standard library assertions
+### Sloppy Imports
 
-## Running Tests
+Requires `--sloppy-imports` flag because the shared test package uses extensionless imports:
 
-```bash
-# From smoke-v2/ directory
-make test deno-node
+- Shared package: `import { foo } from "./helpers/types"` (no `.ts`)
+- This is standard for TypeScript/Node.js but requires `--sloppy-imports` in Deno
+- Alternative would be adding `.ts` extensions, but that may break Node.js tooling
 
-# Or directly in this directory
-make test
-```
+### npm Compatibility
 
-## Test Files
+Uses `nodeModulesDir: "auto"` to enable Deno's npm package resolution:
 
-- `tests/shared-suite.test.ts` - Runs shared test suites from smoke-v2/shared (covers import verification, basic logging, evals, and prompt templating including both mustache and nunjucks)
-
-## Differences from Browser Build
-
-Unlike the browser build (`deno-browser`), this build:
-
-- Supports both mustache and nunjucks template engines
-- Includes Node.js-specific dependencies (simple-git)
-- Uses the main `braintrust` export (not `braintrust/browser`)
+- Allows `npm:braintrust@^2.0.2` imports
+- Combined with `links`, resolves to local workspace packages
