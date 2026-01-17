@@ -101,6 +101,7 @@ import {
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
+import { SpanCache, CachedSpan } from "./span-cache";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -565,8 +566,10 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
+  private _otelFlushCallback: (() => Promise<void>) | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -603,6 +606,7 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+    this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
   public resetLoginInfo() {
@@ -638,6 +642,24 @@ export class BraintrustState {
       this._contextManager = getContextManager();
     }
     return this._contextManager;
+  }
+
+  /**
+   * Register an OTEL flush callback. This is called by @braintrust/otel
+   * when it initializes a BraintrustSpanProcessor/Exporter.
+   */
+  public registerOtelFlush(callback: () => Promise<void>): void {
+    this._otelFlushCallback = callback;
+  }
+
+  /**
+   * Flush OTEL spans if a callback is registered.
+   * Called during ensureSpansFlushed to ensure OTEL spans are visible in BTQL.
+   */
+  public async flushOtel(): Promise<void> {
+    if (this._otelFlushCallback) {
+      await this._otelFlushCallback();
+    }
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -910,6 +932,22 @@ export function _internalSetInitialState() {
  * @internal
  */
 export const _internalGetGlobalState = () => _globalState;
+
+/**
+ * Register a callback to flush OTEL spans. This is called by @braintrust/otel
+ * when it initializes a BraintrustSpanProcessor/Exporter.
+ *
+ * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
+ * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ *
+ * Also disables the span cache, since OTEL spans aren't in the local cache
+ * and we need BTQL to see the complete span tree (both native + OTEL spans).
+ */
+export function registerOtelFlush(callback: () => Promise<void>): void {
+  _globalState?.registerOtelFlush(callback);
+  // Disable span cache since OTEL spans aren't in the local cache
+  _globalState?.spanCache?.disable();
+}
 
 export class FailedHTTPResponse extends Error {
   public status: number;
@@ -3777,6 +3815,12 @@ export interface LoginOptions {
    * Calls this function if there's an error in the background flusher.
    */
   onFlushError?: (error: unknown) => void;
+  /**
+   * If true, disables the local span cache used to optimize scorer access
+   * to trace data. When disabled, scorers will always fetch spans from the
+   * server. Defaults to false.
+   */
+  disableSpanCache?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4870,15 +4914,15 @@ export type WithTransactionId<R> = R & {
 };
 
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
-const MAX_BTQL_ITERATIONS = 10000;
+export const MAX_BTQL_ITERATIONS = 10000;
 
-class ObjectFetcher<RecordType>
+export class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
-    private objectType: "dataset" | "experiment",
+    private objectType: "dataset" | "experiment" | "project_logs",
     private pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
@@ -5685,6 +5729,25 @@ export class SpanImpl implements Span {
 
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
+    }
+
+    // Write to local span cache for scorer access
+    // Only cache experiment spans - regular logs don't need caching
+    if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const cachedSpan: CachedSpan = {
+        input: partialRecord.input,
+        output: partialRecord.output,
+        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        span_id: this._spanId,
+        span_parents: this._spanParents,
+        span_attributes:
+          partialRecord.span_attributes as CachedSpan["span_attributes"],
+      };
+      this._state.spanCache.queueWrite(
+        this._rootSpanId,
+        this._spanId,
+        cachedSpan,
+      );
     }
 
     const computeRecord = async () => ({
