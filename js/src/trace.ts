@@ -228,9 +228,9 @@ export class CachedSpanFetcher {
  */
 export interface Trace {
   getConfiguration(): {
-    objectType: string;
-    objectId: string;
-    rootSpanId: string;
+    object_type: string;
+    object_id: string;
+    root_span_id: string;
   };
   getSpans(options?: { spanType?: string[] }): Promise<SpanData[]>;
 }
@@ -276,9 +276,23 @@ export class LocalTrace implements Trace {
 
   getConfiguration() {
     return {
-      objectType: this.objectType,
-      objectId: this.objectId,
-      rootSpanId: this.rootSpanId,
+      object_type: this.objectType,
+      object_id: this.objectId,
+      root_span_id: this.rootSpanId,
+    };
+  }
+
+  /**
+   * Custom JSON serialization - returns trace_ref format so LocalTrace
+   * can be safely passed through JSON.stringify() (e.g., in invoke()).
+   */
+  toJSON() {
+    return {
+      trace_ref: {
+        object_type: this.objectType,
+        object_id: this.objectId,
+        root_span_id: this.rootSpanId,
+      },
     };
   }
 
