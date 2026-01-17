@@ -376,25 +376,65 @@ runTests()
 
 **Expected Failures (xfail):**
 
-Some tests may be marked as "xfail" (expected failure) for known limitations:
+Some tests may be marked as "xfail" (expected failure) for known limitations. This is especially common in Cloudflare Workers scenarios where certain features (like Nunjucks templating) are not supported.
+
+**Pattern for handling expected failures:**
 
 ```typescript
-const failures = results.filter((r) => r.status === "fail");
-const xfails = results.filter((r) => r.status === "xfail");
+import {
+  testMustacheTemplate,
+  testNunjucksTemplate,
+} from "../../shared/dist/index.js";
 
-// Only actual failures should cause test failure
+// Test both template engines
+const mustacheResult = await testMustacheTemplate({
+  Prompt: braintrust.Prompt,
+});
+const nunjucksResult = await testNunjucksTemplate({
+  Prompt: braintrust.Prompt,
+});
+
+// Convert Nunjucks failure to xfail for browser environments
+const nunjucksResultHandled =
+  nunjucksResult.status === "fail" &&
+  nunjucksResult.error?.message.includes("Nunjucks templating is not supported")
+    ? {
+        ...nunjucksResult,
+        status: "xfail" as const,
+        message: "Expected failure: Nunjucks not supported in browser build",
+      }
+    : nunjucksResult;
+
+const results = [
+  ...importResults,
+  ...functionalResults,
+  mustacheResult,
+  nunjucksResultHandled, // Use the handled version
+];
+
+// Only count "fail" status as actual failures (xfail is acceptable)
+const failures = results.filter((r) => r.status === "fail");
+
 if (failures.length > 0) {
   throw new Error(`${failures.length} test(s) failed`);
 }
 
-// xfails are logged but don't fail the test
-if (xfails.length > 0) {
-  console.log(`⚠️  ${xfails.length} expected failure(s):`);
-  for (const xfail of xfails) {
-    console.log(`  ${xfail.name}: ${xfail.message}`);
-  }
-}
+// Test passes even with xfail results
+console.log(`✅ All tests passed (${results.length} total)`);
 ```
+
+**Why test features that are expected to fail?**
+
+1. **Comprehensive coverage:** Tests all features in all environments consistently
+2. **Detect changes:** If a previously-failing feature starts working (e.g., Cloudflare adds Nunjucks support), we'll know
+3. **Clear documentation:** xfail results document known limitations in test output
+4. **Prevent regressions:** If a feature that should work starts failing, we catch it
+
+**See these scenarios for examples:**
+
+- `scenarios/cloudflare-vite-hono/src/worker.ts`
+- `scenarios/cloudflare-worker-browser-compat/src/worker.ts`
+- `scenarios/cloudflare-worker-node-compat/src/worker.ts`
 
 ## Design Principles
 
