@@ -9,16 +9,7 @@
     "nunjucks": "npm:nunjucks@^3.2.4",
     "eventsource-parser": "npm:eventsource-parser@^3.0.6",
     "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.0",
-    "simple-git": "npm:simple-git@^3.21.0",
-    "async_hooks": "node:async_hooks",
-    "child_process": "node:child_process",
-    "crypto": "node:crypto",
-    "fs": "node:fs",
-    "fs/promises": "node:fs/promises",
-    "os": "node:os",
-    "path": "node:path",
-    "util": "node:util",
-    "zlib": "node:zlib"
+    "simple-git": "npm:simple-git@^3.21.0"
   },
   "tasks": {
     "test:shared": "deno test --config ./deno.json --allow-env --allow-read=.,../build --allow-net shared_suite_test.ts",
