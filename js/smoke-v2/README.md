@@ -236,6 +236,166 @@ Add to package.json:
 - Import from `../../shared` for cross-scenario helpers
 - Example: Import verification tests, basic logging tests
 
+### 5. Shared Test Suite API
+
+**Test Result Format:**
+
+All shared test functions return `TestResult[]` with this structure:
+
+```typescript
+interface TestResult {
+  status: "pass" | "fail" | "xfail"; // xfail = expected failure
+  name: string; // Test identifier (e.g., "testCoreLoggingExports")
+  message?: string; // Human-readable description
+  error?: {
+    message: string;
+    stack?: string;
+  };
+}
+```
+
+**Checking for failures:**
+
+```typescript
+// ✅ CORRECT - Use status property
+const failures = results.filter((r) => r.status === "fail");
+
+// ❌ WRONG - Don't check for .success property (doesn't exist!)
+const failures = results.filter((r) => !r.success);
+```
+
+**Accessing test properties:**
+
+```typescript
+// ✅ CORRECT - Use .name property
+console.log(`Test: ${result.name}`);
+
+// ❌ WRONG - Don't use .testName (doesn't exist!)
+console.log(`Test: ${result.testName}`);
+```
+
+**Available test functions:**
+
+```typescript
+import {
+  setupTestEnvironment,
+  cleanupTestEnvironment,
+  runImportVerificationTests,
+  runBasicLoggingTests,
+  runEvalSmokeTest,
+  runPromptTemplatingTests,
+} from "../../shared/dist/index.js";
+```
+
+**Example: Node.js/Jest test:**
+
+```javascript
+const braintrust = require("braintrust");
+const { initLogger, _exportsForTestingOnly } = braintrust;
+
+async function runTests() {
+  const adapters = await setupTestEnvironment({
+    initLogger,
+    testingExports: _exportsForTestingOnly,
+    canUseFileSystem: true,
+    canUseCLI: true,
+    environment: "my-scenario",
+  });
+
+  try {
+    const importResults = await runImportVerificationTests(braintrust);
+    const functionalResults = await runBasicLoggingTests(adapters);
+    const results = [...importResults, ...functionalResults];
+
+    // Check for failures using .status property
+    const failures = results.filter((r) => r.status === "fail");
+
+    if (failures.length > 0) {
+      for (const failure of failures) {
+        console.error(`❌ ${failure.name}: ${failure.error?.message}`);
+      }
+      throw new Error(`${failures.length} test(s) failed`);
+    }
+
+    // Display results using .name property
+    for (const result of results) {
+      console.log(`✓ ${result.name}: ${result.message}`);
+    }
+  } finally {
+    await cleanupTestEnvironment(adapters);
+  }
+}
+```
+
+**Example: ESM/TypeScript test:**
+
+```typescript
+import {
+  setupTestEnvironment,
+  cleanupTestEnvironment,
+  runBasicLoggingTests,
+  runImportVerificationTests,
+} from "../../shared/dist/index.js";
+import { initLogger, _exportsForTestingOnly } from "braintrust";
+
+async function runTests() {
+  const braintrust = await import("braintrust");
+
+  const adapters = await setupTestEnvironment({
+    initLogger,
+    testingExports: _exportsForTestingOnly,
+    canUseFileSystem: true,
+    canUseCLI: true,
+    environment: "my-scenario",
+  });
+
+  try {
+    const importResults = await runImportVerificationTests(braintrust);
+    const functionalResults = await runBasicLoggingTests(adapters);
+    const results = [...importResults, ...functionalResults];
+
+    const failures = results.filter((r) => r.status === "fail");
+
+    if (failures.length > 0) {
+      throw new Error(`${failures.length} test(s) failed`);
+    }
+
+    console.log(`✅ All ${results.length} tests passed!`);
+  } finally {
+    await cleanupTestEnvironment(adapters);
+  }
+}
+
+runTests()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+```
+
+**Expected Failures (xfail):**
+
+Some tests may be marked as "xfail" (expected failure) for known limitations:
+
+```typescript
+const failures = results.filter((r) => r.status === "fail");
+const xfails = results.filter((r) => r.status === "xfail");
+
+// Only actual failures should cause test failure
+if (failures.length > 0) {
+  throw new Error(`${failures.length} test(s) failed`);
+}
+
+// xfails are logged but don't fail the test
+if (xfails.length > 0) {
+  console.log(`⚠️  ${xfails.length} expected failure(s):`);
+  for (const xfail of xfails) {
+    console.log(`  ${xfail.name}: ${xfail.message}`);
+  }
+}
+```
+
 ## Design Principles
 
 ### Well-Known Tarball Paths
@@ -309,6 +469,16 @@ Add to package.json:
 
 **Fix:** Verify tarball paths in package.json are correct relative to scenario directory
 
+### All tests failing with "undefined" errors
+
+**Cause:** Using wrong test result format (v1 format instead of v2)
+
+**Fix:** Update test code to use v2 format:
+
+- Use `.status === "fail"` not `!r.success`
+- Use `.name` not `.testName`
+- See "Shared Test Suite API" section for correct usage
+
 ## Directory Structure
 
 ```
@@ -345,6 +515,21 @@ Any folder in `scenarios/` with a `Makefile` is automatically discovered. No reg
 - Shows tarball-based installation pattern
 - Demonstrates scenario-specific helpers in `src/`
 - Shows realistic HTTP server for capturing OTLP exports
+- See `tests/shared-suite.test.ts` for correct test result handling
+
+**Jest + Node.js:** `scenarios/jest-node/`
+
+- Tests Jest test runner integration
+- Shows CommonJS mode configuration
+- Demonstrates shared test suite usage in Jest
+- See `tests/shared-suite.test.js` for Jest-specific patterns
+
+**Cloudflare + Vite + Hono:** `scenarios/cloudflare-vite-hono/`
+
+- Tests Cloudflare Workers with Vite bundling
+- Shows Hono framework integration
+- Demonstrates browser build usage
+- See `src/worker.ts` for Worker-based test execution
 
 **Deno + Local Linking:** `scenarios/deno-node/`, `scenarios/deno-browser/`
 
