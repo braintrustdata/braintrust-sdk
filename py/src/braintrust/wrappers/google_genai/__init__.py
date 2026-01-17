@@ -27,11 +27,9 @@ def setup_genai(
         genai.Client = wrap_client(genai.Client)
         models.Models = wrap_models(models.Models)
         models.AsyncModels = wrap_async_models(models.AsyncModels)
-        pass
-    except ImportError as e:
-        logger.error(
-            f"Failed to import Google ADK agents: {e}. Google ADK is not installed. Please install it with: pip install google-adk"
-        )
+        return True
+    except ImportError:
+        # Not installed - this is expected when using auto_instrument()
         return False
 
 

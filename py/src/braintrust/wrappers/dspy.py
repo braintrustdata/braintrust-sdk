@@ -60,6 +60,8 @@ try:
 except ImportError:
     raise ImportError("DSPy is not installed. Please install it with: pip install dspy")
 
+__all__ = ["BraintrustDSpyCallback", "patch_dspy", "unpatch_dspy"]
+
 
 class BraintrustDSpyCallback(BaseCallback):
     """Callback handler that logs DSPy execution traces to Braintrust.
@@ -412,4 +414,72 @@ class BraintrustDSpyCallback(BaseCallback):
             span.end()
 
 
-__all__ = ["BraintrustDSpyCallback"]
+def patch_dspy():
+    """
+    Patch DSPy to automatically add Braintrust tracing callback.
+
+    After calling this, all calls to dspy.configure() will automatically
+    include the BraintrustDSpyCallback.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_dspy()
+
+        import dspy
+        lm = dspy.LM("openai/gpt-4o-mini")
+        dspy.configure(lm=lm)  # BraintrustDSpyCallback auto-added!
+        ```
+    """
+    try:
+        import dspy
+
+        if hasattr(dspy, "_braintrust_wrapped"):
+            return  # Already patched
+
+        dspy._braintrust_original_configure = dspy.configure
+
+        def patched_configure(*args, callbacks=None, **kwargs):
+            # Auto-add BraintrustDSpyCallback if not already present
+            if callbacks is None:
+                callbacks = []
+            else:
+                callbacks = list(callbacks)
+
+            # Check if already has Braintrust callback
+            has_bt_callback = any(isinstance(cb, BraintrustDSpyCallback) for cb in callbacks)
+            if not has_bt_callback:
+                callbacks.append(BraintrustDSpyCallback())
+
+            return dspy._braintrust_original_configure(*args, callbacks=callbacks, **kwargs)
+
+        dspy.configure = patched_configure
+        dspy._braintrust_wrapped = True
+
+    except ImportError:
+        pass
+
+
+def unpatch_dspy():
+    """
+    Restore DSPy to its original state, removing automatic Braintrust callback.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_dspy()
+        # ... use auto-traced DSPy ...
+        braintrust.unpatch_dspy()  # Restore original behavior
+        ```
+    """
+    try:
+        import dspy
+
+        if hasattr(dspy, "_braintrust_wrapped"):
+            dspy.configure = dspy._braintrust_original_configure
+
+            delattr(dspy, "_braintrust_wrapped")
+            delattr(dspy, "_braintrust_original_configure")
+
+    except ImportError:
+        pass
