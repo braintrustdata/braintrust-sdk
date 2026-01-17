@@ -3,8 +3,7 @@
   "license": "MIT",
   "private": true,
   "workspaces": [
-    "js",
-    "core/js"
+    "js"
   ],
   "scripts": {
     "build": "turbo run build",
