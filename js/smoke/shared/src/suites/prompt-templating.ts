@@ -143,9 +143,29 @@ export async function testNunjucksTemplate(
       const errorMessage =
         buildError instanceof Error ? buildError.message : String(buildError);
 
-      // Special handling for Cloudflare Workers environment, they disallow code generation
+      const isUnsupported = errorMessage.includes(
+        "Nunjucks templating is not supported in this build",
+      );
+
       if (
-        environment === "cloudflare-worker" &&
+        (environment === "browser" ||
+          environment === "cloudflare-worker-browser-no-compat" ||
+          environment === "cloudflare-worker-browser-node-compat" ||
+          environment === "nextjs-edge-runtime" ||
+          environment === "vite-react-hono") &&
+        isUnsupported
+      ) {
+        return {
+          success: true,
+          testName,
+          message:
+            "Nunjucks template test passed - threw expected unsupported error",
+        };
+      }
+
+      // In Cloudflare Workers (even with nodejs_compat), string-based template codegen is disallowed.
+      if (
+        environment === "cloudflare-worker-node-node-compat" &&
         errorMessage.includes(
           "String template rendering. Disallowed in this environment for security reasons",
         )
@@ -154,7 +174,7 @@ export async function testNunjucksTemplate(
           success: true,
           testName,
           message:
-            "Nunjucks template test skipped - Cloudflare Workers does not support string template rendering",
+            "Nunjucks template test passed - threw expected codegen-disallowed error",
         };
       }
 
@@ -167,10 +187,12 @@ export async function testNunjucksTemplate(
     }
 
     try {
+      const expected = "Items: apple, banana, cherry";
+      const actual = nunjucksResult.messages[0]?.content;
       assertEqual(
-        nunjucksResult.messages[0]?.content,
-        "Items: apple, banana, cherry",
-        "Nunjucks template should render loop correctly",
+        actual,
+        expected,
+        `Nunjucks template should render loop correctly`,
       );
     } catch (assertError) {
       return {

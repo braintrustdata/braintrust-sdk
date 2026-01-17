@@ -390,7 +390,7 @@ jobs:
         run: |
           npm run restore
 
-  smoke-tests-cloudflare:
+  smoke-tests-cloudflare-worker:
     needs: build
     runs-on: ubuntu-latest
 
@@ -398,6 +398,13 @@ jobs:
       fail-fast: false
       matrix:
         node-version: [20, 22]
+        mode:
+          [
+            braintrust-node-compat,
+            braintrust-browser-node-compat,
+            braintrust-browser-no-compat,
+            braintrust-no-compat,
+          ]
 
     steps:
       - name: Checkout repository
@@ -436,15 +443,75 @@ jobs:
           npm ci
           npm run build
 
-      - name: Run Cloudflare Worker smoke test
+      - name: Run cloudflare-worker smoke test
         working-directory: js/smoke
         shell: bash
+        env:
+          CLOUDFLARE_WORKER_MODE: ${{ matrix.mode }}
         run: |
           ./run-tests.sh cloudflare-worker
 
       - name: Restore original package.json files
         if: always()
         working-directory: js/smoke/tests/cloudflare-worker
+        run: |
+          npm run restore
+
+  smoke-tests-vite-react-hono:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Backup original package manifests
+        working-directory: js/smoke/tests/vite-react-hono
+        run: |
+          npm run backup
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and local build
+        working-directory: js/smoke/tests/vite-react-hono
+        shell: bash
+        run: |
+          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
+          rm -f package-lock.json
+          npm install
+          npx tsx ../../install-build.ts ../../../artifacts braintrust
+
+      - name: Build shared test package
+        working-directory: js/smoke/shared
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run vite-react-hono smoke test
+        working-directory: js/smoke
+        shell: bash
+        run: |
+          ./run-tests.sh vite-react-hono
+
+      - name: Restore original package.json files
+        if: always()
+        working-directory: js/smoke/tests/vite-react-hono
         run: |
           npm run restore
 
@@ -519,8 +586,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
+        mode: [deno-node, deno-browser]
 
     steps:
       - uses: actions/checkout@v4
@@ -537,36 +604,13 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract build artifact
-        working-directory: js/smoke/tests/deno
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARTIFACT_DIR=../../../artifacts
-          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
-          if [ -z "$TARBALL" ]; then
-            echo "No braintrust build found"
-            exit 1
-          fi
-          rm -rf build
-          mkdir -p build
-          tar -xzf "$TARBALL" -C build
-          [ -d build/package ] && mv build/package build/braintrust
-
-      - name: Install Deno dependencies
-        working-directory: js/smoke/tests/deno
-        run: |
-          deno install
-
       - name: Build shared test package
         working-directory: js/smoke/shared
         run: |
           npm ci
           npm run build
 
-      - name: Run Deno smoke test
+      - name: Run Deno smoke test (${{ matrix.mode }})
         working-directory: js/smoke
-        env:
-          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
         run: |
-          ./run-tests.sh deno
+          ./run-tests.sh ${{ matrix.mode }}

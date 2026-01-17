@@ -4,21 +4,16 @@ import {
   runSpanSmokeTest,
   runMustacheTemplateTest,
   runNunjucksTemplateTest,
-} from "../span/span_test_helper.ts";
+} from "../../span/span_test_helper.ts";
 
 /**
  * This is a simple test to send a span to the braintrust API
  * Uses BRAINTRUST_BUILD_DIR environment variable to import the braintrust package
- * ie. BRAINTRUST_BUILD_DIR=./package/dist/browser.mjs
+ * ie. BRAINTRUST_BUILD_DIR=./package/dist/index.mjs
  */
 export async function runBrowserLoggerSmokeTest() {
-  const buildDir = Deno.env.get("BRAINTRUST_BUILD_DIR");
-  if (!buildDir) {
-    throw new Error("BRAINTRUST_BUILD_DIR environment variable is not set");
-  }
-
   const { initLogger, _exportsForTestingOnly, Prompt } = await import(
-    `file://${Deno.env.get("BRAINTRUST_BUILD_DIR")}`
+    "braintrust"
   );
 
   const events = await runSpanSmokeTest({

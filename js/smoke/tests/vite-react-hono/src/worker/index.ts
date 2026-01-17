@@ -1,8 +1,9 @@
 /**
- * Cloudflare Worker smoke test using shared test suites
- * This test demonstrates using the shared test package in Cloudflare Workers
+ * Vite + React + Hono + Cloudflare Worker smoke test using shared test suites
+ * This test demonstrates using the Braintrust SDK with Hono routing framework
  */
 
+import { Hono } from "hono";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -11,12 +12,13 @@ import {
   runImportVerificationTests,
   runPromptTemplatingTests,
   type TestResult,
-} from "../../../shared/dist/index.mjs";
+} from "../../../../shared/dist/index.mjs";
 
-import * as braintrust from "braintrust";
+import * as braintrust from "braintrust/browser";
 const { initLogger, _exportsForTestingOnly } = braintrust;
 
-// Cloudflare Worker environment bindings (empty for this test)
+const app = new Hono<{ Bindings: Env }>();
+
 interface Env {}
 
 interface TestResponse {
@@ -30,30 +32,22 @@ interface TestResponse {
 }
 
 /**
- * Run the shared test suites in Cloudflare Worker environment
+ * Run the shared test suites in Hono + Cloudflare Worker environment
  */
 async function runSharedTestSuites(): Promise<TestResponse> {
   try {
-    // Setup test environment
     const adapters = await setupTestEnvironment({
       initLogger,
       testingExports: _exportsForTestingOnly,
-      canUseFileSystem: false, // No filesystem in Workers
-      canUseCLI: false, // No CLI in Workers
-      environment: "cloudflare-worker",
+      canUseFileSystem: false,
+      canUseCLI: false,
+      environment: "vite-react-hono",
     });
 
     try {
-      // Run import verification tests first (forces all exports to be processed)
       const importResults = await runImportVerificationTests(braintrust);
-
-      // Run functional tests
       const functionalResults = await runBasicLoggingTests(adapters);
-
-      // Run eval smoke test
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
-
-      // Run prompt templating tests
       const promptTemplatingResults = await runPromptTemplatingTests(
         {
           Prompt: braintrust.Prompt,
@@ -61,7 +55,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
         adapters.environment,
       );
 
-      // Combine results
       const results = [
         ...importResults,
         ...functionalResults,
@@ -69,7 +62,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
         ...promptTemplatingResults,
       ];
 
-      // Verify all tests passed
       const failures = results.filter((r) => !r.success);
 
       if (failures.length > 0) {
@@ -86,14 +78,13 @@ async function runSharedTestSuites(): Promise<TestResponse> {
 
       return {
         success: true,
-        message: "All shared test suites passed",
+        message: "All shared test suites passed in Vite + Hono environment",
         totalTests: results.length,
         passedTests: results.length,
         failedTests: 0,
         results,
       };
     } finally {
-      // Clean up test environment
       await cleanupTestEnvironment(adapters);
     }
   } catch (error) {
@@ -107,29 +98,21 @@ async function runSharedTestSuites(): Promise<TestResponse> {
   }
 }
 
-export default {
-  async fetch(request: Request, _env: Env): Promise<Response> {
-    const url = new URL(request.url);
+app.get("/", (c) =>
+  c.text(`Braintrust Vite + React + Hono Smoke Test
 
-    if (url.pathname === "/test") {
-      const result = await runSharedTestSuites();
+GET /api/ - Basic API endpoint
+GET /api/test - Run shared test suites
 
-      return new Response(JSON.stringify(result, null, 2), {
-        headers: { "Content-Type": "application/json" },
-        status: result.success ? 200 : 500,
-      });
-    }
+This worker tests the Braintrust SDK in a Vite + Hono + Cloudflare Workers environment.`),
+);
 
-    return new Response(
-      `Braintrust Cloudflare Worker Smoke Test
+app.get("/api/", (c) => c.json({ name: "Braintrust", framework: "Hono" }));
 
-GET /test - Run shared test suites
+app.get("/api/test", async (c) => {
+  const result = await runSharedTestSuites();
 
-This worker tests the Braintrust SDK in a Cloudflare Workers environment
-using shared test suites for consistency across runtime environments.`,
-      {
-        headers: { "Content-Type": "text/plain" },
-      },
-    );
-  },
-};
+  return c.json(result, result.success ? 200 : 500);
+});
+
+export default app;

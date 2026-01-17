@@ -1,4 +1,6 @@
 import { defineConfig } from "tsup";
+import fs from "node:fs";
+import { builtinModules } from "node:module";
 
 export default defineConfig([
   {
@@ -6,6 +8,13 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist",
     external: ["zod"],
+    noExternal: [
+      "mustache",
+      "eventsource-parser",
+      "zod-to-json-schema",
+      "@vercel/functions",
+    ],
+    removeNodeProtocol: false,
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -19,7 +28,15 @@ export default defineConfig([
     entry: ["src/browser.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
+    removeNodeProtocol: false,
     external: ["zod"],
+    noExternal: [
+      "mustache",
+      "eventsource-parser",
+      "zod-to-json-schema",
+      "@vercel/functions",
+    ],
+    platform: "browser",
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -32,6 +49,7 @@ export default defineConfig([
   {
     entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
+    removeNodeProtocol: false,
     outDir: "dist",
     external: ["esbuild", "prettier", "typescript", "zod"],
     // CLI doesn't need DTS
@@ -42,6 +60,7 @@ export default defineConfig([
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",
+    removeNodeProtocol: false,
     external: ["esbuild", "prettier", "typescript", "zod"],
     dts: {
       // Split DTS generation to reduce memory usage
@@ -57,6 +76,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "util/dist",
     external: ["esbuild", "prettier", "typescript", "zod"],
+    removeNodeProtocol: false,
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
