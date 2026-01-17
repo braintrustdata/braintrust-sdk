@@ -34,7 +34,10 @@ async function runSharedTestSuites(): Promise<TestResponse> {
 
     try {
       const importResults = await runImportVerificationTests(braintrust);
-      const functionalResults = await runBasicLoggingTests(adapters);
+      const functionalResults = await runBasicLoggingTests(
+        adapters,
+        braintrust,
+      );
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
       // Test Mustache template (should always work)

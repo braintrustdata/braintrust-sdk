@@ -36,7 +36,7 @@ export async function runSharedTestSuites() {
     const importResults = await runImportVerificationTests(braintrust);
 
     // Run functional tests
-    const functionalResults = await runBasicLoggingTests(adapters);
+    const functionalResults = await runBasicLoggingTests(adapters, braintrust);
 
     // Run eval smoke test
     const evalResult = await runEvalSmokeTest(adapters, braintrust);

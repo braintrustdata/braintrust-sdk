@@ -33,7 +33,7 @@ async function runSharedTestSuites() {
 
     // Run functional tests
     console.log("\nRunning functional tests...");
-    const functionalResults = await runBasicLoggingTests(adapters);
+    const functionalResults = await runBasicLoggingTests(adapters, braintrust);
 
     // Combine results
     const results = [...importResults, ...functionalResults];

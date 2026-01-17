@@ -42,6 +42,7 @@ export {
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
+  testJSONAttachment,
   runBasicLoggingTests,
 } from "./suites/basic-logging";
 

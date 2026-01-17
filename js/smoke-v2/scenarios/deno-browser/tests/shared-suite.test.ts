@@ -28,7 +28,7 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
 
   try {
     const importResults = await runImportVerificationTests(braintrust);
-    const functionalResults = await runBasicLoggingTests(adapters);
+    const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
     const promptTemplatingResults = await runPromptTemplatingTests(
       { Prompt: braintrust.Prompt },
