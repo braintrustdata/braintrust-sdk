@@ -28,7 +28,7 @@ async function runSharedTestSuites(): Promise<TestResponse> {
       testingExports: braintrust._exportsForTestingOnly,
       canUseFileSystem: false,
       canUseCLI: false,
-      environment: "cloudflare-worker-node-no-compat",
+      environment: "cloudflare-worker-node-compat",
     });
 
     try {
@@ -121,12 +121,12 @@ export default {
     }
 
     return new Response(
-      `Braintrust Cloudflare Worker Smoke Test (Node.js + No Compat)
+      `Braintrust Cloudflare Worker Smoke Test (Node.js + nodejs_compat_v2)
 
 GET /test - Run shared test suites
 
 This worker tests the Braintrust SDK in a Cloudflare Workers environment
-using the Node.js entrypoint without nodejs_compat_v2. This is expected to fail.`,
+using the Node.js entrypoint with nodejs_compat_v2 enabled.`,
       { headers: { "Content-Type": "text/plain" } },
     );
   },
