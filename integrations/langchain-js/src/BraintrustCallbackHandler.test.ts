@@ -1076,3 +1076,270 @@ it("should handle nested agent action with parent run id", async () => {
     span_parents: [root_span_id],
   });
 });
+
+it("should handle tool start and end callbacks", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["tool-span-id"]);
+    }),
+  );
+
+  const toolSerialized = {
+    lc: 1,
+    type: "not_implemented",
+    id: ["langchain", "tools", "calculator"],
+    name: "calculator",
+  };
+
+  const toolInput = JSON.stringify({
+    operation: "multiply",
+    number1: 5,
+    number2: 7,
+  });
+
+  await handler.handleToolStart(
+    toolSerialized,
+    toolInput,
+    "tool-run-1",
+    undefined,
+    ["tool-test"],
+    { custom_metadata: "test-value" },
+    "Calculator Tool",
+  );
+
+  await handler.handleToolEnd("35", "tool-run-1", undefined, ["tool-test"]);
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans).toMatchObject([
+    {
+      span_attributes: {
+        name: "Calculator Tool",
+        type: "tool",
+      },
+      input: {
+        operation: "multiply",
+        number1: 5,
+        number2: 7,
+      },
+      output: "35",
+      metadata: {
+        tags: ["tool-test"],
+        metadata: { custom_metadata: "test-value" },
+        serialized: toolSerialized,
+        input_str: toolInput,
+        input: {
+          operation: "multiply",
+          number1: 5,
+          number2: 7,
+        },
+        name: "Calculator Tool",
+      },
+      span_id: root_span_id,
+      root_span_id,
+    },
+  ]);
+});
+
+it("should handle tool start with string input (not JSON)", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["tool-span-id"]);
+    }),
+  );
+
+  const toolSerialized = {
+    lc: 1,
+    type: "not_implemented",
+    id: ["langchain", "tools", "search"],
+    name: "search",
+  };
+
+  const toolInput = "What is the weather in San Francisco?";
+
+  await handler.handleToolStart(
+    toolSerialized,
+    toolInput,
+    "tool-run-2",
+    undefined,
+    [],
+    {},
+  );
+
+  await handler.handleToolEnd(
+    "The weather in San Francisco is 65°F and sunny",
+    "tool-run-2",
+  );
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans).toMatchObject([
+    {
+      span_attributes: {
+        name: "search",
+        type: "tool",
+      },
+      input: "What is the weather in San Francisco?",
+      output: "The weather in San Francisco is 65°F and sunny",
+      metadata: {
+        tags: [],
+        serialized: toolSerialized,
+        input_str: toolInput,
+        input: toolInput,
+      },
+      span_id: root_span_id,
+      root_span_id,
+    },
+  ]);
+});
+
+it("should handle tool error", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["tool-span-id"]);
+    }),
+  );
+
+  const toolSerialized = {
+    lc: 1,
+    type: "not_implemented",
+    id: ["langchain", "tools", "database"],
+    name: "database_query",
+  };
+
+  const toolInput = JSON.stringify({
+    query: "SELECT * FROM users",
+  });
+
+  await handler.handleToolStart(
+    toolSerialized,
+    toolInput,
+    "tool-run-3",
+    undefined,
+    ["db-tool"],
+  );
+
+  const error = new Error("Database connection failed");
+
+  await handler.handleToolError(error, "tool-run-3", undefined, ["db-tool"]);
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans).toMatchObject([
+    {
+      span_attributes: {
+        name: "database_query",
+        type: "tool",
+      },
+      input: {
+        query: "SELECT * FROM users",
+      },
+      metadata: {
+        tags: ["db-tool"],
+      },
+      span_id: root_span_id,
+      root_span_id,
+    },
+  ]);
+
+  // Verify error field exists (Error objects serialize as empty objects in JSON)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  expect((spans[0] as any).error).toBeDefined();
+});
+
+it("should handle nested tool calls within a chain", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["parent-chain-id", "tool-span-id"]);
+    }),
+  );
+
+  // Start a parent chain
+  await handler.handleChainStart(
+    { id: ["RunnableSequence"], lc: 1, type: "not_implemented" },
+    { query: "Calculate and search" },
+    "chain-run-1",
+    undefined,
+    ["parent-chain"],
+  );
+
+  // Start a tool within the chain
+  const toolSerialized = {
+    lc: 1,
+    type: "not_implemented",
+    id: ["langchain", "tools", "calculator"],
+    name: "calculator",
+  };
+
+  await handler.handleToolStart(
+    toolSerialized,
+    JSON.stringify({ operation: "add", a: 10, b: 20 }),
+    "tool-run-4",
+    "chain-run-1",
+    ["nested-tool"],
+  );
+
+  await handler.handleToolEnd("30", "tool-run-4", "chain-run-1", [
+    "nested-tool",
+  ]);
+
+  // End the parent chain
+  await handler.handleChainEnd({ result: "30" }, "chain-run-1", undefined, [
+    "parent-chain",
+  ]);
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans.length).toBe(2);
+
+  // Parent chain span
+  expect(spans[0]).toMatchObject({
+    span_attributes: {
+      name: "RunnableSequence",
+      type: "task",
+    },
+    input: { query: "Calculate and search" },
+    output: { result: "30" },
+    span_id: root_span_id,
+    root_span_id,
+  });
+
+  // Tool span nested under chain
+  expect(spans[1]).toMatchObject({
+    span_attributes: {
+      name: "calculator",
+      type: "tool",
+    },
+    input: { operation: "add", a: 10, b: 20 },
+    output: "30",
+    metadata: {
+      tags: ["nested-tool"],
+    },
+    root_span_id,
+    span_parents: [root_span_id],
+  });
+});
