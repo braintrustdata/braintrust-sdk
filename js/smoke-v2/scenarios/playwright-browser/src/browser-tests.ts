@@ -5,7 +5,8 @@ import {
   runBasicLoggingTests,
   runEvalSmokeTest,
   runImportVerificationTests,
-  runPromptTemplatingTests,
+  testMustacheTemplate,
+  testNunjucksTemplate,
 } from "../../../shared";
 import { createBrowserHarness, type BrowserSmokeResults } from "./harness";
 
@@ -91,19 +92,42 @@ async function runAllTestSuites() {
 
     harness.log("\n=== Running prompt templating suite ===");
 
-    const promptResults = await runPromptTemplatingTests(
-      { Prompt: braintrust.Prompt },
-      "browser",
-    );
-    for (const r of promptResults) {
-      if (r.status === "pass") harness.pass(PROMPT_SECTION, r.name, r.message);
-      else
-        harness.fail(
-          PROMPT_SECTION,
-          r.name,
-          r.error || new Error("Test failed"),
-          r.message,
-        );
+    const mustacheResult = await testMustacheTemplate({
+      Prompt: braintrust.Prompt,
+    });
+    if (mustacheResult.status === "pass")
+      harness.pass(PROMPT_SECTION, mustacheResult.name, mustacheResult.message);
+    else
+      harness.fail(
+        PROMPT_SECTION,
+        mustacheResult.name,
+        mustacheResult.error || new Error("Test failed"),
+        mustacheResult.message,
+      );
+
+    const nunjucksResult = await testNunjucksTemplate({
+      Prompt: braintrust.Prompt,
+    });
+    if (
+      nunjucksResult.status === "fail" &&
+      nunjucksResult.error?.message.includes(
+        "Nunjucks templating is not supported",
+      )
+    ) {
+      harness.pass(
+        PROMPT_SECTION,
+        nunjucksResult.name,
+        "Expected failure: Nunjucks not supported in browser build",
+      );
+    } else if (nunjucksResult.status === "pass") {
+      harness.pass(PROMPT_SECTION, nunjucksResult.name, nunjucksResult.message);
+    } else {
+      harness.fail(
+        PROMPT_SECTION,
+        nunjucksResult.name,
+        nunjucksResult.error || new Error("Test failed"),
+        nunjucksResult.message,
+      );
     }
 
     harness.completeSection(PROMPT_SECTION);

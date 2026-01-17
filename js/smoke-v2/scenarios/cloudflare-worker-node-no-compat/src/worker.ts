@@ -38,10 +38,9 @@ async function runSharedTestSuites(): Promise<TestResponse> {
         braintrust,
       );
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
-      const promptTemplatingResults = await runPromptTemplatingTests(
-        { Prompt: braintrust.Prompt },
-        adapters.environment,
-      );
+      const promptTemplatingResults = await runPromptTemplatingTests({
+        Prompt: braintrust.Prompt,
+      });
 
       const results = [
         ...importResults,

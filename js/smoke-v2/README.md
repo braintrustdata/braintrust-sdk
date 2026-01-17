@@ -233,7 +233,7 @@ Add to package.json:
 
 **Use shared utilities across scenarios:**
 
-- Import from `../../shared/dist/` for cross-scenario helpers
+- Import from `../../shared` for cross-scenario helpers
 - Example: Import verification tests, basic logging tests
 
 ## Design Principles

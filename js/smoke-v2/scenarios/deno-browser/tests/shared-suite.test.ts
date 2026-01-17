@@ -10,7 +10,8 @@ import {
   runBasicLoggingTests,
   runEvalSmokeTest,
   runImportVerificationTests,
-  runPromptTemplatingTests,
+  testMustacheTemplate,
+  testNunjucksTemplate,
   type TestResult,
 } from "@braintrust/smoke-test-shared";
 import * as braintrust from "braintrust/browser";
@@ -30,16 +31,33 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
     const importResults = await runImportVerificationTests(braintrust);
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
-    const promptTemplatingResults = await runPromptTemplatingTests(
-      { Prompt: braintrust.Prompt },
-      adapters.environment,
-    );
+
+    const mustacheResult = await testMustacheTemplate({
+      Prompt: braintrust.Prompt,
+    });
+
+    const nunjucksResult = await testNunjucksTemplate({
+      Prompt: braintrust.Prompt,
+    });
+    const nunjucksResultHandled =
+      nunjucksResult.status === "fail" &&
+      nunjucksResult.error?.message.includes(
+        "Nunjucks templating is not supported",
+      )
+        ? {
+            ...nunjucksResult,
+            status: "pass" as const,
+            message:
+              "Expected failure: Nunjucks not supported in browser build",
+          }
+        : nunjucksResult;
 
     const results = [
       ...importResults,
       ...functionalResults,
       evalResult,
-      ...promptTemplatingResults,
+      mustacheResult,
+      nunjucksResultHandled,
     ];
 
     const failures = results.filter((r) => r.status === "fail");

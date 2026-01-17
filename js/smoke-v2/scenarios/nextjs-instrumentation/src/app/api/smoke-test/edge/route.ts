@@ -10,7 +10,8 @@ import {
   runBasicLoggingTests,
   runEvalSmokeTest,
   runImportVerificationTests,
-  runPromptTemplatingTests,
+  testMustacheTemplate,
+  testNunjucksTemplate,
 } from "../../../../../../../shared";
 
 import * as braintrust from "braintrust";
@@ -63,19 +64,33 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
       // Run prompt templating tests
-      const promptTemplatingResults = await runPromptTemplatingTests(
-        {
-          Prompt: braintrust.Prompt,
-        },
-        adapters.environment,
-      );
+      const mustacheResult = await testMustacheTemplate({
+        Prompt: braintrust.Prompt,
+      });
+
+      const nunjucksResult = await testNunjucksTemplate({
+        Prompt: braintrust.Prompt,
+      });
+      const nunjucksResultHandled =
+        nunjucksResult.status === "fail" &&
+        nunjucksResult.error?.message.includes(
+          "Nunjucks templating is not supported",
+        )
+          ? {
+              ...nunjucksResult,
+              status: "pass" as const,
+              message:
+                "Expected failure: Nunjucks not supported in Edge Runtime",
+            }
+          : nunjucksResult;
 
       // Combine results
       const results = [
         ...importResults,
         ...functionalResults,
         evalResult,
-        ...promptTemplatingResults,
+        mustacheResult,
+        nunjucksResultHandled,
       ];
 
       // Check for failures
