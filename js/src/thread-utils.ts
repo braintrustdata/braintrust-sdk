@@ -413,10 +413,13 @@ export function mergeAndStringify(
 
 /**
  * Template variables computed from a thread for use in LLM-as-a-judge scorers.
+ *
+ * Note: When used with autoevals' LLMClassifierFromTemplate, `thread` and other
+ * message variables automatically render as human-readable text in Mustache
+ * templates via the smart escape function.
  */
 export interface ThreadTemplateVars {
   thread: unknown[];
-  thread_text: string;
   thread_count: number;
   first_message: unknown | null;
   last_message: unknown | null;
@@ -432,7 +435,6 @@ export interface ThreadTemplateVars {
 export function computeThreadTemplateVars(
   thread: unknown[],
 ): ThreadTemplateVars {
-  let _thread_text: string | undefined;
   let _user_messages: unknown[] | undefined;
   let _assistant_messages: unknown[] | undefined;
   let _human_ai_pairs:
@@ -442,17 +444,6 @@ export function computeThreadTemplateVars(
   return {
     thread,
     thread_count: thread.length,
-
-    get thread_text(): string {
-      if (_thread_text === undefined) {
-        const merger = new IncrementalMerger();
-        for (const item of thread) {
-          merger.add(item);
-        }
-        _thread_text = merger.stringify() ?? "";
-      }
-      return _thread_text;
-    },
 
     get first_message(): unknown | null {
       return thread[0] ?? null;
