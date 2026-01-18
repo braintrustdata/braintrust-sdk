@@ -24,6 +24,7 @@ import {
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
+  OBJECT_DELETE_FIELD,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanComponentsV4,
@@ -2334,21 +2335,82 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
 }
 
 const logs3OverflowUploadSchema = z.object({
+  method: z.enum(["PUT", "POST"]).optional(),
   signedUrl: z.string().url(),
-  headers: z.record(z.string()),
+  headers: z.record(z.string()).optional(),
+  fields: z.record(z.string()).optional(),
   key: z.string().min(1),
 });
 type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+
+type Logs3OverflowInputRow = {
+  object_ids: Record<string, unknown>;
+  has_comment?: boolean;
+  is_delete?: boolean;
+  input_row: {
+    byte_size: number;
+    score_count: number;
+    metric_count: number;
+  };
+};
 
 function constructLogs3Data(items: string[]) {
   return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
 }
 
-function constructLogs3OverflowRequest(key: string) {
+function constructLogs3OverflowRequest(key: string, sizeBytes?: number) {
+  const rows: Record<string, unknown> = {
+    type: LOGS3_OVERFLOW_REFERENCE,
+    key,
+  };
+  if (sizeBytes !== undefined) {
+    rows.size_bytes = sizeBytes;
+  }
   return {
-    rows: { type: LOGS3_OVERFLOW_REFERENCE, key },
+    rows,
     api_version: 2,
   };
+}
+
+function pickLogs3OverflowObjectIds(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const objectIds: Record<string, unknown> = {};
+  const keys = [
+    "experiment_id",
+    "dataset_id",
+    "prompt_session_id",
+    "project_id",
+    "log_id",
+    "function_data",
+  ];
+  for (const key of keys) {
+    if (key in row) {
+      objectIds[key] = row[key];
+    }
+  }
+  return objectIds;
+}
+
+function buildLogs3OverflowRows(items: string[]): Logs3OverflowInputRow[] {
+  return items.map((item) => {
+    const parsed = JSON.parse(item);
+    if (!isObject(parsed)) {
+      throw new Error("Invalid logs3 overflow row");
+    }
+    const scores = isObject(parsed.scores) ? parsed.scores : undefined;
+    const metrics = isObject(parsed.metrics) ? parsed.metrics : undefined;
+    return {
+      object_ids: pickLogs3OverflowObjectIds(parsed),
+      has_comment: Object.prototype.hasOwnProperty.call(parsed, "comment"),
+      is_delete: parsed[OBJECT_DELETE_FIELD] === true,
+      input_row: {
+        byte_size: utf8ByteLength(item),
+        score_count: scores ? Object.keys(scores).length : 0,
+        metric_count: metrics ? Object.keys(metrics).length : 0,
+      },
+    };
+  });
 }
 
 function utf8ByteLength(value: string) {
@@ -2835,11 +2897,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async requestLogs3OverflowUpload(
     conn: HTTPConnection,
+    args: { rows: Logs3OverflowInputRow[]; sizeBytes: number },
   ): Promise<Logs3OverflowUpload> {
     let response: unknown;
     try {
       response = await conn.post_json("logs3/overflow", {
         content_type: "application/json",
+        size_bytes: args.sizeBytes,
+        rows: args.rows,
       });
     } catch (error) {
       const errorStr = JSON.stringify(error);
@@ -2864,7 +2929,30 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     upload: Logs3OverflowUpload,
     payload: string,
   ): Promise<void> {
-    const headers = { ...upload.headers };
+    const method = upload.method ?? "PUT";
+    if (method === "POST") {
+      if (!upload.fields) {
+        throw new Error("Missing logs3 overflow upload fields");
+      }
+      if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+        throw new Error("FormData is not available for logs3 overflow upload");
+      }
+      const form = new FormData();
+      for (const [key, value] of Object.entries(upload.fields)) {
+        form.append(key, value);
+      }
+      const contentType = upload.fields["Content-Type"] ?? "application/json";
+      form.append("file", new Blob([payload], { type: contentType }));
+      await checkResponse(
+        await conn.fetch(upload.signedUrl, {
+          method: "POST",
+          body: form,
+        }),
+      );
+      return;
+    }
+
+    const headers = { ...(upload.headers ?? {}) };
     addAzureBlobHeaders(headers, upload.signedUrl);
     await checkResponse(
       await conn.fetch(upload.signedUrl, {
@@ -2901,6 +2989,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
     let overflowUpload: Logs3OverflowUpload | null = null;
     let overflowUploaded = false;
+    const overflowRows = useOverflow ? buildLogs3OverflowRows(items) : null;
 
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
@@ -2908,7 +2997,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       try {
         if (useOverflow) {
           if (!overflowUpload) {
-            overflowUpload = await this.requestLogs3OverflowUpload(conn);
+            if (!overflowRows) {
+              throw new Error("Missing logs3 overflow metadata");
+            }
+            overflowUpload = await this.requestLogs3OverflowUpload(conn, {
+              rows: overflowRows,
+              sizeBytes: payloadBytes,
+            });
           }
           const currentUpload = overflowUpload;
           if (!currentUpload) {
@@ -2920,7 +3015,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           }
           await conn.post_json(
             "logs3",
-            constructLogs3OverflowRequest(currentUpload.key),
+            constructLogs3OverflowRequest(currentUpload.key, payloadBytes),
           );
         } else {
           await conn.post_json("logs3", dataStr);

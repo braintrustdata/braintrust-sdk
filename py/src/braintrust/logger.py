@@ -50,6 +50,7 @@ from .db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    OBJECT_DELETE_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -746,8 +747,42 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def construct_logs3_overflow_request(key: str) -> dict[str, Any]:
-    return {"rows": {"type": LOGS3_OVERFLOW_REFERENCE_TYPE, "key": key}, "api_version": DATA_API_VERSION}
+def construct_logs3_overflow_request(key: str, size_bytes: int | None = None) -> dict[str, Any]:
+    rows: dict[str, Any] = {"type": LOGS3_OVERFLOW_REFERENCE_TYPE, "key": key}
+    if size_bytes is not None:
+        rows["size_bytes"] = size_bytes
+    return {"rows": rows, "api_version": DATA_API_VERSION}
+
+
+def pick_logs3_overflow_object_ids(row: Mapping[str, Any]) -> dict[str, Any]:
+    object_ids: dict[str, Any] = {}
+    for key in ("experiment_id", "dataset_id", "prompt_session_id", "project_id", "log_id", "function_data"):
+        if key in row:
+            object_ids[key] = row[key]
+    return object_ids
+
+
+def build_logs3_overflow_rows(items: Sequence[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in items:
+        parsed = json.loads(item)
+        if not isinstance(parsed, dict):
+            raise RuntimeError("Invalid logs3 overflow row")
+        scores = parsed.get("scores")
+        metrics = parsed.get("metrics")
+        rows.append(
+            {
+                "object_ids": pick_logs3_overflow_object_ids(parsed),
+                "has_comment": "comment" in parsed,
+                "is_delete": parsed.get(OBJECT_DELETE_FIELD) is True,
+                "input_row": {
+                    "byte_size": utf8_byte_length(item),
+                    "score_count": len(scores) if isinstance(scores, dict) else 0,
+                    "metric_count": len(metrics) if isinstance(metrics, dict) else 0,
+                },
+            }
+        )
+    return rows
 
 
 def utf8_byte_length(value: str) -> int:
@@ -1142,31 +1177,64 @@ class _HTTPBackgroundLogger:
         )
         return [], []
 
-    def _request_logs3_overflow_upload(self, conn: HTTPConnection) -> dict[str, Any]:
+    def _request_logs3_overflow_upload(
+        self, conn: HTTPConnection, payload_size_bytes: int, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         try:
-            resp = conn.post("/logs3/overflow", json={"content_type": "application/json"})
+            resp = conn.post(
+                "/logs3/overflow",
+                json={"content_type": "application/json", "size_bytes": payload_size_bytes, "rows": rows},
+            )
             resp.raise_for_status()
             payload = resp.json()
         except Exception as e:
             raise RuntimeError(f"Failed to request logs3 overflow upload URL: {e}") from e
 
+        method = payload.get("method")
+        if method not in ("PUT", "POST", None):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        method = "POST" if method == "POST" else "PUT"
         signed_url = payload.get("signedUrl")
         headers = payload.get("headers")
+        fields = payload.get("fields")
         key = payload.get("key")
-        if not isinstance(signed_url, str) or not isinstance(headers, dict) or not isinstance(key, str):
+        if not isinstance(signed_url, str) or not isinstance(key, str):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "PUT" and not isinstance(headers, dict):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "POST" and not isinstance(fields, dict):
             raise RuntimeError(f"Invalid response from API server: {payload}")
 
-        add_azure_blob_headers(headers, signed_url)
+        if method == "PUT":
+            add_azure_blob_headers(headers, signed_url)
 
-        return {"signed_url": signed_url, "headers": headers, "key": key}
+        return {
+            "method": method,
+            "signed_url": signed_url,
+            "headers": headers if isinstance(headers, dict) else {},
+            "fields": fields if isinstance(fields, dict) else {},
+            "key": key,
+        }
 
     def _upload_logs3_overflow_payload(self, upload: dict[str, Any], payload: str) -> None:
         obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
-        obj_response = obj_conn.put(
-            upload["signed_url"],
-            headers=upload["headers"],
-            data=payload.encode("utf-8"),
-        )
+        method = upload.get("method", "PUT")
+        if method == "POST":
+            fields = upload.get("fields")
+            if not isinstance(fields, dict):
+                raise RuntimeError("Missing logs3 overflow upload fields")
+            content_type = fields.get("Content-Type", "application/json")
+            obj_response = obj_conn.post(
+                upload["signed_url"],
+                data=fields,
+                files={"file": ("logs3.json", payload.encode("utf-8"), content_type)},
+            )
+        else:
+            obj_response = obj_conn.put(
+                upload["signed_url"],
+                headers=upload["headers"],
+                data=payload.encode("utf-8"),
+            )
         obj_response.raise_for_status()
 
     def _submit_logs_request(self, items: Sequence[str]):
@@ -1183,6 +1251,7 @@ class _HTTPBackgroundLogger:
             _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         overflow_upload: dict[str, Any] | None = None
         overflow_uploaded = False
+        overflow_rows = build_logs3_overflow_rows(items) if use_overflow else None
         for i in range(self.num_tries):
             start_time = time.time()
             resp = None
@@ -1190,13 +1259,18 @@ class _HTTPBackgroundLogger:
             try:
                 if use_overflow:
                     if overflow_upload is None:
-                        overflow_upload = self._request_logs3_overflow_upload(conn)
+                        if overflow_rows is None:
+                            raise RuntimeError("Missing logs3 overflow metadata")
+                        overflow_upload = self._request_logs3_overflow_upload(conn, payload_bytes, overflow_rows)
                     if overflow_upload is None:
                         raise RuntimeError("Failed to request logs3 overflow upload URL")
                     if not overflow_uploaded:
                         self._upload_logs3_overflow_payload(overflow_upload, dataStr)
                         overflow_uploaded = True
-                    resp = conn.post("/logs3", json=construct_logs3_overflow_request(overflow_upload["key"]))
+                    resp = conn.post(
+                        "/logs3",
+                        json=construct_logs3_overflow_request(overflow_upload["key"], payload_bytes),
+                    )
                 else:
                     resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
             except Exception as e:
