@@ -2696,7 +2696,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const allItemsStr = allItems.map((bucket) =>
       bucket.map((item) => JSON.stringify(item)),
     );
-    const conn = await this.apiConn.get();
     const maxRequestSize = this.maxRequestSize;
     const batchSets = batchItems({
       items: allItemsStr,
@@ -2708,7 +2707,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
-            await this.submitLogsRequest(conn, batch, maxRequestSize);
+            await this.submitLogsRequest(batch, maxRequestSize);
             return { type: "success" } as const;
           } catch (e) {
             return { type: "error", value: e } as const;
@@ -2877,10 +2876,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   private async submitLogsRequest(
-    conn: HTTPConnection,
     items: string[],
     maxRequestSize: number,
   ): Promise<void> {
+    const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     const payloadBytes = utf8ByteLength(dataStr);
     const batchLimitBytes = maxRequestSize / 2;
