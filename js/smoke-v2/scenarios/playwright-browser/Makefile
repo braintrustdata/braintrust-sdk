@@ -3,28 +3,26 @@
 setup:
 	@echo "==> Setting up playwright-browser scenario"
 	mise install
-
-	# Build shared test package
-	@if [ ! -d ../../shared/dist ]; then \
-		cd ../../shared && npm install && npm run build; \
+	@# Build shared test package (if not running from parent)
+	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
+		echo "==> Building shared package"; \
+		cd ../../shared && npm ci && npm run build; \
 	fi
-
-	# Build SDK if braintrust-latest.tgz doesn't exist
-	@if [ ! -f ../../../artifacts/braintrust-latest.tgz ]; then \
-		cd ../../.. && pnpm build && npm pack --pack-destination artifacts; \
+	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
+	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
+	else \
+		echo "==> Building SDK"; \
+		cd ../../.. && pnpm turbo build --filter=braintrust && mkdir -p artifacts && pnpm pack --pack-destination artifacts; \
+		\
 		for f in artifacts/braintrust-*.tgz; do \
 			[ "$$(basename $$f)" = "braintrust-latest.tgz" ] && continue; \
-			cp "$$f" artifacts/braintrust-latest.tgz; break; \
+			cp "$$f" artifacts/braintrust-latest.tgz; \
+			break; \
 		done; \
 	fi
-
-	# Install dependencies (tarball paths in package.json)
 	npm install
-
-	# Install Playwright browsers
 	npx playwright install --with-deps chromium
-
-	# Build browser test bundle
 	node esbuild.config.mjs
 
 test: setup

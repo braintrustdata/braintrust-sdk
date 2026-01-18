@@ -3,21 +3,25 @@
 setup:
 	@echo "==> Setting up cloudflare-worker-node-compat"
 	mise install
-
-	# Build SDK if tarball doesn't exist
-	@if [ ! -f ../../../artifacts/braintrust-latest.tgz ]; then \
-		cd ../../.. && pnpm build && npm pack --pack-destination artifacts; \
+	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
+	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
+	else \
+		echo "==> Building SDK"; \
+		cd ../../.. && pnpm turbo build --filter=braintrust && mkdir -p artifacts && pnpm pack --pack-destination artifacts; \
+		\
 		for f in artifacts/braintrust-*.tgz; do \
 			[ "$$(basename $$f)" = "braintrust-latest.tgz" ] && continue; \
-			cp "$$f" artifacts/braintrust-latest.tgz; break; \
+			cp "$$f" artifacts/braintrust-latest.tgz; \
+			break; \
 		done; \
 	fi
-
-	# Build shared package if needed
-	@if [ ! -d ../../shared/dist ]; then \
+	@# Build shared package if needed
+	@# Build shared package (if not running from parent)
+	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
+		echo "==> Building shared package"; \
 		cd ../../shared && npm ci && npm run build; \
 	fi
-
 	npm install
 
 test: setup

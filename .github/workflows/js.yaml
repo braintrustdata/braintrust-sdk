@@ -614,3 +614,82 @@ jobs:
         working-directory: js/smoke
         run: |
           ./run-tests.sh ${{ matrix.mode }}
+
+  # Smoke v2: Auto-discovery of scenarios
+  smoke-v2-discover:
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.discover.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover scenarios
+        id: discover
+        working-directory: js/smoke-v2
+        shell: bash
+        run: |
+          # Use the same auto-discovery logic as the Makefile
+          SCENARIOS=$(command find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "scenarios=$SCENARIOS" >> "$GITHUB_OUTPUT"
+          echo "Discovered scenarios: $SCENARIOS"
+
+  smoke-v2-test:
+    needs: [build, smoke-v2-discover]
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.smoke-v2-discover.outputs.scenarios) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+        with:
+          working_directory: js/smoke-v2
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Download build artifact (node 20)
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-20-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare artifacts at well-known paths
+        working-directory: js/artifacts
+        shell: bash
+        run: |
+          # Copy braintrust tarball to well-known path
+          for f in braintrust-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-latest.tgz
+              echo "Copied $f to braintrust-latest.tgz"
+              break
+            fi
+          done
+
+          # Copy otel tarball to well-known path
+          for f in braintrust-otel-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-otel-latest.tgz
+              echo "Copied $f to braintrust-otel-latest.tgz"
+              break
+            fi
+          done
+
+          ls -la
+
+      - name: Run scenario ${{ matrix.scenario }}
+        working-directory: js/smoke-v2
+        shell: bash
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          CI: true
+          BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
+          BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
+        run: |
+          make test ${{ matrix.scenario }}

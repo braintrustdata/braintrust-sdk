@@ -3,26 +3,35 @@
 setup:
 	@echo "==> Setting up nextjs-instrumentation scenario"
 	mise install
-	@# Build SDK if tarball doesn't exist
-	@if [ ! -f ../../../artifacts/braintrust-latest.tgz ]; then \
+	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
+	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
+	else \
 		echo "==> Building SDK"; \
-		cd ../../.. && pnpm build && mkdir -p artifacts && npm pack --pack-destination artifacts; \
+		cd ../../.. && pnpm turbo build --filter=braintrust && mkdir -p artifacts && pnpm pack --pack-destination artifacts; \
+		\
 		for f in artifacts/braintrust-*.tgz; do \
-			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ]; then \
+			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \
+			   [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ]; then \
 				cp "$$f" artifacts/braintrust-latest.tgz; \
 				break; \
 			fi; \
 		done; \
 	fi
-	@# Build shared package if needed
-	@if [ ! -d ../../shared/dist ]; then \
+
+	@# Build shared package (if not running from parent)
+	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
 		echo "==> Building shared package"; \
 		cd ../../shared && npm ci && npm run build; \
 	fi
-	@# Build @braintrust/otel if needed (before npm install)
-	@if [ ! -f ../../../artifacts/braintrust-otel-latest.tgz ]; then \
+
+	@# Check if BRAINTRUST_OTEL_TAR is set (from parent or CI), otherwise build
+	@if [ -n "$(BRAINTRUST_OTEL_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_OTEL_TAR: $(BRAINTRUST_OTEL_TAR)"; \
+	else \
 		echo "==> Building @braintrust/otel package"; \
-		cd ../../../../integrations/otel-js && pnpm build && pnpm pack --pack-destination ../../js/artifacts; \
+		cd ../../../../integrations/otel-js && pnpm turbo build --filter=@braintrust/otel && pnpm pack --pack-destination ../../js/artifacts; \
+		\
 		for f in ../../js/artifacts/braintrust-otel-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ]; then \
 				cp "$$f" ../../js/artifacts/braintrust-otel-latest.tgz; \
@@ -30,7 +39,6 @@ setup:
 			fi; \
 		done; \
 	fi
-	@# Install dependencies (including tarballs from well-known paths)
 	npm install
 
 test: setup

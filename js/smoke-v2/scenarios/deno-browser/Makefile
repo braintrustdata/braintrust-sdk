@@ -3,12 +3,11 @@
 setup:
 	@echo "==> Setting up deno-browser scenario"
 	mise install
-
-	# Build SDK (Deno will use dist/ directly)
+	@# Deno uses workspace links - always needs SDK built (doesn't use tarballs)
 	@if [ ! -d ../../../dist ]; then \
-		cd ../../.. && pnpm build; \
+		echo "==> Building SDK for Deno workspace link"; \
+		cd ../../.. && pnpm turbo build --filter=braintrust; \
 	fi
-
 	deno install
 
 test: setup
