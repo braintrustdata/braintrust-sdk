@@ -97,6 +97,7 @@ from .xact_ids import prettify_xact
 
 Metadata = dict[str, Any]
 DATA_API_VERSION = 2
+LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow"
 
 
 class DatasetRef(TypedDict, total=False):
@@ -745,6 +746,14 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
+def construct_logs3_overflow_request(key: str) -> dict[str, Any]:
+    return {"rows": {"type": LOGS3_OVERFLOW_REFERENCE_TYPE, "key": key}, "api_version": DATA_API_VERSION}
+
+
+def utf8_byte_length(value: str) -> int:
+    return len(value.encode("utf-8"))
+
+
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
 
@@ -878,6 +887,7 @@ class _HTTPBackgroundLogger:
         self.masking_function: Callable[[Any], Any] | None = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
+        self._max_request_size_configured = False
 
         try:
             self.sync_flush = bool(int(os.environ["BRAINTRUST_SYNC_FLUSH"]))
@@ -886,6 +896,7 @@ class _HTTPBackgroundLogger:
 
         try:
             self.max_request_size = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
+            self._max_request_size_configured = True
         except:
             # 6 MB for the AWS lambda gateway (from our own testing).
             self.max_request_size = 6 * 1024 * 1024
@@ -928,6 +939,9 @@ class _HTTPBackgroundLogger:
 
         self.logger = logging.getLogger("braintrust")
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
+        self._logs3_payload_limit: int | None = None
+        self._logs3_payload_limit_fetched = False
+        self._logs3_payload_limit_lock = threading.Lock()
 
         atexit.register(self._finalize)
 
@@ -984,6 +998,33 @@ class _HTTPBackgroundLogger:
                         pass
                     else:
                         raise
+
+    def _get_logs3_payload_limit(self, conn: HTTPConnection) -> int | None:
+        if self._logs3_payload_limit_fetched:
+            return self._logs3_payload_limit
+        with self._logs3_payload_limit_lock:
+            if self._logs3_payload_limit_fetched:
+                return self._logs3_payload_limit
+            try:
+                info = conn.get_json("version")
+                limit = info.get("logs3_payload_max_bytes")
+                if isinstance(limit, (int, float)) and int(limit) > 0:
+                    self._logs3_payload_limit = int(limit)
+                else:
+                    self._logs3_payload_limit = None
+            except Exception:
+                self._logs3_payload_limit = None
+            self._logs3_payload_limit_fetched = True
+            return self._logs3_payload_limit
+
+    def _maybe_update_max_request_size(self, conn: HTTPConnection) -> int | None:
+        limit = self._get_logs3_payload_limit(conn)
+        if limit:
+            if self._max_request_size_configured:
+                self.max_request_size = min(self.max_request_size, limit)
+            else:
+                self.max_request_size = limit
+        return limit
 
     def flush(self, batch_size: int | None = None):
         if batch_size is None:
@@ -1101,21 +1142,77 @@ class _HTTPBackgroundLogger:
         )
         return [], []
 
+    def _request_logs3_overflow_upload(self, conn: HTTPConnection) -> dict[str, Any]:
+        try:
+            resp = conn.post("/logs3/overflow", json={"content_type": "application/json"})
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            raise RuntimeError(f"Failed to request logs3 overflow upload URL: {e}") from e
+
+        signed_url = payload.get("signedUrl")
+        headers = payload.get("headers")
+        key = payload.get("key")
+        if not isinstance(signed_url, str) or not isinstance(headers, dict) or not isinstance(key, str):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+
+        add_azure_blob_headers(headers, signed_url)
+
+        return {"signed_url": signed_url, "headers": headers, "key": key}
+
+    def _upload_logs3_overflow_payload(self, upload: dict[str, Any], payload: str) -> None:
+        obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+        obj_response = obj_conn.put(
+            upload["signed_url"],
+            headers=upload["headers"],
+            data=payload.encode("utf-8"),
+        )
+        obj_response.raise_for_status()
+
     def _submit_logs_request(self, items: Sequence[str]):
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
+        payload_bytes = utf8_byte_length(dataStr)
+        batch_limit_bytes = self.max_request_size // 2
+        limit: int | None = None
+        if payload_bytes > batch_limit_bytes:
+            limit = self._maybe_update_max_request_size(conn)
+        effective_max_request_size = self.max_request_size
+        use_overflow = limit is not None and payload_bytes > effective_max_request_size
         if self.all_publish_payloads_dir:
             _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+        overflow_upload: dict[str, Any] | None = None
+        overflow_uploaded = False
         for i in range(self.num_tries):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
-            if resp.ok:
+            resp = None
+            error = None
+            try:
+                if use_overflow:
+                    if overflow_upload is None:
+                        overflow_upload = self._request_logs3_overflow_upload(conn)
+                    if overflow_upload is None:
+                        raise RuntimeError("Failed to request logs3 overflow upload URL")
+                    if not overflow_uploaded:
+                        self._upload_logs3_overflow_payload(overflow_upload, dataStr)
+                        overflow_uploaded = True
+                    resp = conn.post("/logs3", json=construct_logs3_overflow_request(overflow_upload["key"]))
+                else:
+                    resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
+            except Exception as e:
+                error = e
+                if use_overflow and not overflow_uploaded:
+                    overflow_upload = None
+            if error is None and resp is not None and resp.ok:
                 return
-            resp_errmsg = f"{resp.status_code}: {resp.text}"
+            if error is None and resp is not None:
+                resp_errmsg = f"{resp.status_code}: {resp.text}"
+            else:
+                resp_errmsg = str(error)
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {payload_bytes}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
                 _HTTPBackgroundLogger._write_payload_to_dir(

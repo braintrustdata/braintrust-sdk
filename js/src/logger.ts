@@ -68,6 +68,7 @@ import {
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+const LOGS3_OVERFLOW_REFERENCE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 import { waitUntil } from "@vercel/functions";
@@ -2332,8 +2333,29 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
+const logs3OverflowUploadSchema = z.object({
+  signedUrl: z.string().url(),
+  headers: z.record(z.string()),
+  key: z.string().min(1),
+});
+type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+
 function constructLogs3Data(items: string[]) {
   return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+}
+
+function constructLogs3OverflowRequest(key: string) {
+  return {
+    rows: { type: LOGS3_OVERFLOW_REFERENCE, key },
+    api_version: 2,
+  };
+}
+
+function utf8ByteLength(value: string) {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
 }
 
 function now() {
@@ -2447,6 +2469,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
   public maxRequestSize: number = 6 * 1024 * 1024;
+  private maxRequestSizeConfigured: boolean = false;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
@@ -2456,6 +2479,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public flushChunkSize: number = 25;
 
   private _disabled = false;
+  private logs3PayloadLimit: number | null | undefined = undefined;
+  private logs3PayloadLimitPromise: Promise<number | null> | null = null;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -2481,6 +2506,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
     if (!isNaN(maxRequestSizeEnv)) {
       this.maxRequestSize = maxRequestSizeEnv;
+      this.maxRequestSizeConfigured = true;
     }
 
     const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -2562,6 +2588,50 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
+  private async getLogs3PayloadLimit(
+    conn: HTTPConnection,
+  ): Promise<number | null> {
+    if (this.logs3PayloadLimit !== undefined) {
+      return this.logs3PayloadLimit;
+    }
+    if (this.logs3PayloadLimitPromise) {
+      return await this.logs3PayloadLimitPromise;
+    }
+    this.logs3PayloadLimitPromise = (async () => {
+      try {
+        const versionInfo = await conn.get_json("version");
+        const limit =
+          typeof versionInfo?.logs3_payload_max_bytes === "number"
+            ? versionInfo.logs3_payload_max_bytes
+            : null;
+        this.logs3PayloadLimit = limit;
+        return limit;
+      } catch {
+        this.logs3PayloadLimit = null;
+        return null;
+      } finally {
+        this.logs3PayloadLimitPromise = null;
+      }
+    })();
+    return await this.logs3PayloadLimitPromise;
+  }
+
+  private async getMaxRequestSize(
+    conn: HTTPConnection,
+  ): Promise<{ maxRequestSize: number; limit: number | null }> {
+    const limit = await this.getLogs3PayloadLimit(conn);
+    const normalizedLimit =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? limit
+        : null;
+    if (normalizedLimit !== null) {
+      this.maxRequestSize = this.maxRequestSizeConfigured
+        ? Math.min(this.maxRequestSize, normalizedLimit)
+        : normalizedLimit;
+    }
+    return { maxRequestSize: this.maxRequestSize, limit: normalizedLimit };
+  }
+
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -2626,17 +2696,19 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const allItemsStr = allItems.map((bucket) =>
       bucket.map((item) => JSON.stringify(item)),
     );
+    const conn = await this.apiConn.get();
+    const maxRequestSize = this.maxRequestSize;
     const batchSets = batchItems({
       items: allItemsStr,
       batchMaxNumItems: batchSize,
-      batchMaxNumBytes: this.maxRequestSize / 2,
+      batchMaxNumBytes: maxRequestSize / 2,
     });
 
     for (const batchSet of batchSets) {
       const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
-            await this.submitLogsRequest(batch);
+            await this.submitLogsRequest(conn, batch, maxRequestSize);
             return { type: "success" } as const;
           } catch (e) {
             return { type: "error", value: e } as const;
@@ -2762,9 +2834,65 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     throw new Error("Impossible");
   }
 
-  private async submitLogsRequest(items: string[]): Promise<void> {
-    const conn = await this.apiConn.get();
+  private async requestLogs3OverflowUpload(
+    conn: HTTPConnection,
+  ): Promise<Logs3OverflowUpload> {
+    let response: unknown;
+    try {
+      response = await conn.post_json("logs3/overflow", {
+        content_type: "application/json",
+      });
+    } catch (error) {
+      const errorStr = JSON.stringify(error);
+      throw new Error(
+        `Failed to request logs3 overflow upload URL: ${errorStr}`,
+      );
+    }
+
+    try {
+      return logs3OverflowUploadSchema.parse(response);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const errorStr = JSON.stringify(error.flatten());
+        throw new Error(`Invalid response from API server: ${errorStr}`);
+      }
+      throw error;
+    }
+  }
+
+  private async uploadLogs3OverflowPayload(
+    conn: HTTPConnection,
+    upload: Logs3OverflowUpload,
+    payload: string,
+  ): Promise<void> {
+    const headers = { ...upload.headers };
+    addAzureBlobHeaders(headers, upload.signedUrl);
+    await checkResponse(
+      await conn.fetch(upload.signedUrl, {
+        method: "PUT",
+        headers,
+        body: payload,
+      }),
+    );
+  }
+
+  private async submitLogsRequest(
+    conn: HTTPConnection,
+    items: string[],
+    maxRequestSize: number,
+  ): Promise<void> {
     const dataStr = constructLogs3Data(items);
+    const payloadBytes = utf8ByteLength(dataStr);
+    const batchLimitBytes = maxRequestSize / 2;
+    let effectiveMaxRequestSize = maxRequestSize;
+    let overflowLimit: number | null = null;
+    if (payloadBytes > batchLimitBytes) {
+      const maxRequestSizeResult = await this.getMaxRequestSize(conn);
+      effectiveMaxRequestSize = maxRequestSizeResult.maxRequestSize;
+      overflowLimit = maxRequestSizeResult.limit;
+    }
+    const useOverflow =
+      overflowLimit !== null && payloadBytes > effectiveMaxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
@@ -2772,13 +2900,37 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
 
+    let overflowUpload: Logs3OverflowUpload | null = null;
+    let overflowUploaded = false;
+
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
-        await conn.post_json("logs3", dataStr);
+        if (useOverflow) {
+          if (!overflowUpload) {
+            overflowUpload = await this.requestLogs3OverflowUpload(conn);
+          }
+          const currentUpload = overflowUpload;
+          if (!currentUpload) {
+            throw new Error("Failed to request logs3 overflow upload URL");
+          }
+          if (!overflowUploaded) {
+            await this.uploadLogs3OverflowPayload(conn, currentUpload, dataStr);
+            overflowUploaded = true;
+          }
+          await conn.post_json(
+            "logs3",
+            constructLogs3OverflowRequest(currentUpload.key),
+          );
+        } else {
+          await conn.post_json("logs3", dataStr);
+        }
       } catch (e) {
         error = e;
+        if (useOverflow && !overflowUploaded) {
+          overflowUpload = null;
+        }
       }
       if (error === undefined) {
         return;
@@ -2796,7 +2948,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const errMsg = `log request failed. Elapsed time: ${
         (now() - startTime) / 1000
       } seconds. Payload size: ${
-        dataStr.length
+        payloadBytes
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
