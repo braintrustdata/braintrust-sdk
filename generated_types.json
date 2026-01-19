@@ -3220,7 +3220,7 @@
           "completion",
           "score",
           "facet",
-          "classification",
+          "tag",
           "any"
         ]
       },
@@ -3234,7 +3234,8 @@
           "custom_view",
           "preprocessor",
           "facet",
-          "classifier"
+          "classifier",
+          "tag"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3252,7 +3253,8 @@
           "custom_view",
           "preprocessor",
           "facet",
-          "classifier"
+          "classifier",
+          "tag"
         ]
       },
       "GitMetadataSettings": {
@@ -6091,7 +6093,7 @@
           },
           "allow_no_match": {
             "type": "boolean",
-            "description": "If true, adds a 'None of the above' option. When selected, no tag is deposited."
+            "description": "If true, adds a 'No match' option. When selected, no tag is deposited."
           }
         },
         "required": [
@@ -7691,7 +7693,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "21146f64bf5ad1eadd3a99d186274728e25e5399"
+    "x-internal-git-sha": "c99d1e6fbf062688da7f1f22394c72ea480fe81a"
   },
   "paths": {},
   "webhooks": {}

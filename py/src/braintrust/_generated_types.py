@@ -1734,7 +1734,7 @@ class PromptParserNullish(TypedDict):
     """
     allow_no_match: NotRequired[bool | None]
     """
-    If true, adds a 'None of the above' option. When selected, no tag is deposited.
+    If true, adds a 'No match' option. When selected, no tag is deposited.
     """
 
 

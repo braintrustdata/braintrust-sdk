@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 21146f64bf5ad1eadd3a99d186274728e25e5399) -- do not modify
+// Auto-generated file (internal git SHA c99d1e6fbf062688da7f1f22394c72ea480fe81a) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -227,6 +227,7 @@ export const FunctionTypeEnum = z.enum([
   "preprocessor",
   "facet",
   "classifier",
+  "tag",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -896,6 +897,7 @@ export const FunctionTypeEnumNullish = z.union([
     "preprocessor",
     "facet",
     "classifier",
+    "tag",
   ]),
   z.null(),
 ]);
@@ -1157,7 +1159,7 @@ export const FunctionOutputType = z.enum([
   "completion",
   "score",
   "facet",
-  "classification",
+  "tag",
   "any",
 ]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
