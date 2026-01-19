@@ -1,11 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sleep:*)",
       "Bash(make:*)",
       "Bash(make)",
-      "Bash(mise:*)",
-      "Bash(mise)",
       "Bash(nox:*)",
       "Bash(nox)",
       "Bash(pytest:*)",

@@ -2,7 +2,7 @@ An isomorphic JS library for logging data to Braintrust.
 
 ## Version information
 
-**1.x** is the current stable release with improved ESM support. OpenTelemetry integration is available via the separate [`@braintrust/otel`](https://www.npmjs.com/package/@braintrust/otel) package. Temporal integration is available via the separate [`@braintrust/temporal`](https://www.npmjs.com/package/@braintrust/temporal) package (install its peer dependencies alongside it).
+**1.x** is the current stable release with improved ESM support. OpenTelemetry integration is available via the separate [`@braintrust/otel`](https://www.npmjs.com/package/@braintrust/otel) package.
 
 ### Upgrading from 0.x
 
