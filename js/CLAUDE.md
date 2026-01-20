@@ -35,6 +35,14 @@ Or from sdk root:
 make fixup                   # Run pre-commit hooks on all files
 ```
 
+## Before Committing
+
+Always run formatting before committing to avoid pre-commit hook failures:
+
+```bash
+pnpm prettier --write .      # Format all files
+```
+
 ## Test Framework
 
 Uses Vitest. Config in `vitest.config.js`. Tests make real API calls (no VCR/cassettes).

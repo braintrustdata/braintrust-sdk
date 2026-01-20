@@ -1,0 +1,4 @@
+server: temporal server start-dev
+worker1: pnpm run worker
+worker2: pnpm run worker
+worker3: pnpm run worker
