@@ -71,15 +71,18 @@ export async function testMustacheTemplate(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Mustache template test passed",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
       message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
@@ -90,7 +93,6 @@ export async function testMustacheTemplate(
  */
 export async function testNunjucksTemplate(
   module: PromptModule,
-  environment?: string,
 ): Promise<TestResult> {
   const testName = "testNunjucksTemplate";
 
@@ -124,9 +126,18 @@ export async function testNunjucksTemplate(
       );
     } catch (constructorError) {
       return {
-        success: false,
-        testName,
-        error: constructorError as Error,
+        status: "fail" as const,
+        name: testName,
+        error: {
+          message:
+            constructorError instanceof Error
+              ? constructorError.message
+              : String(constructorError),
+          stack:
+            constructorError instanceof Error
+              ? constructorError.stack
+              : undefined,
+        },
         message: `Failed to create Prompt: ${constructorError instanceof Error ? constructorError.message : String(constructorError)}`,
       };
     }
@@ -140,49 +151,17 @@ export async function testNunjucksTemplate(
         { templateFormat: "nunjucks" },
       );
     } catch (buildError) {
-      const errorMessage =
-        buildError instanceof Error ? buildError.message : String(buildError);
-
-      const isUnsupported = errorMessage.includes(
-        "Nunjucks templating is not supported in this build",
-      );
-
-      if (
-        (environment === "browser" ||
-          environment === "cloudflare-worker-browser-no-compat" ||
-          environment === "cloudflare-worker-browser-node-compat" ||
-          environment === "nextjs-edge-runtime" ||
-          environment === "vite-react-hono") &&
-        isUnsupported
-      ) {
-        return {
-          success: true,
-          testName,
-          message:
-            "Nunjucks template test passed - threw expected unsupported error",
-        };
-      }
-
-      // In Cloudflare Workers (even with nodejs_compat), string-based template codegen is disallowed.
-      if (
-        environment === "cloudflare-worker-node-node-compat" &&
-        errorMessage.includes(
-          "String template rendering. Disallowed in this environment for security reasons",
-        )
-      ) {
-        return {
-          success: true,
-          testName,
-          message:
-            "Nunjucks template test passed - threw expected codegen-disallowed error",
-        };
-      }
-
       return {
-        success: false,
-        testName,
-        error: buildError as Error,
-        message: `Failed to build prompt: ${errorMessage}`,
+        status: "fail" as const,
+        name: testName,
+        error: {
+          message:
+            buildError instanceof Error
+              ? buildError.message
+              : String(buildError),
+          stack: buildError instanceof Error ? buildError.stack : undefined,
+        },
+        message: `Failed to build prompt: ${buildError instanceof Error ? buildError.message : String(buildError)}`,
       };
     }
 
@@ -196,23 +175,32 @@ export async function testNunjucksTemplate(
       );
     } catch (assertError) {
       return {
-        success: false,
-        testName,
-        error: assertError as Error,
+        status: "fail" as const,
+        name: testName,
+        error: {
+          message:
+            assertError instanceof Error
+              ? assertError.message
+              : String(assertError),
+          stack: assertError instanceof Error ? assertError.stack : undefined,
+        },
         message: `Assertion failed: ${assertError instanceof Error ? assertError.message : String(assertError)}`,
       };
     }
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Nunjucks template test passed",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
       message: `Test failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
@@ -223,12 +211,11 @@ export async function testNunjucksTemplate(
  */
 export async function runPromptTemplatingTests(
   module: PromptModule,
-  environment?: string,
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   results.push(await testMustacheTemplate(module));
-  results.push(await testNunjucksTemplate(module, environment));
+  results.push(await testNunjucksTemplate(module));
 
   return results;
 }

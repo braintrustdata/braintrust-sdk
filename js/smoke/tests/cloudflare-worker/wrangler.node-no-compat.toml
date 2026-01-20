@@ -1,3 +1,0 @@
-name = "braintrust-smoke-test-node-no-compat"
-main = "src/node-no-compat.ts"
-compatibility_date = "2024-09-23"
