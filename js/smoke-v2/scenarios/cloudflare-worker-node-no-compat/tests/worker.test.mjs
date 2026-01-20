@@ -1,4 +1,8 @@
 import { spawn, execSync } from "node:child_process";
+import {
+  displayTestResults,
+  hasFailures,
+} from "../../../shared/dist/index.mjs";
 
 const PORT = 8802;
 const MAX_RETRIES = 20;
@@ -26,16 +30,6 @@ async function waitForServer() {
 }
 
 async function main() {
-  console.log(
-    "\n=== Cloudflare Worker Node No Compat Test (Expected Failure) ===\n",
-  );
-  console.log(
-    "This test expects the worker to fail at startup because the Node.js entrypoint",
-  );
-  console.log(
-    "requires nodejs_compat_v2 to access Node.js APIs in Cloudflare Workers.\n",
-  );
-
   killPort(PORT);
 
   const wrangler = spawn("npx", ["wrangler", "dev", "--port", String(PORT)], {
@@ -63,30 +57,46 @@ async function main() {
     });
   };
 
+  const results = [];
+
   try {
     const serverStartedSuccessfully = await waitForServer();
 
     if (!serverStartedSuccessfully) {
-      console.log("✓ Test PASSED: Worker failed to start as expected");
-      console.log("\nWrangler output (showing expected failure):");
-      console.log(wranglerOutput.trim() || "(no output)");
+      results.push({
+        status: "xfail",
+        name: "Worker startup without nodejs_compat_v2",
+        message:
+          "Worker failed to start as expected (Node.js APIs require nodejs_compat_v2)",
+      });
       await killWrangler();
-      process.exit(0);
+    } else {
+      results.push({
+        status: "fail",
+        name: "Worker startup without nodejs_compat_v2",
+        error: {
+          message:
+            "Worker started successfully, but it should have failed! The Node.js entrypoint should not work without nodejs_compat_v2.",
+        },
+      });
+      await killWrangler();
     }
-
-    console.error(
-      "✗ Test FAILED: Worker started successfully, but it should have failed!",
-    );
-    console.error(
-      "The Node.js entrypoint should not work without nodejs_compat_v2.",
-    );
-    await killWrangler();
-    process.exit(1);
   } catch (error) {
-    console.log("✓ Test PASSED: Worker failed as expected");
-    console.log(`Error: ${error.message}`);
+    results.push({
+      status: "xfail",
+      name: "Worker startup without nodejs_compat_v2",
+      message: `Worker failed as expected: ${error.message}`,
+    });
     await killWrangler();
-    process.exit(0);
+  }
+
+  displayTestResults({
+    scenarioName: "Cloudflare Worker Node No Compat Test Results",
+    results,
+  });
+
+  if (hasFailures(results)) {
+    process.exit(1);
   }
 }
 
