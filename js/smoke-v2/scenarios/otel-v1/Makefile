@@ -45,7 +45,7 @@ setup:
 		done; \
 	fi
 
-	npm install
+	npm install --no-package-lock
 
 # =============================================================================
 # Test

@@ -21,7 +21,7 @@ setup:
 			break; \
 		done; \
 	fi
-	npm install
+	npm install --no-package-lock
 	npx playwright install --with-deps chromium
 	node esbuild.config.mjs
 

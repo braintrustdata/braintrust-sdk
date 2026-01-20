@@ -22,7 +22,7 @@ setup:
 		echo "==> Building shared package"; \
 		cd ../../shared && npm ci && npm run build; \
 	fi
-	npm install
+	npm install --no-package-lock
 
 test: setup
 	@echo "==> Running cloudflare-vite-hono tests"

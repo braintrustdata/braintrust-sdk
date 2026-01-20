@@ -28,7 +28,7 @@ setup:
 		cd ../../shared && npm ci && npm run build; \
 	fi
 
-	npm install
+	npm install --no-package-lock
 
 # =============================================================================
 # Test

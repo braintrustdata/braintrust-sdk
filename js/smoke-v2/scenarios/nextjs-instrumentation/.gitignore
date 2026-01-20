@@ -2,3 +2,4 @@ node_modules/
 .next/
 *.log
 .env.local
+package-lock.json

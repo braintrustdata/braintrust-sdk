@@ -39,7 +39,7 @@ setup:
 			fi; \
 		done; \
 	fi
-	npm install
+	npm install --no-package-lock
 
 test: setup
 	@echo "==> Running Next.js build test (webpack bundling)"
