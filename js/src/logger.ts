@@ -91,6 +91,7 @@ import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
 import {
   addAzureBlobHeaders,
+  assertDefined,
   getCurrentUnixTimestamp,
   GLOBAL_PROJECT,
   isEmpty,
@@ -102,6 +103,13 @@ import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils"
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
+import { zodToJsonSchema } from "./zod/utils";
+import { promptDefinitionToPromptData } from "./framework2";
+import {
+  EvalParameters,
+  InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -3782,6 +3790,565 @@ export async function loadPrompt({
     console.warn("Failed to set prompt in cache:", e);
   }
   return prompt;
+}
+
+/**
+ * Options for loading parameters. Schema is required to define the expected structure
+ * of the parameters data, which enables type-safe parameter access.
+ */
+export type LoadParametersOptions<S extends EvalParameters> =
+  FullLoginOptions & {
+    projectName?: string;
+    projectId?: string;
+    slug?: string;
+    version?: string;
+    id?: string;
+    environment?: string;
+    state?: BraintrustState;
+    schema: S;
+  };
+
+/**
+ * Metadata about loaded parameters.
+ */
+export interface ParametersMetadata {
+  /** The unique ID of the parameters */
+  parametersId: string;
+  /** The slug (URL-friendly name) of the parameters */
+  slug: string;
+  /** The name of the parameters */
+  name: string;
+  /** The project ID containing these parameters */
+  projectId: string;
+  /** The project name containing these parameters (if available) */
+  projectName?: string;
+  /** The version (transaction ID) of these parameters */
+  version: string;
+  /** The environment these parameters were loaded from (if specified) */
+  environment?: string;
+  /** JSON Schema for validating and describing the parameters data structure */
+  schema?: Record<string, unknown>;
+}
+
+// Check if a value looks like a Zod schema
+function isZodSchema(value: unknown): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  // Zod schemas have specific internal properties
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+  const v = value as any;
+  return (
+    "_def" in v || // Zod v3
+    "_zod" in v || // Zod v4
+    (typeof v.parse === "function" && typeof v.safeParse === "function")
+  );
+}
+
+/**
+ * Check if a value is a prompt parameter definition
+ */
+function isPromptParameter(
+  value: unknown,
+): value is { type: "prompt"; default?: unknown; description?: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "type" in value &&
+    value.type === "prompt"
+  );
+}
+
+/**
+ * Parameters loaded from Braintrust. This class wraps the parameters data and includes
+ * metadata about the parameters (id, slug, version, etc.).
+ *
+ * The parameters data can be accessed via the `data` property, or by accessing properties
+ * directly on this object (which forwards to the underlying data for backward compatibility).
+ *
+ * @example
+ * ```typescript
+ * const params = await loadParameters({
+ *   projectName: "My Project",
+ *   slug: "my-params",
+ *   schema: { prefix: z.string().default("hello") },
+ * });
+ *
+ * // Access metadata
+ * console.log(params.parametersId, params.slug, params.version);
+ *
+ * // Access parameters data (both work)
+ * console.log(params.data.prefix);
+ * console.log(params.prefix); // backward compatible
+ * ```
+ */
+export class ParameterSet<
+  T extends Record<string, unknown> = Record<string, unknown>,
+  S extends EvalParameters = EvalParameters,
+> {
+  private readonly __braintrust_parameter_set_marker = true;
+  /** Phantom type to carry the original schema type for type inference */
+  declare readonly __schema: S;
+
+  constructor(
+    private readonly metadata: ParametersMetadata,
+    private readonly _data: T,
+  ) {
+    // Return a Proxy to forward unknown property access to _data
+    // This maintains backward compatibility with code that accesses params.someKey directly
+    return new Proxy(this, {
+      get(target, prop, receiver) {
+        // Symbols and known class properties are handled directly
+        if (typeof prop === "symbol" || prop in target) {
+          return Reflect.get(target, prop, receiver);
+        }
+        // Forward to _data for backward compatibility
+        return target._data[prop];
+      },
+      has(target, prop) {
+        return prop in target || prop in target._data;
+      },
+      ownKeys(target) {
+        // Only return data keys for enumeration (backward compatibility)
+        // Metadata properties are still accessible but not enumerable
+        return Object.keys(target._data);
+      },
+      getOwnPropertyDescriptor(target, prop) {
+        if (typeof prop === "symbol") {
+          return Reflect.getOwnPropertyDescriptor(target, prop);
+        }
+        // For data keys, return enumerable descriptors
+        if (prop in target._data) {
+          return {
+            value: target._data[prop],
+            writable: false,
+            enumerable: true,
+            configurable: true,
+          };
+        }
+        // For class properties, return non-enumerable descriptors
+        if (prop in target) {
+          const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+          if (desc) {
+            return { ...desc, enumerable: false };
+          }
+        }
+        return undefined;
+      },
+    });
+  }
+
+  /** The unique ID of the parameters */
+  public get parametersId(): string {
+    return this.metadata.parametersId;
+  }
+
+  /** The slug (URL-friendly name) of the parameters */
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  /** The name of the parameters */
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  /** The project ID containing these parameters */
+  public get projectId(): string {
+    return this.metadata.projectId;
+  }
+
+  /** The project name containing these parameters (if available) */
+  public get projectName(): string | undefined {
+    return this.metadata.projectName;
+  }
+
+  /** The version (transaction ID) of these parameters */
+  public get version(): string {
+    return this.metadata.version;
+  }
+
+  /** The environment these parameters were loaded from (if specified) */
+  public get environment(): string | undefined {
+    return this.metadata.environment;
+  }
+
+  /** JSON Schema for validating and describing the parameters data structure */
+  public get schema(): Record<string, unknown> | undefined {
+    return this.metadata.schema;
+  }
+
+  /** The validated parameters data */
+  public get data(): T {
+    return this._data;
+  }
+
+  /**
+   * Check if a value is a ParameterSet instance.
+   */
+  public static isParameterSet(
+    value: unknown,
+  ): value is ParameterSet<Record<string, unknown>> {
+    if (
+      value === null ||
+      typeof value !== "object" ||
+      !("__braintrust_parameter_set_marker" in value)
+    ) {
+      return false;
+    }
+    return value.__braintrust_parameter_set_marker === true;
+  }
+
+  /**
+   * Create a ParameterSet with proper typing that reflects the Proxy behavior.
+   * The Proxy forwards property access to the underlying data, so the returned
+   * object acts as both ParameterSet<T> and T.
+   * @internal
+   */
+  public static create<
+    T extends Record<string, unknown>,
+    S extends EvalParameters = EvalParameters,
+  >(metadata: ParametersMetadata, data: T): ParameterSet<T, S> & Readonly<T> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return new ParameterSet(metadata, data) as ParameterSet<T, S> & Readonly<T>;
+  }
+}
+
+/**
+ * Shape of a function/parameters object returned from the API.
+ * @internal
+ */
+interface FunctionResponse {
+  id: string;
+  slug?: string;
+  name?: string;
+  project_id?: string;
+  function_type: string;
+  function_data?: {
+    type: string;
+    data?: Record<string, unknown>;
+    __schema?: Record<string, unknown>;
+  };
+  metadata?: {
+    schema?: Record<string, unknown>;
+  };
+  [TRANSACTION_ID_FIELD]?: string;
+}
+
+/**
+ * Fetch a parameters object by ID.
+ * @internal
+ */
+async function _getParametersById(
+  state: BraintrustState,
+  id: string,
+  version?: string,
+  environment?: string,
+): Promise<FunctionResponse | null> {
+  const response = await state.apiConn().get_json(`v1/function/${id}`, {
+    ...(version ? { version } : {}),
+    ...(environment ? { environment } : {}),
+  });
+  if (!response) {
+    return null;
+  }
+  assertDefined(
+    response.function_type,
+    `Function ${id} is missing function_type`,
+  );
+  if (response.function_type !== "parameters") {
+    throw new Error(
+      `Function ${id} has function_type '${response.function_type}', expected 'parameters'`,
+    );
+  }
+  return response;
+}
+
+/**
+ * Fetch a parameters object by project and slug.
+ * @internal
+ */
+async function _getParametersBySlug(
+  state: BraintrustState,
+  projectName: string | undefined,
+  projectId: string | undefined,
+  slug: string,
+  version?: string,
+  environment?: string,
+): Promise<FunctionResponse | null> {
+  const response = await state.apiConn().get_json("v1/function", {
+    project_name: projectName,
+    project_id: projectId,
+    slug,
+    function_type: "parameters",
+    version,
+    ...(environment ? { environment } : {}),
+  });
+  if (!("objects" in response) || response.objects.length === 0) {
+    return null;
+  }
+  if (response.objects.length > 1) {
+    throw new Error(
+      `Multiple parameters found with slug ${slug} in project ${projectName ?? projectId}. This should never happen.`,
+    );
+  }
+  const result = response.objects[0];
+  if (result.function_type !== "parameters") {
+    throw new Error(
+      `Function ${slug} has function_type '${result.function_type}', expected 'parameters'`,
+    );
+  }
+  return result;
+}
+
+/**
+ * Helper function to create new parameters with default values from the schema.
+ * @internal
+ */
+async function _createParametersFromDefaultSchemaValues<
+  S extends EvalParameters,
+>({
+  state,
+  projectName,
+  projectId,
+  slug,
+  schema,
+}: {
+  state: BraintrustState;
+  projectName?: string;
+  projectId?: string;
+  slug: string;
+  schema: S;
+}): Promise<
+  ParameterSet<InferParameters<S>, S> & Readonly<InferParameters<S>>
+> {
+  // Extract default values from schema
+  const defaultData: Record<string, unknown> = {};
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required: string[] = [];
+
+  for (const [name, paramSchema] of Object.entries(schema)) {
+    if (isPromptParameter(paramSchema)) {
+      // Prompt parameter definition
+      if (paramSchema.default) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+        const defaultPrompt = paramSchema.default as any;
+        defaultData[name] = promptDefinitionToPromptData(
+          defaultPrompt,
+          defaultPrompt.tools,
+        );
+      } else {
+        required.push(name);
+      }
+      properties[name] = {
+        type: "object",
+        description: paramSchema.description,
+      };
+    } else if (isZodSchema(paramSchema)) {
+      // Zod schema - extract default and convert to JSON schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+      const jsonSchema = zodToJsonSchema(paramSchema as any);
+      properties[name] = jsonSchema;
+      if ("default" in jsonSchema && jsonSchema.default !== undefined) {
+        defaultData[name] = jsonSchema.default;
+      } else {
+        required.push(name);
+      }
+    }
+  }
+
+  // Build the JSON schema
+  const parametersSchema: Record<string, unknown> = {
+    type: "object",
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+  };
+
+  // Resolve project ID if not provided
+  let resolvedProjectId = projectId;
+  if (!resolvedProjectId && projectName) {
+    const projectResponse = await state.apiConn().get_json("v1/project", {
+      project_name: projectName,
+    });
+    if ("objects" in projectResponse && projectResponse.objects.length > 0) {
+      resolvedProjectId = projectResponse.objects[0].id;
+    } else {
+      throw new Error(`Project ${projectName} not found`);
+    }
+  }
+  if (!resolvedProjectId) {
+    throw new Error("Must specify either projectName or projectId");
+  }
+
+  // Create the parameters via the API
+  const createResponse = await state.apiConn().post_json("v1/function", {
+    project_id: resolvedProjectId,
+    slug,
+    name: slug,
+    function_type: "parameters",
+    function_data: {
+      type: "parameters",
+      data: defaultData,
+      __schema: parametersSchema,
+    },
+  });
+
+  // Build metadata from the created parameters
+  const metadata: ParametersMetadata = {
+    parametersId: createResponse.id,
+    slug: slug,
+    name: slug,
+    projectId: resolvedProjectId,
+    projectName: projectName,
+    version: createResponse[TRANSACTION_ID_FIELD] ?? "",
+    environment: undefined,
+    schema: parametersSchema,
+  };
+
+  // Validate and transform the data according to the schema
+  const validatedParams = validateParameters(defaultData, schema);
+  return ParameterSet.create<InferParameters<S>, S>(metadata, validatedParams);
+}
+
+/**
+ * Load parameters from the specified project.
+ *
+ * When called with a `schema` parameter, the parameters data is validated and transformed
+ * according to the schema, and the return type is inferred from the schema.
+ *
+ * @param options Options for configuring loadParameters().
+ * @param options.projectName The name of the project to load the parameters from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the parameters to load.
+ * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.schema A schema defining the expected structure of the parameters. The parameters data is validated
+ *                       and transformed according to the schema, and the return type is inferred from the schema.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+ * key is specified, will prompt the user to login.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns A Parameters object containing the validated parameters and metadata.
+ * @throws If the parameters are not found when loading by ID.
+ * @throws If multiple parameters are found with the same slug in the same project (this should never happen).
+ *
+ * @remarks
+ * If the parameters don't exist, they will be automatically created with default values from the schema.
+ *
+ * @example
+ * ```typescript
+ * const params = await loadParameters({
+ *   projectName: "My Project",
+ *   slug: "my-params",
+ *   schema: {
+ *     main: { type: "prompt", default: { messages: [...], model: "gpt-4o" } },
+ *     prefix: z.string().default("hello"),
+ *   },
+ * });
+ * // params.data.main is Prompt, params.data.prefix is string
+ * // Access via proxy: params.main, params.prefix also work
+ * const response = await params.main.invoke({ input: "hello" });
+ * ```
+ */
+export async function loadParameters<S extends EvalParameters>(
+  options: LoadParametersOptions<S>,
+): Promise<ParameterSet<InferParameters<S>, S> & Readonly<InferParameters<S>>> {
+  const {
+    projectName,
+    projectId,
+    slug,
+    version,
+    environment,
+    id,
+    appUrl,
+    apiKey,
+    orgName,
+    fetch,
+    forceLogin,
+    state: stateArg,
+    schema,
+  } = options;
+
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
+  if (!id) {
+    if (isEmpty(projectName) && isEmpty(projectId)) {
+      throw new Error("Must specify either projectName or projectId");
+    }
+    if (isEmpty(slug)) {
+      throw new Error("Must specify slug");
+    }
+  }
+
+  const state = stateArg ?? _globalState;
+  await state.login({
+    orgName,
+    apiKey,
+    appUrl,
+    fetch,
+    forceLogin,
+  });
+
+  let parametersObject: FunctionResponse | null;
+  if (id) {
+    parametersObject = await _getParametersById(
+      state,
+      id,
+      version,
+      environment,
+    );
+    if (!parametersObject) {
+      throw new Error(`Parameters with id ${id} not found.`);
+    }
+  } else {
+    assertDefined(slug, "Must specify slug");
+    parametersObject = await _getParametersBySlug(
+      state,
+      projectName,
+      projectId,
+      slug,
+      version,
+      environment,
+    );
+    if (!parametersObject) {
+      return await _createParametersFromDefaultSchemaValues({
+        state,
+        projectName,
+        projectId,
+        slug,
+        schema,
+      });
+    }
+  }
+  // Extract the parameters data from function_data.data
+  const functionData = parametersObject.function_data;
+  if (functionData?.type !== "parameters") {
+    throw new Error(
+      `Expected function_data.type to be 'parameters', got '${functionData?.type}'`,
+    );
+  }
+  const parametersData: Record<string, unknown> = functionData.data ?? {};
+
+  const storedSchema = functionData.__schema;
+
+  const metadata: ParametersMetadata = {
+    parametersId: parametersObject.id,
+    slug: parametersObject.slug ?? slug ?? "",
+    name: parametersObject.name ?? parametersObject.slug ?? slug ?? "",
+    projectId: parametersObject.project_id ?? projectId ?? "",
+    projectName: projectName,
+    version: parametersObject[TRANSACTION_ID_FIELD] ?? "",
+    environment: environment,
+    schema: storedSchema,
+  };
+
+  // Validate and transform the data according to the schema
+  const validatedParams = validateParameters(parametersData, schema);
+  return ParameterSet.create<InferParameters<S>, S>(metadata, validatedParams);
 }
 
 /**

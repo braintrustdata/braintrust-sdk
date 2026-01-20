@@ -48,6 +48,7 @@ import type {
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
+  ExtractSchema,
   InferParameters,
   validateParameters,
 } from "./eval-parameters";
@@ -103,16 +104,27 @@ export type EvalTask<
   Output,
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends EvalParameters,
+  ResolvedParameters extends EvalParameters = EvalParameters,
 > =
   | ((
       input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
+      hooks: EvalHooks<Expected, Metadata, ResolvedParameters>,
     ) => Promise<Output>)
   | ((
       input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
+      hooks: EvalHooks<Expected, Metadata, ResolvedParameters>,
     ) => Output);
+
+/**
+ * Version of EvalTask that accepts the raw parameters input type and extracts the schema.
+ */
+export type EvalTaskWithExtractedParameterType<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata,
+  Parameters,
+> = EvalTask<Input, Output, Expected, Metadata, ExtractSchema<Parameters>>;
 
 export type TaskProgressEvent = Omit<
   SSEProgressEventData,
@@ -122,7 +134,7 @@ export type TaskProgressEvent = Omit<
 export interface EvalHooks<
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends EvalParameters,
+  ResolvedParameters extends EvalParameters,
 > {
   /**
    * @deprecated Use `metadata` instead.
@@ -144,7 +156,7 @@ export interface EvalHooks<
    * The current parameters being used for this specific task execution.
    * Array parameters are converted to single values.
    */
-  parameters: InferParameters<Parameters>;
+  parameters: InferParameters<ResolvedParameters>;
   /**
    * Report progress that will show up in the playground.
    */
@@ -205,7 +217,9 @@ export interface Evaluator<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends EvalParameters = EvalParameters,
+  // Parameters can be either a direct schema or the result of loadParameters()
+  // We use `unknown` here to accept both, and extract the schema via ExtractSchema<>
+  Parameters = unknown,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -215,7 +229,13 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output, Expected, Metadata, Parameters>;
+  task: EvalTaskWithExtractedParameterType<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
@@ -225,8 +245,8 @@ export interface Evaluator<
   /**
    * A set of parameters that will be passed to the evaluator.
    * Can contain array values that will be converted to single values in the task.
+   * Can be either a schema object directly or the result of loadParameters().
    */
-
   parameters?: Parameters;
 
   /**
@@ -376,7 +396,7 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends EvalParameters = EvalParameters,
+  Parameters = unknown,
 > = {
   projectName: string;
   evalName: string;
@@ -476,7 +496,7 @@ globalThis._evals = {
   reporters: {},
 };
 
-export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
+export interface EvalOptions<EvalReport, Parameters = unknown> {
   /**
    * A `Reporter` which you can use to summarize progress after an Eval() runs.
    */
@@ -512,7 +532,7 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * The parameters to use for the evaluator.
    */
-  parameters?: InferParameters<Parameters>;
+  parameters?: InferParameters<ExtractSchema<Parameters>>;
   /**
    * Whether to retain the per-example Eval results and return them from Eval().
    *
@@ -555,7 +575,7 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
-  Parameters extends EvalParameters = EvalParameters,
+  Parameters = unknown,
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
@@ -848,9 +868,12 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
+    const resolvedEvaluatorParameters = await Promise.resolve(
+      evaluator.parameters,
+    );
     parameters = validateParameters(
       parameters ?? {},
-      evaluator.parameters ?? {},
+      resolvedEvaluatorParameters,
     );
 
     if ("_type" in dataResult) {

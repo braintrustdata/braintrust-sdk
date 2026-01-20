@@ -23,11 +23,13 @@ export type {
   InitDatasetOptions,
   InitLoggerOptions,
   InitOptions,
+  LoadParametersOptions,
   LoadPromptOptions,
   LogOptions,
   LoginOptions,
   MetricSummary,
   ObjectMetadata,
+  ParametersMetadata,
   PromiseUnless,
   PromptRowWithId,
   ScoreSummary,
@@ -77,7 +79,9 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  loadParameters,
   loadPrompt,
+  ParameterSet,
   log,
   logError,
   login,
@@ -222,7 +226,7 @@ export type {
   EvaluatorDefinitions,
 } from "../dev/types";
 
-export type { EvalParameters } from "./eval-parameters";
+export type { EvalParameters, InferParameters } from "./eval-parameters";
 
 export {
   evaluatorDefinitionSchema,

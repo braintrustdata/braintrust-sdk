@@ -35,6 +35,15 @@ export function isEmpty(a: unknown): a is null | undefined {
   return a === undefined || a === null;
 }
 
+export function assertDefined<T>(
+  value: T,
+  message?: string,
+): asserts value is NonNullable<T> {
+  if (value === undefined || value === null) {
+    throw new Error(message ?? "Expected value to be defined");
+  }
+}
+
 // A simple wrapper around a callable async function which computes the value
 // on-demand and saves it for future retrievals. The difference between this and
 // a bare Promise is that the async callable is run only when asked for. There
