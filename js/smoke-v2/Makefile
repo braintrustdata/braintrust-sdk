@@ -41,7 +41,7 @@ setup:
 		echo "==> Using provided BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
 	else \
 		echo "==> Building SDK and creating tarball"; \
-		cd ../../.. && pnpm turbo build --filter=braintrust && pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
+		cd ../../.. && pnpm exec turbo build --filter=braintrust && pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
 		\
 		for f in sdk/js/artifacts/braintrust-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \

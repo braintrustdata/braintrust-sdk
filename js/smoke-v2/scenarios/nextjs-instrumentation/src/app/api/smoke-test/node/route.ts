@@ -27,6 +27,12 @@ interface TestResponse {
   passedTests?: number;
   failedTests?: number;
   timestamp: string;
+  results?: Array<{
+    name: string;
+    status: "pass" | "fail" | "xfail";
+    error?: { message: string };
+    message?: string;
+  }>;
   failures?: Array<{
     testName: string;
     error?: string;
@@ -87,6 +93,7 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
           passedTests: results.length - failures.length,
           failedTests: failures.length,
           timestamp,
+          results,
           failures: failures.map((f) => ({
             testName: f.name,
             error: f.error?.message || "Unknown error",
@@ -105,6 +112,7 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
         passedTests: results.length,
         failedTests: 0,
         timestamp,
+        results,
       };
 
       return NextResponse.json(response, { status: 200 });
