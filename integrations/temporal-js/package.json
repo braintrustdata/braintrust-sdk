@@ -35,7 +35,7 @@
     "@temporalio/worker": "^1.14.1",
     "@temporalio/workflow": "^1.14.1",
     "@types/node": "^22.15.21",
-    "braintrust": "workspace:*",
+    "braintrust": ">=2.0.0",
     "tsup": "^8.5.0",
     "typescript": "5.5.4",
     "vitest": "^2.1.9"
