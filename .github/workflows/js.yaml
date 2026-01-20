@@ -683,6 +683,13 @@ jobs:
 
           ls -la
 
+      - name: Build shared test package (once for all scenarios)
+        working-directory: js/smoke-v2/shared
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+
       - name: Run scenario ${{ matrix.scenario }}
         working-directory: js/smoke-v2
         shell: bash
@@ -691,5 +698,6 @@ jobs:
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
           BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
+          SMOKE_V2_SHARED_DIST: shared/dist
         run: |
           make test ${{ matrix.scenario }}
