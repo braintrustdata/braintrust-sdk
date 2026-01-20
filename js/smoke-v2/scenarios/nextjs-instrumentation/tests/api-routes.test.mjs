@@ -6,6 +6,7 @@
 
 import { spawn } from "child_process";
 import { setTimeout as sleep } from "timers/promises";
+import { displayTestResults } from "../../../shared/dist/index.mjs";
 
 const PORT = 5555;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -20,8 +21,6 @@ let devServer = null;
  * Start the Next.js dev server
  */
 function startDevServer() {
-  console.log(`Starting Next.js dev server on port ${PORT}...\n`);
-
   devServer = spawn("npm", ["run", "dev"], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: true,
@@ -29,11 +28,7 @@ function startDevServer() {
   });
 
   devServer.stdout.on("data", (data) => {
-    const output = data.toString();
-    process.stdout.write(output);
-    if (output.includes("Ready") || output.includes("started server")) {
-      console.log("✓ Dev server ready\n");
-    }
+    process.stdout.write(data.toString());
   });
 
   devServer.stderr.on("data", (data) => {
@@ -53,25 +48,19 @@ function startDevServer() {
 async function waitForServer(maxTime = MAX_STARTUP_TIME) {
   const startTime = Date.now();
 
-  console.log("Waiting for server to be ready...");
-
   while (Date.now() - startTime < maxTime) {
     try {
       const response = await fetch(`${BASE_URL}/`, { method: "HEAD" });
       if (response.ok || response.status === 404) {
-        console.log("✓ Server is responding\n");
         await sleep(2000); // Buffer time
         return true;
       }
     } catch (error) {
       // Server not ready yet
     }
-
     await sleep(POLL_INTERVAL);
-    process.stdout.write(".");
   }
 
-  console.error("\n✗ Server failed to start within timeout\n");
   return false;
 }
 
@@ -79,30 +68,15 @@ async function waitForServer(maxTime = MAX_STARTUP_TIME) {
  * Test an API endpoint
  */
 async function testEndpoint(url, name) {
-  console.log(`Testing ${name}...`);
-  console.log(`  URL: ${url}`);
-
   try {
     const response = await fetch(url);
     const result = await response.json();
 
-    console.log(`  Status: ${response.status}`);
-    console.log(`  Runtime: ${result.runtime}`);
-    console.log(`  Message: ${result.message}`);
-
-    if (result.totalTests !== undefined) {
-      console.log(`  Tests: ${result.passedTests}/${result.totalTests} passed`);
-    }
-
-    if (result.failures && result.failures.length > 0) {
-      console.log(`  Failures:`);
-      for (const failure of result.failures) {
-        console.log(`    - ${failure.name}: ${failure.error}`);
-      }
-    }
-
-    console.log(`  Result: ${result.success ? "✅ PASS" : "❌ FAIL"}`);
-    console.log();
+    // Display results using standardized format
+    displayTestResults({
+      scenarioName: `${name} Test Results`,
+      results: result.results,
+    });
 
     return {
       success: result.success,
@@ -110,10 +84,7 @@ async function testEndpoint(url, name) {
       result,
     };
   } catch (error) {
-    console.error(`  Error: ${error.message}`);
-    console.log(`  Result: ❌ FAIL`);
-    console.log();
-
+    console.error(`Error testing ${name}:`, error.message);
     return {
       success: false,
       status: null,
@@ -127,9 +98,7 @@ async function testEndpoint(url, name) {
  */
 function cleanup(exitCode = 0) {
   if (devServer) {
-    console.log("\nStopping dev server...");
     devServer.kill("SIGTERM");
-
     setTimeout(() => {
       if (devServer && !devServer.killed) {
         devServer.kill("SIGKILL");
@@ -146,10 +115,6 @@ function cleanup(exitCode = 0) {
  * Main execution
  */
 async function main() {
-  console.log("Next.js API Routes Test");
-  console.log("=".repeat(60));
-  console.log();
-
   // Handle cleanup on exit
   process.on("SIGINT", () => cleanup(1));
   process.on("SIGTERM", () => cleanup(1));
@@ -161,15 +126,10 @@ async function main() {
     // Wait for server to be ready
     const serverReady = await waitForServer();
     if (!serverReady) {
-      console.error("✗ Server startup failed\n");
+      console.error("Server startup failed");
       cleanup(1);
       return;
     }
-
-    console.log("=".repeat(60));
-    console.log("Running Tests");
-    console.log("=".repeat(60));
-    console.log();
 
     // Test Edge Runtime
     const edgeResult = await testEndpoint(EDGE_URL, "Edge Runtime");
@@ -177,32 +137,11 @@ async function main() {
     // Test Node.js Runtime
     const nodeResult = await testEndpoint(NODE_URL, "Node.js Runtime");
 
-    // Summary
-    console.log("=".repeat(60));
-    console.log("Summary");
-    console.log("=".repeat(60));
-    console.log();
-
+    // Exit based on results
     const allPassed = edgeResult.success && nodeResult.success;
-
-    console.log(
-      `Edge Runtime:   ${edgeResult.success ? "✅ PASS" : "❌ FAIL"}`,
-    );
-    console.log(
-      `Node.js Runtime: ${nodeResult.success ? "✅ PASS" : "❌ FAIL"}`,
-    );
-    console.log();
-
-    if (allPassed) {
-      console.log("✅ All tests passed!");
-      cleanup(0);
-    } else {
-      console.log("❌ Some tests failed");
-      cleanup(1);
-    }
+    cleanup(allPassed ? 0 : 1);
   } catch (error) {
-    console.error("\n❌ Unexpected error:");
-    console.error(error);
+    console.error("Unexpected error:", error);
     cleanup(1);
   }
 }

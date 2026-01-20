@@ -53,6 +53,8 @@ setup:
 
 test: setup
 	@echo "==> Running otel-v1 tests"
-	npx tsx tests/basic.test.ts
-	npx tsx tests/filtering.test.ts
-	npx tsx tests/shared-suite.test.ts
+	@FAILED=0; \
+	npx tsx tests/basic.test.ts || FAILED=1; \
+	npx tsx tests/filtering.test.ts || FAILED=1; \
+	npx tsx tests/shared-suite.test.ts || FAILED=1; \
+	exit $$FAILED

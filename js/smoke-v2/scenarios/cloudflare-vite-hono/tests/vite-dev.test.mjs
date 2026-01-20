@@ -14,6 +14,7 @@
 
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
+import { displayTestResults } from "../../../shared/dist/index.mjs";
 
 const MAX_RETRIES = 20;
 const RETRY_DELAY_MS = 500;
@@ -109,22 +110,17 @@ async function testViteDevServer() {
     };
   }
 
-  // Print results
-  console.log("\n" + "=".repeat(60));
-  console.log("VITE DEV SERVER TEST RESULTS");
-  console.log("=".repeat(60) + "\n");
+  // Convert to TestResult format and display
+  const results = [];
 
   if (testResult.success) {
-    console.log("✓ Status: PASS - Vite dev server started successfully");
-    console.log("\n🎉 The Nunjucks issue may have been fixed!");
-    console.log(
-      "Consider updating documentation if this is consistently passing.\n",
-    );
+    results.push({
+      status: "pass",
+      name: "viteDevServerStartup",
+      message: "Vite dev server started successfully",
+    });
   } else if (testResult.issue === "vite-nunjucks-incompatibility") {
-    console.log("✗ Status: FAIL - Known Nunjucks incompatibility\n");
-    console.log("Actual error from Vite:");
-    console.log("-".repeat(60));
-    // Show the actual error output
+    // Extract error details
     const errorLines = (output + errorOutput)
       .split("\n")
       .filter(
@@ -133,44 +129,51 @@ async function testViteDevServer() {
           line.includes("Error") ||
           line.includes("at "),
       )
-      .slice(0, 15); // Show first 15 relevant lines
-    console.log(errorLines.join("\n"));
-    console.log("-".repeat(60));
-    console.log(
-      "\nRoot cause: Nunjucks uses Object.setPrototypeOf in ways that",
-    );
-    console.log("fail in Vite's ESM bundler during dependency pre-bundling.\n");
-    console.log("Recommendation: Use 'braintrust/browser' import or configure");
-    console.log("Vite to exclude Nunjucks from optimization.\n");
+      .slice(0, 3);
+
+    const errorStack = errorLines.join("\n");
+
+    results.push({
+      status: "xfail",
+      name: "viteDevServerStartup",
+      message:
+        "Expected failure: Nunjucks incompatibility with Vite bundler. " +
+        "Root cause: Nunjucks uses Object.setPrototypeOf in ways incompatible with Vite's ESM bundler. " +
+        "Recommendation: Use 'braintrust/browser' import or exclude Nunjucks from Vite optimization",
+      error: errorStack
+        ? {
+            message: testResult.error,
+            stack: errorStack,
+          }
+        : undefined,
+    });
   } else {
-    console.log("✗ Status: UNEXPECTED FAILURE");
-    console.log("  Issue:", testResult.issue);
-    console.log("  Message:", testResult.message);
-    if (testResult.output) {
-      console.log("\nOutput:");
-      console.log("-".repeat(60));
-      console.log(testResult.output);
-      console.log("-".repeat(60));
-    }
+    results.push({
+      status: "fail",
+      name: "viteDevServerStartup",
+      message: testResult.message,
+      error: testResult.output
+        ? {
+            message: testResult.message,
+            stack: testResult.output,
+          }
+        : { message: testResult.message },
+    });
   }
 
-  console.log("\n" + "=".repeat(60) + "\n");
+  // Use standardized display
+  displayTestResults({
+    scenarioName: "Vite Dev Server Compatibility Test",
+    results,
+  });
 
   // Return the actual test status
   if (testResult.issue === "vite-nunjucks-incompatibility") {
-    console.log("Test result: FAIL (Known issue - expected to fail)");
-    console.log(
-      "\n💡 This is a known limitation. Configure CI to allow this failure.",
-    );
-    return 1; // Actual failure
+    // Expected failure - return 1 but this is documented
+    return 1;
   } else if (testResult.success) {
-    console.log("Test result: PASS (Vite dev server started successfully!)");
-    console.log(
-      "\n🎉 The Nunjucks issue may be fixed! Review and update documentation.",
-    );
     return 0;
   } else {
-    console.log("Test result: FAIL (Unexpected behavior)");
     return 1;
   }
 }

@@ -12,6 +12,9 @@ import {
   runEvalSmokeTest,
   runImportVerificationTests,
   runPromptTemplatingTests,
+  displayTestResults,
+  hasFailures,
+  getFailureCount,
   type TestResult,
 } from "@braintrust/smoke-test-shared";
 import * as braintrust from "braintrust";
@@ -32,16 +35,10 @@ export async function runSharedTestSuites() {
   });
 
   try {
-    // Run import verification tests first (forces bundler to process all exports)
+    // Run tests
     const importResults = await runImportVerificationTests(braintrust);
-
-    // Run functional tests
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
-
-    // Run eval smoke test
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
-
-    // Run prompt templating tests
     const promptTemplatingResults = await runPromptTemplatingTests({
       Prompt: braintrust.Prompt,
     });
@@ -54,30 +51,15 @@ export async function runSharedTestSuites() {
       ...promptTemplatingResults,
     ];
 
-    // Verify all tests passed
-    const failures = results.filter((r) => r.status === "fail");
+    // Display results
+    displayTestResults({
+      scenarioName: "Deno Node Test Results",
+      results,
+    });
 
-    if (failures.length > 0) {
-      console.error("Test failures:");
-      for (const failure of failures) {
-        console.error(`  ❌ ${failure.name}: ${failure.error?.message}`);
-      }
-      throw new Error(`${failures.length} test(s) failed`);
-    }
-
-    // Log results by category
-    console.log("✅ All shared test suites passed:");
-    console.log("\nImport Verification:");
-    for (const result of importResults) {
-      console.log(`  ✓ ${result.name}: ${result.message}`);
-    }
-    console.log("\nFunctional Tests:");
-    for (const result of functionalResults) {
-      console.log(`  ✓ ${result.name}: ${result.message}`);
-    }
-    console.log("\nPrompt Templating Tests:");
-    for (const result of promptTemplatingResults) {
-      console.log(`  ✓ ${result.name}: ${result.message}`);
+    // Check for failures
+    if (hasFailures(results)) {
+      throw new Error(`${getFailureCount(results)} test(s) failed`);
     }
 
     return results;
@@ -96,7 +78,4 @@ Deno.test("Run shared test suites", async () => {
     0,
     "All tests should pass",
   );
-
-  // Log test count for visibility
-  console.log(`\n✅ All ${results.length} tests passed`);
 });

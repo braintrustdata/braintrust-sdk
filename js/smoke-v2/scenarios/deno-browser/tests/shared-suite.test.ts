@@ -12,6 +12,9 @@ import {
   runImportVerificationTests,
   testMustacheTemplate,
   testNunjucksTemplate,
+  displayTestResults,
+  hasFailures,
+  getFailureCount,
   type TestResult,
 } from "@braintrust/smoke-test-shared";
 import * as braintrust from "braintrust/browser";
@@ -28,6 +31,7 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
   });
 
   try {
+    // Run tests
     const importResults = await runImportVerificationTests(braintrust);
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
@@ -46,7 +50,7 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
       )
         ? {
             ...nunjucksResult,
-            status: "pass" as const,
+            status: "xfail" as const,
             message:
               "Expected failure: Nunjucks not supported in browser build",
           }
@@ -60,12 +64,15 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
       nunjucksResultHandled,
     ];
 
-    const failures = results.filter((r) => r.status === "fail");
-    if (failures.length > 0) {
-      for (const failure of failures) {
-        console.error(`  ❌ ${failure.name}: ${failure.error?.message}`);
-      }
-      throw new Error(`${failures.length} test(s) failed`);
+    // Display results
+    displayTestResults({
+      scenarioName: "Deno Browser Test Results",
+      results,
+    });
+
+    // Check for failures
+    if (hasFailures(results)) {
+      throw new Error(`${getFailureCount(results)} test(s) failed`);
     }
 
     return results;
@@ -77,5 +84,4 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
 Deno.test("Run shared test suites (browser build)", async () => {
   const results = await runSharedTestSuites();
   assertEquals(results.filter((r) => r.status === "fail").length, 0);
-  console.log(`\n✅ All ${results.length} tests passed`);
 });

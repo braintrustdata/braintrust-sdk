@@ -1,4 +1,8 @@
 import { spawn, execSync } from "node:child_process";
+import {
+  displayTestResults,
+  hasFailures,
+} from "../../../shared/dist/index.mjs";
 
 const PORT = 8800;
 const MAX_RETRIES = 20;
@@ -65,7 +69,15 @@ async function runTest() {
     const response = await fetch(`http://localhost:${PORT}/api/test`);
     const result = await response.json();
 
-    console.log(JSON.stringify(result, null, 2));
+    if (result.results && result.results.length > 0) {
+      displayTestResults({
+        scenarioName: "Cloudflare Vite Hono Test Results",
+        results: result.results,
+      });
+    } else {
+      console.log(JSON.stringify(result, null, 2));
+    }
+
     exitCode = result.success ? 0 : 1;
   } catch (error) {
     console.error("Error:", error.message, "\n", output);

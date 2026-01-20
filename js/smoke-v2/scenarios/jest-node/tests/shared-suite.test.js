@@ -4,6 +4,9 @@ const {
   runBasicLoggingTests,
   runImportVerificationTests,
   runPromptTemplatingTests,
+  displayTestResults,
+  hasFailures,
+  getFailureCount,
 } = require("../../../shared/dist/index.js");
 
 const braintrust = require("braintrust");
@@ -43,38 +46,15 @@ async function runSharedTestSuites() {
 }
 
 test("shared test suites pass in Jest", async () => {
-  const {
-    all: results,
-    import: importResults,
-    functional: functionalResults,
-    templating: promptTemplatingResults,
-  } = await runSharedTestSuites();
+  const { all: results } = await runSharedTestSuites();
 
+  // Display results
+  displayTestResults({
+    scenarioName: "Jest Node Test Results",
+    results,
+  });
+
+  // Check for failures
   const failures = results.filter((r) => r.status === "fail");
-
-  if (failures.length > 0) {
-    console.error("Test failures:");
-    for (const failure of failures) {
-      console.error(`  ❌ ${failure.name}: ${failure.error?.message}`);
-      if (failure.error?.stack) {
-        console.error(`    ${failure.error.stack}`);
-      }
-    }
-  }
-
   expect(failures).toHaveLength(0);
-
-  console.log(`\n✅ All ${results.length} shared test suites passed!\n`);
-  console.log("Import Verification Tests:");
-  for (const result of importResults) {
-    console.log(`  ✓ ${result.name}: ${result.message}`);
-  }
-  console.log("\nFunctional Tests:");
-  for (const result of functionalResults) {
-    console.log(`  ✓ ${result.name}: ${result.message}`);
-  }
-  console.log("\nPrompt Templating Tests:");
-  for (const result of promptTemplatingResults) {
-    console.log(`  ✓ ${result.name}: ${result.message}`);
-  }
 });
