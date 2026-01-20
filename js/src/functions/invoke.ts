@@ -77,12 +77,6 @@ export interface InvokeFunctionArgs<
   messages?: Message[];
 
   /**
-   * Context for functions that operate on spans/traces (e.g., facets). Should contain
-   * `object_type`, `object_id`, and `scope` fields.
-   */
-  context?: InvokeFunctionRequest["context"];
-
-  /**
    * Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
    * It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
    * to the function.
@@ -157,7 +151,6 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     fetch,
     input,
     messages,
-    context,
     parent: parentArg,
     metadata,
     tags,
@@ -205,7 +198,6 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     ...functionId.data,
     input,
     messages,
-    context,
     parent,
     metadata,
     tags,
@@ -269,17 +261,24 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  * @param options.projectName The project name containing the function.
  * @param options.slug The slug of the function to invoke.
  * @param options.version Optional version of the function to use. Defaults to latest.
+ * @param options.state Optional Braintrust state to use.
  * @returns A function that can be used as a task or scorer in Eval().
  */
 export function initFunction({
   projectName,
   slug,
   version,
+  state,
 }: {
   projectName: string;
   slug: string;
   version?: string;
+  state?: BraintrustState;
 }) {
+  // Disable span cache since remote function spans won't be in the local cache
+  const s = state ?? _internalGetGlobalState();
+  s?.spanCache?.disable();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
     return await invoke({

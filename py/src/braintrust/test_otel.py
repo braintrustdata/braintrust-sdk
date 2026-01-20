@@ -735,3 +735,76 @@ def test_add_span_parent_to_baggage():
     # Test with None span (should return None and warn)
     token = add_span_parent_to_baggage(None)
     assert token is None
+
+
+def test_parent_from_headers_with_custom_propagator():
+    """Test parent_from_headers with a custom propagator."""
+    if not _check_otel_installed():
+        pytest.skip("OpenTelemetry SDK not fully installed, skipping test")
+
+    from braintrust.otel import parent_from_headers
+    from opentelemetry import baggage as otel_baggage
+    from opentelemetry import context as otel_context
+    from opentelemetry import trace
+    from opentelemetry.propagators.textmap import CarrierT, Getter, TextMapPropagator, default_getter
+    from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
+
+    class CustomHeaderPropagator(TextMapPropagator):
+        """Custom propagator that reads trace context from X-Custom-* headers."""
+
+        def extract(
+            self,
+            carrier: CarrierT,
+            context: otel_context.Context | None = None,
+            getter: Getter = default_getter,
+        ) -> otel_context.Context:
+            if context is None:
+                context = otel_context.get_current()
+
+            trace_id = getter.get(carrier, "X-Custom-Trace-Id")
+            span_id = getter.get(carrier, "X-Custom-Span-Id")
+
+            if trace_id and span_id:
+                trace_id_list = trace_id if isinstance(trace_id, list) else [trace_id]
+                span_id_list = span_id if isinstance(span_id, list) else [span_id]
+
+                span_context = SpanContext(
+                    trace_id=int(trace_id_list[0], 16),
+                    span_id=int(span_id_list[0], 16),
+                    is_remote=True,
+                    trace_flags=TraceFlags.SAMPLED,
+                )
+                span = NonRecordingSpan(span_context)
+                context = trace.set_span_in_context(span, context)
+
+            # Also extract baggage from standard baggage header
+            baggage_header = getter.get(carrier, "baggage")
+            if baggage_header:
+                baggage_list = baggage_header if isinstance(baggage_header, list) else [baggage_header]
+                for item in baggage_list[0].split(","):
+                    if "=" in item:
+                        key, value = item.split("=", 1)
+                        context = otel_baggage.set_baggage(key.strip(), value.strip(), context)
+
+            return context
+
+        def inject(self, carrier, context=None, setter=None):
+            pass  # Not needed for this test
+
+        @property
+        def fields(self):
+            return {"X-Custom-Trace-Id", "X-Custom-Span-Id", "baggage"}
+
+    propagator = CustomHeaderPropagator()
+
+    # Custom header format
+    headers = {
+        "X-Custom-Trace-Id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "X-Custom-Span-Id": "00f067aa0ba902b7",
+        "baggage": "braintrust.parent=project_name:test-project",
+    }
+
+    result = parent_from_headers(headers, propagator=propagator)
+    assert result is not None
+    assert isinstance(result, str)
+    assert len(result) > 0

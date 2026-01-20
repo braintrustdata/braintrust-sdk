@@ -69,3 +69,6 @@ export {
   testNunjucksTemplate,
   runPromptTemplatingTests,
 } from "./suites/prompt-templating";
+
+// Eval smoke test suite
+export { runEvalSmokeTest } from "./suites/eval-smoke";
