@@ -16,11 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: Temporarily reduced to speed up iteration on deno smoke tests
-        os: [ubuntu-latest]
-        node-version: [20]
-        # os: [ubuntu-latest, windows-latest]
-        # node-version: [20, 22]
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
@@ -111,9 +108,6 @@ jobs:
   api-compatibility:
     runs-on: ubuntu-latest
     # Run in parallel with build job
-    # TODO: Temporarily disabled to speed up iteration
-    if: false
-
     strategy:
       fail-fast: false
       matrix:
@@ -252,10 +246,6 @@ jobs:
         working-directory: js/artifacts
         shell: bash
         run: |
-          echo "==> Current directory: $(pwd)"
-          echo "==> Listing artifacts before copy:"
-          ls -la
-
           # Copy braintrust tarball to well-known path
           for f in braintrust-[0-9]*.tgz; do
             if [ -f "$f" ]; then
@@ -273,9 +263,6 @@ jobs:
               break
             fi
           done
-
-          echo "==> Listing artifacts after copy:"
-          ls -la
 
       - name: Build shared test package (once for all scenarios)
         working-directory: js/smoke/shared
