@@ -26,6 +26,8 @@ export type OtherExperimentLogFields = {
   datasetRecordId: string;
   origin: z.infer<typeof objectReferenceSchema>;
   span_attributes: Record<string, unknown>;
+  facets: Record<string, unknown>;
+  vectors: Array<{ path: (string | number)[]; vector: number[] }>;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;
