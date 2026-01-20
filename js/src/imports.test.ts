@@ -44,11 +44,13 @@ describe("CLI import restrictions", () => {
           const importPath = importMatch[1];
 
           // Check if the import path references the CLI directory
+          // Only match actual /cli/ directory paths, not package names containing "cli"
+          // (e.g., @temporalio/client should not match)
           if (
-            importPath.includes("/cli") ||
             importPath.includes("/cli/") ||
             importPath === "./cli" ||
             importPath === "../cli" ||
+            importPath.endsWith("/cli") ||
             importPath.match(/^\.\.\/.*\/cli$/) ||
             importPath.match(/^\.\.\/.*\/cli\//)
           ) {

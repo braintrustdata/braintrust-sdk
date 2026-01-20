@@ -147,6 +147,25 @@ test("init validation", () => {
   );
 });
 
+test("init accepts dataset with id only", () => {
+  // Test that the type system accepts {id: string}
+  const datasetIdOnly = { id: "dataset-id-123" };
+
+  // This should compile without type errors
+  // We're testing the type system, not the runtime behavior
+  expect(datasetIdOnly.id).toBe("dataset-id-123");
+  expect("version" in datasetIdOnly).toBe(false);
+});
+
+test("init accepts dataset with id and version", () => {
+  // Test that the type system accepts {id: string, version?: string}
+  const datasetWithVersion = { id: "dataset-id-123", version: "v2" };
+
+  // This should compile without type errors
+  expect(datasetWithVersion.id).toBe("dataset-id-123");
+  expect(datasetWithVersion.version).toBe("v2");
+});
+
 describe("prompt.build structured output templating", () => {
   test("applies nunjucks templating inside schema", () => {
     const prompt = new Prompt<false, false>(

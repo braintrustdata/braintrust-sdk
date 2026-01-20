@@ -144,6 +144,11 @@ class AsyncScoringControlAsyncScoringControl5(TypedDict):
     triggered_xact_id: str
 
 
+class AsyncScoringControlAsyncScoringControl6(TypedDict):
+    kind: Literal['mark_attempt_failed']
+    function_ids: Sequence[Any]
+
+
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
@@ -484,6 +489,10 @@ class Dataset(TypedDict):
     """
     User-controlled metadata about the dataset
     """
+    url_slug: str
+    """
+    URL slug for the dataset. used to construct dataset URLs
+    """
 
 
 class DatasetEventMetadata(TypedDict):
@@ -530,6 +539,43 @@ class EnvVar(TypedDict):
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
+
+
+class EvalStatusPageConfig(TypedDict):
+    score_columns: NotRequired[Sequence[str] | None]
+    """
+    The score columns to display on the page
+    """
+    metric_columns: NotRequired[Sequence[str] | None]
+    """
+    The metric columns to display on the page
+    """
+    grouping_field: NotRequired[str | None]
+    """
+    The metadata field to use for grouping experiments (model)
+    """
+    filter: NotRequired[str | None]
+    """
+    BTQL filter to apply to experiment data
+    """
+    sort_by: NotRequired[str | None]
+    """
+    Field to sort results by (format: 'score:<name>' or 'metric:<name>')
+    """
+    sort_order: NotRequired[Literal['asc', 'desc'] | None]
+    """
+    Sort order (ascending or descending)
+    """
+    api_key: NotRequired[str | None]
+    """
+    The API key used for fetching experiment data
+    """
+
+
+EvalStatusPageTheme: TypeAlias = Literal['light', 'dark']
+"""
+The theme for the page
+"""
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -749,20 +795,24 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'custom_view', 'preprocessor', 'facet'
+    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier'
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
 
 
-FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnum: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+]
 """
 The type of global function. Defaults to 'scorer'.
 """
 
 
-FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnumNullish: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+]
 
 
 class GitMetadataSettings(TypedDict):
@@ -1674,7 +1724,18 @@ class PromptDataNullishOrigin(TypedDict):
 class PromptParserNullish(TypedDict):
     type: Literal['llm_classifier']
     use_cot: bool
-    choice_scores: Mapping[str, float]
+    choice_scores: NotRequired[Mapping[str, float] | None]
+    """
+    Map of choices to scores (0-1). Used by scorers.
+    """
+    choice: NotRequired[Sequence[str] | None]
+    """
+    List of valid choices without score mapping. Used by classifiers that deposit output to tags.
+    """
+    allow_no_match: NotRequired[bool | None]
+    """
+    If true, adds a 'No match' option. When selected, no tag is deposited.
+    """
 
 
 class PromptSessionEvent(TypedDict):
@@ -2104,7 +2165,7 @@ class SpanScope(TypedDict):
 
 
 SpanType: TypeAlias = Literal[
-    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor'
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
 ]
 """
 Type of the span, for display purposes only
@@ -2384,6 +2445,7 @@ AsyncScoringControl: TypeAlias = (
     | AsyncScoringControlAsyncScoringControl3
     | AsyncScoringControlAsyncScoringControl4
     | AsyncScoringControlAsyncScoringControl5
+    | AsyncScoringControlAsyncScoringControl6
 )
 
 
@@ -2528,6 +2590,43 @@ class DatasetEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+
+
+class EvalStatusPage(TypedDict):
+    id: str
+    """
+    Unique identifier for the eval status page
+    """
+    project_id: str
+    """
+    Unique identifier for the project that the eval status page belongs under
+    """
+    user_id: NotRequired[str | None]
+    """
+    Identifies the user who created the eval status page
+    """
+    created: NotRequired[str | None]
+    """
+    Date of eval status page creation
+    """
+    deleted_at: NotRequired[str | None]
+    """
+    Date of eval status page deletion, or null if the eval status page is still active
+    """
+    name: str
+    """
+    Name of the eval status page
+    """
+    description: NotRequired[str | None]
+    """
+    Textual description of the eval status page
+    """
+    logo_url: NotRequired[str | None]
+    """
+    URL of the logo to display on the page
+    """
+    theme: EvalStatusPageTheme
+    config: EvalStatusPageConfig
 
 
 class Experiment(TypedDict):
@@ -3228,6 +3327,7 @@ class View(TypedDict):
         'prompts',
         'tools',
         'scorers',
+        'classifiers',
         'logs',
         'monitor',
         'for_review',

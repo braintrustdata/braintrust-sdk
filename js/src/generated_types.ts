@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 87ac73f4945a47eff2d4e42775ba4dbc58854c73) -- do not modify
+// Auto-generated file (internal git SHA c99d1e6fbf062688da7f1f22394c72ea480fe81a) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -182,6 +182,10 @@ export const AsyncScoringControl = z.union([
     function_ids: z.array(z.unknown()).min(1),
     triggered_xact_id: z.string(),
   }),
+  z.object({
+    kind: z.literal("mark_attempt_failed"),
+    function_ids: z.array(z.unknown()).min(1),
+  }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
 export const BraintrustAttachmentReference = z.object({
@@ -222,6 +226,8 @@ export const FunctionTypeEnum = z.enum([
   "custom_view",
   "preprocessor",
   "facet",
+  "classifier",
+  "tag",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -491,6 +497,7 @@ export const Dataset = z.object({
   metadata: z
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
+  url_slug: z.string(),
 });
 export type DatasetType = z.infer<typeof Dataset>;
 export const ObjectReferenceNullish = z.union([
@@ -555,6 +562,33 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalStatusPageTheme = z.enum(["light", "dark"]);
+export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
+export const EvalStatusPageConfig = z
+  .object({
+    score_columns: z.union([z.array(z.string()), z.null()]),
+    metric_columns: z.union([z.array(z.string()), z.null()]),
+    grouping_field: z.union([z.string(), z.null()]),
+    filter: z.union([z.string(), z.null()]),
+    sort_by: z.union([z.string(), z.null()]),
+    sort_order: z.union([z.enum(["asc", "desc"]), z.null()]),
+    api_key: z.union([z.string(), z.null()]),
+  })
+  .partial();
+export type EvalStatusPageConfigType = z.infer<typeof EvalStatusPageConfig>;
+export const EvalStatusPage = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  logo_url: z.union([z.string(), z.null()]).optional(),
+  theme: EvalStatusPageTheme,
+  config: EvalStatusPageConfig,
+});
+export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -603,6 +637,7 @@ export const SpanType = z.union([
     "automation",
     "facet",
     "preprocessor",
+    "classifier",
   ]),
   z.null(),
 ]);
@@ -787,7 +822,9 @@ export const PromptParserNullish = z.union([
   z.object({
     type: z.literal("llm_classifier"),
     use_cot: z.boolean(),
-    choice_scores: z.record(z.number().gte(0).lte(1)),
+    choice_scores: z.record(z.number().gte(0).lte(1)).optional(),
+    choice: z.array(z.string()).optional(),
+    allow_no_match: z.boolean().optional(),
   }),
   z.null(),
 ]);
@@ -859,6 +896,8 @@ export const FunctionTypeEnumNullish = z.union([
     "custom_view",
     "preprocessor",
     "facet",
+    "classifier",
+    "tag",
   ]),
   z.null(),
 ]);
@@ -1109,12 +1148,20 @@ export const FunctionObjectType = z.enum([
   "tool",
   "scorer",
   "task",
+  "workflow",
   "custom_view",
   "preprocessor",
   "facet",
+  "classifier",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
-export const FunctionOutputType = z.enum(["completion", "score", "any"]);
+export const FunctionOutputType = z.enum([
+  "completion",
+  "score",
+  "facet",
+  "tag",
+  "any",
+]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
 export const GitMetadataSettings = z.object({
   collect: z.enum(["all", "none", "some"]),
@@ -1770,6 +1817,7 @@ export const View = z.object({
     "prompts",
     "tools",
     "scorers",
+    "classifiers",
     "logs",
     "monitor",
     "for_review",
