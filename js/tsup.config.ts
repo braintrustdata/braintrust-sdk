@@ -24,13 +24,6 @@ export default defineConfig([
     outDir: "dist",
     removeNodeProtocol: false,
     external: ["zod"],
-    noExternal: [
-      "mustache",
-      "eventsource-parser",
-      "zod-to-json-schema",
-      "@vercel/functions",
-    ],
-    platform: "browser",
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
