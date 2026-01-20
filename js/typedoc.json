@@ -7,7 +7,7 @@
     "externalPattern": [
         "**/node_modules/**"
     ],
-    "exclude": ["**/examples/**", "**/smoke/**", "**/smoke-v2/**"],
+    "exclude": ["**/examples/**", "**/smoke/**"],
     "plugin": ["typedoc-plugin-markdown"],
     "out": "../../docs/reference/sdks/ts-api",
     "githubPages": false,

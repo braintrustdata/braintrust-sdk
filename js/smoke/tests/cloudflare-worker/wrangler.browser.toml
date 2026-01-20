@@ -1,3 +1,0 @@
-name = "braintrust-smoke-test-browser"
-main = "src/browser-no-compat.ts"
-compatibility_date = "2024-09-23"

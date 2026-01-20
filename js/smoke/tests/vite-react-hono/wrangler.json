@@ -1,7 +1,0 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "braintrust-vite-react-hono-smoke-test",
-  "main": "./src/worker/index.ts",
-  "compatibility_date": "2025-01-15",
-  "compatibility_flags": ["nodejs_compat"]
-}

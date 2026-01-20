@@ -141,15 +141,18 @@ export async function testCoreLoggingExports(
     assertType(module.flush, "function", "flush must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Core logging exports verified (7 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -174,15 +177,18 @@ export async function testDatasetExports(
     assertType(module.Dataset, "function", "Dataset must be a function/class");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Dataset exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -210,15 +216,18 @@ export async function testPromptExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Prompt exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -254,15 +263,18 @@ export async function testExperimentExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Experiment exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -324,15 +336,18 @@ export async function testEvalExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Eval exports verified (7 runtime exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -366,15 +381,18 @@ export async function testTracingExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Tracing exports verified (5 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -415,15 +433,18 @@ export async function testClientWrapperExports(
     }
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: `Client wrapper exports verified (1 required + ${optionalCount} optional)`,
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -458,15 +479,18 @@ export async function testUtilityExports(
     assertType(module.permalink, "function", "permalink must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Utility exports verified (4 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -491,15 +515,18 @@ export async function testFunctionExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Function exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -527,15 +554,18 @@ export async function testFramework2Exports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Framework2 exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -557,15 +587,18 @@ export async function testIDGeneratorExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "ID generator exports verified (1 export)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -590,15 +623,18 @@ export async function testTestingExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Testing exports verified (1 export)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -623,15 +659,18 @@ export async function testStateManagementExports(
     assertType(module.login, "function", "login must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "State management exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }

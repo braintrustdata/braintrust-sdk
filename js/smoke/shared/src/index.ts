@@ -37,11 +37,21 @@ export {
   assertHasProperty,
 } from "./helpers/assertions";
 
+// Export display utilities
+export type { DisplayTestResultsOptions } from "./helpers/display";
+export {
+  displayTestResults,
+  hasFailures,
+  getFailureCount,
+  getTestStats,
+} from "./helpers/display";
+
 // Export test suites
 export {
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
+  testJSONAttachment,
   runBasicLoggingTests,
 } from "./suites/basic-logging";
 

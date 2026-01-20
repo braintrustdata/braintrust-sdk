@@ -205,7 +205,7 @@ jobs:
           cd js && pnpm test:api-compat
 
   # Smoke v2: Auto-discovery of scenarios
-  smoke-v2-discover:
+  smoke-discover:
     runs-on: ubuntu-latest
     outputs:
       scenarios: ${{ steps.discover.outputs.scenarios }}
@@ -213,7 +213,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Discover scenarios
         id: discover
-        working-directory: js/smoke-v2
+        working-directory: js/smoke
         shell: bash
         run: |
           # Use the same auto-discovery logic as the Makefile
@@ -221,14 +221,14 @@ jobs:
           echo "scenarios=$SCENARIOS" >> "$GITHUB_OUTPUT"
           echo "Discovered scenarios: $SCENARIOS"
 
-  smoke-v2-test:
-    needs: [build, smoke-v2-discover]
+  smoke-test:
+    needs: [build, smoke-discover]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJson(needs.smoke-v2-discover.outputs.scenarios) }}
+        scenario: ${{ fromJson(needs.smoke-discover.outputs.scenarios) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -236,7 +236,7 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
         with:
-          working_directory: js/smoke-v2
+          working_directory: js/smoke
 
       - uses: pnpm/action-setup@v4
 
@@ -278,14 +278,14 @@ jobs:
           ls -la
 
       - name: Build shared test package (once for all scenarios)
-        working-directory: js/smoke-v2/shared
+        working-directory: js/smoke/shared
         shell: bash
         run: |
           npm ci
           npm run build
 
       - name: Run scenario ${{ matrix.scenario }}
-        working-directory: js/smoke-v2
+        working-directory: js/smoke
         shell: bash
         env:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}

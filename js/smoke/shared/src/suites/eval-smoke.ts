@@ -115,15 +115,18 @@ export async function runEvalSmokeTest(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: `Eval smoke test passed (${evalData.length} cases)`,
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }

@@ -1,9 +1,0 @@
-{
-  "name": "braintrust-deno-node-smoke-test",
-  "version": "1.0.0",
-  "description": "Smoke test for Braintrust Node build in Deno runtime",
-  "private": true,
-  "scripts": {
-    "test": "deno test --no-config --import-map=./deno.json --lock=deno.lock --allow-env --allow-read=.,../build --allow-net shared_suite_test.ts span_test.ts"
-  }
-}
