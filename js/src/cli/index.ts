@@ -338,7 +338,7 @@ async function initFile({
           plugins,
           externalPackages,
         }),
-        external: [],
+        external: ["fsevents", "chokidar"],
         write: true,
         plugins: [],
         minify: true,
