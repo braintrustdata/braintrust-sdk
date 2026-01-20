@@ -40,7 +40,7 @@ importers:
         version: 2.6.6(@types/node@20.10.5)(typescript@5.3.3)
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(postcss@8.5.6)(typescript@5.3.3)(yaml@2.8.2)
+        version: 8.3.5(postcss@8.5.6)(tsx@4.21.0)(typescript@5.3.3)(yaml@2.8.2)
       typedoc:
         specifier: ^0.25.13
         version: 0.25.13(typescript@5.3.3)
@@ -110,7 +110,7 @@ importers:
         version: link:../../js
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2)
+        version: 8.5.1(postcss@8.5.6)(tsx@4.21.0)(typescript@5.5.4)(yaml@2.8.2)
       typedoc:
         specifier: ^0.28.15
         version: 0.28.15(typescript@5.5.4)
@@ -135,7 +135,7 @@ importers:
         version: 20.10.5
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(postcss@8.5.6)(typescript@5.3.3)(yaml@2.8.2)
+        version: 8.3.5(postcss@8.5.6)(tsx@4.21.0)(typescript@5.3.3)(yaml@2.8.2)
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
@@ -154,34 +154,6 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
-
-  internal/golden/ai-sdk-v5:
-    dependencies:
-      '@ai-sdk/anthropic':
-        specifier: ^2.0.39
-        version: 2.0.57(zod@3.25.76)
-      '@ai-sdk/openai':
-        specifier: ^2.0.56
-        version: 2.0.89(zod@3.25.76)
-      ai:
-        specifier: ^5.0.116
-        version: 5.0.121(zod@3.25.76)
-      braintrust:
-        specifier: link:../../../js
-        version: link:../../../js
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.16
-      tsx:
-        specifier: ^4.7.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.3.0
-        version: 5.5.4
 
   js:
     dependencies:
@@ -376,6 +348,60 @@ importers:
         specifier: ^3.25.34
         version: 3.25.76
 
+  js/src/wrappers/ai-sdk/tests/v5:
+    devDependencies:
+      '@ai-sdk/anthropic':
+        specifier: 2.0.37
+        version: 2.0.37(zod@3.25.76)
+      '@ai-sdk/openai':
+        specifier: ^2.0.23
+        version: 2.0.89(zod@3.25.76)
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.16
+      ai:
+        specifier: ^5.0.76
+        version: 5.0.121(zod@3.25.76)
+      braintrust:
+        specifier: file:../../../../..
+        version: file:js(zod@3.25.76)
+      typescript:
+        specifier: 5.4.4
+        version: 5.4.4
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.16)(msw@2.6.6(@types/node@20.19.16)(typescript@5.4.4))
+      zod:
+        specifier: ^3.25.34
+        version: 3.25.76
+
+  js/src/wrappers/ai-sdk/tests/v6:
+    devDependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.9
+        version: 3.0.17(zod@3.25.76)
+      '@ai-sdk/openai':
+        specifier: ^3.0.0-beta.44
+        version: 3.0.13(zod@3.25.76)
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.16
+      ai:
+        specifier: 6.0.1
+        version: 6.0.1(zod@3.25.76)
+      braintrust:
+        specifier: file:../../../../..
+        version: file:js(zod@3.25.76)
+      typescript:
+        specifier: 5.4.4
+        version: 5.4.4
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.16)(msw@2.6.6(@types/node@20.19.16)(typescript@5.4.4))
+      zod:
+        specifier: ^3.25.34
+        version: 3.25.76
+
   js/src/wrappers/claude-agent-sdk:
     devDependencies:
       '@anthropic-ai/claude-agent-sdk':
@@ -405,14 +431,20 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/anthropic@2.0.57':
-    resolution: {integrity: sha512-DREpYqW2pylgaj69gZ+K8u92bo9DaMgFdictYnY+IwYeY3bawQ4zI7l/o1VkDsBDljAx8iYz5lPURwVZNu+Xpg==}
+  '@ai-sdk/anthropic@3.0.17':
+    resolution: {integrity: sha512-M1hToV9nRe6iPtK7+nrln7Ja6HFr0VrtiJPGd0krTpvMEgI0Q8LAeraKDI+ESv7TSH9LzLRyXTtqJ2dqBVYL9Q==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/gateway@2.0.27':
     resolution: {integrity: sha512-8hbezMsGa0crSt7/DKjkYL1UbbJJW/UFxTfhmf5qcIeYeeWG4dTNmm+DWbUdIsTaWvp59KC4eeC9gYXBbTHd7w==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/gateway@3.0.0':
+    resolution: {integrity: sha512-JcjePYVpbezv+XOxkxPemwnorjWpgDiiKWMYy6FXTCG2rFABIK2Co1bFxIUSDT4vYO6f1448x9rKbn38vbhDiA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -425,6 +457,12 @@ packages:
 
   '@ai-sdk/openai@2.0.89':
     resolution: {integrity: sha512-4+qWkBCbL9HPKbgrUO/F2uXZ8GqrYxHa8SWEYIzxEJ9zvWw3ISr3t1/27O1i8MGSym+PzEyHBT48EV4LAwWaEw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@3.0.13':
+    resolution: {integrity: sha512-H+iqcmtND5dLsKpuMKjGdSRbU0OQwDdpJZbVBueASmCxsEL52FEWDjwTStDpSyZuvv68Xbs6tej8xcbQXFRCaw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -450,8 +488,20 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@4.0.0':
+    resolution: {integrity: sha512-HyCyOls9I3a3e38+gtvOJOEjuw9KRcvbBnCL5GBuSmJvS9Jh9v3fz7pRC6ha1EUo/ZH1zwvLWYXBMtic8MTguA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@4.0.4':
     resolution: {integrity: sha512-VxhX0B/dWGbpNHxrKCWUAJKXIXV015J4e7qYjdIU9lLWeptk0KMLGcqkB4wFxff5Njqur8dt8wRi1MN9lZtDqg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.8':
+    resolution: {integrity: sha512-ns9gN7MmpI8vTRandzgz+KK/zNMLzhrriiKECMt4euLtQFSBgNfydtagPOX4j4pS1/3KvHF6RivhT3gNQgBZsg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -472,8 +522,16 @@ packages:
     resolution: {integrity: sha512-KCUwswvsC5VsW2PWFqF8eJgSCu5Ysj7m1TxiHTVA6g7k360bk0RNQENT8KTMAYEs+8fWPD3Uu4dEmzGHc+jGng==}
     engines: {node: '>=18'}
 
+  '@ai-sdk/provider@3.0.0':
+    resolution: {integrity: sha512-m9ka3ptkPQbaHHZHqDXDF9C9B5/Mav0KTdky1k2HZ3/nrW2t1AgObxIVPyGDWQNS9FXT/FS6PIoSjpcP/No8rQ==}
+    engines: {node: '>=18'}
+
   '@ai-sdk/provider@3.0.2':
     resolution: {integrity: sha512-HrEmNt/BH/hkQ7zpi2o6N3k1ZR1QTb7z85WYhYygiTxOQuaml4CMtHCWRbric5WPU+RNsYI7r1EpyVQMKO1pYw==}
+    engines: {node: '>=18'}
+
+  '@ai-sdk/provider@3.0.4':
+    resolution: {integrity: sha512-5KXyBOSEX+l67elrEa+wqo/LSsSTtrPj9Uoh3zMbe/ceQX4ucHI3b9nUEfNkGF3Ry1svv90widAt+aiKdIJasQ==}
     engines: {node: '>=18'}
 
   '@ai-sdk/react@0.0.16':
@@ -2049,9 +2107,6 @@ packages:
   '@sinonjs/fake-timers@10.3.0':
     resolution: {integrity: sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==}
 
-  '@standard-schema/spec@1.0.0':
-    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
-
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -2270,6 +2325,10 @@ packages:
     resolution: {integrity: sha512-j3udyHOv/05Y8o3WQ/ANMWa1aYagsY5B3ouImiwgYsz5z4CBUHTY5dk74oQAXYr+bgoVDpdDlmxkpnxGzKEdLQ==}
     engines: {node: '>= 16'}
 
+  '@vercel/oidc@3.0.5':
+    resolution: {integrity: sha512-fnYhv671l+eTTp48gB4zEsTW/YtRgRPnkI2nT7x6qw5rkI1Lq2hTmQIpHPgyThI0znLK+vX2n9XxKdXZ7BUbbw==}
+    engines: {node: '>= 20'}
+
   '@vercel/oidc@3.1.0':
     resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
     engines: {node: '>= 20'}
@@ -2391,6 +2450,12 @@ packages:
 
   ai@5.0.121:
     resolution: {integrity: sha512-3iYPdARKGLryC/7OA9RgBUaym1gynvWS7UPy8NwoRNCKP52lshldtHB5xcEfVviw7liWH2zJlW9yEzsDglcIEQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@6.0.1:
+    resolution: {integrity: sha512-g/jPakC6h4vUJKDww0d6+VaJmfMC38UqH3kKsngiP+coT0uvCUdQ7lpFDJ0mNmamaOyRMaY2zwEB2RnTAaJU/w==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2570,6 +2635,12 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
+
+  braintrust@file:js:
+    resolution: {directory: js, type: directory}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.34 || ^4.0
 
   browserslist@4.23.1:
     resolution: {integrity: sha512-TUfofFo/KsK/bWZ9TWQ5O26tsWW4Uhmt8IYklbnUa70udB6P2wA7w7o4PY4muaEPBQaAX+CEnmmIA41NVHtPVw==}
@@ -5510,10 +5581,10 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.12(zod@3.25.76)
       zod: 3.25.76
 
-  '@ai-sdk/anthropic@2.0.57(zod@3.25.76)':
+  '@ai-sdk/anthropic@3.0.17(zod@3.25.76)':
     dependencies:
-      '@ai-sdk/provider': 2.0.1
-      '@ai-sdk/provider-utils': 3.0.20(zod@3.25.76)
+      '@ai-sdk/provider': 3.0.4
+      '@ai-sdk/provider-utils': 4.0.8(zod@3.25.76)
       zod: 3.25.76
 
   '@ai-sdk/gateway@2.0.27(zod@3.25.76)':
@@ -5521,6 +5592,13 @@ snapshots:
       '@ai-sdk/provider': 2.0.1
       '@ai-sdk/provider-utils': 3.0.20(zod@3.25.76)
       '@vercel/oidc': 3.1.0
+      zod: 3.25.76
+
+  '@ai-sdk/gateway@3.0.0(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.0
+      '@ai-sdk/provider-utils': 4.0.0(zod@3.25.76)
+      '@vercel/oidc': 3.0.5
       zod: 3.25.76
 
   '@ai-sdk/gateway@3.0.11(zod@3.25.76)':
@@ -5536,6 +5614,12 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.20(zod@3.25.76)
       zod: 3.25.76
 
+  '@ai-sdk/openai@3.0.13(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.4
+      '@ai-sdk/provider-utils': 4.0.8(zod@3.25.76)
+      zod: 3.25.76
+
   '@ai-sdk/provider-utils@1.0.0(zod@4.2.1)':
     dependencies:
       '@ai-sdk/provider': 0.0.11
@@ -5548,7 +5632,7 @@ snapshots:
   '@ai-sdk/provider-utils@3.0.12(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 3.25.76
 
@@ -5559,9 +5643,23 @@ snapshots:
       eventsource-parser: 3.0.6
       zod: 3.25.76
 
+  '@ai-sdk/provider-utils@4.0.0(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.0
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.6
+      zod: 3.25.76
+
   '@ai-sdk/provider-utils@4.0.4(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.2
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.6
+      zod: 3.25.76
+
+  '@ai-sdk/provider-utils@4.0.8(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.4
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 3.25.76
@@ -5582,7 +5680,15 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
+  '@ai-sdk/provider@3.0.0':
+    dependencies:
+      json-schema: 0.4.0
+
   '@ai-sdk/provider@3.0.2':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@3.0.4':
     dependencies:
       json-schema: 0.4.0
 
@@ -7349,8 +7455,6 @@ snapshots:
     dependencies:
       '@sinonjs/commons': 3.0.1
 
-  '@standard-schema/spec@1.0.0': {}
-
   '@standard-schema/spec@1.1.0': {}
 
   '@sveltejs/acorn-typescript@1.0.5(acorn@8.15.0)':
@@ -7616,6 +7720,8 @@ snapshots:
 
   '@vercel/functions@1.0.2': {}
 
+  '@vercel/oidc@3.0.5': {}
+
   '@vercel/oidc@3.1.0': {}
 
   '@vitest/expect@2.1.9':
@@ -7804,6 +7910,14 @@ snapshots:
       '@ai-sdk/gateway': 2.0.27(zod@3.25.76)
       '@ai-sdk/provider': 2.0.1
       '@ai-sdk/provider-utils': 3.0.20(zod@3.25.76)
+      '@opentelemetry/api': 1.9.0
+      zod: 3.25.76
+
+  ai@6.0.1(zod@3.25.76):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.0(zod@3.25.76)
+      '@ai-sdk/provider': 3.0.0
+      '@ai-sdk/provider-utils': 4.0.0(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
 
@@ -8105,6 +8219,38 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
+
+  braintrust@file:js(zod@3.25.76):
+    dependencies:
+      '@ai-sdk/provider': 1.1.3
+      '@next/env': 14.2.3
+      '@types/nunjucks': 3.2.6
+      '@vercel/functions': 1.0.2
+      argparse: 2.0.1
+      boxen: 8.0.1
+      chalk: 4.1.2
+      cli-progress: 3.12.0
+      cli-table3: 0.6.5
+      cors: 2.8.5
+      dotenv: 16.4.5
+      esbuild: 0.27.0
+      eventsource-parser: 1.1.2
+      express: 4.21.2
+      graceful-fs: 4.2.11
+      http-errors: 2.0.0
+      minimatch: 9.0.5
+      mustache: 4.2.0
+      nunjucks: 3.2.4
+      pluralize: 8.0.0
+      simple-git: 3.21.0
+      source-map: 0.7.6
+      termi-link: 1.1.0
+      uuid: 9.0.1
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - chokidar
+      - supports-color
 
   browserslist@4.23.1:
     dependencies:
@@ -8707,7 +8853,7 @@ snapshots:
 
   estree-walker@3.0.3:
     dependencies:
-      '@types/estree': 1.0.6
+      '@types/estree': 1.0.8
 
   esutils@2.0.3: {}
 
@@ -10387,6 +10533,14 @@ snapshots:
       tsx: 3.14.0
       yaml: 2.8.2
 
+  postcss-load-config@6.0.1(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2):
+    dependencies:
+      lilconfig: 3.1.3
+    optionalDependencies:
+      postcss: 8.5.6
+      tsx: 4.21.0
+      yaml: 2.8.2
+
   postcss@8.5.6:
     dependencies:
       nanoid: 3.3.11
@@ -11049,7 +11203,7 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.3.5(postcss@8.5.6)(typescript@5.3.3)(yaml@2.8.2):
+  tsup@8.3.5(postcss@8.5.6)(tsx@4.21.0)(typescript@5.3.3)(yaml@2.8.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.24.2)
       cac: 6.7.14
@@ -11059,7 +11213,7 @@ snapshots:
       esbuild: 0.24.2
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2)
+      postcss-load-config: 6.0.1(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2)
       resolve-from: 5.0.0
       rollup: 4.35.0
       source-map: 0.8.0-beta.0
@@ -11104,7 +11258,7 @@ snapshots:
       - tsx
       - yaml
 
-  tsup@8.5.1(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2):
+  tsup@8.5.1(postcss@8.5.6)(tsx@4.21.0)(typescript@5.5.4)(yaml@2.8.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.0)
       cac: 6.7.14
@@ -11115,7 +11269,7 @@ snapshots:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(postcss@8.5.6)(tsx@3.14.0)(yaml@2.8.2)
+      postcss-load-config: 6.0.1(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2)
       resolve-from: 5.0.0
       rollup: 4.35.0
       source-map: 0.7.6
@@ -11146,6 +11300,7 @@ snapshots:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   turbo-darwin-64@2.5.6:
     optional: true

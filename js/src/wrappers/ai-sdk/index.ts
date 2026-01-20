@@ -1,4 +1,4 @@
-export { wrapAISDK } from "./ai-sdk";
+export { wrapAISDK, wrapAgentClass } from "./ai-sdk";
 
 // TODO: remove in the next major release
 export { wrapAISDKModel } from "./deprecated/wrapAISDKModel";

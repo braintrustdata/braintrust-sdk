@@ -131,6 +131,7 @@ export {
 
 export {
   wrapAISDK,
+  wrapAgentClass,
   BraintrustMiddleware,
   wrapAISDKModel,
 } from "./wrappers/ai-sdk";
