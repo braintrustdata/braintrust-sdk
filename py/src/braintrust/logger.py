@@ -1415,7 +1415,7 @@ def init(
             args["base_exp_id"] = base_experiment_id
         elif base_experiment is not None:
             args["base_experiment"] = base_experiment
-        elif merged_git_metadata_settings.collect != "none":
+        elif merged_git_metadata_settings and merged_git_metadata_settings.collect != "none":
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
