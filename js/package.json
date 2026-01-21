@@ -25,12 +25,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "node": {
-        "types": "./dist/index.d.ts",
         "import": "./dist/index.mjs",
         "require": "./dist/index.js"
       },
       "browser": {
-        "types": "./dist/browser.d.mts",
         "import": "./dist/browser.mjs",
         "require": "./dist/browser.js"
       },
@@ -39,13 +37,11 @@
       "require": "./dist/index.js"
     },
     "./browser": {
-      "types": "./dist/browser.d.mts",
       "import": "./dist/browser.mjs",
       "module": "./dist/browser.mjs",
       "require": "./dist/browser.js"
     },
     "./node": {
-      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
