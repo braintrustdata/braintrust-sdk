@@ -960,11 +960,13 @@ def test_prompt_caching_tokens(logger_memory_logger: LoggerMemoryLogger):
 
     model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
 
+    # XXX: if you need to change the cassette or test, you'll want to change the text below to invalidate the stored cache.
+
     # Anthropic prompt caching requires a minimum of 1024 tokens for Claude Sonnet models.
     # This static text (~1500 tokens) ensures we meet that threshold consistently.
     # See: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
     long_text_for_caching = """
-# Comprehensive Guide to Software Testing Methods
+# Comprehensive Guide to Software Testing Methods!
 
 ## Chapter 1: Introduction to Testing
 

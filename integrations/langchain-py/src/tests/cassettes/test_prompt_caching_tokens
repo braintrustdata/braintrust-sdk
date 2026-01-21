@@ -1,8 +1,8 @@
 interactions:
 - request:
-    body: '{"max_tokens":64000,"messages":[{"role":"user","content":"What is the first
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"What is the first
       type of testing mentioned in section 1.2?"}],"model":"claude-sonnet-4-5-20250929","system":[{"type":"text","text":"\n#
-      Comprehensive Guide to Software Testing Methods\n\n## Chapter 1: Introduction
+      Comprehensive Guide to Software Testing Methods!\n\n## Chapter 1: Introduction
       to Testing\n\nSoftware testing is a critical component of the software development
       lifecycle. It ensures that applications\nfunction correctly, meet requirements,
       and provide a positive user experience. This guide covers various\ntesting methodologies,
@@ -103,16 +103,16 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAA/22RT0/DMAzFv0rk49Shrtok6A0h4MAFCRAHhqqQeGu0NimxM/5M++44gwkYnNr4
-        /fxe7GygDxY7qMF0OlkcU/AeeTwdz8ZVWc3Kk+oECnBWiJ6WTTm5oNXqPdwfn11Vd+vL64vp/XN1
-        cy4Mvw2YKSTSS5RCDF0uaCJHrD1LyQTPKH/1w2bPM75mZfep4dSYEK3zS8VBERp2wavJUaXmcCs8
-        qbBQt0gsRDEHxS2qhYvEKrtlkT9F1UuM9KJVjtRodOcd7xtHo0K9tM60WbJIJron4TTlkK92561b
-        O5t0p0zoBzHyLOFRLZLfXYoEkf7Q6Xw6mgNsHwsgDkMTUcsWZRj0tuEUPXwJhM8JvZGpfeq6AtJu
-        UfUGnB8SNxxW6AnqqpRFadNiY8Qq2ze/gUk5Pd4jQtgD+U97jsChxR6j7ppZ/6/dNzBpDw23BYTE
-        P0tTCSGMa2ewYYdRps1vbHW0sN1+AF+uF3dWAgAA
+        H4sIAAAAAAAA/22RzU7rMBCFX8WaZZWiJGqvaHYXsQIhsaBsKIqMPW0sEjt4xgVU9d0ZFyp+V4nn
+        fHOOZ7yDIVjsoQHT62RxSsF75OlsOp/WZT0vF/UCCnBWiIE2bVndrsO/s+1ptYzXl+fz04tN0nZ5
+        JQy/jpgpJNIblEIMfS5oIkesPUvJBM8of83d7sgzvmTl8GngvzEhWuc3ioMiNOyCV9VJrVZwIzyp
+        sFY3SCxEsQLFHaq1i8Qqu2WR30U1SIz0olWO1GSy9I6PjZNJoZ47Z7osWSQT3YNwmnLIR7vz1m2d
+        TbpXJgyjGHmW8KjWyR8uRYJIf+h1Pp2sAPb3BRCHsY2oZYsyDHrbcooePgTCp4TeyNQ+9X0B6bCo
+        ZgfOj4lbDo/oCZq6lEVp02FrxCrbt9+BqpwtjogQ9of8qz1H4NjhgFH37Xz40+4TqLqfhvsCQuKv
+        pZmEEMatM9iywyjT5je2OlrY798Az+eCZFYCAAA=
     headers:
       CF-RAY:
-      - 9c1a4eb6a834c782-SJC
+      - 9c1a60c71c9c67cb-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -120,7 +120,7 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Wed, 21 Jan 2026 22:39:26 GMT
+      - Wed, 21 Jan 2026 22:51:47 GMT
       Server:
       - cloudflare
       Transfer-Encoding:
@@ -134,38 +134,38 @@ interactions:
       anthropic-ratelimit-input-tokens-remaining:
       - '3000000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-01-21T22:39:25Z'
+      - '2026-01-21T22:51:46Z'
       anthropic-ratelimit-output-tokens-limit:
       - '600000'
       anthropic-ratelimit-output-tokens-remaining:
       - '600000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-01-21T22:39:26Z'
+      - '2026-01-21T22:51:47Z'
       anthropic-ratelimit-tokens-limit:
       - '3600000'
       anthropic-ratelimit-tokens-remaining:
       - '3600000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-01-21T22:39:25Z'
+      - '2026-01-21T22:51:46Z'
       cf-cache-status:
       - DYNAMIC
       request-id:
-      - req_011CXMKtz8eKPaCvd5zEACDk
+      - req_011CXMLqXaFZ4xWZExkXJyyb
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       x-envoy-upstream-service-time:
-      - '1215'
+      - '2088'
     status:
       code: 200
       message: OK
 - request:
-    body: '{"max_tokens":64000,"messages":[{"role":"user","content":"What is the first
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"What is the first
       type of testing mentioned in section 1.2?"},{"role":"assistant","content":"According
       to section 1.2 \"Types of Testing,\" the first type of testing mentioned is
       **Unit Testing**, which is described as \"Testing individual components or functions
       in isolation.\""},{"role":"user","content":"What testing framework is mentioned
       for Python?"}],"model":"claude-sonnet-4-5-20250929","system":[{"type":"text","text":"\n#
-      Comprehensive Guide to Software Testing Methods\n\n## Chapter 1: Introduction
+      Comprehensive Guide to Software Testing Methods!\n\n## Chapter 1: Introduction
       to Testing\n\nSoftware testing is a critical component of the software development
       lifecycle. It ensures that applications\nfunction correctly, meet requirements,
       and provide a positive user experience. This guide covers various\ntesting methodologies,
@@ -266,16 +266,16 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAA/2VSyU7DMBD9FcvHKkFJoSy5gRAnQCCBBCIoMva0MU3GwR4Dpeq/My57Odl+yyxP
-        XsreGehkJXWnooE8OESgfCef5ONiPCkOxgcyk9awog+zpihvLybl9iXAmTmaXsPxzd5Ne/42Yw0t
-        BkgqCEHNgAHvugSoEGwghcSQdkjAt+pu+aUneE3M+qjkodbOG4szQU4E0GQdit2tUtTyYkEtP64g
-        EPNZLQW1HkDQByCmXvXw4vw8COVB9NyHzWDE1HnxYa5qrLHcEqPRsEi20Ujk4gQURQ+5t7r9X6zG
-        cdJHtPTtOIq2o9ziZ9VvE0cZO6hxOzl6p+dr9al98Mov1mMkMCndwyPvFuTqPpOB3NB4UJw8BwBo
-        Gh4H5ScR4CkCak4KY9dlMq7DrZbS4hCpITcHDLLaKzlcpVtoNJdKizd/BcUXz7TZ4MpiZ3/TnlrA
-        0EIPXnXNpP9f7oct2012lUkX6Te0y44A/tlqaMiC51XTpzDKG7lavQPrqmlshwIAAA==
+        H4sIAAAAAAAA/2VSzU7DMAx+lSjHqUXtYEzrDYQQB5A4IA2JoiokZg1rnZI4wDTt3XHK/zgl+X4c
+        +0u2sncGOllJ3aloIA8OESg/ymf5tJjOisV0ITNpDSv6sGqKsqSr5fX87OVC6RbncblY3y7PkDW0
+        GSCpIAS1Aga86xKgQrCBFBJD2iEB76q77Zee4C0x41LJE62dNxZXgpwIoMk6FMcHpajl9YZaPtxA
+        IOazWgpqPYCgD0A8etXDq/PrIJQH0fM9bAYjHp0XH+aqxhrLAzGZDJtkm0xELs5BUfSQe6vb/8Vq
+        nCZ9REvfjtNoO8otflb9NnGUsYMaD5Ojd3o9qi/tg1d+M7aRwKR0D088W5C7+0wGckPjQXHyHACg
+        abidFOhIBHiOgJqTwth1mYxjuNVWWhwiNeTWgEFW85LD5ReBRnOpNHjzV1B88UybPa4sjhb79nQF
+        DC304FXXzPr/5X7Yst1nd5l0kX5Dx+wI4F+shoYseB41fQqjvJG73TumCh7LhwIAAA==
     headers:
       CF-RAY:
-      - 9c1a4ebed873c782-SJC
+      - 9c1a60d4ab5e67cb-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -283,7 +283,7 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Wed, 21 Jan 2026 22:39:28 GMT
+      - Wed, 21 Jan 2026 22:51:49 GMT
       Server:
       - cloudflare
       Transfer-Encoding:
@@ -297,27 +297,27 @@ interactions:
       anthropic-ratelimit-input-tokens-remaining:
       - '3000000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-01-21T22:39:27Z'
+      - '2026-01-21T22:51:48Z'
       anthropic-ratelimit-output-tokens-limit:
       - '600000'
       anthropic-ratelimit-output-tokens-remaining:
       - '600000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-01-21T22:39:27Z'
+      - '2026-01-21T22:51:49Z'
       anthropic-ratelimit-tokens-limit:
       - '3600000'
       anthropic-ratelimit-tokens-remaining:
       - '3600000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-01-21T22:39:27Z'
+      - '2026-01-21T22:51:48Z'
       cf-cache-status:
       - DYNAMIC
       request-id:
-      - req_011CXMKu5jEoLn9SCzeKo4mg
+      - req_011CXMLqgrrchykwCdY7YRKM
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       x-envoy-upstream-service-time:
-      - '1457'
+      - '2016'
     status:
       code: 200
       message: OK
