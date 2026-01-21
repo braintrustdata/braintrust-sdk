@@ -676,6 +676,203 @@ export async function testStateManagementExports(
 }
 
 /**
+ * Test which build variant was resolved (browser vs Node.js) and module format (CJS vs ESM)
+ *
+ * This test checks which export path was used by reading the buildType property
+ * from the isomorph object, which is set explicitly during configuration.
+ *
+ * @param module - The Braintrust module to test
+ * @param expectedBuild - Expected build type: "browser" or "node" (optional, for validation)
+ * @param expectedFormat - Expected module format: "cjs" or "esm" (optional, for validation)
+ */
+export async function testBuildResolution(
+  module: BraintrustModule,
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+): Promise<TestResult> {
+  const testName = "testBuildResolution";
+
+  try {
+    // Detect build type from isomorph.buildType
+    const { buildType: detectedBuild, buildDetails } = detectBuildType(module);
+
+    // Detect module format (CJS vs ESM)
+    const detectedFormat = detectModuleFormat();
+
+    const errors = validateBuildResolution(
+      detectedBuild,
+      detectedFormat,
+      expectedBuild,
+      expectedFormat,
+      buildDetails,
+    );
+
+    if (errors.length > 0) {
+      return {
+        status: "fail" as const,
+        name: testName,
+        error: { message: errors.join(" ") },
+      };
+    }
+
+    // Build success message
+    const message = buildSuccessMessage(
+      detectedBuild,
+      detectedFormat,
+      expectedBuild,
+      expectedFormat,
+    );
+
+    return {
+      status: "pass" as const,
+      name: testName,
+      message,
+    };
+  } catch (error) {
+    return {
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    };
+  }
+}
+
+/**
+ * Detect build type from isomorph.buildType property
+ */
+function detectBuildType(module: BraintrustModule): {
+  buildType: "browser" | "node" | "unknown";
+  buildDetails: string;
+} {
+  if (!module._exportsForTestingOnly) {
+    return {
+      buildType: "unknown",
+      buildDetails: "_exportsForTestingOnly not available",
+    };
+  }
+
+  const testing = module._exportsForTestingOnly as any;
+  const iso = testing.isomorph;
+
+  if (!iso || typeof iso !== "object") {
+    return {
+      buildType: "unknown",
+      buildDetails: "isomorph not available in testing exports",
+    };
+  }
+
+  const buildType = iso.buildType;
+  if (
+    buildType === "browser" ||
+    buildType === "node" ||
+    buildType === "unknown"
+  ) {
+    return {
+      buildType,
+      buildDetails: `Build type from isomorph.buildType: ${buildType}`,
+    };
+  }
+
+  return {
+    buildType: "unknown",
+    buildDetails: `isomorph.buildType has unexpected value: ${buildType}`,
+  };
+}
+
+/**
+ * Detect module format (CJS vs ESM) from environment
+ */
+function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+  try {
+    // ESM: import.meta is available
+    if (typeof import.meta !== "undefined" && import.meta.url) {
+      return "esm";
+    }
+    // CJS: require is available (in Node.js)
+    if (typeof require !== "undefined") {
+      return "cjs";
+    }
+  } catch {
+    // import.meta might throw in some environments
+    if (typeof require !== "undefined") {
+      return "cjs";
+    }
+  }
+
+  return "unknown";
+}
+
+/**
+ * Validate detected build type and format against expectations
+ */
+function validateBuildResolution(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+  buildDetails?: string,
+): string[] {
+  const errors: string[] = [];
+
+  // Always error if build type is unknown (not configured)
+  if (detectedBuild === "unknown") {
+    errors.push(
+      `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
+    );
+    return errors; // Don't check other validations if build type is unknown
+  }
+
+  // Validate build type matches expectation
+  if (expectedBuild && detectedBuild !== expectedBuild) {
+    errors.push(
+      `Expected ${expectedBuild} build but detected ${detectedBuild} build. ${buildDetails || ""}`,
+    );
+  }
+
+  // Validate module format matches expectation
+  if (
+    expectedFormat &&
+    detectedFormat !== expectedFormat &&
+    detectedFormat !== "unknown"
+  ) {
+    errors.push(
+      `Expected ${expectedFormat} format but detected ${detectedFormat} format.`,
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * Build success message for test result
+ */
+function buildSuccessMessage(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+): string {
+  const parts: string[] = [];
+
+  if (detectedBuild !== "unknown") {
+    const buildMsg = `Detected ${detectedBuild} build`;
+    const expectedMsg = expectedBuild ? ` (expected ${expectedBuild})` : "";
+    parts.push(`${buildMsg}${expectedMsg}`);
+  }
+
+  if (detectedFormat !== "unknown") {
+    const formatMsg = `${detectedFormat} format`;
+    const expectedMsg = expectedFormat ? ` (expected ${expectedFormat})` : "";
+    parts.push(`${formatMsg}${expectedMsg}`);
+  }
+
+  return parts.join(", ") || "Build resolution check passed";
+}
+
+/**
  * Run all import verification tests
  *
  * This forces bundlers to process the full Braintrust export graph,
@@ -685,9 +882,15 @@ export async function testStateManagementExports(
  * TypeScript type-only exports are not tested as they don't exist at runtime.
  *
  * @param module - The Braintrust module to test
+ * @param options - Optional test configuration
  */
 export async function runImportVerificationTests(
   module: BraintrustModule,
+  options?: {
+    checkBuildResolution?: boolean;
+    expectedBuild?: "browser" | "node";
+    expectedFormat?: "cjs" | "esm";
+  },
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
@@ -705,6 +908,17 @@ export async function runImportVerificationTests(
   results.push(await testStateManagementExports(module));
   results.push(await testExperimentExports(module));
   results.push(await testEvalExports(module));
+
+  // Optionally check which build was resolved
+  if (options?.checkBuildResolution) {
+    results.push(
+      await testBuildResolution(
+        module,
+        options.expectedBuild,
+        options.expectedFormat,
+      ),
+    );
+  }
 
   return results;
 }

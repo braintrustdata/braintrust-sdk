@@ -10,7 +10,7 @@ import {
   type TestResult,
 } from "../../../shared";
 
-import * as braintrust from "braintrust/browser";
+import * as braintrust from "braintrust";
 const { initLogger, _exportsForTestingOnly } = braintrust;
 
 const app = new Hono<{ Bindings: Env }>();
@@ -38,7 +38,13 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      const importResults = await runImportVerificationTests(braintrust);
+      // Test import verification including build resolution check
+      // Vite bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
+      const importResults = await runImportVerificationTests(braintrust, {
+        checkBuildResolution: true,
+        expectedBuild: "browser",
+        expectedFormat: "esm",
+      });
       const functionalResults = await runBasicLoggingTests(adapters);
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
@@ -115,7 +121,8 @@ app.get("/", (c) =>
 GET /api/ - Basic API endpoint
 GET /api/test - Run shared test suites
 
-This worker tests the Braintrust SDK in a Vite + Hono + Cloudflare Workers environment.`),
+This worker tests the Braintrust SDK in a Vite + Hono + Cloudflare Workers environment.
+Vite should automatically resolve the browser build from package.json exports.`),
 );
 
 app.get("/api/", (c) => c.json({ name: "Braintrust", framework: "Hono" }));

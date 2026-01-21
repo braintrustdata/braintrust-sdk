@@ -33,7 +33,13 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      const importResults = await runImportVerificationTests(braintrust);
+      // Test import verification including build resolution check
+      // Node.js build (ESM format) should be used in Cloudflare Workers with nodejs_compat_v2
+      const importResults = await runImportVerificationTests(braintrust, {
+        checkBuildResolution: true,
+        expectedBuild: "node",
+        expectedFormat: "esm",
+      });
       const functionalResults = await runBasicLoggingTests(
         adapters,
         braintrust,
@@ -149,8 +155,8 @@ export default {
 
 GET /test - Run shared test suites
 
-This worker tests the Braintrust SDK in a Cloudflare Workers environment
-using the Node.js entrypoint with nodejs_compat_v2 enabled.`,
+This worker tests the Braintrust SDK in a Cloudflare Workers environment.
+Should use Node.js build from package.json exports.`,
       { headers: { "Content-Type": "text/plain" } },
     );
   },

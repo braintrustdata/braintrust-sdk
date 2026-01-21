@@ -1,4 +1,4 @@
-import * as braintrust from "braintrust/browser";
+import * as braintrust from "braintrust";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -49,7 +49,13 @@ async function runAllTestSuites() {
   try {
     harness.log("=== Running shared suites ===");
 
-    const importResults = await runImportVerificationTests(braintrust);
+    // Test import verification including build resolution check
+    // Bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
+    const importResults = await runImportVerificationTests(braintrust, {
+      checkBuildResolution: true,
+      expectedBuild: "browser",
+      expectedFormat: "esm",
+    });
     for (const r of importResults) {
       if (r.status === "pass") harness.pass(SHARED_SECTION, r.name, r.message);
       else

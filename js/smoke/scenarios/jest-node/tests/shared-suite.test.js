@@ -22,7 +22,13 @@ async function runSharedTestSuites() {
   });
 
   try {
-    const importResults = await runImportVerificationTests(braintrust);
+    // Test import verification including build resolution check
+    // Node.js should resolve to Node build (CJS format) when using require()
+    const importResults = await runImportVerificationTests(braintrust, {
+      checkBuildResolution: true,
+      expectedBuild: "node",
+      expectedFormat: "cjs",
+    });
     const functionalResults = await runBasicLoggingTests(adapters);
     const promptTemplatingResults = await runPromptTemplatingTests({
       Prompt: braintrust.Prompt,

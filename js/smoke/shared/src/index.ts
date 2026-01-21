@@ -70,6 +70,7 @@ export {
   testIDGeneratorExports,
   testTestingExports,
   testStateManagementExports,
+  testBuildResolution,
   runImportVerificationTests,
 } from "./suites/import-verification";
 

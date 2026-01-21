@@ -15,6 +15,9 @@ import { promisify } from "node:util";
 import * as zlib from "node:zlib";
 
 export function configureNode() {
+  // Set build type indicator
+  iso.buildType = "node";
+
   iso.getRepoInfo = getRepoInfo;
   iso.getPastNAncestors = getPastNAncestors;
   iso.getEnv = (name) => process.env[name];

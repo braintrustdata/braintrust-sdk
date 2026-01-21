@@ -24,11 +24,17 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
+      "browser": {
+        "types": "./dist/browser.d.mts",
+        "import": "./dist/browser.mjs",
+        "require": "./dist/browser.js"
+      },
       "import": "./dist/index.mjs",
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./browser": {
+      "types": "./dist/browser.d.mts",
       "import": "./dist/browser.mjs",
       "module": "./dist/browser.mjs",
       "require": "./dist/browser.js"
