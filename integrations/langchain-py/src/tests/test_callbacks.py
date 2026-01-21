@@ -150,6 +150,70 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
     )
 
 
+def test_cache_token_metrics_from_input_token_details(logger_memory_logger: LoggerMemoryLogger):
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    handler = BraintrustCallbackHandler(logger=logger)
+
+    class CachingChatModel(BaseChatModel):
+        call_count: int = 0
+
+        @property
+        def _llm_type(self) -> str:
+            return "caching_test"
+
+        def _generate(
+            self,
+            messages: list[BaseMessage],
+            stop: list[str] | None = None,
+            run_manager=None,
+            **kwargs,
+        ) -> ChatResult:
+            self.call_count += 1
+
+            usage_metadata = {
+                "input_tokens": 18,
+                "output_tokens": 3,
+                "total_tokens": 21,
+            }
+            if self.call_count > 1:
+                usage_metadata["input_token_details"] = {"cache_read": 10, "cache_creation": 5}
+
+            message = AIMessage(content="ok", usage_metadata=usage_metadata)
+            return ChatResult(
+                generations=[ChatGeneration(message=message)],
+                llm_output={"model_name": "test-model"},
+            )
+
+    model = CachingChatModel()
+
+    def build_messages(payload: dict) -> list[BaseMessage]:
+        messages = [HumanMessage(content="cache test")]
+        extra = payload.get("extra")
+        if extra:
+            messages.append(HumanMessage(content=extra))
+        return messages
+
+    chain = RunnableLambda(build_messages) | model
+
+    chain.invoke({"extra": None}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
+    spans = memory_logger.pop()
+    llm_spans = find_spans_by_attributes(spans, type="llm")
+    assert len(llm_spans) == 1
+    first_metrics = llm_spans[0]["metrics"]
+    assert first_metrics.get("prompt_cached_tokens", 0) == 0
+    assert first_metrics.get("prompt_cache_creation_tokens", 0) == 0
+
+    chain.invoke({"extra": "follow-up"}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
+    spans = memory_logger.pop()
+    llm_spans = find_spans_by_attributes(spans, type="llm")
+    assert len(llm_spans) == 1
+    second_metrics = llm_spans[0]["metrics"]
+    assert second_metrics.get("prompt_cached_tokens", 0) > 0
+    assert second_metrics.get("prompt_cache_creation_tokens", 0) > 0
+
+
 @pytest.mark.vcr
 def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
     logger, memory_logger = logger_memory_logger
