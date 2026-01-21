@@ -3,7 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@^1.0.14": "1.0.16",
     "jsr:@std/internal@^1.0.12": "1.0.12",
-    "npm:braintrust@^2.0.2": "2.0.2_zod@4.3.5"
+    "npm:braintrust@*": "2.1.0_zod@4.3.5"
   },
   "jsr": {
     "@std/assert@1.0.16": {
@@ -253,7 +253,7 @@
         "balanced-match"
       ]
     },
-    "braintrust@2.0.2_zod@4.3.5": {
+    "braintrust@2.1.0_zod@4.3.5": {
       "dependencies": [
         "@ai-sdk/provider",
         "@next/env",
@@ -865,13 +865,13 @@
     "dependencies": [
       "jsr:@braintrust/smoke-test-shared@*",
       "jsr:@std/assert@^1.0.14",
-      "npm:braintrust@^2.0.2"
+      "npm:braintrust@*"
     ],
     "links": {
       "jsr:@braintrust/smoke-test-shared": {},
       "npm:@braintrust/smoke-test-shared@1.0.0": {},
       "npm:braintrust-sdk-js@0.0.1": {},
-      "npm:braintrust@2.0.2": {
+      "npm:braintrust@2.1.0": {
         "dependencies": [
           "npm:@ai-sdk/provider@^1.1.3",
           "npm:@next/env@^14.2.3",
