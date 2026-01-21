@@ -2,7 +2,9 @@ import {
   makeScorerPropagatedEvent,
   mergeDicts,
   Score,
+  SpanComponentsV3,
   SpanTypeAttribute,
+  spanObjectTypeV3ToTypedString,
 } from "../util/index";
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
@@ -984,17 +986,29 @@ async function runEvaluatorInternal(
             }
           };
 
+          const parentStr = state.currentParent.getStore();
+          const parentComponents = parentStr
+            ? SpanComponentsV3.fromStr(parentStr)
+            : null;
+
           const trace = state
             ? new LocalTrace({
-                objectType: "experiment",
-                objectId: experimentIdPromise
-                  ? (await experimentIdPromise) ?? ""
-                  : "",
+                objectType: parentComponents
+                  ? spanObjectTypeV3ToTypedString(
+                      parentComponents.data.object_type,
+                    )
+                  : "experiment",
+                objectId:
+                  parentComponents?.data.object_id ??
+                  (experimentIdPromise
+                    ? (await experimentIdPromise) ?? ""
+                    : ""),
                 rootSpanId: rootSpan.rootSpanId,
                 ensureSpansFlushed,
                 state,
               })
             : undefined;
+
           let metadata: Record<string, unknown> = {
             ...("metadata" in datum ? datum.metadata : {}),
           };
