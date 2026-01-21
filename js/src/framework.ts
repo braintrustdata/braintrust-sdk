@@ -3,8 +3,8 @@ import {
   mergeDicts,
   Score,
   SpanComponentsV3,
-  spanObjectTypeV3ToString,
   SpanTypeAttribute,
+  spanObjectTypeV3ToTypedString,
 } from "../util/index";
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
@@ -994,7 +994,9 @@ async function runEvaluatorInternal(
           const trace = state
             ? new LocalTrace({
                 objectType: parentComponents
-                  ? spanObjectTypeV3ToString(parentComponents.data.object_type)
+                  ? spanObjectTypeV3ToTypedString(
+                      parentComponents.data.object_type,
+                    )
                   : "experiment",
                 objectId:
                   parentComponents?.data.object_id ??
