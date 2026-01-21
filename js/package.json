@@ -30,9 +30,9 @@
         "import": "./dist/index.mjs",
         "require": "./dist/index.cjs"
       },
+      "browser": "./dist/browser.mjs",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs",
-      "browser": "./dist/browser.mjs",
       "default": "./dist/browser.mjs"
     },
     "./browser": {
