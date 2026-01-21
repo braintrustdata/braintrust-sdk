@@ -1456,6 +1456,10 @@ async def _run_evaluator_internal_impl(
 
                         await asyncio.get_event_loop().run_in_executor(None, flush_logger)
 
+                    # Also flush OTEL spans if registered
+                    if state:
+                        await state.flush_otel()
+
                 experiment_id = None
                 if experiment:
                     try:

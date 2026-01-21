@@ -155,16 +155,22 @@ class SpanCache:
         if self.disabled or self._initialized:
             return
 
-        # Create temporary file
-        unique_id = f"{int(os.times().elapsed * 1000000)}-{uuid.uuid4().hex[:8]}"
-        self._cache_file_path = os.path.join(tempfile.gettempdir(), f"braintrust-span-cache-{unique_id}.jsonl")
+        try:
+            # Create temporary file
+            unique_id = f"{int(os.times().elapsed * 1000000)}-{uuid.uuid4().hex[:8]}"
+            self._cache_file_path = os.path.join(tempfile.gettempdir(), f"braintrust-span-cache-{unique_id}.jsonl")
 
-        # Create the file
-        with open(self._cache_file_path, "w") as f:
-            pass
+            # Create the file
+            with open(self._cache_file_path, "w") as f:
+                pass
 
-        self._initialized = True
-        self._register_exit_handler()
+            self._initialized = True
+            self._register_exit_handler()
+        except Exception:
+            # Silently fail if filesystem is unavailable - cache is best-effort
+            # This can happen if temp directory is not writable or disk is full
+            self._explicitly_disabled = True
+            return
 
     def _register_exit_handler(self) -> None:
         """Register a handler to clean up the temp file on process exit."""
@@ -180,7 +186,8 @@ class SpanCache:
                     if cache._cache_file_path and os.path.exists(cache._cache_file_path):
                         try:
                             os.unlink(cache._cache_file_path)
-                        except:
+                        except Exception:
+                            # Ignore cleanup errors - file might not exist or already deleted
                             pass
 
             atexit.register(cleanup_all_caches)
@@ -213,7 +220,8 @@ class SpanCache:
                     f.write(json.dumps(record.to_dict()) + "\n")
             self._write_buffer.clear()
         except Exception:
-            # Silently fail - cache is best-effort
+            # Silently fail if write fails - cache is best-effort
+            # This can happen if disk is full or file permissions changed
             pass
 
     def get_by_root_span_id(self, root_span_id: str) -> Optional[list[CachedSpan]]:
@@ -256,11 +264,12 @@ class SpanCache:
                                 merge_dicts(span_map[record.span_id], record.data.to_dict())
                             else:
                                 span_map[record.span_id] = record.data.to_dict()
-                        except:
-                            # Skip malformed lines
+                        except Exception:
+                            # Skip malformed lines - may occur if file was corrupted or truncated
                             pass
-            except:
+            except Exception:
                 # Continue to check buffer even if disk read fails
+                # This can happen if file was deleted or permissions changed
                 pass
 
         # Also check the in-memory write buffer for unflushed data
@@ -319,8 +328,8 @@ class SpanCache:
         if self._cache_file_path and os.path.exists(self._cache_file_path):
             try:
                 os.unlink(self._cache_file_path)
-            except:
-                # Ignore cleanup errors
+            except Exception:
+                # Ignore cleanup errors - file might not exist or already deleted
                 pass
             self._cache_file_path = None
 
