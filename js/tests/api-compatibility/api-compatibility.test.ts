@@ -755,6 +755,27 @@ function areFunctionSignaturesCompatible(
   return true;
 }
 
+/**
+ * Normalizes type references to handle equivalent forms:
+ * - z.infer<typeof Type> -> TypeType
+ * - Type$1, Type$2, etc. -> Type (removes TypeScript disambiguation suffixes)
+ */
+function normalizeTypeReference(type: string): string {
+  // First, remove TypeScript disambiguation suffixes ($1, $2, etc.) from the entire string
+  // This handles cases like: ObjectReference$1, ObjectReferenceType$1, etc.
+  type = type.replace(/(\w+)\$\d+/g, "$1");
+
+  // Then normalize z.infer<typeof Type> to TypeType
+  // Pattern: z.infer<typeof TypeName> -> TypeNameType
+  // This handles: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  type = type.replace(/z\.infer<typeof\s+(\w+)>/g, (match, typeName) => {
+    // Convert TypeName to TypeNameType (e.g., ObjectReference -> ObjectReferenceType)
+    return `${typeName}Type`;
+  });
+
+  return type;
+}
+
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,
@@ -903,7 +924,11 @@ function areTypeAliasSignaturesCompatible(
         return false;
       }
 
-      if (oldProp.type !== newProp.type) {
+      // Normalize type references before comparing
+      const oldTypeNorm = normalizeTypeReference(oldProp.type);
+      const newTypeNorm = normalizeTypeReference(newProp.type);
+
+      if (oldTypeNorm !== newTypeNorm) {
         // Property type changed - breaking change
         return false;
       }
@@ -928,8 +953,10 @@ function areTypeAliasSignaturesCompatible(
     return true;
   }
 
-  // For other types, they must match exactly
-  return oldDef === newDef;
+  // For other types, normalize and compare
+  const oldDefNorm = normalizeTypeReference(oldDef);
+  const newDefNorm = normalizeTypeReference(newDef);
+  return oldDefNorm === newDefNorm;
 }
 
 /**
@@ -1122,8 +1149,9 @@ function areInterfaceSignaturesCompatible(
       return false;
     }
 
-    // Normalize field types for comparison (remove whitespace differences)
-    const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
+    // Normalize field types for comparison (remove whitespace differences and normalize type references)
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
     const oldTypeNorm = normalizeType(oldField.type);
     const newTypeNorm = normalizeType(newField.type);
 
