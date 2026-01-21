@@ -1828,6 +1828,8 @@ interface BreakingChanges {
 function findNewBreakingChanges(
   baselineChanges: BreakingChanges,
   currentChanges: BreakingChanges,
+  baselineExports?: Map<string, ExportedSymbol>,
+  currentExports?: Map<string, ExportedSymbol>,
 ): BreakingChanges {
   // Find removed exports in current that don't exist in baseline
   const newRemoved = currentChanges.removed.filter(
@@ -1841,22 +1843,45 @@ function findNewBreakingChanges(
     const baselineMod = baselineChanges.modified.find(
       (b) => b.name === exp.name,
     );
-    if (!baselineMod) {
-      // Not in baseline at all - it's new
-      return true;
+
+    if (baselineMod) {
+      // It exists in baseline modified - check if the "after" signatures normalize to the same thing
+      // If they do, it's the same breaking change that's already in main, not a new one
+      const baselineAfterNorm = normalizeTypeReference(
+        baselineMod.after.replace(/\s+/g, " ").trim(),
+      );
+      const currentAfterNorm = normalizeTypeReference(
+        exp.after.replace(/\s+/g, " ").trim(),
+      );
+
+      // Only consider it "new" if normalized "after" signatures are different
+      return baselineAfterNorm !== currentAfterNorm;
     }
 
-    // It exists in baseline - check if the "after" signatures normalize to the same thing
-    // If they do, it's the same breaking change that's already in main, not a new one
-    const baselineAfterNorm = normalizeTypeReference(
-      baselineMod.after.replace(/\s+/g, " ").trim(),
-    );
-    const currentAfterNorm = normalizeTypeReference(
-      exp.after.replace(/\s+/g, " ").trim(),
-    );
+    // Not in baseline modified list - check if it exists in baseline exports
+    // If it does and normalized signatures match, it's not a new breaking change
+    if (baselineExports && currentExports) {
+      const baselineExp = baselineExports.get(exp.name);
+      const currentExp = currentExports.get(exp.name);
 
-    // Only consider it "new" if normalized "after" signatures are different
-    return baselineAfterNorm !== currentAfterNorm;
+      if (baselineExp && currentExp) {
+        // Both exist - check if normalized signatures match
+        const baselineNorm = normalizeTypeReference(
+          baselineExp.signature.replace(/\s+/g, " ").trim(),
+        );
+        const currentNorm = normalizeTypeReference(
+          currentExp.signature.replace(/\s+/g, " ").trim(),
+        );
+
+        // If they normalize to the same, it's not a new breaking change
+        if (baselineNorm === currentNorm) {
+          return false;
+        }
+      }
+    }
+
+    // Not in baseline at all, or signatures don't match - it's new
+    return true;
   });
 
   return { removed: newRemoved, modified: newModified };
@@ -2039,9 +2064,12 @@ describe("API Compatibility", () => {
         };
 
         // Find NEW breaking changes (not in baseline)
+        // Also pass exports so we can check normalized signatures even if not in modified list
         const newBreaking = findNewBreakingChanges(
           baselineBreaking,
           currentBreaking,
+          mainExports,
+          currentExports,
         );
 
         // Log baseline info (informational only)
