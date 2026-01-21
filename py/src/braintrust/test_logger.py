@@ -929,11 +929,7 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
 
 @pytest.mark.asyncio
 async def test_span_link_in_async_context(with_simulate_login, with_memory_logger):
-    """Test that span.link() works correctly when called from within an async function.
-
-    This tests the bug where current_logger was a plain attribute instead of a ContextVar,
-    causing span.link() to return a noop link in async contexts even though the span was valid.
-    """
+    """Test that span.link() works correctly when called from within an async function."""
     import asyncio
 
     logger = init_logger(
@@ -964,6 +960,57 @@ async def test_span_link_in_async_context(with_simulate_login, with_memory_logge
     assert span._id in link
     # The link should contain the project ID
     assert "test-project-id" in link
+
+
+def test_current_logger_in_thread(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works correctly when called from a new thread.
+
+    Regression test: ContextVar values don't propagate to new threads,
+    so current_logger must be a plain attribute for thread access.
+    """
+    import threading
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    assert braintrust.current_logger() is logger
+
+    thread_result = {}
+
+    def check_logger_in_thread():
+        thread_result["logger"] = braintrust.current_logger()
+
+    thread = threading.Thread(target=check_logger_in_thread)
+    thread.start()
+    thread.join()
+
+    assert thread_result["logger"] is logger
+
+
+def test_span_link_in_thread(with_simulate_login, with_memory_logger):
+    """Test that span.link() works correctly when called from a new thread.
+
+    The span should be able to generate a valid link even when link() is called
+    from a different thread than where the span was created.
+    """
+    import threading
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    span = logger.start_span(name="test-span")
+
+    thread_result = {}
+
+    def get_link_in_thread():
+        # Call link() on the span directly (not via current_span() which uses ContextVar)
+        thread_result["link"] = span.link()
+
+    thread = threading.Thread(target=get_link_in_thread)
+    thread.start()
+    thread.join()
+    span.end()
+
+    # The link should NOT be the noop link
+    assert thread_result["link"] != "https://www.braintrust.dev/noop-span"
+    # The link should contain the span ID
+    assert span._id in thread_result["link"]
 
 
 def test_span_set_current(with_memory_logger):
