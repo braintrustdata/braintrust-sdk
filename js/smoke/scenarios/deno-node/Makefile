@@ -13,7 +13,6 @@ setup:
 		echo "==> Building SDK for workspace link"; \
 		cd ../../.. && pnpm exec turbo build --filter=braintrust; \
 	fi; \
-	deno install
 
 test: setup
 	deno test --sloppy-imports --allow-all tests/*.test.ts
