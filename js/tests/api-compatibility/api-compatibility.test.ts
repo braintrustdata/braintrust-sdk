@@ -789,8 +789,9 @@ function areTypeAliasSignaturesCompatible(
 ): boolean {
   // Extract type name and definition
   const parseTypeSig = (sig: string) => {
-    // Match: export type Name = Definition
-    const match = sig.match(/export\s+type\s+(\w+)\s*=\s*(.+)$/);
+    // Match: export type Name = Definition (handle multiline)
+    // Use [\s\S] instead of . to match newlines, and make it non-greedy
+    const match = sig.match(/export\s+type\s+(\w+)\s*=\s*([\s\S]+)$/);
     if (!match) return null;
 
     return {
