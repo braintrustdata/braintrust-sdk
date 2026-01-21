@@ -52,6 +52,9 @@ export {
   testMultipleSpans,
   testDirectLogging,
   testJSONAttachment,
+  testAsyncLocalStorageTraced,
+  testNestedTraced,
+  testCurrentSpan,
   runBasicLoggingTests,
 } from "./suites/basic-logging";
 

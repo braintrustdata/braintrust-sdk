@@ -23,10 +23,11 @@ async function runSharedTestSuites() {
 
   try {
     const importResults = await runImportVerificationTests(braintrust, {
+      checkBuildResolution: true,
       expectedBuild: "node",
       expectedFormat: "cjs",
     });
-    const functionalResults = await runBasicLoggingTests(adapters);
+    const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const promptTemplatingResults = await runPromptTemplatingTests({
       Prompt: braintrust.Prompt,
     });

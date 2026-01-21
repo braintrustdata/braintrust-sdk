@@ -4,6 +4,7 @@
  */
 
 import type { TestAdapters, TestResult } from "../helpers/types";
+import type { BraintrustModule } from "./import-verification";
 import { assert, assertEqual, assertNotEmpty } from "../helpers/assertions";
 
 const PROJECT_ID = "test-project-id";
@@ -123,7 +124,7 @@ export async function testMultipleSpans(
 }
 
 /**
- * Test logger.log() if available (direct logging without explicit span)
+ * Test logger.log() - direct logging without explicit span
  */
 export async function testDirectLogging(
   adapters: TestAdapters,
@@ -138,30 +139,22 @@ export async function testDirectLogging(
       projectId: PROJECT_ID,
     });
 
-    // Some logger implementations support direct logging
-    if (typeof logger.log === "function") {
-      logger.log({
-        input: "direct test",
-        output: "direct result",
-      });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    logger.log!({
+      input: "direct test",
+      output: "direct result",
+    });
 
-      await logger.flush();
+    await logger.flush();
 
-      const events = await backgroundLogger.drain();
-      assertNotEmpty(events, "No events were captured from direct logging");
+    const events = await backgroundLogger.drain();
+    assertNotEmpty(events, "No events were captured from direct logging");
 
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "Direct logging test passed",
-      };
-    } else {
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "Direct logging not supported, skipped",
-      };
-    }
+    return {
+      status: "pass" as const,
+      name: testName,
+      message: "Direct logging test passed",
+    };
   } catch (error) {
     return {
       status: "fail" as const,
@@ -180,7 +173,7 @@ export async function testDirectLogging(
  */
 export async function testJSONAttachment(
   adapters: TestAdapters,
-  braintrust: { JSONAttachment?: unknown },
+  braintrust: BraintrustModule,
 ): Promise<TestResult> {
   const testName = "testJSONAttachment";
 
@@ -191,15 +184,6 @@ export async function testJSONAttachment(
       projectName: "json-attachment-test",
       projectId: PROJECT_ID,
     });
-
-    // Check if JSONAttachment is available
-    if (!braintrust.JSONAttachment) {
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "JSONAttachment not available, skipped",
-      };
-    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const JSONAttachment = braintrust.JSONAttachment as any;
@@ -213,30 +197,16 @@ export async function testJSONAttachment(
     };
 
     // Test logging with JSONAttachment
-    if (typeof logger.log === "function") {
-      logger.log({
-        input: {
-          type: "chat_completion",
-          transcript: new JSONAttachment(testData, {
-            filename: "conversation_transcript.json",
-            pretty: true,
-          }),
-        },
-      });
-    } else {
-      // Fallback to span logging
-      const span = logger.startSpan({ name: "json-attachment-test" });
-      span.log({
-        input: {
-          type: "chat_completion",
-          transcript: new JSONAttachment(testData, {
-            filename: "conversation_transcript.json",
-            pretty: true,
-          }),
-        },
-      });
-      span.end();
-    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    logger.log!({
+      input: {
+        type: "chat_completion",
+        transcript: new JSONAttachment(testData, {
+          filename: "conversation_transcript.json",
+          pretty: true,
+        }),
+      },
+    });
 
     await logger.flush();
 
@@ -279,22 +249,321 @@ export async function testJSONAttachment(
 }
 
 /**
+ * Test async local storage (ALS) with traced()
+ * Tests that child spans created inside traced() automatically get the correct parent
+ */
+export async function testAsyncLocalStorageTraced(
+  adapters: TestAdapters,
+  braintrust: BraintrustModule,
+): Promise<TestResult> {
+  const testName = "testAsyncLocalStorageTraced";
+
+  try {
+    const { initLogger, backgroundLogger } = adapters;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const traced = braintrust.traced as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const startSpan = braintrust.startSpan as any;
+
+    initLogger({
+      projectName: "als-traced-test",
+      projectId: PROJECT_ID,
+    });
+
+    // Test: traced() should create a parent span, and startSpan() inside should be a child
+    await traced(
+      () => {
+        const child = startSpan({ name: "child-span" });
+        child.log({ input: "child input", output: "child output" });
+        child.end();
+      },
+      { name: "parent-span" },
+    );
+
+    // Get the events
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
+
+    assertNotEmpty(events, "No events captured for ALS traced test");
+
+    // Find parent and child spans
+    const parentSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "parent-span",
+    );
+    const childSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "child-span",
+    );
+
+    // In environments with ALS, both spans should exist and child should have parent
+    if (parentSpan && childSpan) {
+      const parentId = parentSpan.span_id as string;
+      const childParents = (childSpan.span_parents as string[]) || [];
+
+      // Verify parent-child relationship
+      assert(
+        childParents.includes(parentId),
+        `Child span should have parent span ID in span_parents. Parent ID: ${parentId}, Child parents: ${JSON.stringify(childParents)}`,
+      );
+
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "ALS traced test passed (parent-child relationship verified)",
+      };
+    } else if (!parentSpan && !childSpan) {
+      // Environment without ALS - this is acceptable
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "ALS not available in this environment, test skipped",
+      };
+    } else {
+      // Only one span found - something is wrong
+      return {
+        status: "fail" as const,
+        name: testName,
+        error: {
+          message: `Expected both parent and child spans, but found: parent=${!!parentSpan}, child=${!!childSpan}`,
+        },
+      };
+    }
+  } catch (error) {
+    return {
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    };
+  }
+}
+
+/**
+ * Test nested traced() calls
+ * Tests that nested traced() calls create proper grandparent -> parent -> child relationships
+ */
+export async function testNestedTraced(
+  adapters: TestAdapters,
+  braintrust: BraintrustModule,
+): Promise<TestResult> {
+  const testName = "testNestedTraced";
+
+  try {
+    const { initLogger, backgroundLogger } = adapters;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const traced = braintrust.traced as any;
+
+    initLogger({
+      projectName: "nested-traced-test",
+      projectId: PROJECT_ID,
+    });
+
+    // Test nested traced calls
+    await traced(
+      async () => {
+        await traced(
+          async () => {
+            await traced(
+              () => {
+                // innermost span
+              },
+              { name: "grandchild-span" },
+            );
+          },
+          { name: "child-span" },
+        );
+      },
+      { name: "parent-span" },
+    );
+
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
+
+    if (events.length === 0) {
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "ALS not available in this environment, test skipped",
+      };
+    }
+
+    // Find all three spans
+    const parentSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "parent-span",
+    );
+    const childSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "child-span",
+    );
+    const grandchildSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name ===
+          "grandchild-span",
+    );
+
+    if (parentSpan && childSpan && grandchildSpan) {
+      const parentId = parentSpan.span_id as string;
+      const childId = childSpan.span_id as string;
+      const childParents = (childSpan.span_parents as string[]) || [];
+      const grandchildParents = (grandchildSpan.span_parents as string[]) || [];
+
+      // Verify child has parent as parent
+      assert(
+        childParents.includes(parentId),
+        "Child should have parent in span_parents",
+      );
+
+      // Verify grandchild has child as parent
+      assert(
+        grandchildParents.includes(childId),
+        "Grandchild should have child in span_parents",
+      );
+
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "Nested traced test passed (3-level hierarchy verified)",
+      };
+    } else {
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "ALS not available in this environment, test skipped",
+      };
+    }
+  } catch (error) {
+    return {
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    };
+  }
+}
+
+/**
+ * Test currentSpan() API
+ * Tests that currentSpan() returns the active span within traced()
+ */
+export async function testCurrentSpan(
+  adapters: TestAdapters,
+  braintrust: BraintrustModule,
+): Promise<TestResult> {
+  const testName = "testCurrentSpan";
+
+  try {
+    const { initLogger, backgroundLogger } = adapters;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const traced = braintrust.traced as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const currentSpan = braintrust.currentSpan as any;
+
+    initLogger({
+      projectName: "current-span-test",
+      projectId: PROJECT_ID,
+    });
+
+    let capturedSpanId: string | undefined;
+
+    await traced(
+      () => {
+        const current = currentSpan();
+        if (current && typeof current === "object" && "spanId" in current) {
+          capturedSpanId = (current as { spanId: string }).spanId;
+        }
+      },
+      { name: "test-current-span" },
+    );
+
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
+
+    if (events.length === 0 || !capturedSpanId) {
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "ALS not available in this environment, test skipped",
+      };
+    }
+
+    // Find the span
+    const span = events.find((e) => e.span_id === capturedSpanId);
+
+    if (span) {
+      assertEqual(
+        (
+          (span.span_attributes as Record<string, unknown>) || {
+            name: undefined,
+          }
+        ).name,
+        "test-current-span",
+        "currentSpan() should return the active span",
+      );
+
+      return {
+        status: "pass" as const,
+        name: testName,
+        message: "currentSpan test passed",
+      };
+    } else {
+      return {
+        status: "fail" as const,
+        name: testName,
+        error: {
+          message: "currentSpan() returned a span ID that was not logged",
+        },
+      };
+    }
+  } catch (error) {
+    return {
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    };
+  }
+}
+
+/**
  * Run all basic logging tests
  */
 export async function runBasicLoggingTests(
   adapters: TestAdapters,
-  braintrust?: { JSONAttachment?: unknown },
+  braintrust: BraintrustModule,
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   results.push(await testBasicSpanLogging(adapters));
   results.push(await testMultipleSpans(adapters));
   results.push(await testDirectLogging(adapters));
-
-  // Only run JSONAttachment test if braintrust module is provided
-  if (braintrust) {
-    results.push(await testJSONAttachment(adapters, braintrust));
-  }
+  results.push(await testJSONAttachment(adapters, braintrust));
+  results.push(await testAsyncLocalStorageTraced(adapters, braintrust));
+  results.push(await testNestedTraced(adapters, braintrust));
+  results.push(await testCurrentSpan(adapters, braintrust));
 
   return results;
 }

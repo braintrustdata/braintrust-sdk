@@ -69,7 +69,7 @@ import {
   runBasicLoggingTests,
   displayTestResults,
   hasFailures,
-} from "../../shared/dist/index.mjs";
+} from "../../shared";
 
 import { initLogger, _exportsForTestingOnly } from "braintrust";
 
@@ -86,8 +86,9 @@ async function runTests() {
 
   try {
     const importResults = await runImportVerificationTests(braintrust, {
-      expectedBuild: "node",
-      expectedFormat: "esm",
+      checkBuildResolution: true, 
+      expectedBuild: "node", // depends on scenario
+      expectedFormat: "esm", // depends on scenario
     });
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const results = [...importResults, ...functionalResults];
@@ -136,6 +137,30 @@ Use version-agnostic paths: `braintrust-latest.tgz` not `braintrust-2.0.2.tgz`. 
 ### No Workarounds
 
 Never use `--legacy-peer-deps`, `--no-check`, `--ignore-errors`, or mocks. Smoke tests must expose issues users will encounter.
+
+### No Defensive Checks in Tests
+
+Don't conditionally check if functions exist before calling them. Let natural JavaScript errors occur and get caught by try/catch blocks. This provides:
+
+- **Better error messages**: Stack traces show exactly where/what failed
+- **Cleaner test code**: No redundant existence checks
+- **Real-world behavior**: Tests fail the same way user code would fail
+
+```typescript
+// ❌ Bad - defensive checks hide the real error
+if (!braintrust.traced) {
+  return { status: "fail", error: { message: "traced missing" } };
+}
+
+// ✓ Good - let it throw naturally
+const traced = braintrust.traced;
+await traced(
+  () => {
+    /* ... */
+  },
+  { name: "test" },
+); // Throws if undefined
+```
 
 ### Build Before Install
 
@@ -193,6 +218,17 @@ SCENARIOS := $(shell find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -
 ```
 
 Any folder in `scenarios/` with a `Makefile` is automatically discovered. No registration needed.
+
+## Shared Test Suites
+
+The `shared/` package provides reusable test suites that run across all scenarios:
+
+- **Import Verification** - Verifies SDK exports exist, prevents tree-shaking issues
+- **Basic Logging** - Core logging functionality including Async Local Storage (ALS) tests
+- **Prompt Templating** - Mustache (all environments) and Nunjucks (Node.js)
+- **Eval Smoke Test** - Basic eval functionality
+
+See `shared/README.md` for complete test suite documentation, individual test functions, and implementation details.
 
 ## Reference Scenarios
 

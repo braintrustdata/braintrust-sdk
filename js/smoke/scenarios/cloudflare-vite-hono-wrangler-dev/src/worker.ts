@@ -40,10 +40,14 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     try {
       // Vite bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
       const importResults = await runImportVerificationTests(braintrust, {
+        checkBuildResolution: true,
         expectedBuild: "browser",
         expectedFormat: "esm",
       });
-      const functionalResults = await runBasicLoggingTests(adapters);
+      const functionalResults = await runBasicLoggingTests(
+        adapters,
+        braintrust,
+      );
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
       // Test Mustache template (should always work)

@@ -61,20 +61,21 @@ This produces both CJS and ESM builds in the `dist/` directory.
 const {
   setupTestEnvironment,
   runBasicLoggingTests,
-} = require("../../shared/dist/index.js");
+} = require("../../shared");
+
 
 async function main() {
-  const { initLogger, _exportsForTestingOnly } = require("braintrust");
+  const braintrust = require("braintrust");
 
   const adapters = await setupTestEnvironment({
-    initLogger,
-    testingExports: _exportsForTestingOnly,
+    initLogger: braintrust.initLogger,
+    testingExports: braintrust._exportsForTestingOnly,
     canUseFileSystem: true,
     canUseCLI: true,
     environment: "node",
   });
 
-  const results = await runBasicLoggingTests(adapters);
+  const results = await runBasicLoggingTests(adapters, braintrust);
   // Handle results...
 }
 ```
@@ -86,20 +87,20 @@ async function main() {
 import {
   setupTestEnvironment,
   runBasicLoggingTests,
-} from "../../shared/dist/index.mjs";
+} from "../../shared";
 
 async function main() {
-  const { initLogger, _exportsForTestingOnly } = await import("braintrust");
+  const braintrust = await import("braintrust");
 
   const adapters = await setupTestEnvironment({
-    initLogger,
-    testingExports: _exportsForTestingOnly,
+    initLogger: braintrust.initLogger,
+    testingExports: braintrust._exportsForTestingOnly,
     canUseFileSystem: true,
     canUseCLI: true,
     environment: "node-esm",
   });
 
-  const results = await runBasicLoggingTests(adapters);
+  const results = await runBasicLoggingTests(adapters, braintrust);
   // Handle results...
 }
 ```
@@ -111,21 +112,19 @@ async function main() {
 import {
   setupTestEnvironment,
   runBasicLoggingTests,
-} from "../../shared/dist/index.mjs";
+} from "../../shared";
 
-const { initLogger, _exportsForTestingOnly } = await import(
-  `file://${Deno.env.get("BRAINTRUST_BUILD_DIR")}`
-);
+import * as braintrust from 'braintrust';
 
 const adapters = await setupTestEnvironment({
-  initLogger,
-  testingExports: _exportsForTestingOnly,
+  initLogger: braintrust.initLogger,
+  testingExports: braintrust._exportsForTestingOnly,
   canUseFileSystem: true,
   canUseCLI: false,
   environment: "deno",
 });
 
-const results = await runBasicLoggingTests(adapters);
+const results = await runBasicLoggingTests(adapters, braintrust);
 ```
 
 ### In Cloudflare Workers
@@ -135,21 +134,21 @@ const results = await runBasicLoggingTests(adapters);
 import {
   setupTestEnvironment,
   runBasicLoggingTests,
-} from "../../../shared/dist/index.mjs";
+} from "../../../shared";
 
-import { initLogger, _exportsForTestingOnly } from "braintrust";
+import * as braintrust from "braintrust";
 
 export default {
   async fetch(request: Request): Promise<Response> {
     const adapters = await setupTestEnvironment({
-      initLogger,
-      testingExports: _exportsForTestingOnly,
+      initLogger: braintrust.initLogger,
+      testingExports: braintrust._exportsForTestingOnly,
       canUseFileSystem: false, // No fs in Workers
       canUseCLI: false,
       environment: "cloudflare-worker",
     });
 
-    const results = await runBasicLoggingTests(adapters);
+    const results = await runBasicLoggingTests(adapters, braintrust);
     return new Response(JSON.stringify(results));
   },
 };
@@ -224,7 +223,18 @@ Tests core logging functionality:
 - `testMultipleSpans()` - Multiple sequential spans
 - `testDirectLogging()` - Direct logger.log() if available
 - `testJSONAttachment()` - JSON attachment logging
-- `runBasicLoggingTests()` - Runs all basic logging tests
+- `testAsyncLocalStorageTraced()` - ALS: traced() + startSpan() parent-child relationship
+- `testNestedTraced()` - ALS: Nested traced() calls (3-level hierarchy)
+- `testCurrentSpan()` - ALS: currentSpan() returns active span
+- `runBasicLoggingTests()` - Runs all basic logging tests (including ALS if available)
+
+**Async Local Storage (ALS) tests**: Verify parent-child span relationships work correctly.
+
+- **Node.js/Deno**: Full ALS → verifies `span_parents` relationships
+- **Browser/Workers**: No ALS → functions exist but relationships may not be automatic
+- **Edge**: May have ALS → tests check if relationships work
+
+**Error handling**: Tests don't pre-check if functions exist. If `traced`, `startSpan`, or `currentSpan` are undefined, the code naturally throws and the error is caught by the try/catch block, resulting in a test failure with the full stack trace.
 
 ### Adding New Test Suites
 
