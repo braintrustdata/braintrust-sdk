@@ -1676,6 +1676,16 @@ describe("areTypeAliasSignaturesCompatible", () => {
     const newType = `export type Foo = { value: string }`;
     expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(false);
   });
+
+  test("should treat ObjectReference$1 and ObjectReference as compatible", () => {
+    const oldType = `export type OtherExperimentLogFields = {
+  origin: z.infer<typeof ObjectReference$1>;
+};`;
+    const newType = `export type OtherExperimentLogFields = {
+  origin: z.infer<typeof ObjectReference>;
+};`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
+  });
 });
 
 describe("areEnumSignaturesCompatible", () => {
@@ -2043,8 +2053,12 @@ describe("API Compatibility", () => {
               `NEW modified exports (${newBreaking.modified.length}):\n` +
                 newBreaking.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;
@@ -2108,8 +2122,12 @@ describe("API Compatibility", () => {
               `Modified exports (${comparison.modified.length}):\n` +
                 comparison.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;
