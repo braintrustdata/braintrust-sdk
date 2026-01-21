@@ -962,6 +962,90 @@ async def test_span_link_in_async_context(with_simulate_login, with_memory_logge
     assert "test-project-id" in link
 
 
+@pytest.mark.asyncio
+async def test_current_logger_after_multiple_awaits(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works after multiple await points."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def check_logger_after_awaits():
+        assert braintrust.current_logger() is logger
+        await asyncio.sleep(0.01)
+        assert braintrust.current_logger() is logger
+        await asyncio.sleep(0.01)
+        assert braintrust.current_logger() is logger
+        return braintrust.current_logger()
+
+    result = await check_logger_after_awaits()
+    assert result is logger
+
+
+@pytest.mark.asyncio
+async def test_current_logger_in_async_generator(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works within an async generator (yield)."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def logger_generator():
+        for i in range(3):
+            await asyncio.sleep(0.01)
+            yield braintrust.current_logger()
+
+    results = []
+    async for log in logger_generator():
+        results.append(log)
+
+    assert len(results) == 3
+    assert all(r is logger for r in results)
+
+
+@pytest.mark.asyncio
+async def test_current_logger_in_separate_task(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works in a separately created asyncio task."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def get_logger_in_task():
+        await asyncio.sleep(0.01)
+        return braintrust.current_logger()
+
+    # Create a separate task
+    task = asyncio.create_task(get_logger_in_task())
+    result = await task
+
+    assert result is logger
+
+
+@pytest.mark.asyncio
+async def test_span_link_in_nested_async(with_simulate_login, with_memory_logger):
+    """Test that span.link() works in deeply nested async calls."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    span = logger.start_span(name="test-span")
+
+    async def level3():
+        await asyncio.sleep(0.01)
+        return span.link()
+
+    async def level2():
+        await asyncio.sleep(0.01)
+        return await level3()
+
+    async def level1():
+        await asyncio.sleep(0.01)
+        return await level2()
+
+    link = await level1()
+    span.end()
+
+    assert link != "https://www.braintrust.dev/noop-span"
+    assert span._id in link
+
+
 def test_current_logger_in_thread(with_simulate_login, with_memory_logger):
     """Test that current_logger() works correctly when called from a new thread.
 
