@@ -755,10 +755,6 @@ function areFunctionSignaturesCompatible(
   return true;
 }
 
-/**
- * Compares type alias signatures to determine if changes are backwards compatible.
- * Widening union types or adding optional properties to objects is compatible.
- */
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,

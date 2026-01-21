@@ -1,4 +1,3 @@
-// Explicitly import browser build for this scenario
 import * as braintrust from "braintrust";
 import {
   setupTestEnvironment,

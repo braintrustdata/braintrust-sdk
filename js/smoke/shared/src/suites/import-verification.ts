@@ -679,7 +679,7 @@ export async function testStateManagementExports(
  * Test which build variant was resolved (browser vs Node.js) and module format (CJS vs ESM)
  *
  * This test checks which export path was used by reading the buildType property
- * from the isomorph object, which is set explicitly during configuration.
+ * from the isomorph object and by resolving the module specifier.
  *
  * @param module - The Braintrust module to test
  * @param expectedBuild - Expected build type: "browser" or "node" (optional, for validation)
@@ -740,9 +740,6 @@ export async function testBuildResolution(
   }
 }
 
-/**
- * Detect build type from isomorph.buildType property
- */
 function detectBuildType(module: BraintrustModule): {
   buildType: "browser" | "node" | "unknown";
   buildDetails: string;
@@ -784,32 +781,23 @@ function detectBuildType(module: BraintrustModule): {
 
 /**
  * Detect module format (CJS vs ESM) by resolving the actual file path
- *
- * This is the most reliable method: we resolve the module specifier and check
- * which file extension is used (.mjs for ESM, .js for CJS).
  */
 function detectModuleFormat(): "cjs" | "esm" | "unknown" {
   const packageSpec = "braintrust";
-
-  // Try ESM resolution first (Node.js 20.6+)
+  // Try ESM resolution first
   try {
     if (
       typeof import.meta !== "undefined" &&
       typeof import.meta.resolve === "function"
     ) {
       const resolved = import.meta.resolve(packageSpec);
-      // import.meta.resolve returns a URL string (e.g., "file:///path/to/file.mjs")
-      // Extract the path from the URL
       let resolvedPath: string;
       try {
-        // Try parsing as URL first (handles file:// URLs)
         const url = new URL(resolved);
         resolvedPath = url.pathname;
       } catch {
-        // If not a valid URL, assume it's already a path
         resolvedPath = resolved;
       }
-      // ESM files end with .mjs
       if (resolvedPath.endsWith(".mjs")) {
         return "esm";
       }
@@ -860,7 +848,7 @@ function validateBuildResolution(
     errors.push(
       `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
     );
-    return errors; // Don't check other validations if build type is unknown
+    return errors;
   }
 
   // Validate build type matches expectation
@@ -871,15 +859,13 @@ function validateBuildResolution(
   }
 
   // Validate module format matches expectation
-  // Note: Format detection can be unreliable in bundled environments
-  // (bundlers may polyfill require even when using ESM)
   if (
     expectedFormat &&
     detectedFormat !== expectedFormat &&
     detectedFormat !== "unknown"
   ) {
     errors.push(
-      `Expected ${expectedFormat} format but detected ${detectedFormat} format. Note: Format detection can be unreliable in bundled environments where bundlers may polyfill require even when using ESM.`,
+      `Expected ${expectedFormat} format but detected ${detectedFormat} format.`,
     );
   }
 

@@ -32,8 +32,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      // Test import verification including build resolution check
-      // Node.js build (ESM format) should be used (though may fail due to missing Node.js APIs)
       const importResults = await runImportVerificationTests(braintrust, {
         checkBuildResolution: true,
         expectedBuild: "node",

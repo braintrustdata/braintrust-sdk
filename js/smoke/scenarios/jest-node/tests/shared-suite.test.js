@@ -22,8 +22,6 @@ async function runSharedTestSuites() {
   });
 
   try {
-    // Test import verification including build resolution check
-    // Node.js should resolve to Node build (CJS format) when using require()
     const importResults = await runImportVerificationTests(braintrust, {
       checkBuildResolution: true,
       expectedBuild: "node",
