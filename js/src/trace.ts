@@ -3,7 +3,7 @@ import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
 import { invoke } from "./functions/invoke";
 
 export interface TraceOptions {
-  objectType: "experiment" | "project_logs";
+  objectType: "experiment" | "project_logs" | "playground_logs";
   objectId: string;
   rootSpanId: string;
   ensureSpansFlushed?: () => Promise<void>;
@@ -19,7 +19,7 @@ type SpanRecord = any;
  */
 export class SpanFetcher extends ObjectFetcher<SpanRecord> {
   constructor(
-    objectType: "experiment" | "project_logs",
+    objectType: "experiment" | "project_logs" | "playground_logs",
     private readonly _objectId: string,
     private readonly rootSpanId: string,
     private readonly _state: BraintrustState,
@@ -123,14 +123,18 @@ export class CachedSpanFetcher {
   private fetchFn: SpanFetchFn;
 
   constructor(
-    objectType: "experiment" | "project_logs",
+    objectType: "experiment" | "project_logs" | "playground_logs",
     objectId: string,
     rootSpanId: string,
     getState: () => Promise<BraintrustState>,
   );
   constructor(fetchFn: SpanFetchFn);
   constructor(
-    objectTypeOrFetchFn: "experiment" | "project_logs" | SpanFetchFn,
+    objectTypeOrFetchFn:
+      | "experiment"
+      | "project_logs"
+      | "playground_logs"
+      | SpanFetchFn,
     objectId?: string,
     rootSpanId?: string,
     getState?: () => Promise<BraintrustState>,
@@ -261,7 +265,10 @@ export interface Trace {
  * richer logging or side effects.
  */
 export class LocalTrace implements Trace {
-  private readonly objectType: "experiment" | "project_logs";
+  private readonly objectType:
+    | "experiment"
+    | "project_logs"
+    | "playground_logs";
   private readonly objectId: string;
   private readonly rootSpanId: string;
   private readonly ensureSpansFlushed?: () => Promise<void>;

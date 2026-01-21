@@ -3,7 +3,7 @@ from typing import Any, Literal, TypedDict, TypeVar, overload
 from sseclient import SSEClient
 
 from .._generated_types import FunctionTypeEnum
-from ..logger import Exportable, get_span_parent_object, login, proxy_conn
+from ..logger import Exportable, _internal_get_global_state, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
 from .constants import INVOKE_API_VERSION
 from .stream import BraintrustInvokeError, BraintrustStream
@@ -243,6 +243,8 @@ def init_function(project_name: str, slug: str, version: str | None = None):
     :param version: Optional version of the function to use. Defaults to latest.
     :return: A function that can be used as a task or scorer.
     """
+    # Disable span cache since remote function spans won't be in the local cache
+    _internal_get_global_state().span_cache.disable()
 
     def f(*args: Any, **kwargs: Any) -> Any:
         if len(args) > 0:
