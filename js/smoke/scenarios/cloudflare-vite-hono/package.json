@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
+    "braintrust": "file:../../../../../artifacts/braintrust-latest.tgz",
     "hono": "^4.11.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

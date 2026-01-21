@@ -38,7 +38,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      // Test import verification including build resolution check
       // Vite bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
       const importResults = await runImportVerificationTests(braintrust, {
         checkBuildResolution: true,
