@@ -1,4 +1,6 @@
-import * as braintrust from "braintrust";
+// Workers with nodejs_compat can use Node.js build
+// Explicitly import from "braintrust/node" to ensure Node.js build is used
+import * as braintrust from "braintrust/node";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
