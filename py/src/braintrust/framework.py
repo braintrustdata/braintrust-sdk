@@ -1484,11 +1484,11 @@ async def _run_evaluator_internal_impl(
                     root_span_id_value = getattr(root_span, "root_span_id", root_span.id)
 
                     # Check if there's a parent in the context to determine object_type and object_id
+                    from braintrust.span_identifier_v3 import SpanComponentsV3, span_object_type_v3_to_typed_string
+
                     parent_str = trace_state.current_parent.get()
                     parent_components = None
                     if parent_str:
-                        from braintrust.span_identifier_v3 import SpanComponentsV3, span_object_type_v3_to_typed_string
-
                         try:
                             parent_components = SpanComponentsV3.from_str(parent_str)
                         except Exception:
