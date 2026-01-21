@@ -1,4 +1,6 @@
-import * as braintrust from "braintrust";
+// Explicitly import browser build for this scenario
+// (even though nodejs_compat is enabled, we want to test browser build)
+import * as braintrust from "braintrust/browser";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,

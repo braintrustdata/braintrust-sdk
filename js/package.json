@@ -29,6 +29,11 @@
         "import": "./dist/index.mjs",
         "require": "./dist/index.js"
       },
+      "workerd": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.js"
+      },
       "browser": {
         "types": "./dist/browser.d.mts",
         "import": "./dist/browser.mjs",
