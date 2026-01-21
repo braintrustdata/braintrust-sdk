@@ -793,7 +793,10 @@ function detectModuleFormat(): "cjs" | "esm" | "unknown" {
 
   // Try ESM resolution first (Node.js 20.6+)
   try {
-    if (typeof import.meta !== "undefined" && import.meta.resolve) {
+    if (
+      typeof import.meta !== "undefined" &&
+      typeof import.meta.resolve === "function"
+    ) {
       const resolved = import.meta.resolve(packageSpec);
       // import.meta.resolve returns a URL string (e.g., "file:///path/to/file.mjs")
       // Extract the path from the URL
