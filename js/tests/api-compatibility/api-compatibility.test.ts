@@ -758,24 +758,20 @@ function areFunctionSignaturesCompatible(
 /**
  * Normalizes type references to handle equivalent forms:
  * - z.infer<typeof Type> -> TypeType
- * - z.infer<typeof Type$N> -> TypeType (handles TypeScript disambiguation suffixes)
  * - Type$1, Type$2, etc. -> Type (removes TypeScript disambiguation suffixes)
  */
 function normalizeTypeReference(type: string): string {
-  // First normalize z.infer<typeof TypeName$N> patterns - match the full pattern including $N
-  // This handles: z.infer<typeof ObjectReference$1> -> ObjectReferenceType
-  type = type.replace(
-    /z\.infer<typeof\s+([\w$]+)>/g,
-    (match, typeNameWithSuffix) => {
-      // Remove any $N suffix from the type name
-      const baseTypeName = typeNameWithSuffix.replace(/\$\d+/, "");
-      return `${baseTypeName}Type`;
-    },
-  );
-
-  // Then remove any remaining TypeScript disambiguation suffixes
-  // This handles cases like: ObjectReferenceType$1 -> ObjectReferenceType
+  // First, remove TypeScript disambiguation suffixes ($1, $2, etc.) from the entire string
+  // This handles cases like: ObjectReference$1, ObjectReferenceType$1, etc.
   type = type.replace(/(\w+)\$\d+/g, "$1");
+
+  // Then normalize z.infer<typeof Type> to TypeType
+  // Pattern: z.infer<typeof TypeName> -> TypeNameType
+  // This handles: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  type = type.replace(/z\.infer<typeof\s+(\w+)>/g, (match, typeName) => {
+    // Convert TypeName to TypeNameType (e.g., ObjectReference -> ObjectReferenceType)
+    return `${typeName}Type`;
+  });
 
   return type;
 }
