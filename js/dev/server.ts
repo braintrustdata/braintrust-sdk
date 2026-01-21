@@ -30,6 +30,7 @@ import {
   getSpanParentObject,
   initDataset,
   ParameterSet,
+  validateParameters,
 } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
@@ -43,7 +44,7 @@ import {
   EvaluatorManifest,
   evalParametersSerializedSchema,
 } from "./types";
-import { EvalParameters, validateParameters } from "../src/eval-parameters";
+import { EvalParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import { zodToJsonSchema } from "../src/zod/utils";
@@ -423,7 +424,8 @@ export function makeEvalParametersSchema(
           {
             type: "prompt",
             default: value.default
-              ? promptDefinitionToPromptData(value.default)
+              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+                promptDefinitionToPromptData(value.default as any)
               : undefined,
             description: value.description,
           },

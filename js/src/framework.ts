@@ -37,6 +37,7 @@ import {
   withCurrent,
   withParent,
   _internalGetGlobalState,
+  validateParameters,
 } from "./logger";
 import type { ProgressReporter } from "./reporters/types";
 import { SimpleProgressReporter } from "./reporters/progress";
@@ -50,7 +51,6 @@ import {
   EvalParameters,
   ExtractSchema,
   InferParameters,
-  validateParameters,
 } from "./eval-parameters";
 
 export type BaseExperiment<

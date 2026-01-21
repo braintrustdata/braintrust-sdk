@@ -104,12 +104,13 @@ import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils"
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 import { zodToJsonSchema } from "./zod/utils";
-import { promptDefinitionToPromptData } from "./framework2";
-import {
-  EvalParameters,
-  InferParameters,
-  validateParameters,
-} from "./eval-parameters";
+// Lazy import to break circular dependency:
+// logger.ts → framework2.ts → framework.ts → trace.ts → logger.ts
+function getPromptDefinitionToPromptData() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./framework2").promptDefinitionToPromptData as typeof import("./framework2").promptDefinitionToPromptData;
+}
+import type { EvalParameters, InferParameters } from "./eval-parameters";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -4014,6 +4015,63 @@ export class ParameterSet<
   }
 }
 
+// Overload for typed schema
+export function validateParameters<
+  Parameters extends EvalParameters = EvalParameters,
+>(
+  parameters: Record<string, unknown>,
+  parameterSchema: Parameters,
+): InferParameters<Parameters>;
+// Overload for untyped/unknown schema
+export function validateParameters(
+  parameters: Record<string, unknown>,
+  parameterSchema: unknown,
+): Record<string, unknown>;
+// Implementation
+export function validateParameters(
+  parameters: Record<string, unknown>,
+  parameterSchema: unknown,
+): Record<string, unknown> {
+  if (!parameterSchema || typeof parameterSchema !== "object") {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(parameterSchema).map(([name, schema]) => {
+      const value = parameters[name];
+      try {
+        if (isPromptParameter(schema)) {
+          const promptData = value
+            ? promptDataSchema.parse(value)
+            : schema.default
+              ? getPromptDefinitionToPromptData()(
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+                  schema.default as any,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
+                  (schema.default as any).tools,
+                )
+              : undefined;
+          if (!promptData) {
+            throw new Error(`Parameter '${name}' is required`);
+          }
+          return [name, Prompt.fromPromptData(name, promptData)];
+        }
+
+        if (isZodSchema(schema)) {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          return [name, (schema as z.ZodType).parse(value)];
+        }
+
+        return [name, value ?? schema];
+      } catch (e) {
+        console.error("Error validating parameter", name, e);
+        throw Error(
+          `Invalid parameter '${name}': ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }),
+  );
+}
+
 /**
  * Shape of a function/parameters object returned from the API.
  * @internal
@@ -4133,7 +4191,7 @@ async function _createParametersFromDefaultSchemaValues<
       if (paramSchema.default) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
         const defaultPrompt = paramSchema.default as any;
-        defaultData[name] = promptDefinitionToPromptData(
+        defaultData[name] = getPromptDefinitionToPromptData()(
           defaultPrompt,
           defaultPrompt.tools,
         );
