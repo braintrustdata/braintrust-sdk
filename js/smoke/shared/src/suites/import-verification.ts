@@ -783,23 +783,58 @@ function detectBuildType(module: BraintrustModule): {
 }
 
 /**
- * Detect module format (CJS vs ESM) from environment
+ * Detect module format (CJS vs ESM) by resolving the actual file path
+ *
+ * This is the most reliable method: we resolve the module specifier and check
+ * which file extension is used (.mjs for ESM, .js for CJS).
  */
 function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+  const packageSpec = "braintrust";
+
+  // Try ESM resolution first (Node.js 20.6+)
   try {
-    // ESM: import.meta is available
-    if (typeof import.meta !== "undefined" && import.meta.url) {
-      return "esm";
-    }
-    // CJS: require is available (in Node.js)
-    if (typeof require !== "undefined") {
-      return "cjs";
+    if (typeof import.meta !== "undefined" && import.meta.resolve) {
+      const resolved = import.meta.resolve(packageSpec);
+      // import.meta.resolve returns a URL string (e.g., "file:///path/to/file.mjs")
+      // Extract the path from the URL
+      let resolvedPath: string;
+      try {
+        // Try parsing as URL first (handles file:// URLs)
+        const url = new URL(resolved);
+        resolvedPath = url.pathname;
+      } catch {
+        // If not a valid URL, assume it's already a path
+        resolvedPath = resolved;
+      }
+      // ESM files end with .mjs
+      if (resolvedPath.endsWith(".mjs")) {
+        return "esm";
+      }
+      // If resolved but not .mjs, check if it's .js (CJS)
+      if (resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".mjs")) {
+        return "cjs";
+      }
     }
   } catch {
-    // import.meta might throw in some environments
-    if (typeof require !== "undefined") {
-      return "cjs";
+    // import.meta.resolve might not be available or might throw
+    // Continue to try CJS resolution
+  }
+
+  // Try CJS resolution
+  try {
+    if (typeof require !== "undefined" && require.resolve) {
+      const resolved = require.resolve(packageSpec);
+      // CJS files end with .js (not .mjs)
+      if (resolved.endsWith(".js") && !resolved.endsWith(".mjs")) {
+        return "cjs";
+      }
+      // If resolved to .mjs, it's ESM
+      if (resolved.endsWith(".mjs")) {
+        return "esm";
+      }
     }
+  } catch {
+    // require.resolve might not be available or might throw
   }
 
   return "unknown";
@@ -833,13 +868,15 @@ function validateBuildResolution(
   }
 
   // Validate module format matches expectation
+  // Note: Format detection can be unreliable in bundled environments
+  // (bundlers may polyfill require even when using ESM)
   if (
     expectedFormat &&
     detectedFormat !== expectedFormat &&
     detectedFormat !== "unknown"
   ) {
     errors.push(
-      `Expected ${expectedFormat} format but detected ${detectedFormat} format.`,
+      `Expected ${expectedFormat} format but detected ${detectedFormat} format. Note: Format detection can be unreliable in bundled environments where bundlers may polyfill require even when using ESM.`,
     );
   }
 
