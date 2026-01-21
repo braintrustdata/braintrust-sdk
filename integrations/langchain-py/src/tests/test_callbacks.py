@@ -7,7 +7,8 @@ from braintrust.logger import flush
 from langchain.prompts import ChatPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
 from langchain_core.runnables import RunnableMap, RunnableSerializable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -146,6 +147,48 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
                 "span_parents": [root_span_id],
             },
         ],
+    )
+
+
+def test_cache_token_metrics_from_input_token_details(logger_memory_logger: LoggerMemoryLogger):
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    handler = BraintrustCallbackHandler(logger=logger)
+    run_id = uuid.uuid4()
+
+    handler.on_chat_model_start(
+        serialized={"id": ["test"], "name": "TestChatModel"},
+        messages=[[HumanMessage(content="cache test")]],
+        run_id=run_id,
+    )
+
+    usage_metadata = {
+        "input_tokens": 18,
+        "output_tokens": 3,
+        "total_tokens": 21,
+        "input_token_details": {"cache_read": 10, "cache_creation": 5},
+    }
+    result = LLMResult(
+        generations=[[ChatGeneration(message=AIMessage(content="ok", usage_metadata=usage_metadata))]],
+        llm_output={"model_name": "test-model"},
+    )
+
+    handler.on_llm_end(result, run_id=run_id)
+
+    spans = memory_logger.pop()
+    llm_spans = find_spans_by_attributes(spans, type="llm")
+    assert len(llm_spans) == 1
+
+    assert_matches_object(
+        llm_spans[0]["metrics"],
+        {
+            "prompt_tokens": 18,
+            "completion_tokens": 3,
+            "total_tokens": 21,
+            "prompt_cached_tokens": 10,
+            "prompt_cache_creation_tokens": 5,
+        },
     )
 
 
