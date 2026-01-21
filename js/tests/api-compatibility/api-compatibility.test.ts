@@ -765,12 +765,14 @@ function normalizeTypeReference(type: string): string {
   // First normalize z.infer<typeof TypeName$N> patterns - handle both with and without $N suffix
   // This handles: z.infer<typeof ObjectReference$1> -> ObjectReferenceType
   // And: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  // Match the full identifier (which may include $ suffix) and extract just the base name
   type = type.replace(
-    /z\.infer<typeof\s+(\w+)(\$\d+)?>/g,
-    (match, typeName, suffix) => {
-      // suffix will be undefined if there's no $N, or will be like '$1'
-      // We ignore the suffix and just use the base type name
-      return `${typeName}Type`;
+    /z\.infer<typeof\s+([\w$]+)>/g,
+    (match, fullIdentifier) => {
+      // Extract base name by removing $ suffix if present
+      // Simply remove any $ followed by digits from the end
+      const baseName = fullIdentifier.replace(/\$\d+$/, "");
+      return `${baseName}Type`;
     },
   );
 
