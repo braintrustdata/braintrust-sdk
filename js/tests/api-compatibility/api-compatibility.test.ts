@@ -387,16 +387,8 @@ function compareExports(
     kind: string;
   }> = [];
 
-  // Internal testing exports that can change without breaking compatibility
-  const internalExports = new Set(["_exportsForTestingOnly"]);
-
   // Check for removed or modified exports
   for (const [name, publishedSymbol] of publishedExports) {
-    // Skip internal exports - they can change without being breaking changes
-    if (internalExports.has(name)) {
-      continue;
-    }
-
     const currentSymbol = currentExports.get(name);
     if (!currentSymbol) {
       removed.push(publishedSymbol);
@@ -418,11 +410,6 @@ function compareExports(
 
   // Check for added exports
   for (const [name, currentSymbol] of currentExports) {
-    // Skip internal exports - their additions don't count as public API additions
-    if (internalExports.has(name)) {
-      continue;
-    }
-
     if (!publishedExports.has(name)) {
       added.push(currentSymbol);
     }
@@ -755,6 +742,10 @@ function areFunctionSignaturesCompatible(
   return true;
 }
 
+/**
+ * Compares type alias signatures to determine if changes are backwards compatible.
+ * Widening union types or adding optional properties to objects is compatible.
+ */
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,

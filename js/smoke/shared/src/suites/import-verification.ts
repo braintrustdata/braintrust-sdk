@@ -678,33 +678,35 @@ export async function testStateManagementExports(
 /**
  * Test which build variant was resolved (browser vs Node.js) and module format (CJS vs ESM)
  *
- * This test checks which export path was used by reading the buildType property
- * from the isomorph object and by resolving the module specifier.
+ * This test checks which export path was used by resolving the module specifier
+ * and inspecting the resolved filename (e.g. browser.* vs index.*).
  *
- * @param module - The Braintrust module to test
+ * @param module - The Braintrust module to test (unused; included for consistency)
  * @param expectedBuild - Expected build type: "browser" or "node" (optional, for validation)
  * @param expectedFormat - Expected module format: "cjs" or "esm" (optional, for validation)
  */
 export async function testBuildResolution(
-  module: BraintrustModule,
+  _module: BraintrustModule,
   expectedBuild?: "browser" | "node",
   expectedFormat?: "cjs" | "esm",
 ): Promise<TestResult> {
   const testName = "testBuildResolution";
 
   try {
-    // Detect build type from isomorph.buildType
-    const { buildType: detectedBuild, buildDetails } = detectBuildType(module);
-
-    // Detect module format (CJS vs ESM)
-    const detectedFormat = detectModuleFormat();
+    // Detect build variant (browser vs node) and module format (CJS vs ESM)
+    // by resolving the actual entrypoint file path.
+    const {
+      buildType: detectedBuild,
+      moduleFormat: detectedFormat,
+      resolutionDetails,
+    } = detectBuildAndFormatFromResolution();
 
     const errors = validateBuildResolution(
       detectedBuild,
       detectedFormat,
       expectedBuild,
       expectedFormat,
-      buildDetails,
+      resolutionDetails,
     );
 
     if (errors.length > 0) {
@@ -740,49 +742,18 @@ export async function testBuildResolution(
   }
 }
 
-function detectBuildType(module: BraintrustModule): {
-  buildType: "browser" | "node" | "unknown";
-  buildDetails: string;
-} {
-  if (!module._exportsForTestingOnly) {
-    return {
-      buildType: "unknown",
-      buildDetails: "_exportsForTestingOnly not available",
-    };
-  }
-
-  const testing = module._exportsForTestingOnly as any;
-  const iso = testing.isomorph;
-
-  if (!iso || typeof iso !== "object") {
-    return {
-      buildType: "unknown",
-      buildDetails: "isomorph not available in testing exports",
-    };
-  }
-
-  const buildType = iso.buildType;
-  if (
-    buildType === "browser" ||
-    buildType === "node" ||
-    buildType === "unknown"
-  ) {
-    return {
-      buildType,
-      buildDetails: `Build type from isomorph.buildType: ${buildType}`,
-    };
-  }
-
-  return {
-    buildType: "unknown",
-    buildDetails: `isomorph.buildType has unexpected value: ${buildType}`,
-  };
-}
-
 /**
- * Detect module format (CJS vs ESM) by resolving the actual file path
+ * Detect build variant (browser vs node) and module format (CJS vs ESM)
+ * by resolving the actual entrypoint file path.
+ *
+ * Note: Resolution APIs may not exist in every runtime. In that case this returns
+ * unknowns, and callers should only fail if an expectation was provided.
  */
-function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+function detectBuildAndFormatFromResolution(): {
+  buildType: "browser" | "node" | "unknown";
+  moduleFormat: "cjs" | "esm" | "unknown";
+  resolutionDetails: string;
+} {
   const packageSpec = "braintrust";
   // Try ESM resolution first
   try {
@@ -798,13 +769,13 @@ function detectModuleFormat(): "cjs" | "esm" | "unknown" {
       } catch {
         resolvedPath = resolved;
       }
-      if (resolvedPath.endsWith(".mjs")) {
-        return "esm";
-      }
-      // If resolved but not .mjs, check if it's .js (CJS)
-      if (resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".mjs")) {
-        return "cjs";
-      }
+      const { buildType, moduleFormat } =
+        inferBuildAndFormatFromResolvedPath(resolvedPath);
+      return {
+        buildType,
+        moduleFormat,
+        resolutionDetails: `Resolved via import.meta.resolve: ${resolvedPath}`,
+      };
     }
   } catch {
     // import.meta.resolve might not be available or might throw
@@ -815,20 +786,45 @@ function detectModuleFormat(): "cjs" | "esm" | "unknown" {
   try {
     if (typeof require !== "undefined" && require.resolve) {
       const resolved = require.resolve(packageSpec);
-      // CJS files end with .js (not .mjs)
-      if (resolved.endsWith(".js") && !resolved.endsWith(".mjs")) {
-        return "cjs";
-      }
-      // If resolved to .mjs, it's ESM
-      if (resolved.endsWith(".mjs")) {
-        return "esm";
-      }
+      const { buildType, moduleFormat } =
+        inferBuildAndFormatFromResolvedPath(resolved);
+      return {
+        buildType,
+        moduleFormat,
+        resolutionDetails: `Resolved via require.resolve: ${resolved}`,
+      };
     }
   } catch {
     // require.resolve might not be available or might throw
   }
 
-  return "unknown";
+  return {
+    buildType: "unknown",
+    moduleFormat: "unknown",
+    resolutionDetails:
+      "Could not resolve module entrypoint (no import.meta.resolve / require.resolve)",
+  };
+}
+
+function inferBuildAndFormatFromResolvedPath(resolvedPath: string): {
+  buildType: "browser" | "node" | "unknown";
+  moduleFormat: "cjs" | "esm" | "unknown";
+} {
+  const moduleFormat =
+    resolvedPath.endsWith(".mjs") || resolvedPath.endsWith(".mts")
+      ? "esm"
+      : resolvedPath.endsWith(".js") || resolvedPath.endsWith(".cjs")
+        ? "cjs"
+        : "unknown";
+
+  const lower = resolvedPath.toLowerCase();
+  const buildType = lower.includes("/browser.")
+    ? "browser"
+    : lower.includes("/index.")
+      ? "node"
+      : "unknown";
+
+  return { buildType, moduleFormat };
 }
 
 /**
@@ -839,22 +835,26 @@ function validateBuildResolution(
   detectedFormat: "cjs" | "esm" | "unknown",
   expectedBuild?: "browser" | "node",
   expectedFormat?: "cjs" | "esm",
-  buildDetails?: string,
+  resolutionDetails?: string,
 ): string[] {
   const errors: string[] = [];
 
-  // Always error if build type is unknown (not configured)
-  if (detectedBuild === "unknown") {
+  // Only error on unknowns if the caller provided an expectation.
+  if (expectedBuild && detectedBuild === "unknown") {
     errors.push(
-      `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
+      `Could not detect build variant from module resolution. ${resolutionDetails || ""}`,
     );
-    return errors;
+  }
+  if (expectedFormat && detectedFormat === "unknown") {
+    errors.push(
+      `Could not detect module format from module resolution. ${resolutionDetails || ""}`,
+    );
   }
 
   // Validate build type matches expectation
   if (expectedBuild && detectedBuild !== expectedBuild) {
     errors.push(
-      `Expected ${expectedBuild} build but detected ${detectedBuild} build. ${buildDetails || ""}`,
+      `Expected ${expectedBuild} build but detected ${detectedBuild} build. ${resolutionDetails || ""}`,
     );
   }
 
