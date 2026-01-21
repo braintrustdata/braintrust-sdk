@@ -56,7 +56,7 @@ class SpanFetcher(ObjectFetcher[dict[str, Any]]):
 
     def __init__(
         self,
-        object_type: str,
+        object_type: str,  # Literal["experiment", "project_logs", "playground_logs"]
         object_id: str,
         root_span_id: str,
         state: BraintrustState,
@@ -134,7 +134,7 @@ class CachedSpanFetcher:
 
     def __init__(
         self,
-        object_type: Optional[str] = None,
+        object_type: Optional[str] = None,  # Literal["experiment", "project_logs", "playground_logs"]
         object_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
         get_state: Optional[Callable[[], Awaitable[BraintrustState]]] = None,
@@ -283,7 +283,7 @@ class LocalTrace(dict):
 
     def __init__(
         self,
-        object_type: str,
+        object_type: str,  # Literal["experiment", "project_logs", "playground_logs"]
         object_id: str,
         root_span_id: str,
         ensure_spans_flushed: Optional[Callable[[], Awaitable[None]]],

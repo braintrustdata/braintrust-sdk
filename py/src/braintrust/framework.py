@@ -1483,9 +1483,29 @@ async def _run_evaluator_internal_impl(
                     # The Span interface doesn't expose this but SpanImpl has it
                     root_span_id_value = getattr(root_span, "root_span_id", root_span.id)
 
+                    # Check if there's a parent in the context to determine object_type and object_id
+                    parent_str = trace_state.current_parent.get()
+                    parent_components = None
+                    if parent_str:
+                        from braintrust.span_identifier_v3 import SpanComponentsV3, span_object_type_v3_to_typed_string
+
+                        try:
+                            parent_components = SpanComponentsV3.from_str(parent_str)
+                        except Exception:
+                            # If parsing fails, parent_components stays None
+                            pass
+
+                    # Determine object_type and object_id based on parent or experiment
+                    if parent_components:
+                        trace_object_type = span_object_type_v3_to_typed_string(parent_components.object_type)
+                        trace_object_id = parent_components.object_id or ""
+                    else:
+                        trace_object_type = "experiment"
+                        trace_object_id = experiment_id or ""
+
                     trace = LocalTrace(
-                        object_type="experiment",
-                        object_id=experiment_id or "",
+                        object_type=trace_object_type,
+                        object_id=trace_object_id,
                         root_span_id=root_span_id_value,
                         ensure_spans_flushed=ensure_spans_flushed,
                         state=trace_state,
