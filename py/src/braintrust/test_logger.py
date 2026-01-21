@@ -1097,6 +1097,39 @@ def test_span_link_in_thread(with_simulate_login, with_memory_logger):
     assert span._id in thread_result["link"]
 
 
+@pytest.mark.asyncio
+async def test_current_logger_async_context_isolation(with_simulate_login, with_memory_logger):
+    """Test that different async contexts can have different loggers.
+
+    When a child task sets its own logger, it should not affect the parent context.
+    This ensures async context isolation via ContextVar.
+    """
+    import asyncio
+
+    parent_logger = init_logger(project="parent-project", project_id="parent-project-id")
+    assert braintrust.current_logger() is parent_logger
+
+    child_result = {}
+
+    async def child_task():
+        # Child initially inherits parent's logger
+        assert braintrust.current_logger() is parent_logger
+
+        # Child sets its own logger
+        child_logger = init_logger(project="child-project", project_id="child-project-id")
+        child_result["logger"] = braintrust.current_logger()
+        return child_logger
+
+    # Run child task
+    child_logger = await asyncio.create_task(child_task())
+
+    # Child should have seen its own logger
+    assert child_result["logger"] is child_logger
+
+    # Parent should still see parent logger (not affected by child)
+    assert braintrust.current_logger() is parent_logger
+
+
 def test_span_set_current(with_memory_logger):
     """Test that span.set_current() makes the span accessible via current_span()."""
     init_test_logger(__name__)
