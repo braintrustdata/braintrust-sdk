@@ -2,6 +2,8 @@ import {
   makeScorerPropagatedEvent,
   mergeDicts,
   Score,
+  SpanComponentsV3,
+  spanObjectTypeV3ToString,
   SpanTypeAttribute,
 } from "../util/index";
 import {
@@ -984,17 +986,27 @@ async function runEvaluatorInternal(
             }
           };
 
+          const parentStr = state.currentParent.getStore();
+          const parentComponents = parentStr
+            ? SpanComponentsV3.fromStr(parentStr)
+            : null;
+
           const trace = state
             ? new LocalTrace({
-                objectType: "experiment",
-                objectId: experimentIdPromise
-                  ? (await experimentIdPromise) ?? ""
-                  : "",
+                objectType: parentComponents
+                  ? spanObjectTypeV3ToString(parentComponents.data.object_type)
+                  : "experiment",
+                objectId:
+                  parentComponents?.data.object_id ??
+                  (experimentIdPromise
+                    ? (await experimentIdPromise) ?? ""
+                    : ""),
                 rootSpanId: rootSpan.rootSpanId,
                 ensureSpansFlushed,
                 state,
               })
             : undefined;
+
           let metadata: Record<string, unknown> = {
             ...("metadata" in datum ? datum.metadata : {}),
           };

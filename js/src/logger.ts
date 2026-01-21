@@ -4922,7 +4922,11 @@ export class ObjectFetcher<RecordType>
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
-    private objectType: "dataset" | "experiment" | "project_logs",
+    private objectType:
+      | "dataset"
+      | "experiment"
+      | "project_logs"
+      | "playground_logs",
     private pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,

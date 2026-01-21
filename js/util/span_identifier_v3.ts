@@ -42,7 +42,9 @@ export enum SpanObjectTypeV3 {
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
 
-export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
+export function spanObjectTypeV3ToString(
+  objectType: SpanObjectTypeV3,
+): "experiment" | "project_logs" | "playground_logs" {
   switch (objectType) {
     case SpanObjectTypeV3.EXPERIMENT:
       return "experiment";
