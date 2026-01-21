@@ -1446,15 +1446,11 @@ async def _run_evaluator_internal_impl(
                 async def ensure_spans_flushed():
                     # Flush native Braintrust spans
                     if experiment:
-                        from braintrust.logger import flush as flush_logger
-
                         await asyncio.get_event_loop().run_in_executor(
-                            None, lambda: flush_logger(state=experiment._state)
+                            None, lambda: experiment.state.flush()
                         )
                     elif state:
-                        from braintrust.logger import flush as flush_logger
-
-                        await asyncio.get_event_loop().run_in_executor(None, lambda: flush_logger(state=state))
+                        await asyncio.get_event_loop().run_in_executor(None, lambda: state.flush())
                     else:
                         from braintrust.logger import flush as flush_logger
 
@@ -1472,7 +1468,7 @@ async def _run_evaluator_internal_impl(
                     # Get the state to use
                     trace_state = state
                     if not trace_state and experiment:
-                        trace_state = experiment._state
+                        trace_state = experiment.state
                     if not trace_state:
                         # Fall back to global state
                         from braintrust.logger import _internal_get_global_state
