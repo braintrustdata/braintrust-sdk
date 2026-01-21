@@ -1835,9 +1835,29 @@ function findNewBreakingChanges(
   );
 
   // Find modified exports in current that don't exist in baseline
-  const newModified = currentChanges.modified.filter(
-    (exp) => !baselineChanges.modified.some((b) => b.name === exp.name),
-  );
+  // Also exclude exports that normalize to the same signature (not actually breaking)
+  const newModified = currentChanges.modified.filter((exp) => {
+    // Check if this export exists in baseline with same name
+    const baselineMod = baselineChanges.modified.find(
+      (b) => b.name === exp.name,
+    );
+    if (!baselineMod) {
+      // Not in baseline at all - it's new
+      return true;
+    }
+
+    // It exists in baseline - check if the "after" signatures normalize to the same thing
+    // If they do, it's the same breaking change that's already in main, not a new one
+    const baselineAfterNorm = normalizeTypeReference(
+      baselineMod.after.replace(/\s+/g, " ").trim(),
+    );
+    const currentAfterNorm = normalizeTypeReference(
+      exp.after.replace(/\s+/g, " ").trim(),
+    );
+
+    // Only consider it "new" if normalized "after" signatures are different
+    return baselineAfterNorm !== currentAfterNorm;
+  });
 
   return { removed: newRemoved, modified: newModified };
 }
