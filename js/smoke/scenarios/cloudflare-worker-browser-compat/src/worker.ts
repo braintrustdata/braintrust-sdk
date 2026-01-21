@@ -1,6 +1,5 @@
 // Explicitly import browser build for this scenario
-// (even though nodejs_compat is enabled, we want to test browser build)
-import * as braintrust from "braintrust/browser";
+import * as braintrust from "braintrust";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -36,7 +35,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
 
     try {
       // Test import verification including build resolution check
-      // Bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
       const importResults = await runImportVerificationTests(braintrust, {
         checkBuildResolution: true,
         expectedBuild: "browser",

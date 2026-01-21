@@ -1,4 +1,4 @@
-import * as braintrust from "braintrust";
+import * as braintrust from "braintrust/node";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
