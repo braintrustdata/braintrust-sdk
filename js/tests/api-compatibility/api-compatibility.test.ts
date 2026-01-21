@@ -755,6 +755,32 @@ function areFunctionSignaturesCompatible(
   return true;
 }
 
+/**
+ * Normalizes type references to handle equivalent forms:
+ * - z.infer<typeof Type> -> TypeType
+ * - z.infer<typeof Type$N> -> TypeType (handles TypeScript disambiguation suffixes)
+ * - Type$1, Type$2, etc. -> Type (removes TypeScript disambiguation suffixes)
+ */
+function normalizeTypeReference(type: string): string {
+  // First normalize z.infer<typeof TypeName$N> patterns - handle both with and without $N suffix
+  // This handles: z.infer<typeof ObjectReference$1> -> ObjectReferenceType
+  // And: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  type = type.replace(
+    /z\.infer<typeof\s+(\w+)(\$\d+)?>/g,
+    (match, typeName, suffix) => {
+      // suffix will be undefined if there's no $N, or will be like '$1'
+      // We ignore the suffix and just use the base type name
+      return `${typeName}Type`;
+    },
+  );
+
+  // Then remove any remaining TypeScript disambiguation suffixes
+  // This handles cases like: ObjectReferenceType$1 -> ObjectReferenceType
+  type = type.replace(/(\w+)\$\d+/g, "$1");
+
+  return type;
+}
+
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,
@@ -903,7 +929,13 @@ function areTypeAliasSignaturesCompatible(
         return false;
       }
 
-      if (oldProp.type !== newProp.type) {
+      // Normalize type references before comparing
+      // This handles cases where TypeScript generates different names (e.g., ObjectReference$1 vs ObjectReference)
+      // that are semantically equivalent
+      const oldTypeNorm = normalizeTypeReference(oldProp.type);
+      const newTypeNorm = normalizeTypeReference(newProp.type);
+
+      if (oldTypeNorm !== newTypeNorm) {
         // Property type changed - breaking change
         return false;
       }
@@ -928,8 +960,11 @@ function areTypeAliasSignaturesCompatible(
     return true;
   }
 
-  // For other types, they must match exactly
-  return oldDef === newDef;
+  // For other types, normalize and compare
+  // This handles cases where TypeScript generates different names that are semantically equivalent
+  const oldDefNorm = normalizeTypeReference(oldDef);
+  const newDefNorm = normalizeTypeReference(newDef);
+  return oldDefNorm === newDefNorm;
 }
 
 /**
@@ -1122,8 +1157,9 @@ function areInterfaceSignaturesCompatible(
       return false;
     }
 
-    // Normalize field types for comparison (remove whitespace differences)
-    const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
+    // Normalize field types for comparison (remove whitespace differences and normalize type references)
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
     const oldTypeNorm = normalizeType(oldField.type);
     const newTypeNorm = normalizeType(newField.type);
 
