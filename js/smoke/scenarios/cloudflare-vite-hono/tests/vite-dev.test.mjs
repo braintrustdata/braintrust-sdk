@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * Test for Vite dev server compatibility with Braintrust SDK
+ * Test for Vite dev server compatibility with Braintrust SDK (browser build)
  *
- * This test verifies a known issue: When Vite tries to pre-bundle the Braintrust SDK,
- * it encounters Nunjucks (used for prompt templating) which doesn't work in Vite's
- * ESM bundler due to its use of Object.setPrototypeOf with undefined values.
+ * This test verifies that Vite can successfully pre-bundle the browser build of Braintrust.
+ * The browser build does NOT include Nunjucks, so it should start successfully.
  *
- * Error: TypeError: Object prototype may only be an Object or null: undefined
- *   at _inheritsLoose (node_modules/nunjucks/src/object.js:8:77)
- *
- * This is a known limitation when using the full Braintrust SDK in Vite dev mode.
+ * Note: The Node.js ESM build (braintrust/node) DOES include Nunjucks and will fail
+ * with Vite's bundler - that is tested separately in node-esm-import.test.mjs
  */
 
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
-import { displayTestResults } from "../../../shared/dist/index.mjs";
+import {
+  displayTestResults,
+  hasFailures,
+} from "../../../shared/dist/index.mjs";
 
 const MAX_RETRIES = 20;
 const RETRY_DELAY_MS = 500;
@@ -22,19 +22,10 @@ const RETRY_DELAY_MS = 500;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function testViteDevServer() {
-  console.log("Testing Vite dev server compatibility with Braintrust SDK...\n");
-
   // Clear Vite cache to force fresh dependency pre-bundling
-  console.log("1. Clearing Vite cache...");
   try {
     rmSync("node_modules/.vite", { recursive: true, force: true });
-    console.log("   ✓ Vite cache cleared\n");
-  } catch (error) {
-    console.log("   ℹ No cache to clear\n");
-  }
-
-  // Try to start Vite dev server
-  console.log("2. Starting Vite dev server...");
+  } catch {}
 
   const vite = spawn("npx", ["vite"], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -54,29 +45,27 @@ async function testViteDevServer() {
   const checkOutput = () => {
     const combined = output + errorOutput;
 
-    // Check for the Nunjucks error
-    if (combined.includes("Object prototype may only be an Object or null")) {
-      resolved = true;
-      testResult = {
-        success: false,
-        issue: "vite-nunjucks-incompatibility",
-        message:
-          "Vite dev server fails to start due to Nunjucks incompatibility",
-        error:
-          "TypeError: Object prototype may only be an Object or null: undefined",
-        details:
-          "Vite's dependency pre-bundler cannot handle Nunjucks' use of Object.setPrototypeOf",
-        recommendation:
-          "Use 'braintrust/browser' import or configure Vite to exclude Nunjucks from optimization",
-      };
-    }
-
     // Check for successful startup
     if (combined.includes("Local:") || combined.includes("http://localhost")) {
       resolved = true;
       testResult = {
         success: true,
-        message: "Vite dev server started successfully",
+        message: "Vite dev server started successfully with browser build",
+      };
+    }
+
+    // Check for any errors (browser build should not have nunjucks errors)
+    if (combined.includes("Object prototype may only be an Object or null")) {
+      resolved = true;
+      testResult = {
+        success: false,
+        issue: "unexpected-nunjucks-error",
+        message:
+          "Unexpected Nunjucks error - browser build should not include Nunjucks",
+        error:
+          "TypeError: Object prototype may only be an Object or null: undefined",
+        details:
+          "Browser build should not include Nunjucks. This indicates a bundling or export resolution issue.",
       };
     }
   };
@@ -117,9 +106,10 @@ async function testViteDevServer() {
     results.push({
       status: "pass",
       name: "viteDevServerStartup",
-      message: "Vite dev server started successfully",
+      message:
+        "Vite dev server started successfully with browser build (no Nunjucks)",
     });
-  } else if (testResult.issue === "vite-nunjucks-incompatibility") {
+  } else if (testResult.issue === "unexpected-nunjucks-error") {
     // Extract error details
     const errorLines = (output + errorOutput)
       .split("\n")
@@ -134,12 +124,11 @@ async function testViteDevServer() {
     const errorStack = errorLines.join("\n");
 
     results.push({
-      status: "xfail",
+      status: "fail",
       name: "viteDevServerStartup",
       message:
-        "Expected failure: Nunjucks incompatibility with Vite bundler. " +
-        "Root cause: Nunjucks uses Object.setPrototypeOf in ways incompatible with Vite's ESM bundler. " +
-        "Recommendation: Use 'braintrust/browser' import or exclude Nunjucks from Vite optimization",
+        "Unexpected Nunjucks error with browser build. " +
+        "Browser build should not include Nunjucks, indicating a bundling or export resolution issue.",
       error: errorStack
         ? {
             message: testResult.error,
@@ -163,19 +152,20 @@ async function testViteDevServer() {
 
   // Use standardized display
   displayTestResults({
-    scenarioName: "Vite Dev Server Compatibility Test",
+    scenarioName: "Vite Dev Server - Browser Build Test",
     results,
   });
 
-  // Return the actual test status
-  if (testResult.issue === "vite-nunjucks-incompatibility") {
-    // Expected failure - return 1 but this is documented
-    return 1;
-  } else if (testResult.success) {
-    return 0;
-  } else {
+  // Check for failures (hasFailures excludes xfail)
+  if (hasFailures(results)) {
     return 1;
   }
+  return 0;
 }
 
-testViteDevServer().then((code) => process.exit(code));
+testViteDevServer()
+  .then((code) => process.exit(code))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

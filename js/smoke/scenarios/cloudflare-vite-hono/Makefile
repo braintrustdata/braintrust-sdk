@@ -29,7 +29,7 @@ test: setup
 	@echo ""
 	@npx tsx tests/worker.test.mjs || WORKER_FAILED=1; \
 	echo ""; \
-	npx tsx tests/node-esm-import.test.mjs || true \
+	npx tsx tests/node-esm-import.test.mjs || true; \
 	echo ""; \
 	npx tsx tests/vite-dev.test.mjs || BROWSER_IMPORT_FAILED=1; \
 	if [ "$$WORKER_FAILED" = "1" ] || [ "$$BROWSER_IMPORT_FAILED" = "1" ]; then exit 1; fi

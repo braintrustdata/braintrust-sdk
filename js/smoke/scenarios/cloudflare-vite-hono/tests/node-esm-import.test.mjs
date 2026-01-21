@@ -178,12 +178,16 @@ async function testViteDevServerWithNodeEsm() {
   });
 
   // Check for failures (hasFailures excludes xfail)
+  // Note: This test expects xfail for nunjucks error, so it won't fail the suite
   if (hasFailures(results)) {
-    process.exit(1);
+    return 1;
   }
+  return 0;
 }
 
-testViteDevServerWithNodeEsm().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+testViteDevServerWithNodeEsm()
+  .then((code) => process.exit(code))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
