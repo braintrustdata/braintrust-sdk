@@ -493,7 +493,8 @@ class BraintrustState:
             if k
             not in (
                 "current_experiment",
-                "current_logger",
+                "_cv_logger",
+                "_local_logger",
                 "current_parent",
                 "current_span",
                 "_global_bg_logger",
