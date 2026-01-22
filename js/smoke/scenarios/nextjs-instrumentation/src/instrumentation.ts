@@ -17,9 +17,9 @@ import { registerOTel } from "@vercel/otel";
 // Import verification: webpack will fail the build if this import doesn't work
 // This tests tree-shaking and module resolution
 import {
-  setupTestEnvironment,
-  runBasicLoggingTests,
-  runImportVerificationTests,
+  runTests,
+  testBasicSpanLogging,
+  testCoreLoggingExports,
 } from "../../../shared";
 
 export async function register() {
@@ -48,7 +48,7 @@ export async function register() {
 // (They need to be referenced somewhere for webpack to include them)
 if (process.env.NODE_ENV === "test") {
   // This code never runs in production, but ensures webpack includes the imports
-  void setupTestEnvironment;
-  void runBasicLoggingTests;
-  void runImportVerificationTests;
+  void runTests;
+  void testBasicSpanLogging;
+  void testCoreLoggingExports;
 }

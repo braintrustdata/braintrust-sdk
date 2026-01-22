@@ -26,18 +26,6 @@ export interface TestingExports {
   clearTestBackgroundLogger: () => void;
 }
 
-export interface TestAdapters {
-  initLogger: (options: {
-    projectName: string;
-    projectId?: string;
-  }) => LoggerInstance;
-  testingExports: TestingExports;
-  backgroundLogger: BackgroundLogger;
-  canUseFileSystem: boolean;
-  canUseCLI: boolean;
-  environment: string;
-}
-
 export interface TestResult {
   status: "pass" | "fail" | "xfail"; // xfail = expected failure
   name: string;

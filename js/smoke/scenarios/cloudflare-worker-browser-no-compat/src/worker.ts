@@ -1,161 +1,109 @@
 import * as braintrust from "braintrust";
 import {
-  setupTestEnvironment,
-  cleanupTestEnvironment,
-  runBasicLoggingTests,
-  runEvalSmokeTest,
-  runImportVerificationTests,
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  testDirectLogging,
+  testJSONAttachment,
+  testAsyncLocalStorageTraced,
+  testNestedTraced,
+  testCurrentSpan,
+  testCoreLoggingExports,
+  testDatasetExports,
+  testPromptExports,
+  testExperimentExports,
+  testEvalExports,
+  testTracingExports,
+  testClientWrapperExports,
+  testUtilityExports,
+  testFunctionExports,
+  testFramework2Exports,
+  testIDGeneratorExports,
+  testTestingExports,
+  testStateManagementExports,
+  testBuildResolution,
   testMustacheTemplate,
   testNunjucksTemplate,
-  type TestResult,
+  testEvalSmoke,
 } from "../../../shared";
 
 interface Env {}
-
-interface TestResponse {
-  success: boolean;
-  message: string;
-  totalTests?: number;
-  passedTests?: number;
-  failedTests?: number;
-  results?: TestResult[];
-  failures?: TestResult[];
-}
-
-async function runSharedTestSuites(): Promise<TestResponse> {
-  try {
-    const adapters = await setupTestEnvironment({
-      initLogger: braintrust.initLogger,
-      testingExports: braintrust._exportsForTestingOnly,
-      canUseFileSystem: false,
-      canUseCLI: false,
-      environment: "cloudflare-worker-browser-no-compat",
-    });
-
-    try {
-      // Test import verification including build resolution check
-      // Bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
-      const importResults = await runImportVerificationTests(braintrust, {
-        expectedBuild: "browser",
-        expectedFormat: "esm",
-      });
-      const functionalResults = await runBasicLoggingTests(
-        adapters,
-        braintrust,
-      );
-      const evalResult = await runEvalSmokeTest(adapters, braintrust);
-
-      // Test Mustache template (should always work)
-      const mustacheResult = await testMustacheTemplate({
-        Prompt: braintrust.Prompt,
-      });
-
-      // Test Nunjucks template - expected to fail in browser builds
-      const nunjucksResult = await testNunjucksTemplate({
-        Prompt: braintrust.Prompt,
-      });
-      const nunjucksResultHandled =
-        nunjucksResult.status === "fail" &&
-        nunjucksResult.error?.message.includes(
-          "Nunjucks templating is not supported",
-        )
-          ? {
-              ...nunjucksResult,
-              status: "xfail" as const,
-              message:
-                "Expected failure: Nunjucks not supported in browser build",
-            }
-          : nunjucksResult;
-
-      const results = [
-        ...importResults,
-        ...functionalResults,
-        evalResult,
-        mustacheResult,
-        nunjucksResultHandled,
-      ];
-
-      // Filter out expected failures when counting actual failures
-      const failures = results.filter((r) => r.status === "fail");
-      if (failures.length > 0) {
-        return {
-          success: false,
-          message: `${failures.length} test(s) failed`,
-          totalTests: results.length,
-          passedTests: results.length - failures.length,
-          failedTests: failures.length,
-          results,
-          failures,
-        };
-      }
-
-      return {
-        success: true,
-        message: "All shared test suites passed",
-        totalTests: results.length,
-        passedTests: results.length,
-        failedTests: 0,
-        results,
-      };
-    } finally {
-      await cleanupTestEnvironment(adapters);
-    }
-  } catch (error) {
-    return {
-      success: false,
-      message: `Error during smoke test: ${error instanceof Error ? error.message : String(error)}`,
-      totalTests: 0,
-      passedTests: 0,
-      failedTests: 0,
-    };
-  }
-}
 
 export default {
   async fetch(request: Request, _env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/test") {
-      const result = await runSharedTestSuites();
+      const { all, passed, failed, xfail } = await runTests({
+        name: "cloudflare-worker-browser-no-compat",
+        braintrust,
+        tests: [
+          testCoreLoggingExports,
+          testDatasetExports,
+          testPromptExports,
+          testExperimentExports,
+          testEvalExports,
+          testTracingExports,
+          testClientWrapperExports,
+          testUtilityExports,
+          testFunctionExports,
+          testFramework2Exports,
+          testIDGeneratorExports,
+          testTestingExports,
+          testStateManagementExports,
+          testBuildResolution,
+          testBasicSpanLogging,
+          testMultipleSpans,
+          testDirectLogging,
+          testJSONAttachment,
+          testAsyncLocalStorageTraced,
+          testNestedTraced,
+          testCurrentSpan,
+          testEvalSmoke,
+          testMustacheTemplate,
+          expectFailure(
+            testNunjucksTemplate,
+            (e) => e.message.includes("Nunjucks templating is not supported"),
+            "Nunjucks not supported in browser build",
+          ),
+        ],
+      });
 
-      // Serialize errors properly (Error objects don't JSON.stringify well)
-      const serializedResult = {
-        ...result,
-        results: result.results?.map((r) => ({
+      const response = {
+        success: failed.length === 0,
+        message:
+          failed.length > 0
+            ? `${failed.length} test(s) failed`
+            : "All shared test suites passed",
+        totalTests: all.length,
+        passedTests: passed.length,
+        failedTests: failed.length,
+        xfailTests: xfail.length,
+        results: all.map((r) => ({
           ...r,
           error: r.error
-            ? {
-                message: r.error.message,
-                stack: r.error.stack,
-                name: r.error.name,
-              }
+            ? { message: r.error.message, stack: r.error.stack }
             : undefined,
         })),
-        failures: result.failures?.map((r) => ({
+        failures: failed.map((r) => ({
           ...r,
           error: r.error
-            ? {
-                message: r.error.message,
-                stack: r.error.stack,
-                name: r.error.name,
-              }
+            ? { message: r.error.message, stack: r.error.stack }
             : undefined,
         })),
       };
 
-      return new Response(JSON.stringify(serializedResult, null, 2), {
+      return new Response(JSON.stringify(response, null, 2), {
         headers: { "Content-Type": "application/json" },
-        status: result.success ? 200 : 500,
+        status: response.success ? 200 : 500,
       });
     }
 
     return new Response(
       `Braintrust Cloudflare Worker Smoke Test (Browser + No Compat)
 
-GET /test - Run shared test suites
-
-This worker tests the Braintrust SDK in a Cloudflare Workers environment.
-The bundler should automatically resolve the browser build from package.json exports.`,
+GET /test - Run shared test suites`,
       { headers: { "Content-Type": "text/plain" } },
     );
   },
