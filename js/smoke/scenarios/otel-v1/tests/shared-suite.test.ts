@@ -31,7 +31,6 @@ async function runSharedTestSuites() {
     // Run tests including build resolution check
     // Node.js should resolve to Node build (ESM format) when using import
     const importResults = await runImportVerificationTests(braintrust, {
-      checkBuildResolution: true,
       expectedBuild: "node",
       expectedFormat: "esm",
     });

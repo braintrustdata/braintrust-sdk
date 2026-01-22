@@ -50,7 +50,6 @@ async function runAllTestSuites() {
     harness.log("=== Running shared suites ===");
 
     const importResults = await runImportVerificationTests(braintrust, {
-      checkBuildResolution: true,
       expectedBuild: "browser",
       expectedFormat: "esm",
     });

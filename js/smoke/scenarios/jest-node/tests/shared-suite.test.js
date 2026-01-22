@@ -23,7 +23,6 @@ async function runSharedTestSuites() {
 
   try {
     const importResults = await runImportVerificationTests(braintrust, {
-      checkBuildResolution: true,
       expectedBuild: "node",
       expectedFormat: "cjs",
     });

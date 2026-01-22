@@ -37,7 +37,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     try {
       // Node.js build (ESM format) should be used in Cloudflare Workers with nodejs_compat_v2
       const importResults = await runImportVerificationTests(braintrust, {
-        checkBuildResolution: true,
         expectedBuild: "node",
         expectedFormat: "esm",
       });

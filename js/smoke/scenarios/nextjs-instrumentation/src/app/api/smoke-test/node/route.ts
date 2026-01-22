@@ -59,7 +59,6 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       // Run import verification tests including build resolution check
       // Next.js Node.js runtime should resolve to Node build (CJS format)
       const importResults = await runImportVerificationTests(braintrust, {
-        checkBuildResolution: true,
         expectedBuild: "node",
         expectedFormat: "cjs",
       });

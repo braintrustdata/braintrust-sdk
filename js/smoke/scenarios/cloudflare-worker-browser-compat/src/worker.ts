@@ -35,7 +35,6 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     try {
       // Test import verification including build resolution check
       const importResults = await runImportVerificationTests(braintrust, {
-        checkBuildResolution: true,
         expectedBuild: "browser",
         expectedFormat: "esm",
       });

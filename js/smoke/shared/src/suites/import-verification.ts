@@ -912,10 +912,9 @@ function buildSuccessMessage(
  */
 export async function runImportVerificationTests(
   module: BraintrustModule,
-  options?: {
-    checkBuildResolution?: boolean;
-    expectedBuild?: "browser" | "node";
-    expectedFormat?: "cjs" | "esm";
+  options: {
+    expectedBuild: "browser" | "node";
+    expectedFormat: "cjs" | "esm";
   },
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -934,17 +933,13 @@ export async function runImportVerificationTests(
   results.push(await testStateManagementExports(module));
   results.push(await testExperimentExports(module));
   results.push(await testEvalExports(module));
-
-  // Optionally check which build was resolved
-  if (options?.checkBuildResolution) {
-    results.push(
-      await testBuildResolution(
-        module,
-        options.expectedBuild,
-        options.expectedFormat,
-      ),
-    );
-  }
+  results.push(
+    await testBuildResolution(
+      module,
+      options.expectedBuild,
+      options.expectedFormat,
+    ),
+  );
 
   return results;
 }

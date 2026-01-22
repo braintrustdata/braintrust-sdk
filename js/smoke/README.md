@@ -85,7 +85,10 @@ async function runTests() {
   });
 
   try {
-    const importResults = await runImportVerificationTests(braintrust);
+    const importResults = await runImportVerificationTests(braintrust, {
+      expectedBuild: "node",
+      expectedFormat: "esm",
+    });
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const results = [...importResults, ...functionalResults];
 

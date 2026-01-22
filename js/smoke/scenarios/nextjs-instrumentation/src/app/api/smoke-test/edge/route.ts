@@ -60,7 +60,6 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
       // Run import verification tests including build resolution check
       // Next.js Edge runtime should resolve to browser build (ESM format)
       const importResults = await runImportVerificationTests(braintrust, {
-        checkBuildResolution: true,
         expectedBuild: "browser",
         expectedFormat: "esm",
       });

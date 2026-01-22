@@ -34,7 +34,6 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
     // Run tests including build resolution check
     // Bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
     const importResults = await runImportVerificationTests(braintrust, {
-      checkBuildResolution: true,
       expectedBuild: "browser",
       expectedFormat: "esm",
     });

@@ -24,7 +24,6 @@ async function runNodeEsmImportTest(): Promise<TestResponse> {
     // Note: This worker will not actually run via vite dev due to nunjucks bundling error,
     // but we test import resolution to verify the export path works correctly.
     const importResults = await runImportVerificationTests(braintrustNode, {
-      checkBuildResolution: true,
       expectedBuild: "node",
       expectedFormat: "esm",
     });
