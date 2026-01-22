@@ -79,6 +79,13 @@ class PromptData(SerializableDataClass):
             d2["template_format"] = "jinja"
         return super().from_dict_deep(d2)
 
+    def as_dict(self):
+        """Serialize to dict, converting jinja back to nunjucks for API compatibility."""
+        result = super().as_dict()
+        if result.get("template_format") == "jinja":
+            result["template_format"] = "nunjucks"
+        return result
+
 
 @dataclass
 class PromptSchema(SerializableDataClass):
