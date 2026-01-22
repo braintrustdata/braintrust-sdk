@@ -1,6 +1,5 @@
 import iso from "./isomorph";
 import { _internalSetInitialState } from "./logger";
-import { registerTemplateRenderer } from "./template/registry";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge
 // environment, even though it's not defined in the browser.
@@ -48,19 +47,6 @@ export function configureBrowser() {
     const hashHex = (hash >>> 0).toString(16).padStart(8, "0");
     return hashHex.repeat(8).substring(0, 64); // Make it look like a SHA-256 hash length
   };
-
-  registerTemplateRenderer("nunjucks", {
-    render() {
-      throw new Error(
-        "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
-      );
-    },
-    lint() {
-      throw new Error(
-        "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
-      );
-    },
-  });
 
   _internalSetInitialState();
   browserConfigured = true;

@@ -302,7 +302,7 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
     );
 
     expect(() => prompt.build({ name: "World" })).toThrowError(
-      /Nunjucks templating is not supported in this build/,
+      /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
 
@@ -343,7 +343,7 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
     );
 
     expect(() => prompt.build({ name: "World" })).toThrowError(
-      /Nunjucks templating is not supported in this build/,
+      /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
 });
