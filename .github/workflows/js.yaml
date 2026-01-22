@@ -95,7 +95,7 @@ jobs:
         run: |
           cd integrations/templates-nunjucks
           pnpm run build
-          PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts --loglevel=error)
           echo "packed_nunjucks_tarball=$PACKED_NUNJUCKS_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: List artifacts before upload

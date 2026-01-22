@@ -22,8 +22,7 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
-    "test": "vitest run",
-    "prepack": "npm run build"
+    "test": "vitest run"
   },
   "author": "Braintrust Data Inc.",
   "license": "MIT",
@@ -31,7 +30,7 @@
     "nunjucks": "^3.2.4"
   },
   "peerDependencies": {
-    "braintrust": ">=0.0.141"
+    "braintrust": ">=3.0.0"
   },
   "devDependencies": {
     "@types/nunjucks": "^3.2.6",
