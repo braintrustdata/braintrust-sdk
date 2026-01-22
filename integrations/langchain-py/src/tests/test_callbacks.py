@@ -1128,8 +1128,7 @@ Remember: Testing is not just about finding bugs, it's about building confidence
 
     assert "prompt_cache_creation_tokens" in first_metrics
     assert first_metrics["prompt_cache_creation_tokens"] > 0
-    if "prompt_cached_tokens" in first_metrics:
-        assert first_metrics["prompt_cached_tokens"] == 0
+    assert first_metrics["prompt_cached_tokens"] == 0
 
     res = model.invoke(
         messages + [res, HumanMessage(content="What testing framework is mentioned for Python?")],
