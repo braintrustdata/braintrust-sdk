@@ -135,7 +135,7 @@ importers:
         version: link:../../js
       tsup:
         specifier: ^8.5.1
-        version: 8.5.1(@swc/core@1.15.8)(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2)
+        version: 8.5.1(@swc/core@1.15.8)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2)
       typescript:
         specifier: 5.5.4
         version: 5.5.4
