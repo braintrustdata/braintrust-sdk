@@ -1,4 +1,4 @@
-import "@braintrust/template-nunjucks";
+import "@braintrust/templates-nunjucks";
 import { Prompt } from "braintrust";
 import {
   displayTestResults,
@@ -159,7 +159,7 @@ async function main() {
   }
 
   displayTestResults({
-    scenarioName: "Template-Nunjucks Test Results",
+    scenarioName: "Templates-Nunjucks Test Results",
     results,
   });
 

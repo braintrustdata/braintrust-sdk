@@ -5,7 +5,7 @@
 # =============================================================================
 
 setup:
-	@echo "==> Setting up template-nunjucks scenario"
+	@echo "==> Setting up templates-nunjucks scenario"
 	mise install
 
 	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
@@ -18,7 +18,7 @@ setup:
 		for f in artifacts/braintrust-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \
 			   [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ] && \
-			   [ "$$(basename $$f)" != "braintrust-template-nunjucks-latest.tgz" ]; then \
+			   [ "$$(basename $$f)" != "braintrust-templates-nunjucks-latest.tgz" ]; then \
 				cp "$$f" artifacts/braintrust-latest.tgz; \
 				break; \
 			fi; \
@@ -31,16 +31,16 @@ setup:
 		cd ../../shared && npm ci && npm run build; \
 	fi
 
-	@# Check if BRAINTRUST_TEMPLATE_NUNJUCKS_TAR is set (from parent or CI), otherwise build
-	@if [ -n "$(BRAINTRUST_TEMPLATE_NUNJUCKS_TAR)" ]; then \
-		echo "==> Using BRAINTRUST_TEMPLATE_NUNJUCKS_TAR: $(BRAINTRUST_TEMPLATE_NUNJUCKS_TAR)"; \
+	@# Check if BRAINTRUST_TEMPLATES_NUNJUCKS_TAR is set (from parent or CI), otherwise build
+	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)"; \
 	else \
-		echo "==> Building @braintrust/template-nunjucks package"; \
-		cd ../../../../integrations/template-nunjucks && pnpm exec turbo build --filter=@braintrust/template-nunjucks && pnpm pack --pack-destination ../../js/artifacts; \
+		echo "==> Building @braintrust/templates-nunjucks package"; \
+		cd ../../../../integrations/templates-nunjucks && pnpm exec turbo build --filter=@braintrust/templates-nunjucks && pnpm pack --pack-destination ../../js/artifacts; \
 		\
-		for f in ../../js/artifacts/braintrust-template-nunjucks-*.tgz; do \
-			if [ "$$(basename $$f)" != "braintrust-template-nunjucks-latest.tgz" ]; then \
-				cp "$$f" ../../js/artifacts/braintrust-template-nunjucks-latest.tgz; \
+		for f in ../../js/artifacts/braintrust-templates-nunjucks-*.tgz; do \
+			if [ "$$(basename $$f)" != "braintrust-templates-nunjucks-latest.tgz" ]; then \
+				cp "$$f" ../../js/artifacts/braintrust-templates-nunjucks-latest.tgz; \
 				break; \
 			fi; \
 		done; \
@@ -53,5 +53,5 @@ setup:
 # =============================================================================
 
 test: setup
-	@echo "==> Running template-nunjucks tests"
+	@echo "==> Running templates-nunjucks tests"
 	npx tsx tests/basic.test.ts

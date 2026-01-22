@@ -1,10 +1,10 @@
 {
-  "name": "smoke-template-nunjucks",
+  "name": "smoke-templates-nunjucks",
   "private": true,
   "type": "module",
   "dependencies": {
     "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
-    "@braintrust/template-nunjucks": "file:../../../artifacts/braintrust-template-nunjucks-latest.tgz"
+    "@braintrust/templates-nunjucks": "file:../../../artifacts/braintrust-templates-nunjucks-latest.tgz"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",

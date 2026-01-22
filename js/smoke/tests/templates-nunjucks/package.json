@@ -9,7 +9,7 @@
     "install-build": "npx tsx ../../install-build.ts ../../../artifacts"
   },
   "dependencies": {
-    "@braintrust/template-nunjucks": "file:../../../artifacts/braintrust-template-nunjucks-0.0.1.tgz",
+    "@braintrust/templates-nunjucks": "file:../../../artifacts/braintrust-template-nunjucks-0.0.1.tgz",
     "braintrust": "file:../../../artifacts/braintrust-2.0.2.tgz"
   },
   "devDependencies": {

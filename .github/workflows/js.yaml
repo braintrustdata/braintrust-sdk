@@ -89,11 +89,11 @@ jobs:
           PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
-      - name: Build and pack @braintrust/template-nunjucks
-        id: prepare_template_nunjucks_artifact
+      - name: Build and pack @braintrust/templates-nunjucks
+        id: prepare_templates_nunjucks_artifact
         shell: bash
         run: |
-          cd integrations/template-nunjucks
+          cd integrations/templates-nunjucks
           pnpm run build
           PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_nunjucks_tarball=$PACKED_NUNJUCKS_TARBALL" >> "$GITHUB_OUTPUT"
@@ -103,7 +103,7 @@ jobs:
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
-          echo "Template-nunjucks tarball: ${{ steps.prepare_template_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
+          echo "Templates-nunjucks tarball: ${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
           ls -la js/artifacts/
 
       - name: Upload build artifacts
@@ -113,7 +113,7 @@ jobs:
           path: |
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
-            js/artifacts/${{ steps.prepare_template_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
+            js/artifacts/${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
           retention-days: 1
 
   api-compatibility:
@@ -275,11 +275,11 @@ jobs:
             fi
           done
 
-          # Copy template-nunjucks tarball to well-known path
-          for f in braintrust-template-nunjucks-[0-9]*.tgz; do
+          # Copy templates-nunjucks tarball to well-known path
+          for f in braintrust-templates-nunjucks-[0-9]*.tgz; do
             if [ -f "$f" ]; then
-              cp "$f" braintrust-template-nunjucks-latest.tgz
-              echo "Copied $f to braintrust-template-nunjucks-latest.tgz"
+              cp "$f" braintrust-templates-nunjucks-latest.tgz
+              echo "Copied $f to braintrust-templates-nunjucks-latest.tgz"
               break
             fi
           done
@@ -299,7 +299,7 @@ jobs:
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
           BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
-          BRAINTRUST_TEMPLATE_NUNJUCKS_TAR: ../artifacts/braintrust-template-nunjucks-latest.tgz
+          BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: ../artifacts/braintrust-templates-nunjucks-latest.tgz
           SMOKE_V2_SHARED_DIST: shared/dist
         run: |
           make test ${{ matrix.scenario }}

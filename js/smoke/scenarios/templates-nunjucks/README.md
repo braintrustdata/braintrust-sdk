@@ -1,6 +1,6 @@
-# Template-Nunjucks Smoke Test
+# Templates-Nunjucks Smoke Test
 
-This smoke test validates that the `@braintrust/template-nunjucks` package correctly integrates with the Braintrust SDK to provide Nunjucks template rendering capabilities.
+This smoke test validates that the `@braintrust/templates-nunjucks` package correctly integrates with the Braintrust SDK to provide Nunjucks template rendering capabilities.
 
 ## What It Tests
 
@@ -16,14 +16,14 @@ make test
 
 # Or from the smoke test root
 cd ../..
-make test template-nunjucks
+make test templates-nunjucks
 ```
 
 ## Integration Points
 
 This test verifies that:
 
-- The `@braintrust/template-nunjucks` package can be imported
+- The `@braintrust/templates-nunjucks` package can be imported
 - The Nunjucks template engine is properly registered with Braintrust
 - The `templateFormat` option correctly activates Nunjucks rendering
 - Template variables and control structures are correctly interpolated

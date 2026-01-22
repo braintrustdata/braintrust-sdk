@@ -1,4 +1,4 @@
-import "@braintrust/template-nunjucks";
+import "@braintrust/templates-nunjucks";
 import { Prompt } from "braintrust";
 
 function assertEqual(actual: unknown, expected: unknown, message: string) {
