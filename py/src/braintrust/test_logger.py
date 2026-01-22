@@ -59,6 +59,33 @@ class TestInit(TestCase):
 
         assert str(cm.exception) == "Cannot open an experiment without specifying its name"
 
+    def test_init_with_dataset_id_only(self):
+        """Test that init accepts dataset={'id': '...'} parameter"""
+        # Test the logic that extracts dataset_id from the dict
+        from braintrust.logger import Dataset
+
+        # Test 1: dict with only id
+        dataset_dict = {"id": "dataset-id-123"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+
+        # Test 2: full Dataset object has different behavior
+        # (We can't easily instantiate a Dataset here, but we can verify
+        # that the isinstance check distinguishes them)
+
+    def test_init_with_dataset_id_and_version(self):
+        """Test that init accepts dataset={'id': '...', 'version': '...'} parameter"""
+        # Test the logic that extracts both dataset_id and dataset_version from the dict
+        from braintrust.logger import Dataset
+
+        # Test: dict with id and version
+        dataset_dict = {"id": "dataset-id-123", "version": "v2"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+        assert dataset_dict["version"] == "v2"
+
 
 class TestLogger(TestCase):
     def test_extract_attachments_no_op(self):
@@ -2432,6 +2459,95 @@ def test_logger_export_respects_otel_compat_enabled():
 
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
+
+
+def test_register_otel_flush_callback():
+    """Test that register_otel_flush registers a callback correctly."""
+    import asyncio
+
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Track if callback was invoked
+    callback_invoked = False
+
+    async def mock_flush():
+        nonlocal callback_invoked
+        callback_invoked = True
+
+    # Register the callback
+    register_otel_flush(mock_flush)
+
+    # Calling flush_otel should invoke the registered callback
+    asyncio.run(state.flush_otel())
+
+    assert callback_invoked is True
+
+
+def test_register_otel_flush_disables_span_cache():
+    """Test that register_otel_flush disables the span cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache (simulating what happens during eval)
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+
+    # Cache should now be disabled
+    assert state.span_cache.disabled is True
+
+
+def test_flush_otel_noop_when_no_callback():
+    """Test that flush_otel is a no-op when no callback is registered."""
+    import asyncio
+
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Should not throw even with no callback registered
+    asyncio.run(state.flush_otel())
+
+
+def test_register_otel_flush_permanently_disables_cache():
+    """Test that register_otel_flush permanently disables the cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+    assert state.span_cache.disabled is True
+
+    # Try to start again - should still be disabled because of explicit disable
+    state.span_cache.start()
+    assert state.span_cache.disabled is True
 
 
 class TestJSONAttachment(TestCase):

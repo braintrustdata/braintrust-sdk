@@ -29,6 +29,47 @@ interface WrapAISDKOptions {
 }
 
 /**
+ * Detects if an object is an ES module namespace (ModuleRecord).
+ *
+ * ES module namespaces have immutable, non-configurable properties that cause
+ * Proxy invariant violations when trying to return wrapped versions of functions.
+ *
+ * Detection strategy:
+ * 1. Check constructor.name === 'Module' (most reliable, suggested by Stephen)
+ * 2. Fallback: Check if properties are non-configurable (catches edge cases)
+ *
+ * @param obj - Object to check
+ * @returns true if obj appears to be an ES module namespace
+ */
+function isModuleNamespace(obj: any): boolean {
+  if (!obj || typeof obj !== "object") {
+    return false;
+  }
+
+  // Primary detection: Check if constructor is 'Module'
+  // ES module namespaces have constructor.name === 'Module'
+  if (obj.constructor?.name === "Module") {
+    return true;
+  }
+
+  // Fallback: Check if properties are non-configurable
+  // This catches cases where constructor check might not work
+  try {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return false;
+
+    const firstKey = keys[0];
+    const descriptor = Object.getOwnPropertyDescriptor(obj, firstKey);
+    // Module namespace properties are non-configurable and non-writable
+    return descriptor
+      ? !descriptor.configurable && !descriptor.writable
+      : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
  * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
  * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
@@ -53,8 +94,22 @@ interface WrapAISDKOptions {
  * ```
  */
 export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // Handle null/undefined early - can't create Proxy with non-objects
+  if (!aiSDK || typeof aiSDK !== "object") {
+    return aiSDK;
+  }
+
+  // Handle ES module namespaces (ModuleRecords) that have non-configurable properties.
+  // These cause Proxy invariant violations because we return wrapped functions instead
+  // of the original values. Using prototype chain preserves all properties (enumerable
+  // and non-enumerable) while avoiding invariants since the target has no own properties.
+  // See: https://github.com/braintrustdata/braintrust-sdk/pull/1259
+  const target = isModuleNamespace(aiSDK)
+    ? Object.setPrototypeOf({}, aiSDK)
+    : aiSDK;
+
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(aiSDK as unknown as any, {
+  return new Proxy(target as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
@@ -76,13 +131,16 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   }) as T;
 }
 
-const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
+export const wrapAgentClass = (
+  AgentClass: any,
+  options: WrapAISDKOptions = {},
+) => {
   return new Proxy(AgentClass, {
-    construct(target, args) {
-      const instance = new target(...args);
+    construct(target, args, newTarget) {
+      const instance = Reflect.construct(target, args, newTarget);
       return new Proxy(instance, {
         get(instanceTarget, prop, instanceReceiver) {
-          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+          const original = Reflect.get(instanceTarget, prop, instanceTarget);
 
           if (prop === "generate") {
             return wrapAgentGenerate(original, instanceTarget, options);
@@ -90,6 +148,11 @@ const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
 
           if (prop === "stream") {
             return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          // Bind methods to the actual instance to preserve private field access
+          if (typeof original === "function") {
+            return original.bind(instanceTarget);
           }
 
           return original;
@@ -144,6 +207,9 @@ const makeGenerateTextWrapper = (
 
     const { model, provider } = serializeModelWithProvider(params.model);
 
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(params);
+
     return traced(
       async (span) => {
         const result = await generateText({
@@ -179,7 +245,7 @@ const makeGenerateTextWrapper = (
           ...spanInfoAttrs,
         },
         event: {
-          input: processInputAttachments(params),
+          input: processedInput,
           metadata: {
             ...spanInfoMetadata,
             model,
@@ -243,6 +309,9 @@ const wrapModel = (model: any, ai?: any): any => {
     serializeModelWithProvider(resolvedModel);
 
   const wrappedDoGenerate = async (options: any) => {
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(options);
+
     return traced(
       async (span) => {
         const result = await originalDoGenerate(options);
@@ -276,7 +345,7 @@ const wrapModel = (model: any, ai?: any): any => {
           type: SpanTypeAttribute.LLM,
         },
         event: {
-          input: processInputAttachments(options),
+          input: processedInput,
           metadata: {
             model: modelId,
             ...(provider ? { provider } : {}),
@@ -294,13 +363,16 @@ const wrapModel = (model: any, ai?: any): any => {
     const startTime = Date.now();
     let receivedFirst = false;
 
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(options);
+
     const span = startSpan({
       name: "doStream",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
       event: {
-        input: processInputAttachments(options),
+        input: processedInput,
         metadata: {
           model: modelId,
           ...(provider ? { provider } : {}),
@@ -465,6 +537,9 @@ const wrapGenerateObject = (
 
     const { model, provider } = serializeModelWithProvider(params.model);
 
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(params);
+
     return traced(
       async (span) => {
         const result = await generateObject({
@@ -502,7 +577,7 @@ const wrapGenerateObject = (
           ...spanInfoAttrs,
         },
         event: {
-          input: processInputAttachments(params),
+          input: processedInput,
           metadata: {
             ...spanInfoMetadata,
             model,
@@ -524,6 +599,10 @@ const makeStreamTextWrapper = (
   streamText: any,
   aiSDK?: any,
 ) => {
+  // Note: streamText returns a sync result (stream object), so we cannot make this async
+  // For v6, Output.object responseFormat is a Promise - we handle this by:
+  // 1. Processing input synchronously (v5 works, v6 gets placeholder)
+  // 2. Updating the span with resolved schema when Promise completes
   const wrapper = function (allParams: any) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
@@ -535,6 +614,12 @@ const makeStreamTextWrapper = (
 
     const { model, provider } = serializeModelWithProvider(params.model);
 
+    // Process input attachments synchronously
+    // v5: responseFormat is a plain object - captured fully
+    // v6: responseFormat is a Promise - captured as placeholder, then updated when resolved
+    const { input: processedInput, outputPromise } =
+      processInputAttachmentsSync(params);
+
     const span = startSpan({
       name: spanName || name,
       spanAttributes: {
@@ -542,7 +627,7 @@ const makeStreamTextWrapper = (
         ...spanInfoAttrs,
       },
       event: {
-        input: processInputAttachments(params),
+        input: processedInput,
         metadata: {
           ...spanInfoMetadata,
           model,
@@ -554,6 +639,17 @@ const makeStreamTextWrapper = (
         },
       },
     });
+
+    // v6: Update input with resolved output schema when Promise completes
+    if (outputPromise) {
+      outputPromise
+        .then((resolvedData) => {
+          span.log({ input: { ...processedInput, ...resolvedData } });
+        })
+        .catch(() => {
+          // Silently ignore resolution errors - placeholder will be used
+        });
+    }
 
     try {
       const startTime = Date.now();
@@ -673,6 +769,10 @@ const wrapStreamObject = (
   options: WrapAISDKOptions = {},
   aiSDK?: any,
 ) => {
+  // Note: streamObject returns a sync result (stream object), so we cannot make this async
+  // For v6, Output.object responseFormat is a Promise - we handle this by:
+  // 1. Processing input synchronously (v5 works, v6 gets placeholder)
+  // 2. Updating the span with resolved schema when Promise completes
   return function streamObjectWrapper(allParams: any) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
@@ -684,6 +784,12 @@ const wrapStreamObject = (
 
     const { model, provider } = serializeModelWithProvider(params.model);
 
+    // Process input attachments synchronously
+    // v5: responseFormat is a plain object - captured fully
+    // v6: responseFormat is a Promise - captured as placeholder, then updated when resolved
+    const { input: processedInput, outputPromise } =
+      processInputAttachmentsSync(params);
+
     const span = startSpan({
       name: spanName || "streamObject",
       spanAttributes: {
@@ -691,7 +797,7 @@ const wrapStreamObject = (
         ...spanInfoAttrs,
       },
       event: {
-        input: processInputAttachments(params),
+        input: processedInput,
         metadata: {
           ...spanInfoMetadata,
           model,
@@ -703,6 +809,17 @@ const wrapStreamObject = (
         },
       },
     });
+
+    // v6: Update input with resolved output schema when Promise completes
+    if (outputPromise) {
+      outputPromise
+        .then((resolvedData) => {
+          span.log({ input: { ...processedInput, ...resolvedData } });
+        })
+        .catch(() => {
+          // Silently ignore resolution errors - placeholder will be used
+        });
+    }
 
     try {
       const startTime = Date.now();
@@ -1138,7 +1255,208 @@ const processTool = (tool: any): any => {
   return processed;
 };
 
-const processInputAttachments = (input: any) => {
+/**
+ * Detects if an object is an AI SDK Output object (from Output.object() or Output.text())
+ * Output objects have a responseFormat property (function, object, or Promise).
+ * AI SDK v5: { type: "object", responseFormat: { type: "json", schema: {...} } }
+ * AI SDK v6: { responseFormat: Promise<{ type: "json", schema: {...} }> }
+ */
+const isOutputObject = (value: any): boolean => {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  // Check for responseFormat property - this is the key indicator
+  if (!("responseFormat" in value)) {
+    return false;
+  }
+
+  // v5: Has type: "object" or "text"
+  if (value.type === "object" || value.type === "text") {
+    return true;
+  }
+
+  // v6 and other cases: responseFormat is a Promise, object, or function
+  if (
+    typeof value.responseFormat === "function" ||
+    typeof value.responseFormat === "object"
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Serializes an AI SDK Output object for logging
+ * Extracts the response format including schema for structured outputs
+ * Handles v5 (plain object), v6 (Promise), and function-based responseFormat
+ */
+const serializeOutputObject = (output: any, model: any): any => {
+  try {
+    const result: any = {};
+
+    // Include type if present (v5 has this)
+    if (output.type) {
+      result.type = output.type;
+    }
+
+    // responseFormat can be:
+    // 1. A function (edge case) - need to call it
+    // 2. A Promise (v6) - return the Promise to be resolved by logger
+    // 3. A plain object (v5) - can use directly
+    let responseFormat: any;
+
+    if (typeof output.responseFormat === "function") {
+      // Call responseFormat to get the schema
+      // For logging purposes, we create a mock model that claims to support structured outputs
+      // to ensure we always extract the schema when available
+      const mockModelForSchema = {
+        supportsStructuredOutputs: true,
+        ...(model || {}),
+      };
+      responseFormat = output.responseFormat({ model: mockModelForSchema });
+    } else if (
+      output.responseFormat != null &&
+      typeof output.responseFormat === "object"
+    ) {
+      // Could be a Promise or a plain object
+      responseFormat = output.responseFormat;
+    }
+
+    if (responseFormat) {
+      // If responseFormat is a Promise (v6), wrap it to handle Zod schema conversion
+      if (typeof responseFormat.then === "function") {
+        // Return a Promise that resolves to the formatted output
+        // The logger will need to handle this Promise
+        result.response_format = Promise.resolve(responseFormat).then(
+          (resolved) => {
+            // Convert Zod schema to JSON Schema if needed
+            if (resolved.schema && isZodSchema(resolved.schema)) {
+              return {
+                ...resolved,
+                schema: serializeZodSchema(resolved.schema),
+              };
+            }
+            return resolved;
+          },
+        );
+      } else {
+        // Plain object - convert Zod schema if needed
+        if (responseFormat.schema && isZodSchema(responseFormat.schema)) {
+          responseFormat = {
+            ...responseFormat,
+            schema: serializeZodSchema(responseFormat.schema),
+          };
+        }
+        result.response_format = responseFormat;
+      }
+    }
+
+    return result;
+  } catch {
+    // If extraction fails, return a minimal representation
+    return {
+      response_format: null,
+    };
+  }
+};
+
+/**
+ * Result from sync input processing.
+ * For v6, includes a Promise to resolve the async output schema.
+ */
+interface ProcessInputSyncResult {
+  input: any;
+  // v6: Promise that resolves to { output: { response_format: {...} } } when available
+  outputPromise?: Promise<any>;
+}
+
+/**
+ * Synchronous version of processInputAttachments for stream wrappers.
+ * For v5: responseFormat is a plain object - captured fully
+ * For v6: responseFormat is a Promise - returns initial input + Promise for update
+ */
+const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
+  if (!input) return { input };
+
+  const processed: any = { ...input };
+
+  // Process messages array if present
+  if (input.messages && Array.isArray(input.messages)) {
+    processed.messages = input.messages.map(processMessage);
+  }
+
+  // Process prompt - can be an array of messages (provider-level format) or an object
+  if (input.prompt && typeof input.prompt === "object") {
+    if (Array.isArray(input.prompt)) {
+      // Provider-level format: prompt is an array of messages
+      processed.prompt = input.prompt.map(processMessage);
+    } else {
+      // High-level format: prompt is an object with potential attachments
+      processed.prompt = processPromptContent(input.prompt);
+    }
+  }
+
+  // Process tools to convert Zod schemas to JSON Schema
+  if (input.tools) {
+    processed.tools = processTools(input.tools);
+  }
+
+  // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
+  if (input.schema && isZodSchema(input.schema)) {
+    processed.schema = serializeZodSchema(input.schema);
+  }
+
+  // Process callOptionsSchema (used by ToolLoopAgent and other agents)
+  if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
+    processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  // Track if we need async resolution for v6
+  let outputPromise: Promise<any> | undefined;
+
+  // Process output schema for generateText/streamText with Output.object()
+  // v5: responseFormat is a plain object with schema - serialize it
+  // v6: responseFormat is a Promise - store placeholder and return Promise for update
+  if (input.output && isOutputObject(input.output)) {
+    const serialized = serializeOutputObject(input.output, input.model);
+
+    // Check if response_format is a Promise (v6)
+    if (
+      serialized.response_format &&
+      typeof serialized.response_format.then === "function"
+    ) {
+      // v6: Store placeholder now, resolve Promise for later update
+      processed.output = { ...serialized, response_format: {} };
+      outputPromise = serialized.response_format.then(
+        (resolvedFormat: any) => ({
+          output: { ...serialized, response_format: resolvedFormat },
+        }),
+      );
+    } else {
+      // v5: response_format is already resolved
+      processed.output = serialized;
+    }
+  }
+
+  // Remove prepareCall function from logs (not serializable and not useful)
+  if (
+    "prepareCall" in processed &&
+    typeof processed.prepareCall === "function"
+  ) {
+    processed.prepareCall = "[Function]";
+  }
+
+  return { input: processed, outputPromise };
+};
+
+/**
+ * Async version of processInputAttachments for non-stream wrappers.
+ * For v5: responseFormat is a plain object - captured fully
+ * For v6: responseFormat is a Promise - awaited and captured fully
+ */
+const processInputAttachments = async (input: any): Promise<any> => {
   if (!input) return input;
 
   const processed: any = { ...input };
@@ -1174,14 +1492,23 @@ const processInputAttachments = (input: any) => {
     processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
   }
 
-  // TODO: Process output schema for ToolLoopAgent with Output.object()
-  // The output field contains an Output object with a responseFormat Promise that resolves
-  // to an object with type: "json" and schema: {...JSON Schema...}
-  // We need to:
-  // 1. Await the responseFormat Promise (requires making this function async)
-  // 2. Extract the resolved schema from responseFormat.schema
-  // 3. Log it in a useful format for users to recreate the output configuration
-  // Currently logs as output: {} which is not useful
+  // Process output schema for generateText/streamText with Output.object()
+  // The output field contains an Output object with a responseFormat property
+  // v5: { type: "json", schema: {...JSON Schema...} } - sync
+  // v6: Promise<{ type: "json", schema: {...JSON Schema...} }> - await it
+  if (input.output && isOutputObject(input.output)) {
+    const serialized = serializeOutputObject(input.output, input.model);
+
+    // v6: If response_format is a Promise, await it
+    if (
+      serialized.response_format &&
+      typeof serialized.response_format.then === "function"
+    ) {
+      serialized.response_format = await serialized.response_format;
+    }
+
+    processed.output = serialized;
+  }
 
   // Remove prepareCall function from logs (not serializable and not useful)
   if (

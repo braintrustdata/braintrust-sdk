@@ -264,6 +264,8 @@ def pylint(session):
     # but pylint needs it with minimum version constraint for proper API checking
     session.install("pydantic_ai>=1.10.0")
     session.install("opentelemetry.instrumentation.openai")
+    # langsmith is needed for the wrapper module but not in VENDOR_PACKAGES
+    session.install("langsmith")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
     files = result.strip().splitlines()

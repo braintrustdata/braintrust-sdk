@@ -8,17 +8,6 @@ from braintrust.framework import _evals
 from braintrust.test_helpers import has_devserver_installed
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    """VCR configuration to filter sensitive headers."""
-    return {
-        "filter_headers": [
-            "x-bt-auth-token",
-            "authorization",
-        ]
-    }
-
-
 @pytest.fixture
 def client():
     """Create test client using the real simple_eval.py example."""

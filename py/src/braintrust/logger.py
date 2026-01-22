@@ -47,12 +47,9 @@ from urllib3.util.retry import Retry
 from . import context, id_gen
 from .bt_json import bt_dumps, bt_safe_deep_copy
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -100,6 +97,14 @@ from .xact_ids import prettify_xact
 
 Metadata = dict[str, Any]
 DATA_API_VERSION = 2
+
+
+class DatasetRef(TypedDict, total=False):
+    """Reference to a dataset by ID and optional version."""
+
+    id: str
+    version: str
+
 
 T = TypeVar("T")
 TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
@@ -396,6 +401,11 @@ class BraintrustState:
             ),
         )
 
+        from braintrust.span_cache import SpanCache
+
+        self.span_cache = SpanCache()
+        self._otel_flush_callback: Any | None = None
+
     def reset_login_info(self):
         self.app_url: str | None = None
         self.app_public_url: str | None = None
@@ -451,6 +461,21 @@ class BraintrustState:
                     self._context_manager = get_context_manager()
 
         return self._context_manager
+
+    def register_otel_flush(self, callback: Any) -> None:
+        """
+        Register an OTEL flush callback. This is called by the OTEL integration
+        when it initializes a span processor/exporter.
+        """
+        self._otel_flush_callback = callback
+
+    async def flush_otel(self) -> None:
+        """
+        Flush OTEL spans if a callback is registered.
+        Called during ensure_spans_flushed to ensure OTEL spans are visible in BTQL.
+        """
+        if self._otel_flush_callback:
+            await self._otel_flush_callback()
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -1297,7 +1322,7 @@ def init(
     project: str | None = None,
     experiment: str | None = None,
     description: str | None = None,
-    dataset: Optional["Dataset"] = None,
+    dataset: Optional["Dataset"] | DatasetRef = None,
     open: bool = False,
     base_experiment: str | None = None,
     is_public: bool = False,
@@ -1410,12 +1435,19 @@ def init(
             args["base_exp_id"] = base_experiment_id
         elif base_experiment is not None:
             args["base_experiment"] = base_experiment
-        else:
+        elif merged_git_metadata_settings and merged_git_metadata_settings.collect != "none":
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
+            if isinstance(dataset, dict):
+                # Simple {"id": ..., "version": ...} dict
+                args["dataset_id"] = dataset["id"]
+                if "version" in dataset:
+                    args["dataset_version"] = dataset["version"]
+            else:
+                # Full Dataset object
+                args["dataset_id"] = dataset.id
+                args["dataset_version"] = dataset.version
 
         if is_public is not None:
             args["public"] = is_public
@@ -1446,7 +1478,11 @@ def init(
     # For experiments, disable queue size limit enforcement (unlimited queue)
     state.enforce_queue_size_limit(False)
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
+    ret = Experiment(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        dataset=dataset if isinstance(dataset, Dataset) else None,
+        state=state,
+    )
     if set_current:
         state.current_experiment = ret
     return ret
@@ -1759,6 +1795,25 @@ def login(
     # Only permit one thread to login at a time
     with login_lock:
         _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
+
+
+def register_otel_flush(callback: Any) -> None:
+    """
+    Register a callback to flush OTEL spans. This is called by the OTEL integration
+    when it initializes a span processor/exporter.
+
+    When ensure_spans_flushed is called (e.g., before a BTQL query in scorers),
+    this callback will be invoked to ensure OTEL spans are flushed to the server.
+
+    Also disables the span cache, since OTEL spans aren't in the local cache
+    and we need BTQL to see the complete span tree (both native + OTEL spans).
+
+    :param callback: The async callback function to flush OTEL spans.
+    """
+    global _state
+    _state.register_otel_flush(callback)
+    # Disable span cache since OTEL spans aren't in the local cache
+    _state.span_cache.disable()
 
 
 def login_to_state(
@@ -2323,30 +2378,6 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
 
 
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-        "_bt_internal_override_pagination_key",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
     scores = event.get("scores")
     if scores:
         for name, score in scores.items():
@@ -3854,6 +3885,21 @@ class SpanImpl(Span):
         serializable_partial_record = bt_safe_deep_copy(partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
+
+        # Write to local span cache for scorer access
+        # Only cache experiment spans - regular logs don't need caching
+        if self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            from braintrust.span_cache import CachedSpan
+
+            cached_span = CachedSpan(
+                span_id=self.span_id,
+                input=serializable_partial_record.get("input"),
+                output=serializable_partial_record.get("output"),
+                metadata=serializable_partial_record.get("metadata"),
+                span_parents=self.span_parents,
+                span_attributes=serializable_partial_record.get("span_attributes"),
+            )
+            self.state.span_cache.queue_write(self.root_span_id, self.span_id, cached_span)
 
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()

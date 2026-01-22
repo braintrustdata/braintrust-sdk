@@ -2,7 +2,7 @@ import dataclasses
 import logging
 import threading
 import time
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, AsyncIterable, Callable
 from typing import Any
 
 from braintrust.logger import start_span
@@ -191,17 +191,38 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
             self.__client = client
             self.__last_prompt: str | None = None
             self.__query_start_time: float | None = None
+            self.__captured_messages: list[dict[str, Any]] | None = None
 
         async def query(self, *args: Any, **kwargs: Any) -> Any:
             """Wrap query to capture the prompt and start time for tracing."""
             # Capture the time when query is called (when LLM call starts)
             self.__query_start_time = time.time()
+            self.__captured_messages = None
 
             # Capture the prompt for use in receive_response
-            if args:
-                self.__last_prompt = str(args[0])
-            elif "prompt" in kwargs:
-                self.__last_prompt = str(kwargs["prompt"])
+            prompt = args[0] if args else kwargs.get("prompt")
+
+            if prompt is not None:
+                if isinstance(prompt, str):
+                    self.__last_prompt = prompt
+                elif isinstance(prompt, AsyncIterable):
+                    # AsyncIterable[dict] - wrap it to capture messages as they're yielded
+                    captured: list[dict[str, Any]] = []
+                    self.__captured_messages = captured
+                    self.__last_prompt = None  # Will be set after messages are captured
+
+                    async def capturing_wrapper() -> AsyncGenerator[dict[str, Any], None]:
+                        async for msg in prompt:
+                            captured.append(msg)
+                            yield msg
+
+                    # Replace the prompt with our capturing wrapper
+                    if args:
+                        args = (capturing_wrapper(),) + args[1:]
+                    else:
+                        kwargs["prompt"] = capturing_wrapper()
+                else:
+                    self.__last_prompt = str(prompt)
 
             return await self.__client.query(*args, **kwargs)
 
@@ -215,11 +236,16 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
             """
             generator = self.__client.receive_response()
 
+            # Determine the initial input - may be updated later if using async generator
+            initial_input = self.__last_prompt if self.__last_prompt else None
+
             with start_span(
                 name="Claude Agent",
                 span_attributes={"type": SpanTypeAttribute.TASK},
-                input=self.__last_prompt if self.__last_prompt else None,
+                input=initial_input,
             ) as span:
+                # If we're capturing async messages, we'll update input after they're consumed
+                input_needs_update = self.__captured_messages is not None
                 # Store the parent span export in thread-local storage for tool handlers
                 _thread_local.parent_span_export = span.export()
 
@@ -228,6 +254,13 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
 
                 try:
                     async for message in generator:
+                        # Update input from captured async messages (once, after they're consumed)
+                        if input_needs_update and self.__captured_messages:
+                            captured_input = _format_captured_messages(self.__captured_messages)
+                            if captured_input:
+                                span.log(input=captured_input)
+                            input_needs_update = False
+
                         message_type = type(message).__name__
 
                         if message_type == "AssistantMessage":
@@ -390,3 +423,12 @@ def _build_llm_input(prompt: Any, conversation_history: list[dict[str, Any]]) ->
             return [{"content": prompt, "role": "user"}] + conversation_history
 
     return conversation_history if conversation_history else None
+
+
+def _format_captured_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Formats captured async generator messages into structured input.
+
+    Returns the messages as-is to preserve structure for tracing.
+    Empty list returns empty list.
+    """
+    return messages if messages else []
