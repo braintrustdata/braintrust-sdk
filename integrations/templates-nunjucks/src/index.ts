@@ -53,9 +53,9 @@ export interface NunjucksOptions {
    * ```typescript
    * // Lenient mode (default) - typos render as empty
    * useTemplateRenderer("nunjucks", { throwOnUndefined: false });
-   * // Template: "Hello {{ userName }}" (typo: should be 'name')
-   * // Variables: { name: "Alice" }
-   * // Output: "Hello "
+   * // Template: "Hello {{ userName }}"
+   * // Variables: { userName: "Alice" }
+   * // Output: "Hello Alice"
    *
    * // Strict mode - typos throw errors
    * useTemplateRenderer("nunjucks", { throwOnUndefined: true });

@@ -104,7 +104,7 @@ async function main() {
       });
     }
 
-    // Test 3: Verify templateFormat option is required
+    // Test 3: Verify nunjucks-specific syntax requires templateFormat
     try {
       const noFormatPrompt = new Prompt(
         {
@@ -116,7 +116,7 @@ async function main() {
               messages: [
                 {
                   role: "user",
-                  content: "{{ variable }}",
+                  content: "{% if condition %}yes{% endif %}",
                 },
               ],
             },
@@ -127,28 +127,32 @@ async function main() {
         false,
       );
 
-      // Without templateFormat, it should not render nunjucks templates
-      const noFormatResult = noFormatPrompt.build({ variable: "test" });
+      // Without templateFormat, nunjucks-specific syntax should not be processed
+      // (mustache, the default, doesn't understand {% %} syntax)
+      const noFormatResult = noFormatPrompt.build({ condition: true });
 
-      // Should NOT have rendered the template (no nunjucks processing)
-      if (noFormatResult.messages[0]?.content === "{{ variable }}") {
+      // Should NOT have rendered the nunjucks template (mustache leaves it as-is)
+      if (
+        noFormatResult.messages[0]?.content ===
+        "{% if condition %}yes{% endif %}"
+      ) {
         results.push({
           status: "pass",
-          name: "Nunjucks requires explicit templateFormat option",
+          name: "Nunjucks-specific syntax requires explicit templateFormat option",
         });
       } else {
         results.push({
           status: "fail",
-          name: "Nunjucks requires explicit templateFormat option",
+          name: "Nunjucks-specific syntax requires explicit templateFormat option",
           error: {
-            message: `Without templateFormat, expected "{{ variable }}", got "${noFormatResult.messages[0]?.content}"`,
+            message: `Without templateFormat, expected "{% if condition %}yes{% endif %}", got "${noFormatResult.messages[0]?.content}"`,
           },
         });
       }
     } catch (error) {
       results.push({
         status: "fail",
-        name: "Nunjucks requires explicit templateFormat option",
+        name: "Nunjucks-specific syntax requires explicit templateFormat option",
         error: {
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
