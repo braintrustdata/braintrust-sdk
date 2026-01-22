@@ -63,12 +63,34 @@ def auto_instrument(
         import braintrust
         braintrust.auto_instrument()
 
-        # Both styles work after auto_instrument()
+        # OpenAI
         import openai
-        client = openai.OpenAI()  # Traced!
+        client = openai.OpenAI()
+        client.chat.completions.create(model="gpt-4o-mini", messages=[...])
 
-        from anthropic import Anthropic
-        client = Anthropic()  # Traced!
+        # Anthropic
+        import anthropic
+        client = anthropic.Anthropic()
+        client.messages.create(model="claude-sonnet-4-20250514", messages=[...])
+
+        # LiteLLM
+        import litellm
+        litellm.completion(model="gpt-4o-mini", messages=[...])
+
+        # DSPy
+        import dspy
+        lm = dspy.LM("openai/gpt-4o-mini")
+        dspy.configure(lm=lm)
+
+        # Pydantic AI
+        from pydantic_ai import Agent
+        agent = Agent("openai:gpt-4o-mini")
+        result = agent.run_sync("Hello!")
+
+        # Google GenAI
+        from google.genai import Client
+        client = Client()
+        client.models.generate_content(model="gemini-2.0-flash", contents="Hello!")
         ```
     """
     results = {}
