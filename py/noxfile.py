@@ -152,6 +152,7 @@ def test_openai(session, version):
     # openai-agents requires Python >= 3.10
     _install(session, "openai-agents")
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_auto.py")
     _run_core_tests(session)
 
 

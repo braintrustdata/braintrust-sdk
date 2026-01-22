@@ -50,6 +50,10 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 """
 
 from .audit import *
+from .auto import (
+    auto_instrument,  # noqa: F401 # type: ignore[reportUnusedImport]
+    auto_uninstrument,  # noqa: F401 # type: ignore[reportUnusedImport]
+)
 from .framework import *
 from .framework2 import *
 from .functions.invoke import *
@@ -62,6 +66,8 @@ from .logger import (
     _internal_with_custom_background_logger,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .oai import (
+    patch_openai,  # noqa: F401 # type: ignore[reportUnusedImport]
+    unpatch_openai,  # noqa: F401 # type: ignore[reportUnusedImport]
     wrap_openai,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .util import (
@@ -69,11 +75,23 @@ from .util import (
     MarkAsyncWrapper,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .wrappers.anthropic import (
+    patch_anthropic,  # noqa: F401 # type: ignore[reportUnusedImport]
+    unpatch_anthropic,  # noqa: F401 # type: ignore[reportUnusedImport]
     wrap_anthropic,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .wrappers.litellm import (
+    patch_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
+    unpatch_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
     wrap_litellm,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
+
+try:
+    from .wrappers.dspy import (
+        patch_dspy,  # noqa: F401 # type: ignore[reportUnusedImport]
+        unpatch_dspy,  # noqa: F401 # type: ignore[reportUnusedImport]
+    )
+except ImportError:
+    pass  # dspy not installed
 from .wrappers.pydantic_ai import (
     setup_pydantic_ai,  # noqa: F401 # type: ignore[reportUnusedImport]
 )

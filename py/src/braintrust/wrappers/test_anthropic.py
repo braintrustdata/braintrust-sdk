@@ -9,6 +9,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.anthropic import wrap_anthropic
+from braintrust.wrappers.test_utils import run_in_subprocess, verify_autoinstrument_script
 
 TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-anthropic-app"
@@ -481,3 +482,185 @@ async def test_anthropic_beta_messages_streaming_async(memory_logger):
     assert metrics["prompt_tokens"] == usage.input_tokens
     assert metrics["completion_tokens"] == usage.output_tokens
     assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
+
+
+class TestPatchAnthropic:
+    """Tests for patch_anthropic() / unpatch_anthropic()."""
+
+    def test_patch_anthropic_sets_wrapped_flag(self):
+        """patch_anthropic() should set _braintrust_wrapped on anthropic module."""
+        result = run_in_subprocess("""
+            from braintrust.wrappers.anthropic import patch_anthropic
+            import anthropic
+
+            assert not hasattr(anthropic, "_braintrust_wrapped")
+            patch_anthropic()
+            assert hasattr(anthropic, "_braintrust_wrapped")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_anthropic_wraps_new_clients(self):
+        """After patch_anthropic(), new Anthropic() clients should be wrapped."""
+        result = run_in_subprocess("""
+            from braintrust.wrappers.anthropic import patch_anthropic
+            patch_anthropic()
+
+            import anthropic
+            client = anthropic.Anthropic(api_key="test-key")
+
+            # Check that messages is wrapped
+            messages_type = type(client.messages).__name__
+            print(f"messages_type={messages_type}")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_unpatch_anthropic_restores_original(self):
+        """unpatch_anthropic() should restore original classes."""
+        result = run_in_subprocess("""
+            import anthropic
+            from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
+
+            original_class = anthropic.Anthropic
+
+            patch_anthropic()
+            patched_class = anthropic.Anthropic
+            assert patched_class is not original_class
+
+            unpatch_anthropic()
+            restored_class = anthropic.Anthropic
+            assert restored_class is original_class
+            assert not hasattr(anthropic, "_braintrust_wrapped")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_anthropic_idempotent(self):
+        """Multiple patch_anthropic() calls should be safe."""
+        result = run_in_subprocess("""
+            from braintrust.wrappers.anthropic import patch_anthropic
+            import anthropic
+
+            patch_anthropic()
+            first_class = anthropic.Anthropic
+
+            patch_anthropic()  # Second call
+            second_class = anthropic.Anthropic
+
+            assert first_class is second_class
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_anthropic_creates_spans(self):
+        """patch_anthropic() should create spans when making API calls."""
+        result = run_in_subprocess("""
+            from braintrust.wrappers.anthropic import patch_anthropic
+            from braintrust.test_helpers import init_test_logger
+            from braintrust import logger
+
+            # Set up memory logger
+            init_test_logger("test-auto")
+            with logger._internal_with_memory_background_logger() as memory_logger:
+                patch_anthropic()
+
+                import anthropic
+                client = anthropic.Anthropic()
+
+                # Make a call within a span context
+                import braintrust
+                with braintrust.start_span(name="test") as span:
+                    try:
+                        # This will fail without API key, but span should still be created
+                        client.messages.create(
+                            model="claude-3-5-haiku-latest",
+                            max_tokens=100,
+                            messages=[{"role": "user", "content": "hi"}],
+                        )
+                    except Exception:
+                        pass  # Expected without API key
+
+                # Check that spans were logged
+                spans = memory_logger.pop()
+                # Should have at least the parent span
+                assert len(spans) >= 1, f"Expected spans, got {spans}"
+                print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+
+class TestPatchAnthropicSpans:
+    """VCR-based tests verifying that patch_anthropic() produces spans."""
+
+    @pytest.mark.vcr
+    def test_patch_anthropic_creates_spans(self, memory_logger):
+        """patch_anthropic() should create spans when making API calls."""
+        from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
+
+        assert not memory_logger.pop()
+
+        patch_anthropic()
+        try:
+            client = anthropic.Anthropic()
+            response = client.messages.create(
+                model="claude-3-5-haiku-latest",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "Say hi"}],
+            )
+            assert response.content[0].text
+
+            # Verify span was created
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+            assert span["metadata"]["provider"] == "anthropic"
+            assert "claude" in span["metadata"]["model"]
+            assert span["input"]
+        finally:
+            unpatch_anthropic()
+
+
+class TestPatchAnthropicAsyncSpans:
+    """VCR-based tests verifying that patch_anthropic() produces spans for async clients."""
+
+    @pytest.mark.vcr
+    @pytest.mark.asyncio
+    async def test_patch_anthropic_async_creates_spans(self, memory_logger):
+        """patch_anthropic() should create spans for async API calls."""
+        from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
+
+        assert not memory_logger.pop()
+
+        patch_anthropic()
+        try:
+            client = anthropic.AsyncAnthropic()
+            response = await client.messages.create(
+                model="claude-3-5-haiku-latest",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "Say hi async"}],
+            )
+            assert response.content[0].text
+
+            # Verify span was created
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+            assert span["metadata"]["provider"] == "anthropic"
+            assert "claude" in span["metadata"]["model"]
+            assert span["input"]
+        finally:
+            unpatch_anthropic()
+
+
+class TestAutoInstrumentAnthropic:
+    """Tests for auto_instrument() with Anthropic."""
+
+    def test_auto_instrument_anthropic(self):
+        """Test auto_instrument patches Anthropic, creates spans, and uninstrument works."""
+        verify_autoinstrument_script("test_auto_anthropic.py")

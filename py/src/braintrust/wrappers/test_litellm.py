@@ -6,7 +6,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.litellm import wrap_litellm
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from braintrust.wrappers.test_utils import assert_metrics_are_valid, verify_autoinstrument_script
 
 TEST_ORG_ID = "test-org-litellm-py-tracing"
 PROJECT_NAME = "test-project-litellm-py-tracing"
@@ -765,3 +765,11 @@ async def test_patch_litellm_aresponses(memory_logger):
         assert TEST_PROMPT in str(span["input"])
     finally:
         unpatch_litellm()
+
+
+class TestAutoInstrumentLiteLLM:
+    """Tests for auto_instrument() with LiteLLM."""
+
+    def test_auto_instrument_litellm(self):
+        """Test auto_instrument patches LiteLLM, creates spans, and uninstrument works."""
+        verify_autoinstrument_script("test_auto_litellm.py")

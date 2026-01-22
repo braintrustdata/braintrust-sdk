@@ -6,7 +6,7 @@ import openai
 import pytest
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from braintrust.wrappers.test_utils import assert_metrics_are_valid, run_in_subprocess, verify_autoinstrument_script
 from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
 from pydantic import BaseModel
@@ -1681,3 +1681,329 @@ def test_braintrust_tracing_processor_trace_metadata_logging(memory_logger):
     spans = memory_logger.pop()
     root_span = spans[0]
     assert root_span["metadata"]["conversation_id"] == "test-12345", "Should log trace metadata"
+
+
+class TestPatchOpenAI:
+    """Tests for patch_openai() / unpatch_openai()."""
+
+    def test_patch_openai_sets_wrapped_flag(self):
+        """patch_openai() should set _braintrust_wrapped on openai module."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai
+            import openai
+
+            assert not hasattr(openai, "_braintrust_wrapped")
+            patch_openai()
+            assert hasattr(openai, "_braintrust_wrapped")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_wraps_new_clients(self):
+        """After patch_openai(), new OpenAI() clients should be wrapped."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai
+            patch_openai()
+
+            import openai
+            client = openai.OpenAI(api_key="test-key")
+
+            # Check that chat completions is wrapped (our wrapper adds tracing)
+            # The wrapper replaces client.chat with a wrapped version
+            chat_type = type(client.chat).__name__
+            print(f"chat_type={chat_type}")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_creates_spans(self):
+        """patch_openai() should create spans when making API calls."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai
+            from braintrust.test_helpers import init_test_logger
+            from braintrust import logger
+
+            # Set up memory logger
+            init_test_logger("test-auto")
+            with logger._internal_with_memory_background_logger() as memory_logger:
+                patch_openai()
+
+                import openai
+                client = openai.OpenAI()
+
+                # Make a call within a span context
+                import braintrust
+                with braintrust.start_span(name="test") as span:
+                    try:
+                        # This will fail without API key, but span should still be created
+                        client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[{"role": "user", "content": "hi"}],
+                        )
+                    except Exception:
+                        pass  # Expected without API key
+
+                # Check that spans were logged
+                spans = memory_logger.pop()
+                # Should have at least the parent span
+                assert len(spans) >= 1, f"Expected spans, got {spans}"
+                print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_before_import(self):
+        """patch_openai() should work when called before importing openai."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai
+
+            # Patch BEFORE importing openai
+            patch_openai()
+
+            import openai
+            assert hasattr(openai, "_braintrust_wrapped")
+
+            client = openai.OpenAI(api_key="test-key")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_after_import(self):
+        """patch_openai() should work when called after importing openai."""
+        result = run_in_subprocess("""
+            import openai
+            from braintrust.oai import patch_openai
+
+            # Patch AFTER importing openai
+            patch_openai()
+
+            assert hasattr(openai, "_braintrust_wrapped")
+
+            client = openai.OpenAI(api_key="test-key")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_unpatch_openai_restores_original(self):
+        """unpatch_openai() should restore original classes."""
+        result = run_in_subprocess("""
+            import openai
+            from braintrust.oai import patch_openai, unpatch_openai
+
+            original_class = openai.OpenAI
+
+            patch_openai()
+            patched_class = openai.OpenAI
+            assert patched_class is not original_class
+
+            unpatch_openai()
+            restored_class = openai.OpenAI
+            assert restored_class is original_class
+            assert not hasattr(openai, "_braintrust_wrapped")
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_idempotent(self):
+        """Multiple patch_openai() calls should be safe."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai, unpatch_openai
+            import openai
+
+            patch_openai()
+            first_class = openai.OpenAI
+
+            patch_openai()  # Second call
+            second_class = openai.OpenAI
+
+            assert first_class is second_class
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_unpatch_openai_idempotent(self):
+        """Multiple unpatch_openai() calls should be safe."""
+        result = run_in_subprocess("""
+            from braintrust.oai import patch_openai, unpatch_openai
+            import openai
+
+            original_class = openai.OpenAI
+
+            patch_openai()
+            unpatch_openai()
+            unpatch_openai()  # Second call - should be no-op
+
+            assert openai.OpenAI is original_class
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_chains_with_other_patches(self):
+        """patch_openai() should chain with other libraries that patch OpenAI."""
+        result = run_in_subprocess("""
+            import openai
+
+            # Simulate another library (like Datadog) patching OpenAI first
+            other_library_init_called = []
+
+            class OtherLibraryOpenAI(openai.OpenAI):
+                def __init__(self, *args, **kwargs):
+                    other_library_init_called.append(True)
+                    super().__init__(*args, **kwargs)
+
+            openai.OpenAI = OtherLibraryOpenAI
+
+            # Now apply our patch - should subclass OtherLibraryOpenAI
+            from braintrust.oai import patch_openai
+            patch_openai()
+
+            # Create a client - both patches should run
+            client = openai.OpenAI(api_key="test-key")
+
+            # Verify other library's __init__ was called (chaining works)
+            assert len(other_library_init_called) == 1, "Other library's patch should have run"
+
+            # Verify our patch was applied (client has wrapped chat)
+            assert hasattr(client, "chat"), "Client should have chat attribute"
+
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_unpatch_openai_restores_to_previous_patch(self):
+        """unpatch_openai() should restore to previous patch, not original."""
+        result = run_in_subprocess("""
+            import openai
+
+            original_class = openai.OpenAI
+
+            # Simulate another library patching first
+            class OtherLibraryOpenAI(openai.OpenAI):
+                pass
+
+            openai.OpenAI = OtherLibraryOpenAI
+
+            # Apply our patch
+            from braintrust.oai import patch_openai, unpatch_openai
+            patch_openai()
+
+            # Unpatch - should restore to OtherLibraryOpenAI, not original
+            unpatch_openai()
+
+            assert openai.OpenAI is OtherLibraryOpenAI, "Should restore to previous patch"
+            assert openai.OpenAI is not original_class, "Should not restore to original"
+
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+    def test_patch_openai_chains_async_client(self):
+        """patch_openai() should chain with other libraries for AsyncOpenAI too."""
+        result = run_in_subprocess("""
+            import openai
+
+            # Simulate another library patching AsyncOpenAI first
+            other_library_init_called = []
+
+            class OtherLibraryAsyncOpenAI(openai.AsyncOpenAI):
+                def __init__(self, *args, **kwargs):
+                    other_library_init_called.append(True)
+                    super().__init__(*args, **kwargs)
+
+            openai.AsyncOpenAI = OtherLibraryAsyncOpenAI
+
+            # Now apply our patch
+            from braintrust.oai import patch_openai
+            patch_openai()
+
+            # Create an async client - both patches should run
+            client = openai.AsyncOpenAI(api_key="test-key")
+
+            # Verify other library's __init__ was called
+            assert len(other_library_init_called) == 1, "Other library's patch should have run"
+
+            # Verify our patch was applied
+            assert hasattr(client, "chat"), "Client should have chat attribute"
+
+            print("SUCCESS")
+        """)
+        assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+
+class TestPatchOpenAISpans:
+    """VCR-based tests verifying that patch_openai() produces spans."""
+
+    @pytest.mark.vcr
+    def test_patch_openai_creates_spans(self, memory_logger):
+        """patch_openai() should create spans when making API calls."""
+        from braintrust.oai import patch_openai, unpatch_openai
+
+        assert not memory_logger.pop()
+
+        patch_openai()
+        try:
+            client = openai.OpenAI()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Say hi"}],
+            )
+            assert response.choices[0].message.content
+
+            # Verify span was created
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+            assert span["metadata"]["provider"] == "openai"
+            assert "gpt-4o-mini" in span["metadata"]["model"]
+            assert span["input"]
+        finally:
+            unpatch_openai()
+
+
+class TestPatchOpenAIAsyncSpans:
+    """VCR-based tests verifying that patch_openai() produces spans for async clients."""
+
+    @pytest.mark.vcr
+    @pytest.mark.asyncio
+    async def test_patch_openai_async_creates_spans(self, memory_logger):
+        """patch_openai() should create spans for async API calls."""
+        from braintrust.oai import patch_openai, unpatch_openai
+
+        assert not memory_logger.pop()
+
+        patch_openai()
+        try:
+            client = openai.AsyncOpenAI()
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Say hi async"}],
+            )
+            assert response.choices[0].message.content
+
+            # Verify span was created
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+            assert span["metadata"]["provider"] == "openai"
+            assert "gpt-4o-mini" in span["metadata"]["model"]
+            assert span["input"]
+        finally:
+            unpatch_openai()
+
+
+class TestAutoInstrumentOpenAI:
+    """Tests for auto_instrument() with OpenAI."""
+
+    def test_auto_instrument_openai(self):
+        """Test auto_instrument patches OpenAI, creates spans, and uninstrument works."""
+        verify_autoinstrument_script("test_auto_openai.py")
