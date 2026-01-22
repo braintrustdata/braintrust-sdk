@@ -1,7 +1,7 @@
 .PHONY: setup test
 
 setup:
-	@echo "==> Setting up cloudflare-vite-hono"
+	@echo "==> Setting up cloudflare-vite-hono-wrangler-dev"
 	mise install
 	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
 	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
@@ -16,7 +16,6 @@ setup:
 			break; \
 		done; \
 	fi
-	@# Build shared package if needed
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
 		echo "==> Building shared package"; \
@@ -25,11 +24,5 @@ setup:
 	npm install --no-package-lock
 
 test: setup
-	@echo "==> Running cloudflare-vite-hono tests"
-	@echo ""
-	@npx tsx tests/worker.test.mjs || WORKER_FAILED=1; \
-	echo ""; \
-	npx tsx tests/node-esm-import.test.mjs || true; \
-	echo ""; \
-	npx tsx tests/vite-dev.test.mjs || BROWSER_IMPORT_FAILED=1; \
-	if [ "$$WORKER_FAILED" = "1" ] || [ "$$BROWSER_IMPORT_FAILED" = "1" ]; then exit 1; fi
+	@echo "==> Running cloudflare-vite-hono-wrangler-dev test"
+	@npx tsx tests/worker.test.mjs
