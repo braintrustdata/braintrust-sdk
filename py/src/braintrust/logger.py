@@ -9,7 +9,6 @@ import inspect
 import io
 import json
 import logging
-import math
 import os
 import sys
 import textwrap
@@ -48,14 +47,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps, bt_loads
+from .bt_json import bt_dumps, bt_safe_deep_copy
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -112,6 +108,14 @@ from .xact_ids import prettify_xact
 
 Metadata = dict[str, Any]
 DATA_API_VERSION = 2
+
+
+class DatasetRef(TypedDict, total=False):
+    """Reference to a dataset by ID and optional version."""
+
+    id: str
+    version: str
+
 
 T = TypeVar("T")
 TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
@@ -408,6 +412,11 @@ class BraintrustState:
             ),
         )
 
+        from braintrust.span_cache import SpanCache
+
+        self.span_cache = SpanCache()
+        self._otel_flush_callback: Any | None = None
+
     def reset_login_info(self):
         self.app_url: str | None = None
         self.app_public_url: str | None = None
@@ -464,26 +473,39 @@ class BraintrustState:
 
         return self._context_manager
 
+    def register_otel_flush(self, callback: Any) -> None:
+        """
+        Register an OTEL flush callback. This is called by the OTEL integration
+        when it initializes a span processor/exporter.
+        """
+        self._otel_flush_callback = callback
+
+    async def flush_otel(self) -> None:
+        """
+        Flush OTEL spans if a callback is registered.
+        Called during ensure_spans_flushed to ensure OTEL spans are visible in BTQL.
+        """
+        if self._otel_flush_callback:
+            await self._otel_flush_callback()
+
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update(
-            {
-                k: v
-                for (k, v) in other.__dict__.items()
-                if k
-                not in (
-                    "current_experiment",
-                    "current_logger",
-                    "current_parent",
-                    "current_span",
-                    "_global_bg_logger",
-                    "_override_bg_logger",
-                    "_context_manager",
-                    "_last_otel_setting",
-                    "_context_manager_lock",
-                )
-            }
-        )
+        self.__dict__.update({
+            k: v
+            for (k, v) in other.__dict__.items()
+            if k
+            not in (
+                "current_experiment",
+                "current_logger",
+                "current_parent",
+                "current_span",
+                "_global_bg_logger",
+                "_override_bg_logger",
+                "_context_manager",
+                "_last_otel_setting",
+                "_context_manager_lock",
+            )
+        })
 
     def login(
         self,
@@ -754,13 +776,6 @@ def construct_logs3_data(items: Sequence[str]):
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def _check_json_serializable(event):
-    try:
-        return bt_dumps(event)
-    except (TypeError, ValueError) as e:
-        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
-
 class _MaskingError:
     """Internal class to signal masking errors that need special handling."""
 
@@ -810,6 +825,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.lock = threading.Lock()
         self.logs = []
         self.masking_function: Callable[[Any], Any] | None = None
+        self.upload_attempts: list[BaseAttachment] = []  # Track upload attempts
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
         pass
@@ -823,7 +839,21 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.masking_function = masking_function
 
     def flush(self, batch_size: int | None = None):
-        pass
+        """Flush the memory logger, extracting attachments and tracking upload attempts."""
+        with self.lock:
+            if not self.logs:
+                return
+
+            # Unwrap lazy values and extract attachments
+            logs = [l.get() for l in self.logs]
+
+            # Extract attachments from all logs
+            attachments: list[BaseAttachment] = []
+            for log in logs:
+                _extract_attachments(log, attachments)
+
+            # Track upload attempts (don't actually call upload() in tests)
+            self.upload_attempts.extend(attachments)
 
     def pop(self):
         with self.lock:
@@ -1303,7 +1333,7 @@ def init(
     project: str | None = None,
     experiment: str | None = None,
     description: str | None = None,
-    dataset: Optional["Dataset"] = None,
+    dataset: Optional["Dataset"] | DatasetRef = None,
     open: bool = False,
     base_experiment: str | None = None,
     is_public: bool = False,
@@ -1416,12 +1446,19 @@ def init(
             args["base_exp_id"] = base_experiment_id
         elif base_experiment is not None:
             args["base_experiment"] = base_experiment
-        else:
+        elif merged_git_metadata_settings and merged_git_metadata_settings.collect != "none":
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
+            if isinstance(dataset, dict):
+                # Simple {"id": ..., "version": ...} dict
+                args["dataset_id"] = dataset["id"]
+                if "version" in dataset:
+                    args["dataset_version"] = dataset["version"]
+            else:
+                # Full Dataset object
+                args["dataset_id"] = dataset.id
+                args["dataset_version"] = dataset.version
 
         if is_public is not None:
             args["public"] = is_public
@@ -1452,7 +1489,11 @@ def init(
     # For experiments, disable queue size limit enforcement (unlimited queue)
     state.enforce_queue_size_limit(False)
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
+    ret = Experiment(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        dataset=dataset if isinstance(dataset, Dataset) else None,
+        state=state,
+    )
     if set_current:
         state.current_experiment = ret
     return ret
@@ -1767,6 +1808,25 @@ def login(
         _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
 
+def register_otel_flush(callback: Any) -> None:
+    """
+    Register a callback to flush OTEL spans. This is called by the OTEL integration
+    when it initializes a span processor/exporter.
+
+    When ensure_spans_flushed is called (e.g., before a BTQL query in scorers),
+    this callback will be invoked to ensure OTEL spans are flushed to the server.
+
+    Also disables the span cache, since OTEL spans aren't in the local cache
+    and we need BTQL to see the complete span tree (both native + OTEL spans).
+
+    :param callback: The async callback function to flush OTEL spans.
+    """
+    global _state
+    _state.register_otel_flush(callback)
+    # Disable span cache since OTEL spans aren't in the local cache
+    _state.span_cache.disable()
+
+
 def login_to_state(
     app_url: str | None = None,
     api_key: str | None = None,
@@ -1974,24 +2034,14 @@ def get_span_parent_object(
 
 def _try_log_input(span, f_sig, f_args, f_kwargs):
     if f_sig:
-        bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
-        input_serializable = bound_args
+        input_data = f_sig.bind(*f_args, **f_kwargs).arguments
     else:
-        input_serializable = dict(args=f_args, kwargs=f_kwargs)
-    try:
-        _check_json_serializable(input_serializable)
-    except Exception as e:
-        input_serializable = "<input not json-serializable>: " + str(e)
-    span.log(input=input_serializable)
+        input_data = dict(args=f_args, kwargs=f_kwargs)
+    span.log(input=input_data)
 
 
 def _try_log_output(span, output):
-    output_serializable = output
-    try:
-        _check_json_serializable(output)
-    except Exception as e:
-        output_serializable = "<output not json-serializable>: " + str(e)
-    span.log(output=output_serializable)
+    span.log(output=output)
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -2339,29 +2389,6 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
 
 
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
     scores = event.get("scores")
     if scores:
         for name, score in scores.items():
@@ -2439,91 +2466,6 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
         raise ValueError("scores must be a dictionary of names with scores")
 
     return event
-
-
-def _deep_copy_event(event: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Creates a deep copy of the given event. Replaces references to user objects
-    with placeholder strings to ensure serializability, except for `Attachment`
-    and `ExternalAttachment` objects, which are preserved and not deep-copied.
-
-    Handles circular references and excessive nesting depth to prevent
-    RecursionError during serialization.
-    """
-    # Maximum depth to prevent hitting Python's recursion limit
-    # Python's default limit is ~1000, we use a conservative limit
-    # to account for existing call stack usage from pytest, application code, etc.
-    MAX_DEPTH = 200
-
-    # Track visited objects to detect circular references
-    visited: set[int] = set()
-
-    def _deep_copy_object(v: Any, depth: int = 0) -> Any:
-        # Check depth limit - use >= to stop before exceeding
-        if depth >= MAX_DEPTH:
-            return "<max depth exceeded>"
-
-        # Check for circular references in mutable containers
-        # Use id() to track object identity
-        if isinstance(v, (Mapping, list, tuple, set)):
-            obj_id = id(v)
-            if obj_id in visited:
-                return "<circular reference>"
-            visited.add(obj_id)
-            try:
-                if isinstance(v, Mapping):
-                    # Prevent dict keys from holding references to user data. Note that
-                    # `bt_json` already coerces keys to string, a behavior that comes from
-                    # `json.dumps`. However, that runs at log upload time, while we want to
-                    # cut out all the references to user objects synchronously in this
-                    # function.
-                    result = {}
-                    for k in v:
-                        try:
-                            key_str = str(k)
-                        except Exception:
-                            # If str() fails on the key, use a fallback representation
-                            key_str = f"<non-stringifiable-key: {type(k).__name__}>"
-                        result[key_str] = _deep_copy_object(v[k], depth + 1)
-                    return result
-                elif isinstance(v, (list, tuple, set)):
-                    return [_deep_copy_object(x, depth + 1) for x in v]
-            finally:
-                # Remove from visited set after processing to allow the same object
-                # to appear in different branches of the tree
-                visited.discard(obj_id)
-
-        if isinstance(v, Span):
-            return "<span>"
-        elif isinstance(v, Experiment):
-            return "<experiment>"
-        elif isinstance(v, Dataset):
-            return "<dataset>"
-        elif isinstance(v, Logger):
-            return "<logger>"
-        elif isinstance(v, BaseAttachment):
-            return v
-        elif isinstance(v, ReadonlyAttachment):
-            return v.reference
-        elif isinstance(v, float):
-            # Handle NaN and Infinity for JSON compatibility
-            if math.isnan(v):
-                return "NaN"
-            elif math.isinf(v):
-                return "Infinity" if v > 0 else "-Infinity"
-            return v
-        elif isinstance(v, (int, str, bool)) or v is None:
-            # Skip roundtrip for primitive types.
-            return v
-        else:
-            # Note: we avoid using copy.deepcopy, because it's difficult to
-            # guarantee the independence of such copied types from their origin.
-            # E.g. the original type could have a `__del__` method that alters
-            # some shared internal state, and we need this deep copy to be
-            # fully-independent from the original.
-            return bt_loads(bt_dumps(v))
-
-    return _deep_copy_object(event)
 
 
 class ObjectIterator(Generic[T]):
@@ -3075,7 +3017,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3131,7 +3073,7 @@ def _update_span_impl(
         event=event,
     )
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3951,13 +3893,24 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        serializable_partial_record = _deep_copy_event(partial_record)
-        _check_json_serializable(serializable_partial_record)
+        serializable_partial_record = bt_safe_deep_copy(partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
+        # Write to local span cache for scorer access
+        # Only cache experiment spans - regular logs don't need caching
+        if self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            from braintrust.span_cache import CachedSpan
+
+            cached_span = CachedSpan(
+                span_id=self.span_id,
+                input=serializable_partial_record.get("input"),
+                output=serializable_partial_record.get("output"),
+                metadata=serializable_partial_record.get("metadata"),
+                span_parents=self.span_parents,
+                span_attributes=serializable_partial_record.get("span_attributes"),
+            )
+            self.state.span_cache.queue_write(self.root_span_id, self.span_id, cached_span)
 
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
@@ -4319,8 +4272,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args[IS_MERGE_FIELD] = True
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
-        _check_json_serializable(args)
-        args = _deep_copy_event(args)
+        args = bt_safe_deep_copy(args)
 
         def compute_args() -> dict[str, Any]:
             return dict(
@@ -4423,8 +4375,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
-        _check_json_serializable(partial_args)
-        partial_args = _deep_copy_event(partial_args)
+        partial_args = bt_safe_deep_copy(partial_args)
 
         def compute_args():
             return dict(
@@ -4508,24 +4459,20 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append(
-                        {
-                            **c,
-                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                        }
-                    )
+                    rendered_content.append({
+                        **c,
+                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                    })
                 elif c["type"] == "file":
-                    rendered_content.append(
-                        {
-                            **c,
-                            "file": {
-                                **c["file"],
-                                "file_data": render(c["file"]["file_data"]),
-                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
-                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
-                            },
-                        }
-                    )
+                    rendered_content.append({
+                        **c,
+                        "file": {
+                            **c["file"],
+                            "file_data": render(c["file"]["file_data"]),
+                            **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                            **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                        },
+                    })
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 

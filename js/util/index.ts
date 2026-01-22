@@ -1,5 +1,6 @@
 export type { Source, TransactionId } from "./db_fields";
 export {
+  ARRAY_DELETE_FIELD,
   ASYNC_SCORING_CONTROL_FIELD,
   AUDIT_METADATA_FIELD,
   AUDIT_SOURCE_FIELD,
@@ -109,6 +110,7 @@ export {
   spanComponentsV3Schema,
   spanObjectTypeV3EnumSchema,
   spanObjectTypeV3ToString,
+  spanObjectTypeV3ToTypedString,
 } from "./span_identifier_v3";
 
 export type { SpanComponentsV4Data } from "./span_identifier_v4";

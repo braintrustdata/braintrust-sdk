@@ -88,7 +88,7 @@ export const withLogging = <T extends BaseCallbackHandler>(handler: T): T => {
             if (propString.endsWith("Start")) {
               depth++;
             } else if (propString.endsWith("End")) {
-              depth--;
+              depth = Math.max(0, depth - 1);
             }
           }
           // @ts-expect-error

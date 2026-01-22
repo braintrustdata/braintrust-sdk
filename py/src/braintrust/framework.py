@@ -1281,6 +1281,29 @@ async def _run_evaluator_internal(
     stream: Callable[[SSEProgressEvent], None] | None = None,
     state: BraintrustState | None = None,
 ):
+    # Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
+    if state is None:
+        from braintrust.logger import _internal_get_global_state
+
+        state = _internal_get_global_state()
+
+    state.span_cache.start()
+    try:
+        return await _run_evaluator_internal_impl(experiment, evaluator, position, filters, stream, state)
+    finally:
+        # Clean up disk-based span cache after eval completes and stop caching
+        state.span_cache.dispose()
+        state.span_cache.stop()
+
+
+async def _run_evaluator_internal_impl(
+    experiment,
+    evaluator: Evaluator,
+    position: int | None,
+    filters: list[Filter],
+    stream: Callable[[SSEProgressEvent], None] | None = None,
+    state: BraintrustState | None = None,
+):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -1290,11 +1313,13 @@ async def _run_evaluator_internal(
             {**parent_propagated},
             {"span_attributes": {"purpose": "scorer"}},
         )
+        # Strip trace from logged input - it's internal plumbing that shouldn't appear in spans
+        logged_input = {k: v for k, v in kwargs.items() if k != "trace"}
         with root_span.start_span(
             name=name,
             span_attributes={"type": SpanTypeAttribute.SCORE, "purpose": "scorer"},
             propagated_event=merged_propagated,
-            input=dict(**kwargs),
+            input=logged_input,
         ) as span:
             score = scorer
             if hasattr(scorer, "eval_async"):
@@ -1415,6 +1440,77 @@ async def _run_evaluator_internal(
                 tags = hooks.tags if hooks.tags else None
                 root_span.log(output=output, metadata=metadata, tags=tags)
 
+                # Create trace object for scorers
+                from braintrust.trace import LocalTrace
+
+                async def ensure_spans_flushed():
+                    # Flush native Braintrust spans
+                    if experiment:
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: experiment.state.flush()
+                        )
+                    elif state:
+                        await asyncio.get_event_loop().run_in_executor(None, lambda: state.flush())
+                    else:
+                        from braintrust.logger import flush as flush_logger
+
+                        await asyncio.get_event_loop().run_in_executor(None, flush_logger)
+
+                    # Also flush OTEL spans if registered
+                    if state:
+                        await state.flush_otel()
+
+                experiment_id = None
+                if experiment:
+                    try:
+                        experiment_id = experiment.id
+                    except:
+                        experiment_id = None
+
+                trace = None
+                if state or experiment:
+                    # Get the state to use
+                    trace_state = state
+                    if not trace_state and experiment:
+                        trace_state = experiment.state
+                    if not trace_state:
+                        # Fall back to global state
+                        from braintrust.logger import _internal_get_global_state
+
+                        trace_state = _internal_get_global_state()
+
+                    # Access root_span_id from the concrete SpanImpl instance
+                    # The Span interface doesn't expose this but SpanImpl has it
+                    root_span_id_value = getattr(root_span, "root_span_id", root_span.id)
+
+                    # Check if there's a parent in the context to determine object_type and object_id
+                    from braintrust.span_identifier_v3 import SpanComponentsV3, span_object_type_v3_to_typed_string
+
+                    parent_str = trace_state.current_parent.get()
+                    parent_components = None
+                    if parent_str:
+                        try:
+                            parent_components = SpanComponentsV3.from_str(parent_str)
+                        except Exception:
+                            # If parsing fails, parent_components stays None
+                            pass
+
+                    # Determine object_type and object_id based on parent or experiment
+                    if parent_components:
+                        trace_object_type = span_object_type_v3_to_typed_string(parent_components.object_type)
+                        trace_object_id = parent_components.object_id or ""
+                    else:
+                        trace_object_type = "experiment"
+                        trace_object_id = experiment_id or ""
+
+                    trace = LocalTrace(
+                        object_type=trace_object_type,
+                        object_id=trace_object_id,
+                        root_span_id=root_span_id_value,
+                        ensure_spans_flushed=ensure_spans_flushed,
+                        state=trace_state,
+                    )
+
                 score_promises = [
                     asyncio.create_task(
                         await_or_run_scorer(
@@ -1426,6 +1522,7 @@ async def _run_evaluator_internal(
                                 "expected": datum.expected,
                                 "metadata": metadata,
                                 "output": output,
+                                "trace": trace,
                             },
                         )
                     )
@@ -1559,9 +1656,9 @@ def build_local_summary(
     scores_by_name = defaultdict(lambda: (0, 0))
     for result in results:
         for name, score in result.scores.items():
-            curr = scores_by_name[name]
-            if curr is None:
+            if score is None:
                 continue
+            curr = scores_by_name[name]
             scores_by_name[name] = (curr[0] + score, curr[1] + 1)
     longest_score_name = max(len(name) for name in scores_by_name) if scores_by_name else 0
     avg_scores = {

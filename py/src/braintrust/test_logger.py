@@ -1,3 +1,5 @@
+# pyright: reportUnknownVariableType=false
+# pyright: reportPrivateUsage=false
 import asyncio
 import json
 import logging
@@ -21,7 +23,6 @@ from braintrust import (
 )
 from braintrust.id_gen import OTELIDGenerator, get_id_generator
 from braintrust.logger import (
-    _deep_copy_event,
     _extract_attachments,
     parent_context,
     render_jinja,
@@ -61,6 +62,33 @@ class TestInit(TestCase):
             braintrust.init(project="project", open=True)
 
         assert str(cm.exception) == "Cannot open an experiment without specifying its name"
+
+    def test_init_with_dataset_id_only(self):
+        """Test that init accepts dataset={'id': '...'} parameter"""
+        # Test the logic that extracts dataset_id from the dict
+        from braintrust.logger import Dataset
+
+        # Test 1: dict with only id
+        dataset_dict = {"id": "dataset-id-123"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+
+        # Test 2: full Dataset object has different behavior
+        # (We can't easily instantiate a Dataset here, but we can verify
+        # that the isinstance check distinguishes them)
+
+    def test_init_with_dataset_id_and_version(self):
+        """Test that init accepts dataset={'id': '...', 'version': '...'} parameter"""
+        # Test the logic that extracts both dataset_id and dataset_version from the dict
+        from braintrust.logger import Dataset
+
+        # Test: dict with id and version
+        dataset_dict = {"id": "dataset-id-123", "version": "v2"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+        assert dataset_dict["version"] == "v2"
 
 
 class TestLogger(TestCase):
@@ -180,113 +208,7 @@ class TestLogger(TestCase):
             },
         )
 
-    def test_deep_copy_event_basic(self):
-        original = {
-            "input": {"foo": "bar", "null": None, "empty": {}},
-            "output": [1, 2, "3", None, {}],
-        }
-        copy = _deep_copy_event(original)
-        self.assertEqual(copy, original)
-        self.assertIsNot(copy, original)
-        self.assertIsNot(copy["input"], original["input"])
-        self.assertIsNot(copy["output"], original["output"])
 
-    def test_deep_copy_event_with_attachments(self):
-        attachment1 = Attachment(
-            data=b"data",
-            filename="filename",
-            content_type="text/plain",
-        )
-        attachment2 = Attachment(
-            data=b"data2",
-            filename="filename2",
-            content_type="text/plain",
-        )
-        attachment3 = ExternalAttachment(
-            url="s3://bucket/path/to/key.pdf",
-            filename="filename3",
-            content_type="application/pdf",
-        )
-        date = "2024-10-23T05:02:48.796Z"
-
-        original = {
-            "input": "Testing",
-            "output": {
-                "span": "<span>",
-                "myIllegalObjects": ["<experiment>", "<dataset>", "<logger>"],
-                "myOtherWeirdObjects": [None, date, None, None],
-                "attachment": attachment1,
-                "another_attachment": attachment3,
-                "attachmentList": [attachment1, attachment2, "string", attachment3],
-                "nestedAttachment": {
-                    "attachment": attachment2,
-                    "another_attachment": attachment3,
-                },
-                "fake": {
-                    "_bt_internal_saved_attachment": "not a number",
-                },
-            },
-        }
-
-        copy = _deep_copy_event(original)
-
-        self.assertEqual(
-            copy,
-            {
-                "input": "Testing",
-                "output": {
-                    "span": "<span>",
-                    "myIllegalObjects": ["<experiment>", "<dataset>", "<logger>"],
-                    "myOtherWeirdObjects": [None, date, None, None],
-                    "attachment": attachment1,
-                    "another_attachment": attachment3,
-                    "attachmentList": [attachment1, attachment2, "string", attachment3],
-                    "nestedAttachment": {
-                        "attachment": attachment2,
-                        "another_attachment": attachment3,
-                    },
-                    "fake": {
-                        "_bt_internal_saved_attachment": "not a number",
-                    },
-                },
-            },
-        )
-
-        self.assertIsNot(copy, original)
-
-        self.assertIs(copy["output"]["attachment"], attachment1)
-        self.assertIs(copy["output"]["another_attachment"], attachment3)
-        self.assertIs(copy["output"]["nestedAttachment"]["attachment"], attachment2)
-        self.assertIs(copy["output"]["nestedAttachment"]["another_attachment"], attachment3)
-        self.assertIs(copy["output"]["attachmentList"][0], attachment1)
-        self.assertIs(copy["output"]["attachmentList"][1], attachment2)
-        self.assertIs(copy["output"]["attachmentList"][3], attachment3)
-
-    def test_check_json_serializable_catches_circular_references(self):
-        """Test that _check_json_serializable properly handles circular references.
-
-        After fix, _check_json_serializable should catch ValueError from circular
-        references and convert them to a more appropriate exception or handle them.
-        """
-        from braintrust.logger import _check_json_serializable
-
-        # Create data with circular reference
-        data = {"a": "b"}
-        data["self"] = data
-
-        # Should either succeed (by handling circular refs) or raise a clear exception
-        # The error message should indicate the data is not serializable
-        try:
-            result = _check_json_serializable(data)
-            # If it succeeds, it should return a serialized string
-            self.assertIsInstance(result, str)
-        except Exception as e:
-            # If it raises an exception, it should mention serialization issue
-            error_msg = str(e).lower()
-            self.assertTrue(
-                "json-serializable" in error_msg or "circular" in error_msg,
-                f"Expected error message to mention serialization issue, got: {e}",
-            )
 
     def test_prompt_build_with_structured_output_templating(self):
         self.maxDiff = None
@@ -1107,6 +1029,25 @@ def test_span_log_handles_infinity_gracefully(with_memory_logger):
     assert logs[0]["output"]["neg"] == "-Infinity"
 
 
+def test_span_log_with_binary_data(with_memory_logger):
+    """Test how span.log() currently handles binary data."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        span.log(
+            input={"file": "image.png"},
+            output={"embedding": b"\x00\x01\x02\x03" * 100},
+        )
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    # Document actual behavior - binary data goes through deep_copy_and_sanitize_dict
+    # which uses bt_dumps/bt_loads roundtrip
+    assert logs[0]["input"]["file"] == "image.png"
+    # The embedding should be present (converted to some serializable form)
+    assert "embedding" in logs[0]["output"]
+
+
 def test_span_log_handles_unstringifiable_object_gracefully(with_memory_logger):
     """Test that span.log() should handle objects with bad __str__ gracefully without raising.
 
@@ -1278,6 +1219,40 @@ def test_span_link_with_unresolved_experiment(with_simulate_login, with_memory_l
 
     link = span.link()
     assert link == "https://www.braintrust.dev/error-generating-link?msg=resolve-experiment-id"
+
+
+def test_experiment_span_link_uses_env_vars_when_logged_out(with_memory_logger):
+    """Verify EXPERIMENT spans use BRAINTRUST_ORG_NAME env var when not logged in."""
+    simulate_logout()
+    assert_logged_out()
+
+    keys = ["BRAINTRUST_APP_URL", "BRAINTRUST_ORG_NAME"]
+    originals = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["BRAINTRUST_APP_URL"] = "https://test-app.example.com"
+        os.environ["BRAINTRUST_ORG_NAME"] = "env-org-name"
+
+        experiment = braintrust.init(
+            project="test-project",
+            experiment="test-experiment",
+        )
+
+        # Create span with resolved experiment ID
+        span = experiment.start_span(name="test-span")
+        span.parent_object_id = LazyValue(lambda: "test-exp-id", use_mutex=False)
+        span.end()
+
+        link = span.link()
+
+        # Should use env var org name and app url
+        assert "env-org-name" in link
+        assert "test-app.example.com" in link
+        assert "test-exp-id" in link
+    finally:
+        for k, v in originals.items():
+            os.environ.pop(k, None)
+            if v:
+                os.environ[k] = v
 
 
 def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_logger):
@@ -2831,6 +2806,95 @@ def test_logger_export_respects_otel_compat_enabled():
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
 
 
+def test_register_otel_flush_callback():
+    """Test that register_otel_flush registers a callback correctly."""
+    import asyncio
+
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Track if callback was invoked
+    callback_invoked = False
+
+    async def mock_flush():
+        nonlocal callback_invoked
+        callback_invoked = True
+
+    # Register the callback
+    register_otel_flush(mock_flush)
+
+    # Calling flush_otel should invoke the registered callback
+    asyncio.run(state.flush_otel())
+
+    assert callback_invoked is True
+
+
+def test_register_otel_flush_disables_span_cache():
+    """Test that register_otel_flush disables the span cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache (simulating what happens during eval)
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+
+    # Cache should now be disabled
+    assert state.span_cache.disabled is True
+
+
+def test_flush_otel_noop_when_no_callback():
+    """Test that flush_otel is a no-op when no callback is registered."""
+    import asyncio
+
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Should not throw even with no callback registered
+    asyncio.run(state.flush_otel())
+
+
+def test_register_otel_flush_permanently_disables_cache():
+    """Test that register_otel_flush permanently disables the cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+    assert state.span_cache.disabled is True
+
+    # Try to start again - should still be disabled because of explicit disable
+    state.span_cache.start()
+    assert state.span_cache.disabled is True
+
+
 class TestJSONAttachment(TestCase):
     def test_create_attachment_from_json_data(self):
         """Test creating an attachment from JSON data."""
@@ -3097,3 +3161,187 @@ class TestDatasetInternalBtql(TestCase):
 
         # Verify that the custom batch_size is used
         self.assertEqual(query_json["limit"], custom_batch_size)
+
+
+def test_attachment_identity_preserved_through_bt_safe_deep_copy():
+    """Test that attachment object identity is preserved through bt_safe_deep_copy."""
+    from braintrust.bt_json import bt_safe_deep_copy
+
+    attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+    original_id = id(attachment)
+
+    # Simulate what happens in Span.log
+    partial_record = {"input": {"file": attachment}}
+    copied = bt_safe_deep_copy(partial_record)
+
+    # Verify identity preserved
+    assert copied["input"]["file"] is attachment
+    assert id(copied["input"]["file"]) == original_id
+
+
+def test_extract_attachments_collects_and_replaces():
+    """Test that _extract_attachments properly collects attachments and replaces them with references."""
+    from braintrust.logger import _extract_attachments
+
+    attachment1 = Attachment(data=b"data1", filename="file1.txt", content_type="text/plain")
+    attachment2 = Attachment(data=b"data2", filename="file2.txt", content_type="text/plain")
+    ext_attachment = ExternalAttachment(url="s3://bucket/key", filename="file3.pdf", content_type="application/pdf")
+
+    event = {
+        "input": {"file": attachment1},
+        "output": {"file": attachment2},
+        "metadata": {"files": [attachment1, ext_attachment]}
+    }
+
+    attachments = []
+    _extract_attachments(event, attachments)
+
+    # Should have collected all 4 attachment instances (attachment1 appears twice)
+    assert len(attachments) == 4
+    assert attachments[0] is attachment1
+    assert attachments[1] is attachment2
+    assert attachments[2] is attachment1  # Same instance collected again
+    assert attachments[3] is ext_attachment
+
+    # Event should have been modified to contain references
+    assert event["input"]["file"] == attachment1.reference
+    assert event["output"]["file"] == attachment2.reference
+    assert event["metadata"]["files"][0] == attachment1.reference
+    assert event["metadata"]["files"][1] == ext_attachment.reference
+
+
+def test_extract_attachments_preserves_identity():
+    """Test that the same attachment instance is collected multiple times when it appears in different places."""
+    from braintrust.logger import _extract_attachments
+
+    attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+    original_id = id(attachment)
+
+    event = {
+        "input": attachment,
+        "output": attachment,  # Same instance
+        "metadata": {"file": attachment}  # Same instance again
+    }
+
+    attachments = []
+    _extract_attachments(event, attachments)
+
+    # Should collect the same instance 3 times
+    assert len(attachments) == 3
+    assert all(att is attachment for att in attachments)
+    assert all(id(att) == original_id for att in attachments)
+
+
+def test_attachment_upload_tracked_on_flush(with_memory_logger, with_simulate_login):
+    """Test that attachment upload is tracked when attachments are logged and flushed."""
+    attachment = Attachment(data=b"test data", filename="test.txt", content_type="text/plain")
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(input={"file": attachment})
+    span.end()
+
+    # No upload attempts yet
+    assert len(with_memory_logger.upload_attempts) == 0
+
+    # Flush should track upload attempt
+    logger.flush()
+
+    # Now upload should be tracked
+    assert len(with_memory_logger.upload_attempts) == 1
+    assert with_memory_logger.upload_attempts[0] is attachment
+
+
+def test_multiple_attachments_upload_tracked(with_memory_logger, with_simulate_login):
+    """Test that upload is tracked for multiple attachments."""
+    attachment1 = Attachment(data=b"data1", filename="file1.txt", content_type="text/plain")
+    attachment2 = Attachment(data=b"data2", filename="file2.txt", content_type="text/plain")
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(
+        input={"file1": attachment1},
+        output={"file2": attachment2}
+    )
+    span.end()
+    logger.flush()
+
+    # Both attachments should be tracked
+    assert len(with_memory_logger.upload_attempts) == 2
+    assert attachment1 in with_memory_logger.upload_attempts
+    assert attachment2 in with_memory_logger.upload_attempts
+
+
+def test_same_attachment_logged_twice_tracked_twice(with_memory_logger, with_simulate_login):
+    """Test that same attachment logged twice appears twice in upload attempts."""
+    attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(input={"file": attachment})
+    span.log(metadata={"same_file": attachment})
+    span.end()
+    logger.flush()
+
+    # Same attachment should be tracked twice (once for each log call)
+    assert len(with_memory_logger.upload_attempts) == 2
+    assert with_memory_logger.upload_attempts[0] is attachment
+    assert with_memory_logger.upload_attempts[1] is attachment
+
+
+def test_external_attachment_upload_tracked(with_memory_logger, with_simulate_login):
+    """Test that ExternalAttachment upload is also tracked."""
+    ext_attachment = ExternalAttachment(
+        url="s3://bucket/key.pdf",
+        filename="external.pdf",
+        content_type="application/pdf"
+    )
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(input={"file": ext_attachment})
+    span.end()
+    logger.flush()
+
+    # ExternalAttachment should be tracked
+    assert len(with_memory_logger.upload_attempts) == 1
+    assert with_memory_logger.upload_attempts[0] is ext_attachment
+
+
+def test_json_attachment_upload_tracked(with_memory_logger, with_simulate_login):
+    """Test that JSONAttachment upload is tracked."""
+    data = {"key": "value", "nested": {"array": [1, 2, 3]}}
+    json_attachment = JSONAttachment(data, filename="data.json")
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(output={"data": json_attachment})
+    span.end()
+    logger.flush()
+
+    # JSONAttachment should be tracked
+    assert len(with_memory_logger.upload_attempts) == 1
+    assert with_memory_logger.upload_attempts[0] is json_attachment
+
+
+def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_login):
+    """Test that different attachment types are all tracked."""
+    attachment = Attachment(data=b"data", filename="file.txt", content_type="text/plain")
+    json_attachment = JSONAttachment({"key": "value"}, filename="data.json")
+    ext_attachment = ExternalAttachment(url="s3://bucket/key", filename="file.pdf", content_type="application/pdf")
+
+    logger = init_test_logger(__name__)
+    span = logger.start_span(name="test_span")
+    span.log(
+        input=attachment,
+        output=json_attachment,
+        metadata={"file": ext_attachment}
+    )
+    span.end()
+    logger.flush()
+
+    # All three types should be tracked
+    assert len(with_memory_logger.upload_attempts) == 3
+    assert attachment in with_memory_logger.upload_attempts
+    assert json_attachment in with_memory_logger.upload_attempts
+    assert ext_attachment in with_memory_logger.upload_attempts

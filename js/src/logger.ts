@@ -101,6 +101,7 @@ import {
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
+import { SpanCache, CachedSpan } from "./span-cache";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -565,8 +566,10 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
+  private _otelFlushCallback: (() => Promise<void>) | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -603,6 +606,7 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+    this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
   public resetLoginInfo() {
@@ -638,6 +642,24 @@ export class BraintrustState {
       this._contextManager = getContextManager();
     }
     return this._contextManager;
+  }
+
+  /**
+   * Register an OTEL flush callback. This is called by @braintrust/otel
+   * when it initializes a BraintrustSpanProcessor/Exporter.
+   */
+  public registerOtelFlush(callback: () => Promise<void>): void {
+    this._otelFlushCallback = callback;
+  }
+
+  /**
+   * Flush OTEL spans if a callback is registered.
+   * Called during ensureSpansFlushed to ensure OTEL spans are visible in BTQL.
+   */
+  public async flushOtel(): Promise<void> {
+    if (this._otelFlushCallback) {
+      await this._otelFlushCallback();
+    }
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -911,6 +933,22 @@ export function _internalSetInitialState() {
  */
 export const _internalGetGlobalState = () => _globalState;
 
+/**
+ * Register a callback to flush OTEL spans. This is called by @braintrust/otel
+ * when it initializes a BraintrustSpanProcessor/Exporter.
+ *
+ * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
+ * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ *
+ * Also disables the span cache, since OTEL spans aren't in the local cache
+ * and we need BTQL to see the complete span tree (both native + OTEL spans).
+ */
+export function registerOtelFlush(callback: () => Promise<void>): void {
+  _globalState?.registerOtelFlush(callback);
+  // Disable span cache since OTEL spans aren't in the local cache
+  _globalState?.spanCache?.disable();
+}
+
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
@@ -1130,9 +1168,17 @@ interface OrgProjectMetadata {
   project: ObjectMetadata;
 }
 
+export interface LinkArgs {
+  org_name?: string;
+  app_url?: string;
+  project_name?: string;
+  project_id?: string;
+}
+
 export interface LogOptions<IsAsyncFlush> {
   asyncFlush?: IsAsyncFlush;
   computeMetadataArgs?: Record<string, any>;
+  linkArgs?: LinkArgs;
 }
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
@@ -1860,6 +1906,33 @@ function getErrPermlink(msg: string) {
   return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
 }
 
+function _getAppUrl(appUrl?: string | null): string {
+  return (
+    appUrl || iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev"
+  );
+}
+
+function _getOrgName(orgName?: string | null): string | undefined {
+  return orgName || iso.getEnv("BRAINTRUST_ORG_NAME") || undefined;
+}
+
+/**
+ * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+ * if we have the info, otherwise return null.
+ * Resolution order: state -> linkArgs -> env var
+ */
+function _getLinkBaseUrl(
+  state: BraintrustState,
+  linkArgs?: LinkArgs,
+): string | null {
+  const appUrl = _getAppUrl(state.appUrl || linkArgs?.app_url);
+  const orgName = _getOrgName(state.orgName || linkArgs?.org_name);
+  if (!orgName) {
+    return null;
+  }
+  return `${appUrl}/app/${orgName}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -2012,6 +2085,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
   private computeMetadataArgs: Record<string, any> | undefined;
+  private _linkArgs: LinkArgs | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -2027,6 +2101,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     this.lazyMetadata = lazyMetadata;
     this._asyncFlush = logOptions.asyncFlush;
     this.computeMetadataArgs = logOptions.computeMetadataArgs;
+    this._linkArgs = logOptions.linkArgs;
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -2232,6 +2307,15 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   get asyncFlush(): IsAsyncFlush | undefined {
     return this._asyncFlush;
+  }
+
+  /**
+   * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+   * if we have the info, otherwise return null.
+   * Resolution order: state -> linkArgs -> env var
+   */
+  public _getLinkBaseUrl(): string | null {
+    return _getLinkBaseUrl(this.state, this._linkArgs);
   }
 }
 
@@ -2869,10 +2953,18 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
+/**
+ * Reference to a dataset by ID and optional version.
+ */
+export interface DatasetRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
-  dataset?: AnyDataset;
+  dataset?: AnyDataset | DatasetRef;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3083,8 +3175,21 @@ export function init<IsOpen extends boolean = false>(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = await dataset.id;
-        args["dataset_version"] = await dataset.version();
+        if (
+          "id" in dataset &&
+          typeof dataset.id === "string" &&
+          !("__braintrust_dataset_marker" in dataset)
+        ) {
+          // Simple {id: ..., version?: ...} object
+          args["dataset_id"] = dataset.id;
+          if ("version" in dataset && dataset.version !== undefined) {
+            args["dataset_version"] = dataset.version;
+          }
+        } else {
+          // Full Dataset object
+          args["dataset_id"] = await (dataset as AnyDataset).id;
+          args["dataset_version"] = await (dataset as AnyDataset).version();
+        }
       }
 
       if (isPublic !== undefined) {
@@ -3133,7 +3238,13 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const ret = new Experiment(state, lazyMetadata, dataset);
+  const ret = new Experiment(
+    state,
+    lazyMetadata,
+    dataset !== undefined && "version" in dataset
+      ? (dataset as AnyDataset)
+      : undefined,
+  );
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
@@ -3466,6 +3577,13 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_id: projectId,
   };
 
+  const linkArgs = {
+    org_name: orgName,
+    app_url: appUrl,
+    project_name: projectName,
+    project_id: projectId,
+  };
+
   const state = stateArg ?? _globalState;
 
   // Enable queue size limit enforcement for initLogger() calls
@@ -3488,6 +3606,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
+    linkArgs,
   });
   if (options.setCurrent ?? true) {
     state.currentLogger = ret as Logger<false>;
@@ -3696,6 +3815,12 @@ export interface LoginOptions {
    * Calls this function if there's an error in the background flusher.
    */
   onFlushError?: (error: unknown) => void;
+  /**
+   * If true, disables the local span cache used to optimize scorer access
+   * to trace data. When disabled, scorers will always fetch spans from the
+   * server. Defaults to false.
+   */
+  disableSpanCache?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4789,15 +4914,19 @@ export type WithTransactionId<R> = R & {
 };
 
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
-const MAX_BTQL_ITERATIONS = 10000;
+export const MAX_BTQL_ITERATIONS = 10000;
 
-class ObjectFetcher<RecordType>
+export class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
-    private objectType: "dataset" | "experiment",
+    private objectType:
+      | "dataset"
+      | "experiment"
+      | "project_logs"
+      | "playground_logs",
     private pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
@@ -5606,8 +5735,23 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
-      throw new Error("Tags can only be logged to the root span");
+    // Write to local span cache for scorer access
+    // Only cache experiment spans - regular logs don't need caching
+    if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const cachedSpan: CachedSpan = {
+        input: partialRecord.input,
+        output: partialRecord.output,
+        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        span_id: this._spanId,
+        span_parents: this._spanParents,
+        span_attributes:
+          partialRecord.span_attributes as CachedSpan["span_attributes"],
+      };
+      this._state.spanCache.queueWrite(
+        this._rootSpanId,
+        this._spanId,
+        cachedSpan,
+      );
     }
 
     const computeRecord = async () => ({
@@ -5740,21 +5884,32 @@ export class SpanImpl implements Span {
     }
 
     try {
-      const orgName = this._state.orgName;
-      if (!orgName) {
-        throw new Error("log-in-or-provide-org-name");
+      let baseUrl: string | null = null;
+
+      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
+        // For PROJECT_LOGS, use Logger's _getLinkBaseUrl which checks
+        // state -> linkArgs -> env var (matches Python)
+        const curLogger = this._state.currentLogger;
+        if (curLogger) {
+          baseUrl = curLogger._getLinkBaseUrl();
+        }
       }
 
-      return this._link(orgName);
+      // For EXPERIMENT or if Logger not available, fall back to state -> env var
+      if (!baseUrl) {
+        baseUrl = _getLinkBaseUrl(this._state);
+        if (!baseUrl) {
+          throw new Error("log-in-or-provide-org-name");
+        }
+      }
+
+      return this._link(baseUrl);
     } catch (e) {
       return getErrPermlink(e instanceof Error ? e.message : String(e));
     }
   }
 
-  _link(orgName: string): string {
-    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
-    const baseUrl = `${appUrl}/app/${orgName}`;
-
+  _link(baseUrl: string): string {
     // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
     // Nothing in this module should have the possibility of blocking with the lone exception of
     // flush() which should be a clear exception. We shouldn't build on it and

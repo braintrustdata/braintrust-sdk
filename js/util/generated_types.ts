@@ -141,10 +141,22 @@ export const AsyncScoringState = z.union([
 ]);
 export type AsyncScoringStateType = z.infer<typeof AsyncScoringState>;
 export const AsyncScoringControl = z.union([
-  z.object({ kind: z.literal("score_update"), token: z.string() }),
+  z.object({
+    kind: z.literal("score_update"),
+    token: z.string().optional(),
+  }),
   z.object({ kind: z.literal("state_override"), state: AsyncScoringState }),
   z.object({ kind: z.literal("state_force_reselect") }),
   z.object({ kind: z.literal("state_enabled_force_rescore") }),
+  z.object({
+    kind: z.literal("add_triggered_functions"),
+    triggered_function_ids: z.array(z.unknown()).min(1),
+  }),
+  z.object({
+    kind: z.literal("complete_triggered_functions"),
+    function_ids: z.array(z.unknown()).min(1),
+    triggered_xact_id: z.string(),
+  }),
 ]);
 export type AsyncScoringControlType = z.infer<typeof AsyncScoringControl>;
 export const BraintrustAttachmentReference = z.object({
@@ -892,13 +904,7 @@ export const FunctionId = z.union([
   }),
 ]);
 export type FunctionIdType = z.infer<typeof FunctionId>;
-export const FunctionObjectType = z.enum([
-  "prompt",
-  "tool",
-  "scorer",
-  "task",
-  "agent",
-]);
+export const FunctionObjectType = z.enum(["prompt", "tool", "scorer", "task"]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum(["completion", "score", "any"]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
@@ -1494,7 +1500,6 @@ export const View = z.object({
     "tools",
     "scorers",
     "logs",
-    "agents",
     "monitor",
   ]),
   name: z.string(),

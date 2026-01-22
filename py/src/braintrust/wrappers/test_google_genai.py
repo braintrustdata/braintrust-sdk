@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 
@@ -15,12 +16,16 @@ FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "internal/gol
 
 @pytest.fixture(scope="module")
 def vcr_config():
+    """Google-specific VCR config - needs to uppercase HTTP methods."""
+    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+
     def before_record_request(request):
-        # Normalize HTTP method to uppercase for consistency
+        # Normalize HTTP method to uppercase for consistency (Google API quirk)
         request.method = request.method.upper()
         return request
 
     return {
+        "record_mode": record_mode,
         "filter_headers": [
             "authorization",
             "x-api-key",
@@ -547,7 +552,6 @@ def test_error_handling(memory_logger):
     assert log["error"]
 
 
-# Test 9: Stop Sequences
 @pytest.mark.vcr
 def test_stop_sequences(memory_logger):
     """Test stop sequences parameter."""
@@ -571,3 +575,65 @@ def test_stop_sequences(memory_logger):
     assert len(spans) == 1
     span = spans[0]
     assert span["metadata"]["model"] == MODEL
+
+
+def test_attachment_in_config(memory_logger):
+    """Test that attachments in config are preserved through serialization."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+
+    attachment = Attachment(data=b"config data", filename="config.txt", content_type="text/plain")
+
+    # Simulate config with attachment
+    config = {"temperature": 0.5, "context_file": attachment, "max_output_tokens": 100}
+
+    # Test bt_safe_deep_copy preserves attachment
+    copied = bt_safe_deep_copy(config)
+    assert copied["context_file"] is attachment
+    assert copied["temperature"] == 0.5
+
+
+def test_nested_attachments_in_contents(memory_logger):
+    """Test that nested attachments in contents are preserved."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment, ExternalAttachment
+
+    attachment1 = Attachment(data=b"file1", filename="file1.txt", content_type="text/plain")
+    attachment2 = ExternalAttachment(url="s3://bucket/file2.pdf", filename="file2.pdf", content_type="application/pdf")
+
+    # Simulate contents with nested attachments
+    contents = [
+        {"role": "user", "parts": [{"text": "Check these files"}, {"file": attachment1}]},
+        {"role": "model", "parts": [{"text": "Analyzed"}, {"result_file": attachment2}]},
+    ]
+
+    copied = bt_safe_deep_copy(contents)
+
+    # Verify attachments preserved
+    assert copied[0]["parts"][1]["file"] is attachment1
+    assert copied[1]["parts"][1]["result_file"] is attachment2
+
+
+def test_attachment_with_pydantic_model(memory_logger):
+    """Test that attachments work alongside Pydantic model serialization."""
+    from braintrust.bt_json import bt_safe_deep_copy
+    from braintrust.logger import Attachment
+    from pydantic import BaseModel
+
+    class TestModel(BaseModel):
+        name: str
+        value: int
+
+    attachment = Attachment(data=b"model data", filename="model.txt", content_type="text/plain")
+
+    # Structure with both Pydantic model and attachment
+    data = {"model_config": TestModel(name="test", value=42), "context_file": attachment}
+
+    copied = bt_safe_deep_copy(data)
+
+    # Pydantic model should be converted to dict
+    assert isinstance(copied["model_config"], dict)
+    assert copied["model_config"]["name"] == "test"
+
+    # Attachment should be preserved
+    assert copied["context_file"] is attachment

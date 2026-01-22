@@ -165,7 +165,7 @@ interactions:
         serializable object)"},"metadata":{"anyOf":[{"type":"object","properties":{"model":{"description":"The
         model used for this example","type":["string","null"]}},"additionalProperties":{}},{"type":"null"}]},"tags":{"anyOf":[{"type":"array","items":{"type":"string"}},{"type":"null"}]},"span_id":{"type":"string","description":"A
         unique identifier used to link different dataset events together as part of
-        a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing)
+        a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument)
         for full details on tracing"},"root_span_id":{"type":"string","description":"A
         unique identifier for the trace this dataset event belongs to"},"is_root":{"type":["boolean","null"],"description":"Whether
         this span is a root span"},"origin":{"anyOf":[{"type":"object","properties":{"object_type":{"description":"Type
@@ -254,7 +254,7 @@ interactions:
         serializable object)"},"metadata":{"anyOf":[{"type":"object","properties":{"model":{"description":"The
         model used for this example","type":["string","null"]}},"additionalProperties":{}},{"type":"null"}]},"tags":{"anyOf":[{"type":"array","items":{"type":"string"}},{"type":"null"}]},"span_id":{"type":"string","description":"A
         unique identifier used to link different dataset events together as part of
-        a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing)
+        a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument)
         for full details on tracing"},"root_span_id":{"type":"string","description":"A
         unique identifier for the trace this dataset event belongs to"},"is_root":{"type":["boolean","null"],"description":"Whether
         this span is a root span"},"origin":{"anyOf":[{"type":"object","properties":{"object_type":{"description":"Type

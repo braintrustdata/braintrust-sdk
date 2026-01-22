@@ -9,6 +9,11 @@ import { join } from "path";
 import type { LanguageModel } from "ai";
 
 console.log("Running ai sdk version:", require("ai/package.json").version);
+console.log(
+  process.env.AI_GATEWAY_API_KEY
+    ? "using ai gateway"
+    : "using ai provider directly",
+);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
@@ -21,8 +26,8 @@ const gpt4o = process.env.AI_GATEWAY_API_KEY
   : openai("gpt-4o");
 
 const claudeSonnet45 = process.env.AI_GATEWAY_API_KEY
-  ? "anthropic/claude-sonnet-45"
-  : anthropic("claude-sonnet-45");
+  ? "anthropic/claude-sonnet-4-5"
+  : anthropic("claude-sonnet-4-5");
 
 const claudeSonnet37 = process.env.AI_GATEWAY_API_KEY
   ? "anthropic/claude-3-7-sonnet-latest"

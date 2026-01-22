@@ -9,6 +9,11 @@ import { join } from "path";
 import type { LanguageModel } from "ai";
 
 console.log("Running ai sdk version:", require("ai/package.json").version);
+console.log(
+  process.env.AI_GATEWAY_API_KEY
+    ? "using ai gateway"
+    : "using ai provider directly",
+);
 
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
@@ -571,6 +576,16 @@ async function testToolUseWithResult() {
         },
       };
 
+      const greetingTool = ai.tool({
+        description: "A tool that streams a personalized greeting",
+        inputSchema: z.object({ name: z.string() }),
+        execute: async function* ({ name }: { name: string }) {
+          yield { status: "starting", message: "Preparing..." };
+          yield { status: "processing", message: `Looking up ${name}...` };
+          yield { status: "done", greeting: `Hello, ${name}!` };
+        },
+      });
+
       for (const model of [gpt5mini, claudeSonnet45]) {
         await generateText({
           model: model as LanguageModel,
@@ -597,6 +612,15 @@ async function testToolUseWithResult() {
           },
         }).generate({
           prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+        });
+
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            greeting: greetingTool,
+          },
+          prompt: "Greet Alice using the greeting tool.",
+          stopWhen: ai.stepCountIs(2),
         });
       }
     },
@@ -728,6 +752,53 @@ async function testStreamingStructuredOutput() {
       }
     },
     { name: "test_streaming_structured_output" },
+  );
+}
+
+// Test 18b: streamText with Output.object (structured output via output parameter)
+async function testStreamTextWithOutputObject() {
+  return traced(
+    async () => {
+      const analysisSchema = z.object({
+        scratchpad: z.string().describe("Thinking through the problem"),
+        answer: z.string().describe("The final answer"),
+        confidence: z.number().describe("Confidence level from 0 to 1"),
+      });
+
+      const outputSchema = ai.Output.object({
+        schema: analysisSchema,
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        // streamText with output parameter
+        const streamResult = streamText({
+          model: model as LanguageModel,
+          output: outputSchema,
+          messages: [
+            {
+              role: "user",
+              content: "What is 15 * 23? Think through it step by step.",
+            },
+          ],
+        });
+
+        for await (const _ of streamResult.textStream) {
+        }
+
+        // Also test generateText with output parameter
+        await generateText({
+          model: model as LanguageModel,
+          output: outputSchema,
+          messages: [
+            {
+              role: "user",
+              content: "What is 42 + 58? Think through it step by step.",
+            },
+          ],
+        });
+      }
+    },
+    { name: "test_stream_text_with_output_object" },
   );
 }
 
@@ -976,6 +1047,7 @@ async function runAllTests() {
     testStructuredOutputWithContext,
     testToolLoopAgentStructuredOutput,
     testReasoning,
+    testStreamTextWithOutputObject,
   ];
 
   for (const test of tests) {

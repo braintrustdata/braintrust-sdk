@@ -45,6 +45,7 @@ export {
   ContextManager,
   DEFAULT_FETCH_BATCH_SIZE,
   Dataset,
+  ObjectFetcher,
   ERR_PERMALINK,
   Experiment,
   ExternalAttachment,
@@ -99,6 +100,7 @@ export {
   withLogger,
   withParent,
   wrapTraced,
+  registerOtelFlush,
 } from "./logger";
 
 export {
@@ -131,6 +133,7 @@ export {
 
 export {
   wrapAISDK,
+  wrapAgentClass,
   BraintrustMiddleware,
   wrapAISDKModel,
 } from "./wrappers/ai-sdk";
@@ -191,6 +194,9 @@ export {
   promptDefinitionWithToolsSchema,
   toolFunctionDefinitionSchema,
 } from "./framework2";
+
+export type { Trace, SpanData } from "./trace";
+export { SpanFetcher, CachedSpanFetcher } from "./trace";
 
 export type {
   ParentExperimentIds,

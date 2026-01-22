@@ -177,3 +177,109 @@ async def test_calculator_with_multiple_operations(memory_logger):
         if span["span_id"] != root_span_id:
             assert span["root_span_id"] == root_span_id
             assert root_span_id in span["span_parents"]
+
+
+def _make_message(content: str) -> dict:
+    """Create a streaming format message dict."""
+    return {"type": "user", "message": {"role": "user", "content": content}}
+
+
+def _assert_structured_input(task_span: dict, expected_contents: list[str]) -> None:
+    """Assert that task span input is a structured list with expected content."""
+    inp = task_span.get("input")
+    assert isinstance(inp, list), f"Expected list input, got {type(inp).__name__}: {inp}"
+    assert [x["message"]["content"] for x in inp] == expected_contents
+
+
+class CustomAsyncIterable:
+    """Custom AsyncIterable class (not a generator) for testing."""
+
+    def __init__(self, messages: list[dict]):
+        self._messages = messages
+
+    def __aiter__(self):
+        return CustomAsyncIterator(self._messages)
+
+
+class CustomAsyncIterator:
+    """Iterator for CustomAsyncIterable."""
+
+    def __init__(self, messages: list[dict]):
+        self._messages = messages
+        self._index = 0
+
+    async def __anext__(self):
+        if self._index >= len(self._messages):
+            raise StopAsyncIteration
+        msg = self._messages[self._index]
+        self._index += 1
+        return msg
+
+
+@pytest.mark.skipif(not CLAUDE_SDK_AVAILABLE, reason="Claude Agent SDK not installed")
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input_factory,expected_contents",
+    [
+        pytest.param(
+            lambda: (msg async for msg in _single_message_generator()),
+            ["What is 2 + 2?"],
+            id="asyncgen_single",
+        ),
+        pytest.param(
+            lambda: (msg async for msg in _multi_message_generator()),
+            ["Part 1", "Part 2"],
+            id="asyncgen_multi",
+        ),
+        pytest.param(
+            lambda: CustomAsyncIterable([_make_message("Custom 1"), _make_message("Custom 2")]),
+            ["Custom 1", "Custom 2"],
+            id="custom_async_iterable",
+        ),
+    ],
+)
+async def test_query_async_iterable(memory_logger, input_factory, expected_contents):
+    """Test that async iterable inputs are captured as structured lists.
+
+    Verifies that passing AsyncIterable[dict] to query() results in the span
+    input showing the structured message list, not a flattened string or repr.
+    """
+    assert not memory_logger.pop()
+
+    original_client = claude_agent_sdk.ClaudeSDKClient
+    claude_agent_sdk.ClaudeSDKClient = _create_client_wrapper_class(original_client)
+
+    try:
+        options = claude_agent_sdk.ClaudeAgentOptions(model=TEST_MODEL)
+
+        async with claude_agent_sdk.ClaudeSDKClient(options=options) as client:
+            await client.query(input_factory())
+            async for message in client.receive_response():
+                if type(message).__name__ == "ResultMessage":
+                    break
+
+        spans = memory_logger.pop()
+
+        task_spans = [s for s in spans if s["span_attributes"]["type"] == SpanTypeAttribute.TASK]
+        assert len(task_spans) >= 1, f"Should have at least one task span, got {len(task_spans)}"
+
+        task_span = next(
+            (s for s in task_spans if s["span_attributes"]["name"] == "Claude Agent"),
+            task_spans[0],
+        )
+
+        _assert_structured_input(task_span, expected_contents)
+
+    finally:
+        claude_agent_sdk.ClaudeSDKClient = original_client
+
+
+async def _single_message_generator():
+    """Generator yielding a single message."""
+    yield _make_message("What is 2 + 2?")
+
+
+async def _multi_message_generator():
+    """Generator yielding multiple messages."""
+    yield _make_message("Part 1")
+    yield _make_message("Part 2")
