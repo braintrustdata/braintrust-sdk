@@ -44,8 +44,7 @@ import {
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
-import { promptDefinitionToPromptData } from "../src/framework2";
-import { zodToJsonSchema } from "../src/zod/utils";
+import { makeEvalParametersSchema } from "../src/framework2";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -387,42 +386,4 @@ function makeScorer(
   });
 
   return ret;
-}
-
-export function makeEvalParametersSchema(
-  parameters: EvalParameters,
-): z.infer<typeof evalParametersSerializedSchema> {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
-          },
-        ];
-      } else {
-        // Since this schema is bundled, it won't pass an instanceof check. For
-        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
-        // Type instantiation is excessively deep and possibly infinite.` So
-        // just using `any` to turn off the typesystem.
-        //
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as any);
-        return [
-          name,
-          {
-            type: "data",
-            schema: schemaObj,
-            default: schemaObj.default,
-            description: schemaObj.description,
-          },
-        ];
-      }
-    }),
-  );
 }
