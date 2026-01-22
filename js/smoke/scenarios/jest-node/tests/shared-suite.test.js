@@ -22,7 +22,10 @@ async function runSharedTestSuites() {
   });
 
   try {
-    const importResults = await runImportVerificationTests(braintrust);
+    const importResults = await runImportVerificationTests(braintrust, {
+      expectedBuild: "node",
+      expectedFormat: "cjs",
+    });
     const functionalResults = await runBasicLoggingTests(adapters);
     const promptTemplatingResults = await runPromptTemplatingTests({
       Prompt: braintrust.Prompt,

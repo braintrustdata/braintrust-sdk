@@ -2,7 +2,7 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.14",
     "@braintrust/smoke-test-shared": "jsr:@braintrust/smoke-test-shared",
-    "braintrust/browser": "npm:braintrust@^2.0.2/browser"
+    "braintrust": "npm:braintrust/browser"
   },
   "nodeModulesDir": "auto",
   "links": [

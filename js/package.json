@@ -24,14 +24,27 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
+      "edge-light": "./dist/browser.mjs",
+      "workerd": "./dist/browser.mjs",
+      "node": {
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.js"
+      },
+      "browser": "./dist/browser.mjs",
       "import": "./dist/index.mjs",
-      "module": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "require": "./dist/index.js",
+      "default": "./dist/browser.mjs"
     },
     "./browser": {
       "import": "./dist/browser.mjs",
       "module": "./dist/browser.mjs",
       "require": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./dev": {
       "types": "./dev/dist/index.d.ts",

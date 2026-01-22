@@ -17,7 +17,7 @@ import {
   getFailureCount,
   type TestResult,
 } from "@braintrust/smoke-test-shared";
-import * as braintrust from "braintrust/browser";
+import * as braintrust from "braintrust";
 
 export async function runSharedTestSuites(): Promise<TestResult[]> {
   const { initLogger, _exportsForTestingOnly } = braintrust;
@@ -31,8 +31,12 @@ export async function runSharedTestSuites(): Promise<TestResult[]> {
   });
 
   try {
-    // Run tests
-    const importResults = await runImportVerificationTests(braintrust);
+    // Run tests including build resolution check
+    // Bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
+    const importResults = await runImportVerificationTests(braintrust, {
+      expectedBuild: "browser",
+      expectedFormat: "esm",
+    });
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
 

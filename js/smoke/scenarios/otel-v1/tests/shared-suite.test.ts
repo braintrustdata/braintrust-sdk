@@ -28,8 +28,12 @@ async function runSharedTestSuites() {
   });
 
   try {
-    // Run tests
-    const importResults = await runImportVerificationTests(braintrust);
+    // Run tests including build resolution check
+    // Node.js should resolve to Node build (ESM format) when using import
+    const importResults = await runImportVerificationTests(braintrust, {
+      expectedBuild: "node",
+      expectedFormat: "esm",
+    });
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
 
     // Combine results

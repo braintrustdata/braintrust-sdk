@@ -35,8 +35,12 @@ export async function runSharedTestSuites() {
   });
 
   try {
-    // Run tests
-    const importResults = await runImportVerificationTests(braintrust);
+    // Run tests including build resolution check
+    // Deno Node should resolve to Node build (ESM format) when using import
+    const importResults = await runImportVerificationTests(braintrust, {
+      expectedBuild: "node",
+      expectedFormat: "esm",
+    });
     const functionalResults = await runBasicLoggingTests(adapters, braintrust);
     const evalResult = await runEvalSmokeTest(adapters, braintrust);
     const promptTemplatingResults = await runPromptTemplatingTests({

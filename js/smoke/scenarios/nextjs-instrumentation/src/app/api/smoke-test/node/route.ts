@@ -56,8 +56,12 @@ export async function GET(): Promise<NextResponse<TestResponse>> {
     });
 
     try {
-      // Run import verification tests (forces all exports to be processed)
-      const importResults = await runImportVerificationTests(braintrust);
+      // Run import verification tests including build resolution check
+      // Next.js Node.js runtime should resolve to Node build (CJS format)
+      const importResults = await runImportVerificationTests(braintrust, {
+        expectedBuild: "node",
+        expectedFormat: "cjs",
+      });
 
       // Run functional tests
       const functionalResults = await runBasicLoggingTests(

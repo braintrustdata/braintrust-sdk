@@ -1,4 +1,4 @@
-import * as braintrust from "braintrust/browser";
+import * as braintrust from "braintrust";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -33,7 +33,11 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      const importResults = await runImportVerificationTests(braintrust);
+      // Test import verification including build resolution check
+      const importResults = await runImportVerificationTests(braintrust, {
+        expectedBuild: "browser",
+        expectedFormat: "esm",
+      });
       const functionalResults = await runBasicLoggingTests(
         adapters,
         braintrust,
@@ -149,8 +153,8 @@ export default {
 
 GET /test - Run shared test suites
 
-This worker tests the Braintrust SDK in a Cloudflare Workers environment
-using the browser entrypoint with nodejs_compat_v2 enabled.`,
+This worker tests the Braintrust SDK in a Cloudflare Workers environment.
+The bundler should automatically resolve the browser build from package.json exports.`,
       { headers: { "Content-Type": "text/plain" } },
     );
   },

@@ -15,6 +15,10 @@ export function configureBrowser() {
   if (browserConfigured) {
     return;
   }
+
+  // Set build type indicator
+  iso.buildType = "browser";
+
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();

@@ -1,4 +1,4 @@
-import * as braintrust from "braintrust";
+import * as braintrust from "braintrust/node";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -32,7 +32,10 @@ async function runSharedTestSuites(): Promise<TestResponse> {
     });
 
     try {
-      const importResults = await runImportVerificationTests(braintrust);
+      const importResults = await runImportVerificationTests(braintrust, {
+        expectedBuild: "node",
+        expectedFormat: "esm",
+      });
       const functionalResults = await runBasicLoggingTests(
         adapters,
         braintrust,
@@ -127,8 +130,8 @@ export default {
 
 GET /test - Run shared test suites
 
-This worker tests the Braintrust SDK in a Cloudflare Workers environment
-using the Node.js entrypoint without nodejs_compat_v2. This is expected to fail.`,
+This worker tests the Braintrust SDK in a Cloudflare Workers environment.
+Should use Node.js build from package.json exports (may fail without nodejs_compat_v2).`,
       { headers: { "Content-Type": "text/plain" } },
     );
   },

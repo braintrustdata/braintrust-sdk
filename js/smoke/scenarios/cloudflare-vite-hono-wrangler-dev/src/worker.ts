@@ -1,6 +1,4 @@
-// Workers with nodejs_compat can use Node.js build
-// Explicitly import from "braintrust/node" to ensure Node.js build is used
-import * as braintrust from "braintrust/node";
+import { Hono } from "hono";
 import {
   setupTestEnvironment,
   cleanupTestEnvironment,
@@ -11,6 +9,11 @@ import {
   testNunjucksTemplate,
   type TestResult,
 } from "../../../shared";
+
+import * as braintrust from "braintrust";
+const { initLogger, _exportsForTestingOnly } = braintrust;
+
+const app = new Hono<{ Bindings: Env }>();
 
 interface Env {}
 
@@ -27,23 +30,20 @@ interface TestResponse {
 async function runSharedTestSuites(): Promise<TestResponse> {
   try {
     const adapters = await setupTestEnvironment({
-      initLogger: braintrust.initLogger,
-      testingExports: braintrust._exportsForTestingOnly,
+      initLogger,
+      testingExports: _exportsForTestingOnly,
       canUseFileSystem: false,
       canUseCLI: false,
-      environment: "cloudflare-worker-node-compat",
+      environment: "cloudflare-vite-hono",
     });
 
     try {
-      // Node.js build (ESM format) should be used in Cloudflare Workers with nodejs_compat_v2
+      // Vite bundler should automatically resolve browser build (ESM format) when importing from "braintrust"
       const importResults = await runImportVerificationTests(braintrust, {
-        expectedBuild: "node",
+        expectedBuild: "browser",
         expectedFormat: "esm",
       });
-      const functionalResults = await runBasicLoggingTests(
-        adapters,
-        braintrust,
-      );
+      const functionalResults = await runBasicLoggingTests(adapters);
       const evalResult = await runEvalSmokeTest(adapters, braintrust);
 
       // Test Mustache template (should always work)
@@ -51,20 +51,20 @@ async function runSharedTestSuites(): Promise<TestResponse> {
         Prompt: braintrust.Prompt,
       });
 
-      // Test Nunjucks template - expected to fail due to code generation restrictions
+      // Test Nunjucks template - expected to fail in browser builds
       const nunjucksResult = await testNunjucksTemplate({
         Prompt: braintrust.Prompt,
       });
       const nunjucksResultHandled =
         nunjucksResult.status === "fail" &&
         nunjucksResult.error?.message.includes(
-          "Disallowed in this environment for security reasons",
+          "Nunjucks templating is not supported",
         )
           ? {
               ...nunjucksResult,
               status: "xfail" as const,
               message:
-                "Expected failure: Cloudflare Workers blocks dynamic code generation (eval/Function)",
+                "Expected failure: Nunjucks not supported in browser build",
             }
           : nunjucksResult;
 
@@ -78,6 +78,7 @@ async function runSharedTestSuites(): Promise<TestResponse> {
 
       // Filter out expected failures when counting actual failures
       const failures = results.filter((r) => r.status === "fail");
+
       if (failures.length > 0) {
         return {
           success: false,
@@ -92,7 +93,7 @@ async function runSharedTestSuites(): Promise<TestResponse> {
 
       return {
         success: true,
-        message: "All shared test suites passed",
+        message: "All shared test suites passed in Vite + Hono environment",
         totalTests: results.length,
         passedTests: results.length,
         failedTests: 0,
@@ -112,52 +113,21 @@ async function runSharedTestSuites(): Promise<TestResponse> {
   }
 }
 
-export default {
-  async fetch(request: Request, _env: Env): Promise<Response> {
-    const url = new URL(request.url);
+app.get("/", (c) =>
+  c.text(`Braintrust Cloudflare Vite + Hono Smoke Test
 
-    if (url.pathname === "/test") {
-      const result = await runSharedTestSuites();
+GET /api/ - Basic API endpoint
+GET /api/test - Run shared test suites
 
-      // Serialize errors properly (Error objects don't JSON.stringify well)
-      const serializedResult = {
-        ...result,
-        results: result.results?.map((r) => ({
-          ...r,
-          error: r.error
-            ? {
-                message: r.error.message,
-                stack: r.error.stack,
-                name: r.error.name,
-              }
-            : undefined,
-        })),
-        failures: result.failures?.map((r) => ({
-          ...r,
-          error: r.error
-            ? {
-                message: r.error.message,
-                stack: r.error.stack,
-                name: r.error.name,
-              }
-            : undefined,
-        })),
-      };
+This worker tests the Braintrust SDK in a Vite + Hono + Cloudflare Workers environment.
+Vite should automatically resolve the browser build from package.json exports.`),
+);
 
-      return new Response(JSON.stringify(serializedResult, null, 2), {
-        headers: { "Content-Type": "application/json" },
-        status: result.success ? 200 : 500,
-      });
-    }
+app.get("/api/", (c) => c.json({ name: "Braintrust", framework: "Hono" }));
 
-    return new Response(
-      `Braintrust Cloudflare Worker Smoke Test (Node.js + nodejs_compat_v2)
+app.get("/api/test", async (c) => {
+  const result = await runSharedTestSuites();
+  return c.json(result, result.success ? 200 : 500);
+});
 
-GET /test - Run shared test suites
-
-This worker tests the Braintrust SDK in a Cloudflare Workers environment.
-Should use Node.js build from package.json exports.`,
-      { headers: { "Content-Type": "text/plain" } },
-    );
-  },
-};
+export default app;
