@@ -1,6 +1,16 @@
 import { describe, test, expect, beforeAll } from "vitest";
-import "./index";
-import { Prompt } from "braintrust";
+import {
+  registerTemplatePlugin,
+  useTemplateRenderer,
+  Prompt,
+} from "braintrust";
+import { nunjucksPlugin } from "./index";
+
+// Register and activate the plugin for all tests
+beforeAll(() => {
+  registerTemplatePlugin(nunjucksPlugin);
+  useTemplateRenderer("nunjucks");
+});
 
 describe("nunjucks rendering via Prompt", () => {
   test("renders variable and control structures", () => {
