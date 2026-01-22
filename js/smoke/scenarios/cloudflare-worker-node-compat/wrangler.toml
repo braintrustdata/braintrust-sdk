@@ -1,9 +1,4 @@
-<<<<<<<< HEAD:js/smoke/tests/cloudflare-worker/wrangler.node.toml
-name = "braintrust-smoke-test-node"
-main = "src/node-node-compat.ts"
-========
 name = "smoke-cloudflare-worker-node-compat"
 main = "src/worker.ts"
->>>>>>>> caitlin/externalize:js/smoke/scenarios/cloudflare-worker-node-compat/wrangler.toml
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat_v2"]

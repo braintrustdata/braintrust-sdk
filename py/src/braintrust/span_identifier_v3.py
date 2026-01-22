@@ -38,27 +38,6 @@ class SpanObjectTypeV3(Enum):
         }[self]
 
 
-def span_object_type_v3_to_typed_string(
-    object_type: SpanObjectTypeV3,
-) -> str:
-    """Convert SpanObjectTypeV3 enum to typed string literal.
-
-    Args:
-        object_type: The SpanObjectTypeV3 enum value
-
-    Returns:
-        One of "experiment", "project_logs", or "playground_logs"
-    """
-    if object_type == SpanObjectTypeV3.EXPERIMENT:
-        return "experiment"
-    elif object_type == SpanObjectTypeV3.PROJECT_LOGS:
-        return "project_logs"
-    elif object_type == SpanObjectTypeV3.PLAYGROUND_LOGS:
-        return "playground_logs"
-    else:
-        raise ValueError(f"Unknown SpanObjectTypeV3: {object_type}")
-
-
 class InternalSpanComponentUUIDFields(Enum):
     OBJECT_ID = 1
     ROW_ID = 2

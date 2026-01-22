@@ -220,8 +220,6 @@ jobs:
         id: discover
         working-directory: js/smoke
         shell: bash
-        env:
-          CLOUDFLARE_WORKER_MODE: ${{ matrix.mode }}
         run: |
           # Use the same auto-discovery logic as the Makefile
           SCENARIOS=$(command find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')

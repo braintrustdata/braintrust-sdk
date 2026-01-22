@@ -10,25 +10,6 @@ const RETRY_DELAY_MS = 250;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function parseArgs(argv) {
-  const out = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--config") {
-      const v = argv[i + 1];
-      if (!v) throw new Error("Missing value for --config");
-      out.config = v;
-      i++;
-      continue;
-    }
-    if (a === "--expect-start-fail") {
-      out.expectStartFail = true;
-      continue;
-    }
-  }
-  return out;
-}
-
 function killPort(port) {
   try {
     execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, {
@@ -48,17 +29,13 @@ async function waitForServer() {
   return false;
 }
 
-async function runWranglerTest({ config, label, expectStartFail = false }) {
+async function runTest() {
   killPort(PORT);
 
-  const wrangler = spawn(
-    "npx",
-    ["wrangler", "dev", "--config", config, "--port", String(PORT)],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
-    },
-  );
+  const wrangler = spawn("npx", ["wrangler", "dev", "--port", String(PORT)], {
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: true,
+  });
 
   let output = "";
   wrangler.stdout.on("data", (d) => (output += d));
@@ -84,13 +61,7 @@ async function runWranglerTest({ config, label, expectStartFail = false }) {
 
   try {
     if (!(await waitForServer())) {
-      if (expectStartFail) {
-        console.log(`\n=== ${label} (expected startup failure) ===\n`);
-        console.log(output.trim() ? output : "(no output)");
-        await killWrangler();
-        return 0;
-      }
-      console.error(`[${label}] Server failed to start:\n`, output);
+      console.error("Server failed to start:\n", output);
       await killWrangler();
       return 1;
     }
@@ -109,7 +80,7 @@ async function runWranglerTest({ config, label, expectStartFail = false }) {
 
     exitCode = result.success ? 0 : 1;
   } catch (error) {
-    console.error(`[${label}] Error:`, error.message, "\n", output);
+    console.error("Error:", error.message, "\n", output);
     exitCode = 1;
   }
 
@@ -117,41 +88,4 @@ async function runWranglerTest({ config, label, expectStartFail = false }) {
   return exitCode;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.config) {
-    const label =
-      args.config === "wrangler.node.toml"
-        ? "nodejs_compat_v2 + braintrust"
-        : args.config === "wrangler.browser.toml"
-          ? "no compatibility_flags + braintrust/browser"
-          : args.config === "wrangler.browser-node-compat.toml"
-            ? "nodejs_compat_v2 + braintrust/browser"
-            : args.config === "wrangler.node-no-compat.toml"
-              ? "no compatibility_flags + braintrust"
-              : args.config;
-    const code = await runWranglerTest({
-      config: args.config,
-      label,
-      expectStartFail: !!args.expectStartFail,
-    });
-    process.exit(code);
-  }
-
-  const a = await runWranglerTest({
-    config: "wrangler.node.toml",
-    label: "nodejs_compat_v2 + braintrust",
-  });
-  if (a !== 0) process.exit(a);
-
-  const b = await runWranglerTest({
-    config: "wrangler.browser.toml",
-    label: "no compatibility_flags + braintrust/browser",
-  });
-  process.exit(b);
-}
-
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+runTest().then((code) => process.exit(code));
