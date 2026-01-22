@@ -131,13 +131,16 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   }) as T;
 }
 
-const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
+export const wrapAgentClass = (
+  AgentClass: any,
+  options: WrapAISDKOptions = {},
+) => {
   return new Proxy(AgentClass, {
     construct(target, args, newTarget) {
       const instance = Reflect.construct(target, args, newTarget);
       return new Proxy(instance, {
         get(instanceTarget, prop, instanceReceiver) {
-          const original = Reflect.get(instanceTarget, prop, instanceReceiver);
+          const original = Reflect.get(instanceTarget, prop, instanceTarget);
 
           if (prop === "generate") {
             return wrapAgentGenerate(original, instanceTarget, options);
@@ -145,6 +148,11 @@ const wrapAgentClass = (AgentClass: any, options: WrapAISDKOptions = {}) => {
 
           if (prop === "stream") {
             return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          // Bind methods to the actual instance to preserve private field access
+          if (typeof original === "function") {
+            return original.bind(instanceTarget);
           }
 
           return original;

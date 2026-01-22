@@ -1,4 +1,5 @@
 import { _initializeSpanContext } from "./framework";
+import type { Trace } from "./trace";
 import iso from "./isomorph";
 import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
@@ -305,6 +306,7 @@ type ScorerArgs<Output, Input> = {
   expected?: Output;
   input?: Input;
   metadata?: Record<string, unknown>;
+  trace?: Trace;
 };
 
 type Exact<T, Shape> = T extends Shape
