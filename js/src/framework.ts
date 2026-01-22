@@ -16,7 +16,7 @@ import { queue } from "async";
 
 import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt } from "./framework2";
+import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
@@ -396,6 +396,7 @@ export type EvaluatorFile = {
     GenericFunction<unknown, unknown>
   >[];
   prompts: CodePrompt[];
+  parameters: CodeParameters[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -479,6 +480,7 @@ declare global {
 globalThis._evals = {
   functions: [],
   prompts: [],
+  parameters: [],
   evaluators: {},
   reporters: {},
 };

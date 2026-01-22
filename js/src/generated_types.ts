@@ -228,6 +228,7 @@ export const FunctionTypeEnum = z.enum([
   "facet",
   "classifier",
   "tag",
+  "parameters",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -1103,6 +1104,11 @@ export const FunctionData = z.union([
   }),
   FacetData,
   BatchedFacetData,
+  z.object({
+    type: z.literal("parameters"),
+    data: z.record(z.unknown()).optional(),
+    __schema: z.record(z.unknown()),
+  }),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
