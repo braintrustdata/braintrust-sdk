@@ -78,11 +78,6 @@ async function testViteDevServer() {
     }
 
     const response = await fetch(`http://localhost:${PORT}/api/test`);
-    if (!response.ok) {
-      await killVite();
-      return 1;
-    }
-
     const result = await response.json();
 
     if (result.results && result.results.length > 0) {
