@@ -16,6 +16,10 @@ export function configureBrowser() {
   if (browserConfigured) {
     return;
   }
+
+  // Set build type indicator
+  iso.buildType = "browser";
+
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
@@ -29,6 +33,12 @@ export function configureBrowser() {
       return undefined;
     }
     return process.env[name];
+  };
+
+  iso.renderNunjucksString = () => {
+    throw new Error(
+      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
+    );
   };
 
   // Implement browser-compatible hash function using a simple hash algorithm

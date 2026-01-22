@@ -7125,4 +7125,5 @@ export const _exportsForTestingOnly = {
   isGeneratorFunction,
   isAsyncGeneratorFunction,
   resetIdGenStateForTests,
+  isomorph: iso, // Expose isomorph for build type detection
 };

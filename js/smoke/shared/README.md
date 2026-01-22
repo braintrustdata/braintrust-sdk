@@ -172,6 +172,48 @@ interface TestAdapters {
 
 Test suites check these flags and skip tests that aren't feasible in the current environment.
 
+## Test Result Display
+
+### Standardized Output Format
+
+All scenarios now use a standardized display format via the `displayTestResults()` utility:
+
+```typescript
+import { displayTestResults } from "../../shared/dist/index.mjs";
+
+// Display test results
+displayTestResults({
+  scenarioName: "My Scenario Test Results",
+  results: testResults,
+  verbose: false, // Optional: show full stack traces
+});
+```
+
+This produces consistent output across all scenarios:
+
+```
+=== My Scenario Test Results ===
+
+Tests: 18/20 passed
+Expected failures: 2
+
+✓ testCoreLoggingExports
+✓ testDatasetExports
+✗ testFailingFeature
+  Error: Feature not implemented
+  at Feature.test (feature.ts:42:11)
+  at runTest (test.ts:10:5)
+⊘ testNunjucksTemplate
+  Expected failure: Nunjucks not supported in browser build
+```
+
+### Display Utilities
+
+- `displayTestResults(options)` - Display results in standardized format
+- `hasFailures(results)` - Check if there are any real failures (excluding xfail)
+- `getFailureCount(results)` - Get count of real failures
+- `getTestStats(results)` - Get summary statistics (total, passed, failed, xfail)
+
 ## Available Test Suites
 
 ### Basic Logging
@@ -181,6 +223,7 @@ Tests core logging functionality:
 - `testBasicSpanLogging()` - Single span with input/output/expected
 - `testMultipleSpans()` - Multiple sequential spans
 - `testDirectLogging()` - Direct logger.log() if available
+- `testJSONAttachment()` - JSON attachment logging
 - `runBasicLoggingTests()` - Runs all basic logging tests
 
 ### Adding New Test Suites

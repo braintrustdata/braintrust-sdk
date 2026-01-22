@@ -141,16 +141,18 @@ export async function testCoreLoggingExports(
     assertType(module.flush, "function", "flush must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Core logging exports verified (7 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -175,16 +177,18 @@ export async function testDatasetExports(
     assertType(module.Dataset, "function", "Dataset must be a function/class");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Dataset exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -212,16 +216,18 @@ export async function testPromptExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Prompt exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -257,16 +263,18 @@ export async function testExperimentExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Experiment exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -328,16 +336,18 @@ export async function testEvalExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Eval exports verified (7 runtime exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -371,16 +381,18 @@ export async function testTracingExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Tracing exports verified (5 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -421,16 +433,18 @@ export async function testClientWrapperExports(
     }
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: `Client wrapper exports verified (1 required + ${optionalCount} optional)`,
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -465,16 +479,18 @@ export async function testUtilityExports(
     assertType(module.permalink, "function", "permalink must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Utility exports verified (4 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -499,16 +515,18 @@ export async function testFunctionExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Function exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -536,16 +554,18 @@ export async function testFramework2Exports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Framework2 exports verified (3 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -567,16 +587,18 @@ export async function testIDGeneratorExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "ID generator exports verified (1 export)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -601,16 +623,18 @@ export async function testTestingExports(
     );
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "Testing exports verified (1 export)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
 }
@@ -635,18 +659,401 @@ export async function testStateManagementExports(
     assertType(module.login, "function", "login must be a function");
 
     return {
-      success: true,
-      testName,
+      status: "pass" as const,
+      name: testName,
       message: "State management exports verified (2 exports)",
     };
   } catch (error) {
     return {
-      success: false,
-      testName,
-      error: error as Error,
-      message: error instanceof Error ? error.message : String(error),
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     };
   }
+}
+
+/**
+ * Test which build variant was resolved (browser vs Node.js) and module format (CJS vs ESM)
+ *
+ * This test checks which export path was used by reading the buildType property
+ * from the isomorph object and by resolving the module specifier.
+ *
+ * @param module - The Braintrust module to test
+ * @param expectedBuild - Expected build type: "browser" or "node" (optional, for validation)
+ * @param expectedFormat - Expected module format: "cjs" or "esm" (optional, for validation)
+ */
+export async function testBuildResolution(
+  module: BraintrustModule,
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+): Promise<TestResult> {
+  const testName = "testBuildResolution";
+
+  try {
+    // Detect build type from isomorph.buildType
+    const { buildType: detectedBuild, buildDetails } = detectBuildType(module);
+
+    // Detect module format (CJS vs ESM)
+    const detectedFormat = detectModuleFormat();
+
+    const errors = validateBuildResolution(
+      detectedBuild,
+      detectedFormat,
+      expectedBuild,
+      expectedFormat,
+      buildDetails,
+    );
+
+    if (errors.length > 0) {
+      return {
+        status: "fail" as const,
+        name: testName,
+        error: { message: errors.join(" ") },
+      };
+    }
+
+    // Build success message
+    const message = buildSuccessMessage(
+      detectedBuild,
+      detectedFormat,
+      expectedBuild,
+      expectedFormat,
+    );
+
+    return {
+      status: "pass" as const,
+      name: testName,
+      message,
+    };
+  } catch (error) {
+    return {
+      status: "fail" as const,
+      name: testName,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    };
+  }
+}
+
+function detectBuildType(module: BraintrustModule): {
+  buildType: "browser" | "node" | "unknown";
+  buildDetails: string;
+} {
+  if (!module._exportsForTestingOnly) {
+    return {
+      buildType: "unknown",
+      buildDetails: "_exportsForTestingOnly not available",
+    };
+  }
+
+  const testing = module._exportsForTestingOnly as any;
+  const iso = testing.isomorph;
+
+  if (!iso || typeof iso !== "object") {
+    return {
+      buildType: "unknown",
+      buildDetails: "isomorph not available in testing exports",
+    };
+  }
+
+  const buildType = iso.buildType;
+  if (
+    buildType === "browser" ||
+    buildType === "node" ||
+    buildType === "unknown"
+  ) {
+    return {
+      buildType,
+      buildDetails: `Build type from isomorph.buildType: ${buildType}`,
+    };
+  }
+
+  return {
+    buildType: "unknown",
+    buildDetails: `isomorph.buildType has unexpected value: ${buildType}`,
+  };
+}
+
+/**
+ * Detect module format (CJS vs ESM) by resolving the actual file path
+ */
+function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+  const packageSpec = "braintrust";
+  // Try ESM resolution first
+  try {
+    if (
+      typeof import.meta !== "undefined" &&
+      typeof import.meta.resolve === "function"
+    ) {
+      const resolved = import.meta.resolve(packageSpec);
+      let resolvedPath: string;
+      try {
+        const url = new URL(resolved);
+        resolvedPath = url.pathname;
+      } catch {
+        resolvedPath = resolved;
+      }
+      if (resolvedPath.endsWith(".mjs")) {
+        return "esm";
+      }
+      // If resolved but not .mjs, check if it's .js (CJS)
+      if (resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".mjs")) {
+        return "cjs";
+      }
+    }
+  } catch {
+    // import.meta.resolve might not be available or might throw
+    // Continue to try CJS resolution
+  }
+
+  // Try CJS resolution
+  try {
+    if (typeof require !== "undefined" && require.resolve) {
+      const resolved = require.resolve(packageSpec);
+      // CJS files end with .js (not .mjs)
+      if (resolved.endsWith(".js") && !resolved.endsWith(".mjs")) {
+        return "cjs";
+      }
+      // If resolved to .mjs, it's ESM
+      if (resolved.endsWith(".mjs")) {
+        return "esm";
+      }
+    }
+  } catch {
+    // require.resolve might not be available or might throw
+  }
+
+  return "unknown";
+}
+
+/**
+ * Validate detected build type and format against expectations
+ */
+function validateBuildResolution(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+  buildDetails?: string,
+): string[] {
+  const errors: string[] = [];
+
+  // Always error if build type is unknown (not configured)
+  if (detectedBuild === "unknown") {
+    errors.push(
+      `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
+    );
+    return errors;
+  }
+
+  // Validate build type matches expectation
+  if (expectedBuild && detectedBuild !== expectedBuild) {
+    errors.push(
+      `Expected ${expectedBuild} build but detected ${detectedBuild} build. ${buildDetails || ""}`,
+    );
+  }
+
+  // Validate module format matches expectation
+  if (
+    expectedFormat &&
+    detectedFormat !== expectedFormat &&
+    detectedFormat !== "unknown"
+  ) {
+    errors.push(
+      `Expected ${expectedFormat} format but detected ${detectedFormat} format.`,
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * Build success message for test result
+ */
+function buildSuccessMessage(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+): string {
+  const parts: string[] = [];
+
+  if (detectedBuild !== "unknown") {
+    const buildMsg = `Detected ${detectedBuild} build`;
+    const expectedMsg = expectedBuild ? ` (expected ${expectedBuild})` : "";
+    parts.push(`${buildMsg}${expectedMsg}`);
+  }
+
+  if (detectedFormat !== "unknown") {
+    const formatMsg = `${detectedFormat} format`;
+    const expectedMsg = expectedFormat ? ` (expected ${expectedFormat})` : "";
+    parts.push(`${formatMsg}${expectedMsg}`);
+  }
+
+  return parts.join(", ") || "Build resolution check passed";
+}
+
+function detectBuildType(module: BraintrustModule): {
+  buildType: "browser" | "node" | "unknown";
+  buildDetails: string;
+} {
+  if (!module._exportsForTestingOnly) {
+    return {
+      buildType: "unknown",
+      buildDetails: "_exportsForTestingOnly not available",
+    };
+  }
+
+  const testing = module._exportsForTestingOnly as any;
+  const iso = testing.isomorph;
+
+  if (!iso || typeof iso !== "object") {
+    return {
+      buildType: "unknown",
+      buildDetails: "isomorph not available in testing exports",
+    };
+  }
+
+  const buildType = iso.buildType;
+  if (
+    buildType === "browser" ||
+    buildType === "node" ||
+    buildType === "unknown"
+  ) {
+    return {
+      buildType,
+      buildDetails: `Build type from isomorph.buildType: ${buildType}`,
+    };
+  }
+
+  return {
+    buildType: "unknown",
+    buildDetails: `isomorph.buildType has unexpected value: ${buildType}`,
+  };
+}
+
+/**
+ * Detect module format (CJS vs ESM) by resolving the actual file path
+ */
+function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+  const packageSpec = "braintrust";
+  // Try ESM resolution first
+  try {
+    if (
+      typeof import.meta !== "undefined" &&
+      typeof import.meta.resolve === "function"
+    ) {
+      const resolved = import.meta.resolve(packageSpec);
+      let resolvedPath: string;
+      try {
+        const url = new URL(resolved);
+        resolvedPath = url.pathname;
+      } catch {
+        resolvedPath = resolved;
+      }
+      if (resolvedPath.endsWith(".mjs")) {
+        return "esm";
+      }
+      // If resolved but not .mjs, check if it's .js (CJS)
+      if (resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".mjs")) {
+        return "cjs";
+      }
+    }
+  } catch {
+    // import.meta.resolve might not be available or might throw
+    // Continue to try CJS resolution
+  }
+
+  // Try CJS resolution
+  try {
+    if (typeof require !== "undefined" && require.resolve) {
+      const resolved = require.resolve(packageSpec);
+      // CJS files end with .js (not .mjs)
+      if (resolved.endsWith(".js") && !resolved.endsWith(".mjs")) {
+        return "cjs";
+      }
+      // If resolved to .mjs, it's ESM
+      if (resolved.endsWith(".mjs")) {
+        return "esm";
+      }
+    }
+  } catch {
+    // require.resolve might not be available or might throw
+  }
+
+  return "unknown";
+}
+
+/**
+ * Validate detected build type and format against expectations
+ */
+function validateBuildResolution(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+  buildDetails?: string,
+): string[] {
+  const errors: string[] = [];
+
+  // Always error if build type is unknown (not configured)
+  if (detectedBuild === "unknown") {
+    errors.push(
+      `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
+    );
+    return errors;
+  }
+
+  // Validate build type matches expectation
+  if (expectedBuild && detectedBuild !== expectedBuild) {
+    errors.push(
+      `Expected ${expectedBuild} build but detected ${detectedBuild} build. ${buildDetails || ""}`,
+    );
+  }
+
+  // Validate module format matches expectation
+  if (
+    expectedFormat &&
+    detectedFormat !== expectedFormat &&
+    detectedFormat !== "unknown"
+  ) {
+    errors.push(
+      `Expected ${expectedFormat} format but detected ${detectedFormat} format.`,
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * Build success message for test result
+ */
+function buildSuccessMessage(
+  detectedBuild: "browser" | "node" | "unknown",
+  detectedFormat: "cjs" | "esm" | "unknown",
+  expectedBuild?: "browser" | "node",
+  expectedFormat?: "cjs" | "esm",
+): string {
+  const parts: string[] = [];
+
+  if (detectedBuild !== "unknown") {
+    const buildMsg = `Detected ${detectedBuild} build`;
+    const expectedMsg = expectedBuild ? ` (expected ${expectedBuild})` : "";
+    parts.push(`${buildMsg}${expectedMsg}`);
+  }
+
+  if (detectedFormat !== "unknown") {
+    const formatMsg = `${detectedFormat} format`;
+    const expectedMsg = expectedFormat ? ` (expected ${expectedFormat})` : "";
+    parts.push(`${formatMsg}${expectedMsg}`);
+  }
+
+  return parts.join(", ") || "Build resolution check passed";
 }
 
 /**
@@ -659,9 +1066,14 @@ export async function testStateManagementExports(
  * TypeScript type-only exports are not tested as they don't exist at runtime.
  *
  * @param module - The Braintrust module to test
+ * @param options - Optional test configuration
  */
 export async function runImportVerificationTests(
   module: BraintrustModule,
+  options: {
+    expectedBuild: "browser" | "node";
+    expectedFormat: "cjs" | "esm";
+  },
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
@@ -679,6 +1091,13 @@ export async function runImportVerificationTests(
   results.push(await testStateManagementExports(module));
   results.push(await testExperimentExports(module));
   results.push(await testEvalExports(module));
+  results.push(
+    await testBuildResolution(
+      module,
+      options.expectedBuild,
+      options.expectedFormat,
+    ),
+  );
 
   return results;
 }

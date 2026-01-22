@@ -119,7 +119,6 @@ jobs:
   api-compatibility:
     runs-on: ubuntu-latest
     # Run in parallel with build job
-
     strategy:
       fail-fast: false
       matrix:
@@ -210,387 +209,89 @@ jobs:
         run: |
           cd js && pnpm test:api-compat
 
-  smoke-tests-node:
-    needs: build
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        integration: [otel-v1, span, template-nunjucks]
-        os: [ubuntu-latest, windows-latest]
-        node-version: [20, 22]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Backup original integration package manifests
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        run: |
-          npm run backup
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-          path: js/artifacts
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install SDK artifacts for ${{ matrix.integration }}
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        shell: bash
-        run: |
-          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
-          rm -f package-lock.json
-
-          if [ "${{ matrix.integration }}" = "template-nunjucks" ]; then
-            npm install
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
-            npx tsx ../../install-build.ts ../../../artifacts template-nunjucks
-          elif [ "${{ matrix.integration }}" != "otel-v1" ]; then
-            npm install
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
-          else
-            npm install --legacy-peer-deps
-            npx tsx ../../install-build.ts ../../../artifacts braintrust
-            npx tsx ../../install-build.ts ../../../artifacts otel
-          fi
-
-      - name: Build shared test package
-        working-directory: js/smoke/shared
-        run: |
-          npm ci
-          npm run build
-
-      - name: Run smoke test for ${{ matrix.integration }}
-        working-directory: js/smoke
-        shell: bash
-        env:
-          BRAINTRUST_API_KEY: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
-          BRAINTRUST_OTEL_COMPAT: ${{ matrix.integration == 'otel-v1' && secrets.BRAINTRUST_API_KEY || '' }}
-        run: |
-          ./run-tests.sh ${{ matrix.integration }}
-
-      - name: Restore original package.json files
-        if: always()
-        working-directory: js/smoke/tests/${{ matrix.integration }}
-        run: |
-          npm run restore
-
-  smoke-tests-jest:
-    needs: build
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node-version: [20, 22]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Backup original span-jest package manifests
-        working-directory: js/smoke/tests/span-jest
-        run: |
-          npm run backup
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-          path: js/artifacts
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install dependencies and local build for Jest span smoke test
-        working-directory: js/smoke/tests/span-jest
-        shell: bash
-        run: |
-          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
-          rm -f package-lock.json
-          npm install
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
-
-      - name: Build shared test package
-        working-directory: js/smoke/shared
-        run: |
-          npm ci
-          npm run build
-
-      - name: Run Jest span smoke test
-        working-directory: js/smoke
-        shell: bash
-        run: |
-          ./run-tests.sh span-jest
-
-      - name: Restore original span-jest package.json files
-        if: always()
-        working-directory: js/smoke/tests/span-jest
-        run: |
-          npm run restore
-
-  smoke-tests-nextjs:
-    needs: build
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node-version: [20, 22]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Backup original package manifests
-        working-directory: js/smoke/tests/nextjs-instrumentation
-        run: |
-          npm run backup
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-          path: js/artifacts
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install dependencies and local builds
-        working-directory: js/smoke/tests/nextjs-instrumentation
-        shell: bash
-        run: |
-          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
-          rm -f package-lock.json
-          npm install --legacy-peer-deps
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
-          npx tsx ../../install-build.ts ../../../artifacts otel
-
-      - name: Build shared test package
-        working-directory: js/smoke/shared
-        run: |
-          npm ci
-          npm run build
-
-      - name: Run Next.js smoke test
-        working-directory: js/smoke
-        shell: bash
-        env:
-          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-        run: |
-          ./run-tests.sh nextjs-instrumentation
-
-      - name: Restore original package.json files
-        if: always()
-        working-directory: js/smoke/tests/nextjs-instrumentation
-        run: |
-          npm run restore
-
-  smoke-tests-cloudflare:
-    needs: build
+  # Smoke v2: Auto-discovery of scenarios
+  smoke-discover:
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [20, 22]
-        mode:
-          [
-            braintrust-node-compat,
-            braintrust-browser-node-compat,
-            braintrust-browser-no-compat,
-            braintrust-no-compat,
-          ]
-
+    outputs:
+      scenarios: ${{ steps.discover.outputs.scenarios }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Backup original package manifests
-        working-directory: js/smoke/tests/cloudflare-worker
-        run: |
-          npm run backup
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-          path: js/artifacts
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install dependencies and local build
-        working-directory: js/smoke/tests/cloudflare-worker
-        shell: bash
-        run: |
-          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
-          rm -f package-lock.json
-          npm install
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
-
-      - name: Build shared test package
-        working-directory: js/smoke/shared
-        run: |
-          npm ci
-          npm run build
-
-      - name: Run Cloudflare Worker smoke test
+      - uses: actions/checkout@v4
+      - name: Discover scenarios
+        id: discover
         working-directory: js/smoke
         shell: bash
         env:
           CLOUDFLARE_WORKER_MODE: ${{ matrix.mode }}
         run: |
-          ./run-tests.sh cloudflare-worker
+          # Use the same auto-discovery logic as the Makefile
+          SCENARIOS=$(command find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "scenarios=$SCENARIOS" >> "$GITHUB_OUTPUT"
+          echo "Discovered scenarios: $SCENARIOS"
 
-      - name: Restore original package.json files
-        if: always()
-        working-directory: js/smoke/tests/cloudflare-worker
-        run: |
-          npm run restore
-
-  smoke-tests-browser:
-    needs: build
+  smoke-test:
+    needs: [build, smoke-discover]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Backup original package manifests
-        working-directory: js/smoke/tests/browser
-        run: |
-          npm run backup
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
-          path: js/artifacts
-          run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install dependencies and local build
-        working-directory: js/smoke/tests/browser
-        shell: bash
-        run: |
-          # Remove package-lock.json to avoid version mismatch with downloaded artifacts
-          rm -f package-lock.json
-          npm install
-          npx tsx ../../install-build.ts ../../../artifacts braintrust
-
-      - name: Install Playwright Chromium (with OS deps)
-        working-directory: js/smoke/tests/browser
-        shell: bash
-        run: |
-          npx playwright install --with-deps chromium
-
-      - name: Build shared test package
-        working-directory: js/smoke/shared
-        run: |
-          npm ci
-          npm run build
-
-      - name: Run Browser (Playwright) smoke test
-        working-directory: js/smoke
-        shell: bash
-        run: |
-          ./run-tests.sh browser
-
-      - name: Restore original package.json files
-        if: always()
-        working-directory: js/smoke/tests/browser
-        run: |
-          npm run restore
-
-  smoke-tests-deno:
-    needs: build
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node-version: [20, 22]
+        scenario: ${{ fromJson(needs.smoke-discover.outputs.scenarios) }}
 
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
 
-      - name: Download build artifact
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+        with:
+          working_directory: js/smoke
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Download build artifact (node 20)
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          name: ${{ needs.build.outputs.artifact-name }}-20-dist
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract build artifact
-        working-directory: js/smoke/tests/deno
+      - name: Prepare artifacts at well-known paths
+        working-directory: js/artifacts
         shell: bash
         run: |
-          set -euo pipefail
-          ARTIFACT_DIR=../../../artifacts
-          TARBALL=$(ls "$ARTIFACT_DIR"/braintrust-*.tgz | head -n 1 || true)
-          if [ -z "$TARBALL" ]; then
-            echo "No braintrust build found"
-            exit 1
-          fi
-          rm -rf build
-          mkdir -p build
-          tar -xzf "$TARBALL" -C build
-          [ -d build/package ] && mv build/package build/braintrust
+          # Copy braintrust tarball to well-known path
+          for f in braintrust-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-latest.tgz
+              echo "Copied $f to braintrust-latest.tgz"
+              break
+            fi
+          done
 
-      - name: Install Deno dependencies
-        working-directory: js/smoke/tests/deno
-        run: |
-          deno install
+          # Copy otel tarball to well-known path
+          for f in braintrust-otel-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-otel-latest.tgz
+              echo "Copied $f to braintrust-otel-latest.tgz"
+              break
+            fi
+          done
 
-      - name: Build shared test package
+      - name: Build shared test package (once for all scenarios)
         working-directory: js/smoke/shared
+        shell: bash
         run: |
           npm ci
           npm run build
 
-      - name: Run Deno smoke test
+      - name: Run scenario ${{ matrix.scenario }}
         working-directory: js/smoke
+        shell: bash
         env:
-          BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/index.mjs
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          CI: true
+          BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
+          BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
+          SMOKE_V2_SHARED_DIST: shared/dist
         run: |
-          ./run-tests.sh deno
+          make test ${{ matrix.scenario }}
