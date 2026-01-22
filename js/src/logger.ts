@@ -3909,7 +3909,7 @@ export async function loadParameters<
       forceLogin,
     });
     if (id) {
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
+      response = await state.apiConn().get_json(`v1/function/${id}`, {
         ...(version && { version }),
         ...(environment && { environment }),
       });
@@ -3917,7 +3917,7 @@ export async function loadParameters<
         response = { objects: [response] };
       }
     } else {
-      response = await state.apiConn().get_json("v1/prompt", {
+      response = await state.apiConn().get_json("v1/function", {
         project_name: projectName,
         project_id: projectId,
         slug,
@@ -7185,6 +7185,39 @@ export class Parameters<
   public get data(): T {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return (this.metadata.function_data.data ?? {}) as T;
+  }
+
+  /**
+   * Returns the schema in a serialized format suitable for the dev server UI.
+   * This format includes type information, JSON Schema, default values, and descriptions.
+   */
+  public get serializableSchema(): Record<
+    string,
+    {
+      type: "data";
+      schema: Record<string, unknown>;
+      default: unknown;
+      description: string | undefined;
+    }
+  > {
+    const explicitSchema = this.schema;
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const schemaProperties = (explicitSchema as any)?.properties ?? {};
+    return Object.fromEntries(
+      Object.entries(this.data).map(([name, value]) => {
+        const propSchema = schemaProperties[name] ?? {};
+        return [
+          name,
+          {
+            type: "data" as const,
+            schema: { ...propSchema, default: value },
+            default: value,
+            description: propSchema.description,
+          },
+        ];
+      }),
+    );
   }
 
   public validate(data: unknown): boolean {

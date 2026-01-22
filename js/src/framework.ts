@@ -26,6 +26,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  Parameters as ParametersClass,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -106,13 +107,13 @@ export type EvalTask<
   Parameters extends EvalParameters,
 > =
   | ((
-      input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
-    ) => Promise<Output>)
+    input: Input,
+    hooks: EvalHooks<Expected, Metadata, Parameters>,
+  ) => Promise<Output>)
   | ((
-      input: Input,
-      hooks: EvalHooks<Expected, Metadata, Parameters>,
-    ) => Output);
+    input: Input,
+    hooks: EvalHooks<Expected, Metadata, Parameters>,
+  ) => Output);
 
 export type TaskProgressEvent = Omit<
   SSEProgressEventData,
@@ -224,10 +225,15 @@ export interface Evaluator<
 
   /**
    * A set of parameters that will be passed to the evaluator.
-   * Can contain array values that will be converted to single values in the task.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-
-  parameters?: Parameters;
+  parameters?:
+  | Parameters
+  | ParametersClass<boolean, boolean, InferParameters<Parameters>>
+  | Promise<ParametersClass<boolean, boolean, InferParameters<Parameters>>>;
 
   /**
    * An optional name for the experiment.
@@ -333,7 +339,7 @@ export class EvalResultWithSummary<
   constructor(
     public summary: ExperimentSummary,
     public results: EvalResult<Input, Output, Expected, Metadata>[],
-  ) {}
+  ) { }
 
   /**
    * @deprecated Use `summary` instead.
@@ -629,21 +635,21 @@ export async function Eval<
       options.parent || options.noSendLogs
         ? null
         : initExperiment(evaluator.state, {
-            ...(evaluator.projectId
-              ? { projectId: evaluator.projectId }
-              : { project: name }),
-            experiment: evaluator.experimentName,
-            description: evaluator.description,
-            metadata: evaluator.metadata,
-            isPublic: evaluator.isPublic,
-            update: evaluator.update,
-            baseExperiment:
-              evaluator.baseExperimentName ?? defaultBaseExperiment,
-            baseExperimentId: evaluator.baseExperimentId,
-            gitMetadataSettings: evaluator.gitMetadataSettings,
-            repoInfo: evaluator.repoInfo,
-            dataset: Dataset.isDataset(data) ? data : undefined,
-          });
+          ...(evaluator.projectId
+            ? { projectId: evaluator.projectId }
+            : { project: name }),
+          experiment: evaluator.experimentName,
+          description: evaluator.description,
+          metadata: evaluator.metadata,
+          isPublic: evaluator.isPublic,
+          update: evaluator.update,
+          baseExperiment:
+            evaluator.baseExperimentName ?? defaultBaseExperiment,
+          baseExperimentId: evaluator.baseExperimentId,
+          gitMetadataSettings: evaluator.gitMetadataSettings,
+          repoInfo: evaluator.repoInfo,
+          dataset: Dataset.isDataset(data) ? data : undefined,
+        });
 
     // Ensure experiment ID is resolved before tasks start for OTEL parent attribute support
     // The Experiment constructor starts resolution (fire-and-forget), but we await here to ensure completion
@@ -780,7 +786,7 @@ function evaluateFilter(object: unknown, filter: Filter) {
     (acc, p) =>
       typeof acc === "object" && acc !== null
         ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          (acc as Record<string, unknown>)[p]
+        (acc as Record<string, unknown>)[p]
         : undefined,
     object,
   );
@@ -850,10 +856,21 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    parameters = validateParameters(
-      parameters ?? {},
-      evaluator.parameters ?? {},
-    );
+    let resolvedEvaluatorParams = evaluator.parameters;
+    if (resolvedEvaluatorParams instanceof Promise) {
+      resolvedEvaluatorParams = await resolvedEvaluatorParams;
+    }
+
+    if (ParametersClass.isParameters(resolvedEvaluatorParams)) {
+      // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      parameters = resolvedEvaluatorParams.data as unknown as InferParameters<EvalParameters>;
+    } else if (resolvedEvaluatorParams) {
+      parameters = validateParameters(
+        parameters ?? {},
+        resolvedEvaluatorParams,
+      );
+    } 
 
     if ("_type" in dataResult) {
       if (dataResult._type !== "BaseExperiment") {
@@ -897,7 +914,7 @@ async function runEvaluatorInternal(
         const iterable = resolvedDataResult as Iterable<
           EvalCase<any, any, any>
         >;
-        return (async function* () {
+        return (async function*() {
           for (const datum of iterable) {
             yield datum;
           }
@@ -913,12 +930,12 @@ async function runEvaluatorInternal(
     const experimentIdPromise: Promise<string | undefined> | undefined =
       experiment
         ? (async () => {
-            try {
-              return await experiment.id;
-            } catch {
-              return undefined;
-            }
-          })()
+          try {
+            return await experiment.id;
+          } catch {
+            return undefined;
+          }
+        })()
         : undefined;
 
     const collectedResults: EvalResult<any, any, any, any>[] = [];
@@ -957,12 +974,12 @@ async function runEvaluatorInternal(
             origin:
               eventDataset && datum.id && datum._xact_id
                 ? {
-                    object_type: "dataset",
-                    object_id: await eventDataset.id,
-                    id: datum.id,
-                    created: datum.created,
-                    _xact_id: datum._xact_id,
-                  }
+                  object_type: "dataset",
+                  object_id: await eventDataset.id,
+                  id: datum.id,
+                  created: datum.created,
+                  _xact_id: datum._xact_id,
+                }
                 : undefined,
             ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
           },
@@ -988,14 +1005,14 @@ async function runEvaluatorInternal(
 
           const trace = state
             ? new LocalTrace({
-                objectType: "experiment",
-                objectId: experimentIdPromise
-                  ? (await experimentIdPromise) ?? ""
-                  : "",
-                rootSpanId: rootSpan.rootSpanId,
-                ensureSpansFlushed,
-                state,
-              })
+              objectType: "experiment",
+              objectId: experimentIdPromise
+                ? (await experimentIdPromise) ?? ""
+                : "",
+              rootSpanId: rootSpan.rootSpanId,
+              ensureSpansFlushed,
+              state,
+            })
             : undefined;
           let metadata: Record<string, unknown> = {
             ...("metadata" in datum ? datum.metadata : {}),
@@ -1009,7 +1026,7 @@ async function runEvaluatorInternal(
           let unhandledScores: string[] | null = scorerNames;
           try {
             const meta = (o: Record<string, unknown>) =>
-              (metadata = { ...metadata, ...o });
+            (metadata = { ...metadata, ...o });
 
             await rootSpan.traced(
               async (span: Span) => {
@@ -1097,11 +1114,11 @@ async function runEvaluatorInternal(
                       : typeof scoreValue === "object" && !isEmpty(scoreValue)
                         ? [scoreValue]
                         : [
-                            {
-                              name: scorerNames[score_idx],
-                              score: scoreValue,
-                            },
-                          ];
+                          {
+                            name: scorerNames[score_idx],
+                            score: scoreValue,
+                          },
+                        ];
 
                     const getOtherFields = (s: Score) => {
                       const { metadata: _metadata, name: _name, ...rest } = s;
@@ -1112,21 +1129,21 @@ async function runEvaluatorInternal(
                       results.length === 1
                         ? results[0].metadata
                         : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, {
-                                [s.name]: s.metadata,
-                              }),
-                            {},
-                          );
+                          (prev, s) =>
+                            mergeDicts(prev, {
+                              [s.name]: s.metadata,
+                            }),
+                          {},
+                        );
 
                     const resultOutput =
                       results.length === 1
                         ? getOtherFields(results[0])
                         : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                            {},
-                          );
+                          (prev, s) =>
+                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                          {},
+                        );
 
                     const scores = results.reduce(
                       (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
@@ -1207,10 +1224,10 @@ async function runEvaluatorInternal(
           const mergedScores = {
             ...(evaluator.errorScoreHandler && unhandledScores
               ? evaluator.errorScoreHandler({
-                  rootSpan,
-                  data: datum,
-                  unhandledScores,
-                })
+                rootSpan,
+                data: datum,
+                unhandledScores,
+              })
               : undefined),
             ...scores,
           } as Record<string, number | null>;
@@ -1347,13 +1364,13 @@ async function runEvaluatorInternal(
 
     const summary = experiment
       ? await experiment.summarize({
-          summarizeScores: evaluator.summarizeScores,
-        })
+        summarizeScores: evaluator.summarizeScores,
+      })
       : buildLocalSummary(
-          evaluator,
-          collectResults ? collectedResults : [],
-          localScoreAccumulator ?? undefined,
-        );
+        evaluator,
+        collectResults ? collectedResults : [],
+        localScoreAccumulator ?? undefined,
+      );
 
     return new EvalResultWithSummary(
       summary,
