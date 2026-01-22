@@ -72,7 +72,7 @@ def autoinstrument_test_context(cassette_name: str):
         memory_logger.pop()  # Clear any prior spans
 
         my_vcr = vcr.VCR(
-            filter_headers=["authorization", "api-key", "x-api-key"],
+            filter_headers=["authorization", "api-key", "x-api-key", "x-goog-api-key"],
             record_mode="once" if not os.environ.get("CI") else "none",
         )
         with my_vcr.use_cassette(str(cassette_path)):
