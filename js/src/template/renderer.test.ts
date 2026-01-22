@@ -293,7 +293,7 @@ describe("renderTemplateContent", () => {
       expect(result).toBe("Data: 42");
     });
 
-    test("renders objects as JSON strings (not [object Object])", () => {
+    test("renders objects as [object Object] by default", () => {
       const varsWithObject = {
         user: { name: "Alice", age: 30 },
         items: ["a", "b", "c"],
@@ -304,9 +304,33 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      // Nunjucks renders arrays as comma-separated (without brackets)
-      expect(result).toBe('User: {"name":"Alice","age":30}, Items: a,b,c');
-      expect(result).not.toContain("[object Object]");
+      expect(result).toBe("User: [object Object], Items: a,b,c");
+    });
+
+    test("renders objects as JSON with dump filter", () => {
+      const varsWithObject = {
+        user: { name: "Alice", age: 30 },
+      };
+      const result = renderTemplateContent(
+        "User: {{ user | dump }}",
+        varsWithObject,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe('User: {"name":"Alice","age":30}');
+    });
+
+    test("renders objects as JSON with tojson filter", () => {
+      const varsWithObject = {
+        user: { name: "Alice", age: 30 },
+      };
+      const result = renderTemplateContent(
+        "User: {{ user | tojson }}",
+        varsWithObject,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe('User: {"name":"Alice","age":30}');
     });
 
     test("allows property access on objects", () => {
@@ -323,7 +347,7 @@ describe("renderTemplateContent", () => {
       expect(result).toBe("User: Alice, Age: 30, Items: a,b,c");
     });
 
-    test("renders nested objects as JSON strings", () => {
+    test("renders nested objects as [object Object] by default", () => {
       const varsWithNested = {
         data: {
           nested: {
@@ -338,8 +362,43 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
+      expect(result).toBe("Data: [object Object]");
+    });
+
+    test("renders nested objects as JSON with dump filter", () => {
+      const varsWithNested = {
+        data: {
+          nested: {
+            value: 123,
+            items: ["x", "y"],
+          },
+        },
+      };
+      const result = renderTemplateContent(
+        "Data: {{ data | dump }}",
+        varsWithNested,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
       expect(result).toBe('Data: {"nested":{"value":123,"items":["x","y"]}}');
-      expect(result).not.toContain("[object Object]");
+    });
+
+    test("renders nested objects as JSON with tojson filter", () => {
+      const varsWithNested = {
+        data: {
+          nested: {
+            value: 123,
+            items: ["x", "y"],
+          },
+        },
+      };
+      const result = renderTemplateContent(
+        "Data: {{ data | tojson }}",
+        varsWithNested,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe('Data: {"nested":{"value":123,"items":["x","y"]}}');
     });
 
     test("renders nested property access", () => {
@@ -360,7 +419,7 @@ describe("renderTemplateContent", () => {
       expect(result).toBe("Value: 123, Items: x,y");
     });
 
-    test("does not render [object Object] for nested objects", () => {
+    test("renders nested property-accessed objects as [object Object]", () => {
       const varsWithNested = {
         data: {
           outer: {
@@ -374,11 +433,27 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      expect(result).not.toContain("[object Object]");
+      expect(result).toBe("Nested: [object Object]");
+    });
+
+    test("renders nested property-accessed objects as JSON with dump", () => {
+      const varsWithNested = {
+        data: {
+          outer: {
+            inner: { value: 42 },
+          },
+        },
+      };
+      const result = renderTemplateContent(
+        "Nested: {{ data.outer.inner | dump }}",
+        varsWithNested,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
       expect(result).toBe('Nested: {"value":42}');
     });
 
-    test("handles deeply nested objects", () => {
+    test("handles deeply nested objects with tojson", () => {
       const deeplyNested = {
         level1: {
           level2: {
@@ -391,12 +466,11 @@ describe("renderTemplateContent", () => {
         },
       };
       const result = renderTemplateContent(
-        "Deep: {{ level1.level2.level3.level4.level5 }}",
+        "Deep: {{ level1.level2.level3.level4.level5 | tojson }}",
         deeplyNested,
         escape,
         { templateFormat: "nunjucks" },
       );
-      expect(result).not.toContain("[object Object]");
       expect(result).toBe('Deep: {"final":"value"}');
     });
 
@@ -428,7 +502,7 @@ describe("renderTemplateContent", () => {
       expect(result).toBe("Scores: 95,87,92,100");
     });
 
-    test("renders array of objects", () => {
+    test("renders array of objects as comma-separated [object Object]", () => {
       const varsWithObjects = {
         users: [
           { id: 1, name: "Alice" },
@@ -442,9 +516,46 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      // Nunjucks renders arrays as comma-separated objects (without brackets)
       expect(result).toBe(
-        'Users: {"id":1,"name":"Alice"},{"id":2,"name":"Bob"},{"id":3,"name":"Charlie"}',
+        "Users: [object Object],[object Object],[object Object]",
+      );
+    });
+
+    test("renders array of objects as JSON with dump", () => {
+      const varsWithObjects = {
+        users: [
+          { id: 1, name: "Alice" },
+          { id: 2, name: "Bob" },
+          { id: 3, name: "Charlie" },
+        ],
+      };
+      const result = renderTemplateContent(
+        "Users: {{ users | dump }}",
+        varsWithObjects,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe(
+        'Users: [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"},{"id":3,"name":"Charlie"}]',
+      );
+    });
+
+    test("renders array of objects as JSON with tojson", () => {
+      const varsWithObjects = {
+        users: [
+          { id: 1, name: "Alice" },
+          { id: 2, name: "Bob" },
+          { id: 3, name: "Charlie" },
+        ],
+      };
+      const result = renderTemplateContent(
+        "Users: {{ users | tojson }}",
+        varsWithObjects,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe(
+        'Users: [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"},{"id":3,"name":"Charlie"}]',
       );
     });
 
@@ -458,13 +569,25 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      // Nunjucks renders arrays as comma-separated (without brackets)
+      expect(result).toBe("Mixed: hello,42,[object Object],,world");
+    });
+
+    test("renders mixed array as JSON with dump", () => {
+      const varsWithMixed = {
+        data: ["hello", 42, { type: "object", value: true }, null, "world"],
+      };
+      const result = renderTemplateContent(
+        "Mixed: {{ data | dump }}",
+        varsWithMixed,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
       expect(result).toBe(
-        'Mixed: hello,42,{"type":"object","value":true},,world',
+        'Mixed: ["hello",42,{"type":"object","value":true},null,"world"]',
       );
     });
 
-    test("handles objects inside arrays with for loops", () => {
+    test("handles objects inside arrays with for loops - renders [object Object]", () => {
       const varsWithArray = {
         attachments: [
           { url: "http://example.com/1.jpg", type: "image" },
@@ -477,13 +600,46 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      expect(result).not.toContain("[object Object]");
+      expect(result).toBe("[object Object], [object Object]");
+    });
+
+    test("handles objects inside arrays with for loops using dump", () => {
+      const varsWithArray = {
+        attachments: [
+          { url: "http://example.com/1.jpg", type: "image" },
+          { url: "http://example.com/2.pdf", type: "pdf" },
+        ],
+      };
+      const result = renderTemplateContent(
+        "{% for image in attachments %}{{ image | dump }}{% if not loop.last %}, {% endif %}{% endfor %}",
+        varsWithArray,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
       expect(result).toBe(
         '{"url":"http://example.com/1.jpg","type":"image"}, {"url":"http://example.com/2.pdf","type":"pdf"}',
       );
     });
 
-    test("handles nested loops with objects", () => {
+    test("handles objects inside arrays with for loops using tojson", () => {
+      const varsWithArray = {
+        attachments: [
+          { url: "http://example.com/1.jpg", type: "image" },
+          { url: "http://example.com/2.pdf", type: "pdf" },
+        ],
+      };
+      const result = renderTemplateContent(
+        "{% for image in attachments %}{{ image | tojson }}{% if not loop.last %}, {% endif %}{% endfor %}",
+        varsWithArray,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe(
+        '{"url":"http://example.com/1.jpg","type":"image"}, {"url":"http://example.com/2.pdf","type":"pdf"}',
+      );
+    });
+
+    test("handles nested loops with objects using dump", () => {
       const varsWithNestedArrays = {
         users: [
           {
@@ -500,12 +656,11 @@ describe("renderTemplateContent", () => {
         ],
       };
       const result = renderTemplateContent(
-        "{% for user in users %}User: {{ user.name }}, Posts: {% for post in user.posts %}{{ post }}{% if not loop.last %}, {% endif %}{% endfor %}; {% endfor %}",
+        "{% for user in users %}User: {{ user.name }}, Posts: {% for post in user.posts %}{{ post | dump }}{% if not loop.last %}, {% endif %}{% endfor %}; {% endfor %}",
         varsWithNestedArrays,
         escape,
         { templateFormat: "nunjucks" },
       );
-      expect(result).not.toContain("[object Object]");
       expect(result).toContain('"id":1');
       expect(result).toContain('"title":"First post"');
       expect(result).toContain('"id":3');
@@ -552,7 +707,7 @@ describe("renderTemplateContent", () => {
       );
     });
 
-    test("renders braintrust_attachment object", () => {
+    test("renders braintrust_attachment object as [object Object]", () => {
       const varsWithAttachment = {
         images: {
           type: "braintrust_attachment",
@@ -563,6 +718,44 @@ describe("renderTemplateContent", () => {
       };
       const result = renderTemplateContent(
         "{{ images }}",
+        varsWithAttachment,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe("[object Object]");
+    });
+
+    test("renders braintrust_attachment object as JSON with dump", () => {
+      const varsWithAttachment = {
+        images: {
+          type: "braintrust_attachment",
+          filename: "deep.txt",
+          content_type: "text/plain",
+          key: "attachments/deep/deep.txt",
+        },
+      };
+      const result = renderTemplateContent(
+        "{{ images | dump }}",
+        varsWithAttachment,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe(
+        '{"type":"braintrust_attachment","filename":"deep.txt","content_type":"text/plain","key":"attachments/deep/deep.txt"}',
+      );
+    });
+
+    test("renders braintrust_attachment object as JSON with tojson", () => {
+      const varsWithAttachment = {
+        images: {
+          type: "braintrust_attachment",
+          filename: "deep.txt",
+          content_type: "text/plain",
+          key: "attachments/deep/deep.txt",
+        },
+      };
+      const result = renderTemplateContent(
+        "{{ images | tojson }}",
         varsWithAttachment,
         escape,
         { templateFormat: "nunjucks" },
@@ -595,13 +788,10 @@ describe("renderTemplateContent", () => {
         escape,
         { templateFormat: "nunjucks" },
       );
-      // Nunjucks renders arrays as comma-separated without brackets
-      expect(result).toBe(
-        '{"type":"braintrust_attachment","filename":"image1.jpg","content_type":"image/jpeg","key":"attachments/image1.jpg"},{"type":"braintrust_attachment","filename":"image2.jpg","content_type":"image/jpeg","key":"attachments/image2.jpg"}',
-      );
+      expect(result).toBe("[object Object],[object Object]");
     });
 
-    test("renders braintrust_attachment with loop", () => {
+    test("renders array of braintrust_attachment objects as JSON with dump", () => {
       const varsWithAttachments = {
         images: [
           {
@@ -619,7 +809,35 @@ describe("renderTemplateContent", () => {
         ],
       };
       const result = renderTemplateContent(
-        "{% for img in images %}{{ img }}{% if not loop.last %}, {% endif %}{% endfor %}",
+        "{{ images | dump }}",
+        varsWithAttachments,
+        escape,
+        { templateFormat: "nunjucks" },
+      );
+      expect(result).toBe(
+        '[{"type":"braintrust_attachment","filename":"image1.jpg","content_type":"image/jpeg","key":"attachments/image1.jpg"},{"type":"braintrust_attachment","filename":"image2.jpg","content_type":"image/jpeg","key":"attachments/image2.jpg"}]',
+      );
+    });
+
+    test("renders braintrust_attachment with loop and tojson", () => {
+      const varsWithAttachments = {
+        images: [
+          {
+            type: "braintrust_attachment",
+            filename: "image1.jpg",
+            content_type: "image/jpeg",
+            key: "attachments/image1.jpg",
+          },
+          {
+            type: "braintrust_attachment",
+            filename: "image2.jpg",
+            content_type: "image/jpeg",
+            key: "attachments/image2.jpg",
+          },
+        ],
+      };
+      const result = renderTemplateContent(
+        "{% for img in images %}{{ img | tojson }}{% if not loop.last %}, {% endif %}{% endfor %}",
         varsWithAttachments,
         escape,
         { templateFormat: "nunjucks" },
