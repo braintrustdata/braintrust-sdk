@@ -110,6 +110,7 @@ export {
   spanComponentsV3Schema,
   spanObjectTypeV3EnumSchema,
   spanObjectTypeV3ToString,
+  spanObjectTypeV3ToTypedString,
 } from "./span_identifier_v3";
 
 export type { SpanComponentsV4Data } from "./span_identifier_v4";

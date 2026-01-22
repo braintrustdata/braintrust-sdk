@@ -401,6 +401,11 @@ class BraintrustState:
             ),
         )
 
+        from braintrust.span_cache import SpanCache
+
+        self.span_cache = SpanCache()
+        self._otel_flush_callback: Any | None = None
+
     def reset_login_info(self):
         self.app_url: str | None = None
         self.app_public_url: str | None = None
@@ -456,6 +461,21 @@ class BraintrustState:
                     self._context_manager = get_context_manager()
 
         return self._context_manager
+
+    def register_otel_flush(self, callback: Any) -> None:
+        """
+        Register an OTEL flush callback. This is called by the OTEL integration
+        when it initializes a span processor/exporter.
+        """
+        self._otel_flush_callback = callback
+
+    async def flush_otel(self) -> None:
+        """
+        Flush OTEL spans if a callback is registered.
+        Called during ensure_spans_flushed to ensure OTEL spans are visible in BTQL.
+        """
+        if self._otel_flush_callback:
+            await self._otel_flush_callback()
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -1775,6 +1795,25 @@ def login(
     # Only permit one thread to login at a time
     with login_lock:
         _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
+
+
+def register_otel_flush(callback: Any) -> None:
+    """
+    Register a callback to flush OTEL spans. This is called by the OTEL integration
+    when it initializes a span processor/exporter.
+
+    When ensure_spans_flushed is called (e.g., before a BTQL query in scorers),
+    this callback will be invoked to ensure OTEL spans are flushed to the server.
+
+    Also disables the span cache, since OTEL spans aren't in the local cache
+    and we need BTQL to see the complete span tree (both native + OTEL spans).
+
+    :param callback: The async callback function to flush OTEL spans.
+    """
+    global _state
+    _state.register_otel_flush(callback)
+    # Disable span cache since OTEL spans aren't in the local cache
+    _state.span_cache.disable()
 
 
 def login_to_state(
@@ -3846,6 +3885,21 @@ class SpanImpl(Span):
         serializable_partial_record = bt_safe_deep_copy(partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
+
+        # Write to local span cache for scorer access
+        # Only cache experiment spans - regular logs don't need caching
+        if self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            from braintrust.span_cache import CachedSpan
+
+            cached_span = CachedSpan(
+                span_id=self.span_id,
+                input=serializable_partial_record.get("input"),
+                output=serializable_partial_record.get("output"),
+                metadata=serializable_partial_record.get("metadata"),
+                span_parents=self.span_parents,
+                span_attributes=serializable_partial_record.get("span_attributes"),
+            )
+            self.state.span_cache.queue_write(self.root_span_id, self.span_id, cached_span)
 
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
