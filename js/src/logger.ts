@@ -75,6 +75,25 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 // 6 MB for the AWS lambda gateway (from our own testing).
 export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
+const parametersRowSchema = z.object({
+  id: z.string().uuid(),
+  _xact_id: z.string(),
+  project_id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  function_type: z.literal("parameters"),
+  function_data: z.object({
+    type: z.literal("parameters"),
+    data: z.record(z.unknown()).optional(),
+    __schema: z.record(z.unknown()),
+  }),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+});
+type ParametersRow = z.infer<typeof parametersRowSchema>;
+
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import {
@@ -93,6 +112,7 @@ import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
+import { ParametersCache } from "./prompt-cache/parameters-cache";
 import {
   addAzureBlobHeaders,
   getCurrentUnixTimestamp,
@@ -105,6 +125,15 @@ import {
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
+import type { EvalParameters, InferParameters } from "./eval-parameters";
+
+// Alias for TypeScript's built-in Parameters utility type (before the Parameters class shadows it)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FunctionParameters<T extends (...args: any[]) => any> = T extends (
+  ...args: infer P
+) => unknown
+  ? P
+  : never;
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -569,6 +598,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public parametersCache: ParametersCache;
   public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
@@ -609,6 +639,26 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+
+    const parametersMemoryCache = new LRUCache<string, Parameters>({
+      max:
+        Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const parametersDiskCache = canUseDiskCache()
+      ? new DiskCache<Parameters>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/parameters_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DISK_MAX")) ??
+            1 << 20,
+        })
+      : undefined;
+    this.parametersCache = new ParametersCache({
+      memoryCache: parametersMemoryCache,
+      diskCache: parametersDiskCache,
+    });
+
     this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
@@ -3867,6 +3917,16 @@ export type LoadPromptOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
+export type LoadParametersOptions = FullLoginOptions & {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  id?: string;
+  environment?: string;
+  state?: BraintrustState;
+};
+
 /**
  * Load a prompt from the specified project.
  *
@@ -4023,6 +4083,164 @@ export async function loadPrompt({
     console.warn("Failed to set prompt in cache:", e);
   }
   return prompt;
+}
+
+/**
+ * Load parameters from the specified project.
+ *
+ * @param options Options for configuring loadParameters().
+ * @param options.projectName The name of the project to load the parameters from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the parameters to load.
+ * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns The parameters object.
+ * @throws If the parameters are not found.
+ * @throws If multiple parameters are found with the same slug in the same project (this should never happen).
+ *
+ * @example
+ * ```typescript
+ * const params = await loadParameters({
+ *  projectName: "My Project",
+ *  slug: "my-parameters",
+ * });
+ * ```
+ */
+export async function loadParameters<
+  S extends EvalParameters = EvalParameters,
+>({
+  projectName,
+  projectId,
+  slug,
+  version,
+  environment,
+  id,
+  appUrl,
+  apiKey,
+  orgName,
+  fetch,
+  forceLogin,
+  state: stateArg,
+}: LoadParametersOptions): Promise<Parameters<true, true, InferParameters<S>>> {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
+    throw new Error("Must specify either projectName or projectId");
+  } else if (isEmpty(slug)) {
+    throw new Error("Must specify slug");
+  }
+
+  const state = stateArg ?? _globalState;
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    if (id) {
+      response = await state.apiConn().get_json(`v1/function/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/function", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+        function_type: "parameters",
+        ...(environment && { environment }),
+      });
+    }
+  } catch (e) {
+    if (environment || version) {
+      throw new Error(`Parameters not found with specified parameters: ${e}`);
+    }
+
+    console.warn(
+      "Failed to load parameters, attempting to fall back to cache:",
+      e,
+    );
+    let parameters;
+    if (id) {
+      parameters = await state.parametersCache.get({ id });
+      if (!parameters) {
+        throw new Error(
+          `Parameters with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      parameters = await state.parametersCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!parameters) {
+        throw new Error(
+          `Parameters ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return parameters as Parameters<true, true, InferParameters<S>>;
+  }
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    if (id) {
+      throw new Error(`Parameters with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Parameters ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
+  } else if (response.objects.length > 1) {
+    if (id) {
+      throw new Error(
+        `Multiple parameters found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple parameters found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
+  }
+
+  const metadata = parametersRowSchema.parse(response["objects"][0]);
+  const parameters = new Parameters(metadata);
+  try {
+    if (id) {
+      await state.parametersCache.set({ id }, parameters);
+    } else if (slug) {
+      await state.parametersCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        parameters,
+      );
+    }
+  } catch (e) {
+    console.warn("Failed to set parameters in cache:", e);
+  }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return parameters as Parameters<true, true, InferParameters<S>>;
 }
 
 /**
@@ -4420,7 +4638,7 @@ function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
   spanArgs: any,
   noTraceIO: boolean,
 ): F {
-  const wrapper = function* (this: any, ...fnArgs: Parameters<F>) {
+  const wrapper = function* (this: any, ...fnArgs: FunctionParameters<F>) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -4487,7 +4705,10 @@ function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
   spanArgs: any,
   noTraceIO: boolean,
 ): F {
-  const wrapper = async function* (this: any, ...fnArgs: Parameters<F>) {
+  const wrapper = async function* (
+    this: any,
+    ...fnArgs: FunctionParameters<F>
+  ) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -4585,7 +4806,7 @@ export function wrapTraced<
     AsyncFlushArg<IsAsyncFlush> &
     WrapTracedArgs,
 ): IsAsyncFlush extends false
-  ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
+  ? (...args: FunctionParameters<F>) => Promise<Awaited<ReturnType<F>>>
   : F {
   const spanArgs: typeof args = {
     name: fn.name,
@@ -4611,7 +4832,7 @@ export function wrapTraced<
   }
 
   if (args?.asyncFlush) {
-    return ((...fnArgs: Parameters<F>) =>
+    return ((...fnArgs: FunctionParameters<F>) =>
       traced((span) => {
         if (!hasExplicitInput) {
           span.log({ input: fnArgs });
@@ -4634,7 +4855,7 @@ export function wrapTraced<
         return output;
       }, spanArgs)) as IsAsyncFlush extends false ? never : F;
   } else {
-    return ((...fnArgs: Parameters<F>) =>
+    return ((...fnArgs: FunctionParameters<F>) =>
       traced(async (span) => {
         if (!hasExplicitInput) {
           span.log({ input: fnArgs });
@@ -4650,7 +4871,7 @@ export function wrapTraced<
 
         return output;
       }, spanArgs)) as IsAsyncFlush extends false
-      ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
+      ? (...args: FunctionParameters<F>) => Promise<Awaited<ReturnType<F>>>
       : never;
   }
 }
@@ -7153,6 +7374,85 @@ export class Prompt<
       },
       {},
       false,
+    );
+  }
+}
+
+export class Parameters<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+  T extends Record<string, unknown> = Record<string, unknown>,
+> {
+  private readonly __braintrust_parameters_marker = true;
+
+  constructor(private metadata: ParametersRow) {}
+
+  public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata.id as HasId extends true ? string : string | undefined;
+  }
+
+  public get projectId(): string | undefined {
+    return this.metadata.project_id;
+  }
+
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  public get version(): HasVersion extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata[TRANSACTION_ID_FIELD] as HasVersion extends true
+      ? TransactionId
+      : TransactionId | undefined;
+  }
+
+  public get schema(): Record<string, unknown> {
+    return this.metadata.function_data.__schema;
+  }
+
+  public get data(): T {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return (this.metadata.function_data.data ?? {}) as T;
+  }
+
+  public validate(data: unknown): boolean {
+    if (typeof data !== "object" || data === null) {
+      return false;
+    }
+    const schemaProps = this.schema.properties;
+    if (typeof schemaProps !== "object" || schemaProps === null) {
+      return true;
+    }
+    for (const key of Object.keys(schemaProps)) {
+      if (!(key in data)) {
+        const required = Array.isArray(this.schema.required)
+          ? this.schema.required
+          : [];
+        if (required.includes(key)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  public static isParameters(
+    x: unknown,
+  ): x is Parameters<boolean, boolean, Record<string, unknown>> {
+    return (
+      typeof x === "object" &&
+      x !== null &&
+      "__braintrust_parameters_marker" in x &&
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      (x as unknown as Parameters<boolean, boolean, Record<string, unknown>>)
+        .__braintrust_parameters_marker === true
     );
   }
 }
