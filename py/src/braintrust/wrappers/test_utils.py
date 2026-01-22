@@ -10,7 +10,7 @@ from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 
 AUTO_TEST_SCRIPTS_DIR = Path(__file__).parent / "auto_test_scripts"
-CASSETTES_DIR = AUTO_TEST_SCRIPTS_DIR / "cassettes"
+CASSETTES_DIR = Path(__file__).parent / "cassettes"
 
 
 def run_in_subprocess(code: str, timeout: int = 30) -> subprocess.CompletedProcess:
