@@ -18,9 +18,11 @@ Tests whether the Braintrust SDK (Node.js ESM build) can be loaded in Vite's dev
 
 Tests whether the SDK's Node.js ESM build can be loaded in Vite's dev server.
 
-**Expected result:** XFAIL (expected to fail) - Vite's dependency pre-bundler cannot handle Nunjucks.
+**Expected result:** XFAIL (expected to fail) - Vite cannot load the Node.js ESM build.
 
-**Known issue:** Nunjucks uses `Object.setPrototypeOf` in ways that fail in Vite's ESM bundler during dependency pre-bundling, causing: `TypeError: Object prototype may only be an Object or null: undefined`
+**Known issues:**
+
+- Nunjucks uses `Object.setPrototypeOf` in ways that fail in Vite's ESM bundler during dependency pre-bundling, causing: `TypeError: Object prototype may only be an Object or null: undefined`
 
 **This failure is expected and acceptable** - users should use Wrangler (production mode) for Cloudflare Workers development with the Node.js build, not Vite dev server. The wrangler-dev test validates the production deployment path.
 

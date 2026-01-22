@@ -25,9 +25,9 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const scenarioDir = join(__dirname, "..");
-const viteConfig = join(scenarioDir, "vite-node-esm.config.ts");
+const viteConfig = join(scenarioDir, "vite.config.ts");
 
-const MAX_RETRIES = 20;
+const MAX_RETRIES = 40;
 const RETRY_DELAY_MS = 500;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,19 +50,31 @@ async function testViteDevServerWithNodeEsm() {
 
   let output = "";
   let errorOutput = "";
+  let resolved = false;
+  let testResult = null;
 
   vite.stdout.on("data", (d) => (output += d.toString()));
   vite.stderr.on("data", (d) => (errorOutput += d.toString()));
-
-  // Wait for either success or error
-  let resolved = false;
-  let testResult = null;
+  vite.on("exit", (code) => {
+    if (code !== 0 && !resolved) {
+      // Non-zero exit indicates an error - check output immediately
+      setTimeout(() => {
+        if (!resolved) {
+          checkOutput();
+        }
+      }, 100);
+    }
+  });
 
   const checkOutput = () => {
     const combined = output + errorOutput;
 
-    // Check for the Nunjucks error
-    if (combined.includes("Object prototype may only be an Object or null")) {
+    // Check for the ONE specific Nunjucks error
+    const hasNunjucksError = combined.includes(
+      "Object prototype may only be an Object or null",
+    );
+
+    if (hasNunjucksError) {
       resolved = true;
       testResult = {
         success: false,
@@ -110,11 +122,13 @@ async function testViteDevServerWithNodeEsm() {
   }
 
   if (!testResult) {
+    // No Nunjucks error detected - this is unexpected
+    const combined = output + errorOutput;
     testResult = {
       success: false,
-      issue: "timeout",
+      issue: "unexpected",
       message: "Vite dev server did not start or error within timeout",
-      output: (output + errorOutput).slice(-500),
+      output: combined.slice(-500),
     };
   }
 
