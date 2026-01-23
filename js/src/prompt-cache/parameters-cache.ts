@@ -1,4 +1,4 @@
-import { Parameters } from "../logger";
+import { RemoteEvalParameters } from "../logger";
 import { LRUCache } from "./lru-cache";
 import { DiskCache } from "./disk-cache";
 
@@ -26,18 +26,18 @@ function createCacheKey(key: ParametersKey): string {
 }
 
 export class ParametersCache {
-  private readonly memoryCache: LRUCache<string, Parameters>;
-  private readonly diskCache?: DiskCache<Parameters>;
+  private readonly memoryCache: LRUCache<string, RemoteEvalParameters>;
+  private readonly diskCache?: DiskCache<RemoteEvalParameters>;
 
   constructor(options: {
-    memoryCache: LRUCache<string, Parameters>;
-    diskCache?: DiskCache<Parameters>;
+    memoryCache: LRUCache<string, RemoteEvalParameters>;
+    diskCache?: DiskCache<RemoteEvalParameters>;
   }) {
     this.memoryCache = options.memoryCache;
     this.diskCache = options.diskCache;
   }
 
-  async get(key: ParametersKey): Promise<Parameters | undefined> {
+  async get(key: ParametersKey): Promise<RemoteEvalParameters | undefined> {
     const cacheKey = createCacheKey(key);
 
     const memoryParams = this.memoryCache.get(cacheKey);
@@ -57,7 +57,7 @@ export class ParametersCache {
     return undefined;
   }
 
-  async set(key: ParametersKey, value: Parameters): Promise<void> {
+  async set(key: ParametersKey, value: RemoteEvalParameters): Promise<void> {
     const cacheKey = createCacheKey(key);
 
     this.memoryCache.set(cacheKey, value);
