@@ -28,6 +28,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  Parameters as ParametersClass,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -226,10 +227,15 @@ export interface Evaluator<
 
   /**
    * A set of parameters that will be passed to the evaluator.
-   * Can contain array values that will be converted to single values in the task.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-
-  parameters?: Parameters;
+  parameters?:
+    | Parameters
+    | ParametersClass<boolean, boolean, InferParameters<Parameters>>
+    | Promise<ParametersClass<boolean, boolean, InferParameters<Parameters>>>;
 
   /**
    * An optional name for the experiment.
@@ -878,10 +884,31 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    parameters = validateParameters(
-      parameters ?? {},
-      evaluator.parameters ?? {},
-    );
+    let resolvedEvaluatorParams = evaluator.parameters;
+    if (resolvedEvaluatorParams instanceof Promise) {
+      resolvedEvaluatorParams = await resolvedEvaluatorParams;
+    }
+
+    if (ParametersClass.isParameters(resolvedEvaluatorParams)) {
+      // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const loadedData =
+        resolvedEvaluatorParams.data as unknown as InferParameters<EvalParameters>;
+      if (parameters && Object.keys(parameters).length > 0) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        parameters = {
+          ...loadedData,
+          ...parameters,
+        } as unknown as InferParameters<EvalParameters>;
+      } else {
+        parameters = loadedData;
+      }
+    } else if (resolvedEvaluatorParams) {
+      parameters = validateParameters(
+        parameters ?? {},
+        resolvedEvaluatorParams,
+      );
+    }
 
     if ("_type" in dataResult) {
       if (dataResult._type !== "BaseExperiment") {
