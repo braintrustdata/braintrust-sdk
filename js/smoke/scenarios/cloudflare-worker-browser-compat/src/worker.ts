@@ -64,8 +64,9 @@ export default {
           testMustacheTemplate,
           expectFailure(
             testNunjucksTemplate,
-            (e) => e.message.includes("String template rendering. Disallowed"),
-            "Nunjucks evals not supported",
+            (e: { message: string }) =>
+              e.message.includes("requires @braintrust/template-nunjucks"),
+            "Nunjucks not supported in browser build",
           ),
         ],
       });

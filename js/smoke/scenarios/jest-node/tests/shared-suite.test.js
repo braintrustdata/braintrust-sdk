@@ -1,5 +1,6 @@
 const {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -54,7 +55,11 @@ test("shared test suites pass in Jest", async () => {
       testNestedTraced,
       testCurrentSpan,
       testMustacheTemplate,
-      testNunjucksTemplate,
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
+      ),
     ],
   });
 
