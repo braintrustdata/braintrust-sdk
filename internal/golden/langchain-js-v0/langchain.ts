@@ -57,9 +57,12 @@ async function testBasicCompletion() {
         );
         const chain = prompt.pipe(model);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({
-          country: "France",
-        })) as BaseMessage;
+        const result = (await chain.invoke(
+          {
+            country: "France",
+          },
+          { callbacks: [handler] },
+        )) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -99,7 +102,9 @@ async function testMultiTurn() {
           new HumanMessage("What did I just tell you my name was?"),
         ];
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -140,9 +145,12 @@ async function testSystemPrompt() {
         ]);
         const chain = prompt.pipe(model);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({
-          input: "Tell me about the weather.",
-        })) as BaseMessage;
+        const result = (await chain.invoke(
+          {
+            input: "Tell me about the weather.",
+          },
+          { callbacks: [handler] },
+        )) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -182,7 +190,7 @@ async function testStreaming() {
         const prompt = ChatPromptTemplate.fromTemplate(promptText);
         const chain = prompt.pipe(model);
 
-        const stream = await chain.stream({});
+        const stream = await chain.stream({}, { callbacks: [handler] });
         for await (const chunk of stream) {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           const msg = chunk as BaseMessage;
@@ -259,7 +267,9 @@ async function testImageInput() {
         }
 
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -333,7 +343,9 @@ async function testDocumentInput() {
         }
 
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -481,7 +493,9 @@ async function testMetadata() {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
         const messages = [new HumanMessage("Hello!")];
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -603,7 +617,9 @@ async function testMixedContent() {
         }
 
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -643,7 +659,9 @@ async function testPrefill() {
           new AIMessage("Here is a haiku:"),
         ];
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await model.invoke(messages)) as BaseMessage;
+        const result = (await model.invoke(messages, {
+          callbacks: [handler],
+        })) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -680,7 +698,10 @@ async function testShortMaxTokens() {
         const prompt = ChatPromptTemplate.fromTemplate("What is AI?");
         const chain = prompt.pipe(model);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({})) as AIMessage;
+        const result = (await chain.invoke(
+          {},
+          { callbacks: [handler] },
+        )) as AIMessage;
         console.log(result.content);
         console.log(
           `Response metadata: ${JSON.stringify(result.response_metadata)}`,
@@ -739,7 +760,9 @@ async function testToolUse() {
         const modelWithTools = model.bindTools([getWeatherTool]);
         const query = "What is the weather like in Paris, France?";
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await modelWithTools.invoke(query)) as AIMessage;
+        const result = (await modelWithTools.invoke(query, {
+          callbacks: [handler],
+        })) as AIMessage;
 
         console.log("Response content:");
         if (result.content) {
@@ -839,9 +862,9 @@ async function testToolUseWithResult() {
           ];
 
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const secondResult = (await modelWithTools.invoke(
-            messages,
-          )) as AIMessage;
+          const secondResult = (await modelWithTools.invoke(messages, {
+            callbacks: [handler],
+          })) as AIMessage;
           console.log("\nSecond response (with tool result):");
           console.log(secondResult.content);
         }
@@ -883,7 +906,10 @@ async function testAsyncGeneration() {
         );
         const chain = prompt.pipe(model);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const result = (await chain.invoke({ topic })) as BaseMessage;
+        const result = (await chain.invoke(
+          { topic },
+          { callbacks: [handler] },
+        )) as BaseMessage;
         console.log(result.content);
         console.log();
       }
@@ -923,7 +949,10 @@ async function testAsyncStreaming() {
         const prompt = ChatPromptTemplate.fromTemplate("List 3 {category}.");
         const chain = prompt.pipe(model);
 
-        const stream = await chain.stream({ category });
+        const stream = await chain.stream(
+          { category },
+          { callbacks: [handler] },
+        );
         for await (const chunk of stream) {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           const msg = chunk as BaseMessage;

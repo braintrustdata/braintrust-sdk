@@ -6,16 +6,12 @@ from collections.abc import Mapping, Sequence
 from re import Pattern
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Set,
     TypedDict,
-    Union,
 )
 from uuid import UUID
 
 import braintrust
+import braintrust.logger
 from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
 from braintrust.version import VERSION as sdk_version
 from langchain_core.agents import AgentAction, AgentFinish
@@ -29,6 +25,12 @@ from typing_extensions import NotRequired
 from braintrust_langchain.version import version
 
 _logger = logging.getLogger("braintrust_langchain")
+
+# Module-level storage for background logger to support cross-thread scenarios.
+# When set by test infrastructure, handlers created in worker threads will use
+# this logger for proper span routing. This is internal and set automatically
+# by the test fixtures - users should not need to manage this directly.
+_module_bg_logger: Any | None = None
 
 
 class LogEvent(TypedDict):
@@ -52,9 +54,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         logger: Logger | Span | None = None,
         debug: bool = False,
         exclude_metadata_props: Pattern[str] | None = None,
+        _bg_logger: Any | None = None,
     ):
         self.logger = logger
         self.spans: dict[UUID, Span] = {}
+        self.root_span_context: dict[UUID, Span] = {}
         self.debug = debug  # DEPRECATED
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
@@ -68,6 +72,43 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self._first_token_times: dict[UUID, float] = {}
         self._ttft_ms: dict[UUID, float] = {}
 
+        # Capture background logger override for cross-thread propagation.
+        # The SDK uses thread-local storage for the background logger override,
+        # but Eval tasks run in a thread pool. We capture the override at init
+        # time and re-apply it before span operations.
+        # Priority order:
+        # 1. Explicit _bg_logger parameter (for direct testing)
+        # 2. Module-level _module_bg_logger (set by test fixtures)
+        # 3. Current thread's _override_bg_logger
+        if _bg_logger is not None:
+            self._captured_bg_logger = _bg_logger
+        elif _module_bg_logger is not None:
+            self._captured_bg_logger = _module_bg_logger
+        else:
+            self._captured_bg_logger = getattr(braintrust.logger._state._override_bg_logger, "logger", None)
+
+        # Capture the current span context at construction time if no explicit
+        # logger is provided. This ensures correct context in concurrent scenarios
+        # when handlers are created inside eval tasks.
+        # Only capture if there's an actual active span (not NOOP_SPAN) to support
+        # handlers created at module level (e.g., with setGlobalHandler).
+        self.captured_context: Span | None = None
+        if not self.logger:
+            current = current_span()
+            if current is not NOOP_SPAN:
+                self.captured_context = current
+
+    def _ensure_bg_logger_override(self) -> None:
+        """Re-apply background logger override in current thread.
+
+        This is needed because the SDK's background logger override is thread-local,
+        but Eval tasks run in a thread pool. We capture the override at init time
+        and re-apply it before span operations to ensure spans are logged to the
+        correct background logger (e.g., memory logger in tests).
+        """
+        if self._captured_bg_logger is not None:
+            braintrust.logger._state._override_bg_logger.logger = self._captured_bg_logger
+
     def _start_span(
         self,
         parent_run_id: UUID | None,
@@ -80,24 +121,43 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent: str | None = None,
         event: LogEvent | None = None,
     ) -> Any:
+        # Re-apply background logger override for cross-thread scenarios
+        self._ensure_bg_logger_override()
+
         if run_id in self.spans:
             # XXX: See graph test case of an example where this _may_ be intended.
             _logger.warning(f"Span already exists for run_id {run_id} (this is likely a bug)")
             return
 
-        if not parent_run_id:
+        if not parent_run_id or parent_run_id == run_id:
             self.root_run_id = run_id
 
-        current_parent = current_span()
+            # Capture the current span context once per root run to avoid
+            # async context issues in concurrent scenarios
+            if run_id not in self.root_span_context:
+                if self.logger is not None:
+                    context_span = self.logger
+                elif self.captured_context is not None:
+                    context_span = self.captured_context
+                else:
+                    context_span = current_span()
+                self.root_span_context[run_id] = context_span
+
         parent_span = None
         if parent_run_id and parent_run_id in self.spans:
+            # Use the parent span from the spans map for child operations
             parent_span = self.spans[parent_run_id]
-        elif current_parent != NOOP_SPAN:
-            parent_span = current_parent
-        elif self.logger is not None:
-            parent_span = self.logger
         else:
-            parent_span = braintrust
+            # For root spans, use the captured context for this root run
+            # This avoids async context issues in concurrent scenarios
+            root_id = self.root_run_id or run_id
+            captured_context = self.root_span_context.get(root_id)
+
+            if captured_context is not None:
+                parent_span = captured_context
+            else:
+                # Fallback to braintrust module
+                parent_span = braintrust
 
         if event is None:
             event = {}
@@ -163,6 +223,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         metrics: Mapping[str, int | float] | None = None,
         dataset_record_id: str | None = None,
     ) -> Any:
+        # Re-apply background logger override for cross-thread scenarios
+        self._ensure_bg_logger_override()
+
         if run_id not in self.spans:
             return
 
@@ -174,6 +237,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         if self.root_run_id == run_id:
             self.root_run_id = None
+
+        # Clean up root span context when root run ends
+        if run_id in self.root_span_context:
+            del self.root_span_context[run_id]
 
         span.log(
             input=input,
@@ -522,7 +589,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self,
         token: str,
         *,
-        chunk: Union["GenerationChunk", "ChatGenerationChunk"] | None = None,  # type: ignore
+        chunk: "GenerationChunk | ChatGenerationChunk | None" = None,  # type: ignore
         run_id: UUID,
         parent_run_id: UUID | None = None,
         **kwargs: Any,
@@ -586,12 +653,16 @@ def last_item(items: list[Any]) -> Any:
     return items[-1] if items else None
 
 
-def _walk_generations(response: LLMResult):
-    for generations in response.generations or []:
+def _walk_generations(response: LLMResult | dict[str, Any]):
+    if isinstance(response, dict):
+        generations_list = response.get("generations") or []
+    else:
+        generations_list = response.generations or []
+    for generations in generations_list:
         yield from generations or []
 
 
-def _get_model_name_from_response(response: LLMResult) -> str | None:
+def _get_model_name_from_response(response: LLMResult | dict[str, Any]) -> str | None:
     model_name = None
     for generation in _walk_generations(response):
         message = getattr(generation, "message", None)
@@ -606,13 +677,16 @@ def _get_model_name_from_response(response: LLMResult) -> str | None:
             break
 
     if not model_name:
-        llm_output: dict[str, Any] = response.llm_output or {}
+        if isinstance(response, dict):
+            llm_output: dict[str, Any] = response.get("llm_output") or {}
+        else:
+            llm_output = response.llm_output or {}
         model_name = llm_output.get("model_name") or llm_output.get("model") or ""
 
     return model_name
 
 
-def _get_metrics_from_response(response: LLMResult):
+def _get_metrics_from_response(response: LLMResult | dict[str, Any]):
     metrics = {}
 
     for generation in _walk_generations(response):
@@ -634,7 +708,10 @@ def _get_metrics_from_response(response: LLMResult):
             )
 
     if not metrics or not any(metrics.values()):
-        llm_output: dict[str, Any] = response.llm_output or {}
+        if isinstance(response, dict):
+            llm_output: dict[str, Any] = response.get("llm_output") or {}
+        else:
+            llm_output = response.llm_output or {}
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
 
     return clean_object(metrics)
