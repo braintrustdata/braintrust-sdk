@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/templates-nunjucks",
+  "name": "@braintrust/templates-nunjucks-js",
   "version": "0.0.1",
   "description": "Nunjucks templating support for the Braintrust JS SDK",
   "main": "./dist/index.js",

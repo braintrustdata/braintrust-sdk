@@ -8,7 +8,7 @@ import type { TemplateRendererPlugin } from "braintrust";
  * @example
  * ```typescript
  * import { registerTemplatePlugin, useTemplateRenderer } from "braintrust";
- * import { nunjucksPlugin, type NunjucksOptions } from "@braintrust/templates-nunjucks";
+ * import { nunjucksPlugin, type NunjucksOptions } from "@braintrust/templates-nunjucks-js";
  *
  * registerTemplatePlugin(nunjucksPlugin);
  * useTemplateRenderer("nunjucks", {
@@ -74,7 +74,7 @@ export interface NunjucksOptions {
  * @example
  * ```typescript
  * import { registerTemplatePlugin, useTemplateRenderer, Prompt } from "braintrust";
- * import { nunjucksPlugin } from "@braintrust/templates-nunjucks";
+ * import { nunjucksPlugin } from "@braintrust/templates-nunjucks-js";
  *
  * // Register and activate the plugin
  * registerTemplatePlugin(nunjucksPlugin);
@@ -109,8 +109,8 @@ export const nunjucksPlugin: TemplateRendererPlugin = {
     autoescape: true,
     throwOnUndefined: false,
   } as NunjucksOptions,
-  createRenderer(options?: unknown) {
-    const opts = (options ?? {}) as NunjucksOptions;
+  createRenderer() {
+    const opts = (this.defaultOptions ?? {}) as NunjucksOptions;
     const autoescape = opts.autoescape ?? true;
     const throwOnUndefined = opts.throwOnUndefined ?? false;
 

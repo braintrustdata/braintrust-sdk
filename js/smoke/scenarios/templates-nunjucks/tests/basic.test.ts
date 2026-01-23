@@ -1,18 +1,13 @@
-import {
-  registerTemplatePlugin,
-  useTemplateRenderer,
-  Prompt,
-} from "braintrust";
-import { nunjucksPlugin } from "@braintrust/templates-nunjucks";
+import { registerTemplatePlugin, Prompt } from "braintrust";
+import { nunjucksPlugin } from "@braintrust/templates-nunjucks-js";
 import {
   displayTestResults,
   hasFailures,
   type TestResult,
 } from "../../../shared/dist/index.mjs";
 
-// Register and activate the nunjucks plugin
+// Register and activate the nunjucks plugin (defaults used)
 registerTemplatePlugin(nunjucksPlugin);
-useTemplateRenderer("nunjucks");
 
 async function main() {
   const results: TestResult[] = [];

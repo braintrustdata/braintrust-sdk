@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
-    "@braintrust/templates-nunjucks": "file:../../../artifacts/braintrust-templates-nunjucks-latest.tgz"
+    "@braintrust/templates-nunjucks-js": "file:../../../artifacts/braintrust-templates-nunjucks-js-latest.tgz"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",

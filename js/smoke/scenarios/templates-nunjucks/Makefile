@@ -35,12 +35,12 @@ setup:
 	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)" ]; then \
 		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)"; \
 	else \
-		echo "==> Building @braintrust/templates-nunjucks package"; \
-		cd ../../../../integrations/templates-nunjucks && pnpm exec turbo build --filter=@braintrust/templates-nunjucks && pnpm pack --pack-destination ../../js/artifacts; \
+		echo "==> Building @braintrust/templates-nunjucks-js package"; \
+		cd ../../../../integrations/templates-nunjucks && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && pnpm pack --pack-destination ../../js/artifacts; \
 		\
 		for f in ../../js/artifacts/braintrust-templates-nunjucks-*.tgz; do \
-			if [ "$$(basename $$f)" != "braintrust-templates-nunjucks-latest.tgz" ]; then \
-				cp "$$f" ../../js/artifacts/braintrust-templates-nunjucks-latest.tgz; \
+			if [ "$$(basename $$f)" != "braintrust-templates-nunjucks-js-latest.tgz" ]; then \
+				cp "$$f" ../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz; \
 				break; \
 			fi; \
 		done; \

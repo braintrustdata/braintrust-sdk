@@ -275,11 +275,11 @@ jobs:
             fi
           done
 
-          # Copy templates-nunjucks tarball to well-known path
-          for f in braintrust-templates-nunjucks-[0-9]*.tgz; do
+          # Copy templates-nunjucks-js tarball to well-known path
+          for f in braintrust-templates-nunjucks-js-[0-9]*.tgz; do
             if [ -f "$f" ]; then
-              cp "$f" braintrust-templates-nunjucks-latest.tgz
-              echo "Copied $f to braintrust-templates-nunjucks-latest.tgz"
+              cp "$f" braintrust-templates-nunjucks-js-latest.tgz
+              echo "Copied $f to braintrust-templates-nunjucks-js-latest.tgz"
               break
             fi
           done
@@ -299,7 +299,7 @@ jobs:
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
           BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
-          BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: ../artifacts/braintrust-templates-nunjucks-latest.tgz
+          BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: ../artifacts/braintrust-templates-nunjucks-js-latest.tgz
           SMOKE_V2_SHARED_DIST: shared/dist
         run: |
           make test ${{ matrix.scenario }}

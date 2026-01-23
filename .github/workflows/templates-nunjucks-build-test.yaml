@@ -1,4 +1,4 @@
-name: templates-nunjucks
+name: templates-nunjucks-js
 
 on:
   pull_request:
@@ -37,10 +37,10 @@ jobs:
         working-directory: js
         run: pnpm run build
 
-      - name: Build @braintrust/templates-nunjucks
+      - name: Build @braintrust/templates-nunjucks-js
         working-directory: integrations/templates-nunjucks
         run: pnpm run build
 
-      - name: Run @braintrust/templates-nunjucks tests
+      - name: Run @braintrust/templates-nunjucks-js tests
         working-directory: integrations/templates-nunjucks
         run: pnpm run test
