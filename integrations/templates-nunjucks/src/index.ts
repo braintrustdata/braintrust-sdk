@@ -105,7 +105,6 @@ export interface NunjucksOptions {
  */
 export const nunjucksPlugin: TemplateRendererPlugin = {
   name: "nunjucks",
-  version: "0.0.1",
   defaultOptions: {
     autoescape: true,
     throwOnUndefined: false,

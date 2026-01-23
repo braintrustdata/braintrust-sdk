@@ -115,7 +115,6 @@ export type {
   TemplateRendererPlugin,
 } from "./template/registry";
 export {
-  registerTemplateRenderer,
   registerTemplatePlugin,
   useTemplateRenderer,
   getTemplateRenderer,

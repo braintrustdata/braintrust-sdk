@@ -17,7 +17,7 @@ export interface TemplateRenderer {
 /**
  * A template renderer plugin that can be registered with Braintrust.
  *
- * Plugins provide support for different template engines (e.g., Nunjucks, Handlebars, Liquid).
+ * Plugins provide support for different template engines (e.g., Nunjucks).
  * They use a factory pattern where the plugin is registered once, then activated with specific
  * configuration options when needed.
  *
@@ -46,12 +46,6 @@ export interface TemplateRendererPlugin {
    * Must match the format string used in `templateFormat` option.
    */
   name: string;
-
-  /**
-   * Version of the plugin (optional).
-   * Can be used for compatibility checks in the future.
-   */
-  version?: string;
 
   /**
    * Factory function that creates a renderer instance.
@@ -199,7 +193,6 @@ export const getTemplateRenderer = templateRegistry.get.bind(templateRegistry);
 // Built-in mustache plugin
 const mustachePlugin: TemplateRendererPlugin = {
   name: "mustache",
-  version: "1.0.0",
   defaultOptions: {},
   createRenderer() {
     return {
@@ -216,25 +209,3 @@ const mustachePlugin: TemplateRendererPlugin = {
 // Auto-register and activate mustache (built-in)
 registerTemplatePlugin(mustachePlugin);
 useTemplateRenderer("mustache");
-
-// Legacy API for backward compatibility
-// @deprecated Use registerTemplatePlugin + useTemplateRenderer instead
-export function registerTemplateRenderer(
-  format: Exclude<TemplateFormat, "none">,
-  renderer: TemplateRenderer,
-): void {
-  console.warn(
-    `registerTemplateRenderer('${format}', renderer) is deprecated. ` +
-      `Use registerTemplatePlugin() and useTemplateRenderer() instead.`,
-  );
-  // Create a synthetic plugin for backward compatibility
-  const syntheticPlugin: TemplateRendererPlugin = {
-    name: format,
-    version: "legacy",
-    createRenderer() {
-      return renderer;
-    },
-  };
-  registerTemplatePlugin(syntheticPlugin);
-  useTemplateRenderer(format);
-}
