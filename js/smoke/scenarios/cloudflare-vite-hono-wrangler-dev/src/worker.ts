@@ -73,7 +73,7 @@ app.get("/api/test", async (c) => {
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,
-        (e) => e.message.includes("Nunjucks templating is not supported"),
+        (e) => e.message.includes("requires @braintrust/template-nunjucks"),
         "Nunjucks not supported in browser build",
       ),
     ],
