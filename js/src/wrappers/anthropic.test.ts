@@ -58,7 +58,9 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
   beforeEach(async () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
-    anthropic = new Anthropic();
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY || "test-key",
+    });
     client = wrapAnthropic(anthropic);
 
     logger = initLogger({

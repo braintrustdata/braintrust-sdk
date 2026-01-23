@@ -20,6 +20,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist",
     external: ["zod"],
+    noExternal: ["dc-browser", "als-browser"],
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -64,6 +65,19 @@ export default defineConfig([
       },
     },
     splitting: true,
+    clean: true,
+  },
+  {
+    entry: ["src/instrumentation/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "dist/instrumentation",
+    external: ["dc-browser", "@braintrust/instrumentation-core", "zod"],
+    dts: {
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
+    splitting: false,
     clean: true,
   },
 ]);
