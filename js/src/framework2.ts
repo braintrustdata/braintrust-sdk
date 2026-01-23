@@ -15,8 +15,6 @@ import {
   type PromptDataType as PromptData,
   ToolFunctionDefinition as toolFunctionDefinitionSchema,
   type ToolFunctionDefinitionType as ToolFunctionDefinition,
-  ChatCompletionMessageParam as chatCompletionMessageParamSchema,
-  ModelParams as modelParamsSchema,
   FunctionData as functionDataSchema,
   Project as projectSchema,
   ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
@@ -30,7 +28,11 @@ import {
   PromptRowWithId,
 } from "./logger";
 import { GenericFunction } from "./framework-types";
-import { EvalParameters } from "./eval-parameters";
+import type { EvalParameters } from "./eval-parameters";
+import {
+  promptDefinitionToPromptData,
+  type PromptDefinition,
+} from "./prompt-schemas";
 import { zodToJsonSchema } from "./zod/utils";
 import type { EvalParameterSerializedSchema } from "../dev/types";
 
@@ -502,38 +504,6 @@ interface PromptNoTrace {
   noTrace: boolean;
 }
 
-// This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
-export const promptContentsSchema = z.union([
-  z.object({
-    prompt: z.string(),
-  }),
-  z.object({
-    messages: z.array(chatCompletionMessageParamSchema),
-  }),
-]);
-
-export type PromptContents = z.infer<typeof promptContentsSchema>;
-
-export const promptDefinitionSchema = promptContentsSchema.and(
-  z.object({
-    model: z.string(),
-    params: modelParamsSchema.optional(),
-    templateFormat: z.enum(["mustache", "nunjucks", "none"]).optional(),
-  }),
-);
-
-export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
-
-export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
-  z.object({
-    tools: z.array(toolFunctionDefinitionSchema).optional(),
-  }),
-);
-
-export type PromptDefinitionWithTools = z.infer<
-  typeof promptDefinitionWithToolsSchema
->;
-
 export type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
@@ -596,37 +566,6 @@ export class PromptBuilder {
 
     return prompt;
   }
-}
-
-export function promptDefinitionToPromptData(
-  promptDefinition: PromptDefinition,
-  rawTools?: ToolFunctionDefinition[],
-): PromptData {
-  const promptBlock: PromptBlockData =
-    "messages" in promptDefinition
-      ? {
-          type: "chat",
-          messages: promptDefinition.messages,
-          tools:
-            rawTools && rawTools.length > 0
-              ? JSON.stringify(rawTools)
-              : undefined,
-        }
-      : {
-          type: "completion",
-          content: promptDefinition.prompt,
-        };
-
-  return {
-    prompt: promptBlock,
-    options: {
-      model: promptDefinition.model,
-      params: promptDefinition.params,
-    },
-    ...(promptDefinition.templateFormat
-      ? { template_format: promptDefinition.templateFormat }
-      : {}),
-  };
 }
 
 export interface ParametersOpts<S extends EvalParameters> {
