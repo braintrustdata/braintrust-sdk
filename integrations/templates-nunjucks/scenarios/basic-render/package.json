@@ -1,0 +1,14 @@
+{
+  "name": "smoke-templates-nunjucks-integration",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "braintrust": "file:../../../../js/artifacts/braintrust-latest.tgz",
+    "@braintrust/templates-nunjucks-js": "file:../../../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.4.4"
+  }
+}

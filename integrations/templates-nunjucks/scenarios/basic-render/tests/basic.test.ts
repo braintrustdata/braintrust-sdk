@@ -4,7 +4,7 @@ import {
   displayTestResults,
   hasFailures,
   type TestResult,
-} from "../../../shared/dist/index.mjs";
+} from "../../../../../js/smoke/shared/dist/index.mjs";
 
 // Register and activate the nunjucks plugin (defaults used)
 registerTemplatePlugin(nunjucksPlugin);
@@ -122,11 +122,8 @@ async function main() {
         false,
       );
 
-      // Without templateFormat, nunjucks-specific syntax should not be processed
-      // (mustache, the default, doesn't understand {% %} syntax)
       const noFormatResult = noFormatPrompt.build({ condition: true });
 
-      // Should NOT have rendered the nunjucks template (mustache leaves it as-is)
       if (
         noFormatResult.messages[0]?.content ===
         "{% if condition %}yes{% endif %}"
