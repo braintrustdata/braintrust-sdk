@@ -24,6 +24,7 @@ const {
   testBuildResolution,
   testMustacheTemplate,
   testNunjucksTemplate,
+  testEvalSmoke,
 } = require("../../../shared/dist/index.js");
 
 const braintrust = require("braintrust");
@@ -54,6 +55,7 @@ test("shared test suites pass in Jest", async () => {
       testAsyncLocalStorageTraced,
       testNestedTraced,
       testCurrentSpan,
+      testEvalSmoke,
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,

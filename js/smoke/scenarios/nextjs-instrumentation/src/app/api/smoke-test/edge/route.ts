@@ -70,7 +70,7 @@ export async function GET() {
         testNunjucksTemplate,
         (e: { message: string }) =>
           e.message.includes("requires @braintrust/template-nunjucks"),
-        "Nunjucks not supported in Edge Runtime",
+        "Nunjucks requires separate package",
       ),
     ],
   });

@@ -86,7 +86,7 @@ async function runAllTestSuites() {
         testNunjucksTemplate,
         (e: { message: string }) =>
           e.message.includes("requires @braintrust/template-nunjucks"),
-        "Nunjucks not supported in browser build",
+        "Nunjucks requires separate package",
       ),
     ],
   });
