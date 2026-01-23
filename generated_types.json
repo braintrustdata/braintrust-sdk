@@ -3179,6 +3179,13 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": {}
+              },
+              "parameters_version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The version (transaction ID) of the parameters being used"
               }
             },
             "required": [
@@ -3225,6 +3232,55 @@
           },
           {
             "$ref": "#/components/schemas/BatchedFacetData"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "parameters"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "additionalProperties": {},
+                "description": "The parameters data"
+              },
+              "__schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "object"
+                    ]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      }
+                    }
+                  }
+                },
+                "description": "JSON Schema describing the structure and types of the parameters data"
+              }
+            },
+            "required": [
+              "type",
+              "data",
+              "__schema"
+            ],
+            "title": "parameters"
           }
         ]
       },
@@ -3433,7 +3489,8 @@
           "custom_view",
           "preprocessor",
           "facet",
-          "classifier"
+          "classifier",
+          "parameters"
         ]
       },
       "FunctionOutputType": {
@@ -3457,7 +3514,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "tag"
+          "tag",
+          "parameters"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3476,7 +3534,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "tag"
+          "tag",
+          "parameters"
         ]
       },
       "GitMetadataSettings": {
@@ -7604,6 +7663,7 @@
               "datasets",
               "dataset",
               "prompts",
+              "parameters",
               "tools",
               "scorers",
               "classifiers",
@@ -8049,7 +8109,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "7178200dd3c7869f27b677260303cda0b798bf42"
+    "x-internal-git-sha": "90f443d1f251497373abd15112abb5c4f92dd8ec"
   },
   "paths": {},
   "webhooks": {}
