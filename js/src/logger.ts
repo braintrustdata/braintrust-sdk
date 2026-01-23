@@ -129,14 +129,6 @@ import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 import type { EvalParameters, InferParameters } from "./eval-parameters";
 
-// Alias for TypeScript's built-in Parameters utility type (before the Parameters class shadows it)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type FunctionParameters<T extends (...args: any[]) => any> = T extends (
-  ...args: infer P
-) => unknown
-  ? P
-  : never;
-
 // Context management interfaces
 export interface ContextParentSpanIds {
   rootSpanId: string;
@@ -642,12 +634,12 @@ export class BraintrustState {
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
 
-    const parametersMemoryCache = new LRUCache<string, Parameters>({
+    const parametersMemoryCache = new LRUCache<string, RemoteEvalParameters>({
       max:
         Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX")) ?? 1 << 10,
     });
     const parametersDiskCache = canUseDiskCache()
-      ? new DiskCache<Parameters>({
+      ? new DiskCache<RemoteEvalParameters>({
           cacheDir:
             iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DIR") ??
             `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/parameters_cache`,
@@ -4120,7 +4112,9 @@ export async function loadParameters<
   fetch,
   forceLogin,
   state: stateArg,
-}: LoadParametersOptions): Promise<Parameters<true, true, InferParameters<S>>> {
+}: LoadParametersOptions): Promise<
+  RemoteEvalParameters<true, true, InferParameters<S>>
+> {
   if (version && environment) {
     throw new Error(
       "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
@@ -4195,7 +4189,7 @@ export async function loadParameters<
       }
     }
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return parameters as Parameters<true, true, InferParameters<S>>;
+    return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
   }
 
   if (!("objects" in response) || response.objects.length === 0) {
@@ -4221,7 +4215,7 @@ export async function loadParameters<
   }
 
   const metadata = parametersRowSchema.parse(response["objects"][0]);
-  const parameters = new Parameters(metadata);
+  const parameters = new RemoteEvalParameters(metadata);
   try {
     if (id) {
       await state.parametersCache.set({ id }, parameters);
@@ -4235,7 +4229,7 @@ export async function loadParameters<
     console.warn("Failed to set parameters in cache:", e);
   }
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return parameters as Parameters<true, true, InferParameters<S>>;
+  return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
 }
 
 /**
@@ -4633,7 +4627,7 @@ function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
   spanArgs: any,
   noTraceIO: boolean,
 ): F {
-  const wrapper = function* (this: any, ...fnArgs: FunctionParameters<F>) {
+  const wrapper = function* (this: any, ...fnArgs: Parameters<F>) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -4700,10 +4694,7 @@ function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
   spanArgs: any,
   noTraceIO: boolean,
 ): F {
-  const wrapper = async function* (
-    this: any,
-    ...fnArgs: FunctionParameters<F>
-  ) {
+  const wrapper = async function* (this: any, ...fnArgs: Parameters<F>) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -4801,7 +4792,7 @@ export function wrapTraced<
     AsyncFlushArg<IsAsyncFlush> &
     WrapTracedArgs,
 ): IsAsyncFlush extends false
-  ? (...args: FunctionParameters<F>) => Promise<Awaited<ReturnType<F>>>
+  ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
   : F {
   const spanArgs: typeof args = {
     name: fn.name,
@@ -4827,7 +4818,7 @@ export function wrapTraced<
   }
 
   if (args?.asyncFlush) {
-    return ((...fnArgs: FunctionParameters<F>) =>
+    return ((...fnArgs: Parameters<F>) =>
       traced((span) => {
         if (!hasExplicitInput) {
           span.log({ input: fnArgs });
@@ -4850,7 +4841,7 @@ export function wrapTraced<
         return output;
       }, spanArgs)) as IsAsyncFlush extends false ? never : F;
   } else {
-    return ((...fnArgs: FunctionParameters<F>) =>
+    return ((...fnArgs: Parameters<F>) =>
       traced(async (span) => {
         if (!hasExplicitInput) {
           span.log({ input: fnArgs });
@@ -4866,7 +4857,7 @@ export function wrapTraced<
 
         return output;
       }, spanArgs)) as IsAsyncFlush extends false
-      ? (...args: FunctionParameters<F>) => Promise<Awaited<ReturnType<F>>>
+      ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
       : never;
   }
 }
@@ -7386,7 +7377,7 @@ export class Prompt<
   }
 }
 
-export class Parameters<
+export class RemoteEvalParameters<
   HasId extends boolean = true,
   HasVersion extends boolean = true,
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -7453,14 +7444,19 @@ export class Parameters<
 
   public static isParameters(
     x: unknown,
-  ): x is Parameters<boolean, boolean, Record<string, unknown>> {
+  ): x is RemoteEvalParameters<boolean, boolean, Record<string, unknown>> {
     return (
       typeof x === "object" &&
       x !== null &&
       "__braintrust_parameters_marker" in x &&
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      (x as unknown as Parameters<boolean, boolean, Record<string, unknown>>)
-        .__braintrust_parameters_marker === true
+      (
+        x as unknown as RemoteEvalParameters<
+          boolean,
+          boolean,
+          Record<string, unknown>
+        >
+      ).__braintrust_parameters_marker === true
     );
   }
 }

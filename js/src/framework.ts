@@ -28,7 +28,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
-  Parameters as ParametersClass,
+  RemoteEvalParameters,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -234,8 +234,10 @@ export interface Evaluator<
    */
   parameters?:
     | Parameters
-    | ParametersClass<boolean, boolean, InferParameters<Parameters>>
-    | Promise<ParametersClass<boolean, boolean, InferParameters<Parameters>>>;
+    | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+    | Promise<
+        RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+      >;
 
   /**
    * An optional name for the experiment.
@@ -889,7 +891,7 @@ async function runEvaluatorInternal(
       resolvedEvaluatorParams = await resolvedEvaluatorParams;
     }
 
-    if (ParametersClass.isParameters(resolvedEvaluatorParams)) {
+    if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
       // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const loadedData =
