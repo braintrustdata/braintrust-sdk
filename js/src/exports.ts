@@ -80,7 +80,7 @@ export {
   loadParameters,
   loadPrompt,
   log,
-  Parameters,
+  RemoteEvalParameters as Parameters,
   logError,
   login,
   loginToState,

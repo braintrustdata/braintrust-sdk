@@ -29,7 +29,7 @@ import {
   EvalCase,
   getSpanParentObject,
   initDataset,
-  Parameters,
+  RemoteEvalParameters,
 } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
@@ -114,7 +114,7 @@ export function runDevServer(
         if (evaluator.parameters) {
           const resolvedParams = await Promise.resolve(evaluator.parameters);
 
-          if (Parameters.isParameters(resolvedParams)) {
+          if (RemoteEvalParameters.isParameters(resolvedParams)) {
             parameters = resolvedParams.schema as EvalParameterSerializedSchema;
             parametersSource = {
               parametersId: resolvedParams.id,
@@ -177,7 +177,7 @@ export function runDevServer(
           );
 
           if (
-            !Parameters.isParameters(resolvedParameters) &&
+            !RemoteEvalParameters.isParameters(resolvedParameters) &&
             Object.keys(resolvedParameters).length > 0
           ) {
             validateParameters(parameters ?? {}, resolvedParameters);
