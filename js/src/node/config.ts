@@ -11,6 +11,7 @@ import iso from "../isomorph";
 import { getRepoInfo, getPastNAncestors } from "../gitutil";
 import { getCallerLocation } from "../stackutil";
 import { _internalSetInitialState } from "../logger";
+import { registry } from "../instrumentation/registry";
 
 export function configureNode() {
   iso.buildType = "node";
@@ -48,4 +49,7 @@ export function configureNode() {
   iso.hash = (data) => crypto.createHash("sha256").update(data).digest("hex");
 
   _internalSetInitialState();
+
+  // Enable auto-instrumentation
+  registry.enable();
 }
