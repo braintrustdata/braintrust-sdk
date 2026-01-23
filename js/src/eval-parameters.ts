@@ -3,7 +3,7 @@ import { Prompt } from "./logger";
 import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
-} from "./framework2";
+} from "./prompt-schemas";
 import { PromptData as promptDataSchema } from "./generated_types";
 
 // Schema for evaluation parameters
