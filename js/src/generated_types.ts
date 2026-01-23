@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA c99d1e6fbf062688da7f1f22394c72ea480fe81a) -- do not modify
+// Auto-generated file (internal git SHA 90f443d1f251497373abd15112abb5c4f92dd8ec) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -899,6 +899,7 @@ export const FunctionTypeEnumNullish = z.union([
     "facet",
     "classifier",
     "tag",
+    "parameters",
   ]),
   z.null(),
 ]);
@@ -1015,6 +1016,7 @@ export const FunctionData = z.union([
     endpoint: z.string(),
     eval_name: z.string(),
     parameters: z.object({}).partial().passthrough(),
+    parameters_version: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
     type: z.literal("global"),
@@ -1028,8 +1030,21 @@ export const FunctionData = z.union([
   BatchedFacetData,
   z.object({
     type: z.literal("parameters"),
-    data: z.record(z.unknown()).optional(),
-    __schema: z.record(z.unknown()),
+    data: z.object({}).partial().passthrough(),
+    __schema: z
+      .object({
+        type: z.literal("object"),
+        properties: z.record(
+          z
+            .object({
+              type: z.string(),
+              description: z.string(),
+              default: z.unknown(),
+            })
+            .partial(),
+        ),
+      })
+      .partial(),
   }),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
@@ -1159,6 +1174,7 @@ export const FunctionObjectType = z.enum([
   "preprocessor",
   "facet",
   "classifier",
+  "parameters",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum([
@@ -1821,6 +1837,7 @@ export const View = z.object({
     "datasets",
     "dataset",
     "prompts",
+    "parameters",
     "tools",
     "scorers",
     "classifiers",
