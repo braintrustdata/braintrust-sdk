@@ -1,0 +1,77 @@
+{
+  "name": "@braintrust/auto-instrumentations",
+  "version": "0.1.0",
+  "description": "Auto-instrumentation for AI SDKs with Braintrust",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./hook.mjs": "./dist/hook.mjs",
+    "./bundler/vite": {
+      "types": "./dist/bundler/vite.d.ts",
+      "import": "./dist/bundler/vite.mjs",
+      "module": "./dist/bundler/vite.mjs",
+      "require": "./dist/bundler/vite.js"
+    },
+    "./bundler/webpack": {
+      "types": "./dist/bundler/webpack.d.ts",
+      "import": "./dist/bundler/webpack.mjs",
+      "module": "./dist/bundler/webpack.mjs",
+      "require": "./dist/bundler/webpack.js"
+    },
+    "./bundler/esbuild": {
+      "types": "./dist/bundler/esbuild.d.ts",
+      "import": "./dist/bundler/esbuild.mjs",
+      "module": "./dist/bundler/esbuild.mjs",
+      "require": "./dist/bundler/esbuild.js"
+    },
+    "./bundler/rollup": {
+      "types": "./dist/bundler/rollup.d.ts",
+      "import": "./dist/bundler/rollup.mjs",
+      "module": "./dist/bundler/rollup.mjs",
+      "require": "./dist/bundler/rollup.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -rf dist/*",
+    "test": "vitest run"
+  },
+  "author": "Braintrust Data Inc.",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "als-browser": "^1.0.1",
+    "braintrust": "workspace:*",
+    "dc-browser": "^1.0.2",
+    "esbuild": "^0.24.2",
+    "openai": "^4.0.0",
+    "rollup": "^4.28.1",
+    "tsup": "^8.5.0",
+    "typescript": "5.4.4",
+    "vite": "^5.4.14",
+    "vitest": "^2.1.9",
+    "webpack": "^5.97.1"
+  },
+  "dependencies": {
+    "@apm-js-collab/code-transformer": "^0.8.2",
+    "module-details-from-path": "^1.0.4",
+    "unplugin": "^2.3.5"
+  },
+  "peerDependencies": {
+    "braintrust": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "braintrust": {
+      "optional": false
+    }
+  }
+}

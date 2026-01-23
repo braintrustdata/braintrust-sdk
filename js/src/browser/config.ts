@@ -1,5 +1,10 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
+import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
+import { registry } from "../instrumentation/registry";
+
+// This is copied from next.js. It seems they define AsyncLocalStorage in the edge
+// environment, even though it's not defined in the browser.
 import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
 
 declare global {
@@ -19,9 +24,13 @@ export function configureBrowser(): void {
 
   iso.buildType = "browser";
 
+  // Try to use global AsyncLocalStorage (edge runtime like Next.js), fallback to als-browser
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    } else {
+      // Use als-browser polyfill for standard browser environments
+      iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
     }
   } catch {
     // Ignore
@@ -46,5 +55,9 @@ export function configureBrowser(): void {
   };
 
   _internalSetInitialState();
+
+  // Enable auto-instrumentation
+  registry.enable();
+
   browserConfigured = true;
 }

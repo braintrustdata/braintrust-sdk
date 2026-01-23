@@ -67,6 +67,12 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
+    },
+    "./instrumentation": {
+      "types": "./dist/instrumentation/index.d.ts",
+      "import": "./dist/instrumentation/index.mjs",
+      "module": "./dist/instrumentation/index.mjs",
+      "require": "./dist/instrumentation/index.js"
     }
   },
   "files": [
@@ -144,12 +150,14 @@
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
     "ajv": "^8.17.1",
+    "als-browser": "^1.0.1",
     "argparse": "^2.0.1",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
+    "dc-browser": "^1.0.2",
     "dotenv": "^16.4.5",
     "esbuild": "^0.27.0",
     "eventsource-parser": "^1.1.2",
