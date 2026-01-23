@@ -349,9 +349,16 @@ class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.current_experiment: Experiment | None = None
-        self.current_logger: contextvars.ContextVar[Logger | None] = contextvars.ContextVar(
+        # We use both a ContextVar and a plain attribute for the current logger:
+        # - _cv_logger (ContextVar): Provides async context isolation so different
+        #   async tasks can have different loggers without affecting each other.
+        # - _local_logger (plain attribute): Fallback for threads, since ContextVars
+        #   don't propagate to new threads. This way if users don't want to do
+        #   anything specific they'll always have a "global logger"
+        self._cv_logger: contextvars.ContextVar[Logger | None] = contextvars.ContextVar(
             "braintrust_current_logger", default=None
         )
+        self._local_logger: Logger | None = None
         self.current_parent: contextvars.ContextVar[str | None] = contextvars.ContextVar(
             "braintrust_current_parent", default=None
         )
@@ -425,7 +432,8 @@ class BraintrustState:
     def reset_parent_state(self):
         # reset possible parent state for tests
         self.current_experiment = None
-        self.current_logger.set(None)
+        self._cv_logger.set(None)
+        self._local_logger = None
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
 
@@ -485,7 +493,8 @@ class BraintrustState:
             if k
             not in (
                 "current_experiment",
-                "current_logger",
+                "_cv_logger",
+                "_local_logger",
                 "current_parent",
                 "current_span",
                 "_global_bg_logger",
@@ -1634,7 +1643,8 @@ def init_logger(
     if set_current:
         if _state is None:
             raise RuntimeError("_state is None in init_logger. This should never happen.")
-        _state.current_logger.set(ret)
+        _state._cv_logger.set(ret)
+        _state._local_logger = ret
     return ret
 
 
@@ -1955,7 +1965,7 @@ def current_experiment() -> Optional["Experiment"]:
 def current_logger() -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
 
-    return _state.current_logger.get()
+    return _state._cv_logger.get() or _state._local_logger
 
 
 def current_span() -> Span:
@@ -3997,7 +4007,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger.get()
+            cur_logger = self.state._cv_logger.get() or self.state._local_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
