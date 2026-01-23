@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypeAlias, TypedDict
 
-from typing_extensions import NotRequired
+from typing_extensions import NotRequired, TypedDict
 
 AclObjectType: TypeAlias = Literal[
     'organization',
@@ -585,7 +585,7 @@ class ExperimentEventMetadata(TypedDict):
     """
 
 
-class ExperimentEventMetrics(TypedDict):
+class ExperimentEventMetrics(TypedDict, extra_items=float):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the experiment event started
@@ -728,6 +728,33 @@ class FunctionDataFunctionData2(TypedDict):
     endpoint: str
     eval_name: str
     parameters: Mapping[str, Any]
+    parameters_version: NotRequired[str | None]
+    """
+    The version (transaction ID) of the parameters being used
+    """
+
+
+class FunctionDataFunctionData4SchemaProperties(TypedDict):
+    type: NotRequired[str | None]
+    description: NotRequired[str | None]
+    default: NotRequired[Any | None]
+
+
+class FunctionDataFunctionData4Schema(TypedDict):
+    type: NotRequired[Literal['object'] | None]
+    properties: NotRequired[Mapping[str, FunctionDataFunctionData4SchemaProperties] | None]
+
+
+class FunctionDataFunctionData4(TypedDict):
+    type: Literal['parameters']
+    data: Mapping[str, Any]
+    """
+    The parameters data
+    """
+    __schema: FunctionDataFunctionData4Schema
+    """
+    JSON Schema describing the structure and types of the parameters data
+    """
 
 
 FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
@@ -795,15 +822,15 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier', 'parameters'
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'tag', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
 ]
 """
 The type of global function. Defaults to 'scorer'.
@@ -811,11 +838,11 @@ The type of global function. Defaults to 'scorer'.
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
 ]
 
 
-class GitMetadataSettings(TypedDict):
+class GitMetadataSettings(TypedDict, closed=True):
     collect: Literal['all', 'none', 'some']
     fields: NotRequired[
         Sequence[
@@ -1563,7 +1590,7 @@ class ProjectLogsEventMetadata(TypedDict):
     """
 
 
-class ProjectLogsEventMetrics(TypedDict):
+class ProjectLogsEventMetrics(TypedDict, extra_items=float):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the project logs event started
@@ -3325,6 +3352,7 @@ class View(TypedDict):
         'datasets',
         'dataset',
         'prompts',
+        'parameters',
         'tools',
         'scorers',
         'classifiers',
@@ -3564,6 +3592,7 @@ FunctionData: TypeAlias = (
     | FunctionDataFunctionData3
     | FacetData
     | BatchedFacetData
+    | FunctionDataFunctionData4
 )
 
 
