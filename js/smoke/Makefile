@@ -104,14 +104,22 @@ test:
 	: $${SMOKE_V2_SHARED_DIST:=shared/dist}; \
 	export BRAINTRUST_TAR BRAINTRUST_OTEL_TAR SMOKE_V2_SHARED_DIST; \
 	\
+	FAILED_SCENARIOS=""; \
 	for scenario in $$SCENARIOS_TO_RUN; do \
 		echo ""; \
 		echo "=== Testing $$scenario ==="; \
-		$(MAKE) -C scenarios/$$scenario test || exit 1; \
+		if ! $(MAKE) -C scenarios/$$scenario test; then \
+			FAILED_SCENARIOS="$$FAILED_SCENARIOS $$scenario"; \
+		fi; \
 	done; \
 	\
 	echo ""; \
-	echo "✓ All requested scenarios passed"
+	if [ -n "$$FAILED_SCENARIOS" ]; then \
+		echo "✗ Failed scenarios:$$FAILED_SCENARIOS"; \
+		exit 1; \
+	else \
+		echo "✓ All requested scenarios passed"; \
+	fi
 
 # =============================================================================
 # List - Show discovered scenarios

@@ -3,31 +3,28 @@
  * Tests core logging functionality: initLogger, spans, flush
  */
 
-import type { TestAdapters, TestResult } from "../helpers/types";
+import type { LoggerInstance } from "../helpers/types";
 import { assert, assertEqual, assertNotEmpty } from "../helpers/assertions";
+import { register } from "../helpers/register";
 
 const PROJECT_ID = "test-project-id";
 
-/**
- * Test basic span logging
- */
-export async function testBasicSpanLogging(
-  adapters: TestAdapters,
-): Promise<TestResult> {
-  const testName = "testBasicSpanLogging";
+type InitLoggerFn = (options: {
+  projectName: string;
+  projectId?: string;
+}) => LoggerInstance;
 
-  try {
-    const { initLogger, backgroundLogger } = adapters;
-
+export const testBasicSpanLogging = register(
+  "testBasicSpanLogging",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
     const logger = initLogger({
       projectName: "basic-logging-test",
       projectId: PROJECT_ID,
     });
 
-    // Create a span
     const span = logger.startSpan({ name: "basic.span" });
 
-    // Log some data
     span.log({
       input: "What is the capital of France?",
       output: "Paris",
@@ -35,13 +32,9 @@ export async function testBasicSpanLogging(
       metadata: { transport: "smoke-test" },
     });
 
-    // End the span
     span.end();
-
-    // Flush the logger
     await logger.flush();
 
-    // Verify events were captured
     const events = await backgroundLogger.drain();
 
     assertNotEmpty(events, "No events were captured by the background logger");
@@ -52,40 +45,19 @@ export async function testBasicSpanLogging(
     assertEqual(event.output, "Paris");
     assertEqual(event.expected, "Paris");
 
-    return {
-      status: "pass" as const,
-      name: testName,
-      message: "Basic span logging test passed",
-    };
-  } catch (error) {
-    return {
-      status: "fail" as const,
-      name: testName,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    };
-  }
-}
+    return "Basic span logging test passed";
+  },
+);
 
-/**
- * Test multiple spans in sequence
- */
-export async function testMultipleSpans(
-  adapters: TestAdapters,
-): Promise<TestResult> {
-  const testName = "testMultipleSpans";
-
-  try {
-    const { initLogger, backgroundLogger } = adapters;
-
+export const testMultipleSpans = register(
+  "testMultipleSpans",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
     const logger = initLogger({
       projectName: "multi-span-test",
       projectId: PROJECT_ID,
     });
 
-    // Create multiple spans
     const span1 = logger.startSpan({ name: "span.1" });
     span1.log({ input: "test1", output: "result1" });
     span1.end();
@@ -96,7 +68,6 @@ export async function testMultipleSpans(
 
     await logger.flush();
 
-    // Verify events
     const events = await backgroundLogger.drain();
 
     assertNotEmpty(events, "No events were captured");
@@ -105,104 +76,45 @@ export async function testMultipleSpans(
       `Expected at least 2 events, got ${events.length}`,
     );
 
-    return {
-      status: "pass" as const,
-      name: testName,
-      message: `Multiple spans test passed (${events.length} events captured)`,
-    };
-  } catch (error) {
-    return {
-      status: "fail" as const,
-      name: testName,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    };
-  }
-}
+    return `Multiple spans test passed (${events.length} events captured)`;
+  },
+);
 
-/**
- * Test logger.log() if available (direct logging without explicit span)
- */
-export async function testDirectLogging(
-  adapters: TestAdapters,
-): Promise<TestResult> {
-  const testName = "testDirectLogging";
-
-  try {
-    const { initLogger, backgroundLogger } = adapters;
-
+export const testDirectLogging = register(
+  "testDirectLogging",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
     const logger = initLogger({
       projectName: "direct-logging-test",
       projectId: PROJECT_ID,
     });
 
-    // Some logger implementations support direct logging
-    if (typeof logger.log === "function") {
-      logger.log({
-        input: "direct test",
-        output: "direct result",
-      });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    logger.log!({
+      input: "direct test",
+      output: "direct result",
+    });
 
-      await logger.flush();
+    await logger.flush();
 
-      const events = await backgroundLogger.drain();
-      assertNotEmpty(events, "No events were captured from direct logging");
+    const events = await backgroundLogger.drain();
+    assertNotEmpty(events, "No events were captured from direct logging");
 
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "Direct logging test passed",
-      };
-    } else {
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "Direct logging not supported, skipped",
-      };
-    }
-  } catch (error) {
-    return {
-      status: "fail" as const,
-      name: testName,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-    };
-  }
-}
+    return "Direct logging test passed";
+  },
+);
 
-/**
- * Test JSONAttachment functionality
- * Tests that JSONAttachment can be created and logged correctly
- */
-export async function testJSONAttachment(
-  adapters: TestAdapters,
-  braintrust: { JSONAttachment?: unknown },
-): Promise<TestResult> {
-  const testName = "testJSONAttachment";
-
-  try {
-    const { initLogger, backgroundLogger } = adapters;
-
+export const testJSONAttachment = register(
+  "testJSONAttachment",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
     const logger = initLogger({
       projectName: "json-attachment-test",
       projectId: PROJECT_ID,
     });
 
-    // Check if JSONAttachment is available
-    if (!braintrust.JSONAttachment) {
-      return {
-        status: "pass" as const,
-        name: testName,
-        message: "JSONAttachment not available, skipped",
-      };
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const JSONAttachment = braintrust.JSONAttachment as any;
+    const Attachment = braintrust.JSONAttachment as any;
 
     const testData = {
       foo: "bar",
@@ -212,38 +124,22 @@ export async function testJSONAttachment(
       },
     };
 
-    // Test logging with JSONAttachment
-    if (typeof logger.log === "function") {
-      logger.log({
-        input: {
-          type: "chat_completion",
-          transcript: new JSONAttachment(testData, {
-            filename: "conversation_transcript.json",
-            pretty: true,
-          }),
-        },
-      });
-    } else {
-      // Fallback to span logging
-      const span = logger.startSpan({ name: "json-attachment-test" });
-      span.log({
-        input: {
-          type: "chat_completion",
-          transcript: new JSONAttachment(testData, {
-            filename: "conversation_transcript.json",
-            pretty: true,
-          }),
-        },
-      });
-      span.end();
-    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    logger.log!({
+      input: {
+        type: "chat_completion",
+        transcript: new Attachment(testData, {
+          filename: "conversation_transcript.json",
+          pretty: true,
+        }),
+      },
+    });
 
     await logger.flush();
 
     const events = await backgroundLogger.drain();
     assertNotEmpty(events, "No events were captured with JSONAttachment");
 
-    // Verify the test data structure is preserved
     assertEqual(testData.foo, "bar", "testData.foo should be 'bar'");
     assertEqual(
       testData.nested.array.length,
@@ -261,40 +157,202 @@ export async function testJSONAttachment(
       "testData.nested.bool should be true",
     );
 
-    return {
-      status: "pass" as const,
-      name: testName,
-      message: "JSONAttachment test passed",
-    };
-  } catch (error) {
-    return {
-      status: "fail" as const,
-      name: testName,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+    return "JSONAttachment test passed";
+  },
+);
+
+export const testAsyncLocalStorageTraced = register(
+  "testAsyncLocalStorageTraced",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tracedFn = braintrust.traced as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const startSpanFn = braintrust.startSpan as any;
+
+    initLogger({
+      projectName: "als-traced-test",
+      projectId: PROJECT_ID,
+    });
+
+    await tracedFn(
+      () => {
+        const child = startSpanFn({ name: "child-span" });
+        child.log({ input: "child input", output: "child output" });
+        child.end();
       },
-    };
-  }
-}
+      { name: "parent-span" },
+    );
 
-/**
- * Run all basic logging tests
- */
-export async function runBasicLoggingTests(
-  adapters: TestAdapters,
-  braintrust?: { JSONAttachment?: unknown },
-): Promise<TestResult[]> {
-  const results: TestResult[] = [];
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
 
-  results.push(await testBasicSpanLogging(adapters));
-  results.push(await testMultipleSpans(adapters));
-  results.push(await testDirectLogging(adapters));
+    assertNotEmpty(events, "No events captured for ALS traced test");
 
-  // Only run JSONAttachment test if braintrust module is provided
-  if (braintrust) {
-    results.push(await testJSONAttachment(adapters, braintrust));
-  }
+    const parentSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "parent-span",
+    );
+    const childSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "child-span",
+    );
 
-  return results;
-}
+    if (parentSpan && childSpan) {
+      const parentId = parentSpan.span_id as string;
+      const childParents = (childSpan.span_parents as string[]) || [];
+
+      assert(
+        childParents.includes(parentId),
+        `Child span should have parent span ID in span_parents. Parent ID: ${parentId}, Child parents: ${JSON.stringify(childParents)}`,
+      );
+
+      return "ALS traced test passed (parent-child relationship verified)";
+    } else if (!parentSpan && !childSpan) {
+      return "ALS not available in this environment, test skipped";
+    } else {
+      throw new Error(
+        `Expected both parent and child spans, but found: parent=${!!parentSpan}, child=${!!childSpan}`,
+      );
+    }
+  },
+);
+
+export const testNestedTraced = register(
+  "testNestedTraced",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tracedFn = braintrust.traced as any;
+
+    initLogger({
+      projectName: "nested-traced-test",
+      projectId: PROJECT_ID,
+    });
+
+    await tracedFn(
+      async () => {
+        await tracedFn(
+          async () => {
+            await tracedFn(
+              () => {
+                // innermost span
+              },
+              { name: "grandchild-span" },
+            );
+          },
+          { name: "child-span" },
+        );
+      },
+      { name: "parent-span" },
+    );
+
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
+
+    if (events.length === 0) {
+      return "ALS not available in this environment, test skipped";
+    }
+
+    const parentSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "parent-span",
+    );
+    const childSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name === "child-span",
+    );
+    const grandchildSpan = events.find(
+      (e) =>
+        typeof e.span_attributes === "object" &&
+        e.span_attributes !== null &&
+        (e.span_attributes as Record<string, unknown>).name ===
+          "grandchild-span",
+    );
+
+    if (parentSpan && childSpan && grandchildSpan) {
+      const parentId = parentSpan.span_id as string;
+      const childId = childSpan.span_id as string;
+      const childParents = (childSpan.span_parents as string[]) || [];
+      const grandchildParents = (grandchildSpan.span_parents as string[]) || [];
+
+      assert(
+        childParents.includes(parentId),
+        "Child should have parent in span_parents",
+      );
+
+      assert(
+        grandchildParents.includes(childId),
+        "Grandchild should have child in span_parents",
+      );
+
+      return "Nested traced test passed (3-level hierarchy verified)";
+    } else {
+      return "ALS not available in this environment, test skipped";
+    }
+  },
+);
+
+export const testCurrentSpan = register(
+  "testCurrentSpan",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tracedFn = braintrust.traced as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const currentSpanFn = braintrust.currentSpan as any;
+
+    initLogger({
+      projectName: "current-span-test",
+      projectId: PROJECT_ID,
+    });
+
+    let capturedSpanId: string | undefined;
+
+    await tracedFn(
+      () => {
+        const current = currentSpanFn();
+        if (current && typeof current === "object" && "spanId" in current) {
+          capturedSpanId = (current as { spanId: string }).spanId;
+        }
+      },
+      { name: "test-current-span" },
+    );
+
+    const events = (await backgroundLogger.drain()) as Array<
+      Record<string, unknown>
+    >;
+
+    if (events.length === 0 || !capturedSpanId) {
+      return "ALS not available in this environment, test skipped";
+    }
+
+    const span = events.find((e) => e.span_id === capturedSpanId);
+
+    if (span) {
+      assertEqual(
+        (
+          (span.span_attributes as Record<string, unknown>) || {
+            name: undefined,
+          }
+        ).name,
+        "test-current-span",
+        "currentSpan() should return the active span",
+      );
+
+      return "currentSpan test passed";
+    } else {
+      throw new Error("currentSpan() returned a span ID that was not logged");
+    }
+  },
+);
