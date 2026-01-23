@@ -52,8 +52,20 @@ export type EvalParameterSerializedSchema = z.infer<
   typeof evalParametersSerializedSchema
 >;
 
+export const parametersSourceSchema = z.object({
+  parametersId: z.string().optional(),
+  slug: z.string(),
+  name: z.string(),
+  projectId: z.string().optional(),
+  version: z.string().optional(),
+});
+
+export type ParametersSource = z.infer<typeof parametersSourceSchema>;
+
 export const evaluatorDefinitionSchema = z.object({
   parameters: evalParametersSerializedSchema.optional(),
+  parametersSource: parametersSourceSchema.optional(),
+  scores: z.array(z.object({ name: z.string() })).optional(),
 });
 export type EvaluatorDefinition = z.infer<typeof evaluatorDefinitionSchema>;
 

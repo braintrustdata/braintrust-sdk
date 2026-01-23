@@ -29,6 +29,7 @@ import {
   EvalCase,
   getSpanParentObject,
   initDataset,
+  Parameters,
 } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
@@ -38,9 +39,10 @@ import {
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
+  EvalParameterSerializedSchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  evalParametersSerializedSchema,
+  ParametersSource,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
@@ -99,22 +101,45 @@ export function runDevServer(
   });
 
   // List endpoint - returns all available evaluators and their metadata
-  app.get("/list", checkAuthorized, (req, res) => {
-    const evalDefs: EvaluatorDefinitions = Object.fromEntries(
-      Object.entries(allEvaluators).map(([name, evaluator]) => [
-        name,
-        {
-          parameters: evaluator.parameters
-            ? makeEvalParametersSchema(evaluator.parameters)
-            : undefined,
+  app.get(
+    "/list",
+    checkAuthorized,
+    asyncHandler(async (req, res) => {
+      const evalDefs: EvaluatorDefinitions = {};
+
+      for (const [name, evaluator] of Object.entries(allEvaluators)) {
+        let parameters: EvalParameterSerializedSchema | undefined;
+        let parametersSource: ParametersSource | undefined;
+
+        if (evaluator.parameters) {
+          const resolvedParams = await Promise.resolve(evaluator.parameters);
+
+          if (Parameters.isParameters(resolvedParams)) {
+            parameters = resolvedParams.schema as EvalParameterSerializedSchema;
+            parametersSource = {
+              parametersId: resolvedParams.id,
+              slug: resolvedParams.slug,
+              name: resolvedParams.name,
+              projectId: resolvedParams.projectId,
+              version: resolvedParams.version,
+            };
+          } else {
+            parameters = makeEvalParametersSchema(resolvedParams);
+          }
+        }
+
+        evalDefs[name] = {
+          parameters,
+          parametersSource,
           scores: evaluator.scores.map((score, idx) => ({
             name: scorerName(score, idx),
           })),
-        },
-      ]),
-    );
-    res.json(evalDefs);
-  });
+        };
+      }
+
+      res.json(evalDefs);
+    }),
+  );
 
   app.post(
     "/eval",
@@ -145,21 +170,18 @@ export function runDevServer(
         return;
       }
 
-      if (
-        evaluator.parameters &&
-        Object.keys(evaluator.parameters).length > 0
-      ) {
+      if (evaluator.parameters) {
         try {
-          if (!evaluator.parameters) {
-            res.status(400).json({
-              error: `Evaluator '${name}' does not accept parameters`,
-            });
-            return;
-          }
+          const resolvedParameters = await Promise.resolve(
+            evaluator.parameters,
+          );
 
-          // This gets done again in the framework, but we do it here too to give a
-          // better error message.
-          validateParameters(parameters ?? {}, evaluator.parameters);
+          if (
+            !Parameters.isParameters(resolvedParameters) &&
+            Object.keys(resolvedParameters).length > 0
+          ) {
+            validateParameters(parameters ?? {}, resolvedParameters);
+          }
         } catch (e) {
           console.error("Error validating parameters", e);
           if (e instanceof z.ZodError || e instanceof Error) {
