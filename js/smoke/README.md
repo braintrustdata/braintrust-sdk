@@ -5,7 +5,7 @@ Smoke test infrastructure verifying SDK installation across different runtimes a
 ## Quick Reference
 
 ```bash
-make test              # Run all scenarios
+make test              # Run all scenarios (doesn't exit early on failures)
 make test otel-v1      # Run specific scenario
 make list              # List available scenarios
 ```
@@ -16,27 +16,42 @@ make list              # List available scenarios
 
 ```typescript
 import {
-  displayTestResults,
-  hasFailures,
-  getFailureCount,
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  // ... other test functions
 } from "../../shared/dist/index.mjs";
 
-// Run your tests
-const results = [...importResults, ...functionalResults];
+import * as braintrust from "braintrust";
 
-// Display with standardized format
-displayTestResults({
-  scenarioName: "My Scenario Test Results",
-  results,
+// Run tests with the new runTests helper
+const { all, passed, failed, xfail } = await runTests({
+  name: "My Scenario Test Results",
+  braintrust,
+  tests: [
+    testBasicSpanLogging,
+    testMultipleSpans,
+    expectFailure(
+      testNunjucksTemplate,
+      (e) => e.message.includes("not supported"),
+      "Nunjucks not supported in browser build",
+    ),
+  ],
 });
 
 // Check for failures
-if (hasFailures(results)) {
+if (failed.length > 0) {
   process.exit(1);
 }
 ```
 
-**Keep logging minimal:** No status messages, banners, or summaries. Let `displayTestResults()` do the talking.
+**Key features:**
+
+- `runTests()` automatically displays results, validates coverage, and returns structured results
+- `expectFailure()` wraps tests expected to fail with error predicate validation
+- No manual `try/catch` blocks needed around `runTests()`
+- No manual coverage validation needed
 
 ## Creating a New Scenario
 
@@ -47,7 +62,7 @@ if (hasFailures(results)) {
 - [ ] Dependencies declared (package.json, deno.json, etc.)
 - [ ] README.md explaining design decisions (15-25 lines)
 - [ ] .gitignore (ignore artifacts, track lock files)
-- [ ] **Tests use `displayTestResults()`**
+- [ ] **Tests use `runTests()` and individual test functions**
 - [ ] **Minimal logging** (errors only)
 - [ ] **POSIX shell syntax** (`[ ]` not `[[ ]]`)
 
@@ -63,51 +78,91 @@ if (hasFailures(results)) {
 
 ```typescript
 import {
-  setupTestEnvironment,
-  cleanupTestEnvironment,
-  runImportVerificationTests,
-  runBasicLoggingTests,
-  displayTestResults,
-  hasFailures,
-} from "../../shared/dist/index.mjs";
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  testDirectLogging,
+  testCoreLoggingExports,
+  testBuildResolution,
+  testNunjucksTemplate,
+} from "../../shared";
 
-import { initLogger, _exportsForTestingOnly } from "braintrust";
+import * as braintrust from "braintrust";
 
-async function runTests() {
-  const braintrust = await import("braintrust");
+async function main() {
+  const { all, passed, failed, xfail } = await runTests({
+    name: "My Scenario Test Results",
+    braintrust,
+    tests: [
+      // Import verification tests
+      testCoreLoggingExports,
+      testBuildResolution,
 
-  const adapters = await setupTestEnvironment({
-    initLogger,
-    testingExports: _exportsForTestingOnly,
-    canUseFileSystem: true,
-    canUseCLI: true,
-    environment: "my-scenario",
+      // Functional tests
+      testBasicSpanLogging,
+      testMultipleSpans,
+      testDirectLogging,
+
+      // Expected failures with error validation
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("not supported"),
+        "Nunjucks not supported in browser build",
+      ),
+    ],
   });
 
-  try {
-    const importResults = await runImportVerificationTests(braintrust, {
-      expectedBuild: "node",
-      expectedFormat: "esm",
-    });
-    const functionalResults = await runBasicLoggingTests(adapters, braintrust);
-    const results = [...importResults, ...functionalResults];
-
-    displayTestResults({
-      scenarioName: "My Scenario Test Results",
-      results,
-    });
-
-    if (hasFailures(results)) {
-      process.exit(1);
-    }
-  } finally {
-    await cleanupTestEnvironment(adapters);
+  if (failed.length > 0) {
+    process.exit(1);
   }
 }
 
-runTests().catch((error) => {
+main().catch((error) => {
   console.error(error);
   process.exit(1);
+});
+```
+
+### Example HTTP Endpoint (Cloudflare Workers, Next.js)
+
+```typescript
+import {
+  runTests,
+  expectFailure /* ... test functions */,
+} from "../../../shared";
+import * as braintrust from "braintrust";
+
+app.get("/api/test", async (c) => {
+  const { all, passed, failed, xfail } = await runTests({
+    name: "My Worker Test Results",
+    braintrust,
+    tests: [
+      testBasicSpanLogging,
+      testMultipleSpans,
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("Disallowed"),
+        "Cloudflare Workers blocks dynamic code generation",
+      ),
+    ],
+  });
+
+  return c.json(
+    {
+      success: failed.length === 0,
+      message:
+        failed.length > 0
+          ? `${failed.length} test(s) failed`
+          : "All tests passed",
+      totalTests: all.length,
+      passedTests: passed.length,
+      failedTests: failed.length,
+      xfailTests: xfail.length,
+      results: all,
+    },
+    failed.length === 0 ? 200 : 500,
+  );
 });
 ```
 
@@ -136,6 +191,30 @@ Use version-agnostic paths: `braintrust-latest.tgz` not `braintrust-2.0.2.tgz`. 
 ### No Workarounds
 
 Never use `--legacy-peer-deps`, `--no-check`, `--ignore-errors`, or mocks. Smoke tests must expose issues users will encounter.
+
+### No Defensive Checks in Tests
+
+Don't conditionally check if functions exist before calling them. Let natural JavaScript errors occur and get caught by the test framework. This provides:
+
+- **Better error messages**: Stack traces show exactly where/what failed
+- **Cleaner test code**: No redundant existence checks
+- **Real-world behavior**: Tests fail the same way user code would fail
+
+```typescript
+// ❌ Bad - defensive checks hide the real error
+if (!braintrust.traced) {
+  return { status: "fail", error: { message: "traced missing" } };
+}
+
+// ✓ Good - let it throw naturally (register() wraps this)
+const traced = braintrust.traced as TracedFn;
+await traced(
+  () => {
+    /* ... */
+  },
+  { name: "test" },
+);
+```
 
 ### Build Before Install
 
@@ -193,6 +272,17 @@ SCENARIOS := $(shell find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -
 ```
 
 Any folder in `scenarios/` with a `Makefile` is automatically discovered. No registration needed.
+
+## Shared Test Suites
+
+The `shared/` package provides reusable test suites that run across all scenarios:
+
+- **Import Verification** - Verifies SDK exports exist, prevents tree-shaking issues
+- **Basic Logging** - Core logging functionality including Async Local Storage (ALS) tests
+- **Prompt Templating** - Mustache (all environments) and Nunjucks (Node.js)
+- **Eval Smoke Test** - Basic eval functionality
+
+See `shared/README.md` for complete test suite documentation, individual test functions, and implementation details.
 
 ## Reference Scenarios
 

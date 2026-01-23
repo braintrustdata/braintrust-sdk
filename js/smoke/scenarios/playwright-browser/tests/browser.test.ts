@@ -99,62 +99,22 @@ test.describe("Braintrust SDK Browser Tests", () => {
       });
     }
 
-    // Test 3: Shared suite
+    // Test 3: All tests passed
     if (
-      smoke.sections.shared.completed &&
-      smoke.sections.shared.failed === 0 &&
-      smoke.sections.shared.passed >= 17
+      smoke.sections.tests.completed &&
+      smoke.sections.tests.failed === 0 &&
+      smoke.sections.tests.passed >= 20
     ) {
       results.push({
         status: "pass",
-        name: `Shared suite (${smoke.sections.shared.passed} tests)`,
+        name: `All tests (${smoke.sections.tests.passed} passed)`,
       });
     } else {
       results.push({
         status: "fail",
-        name: "Shared suite",
+        name: "All tests",
         error: {
-          message: `Completed: ${smoke.sections.shared.completed}, Passed: ${smoke.sections.shared.passed}, Failed: ${smoke.sections.shared.failed}`,
-        },
-      });
-    }
-
-    // Test 4: Eval suite
-    if (
-      smoke.sections.eval.completed &&
-      smoke.sections.eval.failed === 0 &&
-      smoke.sections.eval.passed === 1
-    ) {
-      results.push({
-        status: "pass",
-        name: "Eval suite (1 test)",
-      });
-    } else {
-      results.push({
-        status: "fail",
-        name: "Eval suite",
-        error: {
-          message: `Completed: ${smoke.sections.eval.completed}, Passed: ${smoke.sections.eval.passed}, Failed: ${smoke.sections.eval.failed}`,
-        },
-      });
-    }
-
-    // Test 5: Prompt suite
-    if (
-      smoke.sections.prompt.completed &&
-      smoke.sections.prompt.failed === 0 &&
-      smoke.sections.prompt.passed === 2
-    ) {
-      results.push({
-        status: "pass",
-        name: "Prompt suite (2 tests)",
-      });
-    } else {
-      results.push({
-        status: "fail",
-        name: "Prompt suite",
-        error: {
-          message: `Completed: ${smoke.sections.prompt.completed}, Passed: ${smoke.sections.prompt.passed}, Failed: ${smoke.sections.prompt.failed}`,
+          message: `Completed: ${smoke.sections.tests.completed}, Passed: ${smoke.sections.tests.passed}, Failed: ${smoke.sections.tests.failed}`,
         },
       });
     }
@@ -168,14 +128,8 @@ test.describe("Braintrust SDK Browser Tests", () => {
     expect(smoke).toBeTruthy();
     expect(smoke.completed).toBe(true);
     expect(smoke.unhandledErrors?.length ?? 0).toBe(0);
-    expect(smoke.sections.shared.completed).toBe(true);
-    expect(smoke.sections.shared.failed).toBe(0);
-    expect(smoke.sections.shared.passed).toBeGreaterThanOrEqual(17);
-    expect(smoke.sections.eval.completed).toBe(true);
-    expect(smoke.sections.eval.failed).toBe(0);
-    expect(smoke.sections.eval.passed).toBe(1);
-    expect(smoke.sections.prompt.completed).toBe(true);
-    expect(smoke.sections.prompt.failed).toBe(0);
-    expect(smoke.sections.prompt.passed).toBe(2);
+    expect(smoke.sections.tests.completed).toBe(true);
+    expect(smoke.sections.tests.failed).toBe(0);
+    expect(smoke.sections.tests.passed).toBeGreaterThanOrEqual(20);
   });
 });
