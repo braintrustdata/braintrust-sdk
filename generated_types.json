@@ -711,6 +711,10 @@
                   "type": "string",
                   "description": "The model to use for facet extraction"
                 },
+                "embedding_model": {
+                  "type": "string",
+                  "description": "The embedding model to use for vectorizing facet results."
+                },
                 "no_match_pattern": {
                   "type": "string",
                   "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
@@ -721,6 +725,30 @@
                 "prompt"
               ]
             }
+          },
+          "topic_maps": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "function_name": {
+                  "type": "string",
+                  "description": "The name of the topic map function"
+                },
+                "topic_map_id": {
+                  "type": "string",
+                  "description": "The id of the topic map function"
+                },
+                "topic_map_data": {
+                  "$ref": "#/components/schemas/TopicMapData"
+                }
+              },
+              "required": [
+                "function_name",
+                "topic_map_data"
+              ]
+            },
+            "description": "Topic maps that depend on facets in this batch, keyed by source facet name"
           }
         },
         "required": [
@@ -1985,6 +2013,73 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
+          },
+          "classifications": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Stable classification identifier"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Optional confidence score for the classification"
+                  },
+                  "metadata": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": {},
+                    "description": "Optional metadata associated with the classification"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "classifier",
+                      "topic_map"
+                    ],
+                    "description": "Optional classification source type"
+                  },
+                  "function_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional function id that produced the classification"
+                  },
+                  "topic_map_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional topic map id that produced the classification"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            },
+            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -2546,6 +2641,73 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
+          },
+          "classifications": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Stable classification identifier"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Optional confidence score for the classification"
+                  },
+                  "metadata": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": {},
+                    "description": "Optional metadata associated with the classification"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "classifier",
+                      "topic_map"
+                    ],
+                    "description": "Optional classification source type"
+                  },
+                  "function_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional function id that produced the classification"
+                  },
+                  "topic_map_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional topic map id that produced the classification"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            },
+            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -2684,6 +2846,10 @@
           "model": {
             "type": "string",
             "description": "The model to use for facet extraction"
+          },
+          "embedding_model": {
+            "type": "string",
+            "description": "The embedding model to use for vectorizing facet results."
           },
           "no_match_pattern": {
             "type": "string",
@@ -3003,6 +3169,16 @@
           },
           {
             "$ref": "#/components/schemas/BatchedFacetData"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TopicMapData"
+              },
+              {
+                "title": "topic_map"
+              }
+            ]
           }
         ]
       },
@@ -3012,7 +3188,8 @@
           "llm",
           "code",
           "global",
-          "graph"
+          "graph",
+          "topic_map"
         ]
       },
       "FunctionId": {
@@ -5262,6 +5439,73 @@
           },
           "_async_scoring_state": {
             "description": "The async scoring state for this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
+          },
+          "classifications": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Stable classification identifier"
+                  },
+                  "confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Optional confidence score for the classification"
+                  },
+                  "metadata": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": {},
+                    "description": "Optional metadata associated with the classification"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "classifier",
+                      "topic_map"
+                    ],
+                    "description": "Optional classification source type"
+                  },
+                  "function_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional function id that produced the classification"
+                  },
+                  "topic_map_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional topic map id that produced the classification"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            },
+            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -7059,6 +7303,261 @@
           "function"
         ]
       },
+      "TopicMapData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "topic_map"
+            ]
+          },
+          "source_facet": {
+            "type": "string",
+            "description": "The facet field name to use as input for classification"
+          },
+          "embedding_model": {
+            "type": "string",
+            "description": "The embedding model to use for embedding facet values"
+          },
+          "bundle_uri": {
+            "type": "string",
+            "description": "S3 URI of the topic map bundle (centroids, names, MLP model)"
+          },
+          "distance_threshold": {
+            "type": "number",
+            "description": "Maximum distance to nearest centroid. If exceeded, returns no_match."
+          },
+          "report": {
+            "$ref": "#/components/schemas/TopicMapReport"
+          }
+        },
+        "required": [
+          "type",
+          "source_facet",
+          "embedding_model",
+          "bundle_uri"
+        ]
+      },
+      "TopicMapReport": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "hdbscan",
+                  "kmeans",
+                  "hierarchical"
+                ]
+              },
+              "dimensionReduction": {
+                "type": "string",
+                "enum": [
+                  "umap",
+                  "pca",
+                  "none"
+                ]
+              },
+              "vectorField": {
+                "type": "string"
+              },
+              "embeddingModel": {
+                "type": "string"
+              },
+              "nClusters": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "umapDimensions": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "minClusterSize": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "minSamples": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "algorithm",
+              "dimensionReduction",
+              "vectorField",
+              "embeddingModel"
+            ]
+          },
+          "querySettings": {
+            "type": "object",
+            "properties": {
+              "hierarchyThreshold": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "autoNaming": {
+                "type": "boolean"
+              },
+              "skipCache": {
+                "type": "boolean"
+              },
+              "vizMode": {
+                "type": "string",
+                "enum": [
+                  "bar",
+                  "scatter"
+                ]
+              },
+              "namingModel": {
+                "type": "string"
+              }
+            }
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "clusterId": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "sampleTexts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "samples": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "root_span_id": {
+                        "type": "string"
+                      },
+                      "span_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "text",
+                      "root_span_id",
+                      "span_id"
+                    ]
+                  }
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "centroid": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "children": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "parentId": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "isLeaf": {
+                  "type": "boolean"
+                },
+                "depth": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "clusterId",
+                "count",
+                "sampleTexts",
+                "samples"
+              ]
+            }
+          },
+          "embeddingPoints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "cluster": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "cluster"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "settings",
+          "querySettings",
+          "clusters"
+        ],
+        "description": "Saved clustering report for UI rehydration"
+      },
       "TraceScope": {
         "type": "object",
         "properties": {
@@ -7255,7 +7754,9 @@
               "classifiers",
               "logs",
               "monitor",
-              "for_review"
+              "for_review_project_log",
+              "for_review_experiments",
+              "for_review_datasets"
             ],
             "description": "Type of object that the view corresponds to."
           },
@@ -7693,7 +8194,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "c99d1e6fbf062688da7f1f22394c72ea480fe81a"
+    "x-internal-git-sha": "8d646d224cde97509b18183554516d018f4c0e84"
   },
   "paths": {},
   "webhooks": {}
