@@ -1,0 +1,13 @@
+{
+  "name": "smoke-templates-nunjucks-nextjs",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "braintrust": "file:../../../../js/artifacts/braintrust-latest.tgz",
+    "@braintrust/templates-nunjucks-js": "file:../../../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.4.4"
+  }
+}

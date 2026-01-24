@@ -1,7 +1,7 @@
 ## Discover integration scenarios under ../../integrations
 SCRIPTDIR := ../../integrations
-LOCAL_MAKEFILES := $(shell find scenarios -type f -path 'scenarios/*/Makefile' 2>/dev/null)
-INTEGRATION_MAKEFILES := $(shell find $(SCRIPTDIR) -type f -path '*/scenarios/*/Makefile' 2>/dev/null)
+LOCAL_MAKEFILES := $(shell find scenarios -type f -path 'scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
+INTEGRATION_MAKEFILES := $(shell find $(SCRIPTDIR) -type f -path '*/scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
 SCENARIO_MAKEFILES := $(LOCAL_MAKEFILES) $(INTEGRATION_MAKEFILES)
 SCENARIOS := $(patsubst %/Makefile,%,$(SCENARIO_MAKEFILES))
 
@@ -88,7 +88,7 @@ clean:
 test:
 	@# Collect requested scenario names (strip any trailing /Makefile if provided by user)
 	@REQUESTED_RAW="$(filter-out test,$(MAKECMDGOALS))"; \
-	@REQUESTED="$$(echo $$REQUESTED_RAW | tr ' ' '\n' | sed 's|/Makefile$$||' | tr '\n' ' ' | xargs)"; \
+	REQUESTED="$$(echo $$REQUESTED_RAW | tr ' ' '\n' | sed 's|/Makefile$$||' | tr '\n' ' ' | xargs)"; \
 	if [ -z "$$REQUESTED" ]; then \
 		SCENARIOS_TO_RUN="$(SCENARIOS)"; \
 		echo "==> Running all discovered scenarios"; \

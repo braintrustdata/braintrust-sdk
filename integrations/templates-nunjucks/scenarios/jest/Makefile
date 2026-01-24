@@ -1,14 +1,10 @@
 .PHONY: setup test
 
-# ============================================================================
-# Setup
-# ============================================================================
-
 setup:
-	@echo "==> Setting up templates-nunjucks scenario"
+	@echo "==> Setting up templates-nunjucks jest scenario"
 	mise install
 
-	@# Check if BRAINTRUST_TAR is set (from parent or CI), otherwise build
+	@# Build SDK and shared package if not provided
 	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
 		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
 	else \
@@ -17,7 +13,7 @@ setup:
 		for f in sdk/js/artifacts/braintrust-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \
 			   [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ] && \
-			   [ "$$(basename $$f)" != "braintrust-templates-nunjucks-latest.tgz" ]; then \
+			   [ "$$(basename $$f)" != "braintrust-templates-nunjucks-js-latest.tgz" ]; then \
 				cp "$$f" sdk/js/artifacts/braintrust-latest.tgz; \
 				break; \
 			fi; \
@@ -27,10 +23,10 @@ setup:
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
 		echo "==> Building shared package"; \
-		cd sdk/js/smoke/shared && npm ci && npm run build; \
+		cd ../../../../js/smoke/shared && npm ci && npm run build; \
 	fi
 
-	@# Build @braintrust/templates-nunjucks-js package into js/artifacts
+	@# Build @braintrust/templates-nunjucks-js package
 	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)" ]; then \
 		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)"; \
 	else \
@@ -46,10 +42,7 @@ setup:
 
 	npm install --no-package-lock
 
-# ============================================================================
-# Test
-# ============================================================================
-
 test: setup
-	@echo "==> Running templates-nunjucks tests"
-	npx tsx tests/basic.test.ts
+	@echo "==> Running jest tests"
+	@# Run only tests under the local tests/ directory to avoid workspace-wide discovery
+	npx jest --passWithNoTests --roots ./tests

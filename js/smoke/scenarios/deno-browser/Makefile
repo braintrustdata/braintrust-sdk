@@ -15,4 +15,5 @@ setup:
 	fi; \
 
 test: setup
+	@# Run only tests under the local tests/ directory
 	deno test --sloppy-imports --allow-all tests/*.test.ts
