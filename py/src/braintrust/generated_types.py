@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA da3e660838c1fd18371e00410a236e64cf1158b9) -- do not modify"""
+"""Auto-generated file (internal git SHA 47a4112bbbbe7fe68c0566bd1ebedb617fb9726e) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -53,6 +53,7 @@ from ._generated_types import (
     Group,
     GroupScope,
     IfExists,
+    ImageRenderingMode,
     InvokeFunction,
     InvokeParent,
     MCPServer,
@@ -100,8 +101,6 @@ from ._generated_types import (
     SSEProgressEventData,
     StreamingMode,
     ToolFunctionDefinition,
-    TopicMapData,
-    TopicMapReport,
     TraceScope,
     TriggeredFunctionState,
     UploadStatus,
@@ -165,6 +164,7 @@ __all__ = [
     "Group",
     "GroupScope",
     "IfExists",
+    "ImageRenderingMode",
     "InvokeFunction",
     "InvokeParent",
     "MCPServer",
@@ -212,8 +212,6 @@ __all__ = [
     "SpanType",
     "StreamingMode",
     "ToolFunctionDefinition",
-    "TopicMapData",
-    "TopicMapReport",
     "TraceScope",
     "TriggeredFunctionState",
     "UploadStatus",

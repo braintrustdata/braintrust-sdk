@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA da3e660838c1fd18371e00410a236e64cf1158b9) -- do not modify
+// Auto-generated file (internal git SHA 47a4112bbbbe7fe68c0566bd1ebedb617fb9726e) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -242,72 +242,6 @@ export const NullableSavedFunctionId = z.union([
 export type NullableSavedFunctionIdType = z.infer<
   typeof NullableSavedFunctionId
 >;
-export const TopicMapReport = z.object({
-  version: z.literal(1),
-  createdAt: z.string().optional(),
-  settings: z.object({
-    algorithm: z.enum(["hdbscan", "kmeans", "hierarchical"]),
-    dimensionReduction: z.enum(["umap", "pca", "none"]),
-    vectorField: z.string(),
-    embeddingModel: z.string(),
-    nClusters: z.union([z.number(), z.null()]).optional(),
-    umapDimensions: z.union([z.number(), z.null()]).optional(),
-    minClusterSize: z.union([z.number(), z.null()]).optional(),
-    minSamples: z.union([z.number(), z.null()]).optional(),
-  }),
-  querySettings: z
-    .object({
-      hierarchyThreshold: z.union([z.number(), z.null()]),
-      autoNaming: z.boolean(),
-      skipCache: z.boolean(),
-      vizMode: z.enum(["bar", "scatter"]),
-      namingModel: z.string(),
-    })
-    .partial(),
-  clusters: z.array(
-    z.object({
-      clusterId: z.number(),
-      count: z.number(),
-      sampleTexts: z.array(z.string()),
-      samples: z.array(
-        z.object({
-          id: z.string(),
-          text: z.string(),
-          root_span_id: z.string(),
-          span_id: z.string(),
-        }),
-      ),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      keywords: z.array(z.string()).optional(),
-      centroid: z.array(z.number()).optional(),
-      children: z.array(z.object({}).partial().passthrough()).optional(),
-      parentId: z.union([z.number(), z.null()]).optional(),
-      isLeaf: z.boolean().optional(),
-      depth: z.number().optional(),
-    }),
-  ),
-  embeddingPoints: z
-    .array(
-      z.object({
-        x: z.number(),
-        y: z.number(),
-        cluster: z.number(),
-        text: z.string().optional(),
-      }),
-    )
-    .optional(),
-});
-export type TopicMapReportType = z.infer<typeof TopicMapReport>;
-export const TopicMapData = z.object({
-  type: z.literal("topic_map"),
-  source_facet: z.string(),
-  embedding_model: z.string(),
-  bundle_uri: z.string(),
-  distance_threshold: z.number().optional(),
-  report: TopicMapReport.optional(),
-});
-export type TopicMapDataType = z.infer<typeof TopicMapData>;
 export const BatchedFacetData = z.object({
   type: z.literal("batched_facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -316,19 +250,9 @@ export const BatchedFacetData = z.object({
       name: z.string(),
       prompt: z.string(),
       model: z.string().optional(),
-      embedding_model: z.string().optional(),
       no_match_pattern: z.string().optional(),
     }),
   ),
-  topic_maps: z
-    .record(
-      z.object({
-        function_name: z.string(),
-        topic_map_id: z.string().optional(),
-        topic_map_data: TopicMapData,
-      }),
-    )
-    .optional(),
 });
 export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
@@ -860,7 +784,6 @@ export const FacetData = z.object({
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
   prompt: z.string(),
   model: z.string().optional(),
-  embedding_model: z.string().optional(),
   no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
@@ -1158,7 +1081,6 @@ export const FunctionData = z.union([
   }),
   FacetData,
   BatchedFacetData,
-  TopicMapData.and(z.unknown()),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -1196,13 +1118,7 @@ export const Function = z.object({
     .optional(),
 });
 export type FunctionType = z.infer<typeof Function>;
-export const FunctionFormat = z.enum([
-  "llm",
-  "code",
-  "global",
-  "graph",
-  "topic_map",
-]);
+export const FunctionFormat = z.enum(["llm", "code", "global", "graph"]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
 export const PromptData = z
   .object({
@@ -1342,6 +1258,11 @@ export const GroupScope = z.object({
 export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
+export const ImageRenderingMode = z.union([
+  z.enum(["auto", "click_to_load", "blocked"]),
+  z.null(),
+]);
+export type ImageRenderingModeType = z.infer<typeof ImageRenderingMode>;
 export const InvokeParent = z.union([
   z.object({
     object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
@@ -1450,6 +1371,7 @@ export const Organization = z.object({
   proxy_url: z.union([z.string(), z.null()]).optional(),
   realtime_url: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
+  image_rendering_mode: ImageRenderingMode.optional(),
 });
 export type OrganizationType = z.infer<typeof Organization>;
 export const ProjectSettings = z.union([
