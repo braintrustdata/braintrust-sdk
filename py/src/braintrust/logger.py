@@ -4086,10 +4086,21 @@ class SpanImpl(Span):
             self._context_token = self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
+        """
+        Unset current span context.
+
+        Note: self._context_token may be None if set_current() failed.
+        This is safe - context_manager.unset_current_span() handles None.
+        """
         if self.can_set_current:
-            # Pass the stored token to context manager for cleanup
-            self.state.context_manager.unset_current_span(self._context_token)
-            self._context_token = None
+            try:
+                self.state.context_manager.unset_current_span(self._context_token)
+            except Exception:
+                # Cleanup should never break the application
+                pass
+            finally:
+                # Always clear the token reference
+                self._context_token = None
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -4100,8 +4111,16 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            self.unset_current()
-            self.end()
+            try:
+                self.unset_current()
+            except Exception:
+                pass
+
+            try:
+                self.end()
+            except Exception as e:
+                # Span ending failures are serious - log as warning
+                logging.warning(f"Error ending span: {e}")
 
     def _get_parent_info(self):
         if self.parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
