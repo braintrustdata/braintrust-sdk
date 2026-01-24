@@ -314,7 +314,10 @@ class ChatCompletionWrapper:
                         {
                             "id": delta["tool_calls"][0]["id"],
                             "type": delta["tool_calls"][0]["type"],
-                            "function": delta["tool_calls"][0]["function"],
+                            "function": {
+                                "name": delta["tool_calls"][0]["function"]["name"],
+                                "arguments": delta["tool_calls"][0]["function"]["arguments"] or "",
+                            },
                         }
                     ]
                 else:
