@@ -2333,7 +2333,7 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
 }
 
 function constructLogs3Data(items: string[]) {
-  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+  return `{"rows": ${constructJsonArray(items)}, "api_version": 2, "async": true}`;
 }
 
 function now() {
