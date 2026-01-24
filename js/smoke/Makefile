@@ -84,8 +84,11 @@ clean:
 
 # Support positional scenario argument: make test integration/name
 
+
 test:
-	@REQUESTED="$$(echo $(filter-out test,$(MAKECMDGOALS)) | xargs)"; \
+	@# Collect requested scenario names (strip any trailing /Makefile if provided by user)
+	@REQUESTED_RAW="$(filter-out test,$(MAKECMDGOALS))"; \
+	@REQUESTED="$$(echo $$REQUESTED_RAW | tr ' ' '\n' | sed 's|/Makefile$$||' | tr '\n' ' ' | xargs)"; \
 	if [ -z "$$REQUESTED" ]; then \
 		SCENARIOS_TO_RUN="$(SCENARIOS)"; \
 		echo "==> Running all discovered scenarios"; \
