@@ -108,7 +108,6 @@ Option A - Environment variable (automatic on import - enables both):
 
 Option B - Manual setup (granular control):
     from braintrust.wrappers.threads import setup_threads
-    from braintrust.wrappers.asyncio import setup_asyncio
     setup_threads()   # Enable threading context propagation
     setup_asyncio()   # Enable asyncio context propagation (optional)
 
@@ -126,8 +125,8 @@ from typing import AsyncGenerator, Generator
 import braintrust
 import pytest
 from braintrust import current_span, start_span
-from braintrust.test_helpers import init_test_logger
-from braintrust.wrappers.threads import setup_threads
+from braintrust.test_helpers import init_test_logger, with_memory_logger  # noqa: F401
+from braintrust.wrappers.threads import setup_threads  # noqa: F401
 
 
 @pytest.fixture
@@ -173,6 +172,7 @@ def test_threadpool_context_manager_pattern(test_logger, with_memory_logger, aut
         pytest.xfail("ThreadPoolExecutor loses context without auto-instrumentation")
 
     parent_seen_by_worker = None
+
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
@@ -219,6 +219,7 @@ def test_thread_context_manager_pattern(test_logger, with_memory_logger, auto_in
         pytest.xfail("threading.Thread loses context without auto-instrumentation")
 
     parent_seen_by_worker = None
+
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
@@ -330,6 +331,7 @@ async def test_run_in_executor_context_manager_pattern(test_logger, with_memory_
         pytest.xfail("loop.run_in_executor loses context without auto-instrumentation")
 
     parent_seen_by_worker = None
+
     def blocking_work():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
@@ -1343,9 +1345,7 @@ def test_thread_wrapped_async_with_queue_pattern(test_logger, with_memory_logger
 
     # Verify context propagated through thread into async code
     assert parent_seen_in_thread is not None
-    assert parent_seen_in_thread.id == parent_id, (
-        "Async code in thread should see parent span"
-    )
+    assert parent_seen_in_thread.id == parent_id, "Async code in thread should see parent span"
 
     test_logger.flush()
     logs = with_memory_logger.pop()
@@ -1401,9 +1401,7 @@ async def test_fastapi_background_task_pattern(test_logger, with_memory_logger, 
 
     # Verify context was propagated to background task
     assert parent_seen_by_background is not None
-    assert parent_seen_by_background.id == request_id, (
-        "Background task should see http_request span"
-    )
+    assert parent_seen_by_background.id == request_id, "Background task should see http_request span"
 
     test_logger.flush()
     logs = with_memory_logger.pop()
@@ -1721,78 +1719,6 @@ def test_setup_threads_idempotent():
     result2 = setup_threads()
     assert result1 is True
     assert result2 is True
-
-
-def test_setup_asyncio_success():
-    """Test that setup_asyncio() returns True on success."""
-    from braintrust.wrappers.asyncio import setup_asyncio
-    result = setup_asyncio()
-    assert result is True, "setup_asyncio() should return True"
-
-
-def test_setup_asyncio_idempotent():
-    """Test that calling setup_asyncio() multiple times is safe."""
-    from braintrust.wrappers.asyncio import setup_asyncio
-    result1 = setup_asyncio()
-    result2 = setup_asyncio()
-    assert result1 is True
-    assert result2 is True
-
-
-def test_preserve_context_fallback_on_error():
-    """Test that preserve_context falls back gracefully if context.run() fails."""
-    from braintrust.auto_instrument import preserve_context
-
-    def worker_function():
-        return "success"
-
-    # This should work even if there's no context
-    wrapped = preserve_context(worker_function)
-    result = wrapped()
-    assert result == "success"
-
-
-def test_preserve_context_decorator(test_logger, with_memory_logger):
-    """
-    Test that preserve_context() wraps functions for manual context preservation.
-
-    This is an alternative to using setup_threads() when you want
-    fine-grained control over which functions preserve context.
-
-    NOTE: Memory logger is thread-local (testing limitation), so only parent log appears.
-    Context propagation is verified by checking the worker sees the parent span.
-    """
-    from braintrust.auto_instrument import preserve_context
-
-    parent_seen_by_worker = None
-
-    def worker_function():
-        nonlocal parent_seen_by_worker
-        parent_seen_by_worker = current_span()
-        worker_span = start_span(name="preserved_worker")
-        time.sleep(0.01)
-        worker_span.end()
-
-    with start_span(name="preserve_parent") as parent_span:
-        parent_id = parent_span.id
-
-        # Wrap the function at call site for manual context preservation
-        thread = threading.Thread(target=preserve_context(worker_function))
-        thread.start()
-        thread.join()
-
-    # Verify context was preserved (worker saw the parent)
-    assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "preserve_context should preserve span context"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "preserve_parent")
-    assert parent_log is not None
 
 
 def test_auto_instrumentation_threading_explicit(test_logger, with_memory_logger):
