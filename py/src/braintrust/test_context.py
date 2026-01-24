@@ -1560,7 +1560,7 @@ async def test_taskgroup_context_propagation(test_logger, with_memory_logger):
 
     # Root span
     with start_span(name="root") as root_span:
-        async with asyncio.TaskGroup() as tg:
+        async with asyncio.TaskGroup() as tg:  # pylint: disable=no-member
             for i in range(3):
                 tg.create_task(child_task(i))
 
