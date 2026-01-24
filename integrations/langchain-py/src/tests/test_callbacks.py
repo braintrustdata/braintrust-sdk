@@ -4,10 +4,11 @@ from typing import Dict, List, Union, cast
 
 import pytest
 from braintrust.logger import flush
-from langchain.prompts import ChatPromptTemplate
-from langchain.prompts.prompt import PromptTemplate
+from langchain_anthropic import ChatAnthropic
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts.prompt import PromptTemplate
 from langchain_core.runnables import RunnableMap, RunnableSerializable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -147,7 +148,6 @@ def test_llm_calls(logger_memory_logger: LoggerMemoryLogger):
             },
         ],
     )
-
 
 @pytest.mark.vcr
 def test_chain_with_memory(logger_memory_logger: LoggerMemoryLogger):
@@ -949,3 +949,207 @@ def test_streaming_ttft(logger_memory_logger: LoggerMemoryLogger):
             }
         ],
     )
+
+
+@pytest.mark.vcr
+def test_prompt_caching_tokens(logger_memory_logger: LoggerMemoryLogger):
+    logger, memory_logger = logger_memory_logger
+    assert not memory_logger.pop()
+
+    handler = BraintrustCallbackHandler(logger=logger)
+
+    model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+
+    # XXX: if you need to change the cassette or test, you'll want to change the text below to invalidate the stored cache.
+
+    # Anthropic prompt caching requires a minimum of 1024 tokens for Claude Sonnet models.
+    # This static text (~1500 tokens) ensures we meet that threshold consistently.
+    # See: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+    long_text_for_caching = """
+# Comprehensive Guide to Software Testing Methods!
+
+## Chapter 1: Introduction to Testing
+
+Software testing is a critical component of the software development lifecycle. It ensures that applications
+function correctly, meet requirements, and provide a positive user experience. This guide covers various
+testing methodologies, best practices, and tools used in modern software development.
+
+### 1.1 The Importance of Testing
+
+Testing helps identify defects early in the development process, reducing the cost of fixing issues later.
+Studies have shown that the cost of fixing a bug increases exponentially as it progresses through the
+development lifecycle. A bug found during requirements gathering might cost $1 to fix, while the same bug
+found in production could cost $100 or more.
+
+### 1.2 Types of Testing
+
+There are many types of testing, including:
+- Unit Testing: Testing individual components or functions in isolation
+- Integration Testing: Testing how components work together
+- End-to-End Testing: Testing the entire application flow
+- Performance Testing: Testing application speed and scalability
+- Security Testing: Testing for vulnerabilities and security issues
+- Usability Testing: Testing user experience and interface design
+
+## Chapter 2: Unit Testing Best Practices
+
+Unit testing focuses on testing the smallest testable parts of an application. Here are some best practices:
+
+### 2.1 Write Tests First (TDD)
+
+Test-Driven Development (TDD) is a methodology where tests are written before the actual code. The process
+follows a simple cycle: Red (write a failing test), Green (write code to pass the test), Refactor (improve
+the code while keeping tests passing).
+
+### 2.2 Keep Tests Independent
+
+Each test should be independent of others. Tests should not rely on the state created by previous tests.
+This ensures that tests can be run in any order and that failures are isolated and easy to debug.
+
+### 2.3 Use Meaningful Names
+
+Test names should clearly describe what is being tested and what the expected outcome is. A good test name
+might be "test_user_registration_with_valid_email_succeeds" rather than just "test_registration".
+
+### 2.4 Test Edge Cases
+
+Don't just test the happy path. Consider edge cases like:
+- Empty inputs
+- Null or undefined values
+- Very large inputs
+- Invalid formats
+- Boundary conditions
+
+## Chapter 3: Integration Testing
+
+Integration testing verifies that different modules or services work together correctly.
+
+### 3.1 Database Integration
+
+When testing database interactions, consider using:
+- Test databases separate from production
+- Database transactions that roll back after each test
+- Mock data that represents realistic scenarios
+
+### 3.2 API Integration
+
+API integration tests should verify:
+- Correct HTTP status codes
+- Response format and schema
+- Error handling
+- Authentication and authorization
+
+## Chapter 4: Performance Testing
+
+Performance testing ensures your application can handle expected load and scale appropriately.
+
+### 4.1 Load Testing
+
+Load testing simulates multiple users accessing the application simultaneously. Key metrics include:
+- Response time under load
+- Throughput (requests per second)
+- Error rates
+- Resource utilization (CPU, memory, network)
+
+### 4.2 Stress Testing
+
+Stress testing pushes the application beyond normal operational capacity to find breaking points and
+understand how the system fails gracefully.
+
+## Chapter 5: Continuous Integration and Testing
+
+Modern development practices integrate testing into the CI/CD pipeline.
+
+### 5.1 Automated Test Runs
+
+Tests should run automatically on every code change. This includes:
+- Running unit tests on every commit
+- Running integration tests on pull requests
+- Running end-to-end tests before deployment
+
+### 5.2 Test Coverage
+
+Test coverage metrics help identify untested code. While 100% coverage isn't always practical or necessary,
+maintaining good coverage helps ensure code quality. Focus on critical paths and business logic.
+
+## Chapter 6: Testing Tools and Frameworks
+
+Many tools exist to support testing efforts:
+
+### 6.1 Python Testing
+- pytest: Feature-rich testing framework
+- unittest: Built-in Python testing module
+- mock: Library for mocking objects
+
+### 6.2 JavaScript Testing
+- Jest: Popular testing framework
+- Mocha: Flexible testing framework
+- Cypress: End-to-end testing tool
+
+### 6.3 Other Tools
+- Selenium: Browser automation
+- JMeter: Performance testing
+- Postman: API testing
+
+## Conclusion
+
+Effective testing is essential for delivering high-quality software. By following best practices and using
+appropriate tools, teams can catch bugs early, improve code quality, and deliver better products to users.
+
+Remember: Testing is not just about finding bugs, it's about building confidence in your code.
+"""
+
+    messages: list[BaseMessage] = [
+        SystemMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": long_text_for_caching,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        ),
+        HumanMessage(content="What is the first type of testing mentioned in section 1.2?"),
+    ]
+
+    res = model.invoke(messages, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
+
+    spans = memory_logger.pop()
+    assert len(spans) > 0
+
+    llm_spans = find_spans_by_attributes(spans, name="ChatAnthropic", type="llm")
+    assert len(llm_spans) == 1
+    first_span = llm_spans[0]
+
+    assert "metrics" in first_span
+    first_metrics = first_span["metrics"]
+    assert "prompt_tokens" in first_metrics
+    assert first_metrics["prompt_tokens"] > 0
+
+    assert "prompt_cache_creation_tokens" in first_metrics
+    assert first_metrics["prompt_cache_creation_tokens"] > 0
+    assert first_metrics["prompt_cached_tokens"] == 0
+
+    res = model.invoke(
+        messages + [res, HumanMessage(content="What testing framework is mentioned for Python?")],
+        config={"callbacks": [cast(BaseCallbackHandler, handler)]},
+    )
+
+    spans = memory_logger.pop()
+    assert len(spans) > 0
+
+    llm_spans = find_spans_by_attributes(spans, name="ChatAnthropic", type="llm")
+
+    print(llm_spans)
+
+    assert len(llm_spans) == 1
+    second_span = llm_spans[0]
+
+    assert "metrics" in second_span
+    second_metrics = second_span["metrics"]
+
+    assert "prompt_cached_tokens" in second_metrics
+    assert second_metrics["prompt_cached_tokens"] > 0
+
+    assert "prompt_tokens" in second_metrics
+    assert second_metrics["prompt_tokens"] > 0

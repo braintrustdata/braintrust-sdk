@@ -3,7 +3,7 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
 export const server = setupServer(
-  http.post("http://braintrust.local/api/apikey/login", () => {
+  http.post(/.+\/api\/apikey\/login/, () => {
     return HttpResponse.json({
       org_info: [
         {
@@ -19,7 +19,7 @@ export const server = setupServer(
     });
   }),
 
-  http.post("http://braintrust.local/api/project/register", () => {
+  http.post(/.+\/api\/project\/register/, () => {
     return HttpResponse.json({
       project: {
         id: "209220fc-d3bd-4fab-b1a4-af5827d69200",
@@ -38,6 +38,7 @@ beforeAll(() => {
   // comment out specific to use bypassAndLog
   process.env.BRAINTRUST_API_KEY = "braintrust-api-key";
   process.env.BRAINTRUST_APP_URL = "http://braintrust.local";
+  process.env.BRAINTRUST_ORG_NAME = "braintrustdata.com";
   process.env.OPENAI_API_KEY = "openai-api-key";
 
   server.listen({

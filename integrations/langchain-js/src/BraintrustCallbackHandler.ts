@@ -586,10 +586,13 @@ const getMetricsFromResponse = (response: LLMResult | ChatResult) => {
       const message: any = generation.message;
       const usageMetadata = message.usage_metadata;
       if (usageMetadata && typeof usageMetadata === "object") {
+        const inputTokenDetails = usageMetadata.input_token_details;
         const extracted = cleanObject({
           total_tokens: usageMetadata.total_tokens,
           prompt_tokens: usageMetadata.input_tokens,
           completion_tokens: usageMetadata.output_tokens,
+          prompt_cache_creation_tokens: inputTokenDetails?.cache_creation,
+          prompt_cached_tokens: inputTokenDetails?.cache_read,
         });
         Object.assign(metrics, extracted);
         break;
