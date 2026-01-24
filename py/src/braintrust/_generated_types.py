@@ -167,6 +167,10 @@ AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoring
 class PreprocessorPreprocessor(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class PreprocessorPreprocessor2(TypedDict):
@@ -638,6 +642,10 @@ class ExperimentEventContext(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
@@ -668,6 +676,10 @@ class ExternalAttachmentReference(TypedDict):
 class Preprocessor1Preprocessor1(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class Preprocessor1Preprocessor12(TypedDict):
@@ -799,7 +811,7 @@ FunctionObjectType: TypeAlias = Literal[
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'tag', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal[
@@ -1317,6 +1329,10 @@ class ModelParamsModelParams4(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
@@ -2085,6 +2101,10 @@ class RunEvalMcpAuth(TypedDict):
 class SavedFunctionIdSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class SavedFunctionIdSavedFunctionId1(TypedDict):

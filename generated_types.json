@@ -2008,6 +2008,10 @@
                     "type": "string",
                     "description": "Stable classification identifier"
                   },
+                  "label": {
+                    "type": "string",
+                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
+                  },
                   "confidence": {
                     "type": [
                       "number",
@@ -2041,6 +2045,10 @@
                               },
                               "id": {
                                 "type": "string"
+                              },
+                              "version": {
+                                "type": "string",
+                                "description": "The version of the function"
                               }
                             },
                             "required": [
@@ -2670,6 +2678,10 @@
                     "type": "string",
                     "description": "Stable classification identifier"
                   },
+                  "label": {
+                    "type": "string",
+                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
+                  },
                   "confidence": {
                     "type": [
                       "number",
@@ -2703,6 +2715,10 @@
                               },
                               "id": {
                                 "type": "string"
+                              },
+                              "version": {
+                                "type": "string",
+                                "description": "The version of the function"
                               }
                             },
                             "required": [
@@ -2773,6 +2789,10 @@
               },
               "id": {
                 "type": "string"
+              },
+              "version": {
+                "type": "string",
+                "description": "The version of the function"
               }
             },
             "required": [
@@ -3422,7 +3442,7 @@
           "completion",
           "score",
           "facet",
-          "tag",
+          "classification",
           "any"
         ]
       },
@@ -4558,6 +4578,10 @@
               },
               "id": {
                 "type": "string"
+              },
+              "version": {
+                "type": "string",
+                "description": "The version of the function"
               }
             },
             "required": [
@@ -5502,6 +5526,10 @@
                     "type": "string",
                     "description": "Stable classification identifier"
                   },
+                  "label": {
+                    "type": "string",
+                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
+                  },
                   "confidence": {
                     "type": [
                       "number",
@@ -5535,6 +5563,10 @@
                               },
                               "id": {
                                 "type": "string"
+                              },
+                              "version": {
+                                "type": "string",
+                                "description": "The version of the function"
                               }
                             },
                             "required": [
@@ -7037,6 +7069,10 @@
               },
               "id": {
                 "type": "string"
+              },
+              "version": {
+                "type": "string",
+                "description": "The version of the function"
               }
             },
             "required": [
@@ -8013,7 +8049,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "47a4112bbbbe7fe68c0566bd1ebedb617fb9726e"
+    "x-internal-git-sha": "7178200dd3c7869f27b677260303cda0b798bf42"
   },
   "paths": {},
   "webhooks": {}

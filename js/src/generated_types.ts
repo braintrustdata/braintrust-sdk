@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 47a4112bbbbe7fe68c0566bd1ebedb617fb9726e) -- do not modify
+// Auto-generated file (internal git SHA 7178200dd3c7869f27b677260303cda0b798bf42) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -231,7 +231,11 @@ export const FunctionTypeEnum = z.enum([
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
@@ -519,7 +523,11 @@ export const ObjectReferenceNullish = z.union([
 ]);
 export type ObjectReferenceNullishType = z.infer<typeof ObjectReferenceNullish>;
 export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
@@ -559,13 +567,18 @@ export const DatasetEvent = z.object({
         z.array(
           z.object({
             id: z.string(),
+            label: z.string().optional(),
             confidence: z.union([z.number(), z.null()]).optional(),
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
             source: SavedFunctionId.and(
               z.union([
-                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
                 z.object({
                   type: z.literal("global"),
                   name: z.string(),
@@ -740,13 +753,18 @@ export const ExperimentEvent = z.object({
         z.array(
           z.object({
             id: z.string(),
+            label: z.string().optional(),
             confidence: z.union([z.number(), z.null()]).optional(),
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
             source: SavedFunctionId.and(
               z.union([
-                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
                 z.object({
                   type: z.literal("global"),
                   name: z.string(),
@@ -764,7 +782,11 @@ export const ExperimentEvent = z.object({
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
@@ -1215,7 +1237,7 @@ export const FunctionOutputType = z.enum([
   "completion",
   "score",
   "facet",
-  "tag",
+  "classification",
   "any",
 ]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
@@ -1541,13 +1563,18 @@ export const ProjectLogsEvent = z.object({
         z.array(
           z.object({
             id: z.string(),
+            label: z.string().optional(),
             confidence: z.union([z.number(), z.null()]).optional(),
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
             source: SavedFunctionId.and(
               z.union([
-                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
                 z.object({
                   type: z.literal("global"),
                   name: z.string(),
