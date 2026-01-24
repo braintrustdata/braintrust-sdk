@@ -349,9 +349,16 @@ class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.current_experiment: Experiment | None = None
-        self.current_logger: contextvars.ContextVar[Logger | None] = contextvars.ContextVar(
+        # We use both a ContextVar and a plain attribute for the current logger:
+        # - _cv_logger (ContextVar): Provides async context isolation so different
+        #   async tasks can have different loggers without affecting each other.
+        # - _local_logger (plain attribute): Fallback for threads, since ContextVars
+        #   don't propagate to new threads. This way if users don't want to do
+        #   anything specific they'll always have a "global logger"
+        self._cv_logger: contextvars.ContextVar[Logger | None] = contextvars.ContextVar(
             "braintrust_current_logger", default=None
         )
+        self._local_logger: Logger | None = None
         self.current_parent: contextvars.ContextVar[str | None] = contextvars.ContextVar(
             "braintrust_current_parent", default=None
         )
@@ -401,6 +408,11 @@ class BraintrustState:
             ),
         )
 
+        from braintrust.span_cache import SpanCache
+
+        self.span_cache = SpanCache()
+        self._otel_flush_callback: Any | None = None
+
     def reset_login_info(self):
         self.app_url: str | None = None
         self.app_public_url: str | None = None
@@ -420,7 +432,8 @@ class BraintrustState:
     def reset_parent_state(self):
         # reset possible parent state for tests
         self.current_experiment = None
-        self.current_logger.set(None)
+        self._cv_logger.set(None)
+        self._local_logger = None
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
 
@@ -457,6 +470,21 @@ class BraintrustState:
 
         return self._context_manager
 
+    def register_otel_flush(self, callback: Any) -> None:
+        """
+        Register an OTEL flush callback. This is called by the OTEL integration
+        when it initializes a span processor/exporter.
+        """
+        self._otel_flush_callback = callback
+
+    async def flush_otel(self) -> None:
+        """
+        Flush OTEL spans if a callback is registered.
+        Called during ensure_spans_flushed to ensure OTEL spans are visible in BTQL.
+        """
+        if self._otel_flush_callback:
+            await self._otel_flush_callback()
+
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
         self.__dict__.update({
@@ -465,7 +493,8 @@ class BraintrustState:
             if k
             not in (
                 "current_experiment",
-                "current_logger",
+                "_cv_logger",
+                "_local_logger",
                 "current_parent",
                 "current_span",
                 "_global_bg_logger",
@@ -1614,7 +1643,8 @@ def init_logger(
     if set_current:
         if _state is None:
             raise RuntimeError("_state is None in init_logger. This should never happen.")
-        _state.current_logger.set(ret)
+        _state._cv_logger.set(ret)
+        _state._local_logger = ret
     return ret
 
 
@@ -1777,6 +1807,25 @@ def login(
         _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
 
+def register_otel_flush(callback: Any) -> None:
+    """
+    Register a callback to flush OTEL spans. This is called by the OTEL integration
+    when it initializes a span processor/exporter.
+
+    When ensure_spans_flushed is called (e.g., before a BTQL query in scorers),
+    this callback will be invoked to ensure OTEL spans are flushed to the server.
+
+    Also disables the span cache, since OTEL spans aren't in the local cache
+    and we need BTQL to see the complete span tree (both native + OTEL spans).
+
+    :param callback: The async callback function to flush OTEL spans.
+    """
+    global _state
+    _state.register_otel_flush(callback)
+    # Disable span cache since OTEL spans aren't in the local cache
+    _state.span_cache.disable()
+
+
 def login_to_state(
     app_url: str | None = None,
     api_key: str | None = None,
@@ -1916,7 +1965,7 @@ def current_experiment() -> Optional["Experiment"]:
 def current_logger() -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
 
-    return _state.current_logger.get()
+    return _state._cv_logger.get() or _state._local_logger
 
 
 def current_span() -> Span:
@@ -3847,6 +3896,21 @@ class SpanImpl(Span):
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
+        # Write to local span cache for scorer access
+        # Only cache experiment spans - regular logs don't need caching
+        if self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            from braintrust.span_cache import CachedSpan
+
+            cached_span = CachedSpan(
+                span_id=self.span_id,
+                input=serializable_partial_record.get("input"),
+                output=serializable_partial_record.get("output"),
+                metadata=serializable_partial_record.get("metadata"),
+                span_parents=self.span_parents,
+                span_attributes=serializable_partial_record.get("span_attributes"),
+            )
+            self.state.span_cache.queue_write(self.root_span_id, self.span_id, cached_span)
+
         def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
             return dict(
@@ -3943,7 +4007,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger.get()
+            cur_logger = self.state._cv_logger.get() or self.state._local_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
