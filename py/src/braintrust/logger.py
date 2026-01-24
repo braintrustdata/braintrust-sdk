@@ -51,6 +51,7 @@ from .db_fields import (
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
     OBJECT_DELETE_FIELD,
+    OBJECT_ID_KEYS,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -785,7 +786,7 @@ def construct_logs3_overflow_request(key: str, size_bytes: int | None = None) ->
 
 def pick_logs3_overflow_object_ids(row: Mapping[str, Any]) -> dict[str, Any]:
     object_ids: dict[str, Any] = {}
-    for key in ("experiment_id", "dataset_id", "prompt_session_id", "project_id", "log_id", "function_data"):
+    for key in OBJECT_ID_KEYS:
         if key in row:
             object_ids[key] = row[key]
     return object_ids

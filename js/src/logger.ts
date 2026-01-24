@@ -25,6 +25,7 @@ import {
   mergeGitMetadataSettings,
   mergeRowBatch,
   OBJECT_DELETE_FIELD,
+  OBJECT_ID_KEYS,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanComponentsV4,
@@ -2376,15 +2377,7 @@ function pickLogs3OverflowObjectIds(
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   const objectIds: Record<string, unknown> = {};
-  const keys = [
-    "experiment_id",
-    "dataset_id",
-    "prompt_session_id",
-    "project_id",
-    "log_id",
-    "function_data",
-  ];
-  for (const key of keys) {
+  for (const key of OBJECT_ID_KEYS) {
     if (key in row) {
       objectIds[key] = row[key];
     }
