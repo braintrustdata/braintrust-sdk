@@ -134,12 +134,14 @@ def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
 
     for name, schema in parameters.items():
         if isinstance(schema, dict) and schema.get("type") == "prompt":
-            # Prompt parameter
-            result[name] = {
-                "type": "prompt",
-                "default": schema.get("default"),
-                "description": schema.get("description"),
-            }
+            # Prompt parameter - only include optional fields if they have values
+            # to avoid serializing None as null which Zod .optional() rejects
+            param_data: dict[str, Any] = {"type": "prompt"}
+            if schema.get("default") is not None:
+                param_data["default"] = schema["default"]
+            if schema.get("description") is not None:
+                param_data["description"] = schema["description"]
+            result[name] = param_data
         else:
             # Pydantic model
             try:
