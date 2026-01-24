@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 8d646d224cde97509b18183554516d018f4c0e84) -- do not modify
+// Auto-generated file (internal git SHA da3e660838c1fd18371e00410a236e64cf1158b9) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -594,6 +594,15 @@ export const ObjectReferenceNullish = z.union([
   z.null(),
 ]);
 export type ObjectReferenceNullishType = z.infer<typeof ObjectReferenceNullish>;
+export const SavedFunctionId = z.union([
+  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const DatasetEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
@@ -630,9 +639,17 @@ export const DatasetEvent = z.object({
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
-            source: z.enum(["classifier", "topic_map"]).optional(),
-            function_id: z.union([z.string(), z.null()]).optional(),
-            topic_map_id: z.union([z.string(), z.null()]).optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
           }),
         ),
       ),
@@ -803,9 +820,17 @@ export const ExperimentEvent = z.object({
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
-            source: z.enum(["classifier", "topic_map"]).optional(),
-            function_id: z.union([z.string(), z.null()]).optional(),
-            topic_map_id: z.union([z.string(), z.null()]).optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
           }),
         ),
       ),
@@ -946,15 +971,6 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
-export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-  }),
-]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -1607,9 +1623,17 @@ export const ProjectLogsEvent = z.object({
             metadata: z
               .union([z.object({}).partial().passthrough(), z.null()])
               .optional(),
-            source: z.enum(["classifier", "topic_map"]).optional(),
-            function_id: z.union([z.string(), z.null()]).optional(),
-            topic_map_id: z.union([z.string(), z.null()]).optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({ type: z.literal("function"), id: z.string() }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
           }),
         ),
       ),
