@@ -205,6 +205,7 @@ export const baseAllowedHeaders = [
   // These are eval-specific
   "x-bt-org-name",
   "x-bt-project-id",
+  "x-brain-source",
   "x-bt-stream-fmt",
   "x-bt-use-cache",
   "x-stainless-os",
