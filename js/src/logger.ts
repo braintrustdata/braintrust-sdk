@@ -2352,13 +2352,16 @@ type Logs3OverflowInputRow = {
   is_delete?: boolean;
   input_row: {
     byte_size: number;
-    score_count: number;
-    metric_count: number;
   };
 };
 
-function constructLogs3Data(items: string[]) {
-  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+type LogItemWithMeta = {
+  str: string;
+  overflowMeta: Logs3OverflowInputRow;
+};
+
+function constructLogs3Data(items: LogItemWithMeta[]) {
+  return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
 }
 
 function constructLogs3OverflowRequest(key: string, sizeBytes?: number) {
@@ -2387,25 +2390,20 @@ function pickLogs3OverflowObjectIds(
   return objectIds;
 }
 
-function buildLogs3OverflowRows(items: string[]): Logs3OverflowInputRow[] {
-  return items.map((item) => {
-    const parsed = JSON.parse(item);
-    if (!isObject(parsed)) {
-      throw new Error("Invalid logs3 overflow row");
-    }
-    const scores = isObject(parsed.scores) ? parsed.scores : undefined;
-    const metrics = isObject(parsed.metrics) ? parsed.metrics : undefined;
-    return {
-      object_ids: pickLogs3OverflowObjectIds(parsed),
-      has_comment: Object.prototype.hasOwnProperty.call(parsed, "comment"),
-      is_delete: parsed[OBJECT_DELETE_FIELD] === true,
+function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
+  const str = JSON.stringify(item);
+  const record = item as Record<string, unknown>;
+  return {
+    str,
+    overflowMeta: {
+      object_ids: pickLogs3OverflowObjectIds(record),
+      has_comment: Object.prototype.hasOwnProperty.call(item, "comment"),
+      is_delete: record[OBJECT_DELETE_FIELD] === true,
       input_row: {
-        byte_size: utf8ByteLength(item),
-        score_count: scores ? Object.keys(scores).length : 0,
-        metric_count: metrics ? Object.keys(metrics).length : 0,
+        byte_size: utf8ByteLength(str),
       },
-    };
-  });
+    },
+  };
 }
 
 function utf8ByteLength(value: string) {
@@ -2661,14 +2659,17 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         } catch (e) {
           console.warn("Failed to fetch version info for payload limit:", e);
         }
-        const canUseOverflow = serverLimit !== null && serverLimit > 0;
+        const validServerLimit =
+          serverLimit !== null && serverLimit > 0 ? serverLimit : null;
+        const canUseOverflow = validServerLimit !== null;
         let maxRequestSize = DEFAULT_MAX_REQUEST_SIZE;
         if (this.maxRequestSizeOverride !== null) {
-          maxRequestSize = canUseOverflow
-            ? Math.min(this.maxRequestSizeOverride, serverLimit)
-            : this.maxRequestSizeOverride;
-        } else if (canUseOverflow) {
-          maxRequestSize = serverLimit;
+          maxRequestSize =
+            validServerLimit !== null
+              ? Math.min(this.maxRequestSizeOverride, validServerLimit)
+              : this.maxRequestSizeOverride;
+        } else if (validServerLimit !== null) {
+          maxRequestSize = validServerLimit;
         }
         return { maxRequestSize, canUseOverflow };
       })();
@@ -2737,14 +2738,15 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // Construct batches of records to flush in parallel and in sequence.
-    const allItemsStr = allItems.map((bucket) =>
-      bucket.map((item) => JSON.stringify(item)),
+    const allItemsWithMeta = allItems.map((bucket) =>
+      bucket.map((item) => stringifyWithOverflowMeta(item)),
     );
     const maxRequestSizeResult = await this.getMaxRequestSize();
     const batchSets = batchItems({
-      items: allItemsStr,
+      items: allItemsWithMeta,
       batchMaxNumItems: batchSize,
       batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
+      getByteSize: (item) => item.str.length,
     });
 
     for (const batchSet of batchSets) {
@@ -2953,7 +2955,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   private async submitLogsRequest(
-    items: string[],
+    items: LogItemWithMeta[],
     {
       maxRequestSize,
       canUseOverflow,
@@ -2971,7 +2973,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     let overflowUpload: Logs3OverflowUpload | null = null;
-    const overflowRows = useOverflow ? buildLogs3OverflowRows(items) : null;
+    const overflowRows = useOverflow
+      ? items.map((item) => item.overflowMeta)
+      : null;
 
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
@@ -3077,7 +3081,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await this.unwrapLazyValues(wrappedItems);
 
       const dataStr = constructLogs3Data(
-        allItems.map((x) => JSON.stringify(x)),
+        allItems
+          .map((bucket) => bucket.map((x) => stringifyWithOverflowMeta(x)))
+          .flat(),
       );
       const attachmentStr = JSON.stringify(
         allAttachments.map((a) => a.debugInfo()),

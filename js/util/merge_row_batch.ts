@@ -131,24 +131,26 @@ export function mergeRowBatch<
   return buckets.map((bucket) => bucket.map((i) => merged[i]));
 }
 
-export function batchItems(args: {
-  items: string[][];
+export function batchItems<T>(args: {
+  items: T[][];
   batchMaxNumItems?: number;
   batchMaxNumBytes?: number;
-}): string[][][] {
+  getByteSize: (item: T) => number;
+}): T[][][] {
   let { items } = args;
   const batchMaxNumItems = args.batchMaxNumItems ?? Number.POSITIVE_INFINITY;
   const batchMaxNumBytes = args.batchMaxNumBytes ?? Number.POSITIVE_INFINITY;
+  const getByteSize = args.getByteSize;
 
-  const output: string[][][] = [];
-  let nextItems: string[][] = [];
-  let batchSet: string[][] = [];
-  let batch: string[] = [];
+  const output: T[][][] = [];
+  let nextItems: T[][] = [];
+  let batchSet: T[][] = [];
+  let batch: T[] = [];
   let batchLen = 0;
 
-  function addToBatch(item: string) {
+  function addToBatch(item: T) {
     batch.push(item);
-    batchLen += item.length;
+    batchLen += getByteSize(item);
   }
 
   function flushBatch() {
@@ -161,9 +163,10 @@ export function batchItems(args: {
     for (const bucket of items) {
       let i = 0;
       for (const item of bucket) {
+        const itemSize = getByteSize(item);
         if (
           batch.length === 0 ||
-          (item.length + batchLen < batchMaxNumBytes &&
+          (itemSize + batchLen < batchMaxNumBytes &&
             batch.length < batchMaxNumItems)
         ) {
           addToBatch(item);
