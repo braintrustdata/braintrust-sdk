@@ -20,6 +20,7 @@ ALLOWED_HEADERS = [
     "x-bt-parent",
     "x-bt-org-name",
     "x-bt-project-id",
+    "x-bt-brain-source",
     "x-bt-stream-fmt",
     "x-bt-use-cache",
     "x-stainless-os",
