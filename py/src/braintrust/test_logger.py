@@ -840,7 +840,7 @@ def test_span_export_disables_cache(with_memory_logger):
     with logger.start_span(name="test_span") as span:
         # Exporting should disable the span cache
         span.export()
-        assert logger.state.span_cache.disabled()
+        assert logger.state.span_cache.disabled
 
 
 def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
