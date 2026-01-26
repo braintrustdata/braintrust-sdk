@@ -359,7 +359,7 @@ test("span.export disables cache", async () => {
   const span = logger.startSpan({ name: "test-span" });
 
   await span.export();
-  expect(span.state().spanCache.disabled()).toBe(true);
+  expect(span.state().spanCache.disabled).toBe(true);
 });
 
 test("span.export handles unresolved parent object ID", async () => {
