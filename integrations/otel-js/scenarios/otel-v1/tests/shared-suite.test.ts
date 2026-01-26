@@ -29,7 +29,7 @@ import {
   testMustacheTemplate,
   testNunjucksTemplate,
   testEvalSmoke,
-} from "../../../shared/dist/index.js";
+} from "../../../../../js/smoke/shared/dist/index.js";
 
 async function runSharedTestSuites() {
   const braintrust = await import("braintrust");

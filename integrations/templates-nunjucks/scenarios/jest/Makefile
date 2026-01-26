@@ -9,7 +9,7 @@ setup:
 		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
 	else \
 		echo "==> Building SDK"; \
-		cd ../../../../.. && pnpm exec turbo build --filter=braintrust && mkdir -p sdk/js/artifacts && pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
+		cd ../../../../.. && mise exec -- pnpm exec turbo build --filter=braintrust && mkdir -p sdk/js/artifacts && mise exec -- pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
 		for f in sdk/js/artifacts/braintrust-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \
 			   [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ] && \
@@ -23,7 +23,7 @@ setup:
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
 		echo "==> Building shared package"; \
-		cd ../../../../js/smoke/shared && npm ci && npm run build; \
+		cd ../../../../js/smoke/shared && npm install && npm run build; \
 	fi
 
 	@# Build @braintrust/templates-nunjucks-js package
@@ -31,7 +31,7 @@ setup:
 		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
 	else \
 		echo "==> Building @braintrust/templates-nunjucks-js package"; \
-		cd ../../../../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && cd sdk/integrations/templates-nunjucks && pnpm pack --pack-destination ../../js/artifacts; \
+		cd ../../../../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && cd sdk/integrations/templates-nunjucks && mise exec -- pnpm pack --pack-destination ../../js/artifacts; \
 		for f in ../../js/artifacts/braintrust-templates-nunjucks-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-templates-nunjucks-js-latest.tgz" ]; then \
 				cp "$$f" ../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz; \

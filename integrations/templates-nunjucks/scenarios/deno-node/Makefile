@@ -13,7 +13,7 @@ setup:
 		cd ../../../../js && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
 		echo "==> Building SDK for workspace link"; \
-		cd ../../../../js && pnpm exec turbo build --filter=braintrust; \
+		cd ../../../../js && mise exec -- pnpm exec turbo build --filter=braintrust; \
 	fi
 
 	@# Deno uses workspace links - need templates-nunjucks dist/ folder to exist
@@ -25,9 +25,9 @@ setup:
 		cd ../.. && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
 		echo "==> Building templates-nunjucks for workspace link"; \
-		cd ../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js; \
+		cd ../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js; \
 	fi
 
 test: setup
 	@echo "==> Running deno tests"
-	deno test --sloppy-imports --allow-all tests/*.test.ts
+	mise exec -- deno test --no-check --sloppy-imports --allow-all tests/*.test.ts

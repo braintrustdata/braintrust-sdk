@@ -4,7 +4,9 @@ test("Nunjucks template rendering in Next.js API route", async ({
   request,
 }) => {
   const response = await request.get("/api/test");
-  const data = await response.json();
+
+  const text = await response.text();
+  const data = JSON.parse(text);
 
   expect(response.ok()).toBeTruthy();
   expect(data.success).toBe(true);
