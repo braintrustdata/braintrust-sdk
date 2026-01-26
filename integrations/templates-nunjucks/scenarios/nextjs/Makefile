@@ -43,5 +43,8 @@ setup:
 	npm install --no-package-lock
 
 test: setup
-	@echo "==> Running Next.js-style runtime test (node)"
-	node tests/basic.next.mjs
+	@echo "==> Running Next.js integration test"
+	@echo "==> Building Next.js app"
+	npx next build
+	@echo "==> Starting Next.js dev server and running Playwright tests"
+	npx playwright test

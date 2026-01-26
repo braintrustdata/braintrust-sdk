@@ -3,9 +3,17 @@ SCRIPTDIR := ../../integrations
 LOCAL_MAKEFILES := $(shell find scenarios -type f -path 'scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
 INTEGRATION_MAKEFILES := $(shell find $(SCRIPTDIR) -type f -path '*/scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
 SCENARIO_MAKEFILES := $(LOCAL_MAKEFILES) $(INTEGRATION_MAKEFILES)
-SCENARIOS := $(patsubst %/Makefile,%,$(SCENARIO_MAKEFILES))
+LOCAL_SCENARIOS := $(patsubst scenarios/%/Makefile,%,$(LOCAL_MAKEFILES))
+INTEGRATION_SCENARIOS := $(shell echo "$(INTEGRATION_MAKEFILES)" | tr ' ' '\n' | sed 's|$(SCRIPTDIR)/||' | sed 's|/scenarios/|/|' | sed 's|/Makefile$$||' | tr '\n' ' ')
+SCENARIOS := $(LOCAL_SCENARIOS) $(INTEGRATION_SCENARIOS)
 
 .PHONY: help setup test list clean discover
+
+# Declare all scenarios as phony targets with empty recipes
+# This prevents "No rule to make target" errors when running: make test scenario-name
+.PHONY: $(LOCAL_SCENARIOS) $(INTEGRATION_SCENARIOS)
+$(LOCAL_SCENARIOS) $(INTEGRATION_SCENARIOS):
+	@: # Empty recipe - actual test logic is in the test target
 
 ## ============================================================================
 ## Help
@@ -27,12 +35,12 @@ help:
 	@echo "  SMOKE_V2_SHARED_DIST     - Path to shared package dist (auto-set by parent when running locally)"
 	@echo ""
 	@echo "Discovered local scenarios:"; \
-	@for s in $(LOCAL_MAKEFILES); do \
-		if [ -n "$$s" ]; then echo "  - $$(basename $$(dirname $$s))"; fi; \
+	for s in $(LOCAL_SCENARIOS); do \
+		if [ -n "$$s" ]; then echo "  - $$s"; fi; \
 	done; \
-	@echo "Discovered integration scenarios:"; \
-	@for s in $(INTEGRATION_MAKEFILES); do \
-		if [ -n "$$s" ]; then echo "  - $$(echo $$s | sed 's|$(SCRIPTDIR)/||' | sed 's|/Makefile$$||' | sed 's|/scenarios/|/|')"; fi; \
+	echo "Discovered integration scenarios:"; \
+	for s in $(INTEGRATION_SCENARIOS); do \
+		if [ -n "$$s" ]; then echo "  - $$s"; fi; \
 	done
 
 ## ============================================================================
@@ -105,8 +113,8 @@ test:
 			if [ ! -d "$$dir" ]; then \
 				echo "Error: Scenario '$$scenario' not found at $$dir"; \
 				echo "Available scenarios:"; \
-				for s in $(SCENARIO_MAKEFILES); do \
-					if echo "$$s" | grep -q '$(SCRIPTDIR)'; then echo "  - $$(echo $$s | sed 's|$(SCRIPTDIR)/||' | sed 's|/Makefile$$||' | sed 's|/scenarios/|/|')"; else echo "  - $$(basename $$(dirname $$s))"; fi; \
+				for s in $(LOCAL_SCENARIOS) $(INTEGRATION_SCENARIOS); do \
+					echo "  - $$s"; \
 				done; \
 				exit 1; \
 			fi; \
@@ -150,5 +158,6 @@ test:
 ## ============================================================================
 
 list:
-	@echo "Discovered integration scenarios:"; \
-	for s in $(SCENARIOS); do echo "  - $$(echo $$s | sed 's|$(SCRIPTDIR)/||' | sed 's|/scenarios/|/|')"; done
+	@echo "Discovered scenarios:"; \
+	for s in $(SCENARIOS); do echo "  - $$s"; done
+	@echo ''
