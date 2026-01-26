@@ -837,12 +837,6 @@ def test_span_export_disables_cache(with_memory_logger):
     """Test that span.export() disables the span cache."""
     logger = init_test_logger(__name__)
 
-    # Ensure the span cache is enabled initially (it should be by default in tests unless disabled)
-    # However, we only care that it becomes disabled after export.
-    # Note: init_test_logger might use a memory logger but state is global.
-    # We might need to ensure we don't affect other tests, but with_memory_logger fixture suggests isolation or we should reset.
-    # The span cache is part of BraintrustState.
-
     with logger.start_span(name="test_span") as span:
         # Exporting should disable the span cache
         span.export()
