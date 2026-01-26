@@ -1,6 +1,0 @@
-{
-  "name": "@braintrust/templates-nunjucks-js",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
