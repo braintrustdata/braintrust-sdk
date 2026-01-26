@@ -2338,7 +2338,7 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
 }
 
 const logs3OverflowUploadSchema = z.object({
-  method: z.enum(["PUT", "POST"]).optional(),
+  method: z.enum(["PUT", "POST"]),
   signedUrl: z.string().url(),
   headers: z.record(z.string()).optional(),
   fields: z.record(z.string()).optional(),
@@ -2740,18 +2740,18 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const allItemsStr = allItems.map((bucket) =>
       bucket.map((item) => JSON.stringify(item)),
     );
-    const { maxRequestSize } = await this.getMaxRequestSize();
+    const maxRequestSizeResult = await this.getMaxRequestSize();
     const batchSets = batchItems({
       items: allItemsStr,
       batchMaxNumItems: batchSize,
-      batchMaxNumBytes: maxRequestSize / 2,
+      batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
     });
 
     for (const batchSet of batchSets) {
       const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
-            await this.submitLogsRequest(batch, maxRequestSize);
+            await this.submitLogsRequest(batch, maxRequestSizeResult);
             return { type: "success" } as const;
           } catch (e) {
             return { type: "error", value: e } as const;
@@ -2911,7 +2911,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     upload: Logs3OverflowUpload,
     payload: string,
   ): Promise<void> {
-    const method = upload.method ?? "PUT";
+    const method = upload.method;
     if (method === "POST") {
       if (!upload.fields) {
         throw new Error("Missing logs3 overflow upload fields");
@@ -2925,9 +2925,16 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       }
       const contentType = upload.fields["Content-Type"] ?? "application/json";
       form.append("file", new Blob([payload], { type: contentType }));
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(upload.headers ?? {})) {
+        if (key.toLowerCase() !== "content-type") {
+          headers[key] = value;
+        }
+      }
       await checkResponse(
         await conn.fetch(upload.signedUrl, {
           method: "POST",
+          headers,
           body: form,
         }),
       );
@@ -2947,21 +2954,15 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async submitLogsRequest(
     items: string[],
-    maxRequestSize: number,
+    {
+      maxRequestSize,
+      canUseOverflow,
+    }: { maxRequestSize: number; canUseOverflow: boolean },
   ): Promise<void> {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     const payloadBytes = utf8ByteLength(dataStr);
-    const batchLimitBytes = maxRequestSize / 2;
-    let effectiveMaxRequestSize = maxRequestSize;
-    let canUseOverflow = false;
-    if (payloadBytes > batchLimitBytes) {
-      const maxRequestSizeResult = await this.getMaxRequestSize();
-      effectiveMaxRequestSize = maxRequestSizeResult.maxRequestSize;
-      canUseOverflow = maxRequestSizeResult.canUseOverflow;
-    }
-    const useOverflow =
-      canUseOverflow && payloadBytes > effectiveMaxRequestSize;
+    const useOverflow = canUseOverflow && payloadBytes > maxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
@@ -2970,43 +2971,30 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     let overflowUpload: Logs3OverflowUpload | null = null;
-    let overflowUploaded = false;
     const overflowRows = useOverflow ? buildLogs3OverflowRows(items) : null;
 
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
-        if (useOverflow) {
+        if (overflowRows) {
           if (!overflowUpload) {
-            if (!overflowRows) {
-              throw new Error("Missing logs3 overflow metadata");
-            }
-            overflowUpload = await this.requestLogs3OverflowUpload(conn, {
+            const currentUpload = await this.requestLogs3OverflowUpload(conn, {
               rows: overflowRows,
               sizeBytes: payloadBytes,
             });
-          }
-          const currentUpload = overflowUpload;
-          if (!currentUpload) {
-            throw new Error("Failed to request logs3 overflow upload URL");
-          }
-          if (!overflowUploaded) {
             await this.uploadLogs3OverflowPayload(conn, currentUpload, dataStr);
-            overflowUploaded = true;
+            overflowUpload = currentUpload;
           }
           await conn.post_json(
             "logs3",
-            constructLogs3OverflowRequest(currentUpload.key, payloadBytes),
+            constructLogs3OverflowRequest(overflowUpload.key, payloadBytes),
           );
         } else {
           await conn.post_json("logs3", dataStr);
         }
       } catch (e) {
         error = e;
-        if (useOverflow && !overflowUploaded) {
-          overflowUpload = null;
-        }
       }
       if (error === undefined) {
         return;
