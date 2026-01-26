@@ -631,15 +631,12 @@ def serialize_response_format(response_format: Any) -> Any:
         return response_format
 
 
-def patch_litellm() -> bool:
+def patch_litellm():
     """
     Patch LiteLLM to add Braintrust tracing.
 
     This wraps litellm.completion and litellm.acompletion to automatically
     create Braintrust spans with detailed token metrics, timing, and costs.
-
-    Returns:
-        True if LiteLLM was patched (or already patched), False if LiteLLM is not installed.
 
     Example:
         ```python
@@ -672,20 +669,16 @@ def patch_litellm() -> bool:
             litellm.responses = wrapped.responses
             litellm.aresponses = wrapped.aresponses
             litellm._braintrust_wrapped = True
-        return True
     except ImportError:
-        return False
+        pass  # litellm not available
 
 
-def unpatch_litellm() -> bool:
+def unpatch_litellm():
     """
     Restore LiteLLM to its original state, removing Braintrust tracing.
 
     This undoes the patching done by patch_litellm(), restoring the original
     completion, acompletion, responses, and aresponses functions.
-
-    Returns:
-        True if LiteLLM was unpatched (or wasn't patched), False if LiteLLM is not installed.
 
     Example:
         ```python
@@ -711,6 +704,5 @@ def unpatch_litellm() -> bool:
             delattr(litellm, "_braintrust_original_acompletion")
             delattr(litellm, "_braintrust_original_responses")
             delattr(litellm, "_braintrust_original_aresponses")
-        return True
     except ImportError:
-        return False
+        pass  # litellm not available

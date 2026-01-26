@@ -1,7 +1,7 @@
-"""Test auto_instrument/auto_uninstrument for LiteLLM."""
+"""Test auto_instrument for LiteLLM."""
 
 import litellm
-from braintrust.auto import auto_instrument, auto_uninstrument
+from braintrust.auto import auto_instrument
 from braintrust.wrappers.test_utils import autoinstrument_test_context
 
 # 1. Verify not patched initially
@@ -28,21 +28,5 @@ with autoinstrument_test_context("test_auto_litellm") as memory_logger:
     assert len(spans) == 1, f"Expected 1 span, got {len(spans)}"
     span = spans[0]
     assert span["metadata"]["provider"] == "litellm"
-
-# 5. Uninstrument
-results3 = auto_uninstrument()
-assert results3.get("litellm") == True
-assert not hasattr(litellm, "_braintrust_wrapped")
-
-# 6. Verify no spans after uninstrument
-with autoinstrument_test_context("test_auto_litellm_uninstrumented") as memory_logger:
-    response = litellm.completion(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": "Say hi again"}],
-    )
-    assert response.choices[0].message.content
-
-    spans = memory_logger.pop()
-    assert len(spans) == 0, f"Expected 0 spans after uninstrument, got {len(spans)}"
 
 print("SUCCESS")

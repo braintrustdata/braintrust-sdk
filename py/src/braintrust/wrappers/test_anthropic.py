@@ -488,14 +488,14 @@ class TestPatchAnthropic:
     """Tests for patch_anthropic() / unpatch_anthropic()."""
 
     def test_patch_anthropic_sets_wrapped_flag(self):
-        """patch_anthropic() should set _braintrust_wrapped on anthropic module."""
+        """patch_anthropic() should set __braintrust_wrapped__ on anthropic module."""
         result = run_in_subprocess("""
             from braintrust.wrappers.anthropic import patch_anthropic
             import anthropic
 
-            assert not hasattr(anthropic, "_braintrust_wrapped")
+            assert not hasattr(anthropic, "__braintrust_wrapped__")
             patch_anthropic()
-            assert hasattr(anthropic, "_braintrust_wrapped")
+            assert hasattr(anthropic, "__braintrust_wrapped__")
             print("SUCCESS")
         """)
         assert result.returncode == 0, f"Failed: {result.stderr}"
@@ -513,27 +513,6 @@ class TestPatchAnthropic:
             # Check that messages is wrapped
             messages_type = type(client.messages).__name__
             print(f"messages_type={messages_type}")
-            print("SUCCESS")
-        """)
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "SUCCESS" in result.stdout
-
-    def test_unpatch_anthropic_restores_original(self):
-        """unpatch_anthropic() should restore original classes."""
-        result = run_in_subprocess("""
-            import anthropic
-            from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
-
-            original_class = anthropic.Anthropic
-
-            patch_anthropic()
-            patched_class = anthropic.Anthropic
-            assert patched_class is not original_class
-
-            unpatch_anthropic()
-            restored_class = anthropic.Anthropic
-            assert restored_class is original_class
-            assert not hasattr(anthropic, "_braintrust_wrapped")
             print("SUCCESS")
         """)
         assert result.returncode == 0, f"Failed: {result.stderr}"
@@ -601,29 +580,26 @@ class TestPatchAnthropicSpans:
     @pytest.mark.vcr
     def test_patch_anthropic_creates_spans(self, memory_logger):
         """patch_anthropic() should create spans when making API calls."""
-        from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
+        from braintrust.wrappers.anthropic import patch_anthropic
 
         assert not memory_logger.pop()
 
         patch_anthropic()
-        try:
-            client = anthropic.Anthropic()
-            response = client.messages.create(
-                model="claude-3-5-haiku-latest",
-                max_tokens=100,
-                messages=[{"role": "user", "content": "Say hi"}],
-            )
-            assert response.content[0].text
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-3-5-haiku-latest",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "Say hi"}],
+        )
+        assert response.content[0].text
 
-            # Verify span was created
-            spans = memory_logger.pop()
-            assert len(spans) == 1
-            span = spans[0]
-            assert span["metadata"]["provider"] == "anthropic"
-            assert "claude" in span["metadata"]["model"]
-            assert span["input"]
-        finally:
-            unpatch_anthropic()
+        # Verify span was created
+        spans = memory_logger.pop()
+        assert len(spans) == 1
+        span = spans[0]
+        assert span["metadata"]["provider"] == "anthropic"
+        assert "claude" in span["metadata"]["model"]
+        assert span["input"]
 
 
 class TestPatchAnthropicAsyncSpans:
@@ -633,29 +609,26 @@ class TestPatchAnthropicAsyncSpans:
     @pytest.mark.asyncio
     async def test_patch_anthropic_async_creates_spans(self, memory_logger):
         """patch_anthropic() should create spans for async API calls."""
-        from braintrust.wrappers.anthropic import patch_anthropic, unpatch_anthropic
+        from braintrust.wrappers.anthropic import patch_anthropic
 
         assert not memory_logger.pop()
 
         patch_anthropic()
-        try:
-            client = anthropic.AsyncAnthropic()
-            response = await client.messages.create(
-                model="claude-3-5-haiku-latest",
-                max_tokens=100,
-                messages=[{"role": "user", "content": "Say hi async"}],
-            )
-            assert response.content[0].text
+        client = anthropic.AsyncAnthropic()
+        response = await client.messages.create(
+            model="claude-3-5-haiku-latest",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "Say hi async"}],
+        )
+        assert response.content[0].text
 
-            # Verify span was created
-            spans = memory_logger.pop()
-            assert len(spans) == 1
-            span = spans[0]
-            assert span["metadata"]["provider"] == "anthropic"
-            assert "claude" in span["metadata"]["model"]
-            assert span["input"]
-        finally:
-            unpatch_anthropic()
+        # Verify span was created
+        spans = memory_logger.pop()
+        assert len(spans) == 1
+        span = spans[0]
+        assert span["metadata"]["provider"] == "anthropic"
+        assert "claude" in span["metadata"]["model"]
+        assert span["input"]
 
 
 class TestAutoInstrumentAnthropic:

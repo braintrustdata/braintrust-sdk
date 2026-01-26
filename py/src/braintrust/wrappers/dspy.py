@@ -51,6 +51,7 @@ from typing import Any
 
 from braintrust.logger import current_span, start_span
 from braintrust.span_types import SpanTypeAttribute
+from wrapt import wrap_function_wrapper
 
 # Note: For detailed token and cost metrics, use patch_litellm() before importing DSPy.
 # The DSPy callback focuses on execution flow and span hierarchy.
@@ -414,6 +415,23 @@ class BraintrustDSpyCallback(BaseCallback):
             span.end()
 
 
+def _configure_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for dspy.configure that auto-adds BraintrustDSpyCallback."""
+    callbacks = kwargs.get("callbacks")
+    if callbacks is None:
+        callbacks = []
+    else:
+        callbacks = list(callbacks)
+
+    # Check if already has Braintrust callback
+    has_bt_callback = any(isinstance(cb, BraintrustDSpyCallback) for cb in callbacks)
+    if not has_bt_callback:
+        callbacks.append(BraintrustDSpyCallback())
+
+    kwargs["callbacks"] = callbacks
+    return wrapped(*args, **kwargs)
+
+
 def patch_dspy() -> bool:
     """
     Patch DSPy to automatically add Braintrust tracing callback.
@@ -437,57 +455,11 @@ def patch_dspy() -> bool:
     try:
         import dspy
 
-        if hasattr(dspy, "_braintrust_wrapped"):
+        if getattr(dspy, "__braintrust_wrapped__", False):
             return True  # Already patched
 
-        dspy._braintrust_original_configure = dspy.configure
-
-        def patched_configure(*args, callbacks=None, **kwargs):
-            # Auto-add BraintrustDSpyCallback if not already present
-            if callbacks is None:
-                callbacks = []
-            else:
-                callbacks = list(callbacks)
-
-            # Check if already has Braintrust callback
-            has_bt_callback = any(isinstance(cb, BraintrustDSpyCallback) for cb in callbacks)
-            if not has_bt_callback:
-                callbacks.append(BraintrustDSpyCallback())
-
-            return dspy._braintrust_original_configure(*args, callbacks=callbacks, **kwargs)
-
-        dspy.configure = patched_configure
-        dspy._braintrust_wrapped = True
-        return True
-
-    except ImportError:
-        return False
-
-
-def unpatch_dspy() -> bool:
-    """
-    Restore DSPy to its original state, removing automatic Braintrust callback.
-
-    Returns:
-        True if DSPy was unpatched (or wasn't patched), False if DSPy is not installed.
-
-    Example:
-        ```python
-        import braintrust
-        braintrust.patch_dspy()
-        # ... use auto-traced DSPy ...
-        braintrust.unpatch_dspy()  # Restore original behavior
-        ```
-    """
-    try:
-        import dspy
-
-        if hasattr(dspy, "_braintrust_wrapped"):
-            dspy.configure = dspy._braintrust_original_configure
-
-            delattr(dspy, "_braintrust_wrapped")
-            delattr(dspy, "_braintrust_original_configure")
-
+        wrap_function_wrapper("dspy", "configure", _configure_wrapper)
+        dspy.__braintrust_wrapped__ = True
         return True
 
     except ImportError:

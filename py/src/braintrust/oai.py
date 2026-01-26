@@ -5,6 +5,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from wrapt import wrap_function_wrapper
+
 from .logger import Attachment, Span, start_span
 from .span_types import SpanTypeAttribute
 from .util import merge_dicts
@@ -988,6 +990,12 @@ def _is_not_given(value: Any) -> bool:
         return False
 
 
+def _openai_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for OpenAI.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_openai_wrapper(instance)
+
+
 def patch_openai() -> bool:
     """
     Patch OpenAI to add Braintrust tracing globally.
@@ -1011,60 +1019,12 @@ def patch_openai() -> bool:
     try:
         import openai
 
-        if hasattr(openai, "_braintrust_wrapped"):
+        if getattr(openai, "__braintrust_wrapped__", False):
             return True  # Already patched
 
-        # Store originals for unpatch
-        openai._braintrust_original_OpenAI = openai.OpenAI
-        openai._braintrust_original_AsyncOpenAI = openai.AsyncOpenAI
-
-        # Create patched classes
-        class PatchedOpenAI(openai._braintrust_original_OpenAI):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                _apply_openai_wrapper(self)
-
-        class PatchedAsyncOpenAI(openai._braintrust_original_AsyncOpenAI):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                _apply_openai_wrapper(self)
-
-        # Replace classes
-        openai.OpenAI = PatchedOpenAI
-        openai.AsyncOpenAI = PatchedAsyncOpenAI
-        openai._braintrust_wrapped = True
-        return True
-
-    except ImportError:
-        return False
-
-
-def unpatch_openai() -> bool:
-    """
-    Restore OpenAI to its original state, removing Braintrust tracing.
-
-    Returns:
-        True if OpenAI was unpatched (or wasn't patched), False if OpenAI is not installed.
-
-    Example:
-        ```python
-        import braintrust
-        braintrust.patch_openai()
-        # ... use traced clients ...
-        braintrust.unpatch_openai()  # Restore original behavior
-        ```
-    """
-    try:
-        import openai
-
-        if hasattr(openai, "_braintrust_wrapped"):
-            openai.OpenAI = openai._braintrust_original_OpenAI
-            openai.AsyncOpenAI = openai._braintrust_original_AsyncOpenAI
-
-            delattr(openai, "_braintrust_wrapped")
-            delattr(openai, "_braintrust_original_OpenAI")
-            delattr(openai, "_braintrust_original_AsyncOpenAI")
-
+        wrap_function_wrapper("openai", "OpenAI.__init__", _openai_init_wrapper)
+        wrap_function_wrapper("openai", "AsyncOpenAI.__init__", _openai_init_wrapper)
+        openai.__braintrust_wrapped__ = True
         return True
 
     except ImportError:

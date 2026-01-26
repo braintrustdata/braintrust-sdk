@@ -65,14 +65,14 @@ class TestPatchDSPy:
     """Tests for patch_dspy() / unpatch_dspy()."""
 
     def test_patch_dspy_sets_wrapped_flag(self):
-        """patch_dspy() should set _braintrust_wrapped on dspy module."""
+        """patch_dspy() should set __braintrust_wrapped__ on dspy module."""
         result = run_in_subprocess("""
             dspy = __import__("dspy")
             from braintrust.wrappers.dspy import patch_dspy
 
-            assert not hasattr(dspy, "_braintrust_wrapped")
+            assert not hasattr(dspy, "__braintrust_wrapped__")
             patch_dspy()
-            assert hasattr(dspy, "_braintrust_wrapped")
+            assert hasattr(dspy, "__braintrust_wrapped__")
             print("SUCCESS")
         """)
         assert result.returncode == 0, f"Failed: {result.stderr}"
@@ -151,27 +151,6 @@ class TestPatchDSPy:
         assert result.returncode == 0, f"Failed: {result.stderr}"
         assert "SUCCESS" in result.stdout
 
-    def test_unpatch_dspy_restores_original(self):
-        """unpatch_dspy() should restore original configure function."""
-        result = run_in_subprocess("""
-            import dspy
-            from braintrust.wrappers.dspy import patch_dspy, unpatch_dspy
-
-            original_configure = dspy.configure
-
-            patch_dspy()
-            patched_configure = dspy.configure
-            assert patched_configure is not original_configure
-
-            unpatch_dspy()
-            restored_configure = dspy.configure
-            assert restored_configure is original_configure
-            assert not hasattr(dspy, "_braintrust_wrapped")
-            print("SUCCESS")
-        """)
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "SUCCESS" in result.stdout
-
     def test_patch_dspy_idempotent(self):
         """Multiple patch_dspy() calls should be safe."""
         result = run_in_subprocess("""
@@ -179,30 +158,11 @@ class TestPatchDSPy:
             import dspy
 
             patch_dspy()
-            first_configure = dspy.configure
+            patch_dspy()  # Second call - should be no-op, not double-wrap
 
-            patch_dspy()  # Second call
-            second_configure = dspy.configure
-
-            assert first_configure is second_configure
-            print("SUCCESS")
-        """)
-        assert result.returncode == 0, f"Failed: {result.stderr}"
-        assert "SUCCESS" in result.stdout
-
-    def test_unpatch_dspy_idempotent(self):
-        """Multiple unpatch_dspy() calls should be safe."""
-        result = run_in_subprocess("""
-            from braintrust.wrappers.dspy import patch_dspy, unpatch_dspy
-            import dspy
-
-            original_configure = dspy.configure
-
-            patch_dspy()
-            unpatch_dspy()
-            unpatch_dspy()  # Second call - should be no-op
-
-            assert dspy.configure is original_configure
+            # Verify configure still works
+            lm = dspy.LM("openai/gpt-4o-mini")
+            dspy.configure(lm=lm)
             print("SUCCESS")
         """)
         assert result.returncode == 0, f"Failed: {result.stderr}"

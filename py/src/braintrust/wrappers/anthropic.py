@@ -5,6 +5,7 @@ from contextlib import contextmanager
 
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 from braintrust.wrappers._anthropic_utils import Wrapper, extract_anthropic_usage, finalize_anthropic_tokens
+from wrapt import wrap_function_wrapper
 
 log = logging.getLogger(__name__)
 
@@ -360,6 +361,34 @@ def wrap_anthropic_client(client):
     return wrap_anthropic(client)
 
 
+def _apply_anthropic_wrapper(client):
+    """Apply tracing wrapper to an Anthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _apply_async_anthropic_wrapper(client):
+    """Apply tracing wrapper to an AsyncAnthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for Anthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_anthropic_wrapper(instance)
+
+
+def _async_anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for AsyncAnthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_async_anthropic_wrapper(instance)
+
+
 def patch_anthropic() -> bool:
     """
     Patch Anthropic to add Braintrust tracing globally.
@@ -383,77 +412,13 @@ def patch_anthropic() -> bool:
     try:
         import anthropic
 
-        if hasattr(anthropic, "_braintrust_wrapped"):
+        if getattr(anthropic, "__braintrust_wrapped__", False):
             return True  # Already patched
 
-        # Store originals for unpatch
-        anthropic._braintrust_original_Anthropic = anthropic.Anthropic
-        anthropic._braintrust_original_AsyncAnthropic = anthropic.AsyncAnthropic
-
-        # Create patched classes
-        class PatchedAnthropic(anthropic._braintrust_original_Anthropic):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                _apply_anthropic_wrapper(self)
-
-        class PatchedAsyncAnthropic(anthropic._braintrust_original_AsyncAnthropic):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                _apply_async_anthropic_wrapper(self)
-
-        # Replace classes
-        anthropic.Anthropic = PatchedAnthropic
-        anthropic.AsyncAnthropic = PatchedAsyncAnthropic
-        anthropic._braintrust_wrapped = True
+        wrap_function_wrapper("anthropic", "Anthropic.__init__", _anthropic_init_wrapper)
+        wrap_function_wrapper("anthropic", "AsyncAnthropic.__init__", _async_anthropic_init_wrapper)
+        anthropic.__braintrust_wrapped__ = True
         return True
 
     except ImportError:
         return False
-
-
-def unpatch_anthropic() -> bool:
-    """
-    Restore Anthropic to its original state, removing Braintrust tracing.
-
-    Returns:
-        True if Anthropic was unpatched (or wasn't patched), False if Anthropic is not installed.
-
-    Example:
-        ```python
-        import braintrust
-        braintrust.patch_anthropic()
-        # ... use traced clients ...
-        braintrust.unpatch_anthropic()  # Restore original behavior
-        ```
-    """
-    try:
-        import anthropic
-
-        if hasattr(anthropic, "_braintrust_wrapped"):
-            anthropic.Anthropic = anthropic._braintrust_original_Anthropic
-            anthropic.AsyncAnthropic = anthropic._braintrust_original_AsyncAnthropic
-
-            delattr(anthropic, "_braintrust_wrapped")
-            delattr(anthropic, "_braintrust_original_Anthropic")
-            delattr(anthropic, "_braintrust_original_AsyncAnthropic")
-
-        return True
-
-    except ImportError:
-        return False
-
-
-def _apply_anthropic_wrapper(client):
-    """Apply tracing wrapper to an Anthropic client instance in-place."""
-    wrapped = wrap_anthropic(client)
-    client.messages = wrapped.messages
-    if hasattr(wrapped, "beta"):
-        client.beta = wrapped.beta
-
-
-def _apply_async_anthropic_wrapper(client):
-    """Apply tracing wrapper to an AsyncAnthropic client instance in-place."""
-    wrapped = wrap_anthropic(client)
-    client.messages = wrapped.messages
-    if hasattr(wrapped, "beta"):
-        client.beta = wrapped.beta

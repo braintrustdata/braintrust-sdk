@@ -52,7 +52,6 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 from .audit import *
 from .auto import (
     auto_instrument,  # noqa: F401 # type: ignore[reportUnusedImport]
-    auto_uninstrument,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .framework import *
 from .framework2 import *
