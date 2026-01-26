@@ -7,7 +7,8 @@ setup:
 	@# Deno uses workspace links - need SDK dist/ folder to exist
 	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
 		echo "==> Extracting SDK tarball for workspace link"; \
-		TARBALL_PATH="$$(cd ../../../.. && pwd)/$(BRAINTRUST_TAR)"; \
+		SMOKE_DIR="$$(cd ../../../../js/smoke && pwd)"; \
+		TARBALL_PATH="$$SMOKE_DIR/$(BRAINTRUST_TAR)"; \
 		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
 		cd ../../../../js && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
@@ -18,7 +19,8 @@ setup:
 	@# Deno uses workspace links - need templates-nunjucks dist/ folder to exist
 	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)" ]; then \
 		echo "==> Extracting templates-nunjucks tarball for workspace link"; \
-		TARBALL_PATH="$$(cd ../../../.. && pwd)/$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
+		SMOKE_DIR="$$(cd ../../../../js/smoke && pwd)"; \
+		TARBALL_PATH="$$SMOKE_DIR/$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
 		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
 		cd ../.. && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \

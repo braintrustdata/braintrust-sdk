@@ -5,6 +5,9 @@ export async function GET() {
   try {
     const prompt = new Prompt(
       {
+        id: "test-prompt",
+        _xact_id: "test-xact",
+        project_id: "test-project",
         name: "nunjucks-nextjs-test",
         slug: "nunjucks-nextjs-test",
         prompt_data: {
