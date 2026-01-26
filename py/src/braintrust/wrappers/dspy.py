@@ -61,7 +61,7 @@ try:
 except ImportError:
     raise ImportError("DSPy is not installed. Please install it with: pip install dspy")
 
-__all__ = ["BraintrustDSpyCallback", "patch_dspy", "unpatch_dspy"]
+__all__ = ["BraintrustDSpyCallback", "patch_dspy"]
 
 
 class BraintrustDSpyCallback(BaseCallback):
