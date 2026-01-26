@@ -226,6 +226,7 @@ export type {
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
+  ParametersSource,
 } from "../dev/types";
 
 export type { EvalParameters } from "./eval-parameters";
