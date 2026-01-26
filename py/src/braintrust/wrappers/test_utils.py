@@ -1,4 +1,3 @@
-import os
 import subprocess
 import sys
 import textwrap
@@ -7,6 +6,7 @@ from pathlib import Path
 
 import vcr
 from braintrust import logger
+from braintrust.conftest import get_vcr_config
 from braintrust.test_helpers import init_test_logger
 
 AUTO_TEST_SCRIPTS_DIR = Path(__file__).parent / "auto_test_scripts"
@@ -71,9 +71,6 @@ def autoinstrument_test_context(cassette_name: str):
     with logger._internal_with_memory_background_logger() as memory_logger:
         memory_logger.pop()  # Clear any prior spans
 
-        my_vcr = vcr.VCR(
-            filter_headers=["authorization", "api-key", "x-api-key", "x-goog-api-key"],
-            record_mode="once" if not os.environ.get("CI") else "none",
-        )
+        my_vcr = vcr.VCR(**get_vcr_config())
         with my_vcr.use_cassette(str(cassette_path)):
             yield memory_logger
