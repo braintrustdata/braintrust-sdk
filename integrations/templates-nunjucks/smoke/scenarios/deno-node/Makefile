@@ -4,28 +4,25 @@ setup:
 	@echo "==> Setting up templates-nunjucks deno scenario"
 	mise install
 
-	@# Deno uses workspace links - need SDK dist/ folder to exist
+	@# Build or extract braintrust SDK (workspace link will use dist/)
 	@if [ -n "$(BRAINTRUST_TAR)" ]; then \
 		echo "==> Extracting SDK tarball for workspace link"; \
-		SMOKE_DIR="$$(cd ../../../../../js/smoke && pwd)"; \
-		TARBALL_PATH="$$SMOKE_DIR/$(BRAINTRUST_TAR)"; \
+		TARBALL_PATH="$$(cd ../../../../../js/smoke && pwd)/$(BRAINTRUST_TAR)"; \
 		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
 		cd ../../../../../js && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
-		echo "==> Building SDK for workspace link"; \
+		echo "==> Building SDK"; \
 		cd ../../../../../js && mise exec -- pnpm exec turbo build --filter=braintrust; \
 	fi
 
-	@# Deno uses workspace links - need templates-nunjucks dist/ folder to exist
-	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)" ]; then \
-		echo "==> Extracting templates-nunjucks tarball for workspace link"; \
-		SMOKE_DIR="$$(cd ../../../../../js/smoke && pwd)"; \
-		TARBALL_PATH="$$SMOKE_DIR/$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
-		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
-		cd ../../.. && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
-	else \
-		echo "==> Building templates-nunjucks for workspace link"; \
-		cd ../../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js; \
+	@# Build @braintrust/templates-nunjucks-js (direct import will use dist/)
+	@echo "==> Building @braintrust/templates-nunjucks-js package"; \
+	cd ../../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js
+
+	@# Build shared package (if not running from parent)
+	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
+		echo "==> Building shared package"; \
+		cd ../../../../../js/smoke/shared && npm install && npm run build; \
 	fi
 
 test: setup

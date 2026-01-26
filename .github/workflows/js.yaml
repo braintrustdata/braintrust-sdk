@@ -226,7 +226,7 @@ jobs:
           # Local scenarios (under js/smoke/scenarios): emit their directory names
           LOCAL=$(find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | tr '\n' ' ')
           # Integration scenarios: emit as integration/name
-          INTEGRATIONS=$(find "$SCRIPTDIR" -type f -path '*/scenarios/*/Makefile' 2>/dev/null | sed "s|^$SCRIPTDIR/||" | sed 's|/Makefile$||' | sed 's|/scenarios/|/|' | tr '\n' ' ')
+          INTEGRATIONS=$(find "$SCRIPTDIR" -type f -path '*/smoke/scenarios/*/Makefile' 2>/dev/null | sed "s|^$SCRIPTDIR/||" | sed 's|/Makefile$||' | sed 's|/smoke/scenarios/|/|' | tr '\n' ' ')
           ALL="${LOCAL} ${INTEGRATIONS}"
           # Convert space-separated list to JSON array
           SCENARIOS=$(printf "%s\n" $ALL | jq -R -s -c 'split("\n") | map(select(length>0))')
