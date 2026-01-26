@@ -354,6 +354,14 @@ test("span.export handles unauthenticated state", async () => {
   expect((exported as string).length).toBeGreaterThan(0);
 });
 
+test("span.export disables cache", async () => {
+  const logger = initLogger({});
+  const span = logger.startSpan({ name: "test-span" });
+
+  await span.export();
+  expect(span.state().spanCache.disabled()).toBe(true);
+});
+
 test("span.export handles unresolved parent object ID", async () => {
   // Create a span with a parent object ID that hasn't been resolved
   const logger = initLogger({});
