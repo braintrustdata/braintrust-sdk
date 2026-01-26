@@ -3923,7 +3923,7 @@ export type LoadParametersOptions = FullLoginOptions & {
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
  * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
- * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -4081,7 +4081,7 @@ export async function loadPrompt({
  * @param options.slug The slug of the parameters to load.
  * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
  * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
- * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
