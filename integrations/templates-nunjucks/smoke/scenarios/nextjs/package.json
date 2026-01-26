@@ -2,8 +2,8 @@
   "name": "smoke-templates-nunjucks-nextjs",
   "private": true,
   "dependencies": {
-    "braintrust": "file:../../../../js/artifacts/braintrust-latest.tgz",
-    "@braintrust/templates-nunjucks-js": "file:../../../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz",
+    "braintrust": "file:../../../../../js/artifacts/braintrust-latest.tgz",
+    "@braintrust/templates-nunjucks-js": "file:../../../../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

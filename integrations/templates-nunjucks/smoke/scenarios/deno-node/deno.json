@@ -3,13 +3,13 @@
     "@std/assert": "jsr:@std/assert@^1.0.14",
     "@braintrust/smoke-test-shared": "jsr:@braintrust/smoke-test-shared",
     "braintrust": "npm:braintrust",
-    "@braintrust/templates-nunjucks-js": "../../dist/index.mjs",
+    "@braintrust/templates-nunjucks-js": "../../../dist/index.mjs",
     "nunjucks": "npm:nunjucks@^3.2.4"
   },
   "nodeModulesDir": "auto",
   "links": [
-    "../../../../js",
-    "../../",
-    "../../../../js/smoke/shared"
+    "../../../../../js",
+    "../../../",
+    "../../../../../js/smoke/shared"
   ]
 }

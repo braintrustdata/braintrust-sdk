@@ -1,10 +1,10 @@
 ## Discover integration scenarios under ../../integrations
 SCRIPTDIR := ../../integrations
 LOCAL_MAKEFILES := $(shell find scenarios -type f -path 'scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
-INTEGRATION_MAKEFILES := $(shell find $(SCRIPTDIR) -type f -path '*/scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
+INTEGRATION_MAKEFILES := $(shell find $(SCRIPTDIR) -type f -path '*/smoke/scenarios/*/Makefile' -not -path '*/node_modules/*' 2>/dev/null)
 SCENARIO_MAKEFILES := $(LOCAL_MAKEFILES) $(INTEGRATION_MAKEFILES)
 LOCAL_SCENARIOS := $(patsubst scenarios/%/Makefile,%,$(LOCAL_MAKEFILES))
-INTEGRATION_SCENARIOS := $(shell echo "$(INTEGRATION_MAKEFILES)" | tr ' ' '\n' | sed 's|$(SCRIPTDIR)/||' | sed 's|/scenarios/|/|' | sed 's|/Makefile$$||' | tr '\n' ' ')
+INTEGRATION_SCENARIOS := $(shell echo "$(INTEGRATION_MAKEFILES)" | tr ' ' '\n' | sed 's|$(SCRIPTDIR)/||' | sed 's|/smoke/scenarios/|/|' | sed 's|/Makefile$$||' | tr '\n' ' ')
 SCENARIOS := $(LOCAL_SCENARIOS) $(INTEGRATION_SCENARIOS)
 
 .PHONY: help setup test list clean discover
@@ -106,7 +106,7 @@ test:
 			if echo "$$scenario" | grep -q '/'; then \
 				integration=$$(echo $$scenario | cut -d/ -f1); \
 				name=$$(echo $$scenario | cut -d/ -f2-); \
-				dir="$(SCRIPTDIR)/$$integration/scenarios/$$name"; \
+				dir="$(SCRIPTDIR)/$$integration/smoke/scenarios/$$name"; \
 			else \
 				dir="scenarios/$$scenario"; \
 			fi; \

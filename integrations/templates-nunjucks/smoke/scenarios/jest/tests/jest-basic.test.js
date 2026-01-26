@@ -2,7 +2,7 @@ const {
   runTests,
   testMustacheTemplate,
   testNunjucksTemplate,
-} = require("../../../../../js/smoke/shared/dist/index.js");
+} = require("../../../../../../js/smoke/shared/dist/index.js");
 const braintrust = require("braintrust");
 const { nunjucksPlugin } = require("@braintrust/templates-nunjucks-js");
 

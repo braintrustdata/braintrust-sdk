@@ -21,7 +21,7 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
-    "test": "vitest run --exclude 'scenarios/**'"
+    "test": "vitest run --exclude 'smoke/scenarios/**'"
   },
   "author": "Braintrust Data Inc.",
   "license": "MIT",

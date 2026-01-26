@@ -8,7 +8,7 @@ import {
   displayTestResults,
   hasFailures,
   type TestResult,
-} from "../../../../../js/smoke/shared/dist/index.mjs";
+} from "../../../../../../js/smoke/shared/dist/index.mjs";
 
 async function main() {
   const results: TestResult[] = [];

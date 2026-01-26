@@ -1,7 +1,7 @@
 .PHONY: setup test
 
 setup:
-	@echo "==> Setting up templates-nunjucks nextjs scenario"
+	@echo "==> Setting up templates-nunjucks jest scenario"
 	mise install
 
 	@# Build SDK and shared package if not provided
@@ -9,7 +9,7 @@ setup:
 		echo "==> Using BRAINTRUST_TAR: $(BRAINTRUST_TAR)"; \
 	else \
 		echo "==> Building SDK"; \
-		cd ../../../../.. && mise exec -- pnpm exec turbo build --filter=braintrust && mkdir -p sdk/js/artifacts && mise exec -- pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
+		cd ../../../../../.. && mise exec -- pnpm exec turbo build --filter=braintrust && mkdir -p sdk/js/artifacts && mise exec -- pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
 		for f in sdk/js/artifacts/braintrust-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && \
 			   [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ] && \
@@ -23,7 +23,7 @@ setup:
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
 		echo "==> Building shared package"; \
-		cd ../../../../js/smoke/shared && npm install && npm run build; \
+		cd ../../../../../js/smoke/shared && npm install && npm run build; \
 	fi
 
 	@# Build @braintrust/templates-nunjucks-js package
@@ -31,7 +31,7 @@ setup:
 		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
 	else \
 		echo "==> Building @braintrust/templates-nunjucks-js package"; \
-		cd ../../../../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && cd sdk/integrations/templates-nunjucks && mise exec -- pnpm pack --pack-destination ../../js/artifacts; \
+		cd ../../../../../.. && mise exec -- pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && cd sdk/integrations/templates-nunjucks && mise exec -- pnpm pack --pack-destination ../../js/artifacts; \
 		for f in ../../js/artifacts/braintrust-templates-nunjucks-*.tgz; do \
 			if [ "$$(basename $$f)" != "braintrust-templates-nunjucks-js-latest.tgz" ]; then \
 				cp "$$f" ../../js/artifacts/braintrust-templates-nunjucks-js-latest.tgz; \
@@ -40,13 +40,9 @@ setup:
 		done; \
 	fi
 
-	@echo "==> Cleaning and reinstalling node_modules to pick up new tarballs"
-	rm -rf node_modules package-lock.json .next
 	npm install --no-package-lock
 
 test: setup
-	@echo "==> Running Next.js integration test"
-	@echo "==> Building Next.js app"
-	npx next build
-	@echo "==> Starting Next.js dev server and running Playwright tests"
-	npx playwright test
+	@echo "==> Running jest tests"
+	@# Run only tests under the local tests/ directory to avoid workspace-wide discovery
+	npx jest --passWithNoTests --roots ./tests
