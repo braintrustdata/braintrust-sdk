@@ -828,6 +828,32 @@ export function scorerName(
   return scorer.name || `scorer_${scorer_idx}`;
 }
 
+function applySchemaDefaults<T extends Record<string, unknown>>(
+  data: T,
+  schema: Record<string, unknown>,
+): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const result = { ...data } as T;
+
+  for (const [key, schemaDef] of Object.entries(schema)) {
+    if (key in result) {
+      continue;
+    }
+
+    if (
+      typeof schemaDef === "object" &&
+      schemaDef !== null &&
+      "default" in schemaDef &&
+      schemaDef.default !== undefined
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (result as Record<string, unknown>)[key] = schemaDef.default as any;
+    }
+  }
+
+  return result;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -893,17 +919,24 @@ async function runEvaluatorInternal(
 
     if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
       // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const loadedData =
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         resolvedEvaluatorParams.data as unknown as InferParameters<EvalParameters>;
+
+      // Apply schema defaults to fill in missing values
+      const dataWithDefaults = applySchemaDefaults(
+        loadedData,
+        resolvedEvaluatorParams.schema,
+      );
+
       if (parameters && Object.keys(parameters).length > 0) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         parameters = {
-          ...loadedData,
+          ...dataWithDefaults,
           ...parameters,
         } as unknown as InferParameters<EvalParameters>;
       } else {
-        parameters = loadedData;
+        parameters = dataWithDefaults;
       }
     } else if (resolvedEvaluatorParams) {
       parameters = validateParameters(
