@@ -13,7 +13,7 @@ assert results2.get("claude_agent_sdk") == True
 
 # 3. Make API call and verify span
 with autoinstrument_test_context("test_auto_claude_agent_sdk") as memory_logger:
-    import claude_agent_sdk
+    import claude_agent_sdk  # pylint: disable=import-error
 
     options = claude_agent_sdk.ClaudeAgentOptions(model="claude-3-5-haiku-20241022")
 
