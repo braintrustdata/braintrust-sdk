@@ -545,7 +545,7 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * Whether to enable the span cache for this evaluation. The span cache stores span data on disk
    * to minimize memory usage and allow scorers to read spans without server round-trips. Defaults to true.
-   * Set to false to disable caching if you encounter issues or want to reduce disk I/O.
+   * Set to false to disable caching if you are doing distributed evaluation or want to reduce disk I/O.
    *
    * @example
    * // Disable span cache
