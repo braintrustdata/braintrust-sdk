@@ -163,23 +163,10 @@ clean:
 
 SMOKE_DIR := smoke
 
-# Run smoke tests (always prepares - relies on turbo/tsup caching for build efficiency)
+# Run smoke tests - delegates to smoke/Makefile which handles auto-discovery and tarball creation
 # Usage: make test-smoke [TEST_NAME...]
 test-smoke:
-	@TESTS="$(filter-out test-smoke,$(MAKECMDGOALS))"; \
-	SMOKE_ABS="$$(pwd)/$(SMOKE_DIR)"; \
-	cd $(SMOKE_DIR) && ./prepare-tests.sh $$TESTS; \
-	EXIT_CODE=0; \
-	cd $$SMOKE_ABS && ./run-tests.sh $$TESTS || EXIT_CODE=$$?; \
-	echo ""; \
-	echo "Restoring package files..."; \
-	cd $$SMOKE_ABS && \
-	for dir in tests/*/; do \
-		if [ -f "$$dir/package.json" ] && grep -q '"restore"' "$$dir/package.json" 2>/dev/null; then \
-			(cd "$$dir" && npm run restore >/dev/null 2>&1 && echo "  ✓ Restored $$(basename $$dir)") || true; \
-		fi; \
-	done; \
-	exit $$EXIT_CODE
+	@cd $(SMOKE_DIR) && $(MAKE) test $(filter-out test-smoke,$(MAKECMDGOALS))
 
 # Allow passing test names as make targets (they become no-ops)
 cloudflare-worker deno nextjs-instrumentation otel-v1 span span-jest:

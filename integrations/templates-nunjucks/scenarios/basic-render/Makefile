@@ -31,8 +31,8 @@ setup:
 	fi
 
 	@# Build @braintrust/templates-nunjucks-js package into js/artifacts
-	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)" ]; then \
-		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)"; \
+	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)" ]; then \
+		echo "==> Using BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: $(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
 	else \
 		echo "==> Building @braintrust/templates-nunjucks-js package"; \
 		cd ../../../../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js && cd sdk/integrations/templates-nunjucks && pnpm pack --pack-destination ../../js/artifacts; \

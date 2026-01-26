@@ -16,9 +16,9 @@ setup:
 	fi
 
 	@# Deno uses workspace links - need templates-nunjucks dist/ folder to exist
-	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)" ]; then \
+	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)" ]; then \
 		echo "==> Extracting templates-nunjucks tarball for workspace link"; \
-		TARBALL_PATH="$$(cd ../../../.. && pwd)/$(BRAINTRUST_TEMPLATES_NUNJUCKS_TAR)"; \
+		TARBALL_PATH="$$(cd ../../../.. && pwd)/$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
 		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
 		cd ../.. && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
