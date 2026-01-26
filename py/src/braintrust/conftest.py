@@ -3,18 +3,6 @@ import os
 import pytest
 
 
-@pytest.fixture(scope="module")
-def vcr_config():
-    """Global VCR config to filter sensitive headers from all cassettes."""
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-            "openai-organization",
-        ]
-    }
-
-
 @pytest.fixture(autouse=True)
 def override_app_url_for_tests():
     """
