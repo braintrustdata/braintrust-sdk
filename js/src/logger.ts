@@ -72,6 +72,8 @@ const BRAINTRUST_ATTACHMENT =
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
 const LOGS3_OVERFLOW_REFERENCE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+// 6 MB for the AWS lambda gateway (from our own testing).
+const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -2522,9 +2524,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
-  // 6 MB for the AWS lambda gateway (from our own testing).
-  public maxRequestSize: number = 6 * 1024 * 1024;
-  private maxRequestSizeConfigured: boolean = false;
+  private maxRequestSizeOverride: number | null = null;
+  private _maxRequestSizePromise: Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> | null = null;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
@@ -2534,8 +2538,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public flushChunkSize: number = 25;
 
   private _disabled = false;
-  private logs3PayloadLimit: number | null | undefined = undefined;
-  private logs3PayloadLimitPromise: Promise<number | null> | null = null;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -2560,8 +2562,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
     const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
     if (!isNaN(maxRequestSizeEnv)) {
-      this.maxRequestSize = maxRequestSizeEnv;
-      this.maxRequestSizeConfigured = true;
+      this.maxRequestSizeOverride = maxRequestSizeEnv;
     }
 
     const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -2643,48 +2644,36 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
-  private async getLogs3PayloadLimit(
-    conn: HTTPConnection,
-  ): Promise<number | null> {
-    if (this.logs3PayloadLimit !== undefined) {
-      return this.logs3PayloadLimit;
+  private getMaxRequestSize(): Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> {
+    if (!this._maxRequestSizePromise) {
+      this._maxRequestSizePromise = (async () => {
+        let serverLimit: number | null = null;
+        try {
+          const conn = await this.apiConn.get();
+          const versionInfo = await conn.get_json("version");
+          serverLimit =
+            z
+              .object({ logs3_payload_max_bytes: z.number().nullish() })
+              .parse(versionInfo).logs3_payload_max_bytes ?? null;
+        } catch (e) {
+          console.warn("Failed to fetch version info for payload limit:", e);
+        }
+        const canUseOverflow = serverLimit !== null && serverLimit > 0;
+        let maxRequestSize = DEFAULT_MAX_REQUEST_SIZE;
+        if (this.maxRequestSizeOverride !== null) {
+          maxRequestSize = canUseOverflow
+            ? Math.min(this.maxRequestSizeOverride, serverLimit)
+            : this.maxRequestSizeOverride;
+        } else if (canUseOverflow) {
+          maxRequestSize = serverLimit;
+        }
+        return { maxRequestSize, canUseOverflow };
+      })();
     }
-    if (this.logs3PayloadLimitPromise) {
-      return await this.logs3PayloadLimitPromise;
-    }
-    this.logs3PayloadLimitPromise = (async () => {
-      try {
-        const versionInfo = await conn.get_json("version");
-        const limit =
-          typeof versionInfo?.logs3_payload_max_bytes === "number"
-            ? versionInfo.logs3_payload_max_bytes
-            : null;
-        this.logs3PayloadLimit = limit;
-        return limit;
-      } catch {
-        this.logs3PayloadLimit = null;
-        return null;
-      } finally {
-        this.logs3PayloadLimitPromise = null;
-      }
-    })();
-    return await this.logs3PayloadLimitPromise;
-  }
-
-  private async getMaxRequestSize(
-    conn: HTTPConnection,
-  ): Promise<{ maxRequestSize: number; limit: number | null }> {
-    const limit = await this.getLogs3PayloadLimit(conn);
-    const normalizedLimit =
-      typeof limit === "number" && Number.isFinite(limit) && limit > 0
-        ? limit
-        : null;
-    if (normalizedLimit !== null) {
-      this.maxRequestSize = this.maxRequestSizeConfigured
-        ? Math.min(this.maxRequestSize, normalizedLimit)
-        : normalizedLimit;
-    }
-    return { maxRequestSize: this.maxRequestSize, limit: normalizedLimit };
+    return this._maxRequestSizePromise;
   }
 
   async flush(): Promise<void> {
@@ -2751,7 +2740,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const allItemsStr = allItems.map((bucket) =>
       bucket.map((item) => JSON.stringify(item)),
     );
-    const maxRequestSize = this.maxRequestSize;
+    const { maxRequestSize } = await this.getMaxRequestSize();
     const batchSets = batchItems({
       items: allItemsStr,
       batchMaxNumItems: batchSize,
@@ -2965,14 +2954,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const payloadBytes = utf8ByteLength(dataStr);
     const batchLimitBytes = maxRequestSize / 2;
     let effectiveMaxRequestSize = maxRequestSize;
-    let overflowLimit: number | null = null;
+    let canUseOverflow = false;
     if (payloadBytes > batchLimitBytes) {
-      const maxRequestSizeResult = await this.getMaxRequestSize(conn);
+      const maxRequestSizeResult = await this.getMaxRequestSize();
       effectiveMaxRequestSize = maxRequestSizeResult.maxRequestSize;
-      overflowLimit = maxRequestSizeResult.limit;
+      canUseOverflow = maxRequestSizeResult.canUseOverflow;
     }
     const useOverflow =
-      overflowLimit !== null && payloadBytes > effectiveMaxRequestSize;
+      canUseOverflow && payloadBytes > effectiveMaxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
