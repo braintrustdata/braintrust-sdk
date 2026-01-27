@@ -53,7 +53,6 @@ import {
   InferParameters,
   validateParameters,
 } from "./eval-parameters";
-import e from "@types/cors";
 
 export type BaseExperiment<
   Input,
@@ -1077,12 +1076,8 @@ async function runEvaluatorInternal(
               rootSpan.log({ output, metadata, expected });
             }
 
-            if (evaluator.flushBeforeScoring && experiment) {
-              console.log("flushing");
-              await experiment.flush();
-            } else {
-              console.log("not flushing");
-              console.log(evaluator.flushBeforeScoring, experiment?.id);
+            if (evaluator.flushBeforeScoring) {
+              await rootSpan.flush();
             }
 
             const scoringArgs = {
