@@ -31,6 +31,7 @@ help:
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  BRAINTRUST_TAR           - Path to braintrust tarball (auto-set by parent when running locally)"
+	@echo "  BRAINTRUST_BROWSER_TAR   - Path to browser tarball (auto-set by parent when running locally)"
 	@echo "  BRAINTRUST_OTEL_TAR      - Path to otel tarball (auto-set by parent when running locally)"
 	@echo "  SMOKE_V2_SHARED_DIST     - Path to shared package dist (auto-set by parent when running locally)"
 	@echo ""
@@ -65,15 +66,19 @@ setup:
 		done; \
 	fi
 
-	@# Build browser package and create tarball
-	@echo "==> Building browser package and creating tarball"; \
-	cd ../../.. && pnpm exec turbo build --filter=@braintrust/browser && pnpm --filter=@braintrust/browser pack --pack-destination sdk/js/artifacts; \
-	for f in sdk/js/artifacts/braintrust-browser-*.tgz; do \
-		if [ "$$(basename $$f)" != "braintrust-browser-latest.tgz" ]; then \
-			cp "$$f" sdk/js/artifacts/braintrust-browser-latest.tgz; \
-			break; \
-		fi; \
-	done
+	@# Build browser package and create tarball if not provided
+	@if [ -n "$(BRAINTRUST_BROWSER_TAR)" ] && [ -f "$(BRAINTRUST_BROWSER_TAR)" ]; then \
+		echo "==> Using provided BRAINTRUST_BROWSER_TAR: $(BRAINTRUST_BROWSER_TAR)"; \
+	else \
+		echo "==> Building browser package and creating tarball"; \
+		cd ../../.. && pnpm exec turbo build --filter=@braintrust/browser && pnpm --filter=@braintrust/browser pack --pack-destination sdk/js/artifacts; \
+		for f in sdk/js/artifacts/braintrust-browser-*.tgz; do \
+			if [ "$$(basename $$f)" != "braintrust-browser-latest.tgz" ]; then \
+				cp "$$f" sdk/js/artifacts/braintrust-browser-latest.tgz; \
+				break; \
+			fi; \
+		done; \
+	fi
 
 	@# Build shared package if not provided
 	@if [ -n "$(SMOKE_V2_SHARED_DIST)" ] && [ -d "$(SMOKE_V2_SHARED_DIST)" ]; then \
@@ -136,9 +141,10 @@ test:
 	$(MAKE) setup; \
 	\
 	: $${BRAINTRUST_TAR:=../artifacts/braintrust-latest.tgz}; \
+	: $${BRAINTRUST_BROWSER_TAR:=../artifacts/braintrust-browser-latest.tgz}; \
 	: $${BRAINTRUST_OTEL_TAR:=../artifacts/braintrust-otel-latest.tgz}; \
 	: $${SMOKE_V2_SHARED_DIST:=shared/dist}; \
-	export BRAINTRUST_TAR BRAINTRUST_OTEL_TAR SMOKE_V2_SHARED_DIST; \
+	export BRAINTRUST_TAR BRAINTRUST_BROWSER_TAR BRAINTRUST_OTEL_TAR SMOKE_V2_SHARED_DIST; \
 	\
 	FAILED_SCENARIOS=""; \
 	for scenario in $$SCENARIOS_TO_RUN; do \
