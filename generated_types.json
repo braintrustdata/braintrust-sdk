@@ -3849,6 +3849,18 @@
           "replace"
         ]
       },
+      "ImageRenderingMode": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "auto",
+          "click_to_load",
+          "blocked"
+        ],
+        "description": "Controls how images are rendered in the UI: 'auto' loads images automatically, 'click_to_load' shows a placeholder until clicked, 'blocked' prevents image loading entirely"
+      },
       "InvokeFunction": {
         "allOf": [
           {
@@ -4591,6 +4603,9 @@
             ],
             "format": "date-time",
             "description": "Date of organization creation"
+          },
+          "image_rendering_mode": {
+            "$ref": "#/components/schemas/ImageRenderingMode"
           }
         },
         "required": [
@@ -6925,11 +6940,11 @@
           "eval",
           "task",
           "tool",
-          "review",
           "automation",
           "facet",
           "preprocessor",
-          "classifier"
+          "classifier",
+          "review"
         ],
         "description": "Type of the span, for display purposes only"
       },
@@ -7256,7 +7271,9 @@
               "classifiers",
               "logs",
               "monitor",
-              "for_review"
+              "for_review_project_log",
+              "for_review_experiments",
+              "for_review_datasets"
             ],
             "description": "Type of object that the view corresponds to."
           },
@@ -7694,7 +7711,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "c99d1e6fbf062688da7f1f22394c72ea480fe81a"
+    "x-internal-git-sha": "2e862e920ab0d7431f22882ce1bf3a5ba2a4b8ed"
   },
   "paths": {},
   "webhooks": {}

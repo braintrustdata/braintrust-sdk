@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA c99d1e6fbf062688da7f1f22394c72ea480fe81a) -- do not modify
+// Auto-generated file (internal git SHA 2e862e920ab0d7431f22882ce1bf3a5ba2a4b8ed) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -634,11 +634,11 @@ export const SpanType = z.union([
     "eval",
     "task",
     "tool",
-    "review",
     "automation",
     "facet",
     "preprocessor",
     "classifier",
+    "review",
   ]),
   z.null(),
 ]);
@@ -1203,6 +1203,11 @@ export const GroupScope = z.object({
 export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
+export const ImageRenderingMode = z.union([
+  z.enum(["auto", "click_to_load", "blocked"]),
+  z.null(),
+]);
+export type ImageRenderingModeType = z.infer<typeof ImageRenderingMode>;
 export const InvokeParent = z.union([
   z.object({
     object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
@@ -1311,6 +1316,7 @@ export const Organization = z.object({
   proxy_url: z.union([z.string(), z.null()]).optional(),
   realtime_url: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
+  image_rendering_mode: ImageRenderingMode.optional(),
 });
 export type OrganizationType = z.infer<typeof Organization>;
 export const ProjectSettings = z.union([
@@ -1821,7 +1827,9 @@ export const View = z.object({
     "classifiers",
     "logs",
     "monitor",
-    "for_review",
+    "for_review_project_log",
+    "for_review_experiments",
+    "for_review_datasets",
   ]),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
