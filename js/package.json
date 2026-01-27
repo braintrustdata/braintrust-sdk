@@ -18,6 +18,13 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
+      "edge-light": "./dist/index.mjs",
+      "workerd": "./dist/index.mjs",
+      "browser": "./dist/index.mjs",
+      "node": {
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.js"
+      },
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.mjs"
