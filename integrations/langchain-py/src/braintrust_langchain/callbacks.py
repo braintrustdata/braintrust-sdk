@@ -633,6 +633,18 @@ def _get_metrics_from_response(response: LLMResult):
                 )
             )
 
+            # Extract cache tokens from nested input_token_details (LangChain format)
+            # Maps to Braintrust's standard cache token metric names
+            input_token_details = usage_metadata.get("input_token_details")
+            if input_token_details and isinstance(input_token_details, dict):
+                cache_read = input_token_details.get("cache_read")
+                cache_creation = input_token_details.get("cache_creation")
+
+                if cache_read is not None:
+                    metrics["prompt_cached_tokens"] = cache_read
+                if cache_creation is not None:
+                    metrics["prompt_cache_creation_tokens"] = cache_creation
+
     if not metrics or not any(metrics.values()):
         llm_output: dict[str, Any] = response.llm_output or {}
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}

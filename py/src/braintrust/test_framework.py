@@ -241,6 +241,7 @@ async def test_hooks_trial_index_multiple_inputs():
     assert sorted(input_2_trials) == [0, 1]
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_scorer_spans_have_purpose_attribute(with_memory_logger, with_simulate_login):
     """Test that scorer spans have span_attributes.purpose='scorer' and propagate to subspans."""
