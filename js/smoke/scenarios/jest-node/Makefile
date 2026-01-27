@@ -36,4 +36,5 @@ setup:
 
 test: setup
 	@echo "==> Running jest-node tests"
-	npx jest
+	@# Run only tests under the local tests/ directory to avoid workspace-wide discovery
+	npx jest --passWithNoTests --roots ./tests

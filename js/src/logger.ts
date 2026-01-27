@@ -75,8 +75,8 @@ import Mustache from "mustache";
 import {
   parseTemplateFormat,
   renderTemplateContent,
-  type TemplateFormat,
 } from "./template/renderer";
+import type { TemplateFormat } from "./template/registry";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -6497,25 +6497,15 @@ function renderTemplatedObject(
   options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    const strict = !!options.strict;
-    if (options.templateFormat === "nunjucks") {
-      return iso.renderNunjucksString(obj, args, { strict });
-    }
-    if (options.templateFormat === "mustache") {
-      if (strict) {
-        lintMustacheTemplate(obj, args);
-      }
-      return Mustache.render(obj, args, undefined, {
-        escape: (value) => {
-          if (typeof value === "string") {
-            return value;
-          } else {
-            return JSON.stringify(value);
-          }
-        },
-      });
-    }
-    return obj;
+    return renderTemplateContent(
+      obj,
+      args,
+      (value) => (typeof value === "string" ? value : JSON.stringify(value)),
+      {
+        strict: options.strict,
+        templateFormat: options.templateFormat,
+      },
+    );
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {

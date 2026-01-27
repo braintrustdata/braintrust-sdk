@@ -1,0 +1,16 @@
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.14",
+    "@braintrust/smoke-test-shared": "jsr:@braintrust/smoke-test-shared",
+    "@braintrust/templates-nunjucks-js": "npm:@braintrust/templates-nunjucks-js",
+    "braintrust": "npm:braintrust",
+    "zod": "npm:zod@^4.2.1",
+    "zod/": "npm:/zod@^4.2.1/"
+  },
+  "nodeModulesDir": "auto",
+  "links": [
+    "../../../../../js",
+    "../../../",
+    "../../../../../js/smoke/shared"
+  ]
+}

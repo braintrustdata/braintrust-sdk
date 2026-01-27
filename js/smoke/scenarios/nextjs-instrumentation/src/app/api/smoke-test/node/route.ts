@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -65,7 +66,12 @@ export async function GET() {
       testCurrentSpan,
       testEvalSmoke,
       testMustacheTemplate,
-      testNunjucksTemplate,
+      expectFailure(
+        testNunjucksTemplate,
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
+      ),
     ],
   });
 

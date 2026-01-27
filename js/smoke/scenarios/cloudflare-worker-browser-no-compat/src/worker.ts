@@ -64,8 +64,9 @@ export default {
           testMustacheTemplate,
           expectFailure(
             testNunjucksTemplate,
-            (e) => e.message.includes("Nunjucks templating is not supported"),
-            "Nunjucks not supported in browser build",
+            (e: { message: string }) =>
+              e.message.includes("requires @braintrust/template-nunjucks"),
+            "Nunjucks requires separate package",
           ),
         ],
       });

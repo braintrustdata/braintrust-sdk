@@ -68,8 +68,9 @@ export async function GET() {
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,
-        (e) => e.message.includes("Nunjucks templating is not supported"),
-        "Nunjucks not supported in Edge Runtime",
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
       ),
     ],
   });

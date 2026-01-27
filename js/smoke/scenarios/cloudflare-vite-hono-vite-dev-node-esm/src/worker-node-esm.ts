@@ -78,8 +78,9 @@ app.get("/api/test", async (c) => {
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,
-        (e) => e.message.includes("Disallowed in this environment"),
-        "Cloudflare Workers blocks dynamic code generation (eval/Function)",
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
       ),
     ],
   });

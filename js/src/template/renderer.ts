@@ -1,8 +1,6 @@
-import Mustache from "mustache";
-import { lintTemplate as lintMustacheTemplate } from "./mustache-utils";
-import iso from "../isomorph";
+import { getTemplateRenderer, type TemplateFormat } from "./registry";
 
-export type TemplateFormat = "mustache" | "nunjucks" | "none";
+export type { TemplateFormat } from "./registry";
 
 export function isTemplateFormat(v: unknown): v is TemplateFormat {
   return v === "mustache" || v === "nunjucks" || v === "none";
@@ -23,15 +21,22 @@ export function renderTemplateContent(
 ): string {
   const strict = !!options.strict;
   const templateFormat = parseTemplateFormat(options.templateFormat);
-  if (templateFormat === "nunjucks") {
-    return iso.renderNunjucksString(template, variables, { strict });
-  } else if (templateFormat === "mustache") {
-    if (strict) {
-      lintMustacheTemplate(template, variables);
-    }
-    return Mustache.render(template, variables, undefined, {
-      escape,
-    });
+  if (templateFormat === "none") {
+    return template;
   }
-  return template;
+
+  const renderer = getTemplateRenderer(templateFormat);
+  if (!renderer) {
+    if (templateFormat === "nunjucks") {
+      throw new Error(
+        "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+      );
+    }
+    throw new Error(`No template renderer registered for ${templateFormat}`);
+  }
+
+  if (strict && renderer.lint) {
+    renderer.lint(template, variables);
+  }
+  return renderer.render(template, variables, escape, strict);
 }

@@ -120,6 +120,7 @@ export interface RunTestsOptions {
   name: string;
   braintrust: BraintrustModule;
   tests: TestFn[];
+  skipCoverage?: boolean;
 }
 
 export interface TestRunResults {
@@ -142,6 +143,7 @@ export async function runTests({
   name,
   braintrust,
   tests,
+  skipCoverage = false,
 }: RunTestsOptions): Promise<TestRunResults> {
   const results: TestResult[] = [];
 
@@ -149,7 +151,9 @@ export async function runTests({
     results.push(await test(braintrust));
   }
 
-  results.push(validateCoverage(results));
+  if (!skipCoverage) {
+    results.push(validateCoverage(results));
+  }
 
   displayTestResults({ scenarioName: name, results });
 

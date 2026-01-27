@@ -5,9 +5,18 @@ Smoke test infrastructure verifying SDK installation across different runtimes a
 ## Quick Reference
 
 ```bash
-make test              # Run all scenarios (doesn't exit early on failures)
-make test otel-v1      # Run specific scenario
-make list              # List available scenarios
+# From sdk/js/:
+make test-smoke                    # Run all scenarios
+
+# From sdk/js/smoke/:
+make test                          # Run all scenarios (local + integration)
+make test deno-node                # Run specific local scenario
+make test templates-nunjucks/jest  # Run integration scenario
+make list                          # List all discovered scenarios
+
+# From a specific scenario:
+cd scenarios/deno-node
+make test                          # Auto-creates tarball if needed
 ```
 
 ## Output Standardization (REQUIRED)
@@ -181,6 +190,72 @@ test: setup
 ```
 
 This ensures all tests run and display their results, but the suite still fails if any test failed.
+
+## Environment Variables & Tarball Creation
+
+### Automatic Tarball Creation
+
+Scenarios automatically create tarballs if they're not provided via environment variables. This happens during the `setup` target:
+
+1. **Check for existing tarball**: If `BRAINTRUST_TAR` env var is set and points to a valid file, use it
+2. **Build from source**: Otherwise, build SDK and create tarball:
+
+   ```bash
+   cd ../../.. && pnpm exec turbo build --filter=braintrust && \
+   mkdir-p artifacts && pnpm pack --pack-destination artifacts
+   ```
+
+3. **Rename to well-known path**: Copy to `braintrust-latest.tgz` for consistent references
+
+### Environment Variables
+
+- **`BRAINTRUST_TAR`**: Path to braintrust tarball (auto-created if not set)
+
+  - Example: `../artifacts/braintrust-latest.tgz`
+
+- **`BRAINTRUST_OTEL_TAR`**: Path to @braintrust/otel tarball (auto-created for scenarios that need it)
+
+  - Example: `../artifacts/braintrust-otel-latest.tgz`
+
+- **`BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR`**: Path to @braintrust/templates-nunjucks-js tarball
+
+  - Example: `../artifacts/braintrust-templates-nunjucks-js-latest.tgz`
+
+- **`SMOKE_V2_SHARED_DIST`**: Path to shared test utilities (auto-built if not set)
+  - Example: `shared/dist`
+
+### Local vs CI Execution
+
+**Locally:**
+
+- Tarballs auto-created on first run
+- Cached for subsequent runs (fast)
+- Run from any level: `sdk/js/`, `sdk/js/smoke/`, or scenario directory
+
+**In CI** (`.github/workflows/js.yaml`):
+
+1. **Build job**: Creates all tarballs (braintrust, otel, templates-nunjucks), uploads as artifacts
+2. **Smoke-discover job**: Auto-discovers all scenarios (local + integration)
+3. **Smoke-test job**: Downloads tarballs, runs all scenarios in parallel with `fail-fast: false`
+
+## Integration Scenarios
+
+Integration scenarios test SDK integrations and are located under `../../integrations/*/scenarios/`:
+
+### Templates-Nunjucks
+
+- **templates-nunjucks/basic-render**: Basic Nunjucks template rendering
+- **templates-nunjucks/deno**: Deno runtime with Nunjucks
+- **templates-nunjucks/jest**: Jest test runner with Nunjucks
+- **templates-nunjucks/nextjs**: Next.js integration with Nunjucks
+
+### OpenTelemetry (OTel)
+
+- **otel-js/otel-v1**: OpenTelemetry smoke test scenario (using shared test suite)
+
+Note: The `otel-js/otel-v1` and `otel-js/otel-v2` directories at the root of `integrations/otel-js/` are integration test environments (not smoke tests) and use a different test runner (vitest).
+
+All integration scenarios are automatically discovered and run alongside local scenarios.
 
 ## Design Principles
 

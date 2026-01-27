@@ -63,7 +63,8 @@ js-build:
 	pnpm run build
 
 js-test: js-build
-	pnpm run test
+	# Run tests only for the JS workspace packages and exclude integration scenario tests
+	pnpm --filter ./js... run test
 	cd js && make test
 
 js-docs: js-build

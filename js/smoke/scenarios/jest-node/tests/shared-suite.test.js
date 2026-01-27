@@ -1,5 +1,6 @@
 const {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -23,6 +24,7 @@ const {
   testBuildResolution,
   testMustacheTemplate,
   testNunjucksTemplate,
+  testEvalSmoke,
 } = require("../../../shared/dist/index.js");
 
 const braintrust = require("braintrust");
@@ -53,8 +55,13 @@ test("shared test suites pass in Jest", async () => {
       testAsyncLocalStorageTraced,
       testNestedTraced,
       testCurrentSpan,
+      testEvalSmoke,
       testMustacheTemplate,
-      testNunjucksTemplate,
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
+      ),
     ],
   });
 

@@ -6,6 +6,7 @@
 import { assertEquals } from "@std/assert";
 import {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -61,7 +62,12 @@ Deno.test("Run shared test suites", async () => {
       testCurrentSpan,
       testEvalSmoke,
       testMustacheTemplate,
-      testNunjucksTemplate,
+      expectFailure(
+        testNunjucksTemplate,
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
+      ),
     ],
   });
 

@@ -75,13 +75,6 @@ export interface Common {
   // zlib (promisified and type-erased).
   gunzip?: (data: any) => Promise<any>;
   gzip?: (data: any) => Promise<any>;
-
-  // Nunjucks template rendering (lints if strict is true)
-  renderNunjucksString: (
-    template: string,
-    variables: Record<string, unknown>,
-    options?: { strict?: boolean },
-  ) => string;
 }
 
 const iso: Common = {
@@ -92,11 +85,6 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
-  renderNunjucksString: () => {
-    throw new Error(
-      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
-    );
-  },
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
   writeln: (text: string) => console.log(text),
 };

@@ -108,7 +108,17 @@ export {
   parseTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-export type { TemplateFormat } from "./template/renderer";
+export type { TemplateFormat } from "./template/registry";
+
+export type {
+  TemplateRenderer,
+  TemplateRendererPlugin,
+} from "./template/registry";
+export {
+  registerTemplatePlugin,
+  getTemplateRenderer,
+  templateRegistry,
+} from "./template/registry";
 
 export type { InvokeFunctionArgs, InvokeReturn } from "./functions/invoke";
 export { initFunction, invoke } from "./functions/invoke";
