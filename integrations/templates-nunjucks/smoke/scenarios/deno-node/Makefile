@@ -17,7 +17,7 @@ setup:
 
 	@# Build @braintrust/templates-nunjucks-js (direct import will use dist/)
 	@echo "==> Building @braintrust/templates-nunjucks-js package"; \
-	cd ../../../../../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js
+	cd ../../../../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js
 
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \

@@ -8,7 +8,7 @@
     "zod/": "npm:/zod@^4.2.1/"
   },
   "nodeModulesDir": "auto",
-  "patch": [
+  "links": [
     "../../../../../js",
     "../../../"
   ]
