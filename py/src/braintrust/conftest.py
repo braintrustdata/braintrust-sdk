@@ -48,16 +48,14 @@ def reset_braintrust_state():
     logger._state = logger.BraintrustState()
 
 
-@pytest.fixture(scope="session")
-def vcr_config():
+def get_vcr_config():
     """
-    VCR configuration for recording/playing back HTTP interactions.
+    Get VCR configuration for recording/playing back HTTP interactions.
 
     In CI, use "none" to fail if cassette is missing.
     Locally, use "once" to record new cassettes if they don't exist.
     """
     record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
-
     return {
         "record_mode": record_mode,
         "filter_headers": [
@@ -70,3 +68,9 @@ def vcr_config():
             "x-bt-auth-token",
         ],
     }
+
+
+@pytest.fixture(scope="session")
+def vcr_config():
+    """Pytest fixture wrapper for get_vcr_config()."""
+    return get_vcr_config()
