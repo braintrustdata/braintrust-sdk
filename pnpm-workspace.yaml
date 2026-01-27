@@ -1,5 +1,6 @@
 packages:
   - js
+  - js-browser
   - integrations/*
   - internal/golden
   - js/src/wrappers/*
