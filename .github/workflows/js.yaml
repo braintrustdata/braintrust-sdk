@@ -57,12 +57,11 @@ jobs:
           PACKED_TARBALL=$(npm pack --pack-destination artifacts)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
-      - name: Build and pack @braintrust/browser
+      - name: Pack @braintrust/browser
         id: prepare_browser_artifact
+        working-directory: js-browser
         shell: bash
         run: |
-          cd js-browser
-          pnpm run build
           PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../js/artifacts)
           echo "packed_browser_tarball=$PACKED_BROWSER_TARBALL" >> "$GITHUB_OUTPUT"
 
