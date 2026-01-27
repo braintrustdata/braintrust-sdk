@@ -19,21 +19,6 @@ export default defineConfig([
     clean: true,
   },
   {
-    entry: ["src/browser.ts"],
-    format: ["cjs", "esm"],
-    outDir: "dist",
-    removeNodeProtocol: false,
-    external: ["zod"],
-    dts: {
-      // Split DTS generation to reduce memory usage
-      compilerOptions: {
-        skipLibCheck: true,
-      },
-    },
-    splitting: true,
-    clean: false,
-  },
-  {
     entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
     removeNodeProtocol: false,

@@ -11,12 +11,6 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "browser": {
-    "./dist/index.js": "./dist/browser.js",
-    "./dist/index.d.ts": "./dist/browser.d.ts",
-    "./dist/index.mjs": "./dist/browser.mjs",
-    "./dist/index.d.mts": "./dist/browser.d.mts"
-  },
   "bin": {
     "braintrust": "./dist/cli.js"
   },
@@ -24,16 +18,9 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "edge-light": "./dist/browser.mjs",
-      "workerd": "./dist/browser.mjs",
-      "node": {
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.js"
-      },
-      "browser": "./dist/browser.mjs",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
-      "default": "./dist/browser.mjs"
+      "default": "./dist/index.mjs"
     },
     "./node": {
       "types": "./dist/index.d.ts",
