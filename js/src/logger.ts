@@ -3904,14 +3904,61 @@ export type LoadPromptOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
-export type LoadParametersOptions = FullLoginOptions & {
+type LoadParametersBaseOptions = FullLoginOptions & {
+  state?: BraintrustState;
+};
+
+export type LoadParametersByIdOptions = LoadParametersBaseOptions & {
+  id: string;
+  version?: string;
+};
+
+export type LoadParametersByIdWithEnvOptions = LoadParametersBaseOptions & {
+  id: string;
+  environment: string;
+};
+
+export type LoadParametersByProjectNameOptions = LoadParametersBaseOptions & {
+  projectName: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectNameWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectName: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersByProjectIdOptions = LoadParametersBaseOptions & {
+  projectId: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectIdWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectId: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersOptions =
+  | LoadParametersByIdOptions
+  | LoadParametersByIdWithEnvOptions
+  | LoadParametersByProjectNameOptions
+  | LoadParametersByProjectNameWithEnvOptions
+  | LoadParametersByProjectIdOptions
+  | LoadParametersByProjectIdWithEnvOptions;
+
+type LoadParametersImplementationOptions = LoadParametersBaseOptions & {
   projectName?: string;
   projectId?: string;
   slug?: string;
   version?: string;
   id?: string;
   environment?: string;
-  state?: BraintrustState;
 };
 
 /**
@@ -4097,6 +4144,24 @@ export async function loadPrompt({
  * });
  * ```
  */
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
 export async function loadParameters<
   S extends EvalParameters = EvalParameters,
 >({
@@ -4112,7 +4177,7 @@ export async function loadParameters<
   fetch,
   forceLogin,
   state: stateArg,
-}: LoadParametersOptions): Promise<
+}: LoadParametersImplementationOptions): Promise<
   RemoteEvalParameters<true, true, InferParameters<S>>
 > {
   if (version && environment) {
