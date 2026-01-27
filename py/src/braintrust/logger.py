@@ -658,9 +658,13 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                 if num_prev_retries < self.base_num_retries:
-                    # Reset connection pool on timeout errors to clear stale connections
-                    # (e.g., NAT gateway dropped idle connections)
                     if isinstance(e, requests.exceptions.ReadTimeout):
+                        # Clear all connection pools to discard stale connections. This
+                        # fixes hangs caused by NAT gateways silently dropping idle TCP
+                        # connections (e.g., Azure's ~4 min timeout). close() calls
+                        # PoolManager.clear() which is thread-safe: in-flight requests
+                        # keep their checked-out connections, and new requests create
+                        # fresh pools on demand.
                         self.close()
                     # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
                     sleep_s = self.backoff_factor * (2**num_prev_retries)
@@ -736,20 +740,10 @@ class HTTPConnection:
     def delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def get_json(self, object_type: str, args: Mapping[str, Any] | None = None, retries: int = 0) -> Mapping[str, Any]:
-        # FIXME[matt]: the retry logic seems to be unused and could be n*2 because of the the retry logic
-        # in the RetryRequestExceptionsAdapter. We should probably remove this.
-        tries = retries + 1
-        for i in range(tries):
-            resp = self.get(f"/{object_type}", params=args)
-            if i < tries - 1 and not resp.ok:
-                _logger.warning(f"Retrying API request {object_type} {args} {resp.status_code} {resp.text}")
-                continue
-            response_raise_for_status(resp)
-
-            return resp.json()
-        # Needed for type checking.
-        raise Exception("unreachable")
+    def get_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        resp = self.get(f"/{object_type}", params=args)
+        response_raise_for_status(resp)
+        return resp.json()
 
     def post_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Any:
         resp = self.post(f"/{object_type.lstrip('/')}", json=args)

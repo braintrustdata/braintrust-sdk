@@ -217,3 +217,225 @@ class TestHTTPConnection:
             assert conn.adapter.default_timeout_secs == 30
         finally:
             del os.environ["BRAINTRUST_HTTP_TIMEOUT"]
+
+
+class TestAdapterCloseAndReuse:
+    """Tests verifying that adapter.close() allows subsequent requests.
+
+    This addresses the review concern about whether calling self.close()
+    (which calls PoolManager.clear()) breaks subsequent request handling.
+    """
+
+    @pytest.fixture
+    def simple_server(self):
+        """Fixture that creates a server that always succeeds."""
+
+        class SimpleHandler(http.server.BaseHTTPRequestHandler):
+            request_count = 0
+
+            def log_message(self, format, *args):
+                pass
+
+            def do_GET(self):
+                SimpleHandler.request_count += 1
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"status": "ok"}')
+
+        SimpleHandler.request_count = 0
+        server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), SimpleHandler)
+        server.daemon_threads = True
+        port = server.server_address[1]
+
+        thread = threading.Thread(target=server.serve_forever)
+        thread.daemon = True
+        thread.start()
+
+        yield f"http://127.0.0.1:{port}", SimpleHandler
+
+        server.shutdown()
+        server.server_close()
+
+    def test_adapter_works_after_close(self, simple_server):
+        """Verify adapter.close() does not break subsequent requests.
+
+        This is the key test for the PR feedback: after calling close(),
+        the PoolManager should create new connection pools on demand.
+        """
+        url, handler = simple_server
+
+        adapter = RetryRequestExceptionsAdapter(base_num_retries=3, backoff_factor=0.1)
+        session = requests.Session()
+        session.mount("http://", adapter)
+
+        # First request works
+        resp1 = session.get(f"{url}/test1")
+        assert resp1.status_code == 200
+        assert handler.request_count == 1
+
+        # Explicitly close the adapter (simulates what happens on timeout)
+        adapter.close()
+
+        # Second request should still work after close()
+        resp2 = session.get(f"{url}/test2")
+        assert resp2.status_code == 200
+        assert handler.request_count == 2
+
+    def test_adapter_works_after_multiple_closes(self, simple_server):
+        """Verify adapter works even after multiple close() calls."""
+        url, handler = simple_server
+
+        adapter = RetryRequestExceptionsAdapter(base_num_retries=3, backoff_factor=0.1)
+        session = requests.Session()
+        session.mount("http://", adapter)
+
+        for i in range(3):
+            resp = session.get(f"{url}/test{i}")
+            assert resp.status_code == 200
+            adapter.close()
+
+        assert handler.request_count == 3
+
+    def test_concurrent_requests_with_close(self):
+        """Test thread safety: close() called while requests are in-flight.
+
+        This tests a potential race condition where one thread calls close()
+        while another thread is mid-request.
+        """
+        import concurrent.futures
+
+        class SlowHandler(http.server.BaseHTTPRequestHandler):
+            request_count = 0
+
+            def log_message(self, format, *args):
+                pass
+
+            def do_GET(self):
+                SlowHandler.request_count += 1
+                # Simulate slow response
+                time.sleep(0.1)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"status": "ok"}')
+
+        SlowHandler.request_count = 0
+        server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), SlowHandler)
+        server.daemon_threads = True
+        port = server.server_address[1]
+        url = f"http://127.0.0.1:{port}"
+
+        server_thread = threading.Thread(target=server.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+
+        try:
+            adapter = RetryRequestExceptionsAdapter(base_num_retries=3, backoff_factor=0.1)
+            session = requests.Session()
+            session.mount("http://", adapter)
+
+            errors = []
+
+            def make_request(i):
+                try:
+                    resp = session.get(f"{url}/test{i}")
+                    return resp.status_code
+                except Exception as e:
+                    errors.append(e)
+                    return None
+
+            def close_adapter():
+                time.sleep(0.05)  # Close while requests are likely in-flight
+                adapter.close()
+
+            # Launch concurrent requests and a close() call
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                # Start several requests
+                request_futures = [executor.submit(make_request, i) for i in range(5)]
+                # Start close() call mid-flight
+                close_future = executor.submit(close_adapter)
+
+                close_future.result()
+                results = [f.result() for f in request_futures]
+
+            # All requests should succeed (retry on failure)
+            assert all(r == 200 for r in results), f"Some requests failed: {results}, errors: {errors}"
+
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_stress_concurrent_close_and_requests(self):
+        """Stress test: many close() calls interleaved with requests.
+
+        This is a more aggressive test to try to trigger race conditions.
+        """
+        import concurrent.futures
+
+        class FastHandler(http.server.BaseHTTPRequestHandler):
+            request_count = 0
+
+            def log_message(self, format, *args):
+                pass
+
+            def do_GET(self):
+                FastHandler.request_count += 1
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"status": "ok"}')
+
+        FastHandler.request_count = 0
+        server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), FastHandler)
+        server.daemon_threads = True
+        port = server.server_address[1]
+        url = f"http://127.0.0.1:{port}"
+
+        server_thread = threading.Thread(target=server.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+
+        try:
+            adapter = RetryRequestExceptionsAdapter(base_num_retries=5, backoff_factor=0.01)
+            session = requests.Session()
+            session.mount("http://", adapter)
+
+            errors = []
+            success_count = 0
+            lock = threading.Lock()
+
+            def make_request(i):
+                nonlocal success_count
+                try:
+                    resp = session.get(f"{url}/test{i}")
+                    if resp.status_code == 200:
+                        with lock:
+                            success_count += 1
+                    return resp.status_code
+                except Exception as e:
+                    with lock:
+                        errors.append(str(e))
+                    return None
+
+            def close_repeatedly():
+                for _ in range(20):
+                    adapter.close()
+                    time.sleep(0.001)
+
+            # Launch many concurrent requests while repeatedly closing
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                request_futures = [executor.submit(make_request, i) for i in range(50)]
+                close_futures = [executor.submit(close_repeatedly) for _ in range(3)]
+
+                # Wait for all
+                for f in close_futures:
+                    f.result()
+                results = [f.result() for f in request_futures]
+
+            failed = [r for r in results if r != 200]
+            assert len(failed) == 0, f"Failed requests: {len(failed)}, errors: {errors[:5]}"
+
+        finally:
+            server.shutdown()
+            server.server_close()
