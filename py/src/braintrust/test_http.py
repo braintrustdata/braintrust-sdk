@@ -301,7 +301,8 @@ class TestAdapterCloseAndReuse:
         """Test thread safety: close() called while requests are in-flight.
 
         This tests a potential race condition where one thread calls close()
-        while another thread is mid-request.
+        while another thread is mid-request. Requests are staggered to ensure
+        close() happens while some requests are in-flight.
         """
         import concurrent.futures
 
@@ -339,6 +340,7 @@ class TestAdapterCloseAndReuse:
 
             def make_request(i):
                 try:
+                    time.sleep(i * 0.02)  # Stagger requests
                     resp = session.get(f"{url}/test{i}")
                     return resp.status_code
                 except Exception as e:
@@ -346,12 +348,12 @@ class TestAdapterCloseAndReuse:
                     return None
 
             def close_adapter():
-                time.sleep(0.05)  # Close while requests are likely in-flight
+                time.sleep(0.05)  # Close while requests are in-flight
                 adapter.close()
 
             # Launch concurrent requests and a close() call
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                # Start several requests
+                # Start several requests (staggered)
                 request_futures = [executor.submit(make_request, i) for i in range(5)]
                 # Start close() call mid-flight
                 close_future = executor.submit(close_adapter)
@@ -369,7 +371,7 @@ class TestAdapterCloseAndReuse:
     def test_stress_concurrent_close_and_requests(self):
         """Stress test: many close() calls interleaved with requests.
 
-        This is a more aggressive test to try to trigger race conditions.
+        Requests are staggered to ensure close() calls happen during requests.
         """
         import concurrent.futures
 
@@ -408,6 +410,7 @@ class TestAdapterCloseAndReuse:
             def make_request(i):
                 nonlocal success_count
                 try:
+                    time.sleep(i * 0.005)  # Stagger requests
                     resp = session.get(f"{url}/test{i}")
                     if resp.status_code == 200:
                         with lock:
@@ -420,8 +423,8 @@ class TestAdapterCloseAndReuse:
 
             def close_repeatedly():
                 for _ in range(20):
+                    time.sleep(0.01)  # Close throughout the request window
                     adapter.close()
-                    time.sleep(0.001)
 
             # Launch many concurrent requests while repeatedly closing
             with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:

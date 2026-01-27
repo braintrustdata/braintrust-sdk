@@ -87,6 +87,7 @@ from .util import (
     get_caller_location,
     mask_api_key,
     merge_dicts,
+    parse_env_var_float,
     response_raise_for_status,
 )
 
@@ -693,7 +694,7 @@ class HTTPConnection:
 
     def make_long_lived(self) -> None:
         if not self.adapter:
-            timeout_secs = float(os.environ.get("BRAINTRUST_HTTP_TIMEOUT", "60"))
+            timeout_secs = parse_env_var_float("BRAINTRUST_HTTP_TIMEOUT", 60.0)
             self.adapter = RetryRequestExceptionsAdapter(
                 base_num_retries=10, backoff_factor=0.5, default_timeout_secs=timeout_secs
             )
