@@ -7,14 +7,16 @@ import type { TemplateRendererPlugin } from "braintrust";
  *
  * @example
  * ```typescript
- * import { registerTemplatePlugin, useTemplateRenderer } from "braintrust";
+ * import { registerTemplatePlugin } from "braintrust";
  * import { nunjucksPlugin, type NunjucksOptions } from "@braintrust/templates-nunjucks-js";
  *
- * registerTemplatePlugin(nunjucksPlugin);
- * useTemplateRenderer("nunjucks", {
+ * // Configure options before registering
+ * nunjucksPlugin.defaultOptions = {
  *   autoescape: true,
  *   throwOnUndefined: false
- * } as NunjucksOptions);
+ * } as NunjucksOptions;
+ *
+ * registerTemplatePlugin(nunjucksPlugin);
  * ```
  */
 export interface NunjucksOptions {
@@ -28,13 +30,13 @@ export interface NunjucksOptions {
    * @example
    * ```typescript
    * // With autoescape enabled (default)
-   * useTemplateRenderer("nunjucks", { autoescape: true });
+   * nunjucksPlugin.defaultOptions = { autoescape: true };
    * // Template: "{{ html }}"
    * // Variables: { html: "<div>Test</div>" }
    * // Output: "&lt;div&gt;Test&lt;/div&gt;"
    *
    * // With autoescape disabled
-   * useTemplateRenderer("nunjucks", { autoescape: false });
+   * nunjucksPlugin.defaultOptions = { autoescape: false };
    * // Output: "<div>Test</div>"
    * ```
    */
@@ -52,13 +54,13 @@ export interface NunjucksOptions {
    * @example
    * ```typescript
    * // Lenient mode (default) - typos render as empty
-   * useTemplateRenderer("nunjucks", { throwOnUndefined: false });
+   * nunjucksPlugin.defaultOptions = { throwOnUndefined: false };
    * // Template: "Hello {{ userName }}"
    * // Variables: { userName: "Alice" }
    * // Output: "Hello Alice"
    *
    * // Strict mode - typos throw errors
-   * useTemplateRenderer("nunjucks", { throwOnUndefined: true });
+   * nunjucksPlugin.defaultOptions = { throwOnUndefined: true };
    * // Output: Error: Variable 'userName' is undefined
    * ```
    */
@@ -73,12 +75,11 @@ export interface NunjucksOptions {
  *
  * @example
  * ```typescript
- * import { registerTemplatePlugin, useTemplateRenderer, Prompt } from "braintrust";
+ * import { registerTemplatePlugin, Prompt } from "braintrust";
  * import { nunjucksPlugin } from "@braintrust/templates-nunjucks-js";
  *
- * // Register and activate the plugin
+ * // Register the plugin
  * registerTemplatePlugin(nunjucksPlugin);
- * useTemplateRenderer("nunjucks");
  *
  * // Use in prompts
  * const prompt = new Prompt({

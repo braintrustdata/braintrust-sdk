@@ -49,17 +49,14 @@ export interface TemplateRendererPlugin {
 
   /**
    * Factory function that creates a renderer instance.
-   * Called when `useTemplateRenderer()` is invoked.
    *
-   * @param options - Configuration options passed to `useTemplateRenderer()`.
-   *                  If not provided, `defaultOptions` is used.
+   * @param options - If not provided, `defaultOptions` is used.
    * @returns A configured TemplateRenderer instance
    */
   createRenderer: () => TemplateRenderer;
 
   /**
    * Default configuration options for this plugin.
-   * Used when `useTemplateRenderer()` is called without options.
    */
   defaultOptions?: unknown;
 }
@@ -116,8 +113,7 @@ export const registerTemplatePlugin =
 /**
  * Gets an active template renderer by name.
  *
- * Returns `undefined` if the renderer is not active (i.e., hasn't been activated
- * with `useTemplateRenderer()`). This is used internally by the Prompt system.
+ * Returns `undefined` if the renderer is not active.
  *
  * @param name - Name of the renderer to retrieve
  * @returns The active renderer, or undefined if not activated

@@ -24,7 +24,7 @@
     "test": "vitest run --exclude 'smoke/scenarios/**'"
   },
   "author": "Braintrust Data Inc.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "nunjucks": "^3.2.4"
   },
