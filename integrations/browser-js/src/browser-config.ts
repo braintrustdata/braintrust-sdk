@@ -1,5 +1,4 @@
-import iso from "braintrust/dist/isomorph";
-import { _internalSetInitialState } from "braintrust";
+import { _internalIso as iso, _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge
@@ -17,16 +16,9 @@ export function configureBrowser() {
     return;
   }
 
-  // Set build type indicator
   iso.buildType = "browser";
 
-  if (typeof AsyncLocalStorage !== "undefined") {
-    // Use native AsyncLocalStorage if available (edge runtimes like Cloudflare Workers, Vercel Edge)
-    iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-  } else {
-    // Use als-browser polyfill for standard browsers
-    iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
-  }
+  iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
