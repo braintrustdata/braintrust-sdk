@@ -70,10 +70,10 @@ import {
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
-const LOGS3_OVERFLOW_REFERENCE = "logs3_overflow";
+export const LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 // 6 MB for the AWS lambda gateway (from our own testing).
-const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
+export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -2337,18 +2337,17 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-const logs3OverflowUploadSchema = z.object({
+export const logs3OverflowUploadSchema = z.object({
   method: z.enum(["PUT", "POST"]),
   signedUrl: z.string().url(),
   headers: z.record(z.string()).optional(),
   fields: z.record(z.string()).optional(),
   key: z.string().min(1),
 });
-type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+export type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
 
-type Logs3OverflowInputRow = {
+export type Logs3OverflowInputRow = {
   object_ids: Record<string, unknown>;
-  has_comment?: boolean;
   is_delete?: boolean;
   input_row: {
     byte_size: number;
@@ -2364,21 +2363,17 @@ function constructLogs3Data(items: LogItemWithMeta[]) {
   return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
 }
 
-function constructLogs3OverflowRequest(key: string, sizeBytes?: number) {
-  const rows: Record<string, unknown> = {
-    type: LOGS3_OVERFLOW_REFERENCE,
-    key,
-  };
-  if (sizeBytes !== undefined) {
-    rows.size_bytes = sizeBytes;
-  }
+export function constructLogs3OverflowRequest(key: string) {
   return {
-    rows,
+    rows: {
+      type: LOGS3_OVERFLOW_REFERENCE_TYPE,
+      key,
+    },
     api_version: 2,
   };
 }
 
-function pickLogs3OverflowObjectIds(
+export function pickLogs3OverflowObjectIds(
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   const objectIds: Record<string, unknown> = {};
@@ -2397,7 +2392,6 @@ function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
     str,
     overflowMeta: {
       object_ids: pickLogs3OverflowObjectIds(record),
-      has_comment: Object.prototype.hasOwnProperty.call(item, "comment"),
       is_delete: record[OBJECT_DELETE_FIELD] === true,
       input_row: {
         byte_size: utf8ByteLength(str),
@@ -2992,7 +2986,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           }
           await conn.post_json(
             "logs3",
-            constructLogs3OverflowRequest(overflowUpload.key, payloadBytes),
+            constructLogs3OverflowRequest(overflowUpload.key),
           );
         } else {
           await conn.post_json("logs3", dataStr);
