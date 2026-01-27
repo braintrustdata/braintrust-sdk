@@ -15,9 +15,16 @@ setup:
 		cd ../../../../../js && pnpm build; \
 	fi
 
-	@# Build @braintrust/templates-nunjucks-js (direct import will use dist/)
-	@echo "==> Building @braintrust/templates-nunjucks-js package"; \
-	cd ../../.. && pnpm build
+	@# Build or extract @braintrust/templates-nunjucks-js (workspace link will use dist/)
+	@if [ -n "$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)" ]; then \
+		echo "==> Extracting templates-nunjucks tarball for workspace link"; \
+		TARBALL_PATH="$$(cd ../../../../../js/smoke && pwd)/$(BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR)"; \
+		echo "==> Resolved tarball path: $$TARBALL_PATH"; \
+		cd ../../.. && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
+	else \
+		echo "==> Building @braintrust/templates-nunjucks-js package"; \
+		cd ../../../../.. && pnpm install && pnpm --filter=@braintrust/templates-nunjucks-js build; \
+	fi
 
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
