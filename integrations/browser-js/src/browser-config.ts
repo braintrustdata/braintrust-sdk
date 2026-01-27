@@ -1,5 +1,5 @@
-import iso from "../../js/src/isomorph";
-import { _internalSetInitialState } from "../../js/src/logger";
+import iso from "braintrust/dist/isomorph";
+import { _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge

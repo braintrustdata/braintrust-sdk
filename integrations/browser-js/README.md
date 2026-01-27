@@ -2,15 +2,19 @@
 
 Official browser-only SDK for [Braintrust](https://braintrust.dev).
 
+This is an integration package that provides browser-optimized builds of the Braintrust SDK with AsyncLocalStorage polyfill support for standard browsers.
+
 ## Installation
 
 ```bash
-npm install @braintrust/browser
+npm install @braintrust/browser braintrust
 # or
-pnpm add @braintrust/browser
+pnpm add @braintrust/browser braintrust
 # or
-yarn add @braintrust/browser
+yarn add @braintrust/browser braintrust
 ```
+
+Note: `braintrust` is a peer dependency and must be installed alongside `@braintrust/browser`.
 
 ## Usage
 
@@ -35,10 +39,11 @@ const result = await braintrust.traced(
 
 This package:
 
-- **Includes** `als-browser` polyfill for AsyncLocalStorage
-- **Standalone** - no peer dependencies required
+- **Includes** `als-browser` polyfill for AsyncLocalStorage (bundled)
+- **Requires** `braintrust` as a peer dependency
 - **Optimized** for browser bundle size
 - **Auto-configures** browser environment on import
+- **Supports** edge runtimes with native AsyncLocalStorage (Cloudflare Workers, Vercel Edge)
 
 ## When to Use
 
@@ -46,14 +51,13 @@ Use `@braintrust/browser` when:
 
 - Building browser-only applications
 - Need AsyncLocalStorage support in standard browsers
-- Want a standalone package with no peer dependencies
+- Want automatic browser environment configuration
 
-Use `braintrust` when:
+Use `braintrust` directly when:
 
 - Building Node.js applications
-- Using in Next.js or other full-stack frameworks
+- Using in Next.js or other full-stack frameworks (with proper module resolution)
 - Need CLI tools or filesystem access
-- Running in edge runtimes with native AsyncLocalStorage
 
 ## Features
 
@@ -79,4 +83,4 @@ For full documentation, visit [https://www.braintrust.dev/docs](https://www.brai
 
 ## License
 
-MIT
+Apache-2.0

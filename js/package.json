@@ -14,6 +14,10 @@
   "bin": {
     "braintrust": "./dist/cli.js"
   },
+  "browser": {
+    "./dist/index.js": "./dist/browser.js",
+    "./dist/index.mjs": "./dist/browser.mjs"
+  },
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -43,6 +47,24 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.mjs"
+    },
+    "./edge-light": {
+      "types": "./dist/edge-light.d.ts",
+      "import": "./dist/edge-light.mjs",
+      "require": "./dist/edge-light.js",
+      "default": "./dist/edge-light.mjs"
+    },
+    "./workerd": {
+      "types": "./dist/workerd.d.ts",
+      "import": "./dist/workerd.mjs",
+      "require": "./dist/workerd.js",
+      "default": "./dist/workerd.mjs"
     }
   },
   "files": [

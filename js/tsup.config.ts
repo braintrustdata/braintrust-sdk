@@ -58,4 +58,20 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
+  // Browser/edge exports with noop isomorph
+  {
+    entry: {
+      browser: "browser.ts",
+      "edge-light": "edge-light.ts",
+      workerd: "workerd.ts",
+    },
+    format: ["cjs", "esm"],
+    outDir: "dist",
+    external: ["zod"],
+    removeNodeProtocol: false,
+    platform: "browser",
+    splitting: false,
+    dts: true,
+    clean: false,
+  },
 ]);
