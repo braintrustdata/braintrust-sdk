@@ -45,28 +45,19 @@ main().catch(console.error);
 
 ### Browser Support
 
-The Braintrust SDK works in browser environments with full support for async context tracking through AsyncLocalStorage. This enables parent-child span relationships to be maintained automatically in browser-based tracing.
+**For browser-only applications, use the dedicated browser package:**
 
-**How it works:**
-
-- In environments with native `AsyncLocalStorage` support (e.g., Next.js Edge Runtime, some Cloudflare Workers), the SDK uses the native implementation
-- In standard browsers, the SDK uses [`als-browser`](https://github.com/apm-js-collab/als-browser) to polyfill AsyncLocalStorage functionality
-- Parent-child span relationships work transparently through nested `traced()` calls
-- `currentSpan()` returns the active span within any traced context
-
-**Example:**
-
-```javascript
-import { traced, startSpan } from "braintrust";
-
-// Parent span automatically tracked
-await traced(
-  async () => {
-    // Child span automatically inherits parent
-    const child = startSpan({ name: "child-operation" });
-    // ... do work ...
-    child.end();
-  },
-  { name: "parent-operation" },
-);
+```bash
+npm install @braintrust/browser
 ```
+
+The `@braintrust/browser` package is optimized for browser environments and includes the `als-browser` polyfill for AsyncLocalStorage support. It's a standalone package with no peer dependencies.
+
+**When to use each package:**
+
+- **`braintrust`** (this package) - For Node.js applications, full-stack frameworks (Next.js, etc.), and edge runtimes with native AsyncLocalStorage (Cloudflare Workers, Vercel Edge)
+- **`@braintrust/browser`** - For browser-only applications that need AsyncLocalStorage support in standard browsers
+
+See the [@braintrust/browser README](../js-browser/README.md) for more details.
+
+**Breaking change in v3.0.0:** The `braintrust/browser` subpath export has been removed. Browser users should migrate to the `@braintrust/browser` package.

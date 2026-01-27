@@ -1651,7 +1651,7 @@ const convertImageToAttachment = (
       // Handle Uint8Array
       if (image instanceof Uint8Array) {
         return new Attachment({
-          data: new Blob([image], { type: explicitMimeType }),
+          data: new Blob([image] as BlobPart[], { type: explicitMimeType }),
           filename: `image.${getExtensionFromMediaType(explicitMimeType)}`,
           contentType: explicitMimeType,
         });
@@ -1660,7 +1660,7 @@ const convertImageToAttachment = (
       // Handle Buffer (Node.js)
       if (typeof Buffer !== "undefined" && Buffer.isBuffer(image)) {
         return new Attachment({
-          data: new Blob([image], { type: explicitMimeType }),
+          data: new Blob([image] as BlobPart[], { type: explicitMimeType }),
           filename: `image.${getExtensionFromMediaType(explicitMimeType)}`,
           contentType: explicitMimeType,
         });
@@ -1710,11 +1710,11 @@ const convertDataToAttachment = (
     }
     // Handle Uint8Array
     else if (data instanceof Uint8Array) {
-      blob = new Blob([data], { type: mimeType });
+      blob = new Blob([data] as BlobPart[], { type: mimeType });
     }
     // Handle Buffer (Node.js)
     else if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
-      blob = new Blob([data], { type: mimeType });
+      blob = new Blob([data] as BlobPart[], { type: mimeType });
     }
     // Handle Blob
     else if (data instanceof Blob) {

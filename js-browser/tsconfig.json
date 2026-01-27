@@ -1,0 +1,11 @@
+{
+  "extends": "../js/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "../js",
+    "composite": false,
+    "skipLibCheck": true
+  },
+  "include": ["./src/**/*", "../js/src/**/*", "../js/dev/**/*", "../js/util/**/*"],
+  "exclude": ["node_modules", "dist", "../js/src/cli/**/*", "../js/src/**/*.test.ts", "../js/smoke/**/*", "../js/examples/**/*"]
+}

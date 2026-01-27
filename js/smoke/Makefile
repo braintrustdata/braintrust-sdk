@@ -58,12 +58,22 @@ setup:
 		echo "==> Building SDK and creating tarball"; \
 		cd ../../.. && pnpm exec turbo build --filter=braintrust && pnpm --filter=braintrust pack --pack-destination sdk/js/artifacts; \
 		for f in sdk/js/artifacts/braintrust-*.tgz; do \
-			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ]; then \
+			if [ "$$(basename $$f)" != "braintrust-latest.tgz" ] && [ "$$(basename $$f)" != "braintrust-otel-latest.tgz" ] && [ "$$(basename $$f)" != "braintrust-browser-latest.tgz" ]; then \
 				cp "$$f" sdk/js/artifacts/braintrust-latest.tgz; \
 				break; \
 			fi; \
 		done; \
 	fi
+
+	@# Build browser package and create tarball
+	@echo "==> Building browser package and creating tarball"; \
+	cd ../../.. && pnpm exec turbo build --filter=@braintrust/browser && pnpm --filter=@braintrust/browser pack --pack-destination sdk/js/artifacts; \
+	for f in sdk/js/artifacts/braintrust-browser-*.tgz; do \
+		if [ "$$(basename $$f)" != "braintrust-browser-latest.tgz" ]; then \
+			cp "$$f" sdk/js/artifacts/braintrust-browser-latest.tgz; \
+			break; \
+		fi; \
+	done
 
 	@# Build shared package if not provided
 	@if [ -n "$(SMOKE_V2_SHARED_DIST)" ] && [ -d "$(SMOKE_V2_SHARED_DIST)" ]; then \

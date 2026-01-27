@@ -1,5 +1,6 @@
-import iso from "./isomorph";
-import { _internalSetInitialState } from "./logger";
+import iso from "../../js/src/isomorph";
+import { _internalSetInitialState } from "../../js/src/logger";
+import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge
 // environment, even though it's not defined in the browser.
@@ -23,14 +24,8 @@ export function configureBrowser() {
     // Use native AsyncLocalStorage if available (edge runtimes like Cloudflare Workers, Vercel Edge)
     iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
   } else {
-    // AsyncLocalStorage not available and als-browser removed from main package
-    // Users in standard browsers should use @braintrust/browser package instead
-    console.warn(
-      "AsyncLocalStorage is not available in this environment. " +
-        "For browser support with AsyncLocalStorage, install and use @braintrust/browser package. " +
-        "Async context tracking will not work in this environment.",
-    );
-    // Keep using the default no-op implementation from isomorph.ts
+    // Use als-browser polyfill for standard browsers
+    iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
   }
 
   iso.getEnv = (name: string) => {

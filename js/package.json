@@ -1,7 +1,7 @@
 {
   "name": "braintrust",
   "version": "3.0.0",
-  "description": "SDK for integrating Braintrust",
+  "description": "SDK for integrating Braintrust. For browser-only usage, see @braintrust/browser",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/braintrustdata/braintrust-sdk.git",
@@ -34,11 +34,6 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/browser.mjs"
-    },
-    "./browser": {
-      "import": "./dist/browser.mjs",
-      "module": "./dist/browser.mjs",
-      "require": "./dist/browser.js"
     },
     "./node": {
       "types": "./dist/index.d.ts",
@@ -133,7 +128,6 @@
     "@ai-sdk/provider": "^1.1.3",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
-    "als-browser": "^1.0.1",
     "argparse": "^2.0.1",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
