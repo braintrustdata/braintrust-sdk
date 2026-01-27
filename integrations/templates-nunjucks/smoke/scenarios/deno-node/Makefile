@@ -12,12 +12,12 @@ setup:
 		cd ../../../../../js && tar -xzf "$$TARBALL_PATH" --strip-components=1 package/dist; \
 	else \
 		echo "==> Building SDK"; \
-		cd ../../../../../js && pnpm exec turbo build --filter=braintrust; \
+		cd ../../../../../js && pnpm build; \
 	fi
 
 	@# Build @braintrust/templates-nunjucks-js (direct import will use dist/)
 	@echo "==> Building @braintrust/templates-nunjucks-js package"; \
-	cd ../../../../.. && pnpm exec turbo build --filter=@braintrust/templates-nunjucks-js
+	cd ../../.. && pnpm build
 
 	@# Build shared package (if not running from parent)
 	@if [ -z "$(SMOKE_V2_SHARED_DIST)" ]; then \
