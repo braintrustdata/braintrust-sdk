@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import textwrap
@@ -9,17 +10,27 @@ from braintrust import logger
 from braintrust.conftest import get_vcr_config
 from braintrust.test_helpers import init_test_logger
 
-AUTO_TEST_SCRIPTS_DIR = Path(__file__).parent / "auto_test_scripts"
-CASSETTES_DIR = Path(__file__).parent / "cassettes"
+# Source directory paths (resolved to handle installed vs source locations)
+_SOURCE_DIR = Path(__file__).resolve().parent
+AUTO_TEST_SCRIPTS_DIR = _SOURCE_DIR / "auto_test_scripts"
+
+# Cassettes dir can be overridden via env var for subprocess tests
+CASSETTES_DIR = Path(os.environ.get("BRAINTRUST_CASSETTES_DIR", _SOURCE_DIR / "cassettes"))
 
 
-def run_in_subprocess(code: str, timeout: int = 30) -> subprocess.CompletedProcess:
+def run_in_subprocess(
+    code: str, timeout: int = 30, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     """Run Python code in a fresh subprocess."""
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=run_env,
     )
 
 
@@ -29,11 +40,15 @@ def verify_autoinstrument_script(script_name: str, timeout: int = 30) -> subproc
     Raises AssertionError if the script exits with non-zero code.
     """
     script_path = AUTO_TEST_SCRIPTS_DIR / script_name
+    # Pass cassettes dir to subprocess since it may use installed package
+    env = os.environ.copy()
+    env["BRAINTRUST_CASSETTES_DIR"] = str(_SOURCE_DIR / "cassettes")
     result = subprocess.run(
         [sys.executable, str(script_path)],
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
     assert result.returncode == 0, f"Script {script_name} failed:\n{result.stderr}"
     return result
