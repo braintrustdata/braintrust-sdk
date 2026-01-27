@@ -1,3 +1,4 @@
 [tools]
+node = "22"
 deno = "latest"
 pnpm = "10.26.2"
