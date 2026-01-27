@@ -6,7 +6,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.litellm import wrap_litellm
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from braintrust.wrappers.test_utils import assert_metrics_are_valid, verify_autoinstrument_script
 
 TEST_ORG_ID = "test-org-litellm-py-tracing"
 PROJECT_NAME = "test-project-litellm-py-tracing"
@@ -697,71 +697,73 @@ async def test_litellm_async_streaming_with_break(memory_logger):
 @pytest.mark.vcr
 def test_patch_litellm_responses(memory_logger):
     """Test that patch_litellm() patches responses."""
-    from braintrust.wrappers.litellm import patch_litellm, unpatch_litellm
+    from braintrust.wrappers.litellm import patch_litellm
 
     assert not memory_logger.pop()
 
     patch_litellm()
-    try:
-        start = time.time()
-        # Call litellm.responses directly (not wrapped_litellm.responses)
-        response = litellm.responses(
-            model=TEST_MODEL,
-            input=TEST_PROMPT,
-            instructions="Just the number please",
-        )
-        end = time.time()
+    start = time.time()
+    # Call litellm.responses directly (not wrapped_litellm.responses)
+    response = litellm.responses(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+    )
+    end = time.time()
 
-        assert response
-        assert response.output
-        assert len(response.output) > 0
-        content = response.output[0].content[0].text
-        assert "24" in content or "twenty-four" in content.lower()
+    assert response
+    assert response.output
+    assert len(response.output) > 0
+    content = response.output[0].content[0].text
+    assert "24" in content or "twenty-four" in content.lower()
 
-        # Verify span was created
-        spans = memory_logger.pop()
-        assert len(spans) == 1
-        span = spans[0]
-        assert_metrics_are_valid(span["metrics"], start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
-        assert span["metadata"]["provider"] == "litellm"
-        assert TEST_PROMPT in str(span["input"])
-    finally:
-        unpatch_litellm()
+    # Verify span was created
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert_metrics_are_valid(span["metrics"], start, end)
+    assert span["metadata"]["model"] == TEST_MODEL
+    assert span["metadata"]["provider"] == "litellm"
+    assert TEST_PROMPT in str(span["input"])
 
 
 @pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_patch_litellm_aresponses(memory_logger):
     """Test that patch_litellm() patches aresponses."""
-    from braintrust.wrappers.litellm import patch_litellm, unpatch_litellm
+    from braintrust.wrappers.litellm import patch_litellm
 
     assert not memory_logger.pop()
 
     patch_litellm()
-    try:
-        start = time.time()
-        # Call litellm.aresponses directly (not wrapped_litellm.aresponses)
-        response = await litellm.aresponses(
-            model=TEST_MODEL,
-            input=TEST_PROMPT,
-            instructions="Just the number please",
-        )
-        end = time.time()
+    start = time.time()
+    # Call litellm.aresponses directly (not wrapped_litellm.aresponses)
+    response = await litellm.aresponses(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+    )
+    end = time.time()
 
-        assert response
-        assert response.output
-        assert len(response.output) > 0
-        content = response.output[0].content[0].text
-        assert "24" in content or "twenty-four" in content.lower()
+    assert response
+    assert response.output
+    assert len(response.output) > 0
+    content = response.output[0].content[0].text
+    assert "24" in content or "twenty-four" in content.lower()
 
-        # Verify span was created
-        spans = memory_logger.pop()
-        assert len(spans) == 1
-        span = spans[0]
-        assert_metrics_are_valid(span["metrics"], start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
-        assert span["metadata"]["provider"] == "litellm"
-        assert TEST_PROMPT in str(span["input"])
-    finally:
-        unpatch_litellm()
+    # Verify span was created
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert_metrics_are_valid(span["metrics"], start, end)
+    assert span["metadata"]["model"] == TEST_MODEL
+    assert span["metadata"]["provider"] == "litellm"
+    assert TEST_PROMPT in str(span["input"])
+
+
+class TestAutoInstrumentLiteLLM:
+    """Tests for auto_instrument() with LiteLLM."""
+
+    def test_auto_instrument_litellm(self):
+        """Test auto_instrument patches LiteLLM, creates spans, and uninstrument works."""
+        verify_autoinstrument_script("test_auto_litellm.py")
