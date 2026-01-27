@@ -58,6 +58,6 @@ The `@braintrust/browser` package is optimized for browser environments and incl
 - **`braintrust`** (this package) - For Node.js applications, full-stack frameworks (Next.js, etc.), and edge runtimes with native AsyncLocalStorage (Cloudflare Workers, Vercel Edge)
 - **`@braintrust/browser`** - For browser-only applications that need AsyncLocalStorage support in standard browsers
 
-See the [@braintrust/browser README](../js-browser/README.md) for more details.
+See the [@braintrust/browser README](../integrations/browser-js/README.md) for more details.
 
 **Breaking change in v3.0.0:** The `braintrust/browser` subpath export has been removed. Browser users should migrate to the `@braintrust/browser` package.

@@ -1,6 +1,3 @@
-// Import from main package - should resolve to browser build via "browser" field
-import * as braintrust from "braintrust";
-
 declare global {
   interface Window {
     __btBrowserMessageTest?: {
@@ -14,7 +11,7 @@ declare global {
   }
 }
 
-// Capture console.info messages
+// Capture console.info messages BEFORE importing braintrust
 const capturedMessages: string[] = [];
 const originalConsoleInfo = console.info;
 console.info = (...args: any[]) => {
@@ -22,6 +19,10 @@ console.info = (...args: any[]) => {
   capturedMessages.push(message);
   originalConsoleInfo.apply(console, args);
 };
+
+// Import from main package browser export AFTER setting up console capture
+// This must be done dynamically to ensure console.info is overridden first
+const braintrust = await import("braintrust/browser");
 
 // Test that imports work
 const importSuccessful = true;

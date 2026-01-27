@@ -20,6 +20,9 @@ importers:
       als-browser:
         specifier: ^1.0.1
         version: 1.0.1
+      zod:
+        specifier: ^3.25.34 || ^4.0
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.10.5

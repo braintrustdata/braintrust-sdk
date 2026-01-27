@@ -59,10 +59,10 @@ jobs:
 
       - name: Pack @braintrust/browser
         id: prepare_browser_artifact
-        working-directory: js-browser
+        working-directory: integrations/browser-js
         shell: bash
         run: |
-          PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../js/artifacts)
+          PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_browser_tarball=$PACKED_BROWSER_TARBALL" >> "$GITHUB_OUTPUT"
 
       - name: Build and pack @braintrust/otel

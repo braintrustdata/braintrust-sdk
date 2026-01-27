@@ -58,25 +58,31 @@ test.describe("Braintrust Main Package Browser Build", () => {
     expect(testResults.hasNewId).toBe(true);
     expect(testResults.hasTraceable).toBe(true);
 
-    // Verify the informational message appears
+    // Expected message from browser-isomorph.ts
+    const expectedMessage =
+      "Braintrust SDK Browser Build\n" +
+      "You are using a browser-compatible build from the main package.\n" +
+      "For optimal browser support consider:\n" +
+      "  npm install @braintrust/browser\n" +
+      '  import * as braintrust from "@braintrust/browser"\n\n';
+
+    // Verify the full informational message appears in console
     const hasInformationalMessage = consoleMessages.some(
-      (msg) =>
-        msg.includes("Braintrust SDK Browser Build") &&
-        msg.includes("@braintrust/browser"),
+      (msg) => msg === expectedMessage,
     );
 
     expect(hasInformationalMessage).toBe(true);
 
     // Also verify from captured messages in the page
     const hasCapturedMessage = testResults.consoleMessages.some(
-      (msg: string) =>
-        msg.includes("Braintrust SDK Browser Build") &&
-        msg.includes("@braintrust/browser"),
+      (msg: string) => msg === expectedMessage,
     );
 
     expect(hasCapturedMessage).toBe(true);
 
-    console.log("✓ Informational message verified");
-    console.log("✓ Main package browser build working correctly with message");
+    console.log("✓ Complete informational message verified");
+    console.log(
+      "✓ Main package browser build working correctly with full message",
+    );
   });
 });

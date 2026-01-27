@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ["braintrust"], // Don't bundle braintrust (peer dependency)
+  external: ["braintrust", "zod"], // Don't bundle peer dependencies
   noExternal: ["als-browser"], // Force bundle als-browser
   target: "es2022",
   platform: "browser",

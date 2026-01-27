@@ -13,6 +13,7 @@ await esbuild.build({
   platform: "browser",
   target: "es2022",
   sourcemap: true,
+  mainFields: ["browser", "module", "main"], // Respect "browser" field in package.json
   external: [], // Bundle everything including braintrust
 });
 
