@@ -18,8 +18,8 @@ importers:
   integrations/auto-instrumentations:
     dependencies:
       '@apm-js-collab/code-transformer':
-        specifier: ^0.8.2
-        version: 0.8.2
+        specifier: github:apm-js-collab/orchestrion-js#b6ee7cc
+        version: https://codeload.github.com/apm-js-collab/orchestrion-js/tar.gz/b6ee7cc2971d7871547e56991fe69601390e2979
       '@apm-js-collab/code-transformer-bundler-plugins':
         specifier: ^0.1.0
         version: 0.1.0(esbuild@0.24.2)(rollup@4.35.0)(vite@5.4.14(@types/node@20.19.16)(terser@5.44.1))(webpack@5.104.1(@swc/core@1.15.8)(esbuild@0.24.2))
@@ -618,6 +618,10 @@ packages:
 
   '@apm-js-collab/code-transformer@0.8.2':
     resolution: {integrity: sha512-YRjJjNq5KFSjDUoqu5pFUWrrsvGOxl6c3bu+uMFc9HNNptZ2rNU/TI2nLw4jnhQNtka972Ee2m3uqbvDQtPeCA==}
+
+  '@apm-js-collab/code-transformer@https://codeload.github.com/apm-js-collab/orchestrion-js/tar.gz/b6ee7cc2971d7871547e56991fe69601390e2979':
+    resolution: {tarball: https://codeload.github.com/apm-js-collab/orchestrion-js/tar.gz/b6ee7cc2971d7871547e56991fe69601390e2979}
+    version: 0.8.2
 
   '@apm-js-collab/tracing-hooks@0.3.1':
     resolution: {integrity: sha512-Vu1CbmPURlN5fTboVuKMoJjbO5qcq9fA5YXpskx3dXe/zTBvjODFoerw+69rVBlRLrJpwPqSDqEuJDEKIrTldw==}
@@ -5352,6 +5356,7 @@ packages:
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
     engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   termi-link@1.1.0:
     resolution: {integrity: sha512-2qSN6TnomHgVLtk+htSWbaYs4Rd2MH/RU7VpHTy6MBstyNyWbM4yKd1DCYpE3fDg8dmGWojXCngNi/MHCzGuAA==}
@@ -6203,6 +6208,8 @@ snapshots:
       - debug
 
   '@apm-js-collab/code-transformer@0.8.2': {}
+
+  '@apm-js-collab/code-transformer@https://codeload.github.com/apm-js-collab/orchestrion-js/tar.gz/b6ee7cc2971d7871547e56991fe69601390e2979': {}
 
   '@apm-js-collab/tracing-hooks@0.3.1':
     dependencies:
