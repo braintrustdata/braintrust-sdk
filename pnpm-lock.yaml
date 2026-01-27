@@ -415,6 +415,9 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.16
+      braintrust:
+        specifier: workspace:*
+        version: link:../js
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(@swc/core@1.15.8)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2)
