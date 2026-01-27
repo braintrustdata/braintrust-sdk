@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:8080",
+    baseURL: "http://localhost:8765",
     trace: "on-first-retry",
   },
   projects: [
@@ -18,8 +18,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npx http-server -p 8080",
-    port: 8080,
+    command: "npx http-server -p 8765",
+    port: 8765,
     reuseExistingServer: !process.env.CI,
     timeout: 10000,
   },

@@ -2,6 +2,7 @@
 
 install:
 	npm install
+	npx playwright install --with-deps chromium
 
 build: install
 	node esbuild.config.mjs

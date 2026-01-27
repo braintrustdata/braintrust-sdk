@@ -10,12 +10,8 @@
  *   import * as braintrust from '@braintrust/browser';
  */
 
-// Import browser-safe isomorph (not the full source with Node.js imports)
-import browserIso from "./src/browser-isomorph";
-import iso from "./src/isomorph";
+import { configureBrowserIsomorph } from "./src/browser-isomorph";
 
-// Configure isomorph for browser
-Object.assign(iso, browserIso);
+configureBrowserIsomorph();
 
-// Now export everything (will use browser isomorph)
 export * from "./src/exports";

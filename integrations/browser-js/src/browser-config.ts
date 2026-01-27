@@ -11,14 +11,27 @@ declare global {
 // End copied code
 
 let browserConfigured = false;
+
 export function configureBrowser() {
   if (browserConfigured) {
     return;
   }
 
+  // Set build type indicator
   iso.buildType = "browser";
 
-  iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
+  // Try to use native AsyncLocalStorage if available (edge runtimes)
+  // Otherwise fall back to als-browser polyfill
+  try {
+    if (typeof AsyncLocalStorage !== "undefined") {
+      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    } else {
+      iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
+    }
+  } catch {
+    // Fallback to polyfill if native check fails
+    iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
+  }
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
@@ -26,6 +39,15 @@ export function configureBrowser() {
     }
     return process.env[name];
   };
+
+  // Noop implementations for Node.js-only features
+  iso.getRepoInfo = async () => ({
+    commit: null,
+    branch: null,
+    tag: null,
+    dirty: false,
+  });
+  iso.getCallerLocation = () => undefined;
 
   // Implement browser-compatible hash function using a simple hash algorithm
   iso.hash = (data: string): string => {

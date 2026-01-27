@@ -1,10 +1,8 @@
 import esbuild from "esbuild";
 import { rmSync } from "node:fs";
 
-// Clean dist directory
 rmSync("dist", { recursive: true, force: true });
 
-// Build browser test bundle
 await esbuild.build({
   entryPoints: ["src/browser-message-test.ts"],
   bundle: true,
@@ -13,8 +11,8 @@ await esbuild.build({
   platform: "browser",
   target: "es2022",
   sourcemap: true,
-  mainFields: ["browser", "module", "main"], // Respect "browser" field in package.json
-  external: [], // Bundle everything including braintrust
+  mainFields: ["browser", "module", "main"],
+  external: [],
 });
 
 console.log("Build complete!");

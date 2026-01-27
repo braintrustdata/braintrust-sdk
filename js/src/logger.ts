@@ -1402,9 +1402,7 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
         );
       }
       // This could stream the file in the future.
-      return new LazyValue(
-        async () => new Blob([await readFile(data)] as BlobPart[]),
-      );
+      return new LazyValue(async () => new Blob([await readFile(data)]));
     } else {
       return new LazyValue(async () => new Blob([data]));
     }

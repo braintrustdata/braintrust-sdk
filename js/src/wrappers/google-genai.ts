@@ -294,7 +294,7 @@ function serializePart(part: any): any {
           : Buffer.from(data);
 
       const attachment = new Attachment({
-        data: buffer as unknown as ArrayBuffer,
+        data: buffer,
         filename,
         contentType: mimeType || "application/octet-stream",
       });

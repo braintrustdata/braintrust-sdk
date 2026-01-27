@@ -62,9 +62,7 @@ export class LRUCache<K, V> {
     } else if (this.maxSize && this.cache.size >= this.maxSize) {
       // Map.keys() iterates in insertion order.
       const first = this.cache.keys().next().value;
-      if (first !== undefined) {
-        this.cache.delete(first);
-      }
+      this.cache.delete(first);
     }
     this.cache.set(key, value);
   }

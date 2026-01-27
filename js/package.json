@@ -1,7 +1,7 @@
 {
   "name": "braintrust",
   "version": "3.0.0",
-  "description": "SDK for integrating Braintrust. For browser-only usage, see @braintrust/browser",
+  "description": "SDK for integrating Braintrust.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/braintrustdata/braintrust-sdk.git",
@@ -22,10 +22,13 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
+      "edge-light": "./dist/browser.mjs",
+      "workerd": "./dist/browser.mjs",
       "node": {
         "import": "./dist/index.mjs",
         "require": "./dist/index.js"
       },
+      "browser": "./dist/browser.mjs",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.mjs"
@@ -53,18 +56,6 @@
       "import": "./dist/browser.mjs",
       "require": "./dist/browser.js",
       "default": "./dist/browser.mjs"
-    },
-    "./edge-light": {
-      "types": "./dist/edge-light.d.ts",
-      "import": "./dist/edge-light.mjs",
-      "require": "./dist/edge-light.js",
-      "default": "./dist/edge-light.mjs"
-    },
-    "./workerd": {
-      "types": "./dist/workerd.d.ts",
-      "import": "./dist/workerd.mjs",
-      "require": "./dist/workerd.js",
-      "default": "./dist/workerd.mjs"
     }
   },
   "files": [
