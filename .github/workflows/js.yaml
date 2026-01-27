@@ -36,10 +36,41 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
 
-      - name: "verify ci"
+      - name: Install dependencies
         shell: bash
         run: |
-          make js-verify-ci
+          pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build orchestrion from source
+        shell: bash
+        run: |
+          # Build orchestrion manually since GitHub installs don't run prepare scripts
+          if [ -d "node_modules/@apm-js-collab/code-transformer" ]; then
+            echo "Building orchestrion from source..."
+            cd node_modules/@apm-js-collab/code-transformer
+            npm run build
+            cd ../../..
+          else
+            echo "Orchestrion not found in node_modules, skipping build"
+          fi
+
+      - name: "Build and test"
+        shell: bash
+        run: |
+          # Run build, docs, and tests (dependencies already installed)
+          pnpm run build
+          cd js && make docs
+          cd ..
+          pnpm run test
+          cd js && make test
 
       - name: Determine artifact name
         id: artifact
