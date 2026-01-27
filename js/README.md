@@ -42,3 +42,31 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+### Browser Support
+
+The Braintrust SDK works in browser environments with full support for async context tracking through AsyncLocalStorage. This enables parent-child span relationships to be maintained automatically in browser-based tracing.
+
+**How it works:**
+
+- In environments with native `AsyncLocalStorage` support (e.g., Next.js Edge Runtime, some Cloudflare Workers), the SDK uses the native implementation
+- In standard browsers, the SDK uses [`als-browser`](https://github.com/apm-js-collab/als-browser) to polyfill AsyncLocalStorage functionality
+- Parent-child span relationships work transparently through nested `traced()` calls
+- `currentSpan()` returns the active span within any traced context
+
+**Example:**
+
+```javascript
+import { traced, startSpan } from "braintrust";
+
+// Parent span automatically tracked
+await traced(
+  async () => {
+    // Child span automatically inherits parent
+    const child = startSpan({ name: "child-operation" });
+    // ... do work ...
+    child.end();
+  },
+  { name: "parent-operation" },
+);
+```

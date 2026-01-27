@@ -224,6 +224,9 @@ importers:
       '@vercel/functions':
         specifier: ^1.0.2
         version: 1.0.2
+      als-browser:
+        specifier: ^1.0.1
+        version: 1.0.1
       argparse:
         specifier: ^2.0.1
         version: 2.0.1
@@ -2667,6 +2670,9 @@ packages:
 
   ajv@8.17.1:
     resolution: {integrity: sha512-B/gBuNg5SiMTrPkC+A2+cW0RszwxYmn6VYxB/inlBStS5nx6xHIt/ehKRhIMhqusl7a8LjQoZnjCs5vhwxOQ1g==}
+
+  als-browser@1.0.1:
+    resolution: {integrity: sha512-DjavKf6zf4DFPdEmgsEM474MBjFcZG/1amv2/+WHGf61kVQWqf7XEn4jvpjFS4ssQbh/pkmYThaPfQK1ERC+3g==}
 
   ansi-align@3.0.1:
     resolution: {integrity: sha512-IOfwwBF5iczOjp/WeY4YxyjqAFMQoZufdQWDd19SEExbVLNXqvpzSJ/M7Za4/sCPmQ0+GRquoA7bGcINcxew6w==}
@@ -8582,6 +8588,8 @@ snapshots:
       fast-uri: 3.0.6
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+
+  als-browser@1.0.1: {}
 
   ansi-align@3.0.1:
     dependencies:
