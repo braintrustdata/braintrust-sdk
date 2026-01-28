@@ -1342,7 +1342,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await checkResponse(
           await fetch(signedUrl, {
-            method: "PUT",
+            method: "PUT" satisfies RequestInit["method"],
             headers,
             body: data,
           }),
@@ -2935,17 +2935,17 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         }),
       );
       return;
+    } else {
+      const headers = { ...(upload.headers ?? {}) };
+      addAzureBlobHeaders(headers, upload.signedUrl);
+      await checkResponse(
+        await conn.fetch(upload.signedUrl, {
+          method: "PUT" satisfies RequestInit["method"],
+          headers,
+          body: payload,
+        }),
+      );
     }
-
-    const headers = { ...(upload.headers ?? {}) };
-    addAzureBlobHeaders(headers, upload.signedUrl);
-    await checkResponse(
-      await conn.fetch(upload.signedUrl, {
-        method: "PUT",
-        headers,
-        body: payload,
-      }),
-    );
   }
 
   private async submitLogsRequest(
@@ -5206,7 +5206,6 @@ export class ObjectFetcher<RecordType>
       const respJson = await resp.json();
       const mutate = this.mutateRecord;
       for (const record of respJson.data ?? []) {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         yield mutate
           ? mutate(record)
           : (record as WithTransactionId<RecordType>);
