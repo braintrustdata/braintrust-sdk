@@ -2,129 +2,77 @@
 Context Propagation Tests for Braintrust SDK
 
 This test suite validates context propagation behavior across various concurrency patterns.
-Threading tests run TWICE - with and without auto-instrumentation - to demonstrate:
-1. WITHOUT auto-instrumentation: Context is lost (xfail)
-2. WITH auto-instrumentation: Context is preserved (pass)
 
-ALL XFAILS ARE INTENTIONAL DOCUMENTATION:
-- Every xfail is the "[no_auto_instrument]" parameterized version of a test
-- The same test PASSES with "[with_auto_instrument]"
-- This proves auto-instrumentation solves the problem!
+TEST ISOLATION STRATEGY:
+- Tests use pytest-forked to run each test in an isolated process
+- This ensures setup_threads() patches don't leak between tests
+- Use unpatched(scenario) for xfail tests (documents context loss)
+- Use patched(scenario) for tests that prove setup_threads() fixes it
 
-BREAKDOWN:
-- 13 threading patterns × 2 (with/without auto-instrument) = 26 tests
-  → 13 PASS (with auto-instrument), 13 XFAIL (without)
-- 27 other tests (async patterns, auto-instrument specific, etc.) = 27 PASS
-- TOTAL: 40 PASSED, 13 XFAILED ✅
+Example:
+    def _threadpool_scenario(test_logger, with_memory_logger):
+        # test logic...
 
-Threading tests are parameterized to run BOTH with and without auto-instrumentation,
-demonstrating that our auto-instrumentation solution solves the context loss problem.
+    test_threadpool_loses_context = unpatched(_threadpool_scenario)
+    test_threadpool_with_patch = patched(_threadpool_scenario)
 
-REALISTIC INTEGRATION TESTS (Good Intent, Wrong Implementation):
-Each tests a different way integrations can get context propagation wrong:
-
-1. ✅ Library doing context RIGHT
-   - Uses copy_context() at the right time
-   - Passes WITH and WITHOUT auto-instrumentation
-   - Proves: Auto-instrumentation doesn't break well-behaved libraries
-
-2. ✅ Forgot context propagation entirely
-   - Developer didn't know about context
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation saves naive implementations
-
-3. ✅ Captured context too early (at __init__ instead of call time)
-   - Good intent, wrong timing!
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation uses fresh context at submit time
-
-4. ✅ Used threading.Thread instead of ThreadPoolExecutor
-   - Knew about threads, forgot about context.run()
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation patches Thread.start() too
-
-5. ✅ Decorator pattern loses context
-   - Decorator wraps function but runs it in pool without context
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation fixes decorator-based patterns
-
-6. ✅ Thread-wrapped async (Google ADK, Pydantic AI pattern)
-   - Runs async code in thread with asyncio.run() (sync→thread→async bridge)
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation fixes real-world SDK patterns!
-
-7. ✅ FastAPI background tasks (loop.run_in_executor)
-   - FastAPI uses loop.run_in_executor() for background tasks
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation fixes web framework patterns!
-
-8. ✅ Data pipeline (parallel processing with executor.submit)
-   - Common pattern: process data in parallel with ThreadPoolExecutor
-   - XFAIL without auto-instrumentation, PASS with it
-   - Proves: Auto-instrumentation fixes parallel data processing patterns!
-
-Manual span management (set_current=True) now PASSES with explicit calls:
-- parent_span.set_current() - Makes span current
-- parent_span.unset_current() - Cleans up
-However, context managers (with start_span) are still STRONGLY RECOMMENDED.
-
-THREADING PATTERNS (Parameterized with/without auto-instrumentation):
-
-1. ThreadPoolExecutor:
-   with start_span("parent"):
-       executor.submit(worker_task)
-
-   ❌ Without auto-instrument: Context lost
-   ✅ With auto-instrument: Worker sees parent, creates child span
-
-2. threading.Thread:
-   with start_span("parent"):
-       Thread(target=worker).start()
-
-   ❌ Without auto-instrument: Context lost
-   ✅ With auto-instrument: Worker sees parent, creates child span
-
-3. @traced decorator with threads:
-   @traced
-   def parent():
-       executor.submit(worker)
-
-   ❌ Without auto-instrument: Context lost
-   ✅ With auto-instrument: Worker sees parent, creates child span
-
-ASYNC PATTERNS (Always work - built-in context propagation):
-
-1. asyncio.create_task() - PASSES (Python's asyncio preserves context)
-2. asyncio.to_thread() - PASSES (Uses proper context copying)
-3. Async generators - PASSES (Context maintained across yields)
-
-ENABLING AUTO-INSTRUMENTATION:
-
-Option A - Environment variable (automatic on import - enables both):
-    export BRAINTRUST_INSTRUMENT_THREADS=true
-    python your_app.py
-
-Option B - Manual setup (granular control):
-    from braintrust.wrappers.threads import setup_threads
-    setup_threads()   # Enable threading context propagation
-    setup_asyncio()   # Enable asyncio context propagation (optional)
-
-Option C - Debug logging:
-    export BRAINTRUST_DEBUG_CONTEXT=true  # Only when troubleshooting
+Run with: pytest --forked src/braintrust/test_context.py
 """
 
 import asyncio
 import concurrent.futures
+import functools
 import sys
 import threading
-import time
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator, Callable, Generator, TypeVar
 
 import braintrust
 import pytest
 from braintrust import current_span, start_span
 from braintrust.test_helpers import init_test_logger, with_memory_logger  # noqa: F401
-from braintrust.wrappers.threads import setup_threads  # noqa: F401
+from braintrust.wrappers.threads import setup_threads
+
+F = TypeVar("F", bound=Callable)
+
+
+def isolate(instrument: bool) -> Callable[[F], F]:
+    """
+    Decorator for isolated context propagation tests.
+
+    - Always runs in forked process (pytest-forked)
+    - If instrument=True: calls setup_threads() before test
+    - If instrument=False: marks test as xfail (context loss expected)
+    """
+
+    def decorator(fn: F) -> F:
+        if asyncio.iscoroutinefunction(fn):
+
+            @functools.wraps(fn)
+            async def async_wrapper(*args, **kwargs):
+                if instrument:
+                    setup_threads()
+                return await fn(*args, **kwargs)
+
+            wrapped = pytest.mark.forked(async_wrapper)
+        else:
+
+            @functools.wraps(fn)
+            def wrapper(*args, **kwargs):
+                if instrument:
+                    setup_threads()
+                return fn(*args, **kwargs)
+
+            wrapped = pytest.mark.forked(wrapper)
+
+        if not instrument:
+            wrapped = pytest.mark.xfail(reason="context lost without patch")(wrapped)
+        return wrapped  # type: ignore
+
+    return decorator
+
+
+patched = isolate(instrument=True)
+unpatched = isolate(instrument=False)
 
 
 @pytest.fixture
@@ -134,49 +82,18 @@ def test_logger(with_memory_logger):
     yield logger
 
 
-@pytest.fixture(params=[False, True], ids=["no_auto_instrument", "with_auto_instrument"])
-def auto_instrument(request):
-    """
-    Fixture that runs tests both with and without auto-instrumentation.
-
-    Returns True if auto-instrumentation is enabled for this test run.
-    """
-    if request.param:
-        setup_threads()
-    return request.param
-
-
 # ============================================================================
 # CONTEXT MANAGER PATTERN: with start_span(...)
 # ============================================================================
 
 
-def test_threadpool_context_manager_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: Worker spans created in ThreadPoolExecutor should be children of parent.
-
-    Pattern:
-        with start_span("parent"):
-            executor.submit(worker_task)
-
-    Expected trace:
-        parent
-          └─ worker_span
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("ThreadPoolExecutor loses context without auto-instrumentation")
-
+def _threadpool_scenario(test_logger, with_memory_logger):
+    """ThreadPoolExecutor context propagation."""
     parent_seen_by_worker = None
 
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
-        worker_span = start_span(name="worker_span")
-        time.sleep(0.01)
-        worker_span.end()
 
     with start_span(name="parent") as parent_span:
         parent_id = parent_span.id
@@ -184,46 +101,21 @@ def test_threadpool_context_manager_pattern(test_logger, with_memory_logger, aut
             future = executor.submit(worker_task)
             future.result()
 
-    # Verify context was preserved (worker saw the parent)
     assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Worker should see parent span"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent")
-    assert parent_log is not None
+    assert parent_seen_by_worker.id == parent_id
 
 
-def test_thread_context_manager_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: Worker spans created in threading.Thread should be children of parent.
+test_threadpool_loses_context = unpatched(_threadpool_scenario)
+test_threadpool_with_patch = patched(_threadpool_scenario)
 
-    Pattern:
-        with start_span("parent"):
-            Thread(target=worker).start()
 
-    Expected trace:
-        parent
-          └─ thread_worker
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("threading.Thread loses context without auto-instrumentation")
-
+def _thread_scenario(test_logger, with_memory_logger):
+    """threading.Thread context propagation."""
     parent_seen_by_worker = None
 
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
-        worker_span = start_span(name="thread_worker")
-        time.sleep(0.01)
-        worker_span.end()
 
     with start_span(name="parent") as parent_span:
         parent_id = parent_span.id
@@ -231,60 +123,31 @@ def test_thread_context_manager_pattern(test_logger, with_memory_logger, auto_in
         thread.start()
         thread.join()
 
-    # Verify context was preserved (worker saw the parent)
     assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Worker should see parent span"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent")
-    assert parent_log is not None
+    assert parent_seen_by_worker.id == parent_id
 
 
-def test_nested_threadpool_context_manager_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: Nested thread pool workers should maintain trace hierarchy.
+test_thread_loses_context = unpatched(_thread_scenario)
+test_thread_with_patch = patched(_thread_scenario)
 
-    Pattern:
-        with start_span("root"):
-            executor.submit(level1_task)
-                executor.submit(level2_task)
 
-    Expected trace:
-        root
-          └─ level1
-            └─ level2
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("Nested ThreadPoolExecutor loses context without auto-instrumentation")
-
+def _nested_threadpool_scenario(test_logger, with_memory_logger):
+    """Nested ThreadPoolExecutor context propagation."""
     root_seen_by_level1 = None
     level1_seen_by_level2 = None
 
     def level2_task():
         nonlocal level1_seen_by_level2
         level1_seen_by_level2 = current_span()
-        level2_span = start_span(name="level2")
-        time.sleep(0.01)
-        level2_span.end()
 
     def level1_task():
         nonlocal root_seen_by_level1
         root_seen_by_level1 = current_span()
 
-        # Use context manager to properly set level1 as current
         with start_span(name="level1") as level1_span:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(level2_task)
                 future.result()
-
             return level1_span.id
 
     with start_span(name="root") as root_span:
@@ -293,67 +156,36 @@ def test_nested_threadpool_context_manager_pattern(test_logger, with_memory_logg
             future = executor.submit(level1_task)
             level1_id = future.result()
 
-    # Verify context was preserved at each level
     assert root_seen_by_level1 is not None
-    assert root_seen_by_level1.id == root_id, "Level1 should see root span"
+    assert root_seen_by_level1.id == root_id
     assert level1_seen_by_level2 is not None
-    assert level1_seen_by_level2.id == level1_id, "Level2 should see level1 span"
+    assert level1_seen_by_level2.id == level1_id
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
 
-    # Memory logger is thread-local, so only root log appears in tests
-    assert len(logs) >= 1, "Expected at least root log"
-
-    root_log = next(l for l in logs if l["span_attributes"]["name"] == "root")
-    assert root_log is not None
+test_nested_threadpool_loses_context = unpatched(_nested_threadpool_scenario)
+test_nested_threadpool_with_patch = patched(_nested_threadpool_scenario)
 
 
 @pytest.mark.asyncio
-async def test_run_in_executor_context_manager_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: Spans created in loop.run_in_executor should be children of parent.
-
-    Pattern:
-        with start_span("parent"):
-            await loop.run_in_executor(None, worker)
-
-    Expected trace:
-        parent
-          └─ executor_worker
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("loop.run_in_executor loses context without auto-instrumentation")
-
+async def _run_in_executor_scenario(test_logger, with_memory_logger):
+    """loop.run_in_executor context propagation."""
     parent_seen_by_worker = None
 
     def blocking_work():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
-        worker_span = start_span(name="executor_worker")
-        time.sleep(0.01)
-        worker_span.end()
 
     with start_span(name="parent") as parent_span:
         parent_id = parent_span.id
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, blocking_work)
 
-    # Verify context was preserved (worker saw the parent)
     assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Worker should see parent span"
+    assert parent_seen_by_worker.id == parent_id
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
 
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent")
-    assert parent_log is not None
+test_run_in_executor_loses_context = unpatched(_run_in_executor_scenario)
+test_run_in_executor_with_patch = patched(_run_in_executor_scenario)
 
 
 # ============================================================================
@@ -441,78 +273,31 @@ async def test_to_thread_preserves_context(test_logger, with_memory_logger):
 # ============================================================================
 
 
-def test_traced_decorator_with_threadpool(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: @traced decorator should maintain trace across ThreadPoolExecutor.
+def _traced_decorator_scenario(test_logger, with_memory_logger):
+    """@traced with ThreadPoolExecutor context propagation."""
+    parent_seen_by_worker = None
 
-    Pattern:
-        @traced
-        def parent():
-            executor.submit(worker)
-
-        @traced
-        def worker():
-            ...
-
-    Expected trace:
-        parent
-          └─ worker
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("@traced with ThreadPoolExecutor loses context without auto-instrumentation")
-
-    parent_span_seen = None
-
-    @braintrust.traced
     def worker_function():
-        nonlocal parent_span_seen
-        parent_span_seen = current_span()
-        time.sleep(0.01)
-        return "result"
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
-    @braintrust.traced
-    def parent_function():
+    with start_span(name="parent") as parent_span:
+        parent_id = parent_span.id
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(worker_function)
-            return future.result()
+            future.result()
 
-    result = parent_function()
+    assert parent_seen_by_worker is not None
+    assert parent_seen_by_worker.id == parent_id
 
-    # Note: @traced creates its own span, so parent_span_seen will be the worker's span,
-    # not the parent function's span. We're checking that context propagation works.
-    assert parent_span_seen is not None, "Worker should see some span context"
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent_function")
-    assert parent_log is not None
+test_traced_decorator_loses_context = unpatched(_traced_decorator_scenario)
+test_traced_decorator_with_patch = patched(_traced_decorator_scenario)
 
 
 @pytest.mark.asyncio
 async def test_traced_decorator_with_async(test_logger, with_memory_logger):
-    """
-    Expected: @traced decorator should work with async functions.
-
-    Pattern:
-        @traced
-        async def parent():
-            await child()
-
-        @traced
-        async def child():
-            ...
-
-    Expected trace:
-        parent
-          └─ child
-    """
+    """@traced decorator works with async functions (no patching needed)."""
 
     @braintrust.traced
     async def child_function():
@@ -523,18 +308,14 @@ async def test_traced_decorator_with_async(test_logger, with_memory_logger):
     async def parent_function():
         return await child_function()
 
-    result = await parent_function()
+    await parent_function()
 
     test_logger.flush()
     logs = with_memory_logger.pop()
 
-    # Expected: Both spans should be logged
-    assert len(logs) == 2, f"Expected 2 spans, got {len(logs)}"
-
+    assert len(logs) == 2
     parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent_function")
     child_log = next(l for l in logs if l["span_attributes"]["name"] == "child_function")
-
-    # Child should be child of parent
     assert child_log["root_span_id"] == parent_log["root_span_id"]
     assert parent_log["span_id"] in child_log.get("span_parents", [])
 
@@ -544,62 +325,31 @@ async def test_traced_decorator_with_async(test_logger, with_memory_logger):
 # ============================================================================
 
 
-def test_manual_span_with_threadpool(test_logger, with_memory_logger, auto_instrument):
-    """
-    Expected: Manual start_span/end should maintain trace across ThreadPoolExecutor.
-
-    Pattern:
-        parent_span = start_span("parent", set_current=True)
-        try:
-            executor.submit(worker)
-        finally:
-            parent_span.end()
-
-    Expected trace:
-        parent
-          └─ worker_span
-
-    WITHOUT auto-instrumentation: Context is lost (test fails)
-    WITH auto-instrumentation: Context is preserved (test passes)
-    """
-    if not auto_instrument:
-        pytest.xfail("Manual span with ThreadPoolExecutor loses context without auto-instrumentation")
-
+def _manual_span_scenario(test_logger, with_memory_logger):
+    """Manual span with ThreadPoolExecutor context propagation."""
     parent_seen_by_worker = None
 
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
-        worker_span = start_span(name="worker_span", set_current=True)
-        try:
-            time.sleep(0.01)
-            return "result"
-        finally:
-            worker_span.end()
 
     parent_span = start_span(name="parent", set_current=True)
-    parent_span.set_current()  # Explicitly set as current for manual management
+    parent_span.set_current()
     try:
         parent_id = parent_span.id
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(worker_task)
-            result = future.result()
+            future.result()
     finally:
         parent_span.unset_current()
         parent_span.end()
 
-    # Verify context was preserved (worker saw the parent)
     assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Worker should see parent span"
+    assert parent_seen_by_worker.id == parent_id
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
 
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "parent")
-    assert parent_log is not None
+test_manual_span_loses_context = unpatched(_manual_span_scenario)
+test_manual_span_with_patch = patched(_manual_span_scenario)
 
 
 @pytest.mark.asyncio
@@ -730,36 +480,26 @@ async def test_async_generator_wrapper_pattern(test_logger, with_memory_logger):
     assert consumer_log["span_id"] in stream_log.get("span_parents", [])
 
 
-def test_library_doing_context_right_with_auto_instrumentation(test_logger, with_memory_logger, auto_instrument):
+def test_library_doing_context_right(test_logger, with_memory_logger):
     """
     Test: Well-behaved library (like LangChain) that properly propagates context.
 
-    SCENARIO: Library tries to do the right thing by capturing context correctly.
-    QUESTION: Does our auto-instrumentation break their good behavior?
-    ANSWER: No! Auto-instrumentation is compatible with libraries doing it right.
+    This test works WITHOUT auto-instrumentation because the library correctly
+    captures context at call time using copy_context().
 
     Real-world example - LangChain-style pattern:
         class WellBehavedSDK:
-            def __init__(self):
-                self._pool = ThreadPoolExecutor()
-
             def run_async(self, fn):
-                # Library captures context at call time (good!)
-                import contextvars
-                ctx = contextvars.copy_context()
+                ctx = contextvars.copy_context()  # Captured at call time!
                 return self._pool.submit(lambda: ctx.run(fn))
-
-    Expected: Context propagates correctly with OR without auto-instrumentation.
     """
     import contextvars
 
-    # Simulate a well-behaved library (like LangChain)
     class WellBehavedSDK:
         def __init__(self):
             self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         def run_async(self, fn):
-            # Library captures context at call time (correct!)
             ctx = contextvars.copy_context()
             return self._pool.submit(lambda: ctx.run(fn))
 
@@ -768,66 +508,33 @@ def test_library_doing_context_right_with_auto_instrumentation(test_logger, with
 
     sdk = WellBehavedSDK()
 
+    parent_seen_by_worker = None
+
     def worker_function():
-        with start_span(name="library_worker"):
-            time.sleep(0.01)
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
     try:
-        with start_span(name="user_parent"):
-            # Library captures context HERE (when parent is active) - correct!
+        with start_span(name="user_parent") as parent_span:
+            parent_id = parent_span.id
             future = sdk.run_async(worker_function)
             future.result()
     finally:
         sdk.shutdown()
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Verify the logged trace structure
-    assert len(logs) >= 1, "Expected at least user_parent span"
-
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "user_parent"), None)
-    assert parent_log is not None, "Should have logged user_parent span"
-
-    # If worker span appears in logs (may not due to thread-local memory logger),
-    # verify it has correct parent relationship
-    worker_logs = [l for l in logs if l["span_attributes"]["name"] == "library_worker"]
-    if worker_logs:
-        worker_log = worker_logs[0]
-        # Worker span should be in same trace
-        assert worker_log["root_span_id"] == parent_log["root_span_id"], (
-            "Library worker should be in same trace as user_parent"
-        )
-        # Worker span should have parent as its parent
-        assert parent_log["span_id"] in worker_log.get("span_parents", []), (
-            f"Library worker should have user_parent as parent. "
-            f"Expected {parent_log['span_id']} in {worker_log.get('span_parents', [])}"
-        )
+    assert parent_seen_by_worker is not None
+    assert parent_seen_by_worker.id == parent_id, "Well-behaved library preserves context"
 
 
-def test_integration_forgot_context_propagation(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: Integration forgot to propagate context entirely.
-
-    MISTAKE: Developer didn't know about context propagation at all.
-
-    Real-world example:
-        class NaiveIntegration:
-            def process(self, fn):
-                return self._pool.submit(fn)  # ❌ No context handling!
-
-    WITHOUT auto-instrumentation: Context is lost (xfail)
-    WITH auto-instrumentation: Context is saved! (pass)
-    """
-    if not auto_instrument:
-        pytest.xfail("Integration without context propagation loses context")
+def _integration_forgot_context_scenario(test_logger, with_memory_logger):
+    """Integration without context propagation."""
+    parent_seen_by_worker = None
 
     class NaiveIntegration:
         def __init__(self):
             self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         def process(self, fn):
-            # ❌ MISTAKE: Didn't know about context propagation
             return self._pool.submit(fn)
 
         def shutdown(self):
@@ -836,112 +543,85 @@ def test_integration_forgot_context_propagation(test_logger, with_memory_logger,
     integration = NaiveIntegration()
 
     def worker_function():
-        with start_span(name="naive_worker"):
-            time.sleep(0.01)
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
     try:
-        with start_span(name="user_parent"):
+        with start_span(name="user_parent") as parent_span:
+            parent_id = parent_span.id
             future = integration.process(worker_function)
             future.result()
     finally:
         integration.shutdown()
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    assert len(logs) >= 1, "Expected at least user_parent span"
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "user_parent"), None)
-    assert parent_log is not None
+    assert parent_seen_by_worker is not None
+    assert parent_seen_by_worker.id == parent_id
 
 
-def test_integration_captured_context_too_early(test_logger, with_memory_logger, auto_instrument):
+test_integration_forgot_context_loses = unpatched(_integration_forgot_context_scenario)
+test_integration_forgot_context_with_patch = patched(_integration_forgot_context_scenario)
+
+
+def test_integration_early_context_not_fixable(test_logger, with_memory_logger):
     """
-    Test: Integration captured context at __init__ instead of at call time.
+    Documents: Integration that captured context too early CANNOT be fixed by auto-instrumentation.
 
-    MISTAKE: Developer knew about context but captured it too early.
-    Good intent, wrong timing!
+    This pattern explicitly switches to a stale context using self._ctx.run(fn),
+    which overrides our auto-instrumentation. The integration's explicit context
+    switch happens AFTER our wrapper, so the stale context wins.
 
-    Real-world example:
+    Pattern:
         class EagerContextIntegration:
             def __init__(self):
-                self._ctx = copy_context()  # ❌ Too early!
+                self._ctx = copy_context()  # Stale context captured here
 
             def process(self, fn):
-                return self._pool.submit(lambda: self._ctx.run(fn))
+                return self._pool.submit(lambda: self._ctx.run(fn))  # Explicit switch to stale
 
-    This captures context when SDK is initialized (often at module import time),
-    not when the user calls process(). Result: stale or empty context.
+    Auto-instrumentation wraps submit(), but the lambda then switches to stale context.
 
-    WITHOUT auto-instrumentation: Uses stale/empty context (xfail)
-    WITH auto-instrumentation: Captures fresh context at submit time (pass)
+    This is NOT fixable by auto-instrumentation - the integration must be fixed
+    to capture context at call time, not at __init__ time.
     """
-    if not auto_instrument:
-        pytest.xfail("Eager context capture uses stale context")
-
     import contextvars
+
+    parent_seen_by_worker = None
 
     class EagerContextIntegration:
         def __init__(self):
             self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-            # ❌ MISTAKE: Capturing context at init time (too early!)
-            # This might capture module-level context or empty context
             self._ctx = contextvars.copy_context()
 
         def process(self, fn):
-            # Uses stale context from __init__
             return self._pool.submit(lambda: self._ctx.run(fn))
 
         def shutdown(self):
             self._pool.shutdown(wait=True)
 
-    # Create integration BEFORE user creates any spans
     integration = EagerContextIntegration()
 
     def worker_function():
-        with start_span(name="eager_worker"):
-            time.sleep(0.01)
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
     try:
-        with start_span(name="user_parent"):
-            # Integration uses stale context from __init__ (before this span existed!)
-            # But auto-instrumentation should capture fresh context at submit time
+        with start_span(name="user_parent") as parent_span:
+            parent_id = parent_span.id
             future = integration.process(worker_function)
             future.result()
     finally:
         integration.shutdown()
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    assert len(logs) >= 1, "Expected at least user_parent span"
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "user_parent"), None)
-    assert parent_log is not None
+    assert parent_seen_by_worker is not None, "Worker runs"
+    assert parent_seen_by_worker.id != parent_id, "Worker sees STALE context, not parent (not fixable)"
 
 
-def test_integration_used_thread_instead_of_threadpool(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: Integration used threading.Thread without context.run().
-
-    MISTAKE: Developer used Thread directly and tried to pass context as argument.
-    Good intent (knew about context), wrong mechanism!
-
-    Real-world example:
-        class ThreadIntegration:
-            def process(self, fn, ctx):
-                # ❌ Trying to pass context as argument doesn't work!
-                thread = Thread(target=fn, args=(ctx,))
-                thread.start()
-
-    WITHOUT auto-instrumentation: Context is lost (xfail)
-    WITH auto-instrumentation: Thread.start() is patched (pass)
-    """
-    if not auto_instrument:
-        pytest.xfail("Thread without context.run() loses context")
+def _integration_thread_scenario(test_logger, with_memory_logger):
+    """Integration using Thread directly."""
+    parent_seen_by_worker = None
 
     class ThreadIntegration:
         def process(self, fn):
-            # ❌ MISTAKE: Using Thread directly without context.run()
-            # Developer might think "it's just another way to run async"
             thread = threading.Thread(target=fn)
             thread.start()
             return thread
@@ -952,48 +632,30 @@ def test_integration_used_thread_instead_of_threadpool(test_logger, with_memory_
     integration = ThreadIntegration()
 
     def worker_function():
-        with start_span(name="thread_worker"):
-            time.sleep(0.01)
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
-    with start_span(name="user_parent"):
+    with start_span(name="user_parent") as parent_span:
+        parent_id = parent_span.id
         thread = integration.process(worker_function)
         integration.wait(thread)
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    assert len(logs) >= 1, "Expected at least user_parent span"
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "user_parent"), None)
-    assert parent_log is not None
+    assert parent_seen_by_worker is not None
+    assert parent_seen_by_worker.id == parent_id
 
 
-def test_integration_decorator_loses_context(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: Integration created a decorator that loses context.
+test_integration_thread_loses_context = unpatched(_integration_thread_scenario)
+test_integration_thread_with_patch = patched(_integration_thread_scenario)
 
-    MISTAKE: Decorator wraps function but doesn't preserve context when running async.
-    Good intent (adding functionality), forgot about context!
 
-    Real-world example:
-        def with_retry(fn):
-            def wrapper(*args, **kwargs):
-                pool = ThreadPoolExecutor()
-                return pool.submit(fn, *args, **kwargs)  # ❌ No context!
-            return wrapper
+def _integration_decorator_scenario(test_logger, with_memory_logger):
+    """Decorator pattern loses context."""
+    parent_seen_by_worker = None
 
-    WITHOUT auto-instrumentation: Decorator breaks context (xfail)
-    WITH auto-instrumentation: submit() is patched (pass)
-    """
-    if not auto_instrument:
-        pytest.xfail("Decorator pattern without context propagation loses context")
-
-    # Simulate a decorator-based integration
     def async_retry_decorator(fn):
-        """Decorator that retries function in thread pool (broken context)"""
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         def wrapper(*args, **kwargs):
-            # ❌ MISTAKE: Running in pool without context.run()
             future = pool.submit(fn, *args, **kwargs)
             return future.result()
 
@@ -1001,20 +663,19 @@ def test_integration_decorator_loses_context(test_logger, with_memory_logger, au
 
     @async_retry_decorator
     def user_function():
-        with start_span(name="decorated_worker"):
-            time.sleep(0.01)
+        nonlocal parent_seen_by_worker
+        parent_seen_by_worker = current_span()
 
-    with start_span(name="user_parent"):
+    with start_span(name="user_parent") as parent_span:
+        parent_id = parent_span.id
         user_function()
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
+    assert parent_seen_by_worker is not None
+    assert parent_seen_by_worker.id == parent_id
 
-    assert len(logs) >= 1, "Expected at least user_parent span"
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "user_parent"), None)
-    assert parent_log is not None
 
-    # If this test fails, it proves that copy_context() timing matters!
+test_integration_decorator_loses_context = unpatched(_integration_decorator_scenario)
+test_integration_decorator_with_patch = patched(_integration_decorator_scenario)
 
 
 @pytest.mark.asyncio
@@ -1265,184 +926,68 @@ def test_sync_generator_context_sharing(test_logger, with_memory_logger):
 # ============================================================================
 
 
-def test_thread_wrapped_async_with_queue_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: Thread-wrapped async pattern (Google ADK, Pydantic AI).
+def _thread_wrapped_async_scenario(test_logger, with_memory_logger):
+    """Thread-wrapped async (Google ADK, Pydantic AI pattern)."""
+    import queue as queue_module
 
-    Real-world pattern found in:
-    1. Google ADK (runners.py:374-391) - Runner.run()
-    2. Pydantic AI (direct.py:353-373) - StreamedResponseSync._async_producer()
-
-    Pattern:
-        def sync_method():  # Sync method exposing sync interface
-            event_queue = queue.Queue()
-
-            async def _invoke_async():
-                with start_span("async_work"):
-                    ...  # Create spans in async code
-                    event_queue.put(event)
-
-            def _thread_main():
-                asyncio.run(_invoke_async())  # New event loop in thread!
-
-            thread = threading.Thread(target=_thread_main)
-            thread.start()  # ← Context lost WITHOUT auto-instrumentation!
-
-            while True:
-                event = event_queue.get()
-                if event is None:
-                    break
-                yield event
-
-    This bridges sync/async boundaries by running async code in a background thread.
-
-    WITHOUT auto-instrumentation: Context is lost at Thread.start() (xfail)
-    WITH auto-instrumentation: Thread.start() is patched, context propagates! (pass)
-
-    Expected trace:
-        parent
-          └─ async_work (created in thread's async code)
-    """
-    if not auto_instrument:
-        pytest.xfail("Thread-wrapped async loses context without auto-instrumentation")
-
-    import queue
-
-    event_queue = queue.Queue()
+    event_queue = queue_module.Queue()
     parent_seen_in_thread = None
 
     async def _invoke_async():
-        """Async code running in background thread."""
         nonlocal parent_seen_in_thread
         parent_seen_in_thread = current_span()
-
-        async_span = start_span(name="async_work")
-        await asyncio.sleep(0.01)
-        async_span.end()
         event_queue.put("done")
 
     def _thread_main():
-        """Thread wrapper that runs async code."""
         asyncio.run(_invoke_async())
         event_queue.put(None)
 
     with start_span(name="parent") as parent_span:
         parent_id = parent_span.id
-
-        # Create thread running async code
         thread = threading.Thread(target=_thread_main)
         thread.start()
-
-        # Consume events from queue
         while True:
             event = event_queue.get()
             if event is None:
                 break
-
         thread.join()
 
-    # Verify context propagated through thread into async code
     assert parent_seen_in_thread is not None
-    assert parent_seen_in_thread.id == parent_id, "Async code in thread should see parent span"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears
-    assert len(logs) >= 1, "Expected at least parent span"
-
-    parent_log = next((l for l in logs if l["span_attributes"]["name"] == "parent"), None)
-    assert parent_log is not None
+    assert parent_seen_in_thread.id == parent_id
 
 
-@pytest.mark.asyncio
-async def test_fastapi_background_task_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: FastAPI background tasks pattern.
+test_thread_wrapped_async_loses_context = unpatched(_thread_wrapped_async_scenario)
+test_thread_wrapped_async_with_patch = patched(_thread_wrapped_async_scenario)
 
-    FastAPI uses loop.run_in_executor() for background tasks:
-        @app.post("/send-notification")
-        async def send_notification(background_tasks: BackgroundTasks):
-            with start_span("http_request"):
-                background_tasks.add_task(send_email)  # Uses run_in_executor!
 
-    Pattern:
-        with start_span("http_request"):
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, background_work)
-
-    WITHOUT auto-instrumentation: Context lost in executor (xfail)
-    WITH auto-instrumentation: Executor submit is patched (pass)
-
-    Expected trace:
-        http_request
-          └─ background_email
-    """
-    if not auto_instrument:
-        pytest.xfail("FastAPI background tasks lose context without auto-instrumentation")
-
+async def _fastapi_background_scenario(test_logger, with_memory_logger):
+    """FastAPI background tasks (run_in_executor)."""
     parent_seen_by_background = None
 
     def background_work():
         nonlocal parent_seen_by_background
         parent_seen_by_background = current_span()
 
-        bg_span = start_span(name="background_email")
-        time.sleep(0.01)
-        bg_span.end()
-
     with start_span(name="http_request") as request_span:
         request_id = request_span.id
-
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, background_work)
 
-    # Verify context was propagated to background task
     assert parent_seen_by_background is not None
-    assert parent_seen_by_background.id == request_id, "Background task should see http_request span"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only request log appears
-    assert len(logs) >= 1, "Expected at least http_request span"
-
-    request_log = next((l for l in logs if l["span_attributes"]["name"] == "http_request"), None)
-    assert request_log is not None
+    assert parent_seen_by_background.id == request_id
 
 
-@pytest.mark.asyncio
-async def test_data_pipeline_pattern(test_logger, with_memory_logger, auto_instrument):
-    """
-    Test: Data pipeline with parallel processing via ThreadPoolExecutor.
+test_fastapi_background_loses_context = unpatched(pytest.mark.asyncio(_fastapi_background_scenario))
+test_fastapi_background_with_patch = patched(pytest.mark.asyncio(_fastapi_background_scenario))
 
-    Common pattern for parallel data processing:
-        with start_span("pipeline"):
-            with ThreadPoolExecutor() as executor:
-                results = [executor.submit(process_item, x) for x in data]
-                # or executor.map(process_item, data)
 
-    WITHOUT auto-instrumentation: Worker context is lost (xfail)
-    WITH auto-instrumentation: Each worker sees pipeline context (pass)
-
-    Expected trace:
-        pipeline
-          ├─ process_0
-          ├─ process_1
-          └─ process_2
-    """
-    if not auto_instrument:
-        pytest.xfail("Data pipeline loses context without auto-instrumentation")
-
+def _data_pipeline_scenario(test_logger, with_memory_logger):
+    """Data pipeline with parallel ThreadPoolExecutor."""
     parents_seen = []
 
     def process_item(item: int):
         parent = current_span()
         parents_seen.append(parent)
-
-        worker_span = start_span(name=f"process_{item}")
-        time.sleep(0.01)
-        worker_span.end()
         return item
 
     with start_span(name="pipeline") as pipeline_span:
@@ -1451,22 +996,16 @@ async def test_data_pipeline_pattern(test_logger, with_memory_logger, auto_instr
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(process_item, item) for item in data]
-            results = [f.result() for f in futures]
+            [f.result() for f in futures]
 
-    # Verify all workers saw the pipeline span
     assert len(parents_seen) == 3
     for i, parent in enumerate(parents_seen):
-        assert parent is not None, f"Worker {i} should see parent"
-        assert parent.id == pipeline_id, f"Worker {i} should see pipeline span"
+        assert parent is not None
+        assert parent.id == pipeline_id
 
-    test_logger.flush()
-    logs = with_memory_logger.pop()
 
-    # Memory logger is thread-local, so only pipeline log appears
-    assert len(logs) >= 1, "Expected at least pipeline span"
-
-    pipeline_log = next((l for l in logs if l["span_attributes"]["name"] == "pipeline"), None)
-    assert pipeline_log is not None
+test_data_pipeline_loses_context = unpatched(_data_pipeline_scenario)
+test_data_pipeline_with_patch = patched(_data_pipeline_scenario)
 
 
 @pytest.mark.asyncio
@@ -1705,104 +1244,20 @@ def test_context_with_exception_propagation(test_logger, with_memory_logger):
 # ============================================================================
 
 
-def test_setup_threads_success():
-    """Test that setup_threads() returns True on success."""
+@pytest.mark.forked
+def test_setup_threads_returns_true():
+    """setup_threads() returns True on success."""
     result = setup_threads()
-    assert result is True, "setup_threads() should return True"
+    assert result is True
 
 
+@pytest.mark.forked
 def test_setup_threads_idempotent():
-    """Test that calling setup_threads() multiple times is safe."""
+    """Calling setup_threads() multiple times is safe."""
     result1 = setup_threads()
     result2 = setup_threads()
     assert result1 is True
     assert result2 is True
-
-
-def test_auto_instrumentation_threading_explicit(test_logger, with_memory_logger):
-    """
-    Test explicit setup_threads() call for threading.Thread.
-
-    This verifies that users can manually enable auto-instrumentation
-    by calling setup_threads() instead of using env var.
-
-    NOTE: Memory logger is thread-local (testing limitation), so only parent log appears.
-    Context propagation is verified by checking the worker sees the parent span.
-    """
-    setup_threads()
-
-    parent_seen_by_worker = None
-
-    def worker_function():
-        nonlocal parent_seen_by_worker
-        parent_seen_by_worker = current_span()
-        worker_span = start_span(name="explicit_worker")
-        time.sleep(0.01)
-        worker_span.end()
-
-    with start_span(name="explicit_parent") as parent_span:
-        parent_id = parent_span.id
-
-        # Run in a thread - should automatically preserve context
-        thread = threading.Thread(target=worker_function)
-        thread.start()
-        thread.join()
-
-    # Verify context was preserved (worker saw the parent)
-    assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Auto-instrumentation should preserve span context"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "explicit_parent")
-    assert parent_log is not None
-
-
-def test_auto_instrumentation_threadpool_explicit(test_logger, with_memory_logger):
-    """
-    Test explicit setup_threads() call for ThreadPoolExecutor.
-
-    This verifies that ThreadPoolExecutor.submit() properly wraps submitted
-    functions to preserve context.
-
-    NOTE: Memory logger is thread-local (testing limitation), so only parent log appears.
-    Context propagation is verified by checking the worker sees the parent span.
-    """
-    setup_threads()
-
-    parent_seen_by_worker = None
-
-    def worker_task():
-        nonlocal parent_seen_by_worker
-        parent_seen_by_worker = current_span()
-        worker_span = start_span(name="pool_explicit_worker")
-        time.sleep(0.01)
-        worker_span.end()
-
-    with start_span(name="pool_explicit_parent") as parent_span:
-        parent_id = parent_span.id
-
-        # Submit to thread pool - should automatically preserve context
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(worker_task)
-            future.result()
-
-    # Verify context was preserved (worker saw the parent)
-    assert parent_seen_by_worker is not None
-    assert parent_seen_by_worker.id == parent_id, "Auto-instrumentation should preserve span context in thread pool"
-
-    test_logger.flush()
-    logs = with_memory_logger.pop()
-
-    # Memory logger is thread-local, so only parent log appears in tests
-    assert len(logs) >= 1, "Expected at least parent log"
-
-    parent_log = next(l for l in logs if l["span_attributes"]["name"] == "pool_explicit_parent")
-    assert parent_log is not None
 
 
 if __name__ == "__main__":
