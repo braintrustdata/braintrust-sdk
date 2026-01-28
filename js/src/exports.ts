@@ -26,6 +26,8 @@ export type {
   LoadPromptOptions,
   LogOptions,
   LoginOptions,
+  Logs3OverflowInputRow,
+  Logs3OverflowUpload,
   MetricSummary,
   ObjectMetadata,
   PromiseUnless,
@@ -44,6 +46,7 @@ export {
   BraintrustState,
   ContextManager,
   DEFAULT_FETCH_BATCH_SIZE,
+  DEFAULT_MAX_REQUEST_SIZE,
   Dataset,
   ObjectFetcher,
   ERR_PERMALINK,
@@ -51,6 +54,7 @@ export {
   ExternalAttachment,
   FailedHTTPResponse,
   JSONAttachment,
+  LOGS3_OVERFLOW_REFERENCE_TYPE,
   Logger,
   LoginInvalidOrgError,
   NOOP_SPAN,
@@ -64,6 +68,7 @@ export {
   _exportsForTestingOnly,
   _internalGetGlobalState,
   _internalSetInitialState,
+  constructLogs3OverflowRequest,
   currentExperiment,
   currentLogger,
   currentSpan,
@@ -82,8 +87,12 @@ export {
   logError,
   login,
   loginToState,
+  logs3OverflowUploadSchema,
   newId,
   permalink,
+  pickLogs3OverflowObjectIds,
+  uploadLogs3OverflowPayload,
+  utf8ByteLength,
   renderMessage,
   renderPromptParams,
   setFetch,
@@ -212,7 +221,7 @@ export type {
   DatasetRecord,
 } from "../util";
 
-export { LazyValue } from "./util";
+export { addAzureBlobHeaders, LazyValue } from "./util";
 
 export { AttachmentReference } from "./generated_types";
 

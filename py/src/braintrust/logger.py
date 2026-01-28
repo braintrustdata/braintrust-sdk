@@ -50,6 +50,8 @@ from .db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    OBJECT_DELETE_FIELD,
+    OBJECT_ID_KEYS,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -98,6 +100,23 @@ from .xact_ids import prettify_xact
 
 Metadata = dict[str, Any]
 DATA_API_VERSION = 2
+LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow"
+# 6 MB for the AWS lambda gateway (from our own testing).
+DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024
+
+
+@dataclasses.dataclass
+class Logs3OverflowInputRow:
+    object_ids: dict[str, Any]
+    has_comment: bool
+    is_delete: bool
+    byte_size: int
+
+
+@dataclasses.dataclass
+class LogItemWithMeta:
+    str_value: str
+    overflow_meta: Logs3OverflowInputRow
 
 
 class DatasetRef(TypedDict, total=False):
@@ -488,23 +507,25 @@ class BraintrustState:
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
-        self.__dict__.update({
-            k: v
-            for (k, v) in other.__dict__.items()
-            if k
-            not in (
-                "current_experiment",
-                "_cv_logger",
-                "_local_logger",
-                "current_parent",
-                "current_span",
-                "_global_bg_logger",
-                "_override_bg_logger",
-                "_context_manager",
-                "_last_otel_setting",
-                "_context_manager_lock",
-            )
-        })
+        self.__dict__.update(
+            {
+                k: v
+                for (k, v) in other.__dict__.items()
+                if k
+                not in (
+                    "current_experiment",
+                    "_cv_logger",
+                    "_local_logger",
+                    "current_parent",
+                    "current_span",
+                    "_global_bg_logger",
+                    "_override_bg_logger",
+                    "_context_manager",
+                    "_last_otel_setting",
+                    "_context_manager_lock",
+                )
+            }
+        )
 
     def login(
         self,
@@ -792,9 +813,41 @@ def construct_json_array(items: Sequence[str]):
     return "[" + ",".join(items) + "]"
 
 
-def construct_logs3_data(items: Sequence[str]):
-    rowsS = construct_json_array(items)
+def construct_logs3_data(items: Sequence[LogItemWithMeta]):
+    rowsS = construct_json_array([item.str_value for item in items])
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
+
+
+def construct_logs3_overflow_request(key: str, size_bytes: int | None = None) -> dict[str, Any]:
+    rows: dict[str, Any] = {"type": LOGS3_OVERFLOW_REFERENCE_TYPE, "key": key}
+    if size_bytes is not None:
+        rows["size_bytes"] = size_bytes
+    return {"rows": rows, "api_version": DATA_API_VERSION}
+
+
+def pick_logs3_overflow_object_ids(row: Mapping[str, Any]) -> dict[str, Any]:
+    object_ids: dict[str, Any] = {}
+    for key in OBJECT_ID_KEYS:
+        if key in row:
+            object_ids[key] = row[key]
+    return object_ids
+
+
+def stringify_with_overflow_meta(item: dict[str, Any]) -> LogItemWithMeta:
+    str_value = bt_dumps(item)
+    return LogItemWithMeta(
+        str_value=str_value,
+        overflow_meta=Logs3OverflowInputRow(
+            object_ids=pick_logs3_overflow_object_ids(item),
+            has_comment="comment" in item,
+            is_delete=item.get(OBJECT_DELETE_FIELD) is True,
+            byte_size=utf8_byte_length(str_value),
+        ),
+    )
+
+
+def utf8_byte_length(value: str) -> int:
+    return len(value.encode("utf-8"))
 
 
 class _MaskingError:
@@ -930,6 +983,9 @@ class _HTTPBackgroundLogger:
         self.masking_function: Callable[[Any], Any] | None = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
+        self._max_request_size_override: int | None = None
+        self._max_request_size_result: dict[str, Any] | None = None
+        self._max_request_size_lock = threading.Lock()
 
         try:
             self.sync_flush = bool(int(os.environ["BRAINTRUST_SYNC_FLUSH"]))
@@ -937,10 +993,9 @@ class _HTTPBackgroundLogger:
             self.sync_flush = False
 
         try:
-            self.max_request_size = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
+            self._max_request_size_override = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
         except:
-            # 6 MB for the AWS lambda gateway (from our own testing).
-            self.max_request_size = 6 * 1024 * 1024
+            pass
 
         try:
             self.default_batch_size = int(os.environ["BRAINTRUST_DEFAULT_BATCH_SIZE"])
@@ -980,6 +1035,9 @@ class _HTTPBackgroundLogger:
 
         self.logger = logging.getLogger("braintrust")
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
+
+        # Counter for tracking overflow uploads (useful for testing)
+        self._overflow_upload_count = 0
 
         atexit.register(self._finalize)
 
@@ -1037,6 +1095,38 @@ class _HTTPBackgroundLogger:
                     else:
                         raise
 
+    def _get_max_request_size(self) -> dict[str, Any]:
+        if self._max_request_size_result is not None:
+            return self._max_request_size_result
+        with self._max_request_size_lock:
+            if self._max_request_size_result is not None:
+                return self._max_request_size_result
+            server_limit: int | None = None
+            try:
+                conn = self.api_conn.get()
+                info = conn.get_json("version")
+                limit = info.get("logs3_payload_max_bytes")
+                if isinstance(limit, (int, float)) and int(limit) > 0:
+                    server_limit = int(limit)
+            except Exception as e:
+                print(f"Failed to fetch version info for payload limit: {e}", file=self.outfile)
+            valid_server_limit = server_limit if server_limit is not None and server_limit > 0 else None
+            can_use_overflow = valid_server_limit is not None
+            max_request_size = DEFAULT_MAX_REQUEST_SIZE
+            if self._max_request_size_override is not None:
+                max_request_size = (
+                    min(self._max_request_size_override, valid_server_limit)
+                    if valid_server_limit is not None
+                    else self._max_request_size_override
+                )
+            elif valid_server_limit is not None:
+                max_request_size = valid_server_limit
+            self._max_request_size_result = {
+                "max_request_size": max_request_size,
+                "can_use_overflow": can_use_overflow,
+            }
+            return self._max_request_size_result
+
     def flush(self, batch_size: int | None = None):
         if batch_size is None:
             batch_size = self.default_batch_size
@@ -1052,21 +1142,26 @@ class _HTTPBackgroundLogger:
                 return
 
             # Construct batches of records to flush in parallel and in sequence.
-            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            all_items_with_meta = [[stringify_with_overflow_meta(item) for item in bucket] for bucket in all_items]
+            max_request_size_result = self._get_max_request_size()
             batch_sets = batch_items(
-                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
+                items=all_items_with_meta,
+                batch_max_num_items=batch_size,
+                batch_max_num_bytes=max_request_size_result["max_request_size"] // 2,
+                get_byte_size=lambda item: len(item.str_value),
             )
             for batch_set in batch_sets:
                 post_promises = []
                 try:
                     post_promises = [
-                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
+                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch, max_request_size_result)
+                        for batch in batch_set
                     ]
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process
                     # is terminating, run the requests the old fashioned way.
                     for batch in batch_set:
-                        self._submit_logs_request(batch)
+                        self._submit_logs_request(batch, max_request_size_result)
 
                 concurrent.futures.wait(post_promises)
                 # Raise any exceptions from the promises as one group.
@@ -1153,21 +1248,120 @@ class _HTTPBackgroundLogger:
         )
         return [], []
 
-    def _submit_logs_request(self, items: Sequence[str]):
+    def _request_logs3_overflow_upload(
+        self, conn: HTTPConnection, payload_size_bytes: int, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        try:
+            resp = conn.post(
+                "/logs3/overflow",
+                json={"content_type": "application/json", "size_bytes": payload_size_bytes, "rows": rows},
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            raise RuntimeError(f"Failed to request logs3 overflow upload URL: {e}") from e
+
+        method = payload.get("method")
+        if method not in ("PUT", "POST"):
+            raise RuntimeError(f"Invalid response from API server (method must be PUT or POST): {payload}")
+        signed_url = payload.get("signedUrl")
+        headers = payload.get("headers")
+        fields = payload.get("fields")
+        key = payload.get("key")
+        if not isinstance(signed_url, str) or not isinstance(key, str):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "PUT" and not isinstance(headers, dict):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "POST" and not isinstance(fields, dict):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+
+        if method == "PUT":
+            add_azure_blob_headers(headers, signed_url)
+
+        return {
+            "method": method,
+            "signed_url": signed_url,
+            "headers": headers if isinstance(headers, dict) else {},
+            "fields": fields if isinstance(fields, dict) else {},
+            "key": key,
+        }
+
+    def _upload_logs3_overflow_payload(self, upload: dict[str, Any], payload: str) -> None:
+        obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+        method = upload["method"]
+        if method == "POST":
+            fields = upload.get("fields")
+            if not isinstance(fields, dict):
+                raise RuntimeError("Missing logs3 overflow upload fields")
+            content_type = fields.get("Content-Type", "application/json")
+            headers = {k: v for k, v in upload.get("headers", {}).items() if k.lower() != "content-type"}
+            obj_response = obj_conn.post(
+                upload["signed_url"],
+                headers=headers,
+                data=fields,
+                files={"file": ("logs3.json", payload.encode("utf-8"), content_type)},
+            )
+        else:
+            obj_response = obj_conn.put(
+                upload["signed_url"],
+                headers=upload["headers"],
+                data=payload.encode("utf-8"),
+            )
+        obj_response.raise_for_status()
+
+    def _submit_logs_request(self, items: Sequence[LogItemWithMeta], max_request_size_result: dict[str, Any]):
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
+        payload_bytes = utf8_byte_length(dataStr)
+        max_request_size = max_request_size_result["max_request_size"]
+        can_use_overflow = max_request_size_result["can_use_overflow"]
+        use_overflow = can_use_overflow and payload_bytes > max_request_size
         if self.all_publish_payloads_dir:
             _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+        overflow_upload: dict[str, Any] | None = None
+        overflow_rows = (
+            [
+                {
+                    "object_ids": item.overflow_meta.object_ids,
+                    "has_comment": item.overflow_meta.has_comment,
+                    "is_delete": item.overflow_meta.is_delete,
+                    "input_row": {"byte_size": item.overflow_meta.byte_size},
+                }
+                for item in items
+            ]
+            if use_overflow
+            else None
+        )
         for i in range(self.num_tries):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
-            if resp.ok:
+            resp = None
+            error = None
+            try:
+                if overflow_rows:
+                    if overflow_upload is None:
+                        current_upload = self._request_logs3_overflow_upload(conn, payload_bytes, overflow_rows)
+                        self._upload_logs3_overflow_payload(current_upload, dataStr)
+                        overflow_upload = current_upload
+                    resp = conn.post(
+                        "/logs3",
+                        json=construct_logs3_overflow_request(overflow_upload["key"], payload_bytes),
+                    )
+                else:
+                    resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
+            except Exception as e:
+                error = e
+            if error is None and resp is not None and resp.ok:
+                if overflow_rows:
+                    self._overflow_upload_count += 1
                 return
-            resp_errmsg = f"{resp.status_code}: {resp.text}"
+            if error is None and resp is not None:
+                resp_errmsg = f"{resp.status_code}: {resp.text}"
+            else:
+                resp_errmsg = str(error)
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {payload_bytes}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
                 _HTTPBackgroundLogger._write_payload_to_dir(
@@ -1192,14 +1386,15 @@ class _HTTPBackgroundLogger:
             return
         try:
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
-            dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            items_with_meta = [stringify_with_overflow_meta(item) for bucket in all_items for item in bucket]
+            dataStr = construct_logs3_data(items_with_meta)
             attachment_str = bt_dumps([a.debug_info() for a in attachments])
             payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
                 _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
-        except Exception as e:
+        except Exception:
             traceback.print_exc(file=self.outfile)
 
     def _register_dropped_item_count(self, num_items):
@@ -3293,17 +3488,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert parent_object_id.get() == parent_components_object_id, (
-                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
-            )
+            assert (
+                parent_object_id.get() == parent_components_object_id
+            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -4484,20 +4679,24 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
                 elif c["type"] == "file":
-                    rendered_content.append({
-                        **c,
-                        "file": {
-                            **c["file"],
-                            "file_data": render(c["file"]["file_data"]),
-                            **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
-                            **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
-                        },
-                    })
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
+                        }
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
