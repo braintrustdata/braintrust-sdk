@@ -36,11 +36,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          pnpm install --frozen-lockfile
-
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -49,18 +44,44 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Build orchestrion from source
+      - name: Clone and build orchestrion
         shell: bash
         run: |
-          # Build orchestrion manually since GitHub installs don't run prepare scripts
-          ORCHESTRION_PATH="integrations/auto-instrumentations/node_modules/@apm-js-collab/code-transformer"
-          if [ -d "$ORCHESTRION_PATH" ]; then
-            echo "Building orchestrion from source at $ORCHESTRION_PATH..."
-            cd "$ORCHESTRION_PATH"
-            npm run build
-            cd ../../../../..
+          # Clone orchestrion repo and build it
+          git clone --branch fix-windows-path-matching --depth 1 https://github.com/apm-js-collab/orchestrion-js.git /tmp/orchestrion
+          cd /tmp/orchestrion
+          npm install
+          npm run build
+          echo "Orchestrion built successfully at /tmp/orchestrion"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: Replace orchestrion with local build
+        shell: bash
+        run: |
+          # Replace the incomplete GitHub install with our complete local build
+          TARGET_DIR="integrations/auto-instrumentations/node_modules/@apm-js-collab/code-transformer"
+          if [ -d "$TARGET_DIR" ]; then
+            echo "Replacing orchestrion installation with local build..."
+            rm -rf "$TARGET_DIR"
+            mkdir -p "$TARGET_DIR"
+
+            # Copy built files
+            cp -r /tmp/orchestrion/pkg "$TARGET_DIR/"
+            cp /tmp/orchestrion/index.js "$TARGET_DIR/"
+            cp /tmp/orchestrion/index.d.ts "$TARGET_DIR/"
+            cp /tmp/orchestrion/package.json "$TARGET_DIR/"
+            cp /tmp/orchestrion/LICENSE "$TARGET_DIR/"
+            cp /tmp/orchestrion/NOTICE "$TARGET_DIR/"
+
+            echo "Orchestrion replaced successfully"
+            ls -la "$TARGET_DIR"
           else
-            echo "Orchestrion not found at $ORCHESTRION_PATH, skipping build"
+            echo "Error: Target directory not found: $TARGET_DIR"
+            exit 1
           fi
 
       - name: "Build and test"
