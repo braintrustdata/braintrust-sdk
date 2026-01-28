@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
+    "@braintrust/browser": "file:../../../artifacts/braintrust-browser-latest.tgz",
     "@braintrust/otel": "file:../../../artifacts/braintrust-otel-latest.tgz",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/api-logs": "^0.200.0",

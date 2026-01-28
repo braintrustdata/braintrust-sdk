@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
+    "@braintrust/browser": "file:../../../artifacts/braintrust-browser-latest.tgz",
     "zod": "^3.25.76"
   },
   "devDependencies": {

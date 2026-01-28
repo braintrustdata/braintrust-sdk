@@ -1,12 +1,11 @@
 {
-  "name": "smoke-playwright-browser",
+  "name": "smoke-browser-main-package",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Playwright browser smoke test for Braintrust SDK",
+  "description": "Smoke test for main package browser build with informational message",
   "dependencies": {
     "braintrust": "file:../../../artifacts/braintrust-latest.tgz",
-    "@braintrust/browser": "file:../../../artifacts/braintrust-browser-latest.tgz",
     "zod": "^4.3.5"
   },
   "devDependencies": {
