@@ -127,6 +127,21 @@ const REDACTION_FIELDS = [
   "metrics",
 ] as const;
 
+type MaskingField = (typeof REDACTION_FIELDS)[number];
+
+export type MaskingContext = {
+  field: MaskingField;
+  record: BackgroundLogEvent;
+  spanId?: string;
+  rootSpanId?: string;
+  spanParents?: string[];
+  spanAttributes?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+};
+
+export type MaskingFunction = (value: unknown, ctx?: MaskingContext) => unknown;
+
 class MaskingError {
   constructor(
     public readonly fieldName: string,
@@ -144,12 +159,24 @@ class MaskingError {
  * Returns MaskingError for scores/metrics fields to signal they should be dropped.
  */
 function applyMaskingToField(
-  maskingFunction: (value: unknown) => unknown,
+  maskingFunction: MaskingFunction,
   data: unknown,
-  fieldName: string,
+  fieldName: MaskingField,
+  record: BackgroundLogEvent,
 ): unknown {
   try {
-    return maskingFunction(data);
+    const recordAny = record as Record<string, unknown>;
+    const ctx: MaskingContext = {
+      field: fieldName,
+      record,
+      spanId: recordAny.span_id as string | undefined,
+      rootSpanId: recordAny.root_span_id as string | undefined,
+      spanParents: recordAny.span_parents as string[] | undefined,
+      spanAttributes: recordAny.span_attributes as Record<string, unknown> | undefined,
+      metadata: recordAny.metadata as Record<string, unknown> | undefined,
+      context: recordAny.context as Record<string, unknown> | undefined,
+    };
+    return maskingFunction(data, ctx);
   } catch (error) {
     // Return a generic error message without the stack trace to avoid leaking PII
     const errorType = error instanceof Error ? error.constructor.name : "Error";
@@ -755,7 +782,7 @@ export class BraintrustState {
   }
 
   public setMaskingFunction(
-    maskingFunction: ((value: unknown) => unknown) | null,
+    maskingFunction: MaskingFunction | null,
   ): void {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
@@ -2349,20 +2376,20 @@ interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
   setMaskingFunction(
-    maskingFunction: ((value: unknown) => unknown) | null,
+    maskingFunction: MaskingFunction | null,
   ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
-  private maskingFunction: ((value: unknown) => unknown) | null = null;
+  private maskingFunction: MaskingFunction | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
   }
 
   setMaskingFunction(
-    maskingFunction: ((value: unknown) => unknown) | null,
+    maskingFunction: MaskingFunction | null,
   ): void {
     this.maskingFunction = maskingFunction;
   }
@@ -2400,6 +2427,7 @@ export class TestBackgroundLogger implements BackgroundLogger {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (item as any)[field],
               field,
+              item,
             );
             if (maskedValue instanceof MaskingError) {
               // Drop the field and add error message
@@ -2442,7 +2470,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
-  private maskingFunction: ((value: unknown) => unknown) | null = null;
+  private maskingFunction: MaskingFunction | null = null;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -2538,7 +2566,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   setMaskingFunction(
-    maskingFunction: ((value: unknown) => unknown) | null,
+    maskingFunction: MaskingFunction | null,
   ): void {
     this.maskingFunction = maskingFunction;
   }
@@ -2709,6 +2737,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (item as any)[field],
                     field,
+                    item,
                   );
                   if (maskedValue instanceof MaskingError) {
                     // Drop the field and add error message
@@ -3832,10 +3861,11 @@ export type FullLoginOptions = LoginOptions & {
  * The masking function will be applied after records are merged but before they are sent to the backend.
  *
  * @param maskingFunction A function that takes a JSON-serializable object and returns a masked version.
- *                        Set to null to disable masking.
+ *                        The function may optionally accept a context argument describing the field
+ *                        and record being masked. Set to null to disable masking.
  */
 export function setMaskingFunction(
-  maskingFunction: ((value: unknown) => unknown) | null,
+  maskingFunction: MaskingFunction | null,
 ): void {
   _globalState.setMaskingFunction(maskingFunction);
 }

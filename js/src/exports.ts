@@ -26,6 +26,8 @@ export type {
   LoadPromptOptions,
   LogOptions,
   LoginOptions,
+  MaskingContext,
+  MaskingFunction,
   MetricSummary,
   ObjectMetadata,
   PromiseUnless,
