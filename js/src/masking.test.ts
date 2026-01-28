@@ -113,10 +113,7 @@ describe("masking functionality", () => {
 
   test("conditional masking based on integration", async () => {
     // Helper to recursively mask specific keys
-    const recursiveMask = (
-      data: unknown,
-      keysToMask: string[],
-    ): unknown => {
+    const recursiveMask = (data: unknown, keysToMask: string[]): unknown => {
       if (typeof data !== "object" || data === null) {
         return data;
       }
@@ -180,8 +177,7 @@ describe("masking functionality", () => {
 
     // First event (AI SDK) - should have masked password and api_key
     const aiSdkEvent = events.find(
-      (e: any) =>
-        e.metadata?.braintrust?.integration_name === "ai-sdk",
+      (e: any) => e.metadata?.braintrust?.integration_name === "ai-sdk",
     );
     expect(aiSdkEvent.input).toEqual({
       query: "login",

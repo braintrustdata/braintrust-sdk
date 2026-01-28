@@ -172,7 +172,9 @@ function applyMaskingToField(
       spanId: recordAny.span_id as string | undefined,
       rootSpanId: recordAny.root_span_id as string | undefined,
       spanParents: recordAny.span_parents as string[] | undefined,
-      spanAttributes: recordAny.span_attributes as Record<string, unknown> | undefined,
+      spanAttributes: recordAny.span_attributes as
+        | Record<string, unknown>
+        | undefined,
       metadata: recordAny.metadata as Record<string, unknown> | undefined,
       context: recordAny.context as Record<string, unknown> | undefined,
     };
@@ -781,9 +783,7 @@ export class BraintrustState {
     this._appConn?.setFetch(fetch);
   }
 
-  public setMaskingFunction(
-    maskingFunction: MaskingFunction | null,
-  ): void {
+  public setMaskingFunction(maskingFunction: MaskingFunction | null): void {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
@@ -2375,9 +2375,7 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
-  setMaskingFunction(
-    maskingFunction: MaskingFunction | null,
-  ): void;
+  setMaskingFunction(maskingFunction: MaskingFunction | null): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
@@ -2388,9 +2386,7 @@ export class TestBackgroundLogger implements BackgroundLogger {
     this.items.push(items);
   }
 
-  setMaskingFunction(
-    maskingFunction: MaskingFunction | null,
-  ): void {
+  setMaskingFunction(maskingFunction: MaskingFunction | null): void {
     this.maskingFunction = maskingFunction;
   }
 
@@ -2565,9 +2561,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     this.onFlushError = opts.onFlushError;
   }
 
-  setMaskingFunction(
-    maskingFunction: MaskingFunction | null,
-  ): void {
+  setMaskingFunction(maskingFunction: MaskingFunction | null): void {
     this.maskingFunction = maskingFunction;
   }
 
@@ -3865,7 +3859,7 @@ export type FullLoginOptions = LoginOptions & {
  *                        and record being masked. Set to null to disable masking.
  */
 export function setMaskingFunction(
-  maskingFunction: MaskingFunction | null,
+  maskingFunction: ((value: unknown, ctx?: MaskingContext) => unknown) | null,
 ): void {
   _globalState.setMaskingFunction(maskingFunction);
 }
