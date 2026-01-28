@@ -188,6 +188,112 @@ class TestPromptCache(unittest.TestCase):
         result = self.cache.get(id=prompt_id)
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
+    def test_handle_different_orgs_with_same_project_and_slug(self):
+        """Test that prompts from different orgs with same project/slug are isolated.
+
+        This test verifies the fix for the cross-org cache collision bug where
+        two organizations with the same project name and prompt slug could get
+        each other's cached prompts.
+        """
+        org1_prompt = prompt.PromptSchema(
+            id="org1-prompt-id",
+            project_id="shared-project-id",
+            _xact_id="111",
+            name="shared-prompt",
+            slug="shared-prompt",
+            description="This is Org 1's prompt",
+            prompt_data=prompt.PromptData(),
+            tags=None,
+        )
+
+        org2_prompt = prompt.PromptSchema(
+            id="org2-prompt-id",
+            project_id="shared-project-id",
+            _xact_id="222",
+            name="shared-prompt",
+            slug="shared-prompt",
+            description="This is Org 2's prompt",
+            prompt_data=prompt.PromptData(),
+            tags=None,
+        )
+
+        # Store prompts from different orgs with same project_name and slug
+        self.cache.set(
+            org1_prompt,
+            slug="shared-prompt",
+            version="latest",
+            project_name="MyProject",
+            org_id="org-111",
+        )
+        self.cache.set(
+            org2_prompt,
+            slug="shared-prompt",
+            version="latest",
+            project_name="MyProject",
+            org_id="org-222",
+        )
+
+        # Retrieve each org's prompt - should get the correct one
+        result1 = self.cache.get(
+            slug="shared-prompt",
+            version="latest",
+            project_name="MyProject",
+            org_id="org-111",
+        )
+        result2 = self.cache.get(
+            slug="shared-prompt",
+            version="latest",
+            project_name="MyProject",
+            org_id="org-222",
+        )
+
+        # Verify org isolation - each org gets their own prompt
+        self.assertEqual(result1.description, "This is Org 1's prompt")
+        self.assertEqual(result2.description, "This is Org 2's prompt")
+        self.assertEqual(result1.id, "org1-prompt-id")
+        self.assertEqual(result2.id, "org2-prompt-id")
+
+    def test_org_id_isolation_with_disk_cache(self):
+        """Test that org_id isolation works after memory eviction (via disk cache)."""
+        org1_prompt = prompt.PromptSchema(
+            id="disk-org1-id",
+            project_id="project",
+            _xact_id="111",
+            name="prompt",
+            slug="prompt",
+            description="Org 1 disk prompt",
+            prompt_data=prompt.PromptData(),
+            tags=None,
+        )
+
+        org2_prompt = prompt.PromptSchema(
+            id="disk-org2-id",
+            project_id="project",
+            _xact_id="222",
+            name="prompt",
+            slug="prompt",
+            description="Org 2 disk prompt",
+            prompt_data=prompt.PromptData(),
+            tags=None,
+        )
+
+        # Store org1's prompt
+        self.cache.set(org1_prompt, slug="prompt", version="v1", project_name="proj", org_id="org1")
+
+        # Fill memory cache to evict org1's prompt (memory cache max_size=2)
+        self.cache.set(self.test_prompt, slug="filler1", version="v1", project_id="123")
+        self.cache.set(self.test_prompt, slug="filler2", version="v1", project_id="123")
+
+        # Store org2's prompt (should not overwrite org1's cached prompt)
+        self.cache.set(org2_prompt, slug="prompt", version="v1", project_name="proj", org_id="org2")
+
+        # Both should be retrievable with correct isolation
+        result1 = self.cache.get(slug="prompt", version="v1", project_name="proj", org_id="org1")
+        result2 = self.cache.get(slug="prompt", version="v1", project_name="proj", org_id="org2")
+
+        self.assertEqual(result1.description, "Org 1 disk prompt")
+        self.assertEqual(result2.description, "Org 2 disk prompt")
+
 
 if __name__ == "__main__":
     unittest.main()
