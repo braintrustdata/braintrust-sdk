@@ -48,6 +48,21 @@ def reset_braintrust_state():
     logger._state = logger.BraintrustState()
 
 
+@pytest.fixture(autouse=True)
+def skip_vcr_tests_in_wheel_mode(request):
+    """Skip VCR tests when running from an installed wheel.
+
+    Wheel mode (BRAINTRUST_TESTING_WHEEL=1) is a pre-release sanity check
+    that verifies the built package installs and runs correctly. It's not
+    intended to be a full test suite - VCR cassettes are not included in
+    the wheel, so we skip those tests here. The full test suite with VCR
+    tests runs against source code during normal CI.
+    """
+    if os.environ.get("BRAINTRUST_TESTING_WHEEL") == "1":
+        if request.node.get_closest_marker("vcr"):
+            pytest.skip("VCR tests skipped in wheel mode (pre-release sanity check only)")
+
+
 def get_vcr_config():
     """
     Get VCR configuration for recording/playing back HTTP interactions.
