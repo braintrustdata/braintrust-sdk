@@ -9,6 +9,7 @@ import pytest
 from braintrust import logger, setup_pydantic_ai, traced
 from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import init_test_logger
+from braintrust.wrappers.test_utils import verify_autoinstrument_script
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.messages import ModelRequest, UserPromptPart
@@ -2572,3 +2573,11 @@ async def test_attachment_in_result_data(memory_logger):
     copied = bt_safe_deep_copy(result_data)
     assert copied["output_file"] is ext_attachment
     assert copied["success"] is True
+
+
+class TestAutoInstrumentPydanticAI:
+    """Tests for auto_instrument() with Pydantic AI."""
+
+    def test_auto_instrument_pydantic_ai(self):
+        """Test auto_instrument patches Pydantic AI and creates spans."""
+        verify_autoinstrument_script("test_auto_pydantic_ai.py")
