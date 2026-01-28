@@ -8,6 +8,7 @@ import {
   wrapTraced,
   currentSpan,
   setMaskingFunction,
+  type MaskingContext,
 } from "./logger";
 import { configureNode } from "./node";
 
@@ -66,6 +67,146 @@ describe("masking functionality", () => {
     expect(event.input).toEqual({ query: "login", password: "REDACTED" });
     expect(event.output).toEqual({ status: "success", api_key: "REDACTED" });
     expect(event.metadata).toEqual({ user: "test", token: "safe" });
+  });
+
+  test("masking receives context for conditional masking", async () => {
+    const contexts: Partial<Record<string, MaskingContext>> = {};
+    const maskingFunction = (data: unknown, ctx?: MaskingContext): unknown => {
+      if (ctx) {
+        contexts[ctx.field] = ctx;
+      }
+      return data;
+    };
+
+    setMaskingFunction(maskingFunction);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    logger.log({
+      input: { message: "hello" },
+      output: { result: "ok" },
+      metadata: { braintrust: { integration_name: "ai-sdk" } },
+    });
+
+    await memoryLogger.flush();
+    await memoryLogger.drain();
+
+    expect(contexts.input).toBeDefined();
+    expect(contexts.output).toBeDefined();
+    expect(contexts.metadata).toBeDefined();
+    expect(contexts.input?.field).toBe("input");
+    expect(contexts.input?.metadata).toEqual({
+      braintrust: { integration_name: "ai-sdk" },
+    });
+    expect(contexts.input?.record).toMatchObject({
+      input: { message: "hello" },
+      output: { result: "ok" },
+      metadata: { braintrust: { integration_name: "ai-sdk" } },
+    });
+    expect(typeof contexts.input?.spanId).toBe("string");
+    expect(typeof contexts.input?.rootSpanId).toBe("string");
+    expect(contexts.input?.spanAttributes?.name).toBeDefined();
+  });
+
+  test("conditional masking based on integration", async () => {
+    // Helper to recursively mask specific keys
+    const recursiveMask = (
+      data: unknown,
+      keysToMask: string[],
+    ): unknown => {
+      if (typeof data !== "object" || data === null) {
+        return data;
+      }
+      if (Array.isArray(data)) {
+        return data.map((item) => recursiveMask(item, keysToMask));
+      }
+      const masked: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (keysToMask.includes(key)) {
+          masked[key] = "REDACTED";
+        } else if (typeof value === "object" && value !== null) {
+          masked[key] = recursiveMask(value, keysToMask);
+        } else {
+          masked[key] = value;
+        }
+      }
+      return masked;
+    };
+
+    // Only mask data from AI SDK integrations
+    const maskingFunction = (data: unknown, ctx?: MaskingContext): unknown => {
+      const integrationName = (ctx?.metadata as Record<string, unknown>)
+        ?.braintrust as Record<string, unknown> | undefined;
+      if (integrationName?.integration_name === "ai-sdk") {
+        return recursiveMask(data, ["api_key", "password"]);
+      }
+      return data; // Don't mask other sources
+    };
+
+    setMaskingFunction(maskingFunction);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    // Log from AI SDK integration - should be masked
+    logger.log({
+      input: { query: "login", password: "secret123", api_key: "sk-123" },
+      output: { status: "success" },
+      metadata: { braintrust: { integration_name: "ai-sdk" } },
+    });
+
+    // Log from non-AI SDK source - should NOT be masked
+    logger.log({
+      input: { query: "search", password: "plaintext", api_key: "ak-456" },
+      output: { result: "found" },
+      metadata: { source: "manual-logging" },
+    });
+
+    // Log with no metadata - should NOT be masked
+    logger.log({
+      input: { password: "visible", api_key: "key-789" },
+      output: { done: true },
+    });
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    expect(events).toHaveLength(3);
+
+    // First event (AI SDK) - should have masked password and api_key
+    const aiSdkEvent = events.find(
+      (e: any) =>
+        e.metadata?.braintrust?.integration_name === "ai-sdk",
+    );
+    expect(aiSdkEvent.input).toEqual({
+      query: "login",
+      password: "REDACTED",
+      api_key: "REDACTED",
+    });
+
+    // Second event (manual logging) - should NOT be masked
+    const manualEvent = events.find(
+      (e: any) => e.metadata?.source === "manual-logging",
+    );
+    expect(manualEvent.input).toEqual({
+      query: "search",
+      password: "plaintext",
+      api_key: "ak-456",
+    });
+
+    // Third event (no metadata) - should NOT be masked
+    const noMetadataEvent = events.find(
+      (e: any) => !e.metadata?.braintrust && !e.metadata?.source,
+    );
+    expect(noMetadataEvent.input).toEqual({
+      password: "visible",
+      api_key: "key-789",
+    });
   });
 
   test("masking with scores and metadata", async () => {
