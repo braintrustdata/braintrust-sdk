@@ -1,6 +1,8 @@
 from typing import List
+from unittest.mock import MagicMock
 
 import pytest
+from braintrust.logger import BraintrustState
 
 from .framework import (
     Eval,
@@ -528,3 +530,37 @@ async def test_hooks_without_setting_tags(with_memory_logger, with_simulate_logi
     root_span = [log for log in logs if not log["span_parents"]]
     assert len(root_span) == 1
     assert root_span[0].get("tags") == None
+
+@pytest.mark.asyncio
+async def test_eval_enable_cache():
+    state = BraintrustState()
+    state.span_cache = MagicMock()
+
+    # Test enable_cache=False
+    await Eval(
+        "test-enable-cache-false",
+        data=[EvalCase(input=1, expected=1)],
+        task=lambda x: x,
+        scores=[],
+        state=state,
+        no_send_logs=True,
+        enable_cache=False,
+    )
+    state.span_cache.start.assert_not_called()
+    state.span_cache.stop.assert_not_called()
+
+    # Test enable_cache=True (default)
+    state.span_cache.start.reset_mock()
+    state.span_cache.stop.reset_mock()
+
+    await Eval(
+        "test-enable-cache-true",
+        data=[EvalCase(input=1, expected=1)],
+        task=lambda x: x,
+        scores=[],
+        state=state,
+        no_send_logs=True,
+        # enable_cache defaults to True
+    )
+    state.span_cache.start.assert_called()
+    state.span_cache.stop.assert_called()
