@@ -91,6 +91,8 @@ export {
   newId,
   permalink,
   pickLogs3OverflowObjectIds,
+  uploadLogs3OverflowPayload,
+  utf8ByteLength,
   renderMessage,
   renderPromptParams,
   setFetch,
@@ -219,7 +221,7 @@ export type {
   DatasetRecord,
 } from "../util";
 
-export { LazyValue } from "./util";
+export { addAzureBlobHeaders, LazyValue } from "./util";
 
 export { AttachmentReference } from "./generated_types";
 

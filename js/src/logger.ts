@@ -2385,6 +2385,66 @@ export function pickLogs3OverflowObjectIds(
   return objectIds;
 }
 
+/**
+ * Upload a logs3 overflow payload to the signed URL.
+ * This is a standalone function that can be used by both SDK and app code.
+ *
+ * @param upload - The overflow upload metadata from the API
+ * @param payload - The JSON payload string to upload
+ * @param fetchFn - Optional custom fetch function (defaults to global fetch)
+ */
+export async function uploadLogs3OverflowPayload(
+  upload: Logs3OverflowUpload,
+  payload: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  if (upload.method === "POST") {
+    if (!upload.fields) {
+      throw new Error("Missing logs3 overflow upload fields");
+    }
+    if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+      throw new Error("FormData is not available for logs3 overflow upload");
+    }
+    const form = new FormData();
+    for (const [key, value] of Object.entries(upload.fields)) {
+      form.append(key, value);
+    }
+    const contentType = upload.fields["Content-Type"] ?? "application/json";
+    form.append("file", new Blob([payload], { type: contentType }));
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(upload.headers ?? {})) {
+      if (key.toLowerCase() !== "content-type") {
+        headers[key] = value;
+      }
+    }
+    const response = await fetchFn(upload.signedUrl, {
+      method: "POST" satisfies RequestInit["method"],
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+      );
+    }
+    return;
+  }
+  const headers: Record<string, string> = { ...(upload.headers ?? {}) };
+  addAzureBlobHeaders(headers, upload.signedUrl);
+  const response = await fetchFn(upload.signedUrl, {
+    method: "PUT" satisfies RequestInit["method"],
+    headers,
+    body: payload,
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+    );
+  }
+}
+
 function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
   const str = JSON.stringify(item);
   const record = item as Record<string, unknown>;
@@ -2400,7 +2460,7 @@ function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
   };
 }
 
-function utf8ByteLength(value: string) {
+export function utf8ByteLength(value: string) {
   if (typeof TextEncoder !== "undefined") {
     return new TextEncoder().encode(value).length;
   }
@@ -2902,50 +2962,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
-  private async uploadLogs3OverflowPayload(
+  private async _uploadLogs3OverflowPayload(
     conn: HTTPConnection,
     upload: Logs3OverflowUpload,
     payload: string,
   ): Promise<void> {
-    const method = upload.method;
-    if (method === "POST") {
-      if (!upload.fields) {
-        throw new Error("Missing logs3 overflow upload fields");
-      }
-      if (typeof FormData === "undefined" || typeof Blob === "undefined") {
-        throw new Error("FormData is not available for logs3 overflow upload");
-      }
-      const form = new FormData();
-      for (const [key, value] of Object.entries(upload.fields)) {
-        form.append(key, value);
-      }
-      const contentType = upload.fields["Content-Type"] ?? "application/json";
-      form.append("file", new Blob([payload], { type: contentType }));
-      const headers: Record<string, string> = {};
-      for (const [key, value] of Object.entries(upload.headers ?? {})) {
-        if (key.toLowerCase() !== "content-type") {
-          headers[key] = value;
-        }
-      }
-      await checkResponse(
-        await conn.fetch(upload.signedUrl, {
-          method: "POST",
-          headers,
-          body: form,
-        }),
-      );
-      return;
-    } else {
-      const headers = { ...(upload.headers ?? {}) };
-      addAzureBlobHeaders(headers, upload.signedUrl);
-      await checkResponse(
-        await conn.fetch(upload.signedUrl, {
-          method: "PUT" satisfies RequestInit["method"],
-          headers,
-          body: payload,
-        }),
-      );
-    }
+    // Delegate to the public function, using the connection's fetch
+    await uploadLogs3OverflowPayload(upload, payload, conn.fetch.bind(conn));
   }
 
   private async submitLogsRequest(
@@ -2981,7 +3004,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
               rows: overflowRows,
               sizeBytes: payloadBytes,
             });
-            await this.uploadLogs3OverflowPayload(conn, currentUpload, dataStr);
+            await this._uploadLogs3OverflowPayload(
+              conn,
+              currentUpload,
+              dataStr,
+            );
             overflowUpload = currentUpload;
           }
           await conn.post_json(
