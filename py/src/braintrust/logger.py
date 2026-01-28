@@ -89,6 +89,7 @@ from .util import (
     get_caller_location,
     mask_api_key,
     merge_dicts,
+    parse_env_var_float,
     response_raise_for_status,
 )
 
@@ -585,10 +586,6 @@ class BraintrustState:
             self._user_info = self.api_conn().get_json("ping")
         return self._user_info
 
-    def set_user_info_if_null(self, info: Mapping[str, Any]):
-        if not self._user_info:
-            self._user_info = info
-
     def global_bg_logger(self) -> "_BackgroundLogger":
         return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
 
@@ -650,14 +647,28 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
         base_num_retries: Maximum number of retries before giving up and re-raising the exception.
         backoff_factor: A multiplier used to determine the time to wait between retries.
                        The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+        default_timeout_secs: Default timeout in seconds for requests that don't specify one.
+                             Prevents indefinite hangs on stale connections.
     """
 
-    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+    def __init__(
+        self,
+        *args: Any,
+        base_num_retries: int = 0,
+        backoff_factor: float = 0.5,
+        default_timeout_secs: float = 60,
+        **kwargs: Any,
+    ):
         self.base_num_retries = base_num_retries
         self.backoff_factor = backoff_factor
+        self.default_timeout_secs = default_timeout_secs
         super().__init__(*args, **kwargs)
 
     def send(self, *args, **kwargs):
+        # Apply default timeout if none provided to prevent indefinite hangs
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.default_timeout_secs
+
         num_prev_retries = 0
         while True:
             try:
@@ -669,6 +680,14 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                 if num_prev_retries < self.base_num_retries:
+                    if isinstance(e, requests.exceptions.ReadTimeout):
+                        # Clear all connection pools to discard stale connections. This
+                        # fixes hangs caused by NAT gateways silently dropping idle TCP
+                        # connections (e.g., Azure's ~4 min timeout). close() calls
+                        # PoolManager.clear() which is thread-safe: in-flight requests
+                        # keep their checked-out connections, and new requests create
+                        # fresh pools on demand.
+                        self.close()
                     # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
                     sleep_s = self.backoff_factor * (2**num_prev_retries)
                     print("Retrying request after error:", e, file=sys.stderr)
@@ -690,14 +709,16 @@ class HTTPConnection:
     def ping(self) -> bool:
         try:
             resp = self.get("ping")
-            _state.set_user_info_if_null(resp.json())
             return resp.ok
         except requests.exceptions.ConnectionError:
             return False
 
     def make_long_lived(self) -> None:
         if not self.adapter:
-            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
+            timeout_secs = parse_env_var_float("BRAINTRUST_HTTP_TIMEOUT", 60.0)
+            self.adapter = RetryRequestExceptionsAdapter(
+                base_num_retries=10, backoff_factor=0.5, default_timeout_secs=timeout_secs
+            )
         self._reset()
 
     @staticmethod
@@ -742,6 +763,8 @@ class HTTPConnection:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
     def get_json(self, object_type: str, args: Mapping[str, Any] | None = None, retries: int = 0) -> Mapping[str, Any]:
+        # FIXME[matt]: the retry logic seems to be unused and could be n*2 because of the the retry logic
+        # in the RetryRequestExceptionsAdapter. We should probably remove this.
         tries = retries + 1
         for i in range(tries):
             resp = self.get(f"/{object_type}", params=args)
