@@ -6101,8 +6101,12 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
+    // Disable span cache since remote function spans won't be in the local cache
+    this._state.spanCache.disable();
+
     return new (getSpanComponentsClass())({
       object_type: this.parentObjectType,
+
       ...(this.parentComputeObjectMetadataArgs &&
       !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
