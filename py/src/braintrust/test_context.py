@@ -6,9 +6,7 @@ Threading tests run TWICE - with and without auto-instrumentation - to demonstra
 1. WITHOUT auto-instrumentation: Context is lost (xfail)
 2. WITH auto-instrumentation: Context is preserved (pass)
 
-Total Tests: 53 tests (40 PASSED, 13 XFAILED)
-
-ALL 13 XFAILS ARE INTENTIONAL DOCUMENTATION:
+ALL XFAILS ARE INTENTIONAL DOCUMENTATION:
 - Every xfail is the "[no_auto_instrument]" parameterized version of a test
 - The same test PASSES with "[with_auto_instrument]"
 - This proves auto-instrumentation solves the problem!
@@ -25,7 +23,7 @@ demonstrating that our auto-instrumentation solution solves the context loss pro
 REALISTIC INTEGRATION TESTS (Good Intent, Wrong Implementation):
 Each tests a different way integrations can get context propagation wrong:
 
-1. ✅ Library doing context RIGHT (e.g., LangChain)
+1. ✅ Library doing context RIGHT
    - Uses copy_context() at the right time
    - Passes WITH and WITHOUT auto-instrumentation
    - Proves: Auto-instrumentation doesn't break well-behaved libraries
@@ -1734,6 +1732,7 @@ def test_auto_instrumentation_threading_explicit(test_logger, with_memory_logger
     setup_threads()
 
     parent_seen_by_worker = None
+
     def worker_function():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
@@ -1776,6 +1775,7 @@ def test_auto_instrumentation_threadpool_explicit(test_logger, with_memory_logge
     setup_threads()
 
     parent_seen_by_worker = None
+
     def worker_task():
         nonlocal parent_seen_by_worker
         parent_seen_by_worker = current_span()
@@ -1803,66 +1803,6 @@ def test_auto_instrumentation_threadpool_explicit(test_logger, with_memory_logge
 
     parent_log = next(l for l in logs if l["span_attributes"]["name"] == "pool_explicit_parent")
     assert parent_log is not None
-
-
-# ============================================================================
-# SUMMARY TEST
-# ============================================================================
-
-
-def test_print_comprehensive_summary():
-    """
-    Print a comprehensive summary of test suite intent and current status.
-    """
-    print("\n" + "=" * 80)
-    print("BRAINTRUST CONTEXT PROPAGATION TEST SUITE SUMMARY")
-    print("=" * 80)
-    print("\nTEST PHILOSOPHY:")
-    print("  Tests document INTENDED BEHAVIOR (what users should expect)")
-    print("  Tests marked @pytest.mark.xfail indicate known issues")
-    print("  When issues are fixed, remove xfail and tests should pass")
-    print("\nEXPECTED BEHAVIOR (Intended Contract):")
-    print("  1. Context should propagate across ThreadPoolExecutor boundaries")
-    print("  2. Context should propagate across threading.Thread boundaries")
-    print("  3. Context should propagate through library wrappers")
-    print("  4. All span patterns should work: context manager, decorator, manual")
-    print("  5. Parent-child relationships should be preserved in all scenarios")
-    print("\nCURRENT STATUS (Known Issues):")
-    print("  ❌ ThreadPoolExecutor context loss")
-    print("  ❌ threading.Thread context loss")
-    print("  ❌ loop.run_in_executor context loss")
-    print("  ❌ Thread-wrapped async with queue.Queue (Google ADK, Pydantic AI sync streaming)")
-    print("  ❌ Nested thread pools lose context at each boundary")
-    print("  ❌ FastAPI background tasks")
-    print("  ❌ Data pipelines with worker threads")
-    print("\nWORKING PATTERNS:")
-    print("  ✅ asyncio.create_task() preserves context")
-    print("  ✅ asyncio.create_task() preserves context and parent relationships")
-    print("  ✅ asyncio.to_thread() preserves context (Python 3.9+)")
-    print("  ✅ asyncio.TaskGroup preserves context (Python 3.11+)")
-    print("  ✅ Async generator wrappers (real integration pattern from pydantic-ai)")
-    print("  ✅ Early breaks from generators (no context token errors)")
-    print("  ✅ Nested spans in same thread")
-    print("  ✅ Parallel async tasks have proper isolation")
-    print("  ✅ Context maintained during exception propagation")
-    print("  ✅ Async generators maintain context")
-    print("  ✅ Span lifecycle across async context boundaries (SDK handles gracefully)")
-    print("\nCONTEXT COPY PARADOX:")
-    print("  ⚠️ Libraries that CORRECTLY use copy_context() can still cause issues:")
-    print("     - Context copies are snapshots (stale current_span())")
-    print("     - Token errors when span lifecycle crosses contexts")
-    print("     - Timing matters: when the copy happens affects what's captured")
-    print("  ✅ Braintrust SDK handles these gracefully:")
-    print("     - Maintains hierarchy via explicit span tracking (not just ContextVars)")
-    print("     - Swallows expected token errors in async contexts")
-
-    print("\nNEXT STEPS:")
-    print("  1. Fix threading context propagation issues")
-    print("  2. Remove @pytest.mark.xfail from fixed tests")
-    print("  3. Add utilities for explicit context propagation")
-    print("  4. Document workarounds for current limitations")
-    print("  5. Document context copy paradox for library integrations")
-    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":

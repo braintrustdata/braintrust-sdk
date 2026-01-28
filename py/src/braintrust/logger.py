@@ -4095,9 +4095,8 @@ class SpanImpl(Span):
         if self.can_set_current:
             try:
                 self.state.context_manager.unset_current_span(self._context_token)
-            except Exception:
-                # Cleanup should never break the application
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to unset current span: {e}")
             finally:
                 # Always clear the token reference
                 self._context_token = None
@@ -4113,13 +4112,12 @@ class SpanImpl(Span):
         finally:
             try:
                 self.unset_current()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to unset current in __exit__: {e}")
 
             try:
                 self.end()
             except Exception as e:
-                # Span ending failures are serious - log as warning
                 logging.warning(f"Error ending span: {e}")
 
     def _get_parent_info(self):

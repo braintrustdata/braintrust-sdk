@@ -9,7 +9,7 @@ from wrapt import wrap_function_wrapper  # pyright: ignore[reportUnknownVariable
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["setup_threads", "wrap_thread", "wrap_thread_pool_executor"]
+__all__ = ["setup_threads", "patch_thread", "patch_thread_pool_executor"]
 
 
 def setup_threads() -> bool:
@@ -27,8 +27,8 @@ def setup_threads() -> bool:
         bool: True if instrumentation was successful, False otherwise.
     """
     try:
-        wrap_thread(threading.Thread)
-        wrap_thread_pool_executor(futures.ThreadPoolExecutor)
+        patch_thread(threading.Thread)
+        patch_thread_pool_executor(futures.ThreadPoolExecutor)
 
         logger.debug("Braintrust thread instrumentation enabled")
         return True
@@ -41,8 +41,8 @@ def setup_threads() -> bool:
 T = TypeVar("T", bound=type[threading.Thread])
 
 
-def wrap_thread(thread_cls: T) -> T:
-    if _is_patched(thread_cls):
+def patch_thread(thread_cls: T) -> T:
+    if __is_patched(thread_cls):
         return thread_cls
 
     def _wrap_thread_start(wrapped: Any, instance: Any, args: Any, kwargs: Any) -> Any:
@@ -64,24 +64,24 @@ def wrap_thread(thread_cls: T) -> T:
 
     wrap_function_wrapper(thread_cls, "run", _wrap_thread_run)
 
-    _mark_patched(thread_cls)
+    __mark_patched(thread_cls)
     return thread_cls
 
 
-def _is_patched(obj: Any) -> bool:
+def __is_patched(obj: Any) -> bool:
     """Check if an object has already been patched."""
     return getattr(obj, "_braintrust_patched", False)
 
 
-def _mark_patched(obj: Any) -> None:
+def __mark_patched(obj: Any) -> None:
     setattr(obj, "_braintrust_patched", True)
 
 
 P = TypeVar("P", bound=type[futures.ThreadPoolExecutor])
 
 
-def wrap_thread_pool_executor(executor_cls: P) -> P:
-    if _is_patched(executor_cls):
+def patch_thread_pool_executor(executor_cls: P) -> P:
+    if __is_patched(executor_cls):
         return executor_cls
 
     def _wrap_executor_submit(wrapped: Any, instance: Any, args: Any, kwargs: Any) -> Any:
@@ -110,5 +110,5 @@ def wrap_thread_pool_executor(executor_cls: P) -> P:
 
     wrap_function_wrapper(executor_cls, "submit", _wrap_executor_submit)
 
-    _mark_patched(executor_cls)
+    __mark_patched(executor_cls)
     return executor_cls
