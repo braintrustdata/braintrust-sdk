@@ -1,4 +1,36 @@
-# braintrust-adk
+# braintrust-adk (DEPRECATED)
+
+> **This package is deprecated.** ADK integration is now included in the main `braintrust` package.
+
+## Migration
+
+Update your code to use the main braintrust package:
+
+```bash
+# Remove braintrust-adk
+pip uninstall braintrust-adk
+
+# Install/upgrade braintrust
+pip install --upgrade braintrust
+```
+
+```python
+# Old (deprecated):
+from braintrust_adk import setup_adk
+setup_adk(project_name="my-project")
+
+# New (recommended):
+import braintrust
+braintrust.init_logger(project="my-project")
+braintrust.auto_instrument()  # Automatically instruments ADK and other libraries
+
+# Or for manual imports:
+from braintrust.wrappers.adk import setup_adk, wrap_agent, wrap_flow, wrap_runner
+```
+
+---
+
+# Legacy Documentation
 
 SDK for integrating [Braintrust](https://braintrust.dev) with [Google ADK (Agent Development Kit)](https://github.com/google/adk-python). This package provides automatic tracing and logging of ADK agent executions to Braintrust.
 
@@ -10,7 +42,7 @@ pip install braintrust-adk
 
 ## Requirements
 
-- Python >= 3.9
+- Python >= 3.10
 - Google ADK >= 1.14.1
 
 ## Quick Start
