@@ -27,6 +27,20 @@ class TestParseEnvVarFloat:
         finally:
             del os.environ["TEST_FLOAT"]
 
+    def test_returns_default_for_inf(self):
+        os.environ["TEST_FLOAT"] = "inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_negative_inf(self):
+        os.environ["TEST_FLOAT"] = "-inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
     def test_returns_default_for_empty_string(self):
         os.environ["TEST_FLOAT"] = ""
         try:

@@ -16,14 +16,14 @@ def parse_env_var_float(name: str, default: float) -> float:
     """Parse a float from an environment variable, returning default if invalid.
 
     Returns the default value if the env var is missing, empty, not a valid
-    float, or NaN.
+    float, NaN, or infinity.
     """
     value = os.environ.get(name)
     if value is None:
         return default
     try:
         result = float(value)
-        if math.isnan(result):
+        if math.isnan(result) or math.isinf(result):
             return default
         return result
     except (ValueError, TypeError):
