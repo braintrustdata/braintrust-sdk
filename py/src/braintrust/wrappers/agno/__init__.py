@@ -62,7 +62,6 @@ def setup_agno(
         models.base.Model = wrap_model(models.base.Model)  # pyright: ignore[reportUnknownMemberType]
         tools.function.FunctionCall = wrap_function_call(tools.function.FunctionCall)  # pyright: ignore[reportUnknownMemberType]
         return True
-    except ImportError as e:
-        logger.error(f"Failed to import Agno: {e}")
-        logger.error("Agno is not installed. Please install it with: pip install agno")
+    except ImportError:
+        # Not installed - this is expected when using auto_instrument()
         return False

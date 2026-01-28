@@ -6,6 +6,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.google_genai import setup_genai
+from braintrust.wrappers.test_utils import verify_autoinstrument_script
 from google.genai import types
 from google.genai.client import Client
 
@@ -637,3 +638,11 @@ def test_attachment_with_pydantic_model(memory_logger):
 
     # Attachment should be preserved
     assert copied["context_file"] is attachment
+
+
+class TestAutoInstrumentGoogleGenAI:
+    """Tests for auto_instrument() with Google GenAI."""
+
+    def test_auto_instrument_google_genai(self):
+        """Test auto_instrument patches Google GenAI and creates spans."""
+        verify_autoinstrument_script("test_auto_google_genai.py")

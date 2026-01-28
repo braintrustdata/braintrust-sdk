@@ -302,11 +302,6 @@ def test_to_bt_safe_special_objects():
     assert _to_bt_safe(dataset) == "<dataset>"
     assert _to_bt_safe(logger) == "<logger>"
 
-    # Clean up
-    exp.flush()
-    dataset.flush()
-    logger.flush()
-
 
 class TestBTJsonAttachments(TestCase):
     def test_to_bt_safe_attachments(self):
