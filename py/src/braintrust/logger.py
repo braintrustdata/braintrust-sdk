@@ -4017,6 +4017,9 @@ class SpanImpl(Span):
         use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
         span_components_class = SpanComponentsV4 if use_v4 else SpanComponentsV3
 
+        # Disable span cache since remote function spans won't be in the local cache
+        self.state.span_cache.disable()
+
         return span_components_class(
             object_type=self.parent_object_type,
             object_id=object_id,
