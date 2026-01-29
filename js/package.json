@@ -1,7 +1,7 @@
 {
   "name": "braintrust",
   "version": "3.0.0",
-  "description": "SDK for integrating Braintrust",
+  "description": "SDK for integrating Braintrust.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/braintrustdata/braintrust-sdk.git",
@@ -33,12 +33,12 @@
       "browser": "./dist/browser.mjs",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
-      "default": "./dist/browser.mjs"
+      "default": "./dist/index.mjs"
     },
     "./browser": {
       "import": "./dist/browser.mjs",
-      "module": "./dist/browser.mjs",
-      "require": "./dist/browser.js"
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.mjs"
     },
     "./node": {
       "types": "./dist/index.d.ts",

@@ -103,6 +103,10 @@ export {
   registerOtelFlush,
 } from "./logger";
 
+// Internal isomorph layer for platform-specific implementations
+import _internalIso from "./isomorph";
+export { _internalIso };
+
 export {
   isTemplateFormat,
   parseTemplateFormat,

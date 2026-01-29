@@ -19,21 +19,6 @@ export default defineConfig([
     clean: true,
   },
   {
-    entry: ["src/browser.ts"],
-    format: ["cjs", "esm"],
-    outDir: "dist",
-    removeNodeProtocol: false,
-    external: ["zod"],
-    dts: {
-      // Split DTS generation to reduce memory usage
-      compilerOptions: {
-        skipLibCheck: true,
-      },
-    },
-    splitting: true,
-    clean: false,
-  },
-  {
     entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
     removeNodeProtocol: false,
@@ -72,5 +57,19 @@ export default defineConfig([
     },
     splitting: true,
     clean: true,
+  },
+  // Browser/edge exports - single build used by browser, edge-light, and workerd
+  {
+    entry: {
+      browser: "src/browser.ts",
+    },
+    format: ["cjs", "esm"],
+    outDir: "dist",
+    external: ["zod"],
+    removeNodeProtocol: false,
+    platform: "browser",
+    splitting: false,
+    dts: true,
+    clean: false,
   },
 ]);

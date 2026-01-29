@@ -15,6 +15,31 @@ importers:
         specifier: ^2.5.6
         version: 2.5.6
 
+  integrations/browser-js:
+    dependencies:
+      als-browser:
+        specifier: ^1.0.1
+        version: 1.0.1
+      zod:
+        specifier: ^3.25.34 || ^4.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.5
+        version: 20.19.16
+      braintrust:
+        specifier: workspace:*
+        version: link:../../js
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(@swc/core@1.15.8)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.5.4)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.5.4
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.16)(msw@2.6.6(@types/node@20.19.16)(typescript@5.5.4))(terser@5.44.1)
+
   integrations/langchain-js:
     devDependencies:
       '@langchain/anthropic':
@@ -2667,6 +2692,9 @@ packages:
 
   ajv@8.17.1:
     resolution: {integrity: sha512-B/gBuNg5SiMTrPkC+A2+cW0RszwxYmn6VYxB/inlBStS5nx6xHIt/ehKRhIMhqusl7a8LjQoZnjCs5vhwxOQ1g==}
+
+  als-browser@1.0.1:
+    resolution: {integrity: sha512-DjavKf6zf4DFPdEmgsEM474MBjFcZG/1amv2/+WHGf61kVQWqf7XEn4jvpjFS4ssQbh/pkmYThaPfQK1ERC+3g==}
 
   ansi-align@3.0.1:
     resolution: {integrity: sha512-IOfwwBF5iczOjp/WeY4YxyjqAFMQoZufdQWDd19SEExbVLNXqvpzSJ/M7Za4/sCPmQ0+GRquoA7bGcINcxew6w==}
@@ -8582,6 +8610,8 @@ snapshots:
       fast-uri: 3.0.6
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+
+  als-browser@1.0.1: {}
 
   ansi-align@3.0.1:
     dependencies:

@@ -305,7 +305,6 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
       /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
-
   test("throws unsupported error after configureBrowser()", async () => {
     vi.resetModules();
     const { configureBrowser } = await import("./browser-config");

@@ -57,6 +57,14 @@ jobs:
           PACKED_TARBALL=$(npm pack --pack-destination artifacts)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
+      - name: Pack @braintrust/browser
+        id: prepare_browser_artifact
+        working-directory: integrations/browser-js
+        shell: bash
+        run: |
+          PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          echo "packed_browser_tarball=$PACKED_BROWSER_TARBALL" >> "$GITHUB_OUTPUT"
+
       - name: Build and pack @braintrust/otel
         id: prepare_otel_artifact
         shell: bash
@@ -102,6 +110,7 @@ jobs:
         shell: bash
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
+          echo "Browser tarball: ${{ steps.prepare_browser_artifact.outputs.packed_browser_tarball }}"
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
           echo "Templates-nunjucks tarball: ${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
           ls -la js/artifacts/
@@ -112,6 +121,7 @@ jobs:
           name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
           path: |
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
+            js/artifacts/${{ steps.prepare_browser_artifact.outputs.packed_browser_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
             js/artifacts/${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
           retention-days: 1
@@ -273,6 +283,15 @@ jobs:
             fi
           done
 
+          # Copy browser tarball to well-known path
+          for f in braintrust-browser-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-browser-latest.tgz
+              echo "Copied $f to braintrust-browser-latest.tgz"
+              break
+            fi
+          done
+
           # Copy otel tarball to well-known path
           for f in braintrust-otel-[0-9]*.tgz; do
             if [ -f "$f" ]; then
@@ -305,6 +324,7 @@ jobs:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
+          BRAINTRUST_BROWSER_TAR: ../artifacts/braintrust-browser-latest.tgz
           BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
           BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: ../artifacts/braintrust-templates-nunjucks-js-latest.tgz
           SMOKE_V2_SHARED_DIST: shared/dist

@@ -42,3 +42,22 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+### Browser Support
+
+**For browser-only applications, use the dedicated browser package:**
+
+```bash
+npm install @braintrust/browser
+```
+
+The `@braintrust/browser` package is optimized for browser environments and includes the `als-browser` polyfill for AsyncLocalStorage support. It's a standalone package with no peer dependencies.
+
+**When to use each package:**
+
+- **`braintrust`** (this package) - For Node.js applications, full-stack frameworks (Next.js, etc.), and edge runtimes with native AsyncLocalStorage (Cloudflare Workers, Vercel Edge)
+- **`@braintrust/browser`** - For browser-only applications that need AsyncLocalStorage support in standard browsers
+
+See the [@braintrust/browser README](../integrations/browser-js/README.md) for more details.
+
+**Breaking change in v3.0.0:** The `braintrust/browser` subpath export has been deprecated. Browser users should migrate to the `@braintrust/browser` package.
