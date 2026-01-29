@@ -24,6 +24,8 @@ import {
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
+  OBJECT_DELETE_FIELD,
+  OBJECT_ID_KEYS,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanComponentsV4,
@@ -68,7 +70,10 @@ import {
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+export const LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+// 6 MB for the AWS lambda gateway (from our own testing).
+export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -1337,7 +1342,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await checkResponse(
           await fetch(signedUrl, {
-            method: "PUT",
+            method: "PUT" satisfies RequestInit["method"],
             headers,
             body: data,
           }),
@@ -2332,8 +2337,134 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-function constructLogs3Data(items: string[]) {
-  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+export const logs3OverflowUploadSchema = z.object({
+  method: z.enum(["PUT", "POST"]),
+  signedUrl: z.string().url(),
+  headers: z.record(z.string()).optional(),
+  fields: z.record(z.string()).optional(),
+  key: z.string().min(1),
+});
+export type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+
+export type Logs3OverflowInputRow = {
+  object_ids: Record<string, unknown>;
+  is_delete?: boolean;
+  input_row: {
+    byte_size: number;
+  };
+};
+
+type LogItemWithMeta = {
+  str: string;
+  overflowMeta: Logs3OverflowInputRow;
+};
+
+function constructLogs3Data(items: LogItemWithMeta[]) {
+  return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
+}
+
+export function constructLogs3OverflowRequest(key: string) {
+  return {
+    rows: {
+      type: LOGS3_OVERFLOW_REFERENCE_TYPE,
+      key,
+    },
+    api_version: 2,
+  };
+}
+
+export function pickLogs3OverflowObjectIds(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const objectIds: Record<string, unknown> = {};
+  for (const key of OBJECT_ID_KEYS) {
+    if (key in row) {
+      objectIds[key] = row[key];
+    }
+  }
+  return objectIds;
+}
+
+/**
+ * Upload a logs3 overflow payload to the signed URL.
+ * This is a standalone function that can be used by both SDK and app code.
+ *
+ * @param upload - The overflow upload metadata from the API
+ * @param payload - The JSON payload string to upload
+ * @param fetchFn - Optional custom fetch function (defaults to global fetch)
+ */
+export async function uploadLogs3OverflowPayload(
+  upload: Logs3OverflowUpload,
+  payload: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  if (upload.method === "POST") {
+    if (!upload.fields) {
+      throw new Error("Missing logs3 overflow upload fields");
+    }
+    if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+      throw new Error("FormData is not available for logs3 overflow upload");
+    }
+    const form = new FormData();
+    for (const [key, value] of Object.entries(upload.fields)) {
+      form.append(key, value);
+    }
+    const contentType = upload.fields["Content-Type"] ?? "application/json";
+    form.append("file", new Blob([payload], { type: contentType }));
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(upload.headers ?? {})) {
+      if (key.toLowerCase() !== "content-type") {
+        headers[key] = value;
+      }
+    }
+    const response = await fetchFn(upload.signedUrl, {
+      method: "POST" satisfies RequestInit["method"],
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+      );
+    }
+    return;
+  }
+  const headers: Record<string, string> = { ...(upload.headers ?? {}) };
+  addAzureBlobHeaders(headers, upload.signedUrl);
+  const response = await fetchFn(upload.signedUrl, {
+    method: "PUT" satisfies RequestInit["method"],
+    headers,
+    body: payload,
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+    );
+  }
+}
+
+function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
+  const str = JSON.stringify(item);
+  const record = item as Record<string, unknown>;
+  return {
+    str,
+    overflowMeta: {
+      object_ids: pickLogs3OverflowObjectIds(record),
+      is_delete: record[OBJECT_DELETE_FIELD] === true,
+      input_row: {
+        byte_size: utf8ByteLength(str),
+      },
+    },
+  };
+}
+
+export function utf8ByteLength(value: string) {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
 }
 
 function now() {
@@ -2445,8 +2576,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
-  // 6 MB for the AWS lambda gateway (from our own testing).
-  public maxRequestSize: number = 6 * 1024 * 1024;
+  private maxRequestSizeOverride: number | null = null;
+  private _maxRequestSizePromise: Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> | null = null;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
@@ -2480,7 +2614,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
     const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
     if (!isNaN(maxRequestSizeEnv)) {
-      this.maxRequestSize = maxRequestSizeEnv;
+      this.maxRequestSizeOverride = maxRequestSizeEnv;
     }
 
     const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -2562,6 +2696,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
+  private getMaxRequestSize(): Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> {
+    if (!this._maxRequestSizePromise) {
+      this._maxRequestSizePromise = (async () => {
+        let serverLimit: number | null = null;
+        try {
+          const conn = await this.apiConn.get();
+          const versionInfo = await conn.get_json("version");
+          serverLimit =
+            z
+              .object({ logs3_payload_max_bytes: z.number().nullish() })
+              .parse(versionInfo).logs3_payload_max_bytes ?? null;
+        } catch (e) {
+          console.warn("Failed to fetch version info for payload limit:", e);
+        }
+        const validServerLimit =
+          serverLimit !== null && serverLimit > 0 ? serverLimit : null;
+        const canUseOverflow = validServerLimit !== null;
+        let maxRequestSize = DEFAULT_MAX_REQUEST_SIZE;
+        if (this.maxRequestSizeOverride !== null) {
+          maxRequestSize =
+            validServerLimit !== null
+              ? Math.min(this.maxRequestSizeOverride, validServerLimit)
+              : this.maxRequestSizeOverride;
+        } else if (validServerLimit !== null) {
+          maxRequestSize = validServerLimit;
+        }
+        return { maxRequestSize, canUseOverflow };
+      })();
+    }
+    return this._maxRequestSizePromise;
+  }
+
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -2623,20 +2792,22 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // Construct batches of records to flush in parallel and in sequence.
-    const allItemsStr = allItems.map((bucket) =>
-      bucket.map((item) => JSON.stringify(item)),
+    const allItemsWithMeta = allItems.map((bucket) =>
+      bucket.map((item) => stringifyWithOverflowMeta(item)),
     );
+    const maxRequestSizeResult = await this.getMaxRequestSize();
     const batchSets = batchItems({
-      items: allItemsStr,
+      items: allItemsWithMeta,
       batchMaxNumItems: batchSize,
-      batchMaxNumBytes: this.maxRequestSize / 2,
+      batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
+      getByteSize: (item) => item.str.length,
     });
 
     for (const batchSet of batchSets) {
       const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
-            await this.submitLogsRequest(batch);
+            await this.submitLogsRequest(batch, maxRequestSizeResult);
             return { type: "success" } as const;
           } catch (e) {
             return { type: "error", value: e } as const;
@@ -2762,9 +2933,55 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     throw new Error("Impossible");
   }
 
-  private async submitLogsRequest(items: string[]): Promise<void> {
+  private async requestLogs3OverflowUpload(
+    conn: HTTPConnection,
+    args: { rows: Logs3OverflowInputRow[]; sizeBytes: number },
+  ): Promise<Logs3OverflowUpload> {
+    let response: unknown;
+    try {
+      response = await conn.post_json("logs3/overflow", {
+        content_type: "application/json",
+        size_bytes: args.sizeBytes,
+        rows: args.rows,
+      });
+    } catch (error) {
+      const errorStr = JSON.stringify(error);
+      throw new Error(
+        `Failed to request logs3 overflow upload URL: ${errorStr}`,
+      );
+    }
+
+    try {
+      return logs3OverflowUploadSchema.parse(response);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const errorStr = JSON.stringify(error.flatten());
+        throw new Error(`Invalid response from API server: ${errorStr}`);
+      }
+      throw error;
+    }
+  }
+
+  private async _uploadLogs3OverflowPayload(
+    conn: HTTPConnection,
+    upload: Logs3OverflowUpload,
+    payload: string,
+  ): Promise<void> {
+    // Delegate to the public function, using the connection's fetch
+    await uploadLogs3OverflowPayload(upload, payload, conn.fetch.bind(conn));
+  }
+
+  private async submitLogsRequest(
+    items: LogItemWithMeta[],
+    {
+      maxRequestSize,
+      canUseOverflow,
+    }: { maxRequestSize: number; canUseOverflow: boolean },
+  ): Promise<void> {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
+    const payloadBytes = utf8ByteLength(dataStr);
+    const useOverflow = canUseOverflow && payloadBytes > maxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
@@ -2772,11 +2989,35 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
 
+    let overflowUpload: Logs3OverflowUpload | null = null;
+    const overflowRows = useOverflow
+      ? items.map((item) => item.overflowMeta)
+      : null;
+
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
-        await conn.post_json("logs3", dataStr);
+        if (overflowRows) {
+          if (!overflowUpload) {
+            const currentUpload = await this.requestLogs3OverflowUpload(conn, {
+              rows: overflowRows,
+              sizeBytes: payloadBytes,
+            });
+            await this._uploadLogs3OverflowPayload(
+              conn,
+              currentUpload,
+              dataStr,
+            );
+            overflowUpload = currentUpload;
+          }
+          await conn.post_json(
+            "logs3",
+            constructLogs3OverflowRequest(overflowUpload.key),
+          );
+        } else {
+          await conn.post_json("logs3", dataStr);
+        }
       } catch (e) {
         error = e;
       }
@@ -2796,7 +3037,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const errMsg = `log request failed. Elapsed time: ${
         (now() - startTime) / 1000
       } seconds. Payload size: ${
-        dataStr.length
+        payloadBytes
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
@@ -2861,7 +3102,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await this.unwrapLazyValues(wrappedItems);
 
       const dataStr = constructLogs3Data(
-        allItems.map((x) => JSON.stringify(x)),
+        allItems
+          .map((bucket) => bucket.map((x) => stringifyWithOverflowMeta(x)))
+          .flat(),
       );
       const attachmentStr = JSON.stringify(
         allAttachments.map((a) => a.debugInfo()),
@@ -4990,7 +5233,6 @@ export class ObjectFetcher<RecordType>
       const respJson = await resp.json();
       const mutate = this.mutateRecord;
       for (const record of respJson.data ?? []) {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         yield mutate
           ? mutate(record)
           : (record as WithTransactionId<RecordType>);

@@ -1,7 +1,9 @@
-from collections.abc import Mapping, Sequence
-from typing import Any, Optional
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Optional, TypeVar
 
 from .db_fields import IS_MERGE_FIELD, PARENT_ID_FIELD
+
+T = TypeVar("T")
 from .graph_util import UndirectedGraph, topological_sort, undirected_connected_components
 from .util import merge_dicts
 
@@ -149,13 +151,16 @@ def merge_row_batch(rows: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]
 
 
 def batch_items(
-    items: list[list[str]], batch_max_num_items: int | None = None, batch_max_num_bytes: int | None = None
-) -> list[list[list[str]]]:
+    items: list[list[T]],
+    batch_max_num_items: int | None = None,
+    batch_max_num_bytes: int | None = None,
+    get_byte_size: Callable[[T], int] | None = None,
+) -> list[list[list[T]]]:
     """Repartition the given list of items into sets of batches which can be
     published in parallel or in sequence.
 
-    Output-wise, each outer List[List[str]] is a set of batches which must be
-    published in sequence. Within each set of batches, each individual List[str]
+    Output-wise, each outer List[List[T]] is a set of batches which must be
+    published in sequence. Within each set of batches, each individual List[T]
     batch may be published in parallel with all other batches in its set,
     retaining the order within the batch. So from outside to inside, it goes
     ordered -> parallel -> ordered.
@@ -165,18 +170,21 @@ def batch_items(
     - `items` is a list of ordered buckets, where the constraint is that items
       in different buckets can be published in parallel, while items within a
       bucket must be published in sequence. That means that if two items are in
-      the same bucket, they will either appear in the same innermost List[str]
-      in the output, or in separate List[List[str]] batch sets, with their
+      the same bucket, they will either appear in the same innermost List[T]
+      in the output, or in separate List[List[T]] batch sets, with their
       relative order preserved. If two items are in different buckets, they can
-      appear in different List[str] batches.
+      appear in different List[T] batches.
 
-    - `batch_max_num_items` is the maximum number of items in each List[str]
+    - `batch_max_num_items` is the maximum number of items in each List[T]
       batch. If not provided, there is no limit on the number of items.
 
-    - `batch_max_num_bytes` is the maximum number of bytes (computed as
-      `sum(len(item) for item in batch)`) in each List[str] batch. If an
-      individual item exceeds `batch_max_num_bytes` in size, we will place it in
-      its own batch. If not provided, there is no limit on the number of bytes.
+    - `batch_max_num_bytes` is the maximum number of bytes in each List[T]
+      batch. If an individual item exceeds `batch_max_num_bytes` in size, we
+      will place it in its own batch. If not provided, there is no limit on
+      the number of bytes.
+
+    - `get_byte_size` is a function that returns the byte size of an item.
+      If not provided, defaults to `len(item)` (works for strings).
     """
 
     if batch_max_num_items is not None and batch_max_num_items <= 0:
@@ -184,18 +192,23 @@ def batch_items(
     if batch_max_num_bytes is not None and batch_max_num_bytes < 0:
         raise ValueError(f"batch_max_num_bytes must be nonnegative; got {batch_max_num_bytes}")
 
-    output = []
-    next_items = []
-    batch_set = []
-    batch = []
+    if get_byte_size is None:
+
+        def get_byte_size(item: T) -> int:
+            return len(item)  # type: ignore[arg-type]
+
+    output: list[list[list[T]]] = []
+    next_items: list[list[T]] = []
+    batch_set: list[list[T]] = []
+    batch: list[T] = []
     batch_len = 0
 
-    def add_to_batch(item):
+    def add_to_batch(item: T) -> None:
         nonlocal batch_len
         batch.append(item)
-        batch_len += len(item)
+        batch_len += get_byte_size(item)
 
-    def flush_batch():
+    def flush_batch() -> None:
         nonlocal batch, batch_len
         batch_set.append(batch)
         batch = []
@@ -205,8 +218,9 @@ def batch_items(
         for bucket in items:
             i = 0
             for item in bucket:
+                item_size = get_byte_size(item)
                 if len(batch) == 0 or (
-                    (batch_max_num_bytes is None or len(item) + batch_len < batch_max_num_bytes)
+                    (batch_max_num_bytes is None or item_size + batch_len < batch_max_num_bytes)
                     and (batch_max_num_items is None or len(batch) < batch_max_num_items)
                 ):
                     add_to_batch(item)
