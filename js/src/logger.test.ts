@@ -94,6 +94,209 @@ test("renderMessage with file content parts", () => {
   ]);
 });
 
+test("renderMessage expands image_url array from JSON string", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "text" as const,
+        text: "Look at these images:",
+      },
+      {
+        type: "image_url" as const,
+        image_url: {
+          url: "{{images}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template.replace(
+        "{{images}}",
+        '["https://example.com/img1.jpg","https://example.com/img2.jpg"]',
+      ),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "text",
+      text: "Look at these images:",
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img1.jpg",
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img2.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands file array from JSON string (file_data)", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "file" as const,
+        file: {
+          file_data: "{{files}}",
+          filename: "{{filenames}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template
+        .replace(
+          "{{files}}",
+          '["data:text/plain;base64,SGVsbG8=","data:text/plain;base64,V29ybGQ="]',
+        )
+        .replace("{{filenames}}", '["hello.txt","world.txt"]'),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "file",
+      file: {
+        file_data: "data:text/plain;base64,SGVsbG8=",
+        filename: "hello.txt",
+      },
+    },
+    {
+      type: "file",
+      file: {
+        file_data: "data:text/plain;base64,V29ybGQ=",
+        filename: "world.txt",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands file array from JSON string (file_id)", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "file" as const,
+        file: {
+          file_id: "{{fileIds}}",
+          filename: "{{filenames}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template
+        .replace("{{fileIds}}", '["file-abc123","file-def456"]')
+        .replace("{{filenames}}", '["document1.pdf","document2.pdf"]'),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "file",
+      file: {
+        file_id: "file-abc123",
+        filename: "document1.pdf",
+      },
+    },
+    {
+      type: "file",
+      file: {
+        file_id: "file-def456",
+        filename: "document2.pdf",
+      },
+    },
+  ]);
+});
+
+test("renderMessage handles single image_url (no array)", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: {
+          url: "{{image}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template.replace("{{image}}", "https://example.com/single.jpg"),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/single.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage handles mixed content with array expansion", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "text" as const,
+        text: "Check out:",
+      },
+      {
+        type: "image_url" as const,
+        image_url: {
+          url: "{{images}}",
+        },
+      },
+      {
+        type: "text" as const,
+        text: "And these files:",
+      },
+      {
+        type: "file" as const,
+        file: {
+          file_id: "{{files}}",
+        },
+      },
+    ],
+  };
+
+  const rendered = renderMessage(
+    (template) =>
+      template
+        .replace("{{images}}", '["url1.jpg","url2.jpg"]')
+        .replace("{{files}}", '["file1","file2"]'),
+    message,
+  );
+
+  expect(rendered.content).toEqual([
+    { type: "text", text: "Check out:" },
+    { type: "image_url", image_url: { url: "url1.jpg" } },
+    { type: "image_url", image_url: { url: "url2.jpg" } },
+    { type: "text", text: "And these files:" },
+    { type: "file", file: { file_id: "file1" } },
+    { type: "file", file: { file_id: "file2" } },
+  ]);
+});
+
 test("verify MemoryBackgroundLogger intercepts logs", async () => {
   // Log to memory for the tests.
   _exportsForTestingOnly.simulateLoginForTests();
