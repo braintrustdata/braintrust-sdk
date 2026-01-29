@@ -1,5 +1,22 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
-import { CachedSpanFetcher, SpanData, SpanFetchFn } from "./trace";
+import {
+  describe,
+  expect,
+  test,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
+import { CachedSpanFetcher, LocalTrace, SpanData, SpanFetchFn } from "./trace";
+import { _exportsForTestingOnly, _internalGetGlobalState } from "./logger";
+import { configureNode } from "./node";
+
+// Mock the invoke function
+vi.mock("./functions/invoke", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "./functions/invoke";
 
 describe("CachedSpanFetcher", () => {
   // Helper to create mock spans
@@ -222,5 +239,159 @@ describe("CachedSpanFetcher", () => {
       expect(fetchFn).toHaveBeenCalledWith(undefined);
       expect(result).toHaveLength(1);
     });
+  });
+});
+
+describe("LocalTrace.getThread", () => {
+  const mockedInvoke = vi.mocked(invoke);
+
+  beforeAll(async () => {
+    configureNode();
+    _exportsForTestingOnly.setInitialTestState();
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("should call invoke with correct parameters", async () => {
+    const mockThread = [
+      { role: "user", content: "Hello" },
+      { role: "assistant", content: "Hi there!" },
+    ];
+    mockedInvoke.mockResolvedValue(mockThread);
+
+    const trace = new LocalTrace({
+      objectType: "experiment",
+      objectId: "exp-123",
+      rootSpanId: "root-456",
+      state: _internalGetGlobalState(),
+    });
+
+    const result = await trace.getThread();
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+    expect(mockedInvoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        globalFunction: "project_default",
+        functionType: "preprocessor",
+        mode: "json",
+        input: {
+          trace_ref: {
+            object_type: "experiment",
+            object_id: "exp-123",
+            root_span_id: "root-456",
+          },
+        },
+      }),
+    );
+    expect(result).toEqual(mockThread);
+  });
+
+  test("should use custom preprocessor when specified", async () => {
+    const mockThread = [{ role: "user", content: "Test" }];
+    mockedInvoke.mockResolvedValue(mockThread);
+
+    const trace = new LocalTrace({
+      objectType: "project_logs",
+      objectId: "proj-789",
+      rootSpanId: "root-abc",
+      state: _internalGetGlobalState(),
+    });
+
+    await trace.getThread({ preprocessor: "custom_preprocessor" });
+
+    expect(mockedInvoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        globalFunction: "custom_preprocessor",
+        functionType: "preprocessor",
+      }),
+    );
+  });
+
+  test("should cache results for same preprocessor", async () => {
+    const mockThread = [{ role: "user", content: "Cached" }];
+    mockedInvoke.mockResolvedValue(mockThread);
+
+    const trace = new LocalTrace({
+      objectType: "experiment",
+      objectId: "exp-123",
+      rootSpanId: "root-456",
+      state: _internalGetGlobalState(),
+    });
+
+    // First call
+    const result1 = await trace.getThread();
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+
+    // Second call - should use cache
+    const result2 = await trace.getThread();
+    expect(mockedInvoke).toHaveBeenCalledTimes(1); // Still 1
+
+    expect(result1).toEqual(result2);
+  });
+
+  test("should cache separately for different preprocessors", async () => {
+    const defaultThread = [{ role: "user", content: "Default" }];
+    const customThread = [{ role: "user", content: "Custom" }];
+
+    mockedInvoke
+      .mockResolvedValueOnce(defaultThread)
+      .mockResolvedValueOnce(customThread);
+
+    const trace = new LocalTrace({
+      objectType: "experiment",
+      objectId: "exp-123",
+      rootSpanId: "root-456",
+      state: _internalGetGlobalState(),
+    });
+
+    // Call with default preprocessor
+    const result1 = await trace.getThread();
+    expect(result1).toEqual(defaultThread);
+
+    // Call with custom preprocessor - should fetch again
+    const result2 = await trace.getThread({ preprocessor: "custom" });
+    expect(result2).toEqual(customThread);
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(2);
+
+    // Call with default again - should use cache
+    const result3 = await trace.getThread();
+    expect(result3).toEqual(defaultThread);
+    expect(mockedInvoke).toHaveBeenCalledTimes(2); // Still 2
+  });
+
+  test("should return empty array when invoke returns non-array", async () => {
+    mockedInvoke.mockResolvedValue(null);
+
+    const trace = new LocalTrace({
+      objectType: "experiment",
+      objectId: "exp-123",
+      rootSpanId: "root-456",
+      state: _internalGetGlobalState(),
+    });
+
+    const result = await trace.getThread();
+    expect(result).toEqual([]);
+  });
+
+  test("should return empty array when invoke returns string", async () => {
+    mockedInvoke.mockResolvedValue("some text result");
+
+    const trace = new LocalTrace({
+      objectType: "experiment",
+      objectId: "exp-123",
+      rootSpanId: "root-456",
+      state: _internalGetGlobalState(),
+    });
+
+    const result = await trace.getThread();
+    expect(result).toEqual([]);
   });
 });

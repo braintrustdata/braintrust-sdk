@@ -324,6 +324,11 @@ export interface Evaluator<
    * Defaults to true.
    */
   summarizeScores?: boolean;
+
+  /**
+   * Flushes spans before calling scoring functions
+   */
+  flushBeforeScoring?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -1090,6 +1095,10 @@ async function runEvaluatorInternal(
               rootSpan.log({ output, metadata, expected, tags });
             } else {
               rootSpan.log({ output, metadata, expected });
+            }
+
+            if (evaluator.flushBeforeScoring) {
+              await rootSpan.flush();
             }
 
             const scoringArgs = {
