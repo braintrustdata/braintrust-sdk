@@ -44,6 +44,7 @@ verify-build: _check-git-clean build test-wheel
 verify: lint test
 
 install-build-deps:
+	python -m pip install uv==0.7.8
 	python -m uv pip install -e .
 	python -m uv pip install -r requirements-build.txt
 
