@@ -41,9 +41,6 @@ This package:
 
 - **Includes** `als-browser` polyfill for AsyncLocalStorage (bundled)
 - **Requires** `braintrust` as a peer dependency
-- **Optimized** for browser bundle size
-- **Auto-configures** browser environment on import
-- **Supports** edge runtimes with native AsyncLocalStorage (Cloudflare Workers, Vercel Edge)
 
 ## When to Use
 
@@ -51,7 +48,6 @@ Use `@braintrust/browser` when:
 
 - Building browser-only applications
 - Need AsyncLocalStorage support in standard browsers
-- Want automatic browser environment configuration
 
 Use `braintrust` directly when:
 
@@ -69,13 +65,6 @@ All browser-compatible features from the main SDK:
 - AI provider wrappers (OpenAI, Anthropic, Google)
 - Evaluation framework
 - OpenTelemetry integration
-
-## Environment Support
-
-- Modern browsers (Chrome, Firefox, Safari, Edge)
-- Edge runtimes (Cloudflare Workers, Vercel Edge)
-- React Native (with polyfills)
-- Electron renderer process
 
 ## Documentation
 

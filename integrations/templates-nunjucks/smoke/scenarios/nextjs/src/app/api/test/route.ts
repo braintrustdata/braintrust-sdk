@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import * as braintrust from "braintrust";
+import { registerTemplatePlugin, Prompt } from "braintrust";
 import { nunjucksPlugin } from "@braintrust/templates-nunjucks-js";
 
 export const runtime = "nodejs";
 
-// Register plugin
-braintrust.registerTemplatePlugin(nunjucksPlugin);
-
 export async function GET() {
+  console.log("API route called - starting dynamic imports");
   try {
+    registerTemplatePlugin(nunjucksPlugin);
+
     const results = [];
 
     // Test 1: Basic nunjucks template rendering
-    const prompt = new braintrust.Prompt(
+    const prompt = new Prompt(
       {
         id: "test-prompt-1",
         _xact_id: "test-xact",
@@ -41,7 +41,6 @@ export async function GET() {
       { items: [{ name: "apple" }, { name: "banana" }, { name: "cherry" }] },
       { templateFormat: "nunjucks" },
     );
-
     if (result.messages[0]?.content === "Items: apple, banana, cherry") {
       results.push({
         status: "pass",
@@ -58,7 +57,7 @@ export async function GET() {
     }
 
     // Test 2: Conditional rendering
-    const conditionalPrompt = new braintrust.Prompt(
+    const conditionalPrompt = new Prompt(
       {
         id: "test-prompt-2",
         _xact_id: "test-xact",

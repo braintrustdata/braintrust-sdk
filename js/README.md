@@ -60,4 +60,4 @@ The `@braintrust/browser` package is optimized for browser environments and incl
 
 See the [@braintrust/browser README](../integrations/browser-js/README.md) for more details.
 
-**Breaking change in v3.0.0:** The `braintrust/browser` subpath export has been removed. Browser users should migrate to the `@braintrust/browser` package.
+**Breaking change in v3.0.0:** The `braintrust/browser` subpath export has been deprecated. Browser users should migrate to the `@braintrust/browser` package.
