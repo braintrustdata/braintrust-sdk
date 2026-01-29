@@ -392,6 +392,12 @@ class BraintrustState:
         # different threads unintentionally use the same override.
         self._override_bg_logger = threading.local()
 
+        # Function for filtering/redacting log events before they are sent.
+        # The function receives a log event dict and can:
+        # - Return the event (potentially modified) to log it
+        # - Return None to skip logging this event
+        self._filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
+
         self.reset_login_info()
 
         self._prompt_cache = PromptCache(
@@ -588,6 +594,12 @@ class BraintrustState:
     def set_masking_function(self, masking_function: Callable[[Any], Any] | None) -> None:
         """Set the masking function on the background logger."""
         self.global_bg_logger().set_masking_function(masking_function)
+
+    def set_filtering_function(
+        self, filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None
+    ) -> None:
+        """Set the filtering function on the background logger."""
+        self.global_bg_logger().set_filtering_function(filtering_function)
 
 
 _state: BraintrustState = None  # type: ignore
@@ -823,6 +835,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         self.lock = threading.Lock()
         self.logs = []
         self.masking_function: Callable[[Any], Any] | None = None
+        self.filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
         self.upload_attempts: list[BaseAttachment] = []  # Track upload attempts
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
@@ -830,11 +843,27 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
 
     def log(self, *args: LazyValue[dict[str, Any]]) -> None:
         with self.lock:
-            self.logs.extend(args)
+            filtered_args = []
+            for arg in args:
+                # Apply filtering function before adding to logs
+                if self.filtering_function:
+                    filtered = _apply_filtering_function(arg, self)
+                    if filtered is None:
+                        # Event was filtered out, skip it
+                        continue
+                    arg = filtered
+                filtered_args.append(arg)
+            self.logs.extend(filtered_args)
 
     def set_masking_function(self, masking_function: Callable[[Any], Any] | None) -> None:
         """Set the masking function for the memory logger."""
         self.masking_function = masking_function
+
+    def set_filtering_function(
+        self, filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None
+    ) -> None:
+        """Set the filtering function for the memory logger."""
+        self.filtering_function = filtering_function
 
     def flush(self, batch_size: int | None = None):
         """Flush the memory logger, extracting attachments and tracking upload attempts."""
@@ -905,6 +934,7 @@ class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
         self.masking_function: Callable[[Any], Any] | None = None
+        self.filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
 
@@ -971,6 +1001,14 @@ class _HTTPBackgroundLogger:
         self._start()
         dropped_items = []
         for event in args:
+            # Apply filtering function before adding to queue
+            if self.filtering_function:
+                filtered = _apply_filtering_function(event, self)
+                if filtered is None:
+                    # Event was filtered out, skip it
+                    continue
+                event = filtered
+
             dropped = self.queue.put(event)
             dropped_items.extend(dropped)
 
@@ -1909,6 +1947,39 @@ def login_to_state(
     return state
 
 
+def _apply_filtering_function(
+    event: LazyValue[dict[str, Any]] | dict[str, Any], logger: _HTTPBackgroundLogger | _MemoryBackgroundLogger
+) -> LazyValue[dict[str, Any]] | dict[str, Any] | None:
+    """
+    Helper function to apply the filtering function to an event (lazy or eager).
+    Returns None if the event should be filtered out, otherwise returns the event.
+    """
+    if not logger.filtering_function:
+        return event
+
+    try:
+        # Get the actual event data
+        if isinstance(event, LazyValue):
+            event_data = event.get()
+        else:
+            event_data = event
+
+        # Apply the filtering function
+        filtered = logger.filtering_function(event_data)
+
+        if filtered is None:
+            return None
+
+        # Return in the same format as input
+        if isinstance(event, LazyValue):
+            return LazyValue(lambda: filtered, use_mutex=False)
+        else:
+            return filtered
+    except Exception:
+        # If filtering fails, log the original event
+        return event
+
+
 def set_masking_function(masking_function: Callable[[Any], Any] | None) -> None:
     """
     Set a global masking function that will be applied to all logged data before sending to Braintrust.
@@ -1918,6 +1989,44 @@ def set_masking_function(masking_function: Callable[[Any], Any] | None) -> None:
                            Set to None to disable masking.
     """
     _state.set_masking_function(masking_function)
+
+
+def set_filtering_function(
+    filtering_function: Callable[[dict[str, Any]], dict[str, Any] | None] | None
+) -> None:
+    """
+    Set a global filtering function to control which events are logged to Braintrust.
+
+    The function receives a log event dict and should return None to skip logging that event.
+    You can also return a modified event, but for redacting sensitive data, prefer using
+    set_masking_function() instead.
+
+    This is useful for:
+    - Filtering out events by tags (e.g., LangGraph's 'langsmith:hidden' tag)
+    - Skipping zero-duration spans or other overhead
+    - Filtering events by span name, score thresholds, or other criteria
+
+    Example:
+        def my_filter(event):
+            # Skip events with 'langsmith:hidden' tag
+            root_tags = event.get('tags', []) or []
+            metadata_tags = event.get('metadata', {}).get('tags', []) or []
+            if 'langsmith:hidden' in root_tags + metadata_tags:
+                return None
+
+            # Skip zero-duration spans
+            metrics = event.get('metrics', {})
+            if metrics.get('start') == metrics.get('end'):
+                return None
+
+            return event
+
+        braintrust.set_filtering_function(my_filter)
+
+    :param filtering_function: A callable that takes a log event dict and returns None to skip
+                              logging, or the event to log it. Set to None to disable filtering.
+    """
+    _state.set_filtering_function(filtering_function)
 
 
 def log(**event: Any) -> str:

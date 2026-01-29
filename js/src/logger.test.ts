@@ -17,6 +17,7 @@ import {
   Attachment,
   deepCopyEvent,
   renderMessage,
+  setFilteringFunction,
 } from "./logger";
 import {
   parseTemplateFormat,
@@ -1195,5 +1196,161 @@ describe("sensitive data redaction", () => {
     // I'm not entirely sure why a span may be inside of a background event, but just in case
     const copy = deepCopyEvent({ input: span });
     expect(copy.input).toBe("<span>");
+  });
+});
+
+describe("filtering functionality", () => {
+  let memoryLogger: any;
+
+  beforeEach(() => {
+    _exportsForTestingOnly.simulateLoginForTests();
+    memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  });
+
+  afterEach(() => {
+    setFilteringFunction(null);
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("filter out events with langsmith:hidden tag", async () => {
+    const filteredSpanIds = new Set<string>();
+
+    const filteringFunction = (event: any): any | null => {
+      const spanId = event.span_id;
+      if (spanId && filteredSpanIds.has(spanId)) {
+        return null;
+      }
+
+      const rootTags = event.tags || [];
+      const metadataTags = event.metadata?.tags || [];
+      const allTags = [...rootTags, ...metadataTags];
+
+      if (allTags.includes("langsmith:hidden")) {
+        if (spanId) {
+          filteredSpanIds.add(spanId);
+        }
+        return null;
+      }
+
+      return event;
+    };
+
+    setFilteringFunction(filteringFunction);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    logger.log({
+      input: "Hidden input",
+      output: "Hidden output",
+      tags: ["langsmith:hidden"],
+    });
+
+    logger.log({
+      input: "Normal input",
+      output: "Normal output",
+      tags: ["normal"],
+    });
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].input).toBe("Normal input");
+    expect(events[0].output).toBe("Normal output");
+  });
+
+  test("filter by score threshold", async () => {
+    const filteredSpanIds = new Set<string>();
+
+    const filteringFunction = (event: any): any | null => {
+      const spanId = event.span_id;
+      if (spanId && filteredSpanIds.has(spanId)) {
+        return null;
+      }
+
+      if (event.scores?.accuracy !== undefined && event.scores.accuracy < 0.5) {
+        if (spanId) {
+          filteredSpanIds.add(spanId);
+        }
+        return null;
+      }
+      return event;
+    };
+
+    setFilteringFunction(filteringFunction);
+
+    const experiment = _exportsForTestingOnly.initTestExperiment({
+      projectName: "test",
+      experimentName: "test-exp",
+    });
+
+    experiment.log({
+      input: "bad input",
+      output: "bad output",
+      scores: { accuracy: 0.3 },
+    });
+
+    experiment.log({
+      input: "good input",
+      output: "good output",
+      scores: { accuracy: 0.8 },
+    });
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].input).toBe("good input");
+    expect(events[0].scores.accuracy).toBe(0.8);
+  });
+
+  test("filter nested spans by name", async () => {
+    const filteredSpanIds = new Set<string>();
+
+    const filteringFunction = (event: any): any | null => {
+      const spanId = event.span_id;
+      if (spanId && filteredSpanIds.has(spanId)) {
+        return null;
+      }
+
+      if (event.span_attributes?.name === "internal_helper") {
+        if (spanId) {
+          filteredSpanIds.add(spanId);
+        }
+        return null;
+      }
+
+      return event;
+    };
+
+    setFilteringFunction(filteringFunction);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+    const parent = logger.startSpan({ name: "parent_span" });
+    parent.log({ input: "parent input", output: "parent output" });
+
+    const internalChild = parent.startSpan({ name: "internal_helper" });
+    internalChild.log({ input: "hidden input", output: "hidden output" });
+    internalChild.end();
+
+    const publicChild = parent.startSpan({ name: "public_helper" });
+    publicChild.log({ input: "public input", output: "public output" });
+    publicChild.end();
+
+    parent.end();
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    const inputEvents = events.filter((e: any) => e.input !== undefined);
+    expect(inputEvents).toHaveLength(2);
+    expect(inputEvents[0].input).toBe("parent input");
+    expect(inputEvents[1].input).toBe("public input");
   });
 });

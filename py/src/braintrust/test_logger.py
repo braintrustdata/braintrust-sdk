@@ -2187,6 +2187,224 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
     braintrust.set_masking_function(None)
 
 
+def test_filtering_function_logger(with_memory_logger, with_simulate_login):
+    """Test that filtering function can filter and redact events in Logger."""
+
+    # Track span IDs that should be filtered
+    filtered_span_ids = set()
+
+    def filtering_function(event):
+        """
+        Filter out events with 'langsmith:hidden' tag.
+        Redact sensitive metadata fields.
+        """
+        # Skip events from filtered spans
+        span_id = event.get("span_id")
+        if span_id and span_id in filtered_span_ids:
+            return None
+
+        # Skip events with langsmith:hidden tag
+        # Tags can be in two places depending on where in the processing we are:
+        # 1. At root level before processing (event["tags"])
+        # 2. In metadata after processing (event["metadata"]["tags"])
+        root_tags = event.get("tags", []) or []
+        metadata_tags = event.get("metadata", {}).get("tags", []) or []
+        all_tags = list(root_tags) + list(metadata_tags)
+
+        if "langsmith:hidden" in all_tags:
+            # Track this span ID so we filter all its events
+            if span_id:
+                filtered_span_ids.add(span_id)
+            return None
+
+        # Redact api_key from metadata
+        if "metadata" in event and "api_key" in event.get("metadata", {}):
+            event = event.copy()
+            event["metadata"] = event["metadata"].copy()
+            event["metadata"]["api_key"] = "***REDACTED***"
+
+        return event
+
+    # Set filtering function globally
+    braintrust.set_filtering_function(filtering_function)
+
+    # Create test logger
+    test_logger = init_test_logger("test_project")
+
+    # Log event that should be filtered out
+    test_logger.log(
+        input="Hidden input",
+        output="Hidden output",
+        tags=["langsmith:hidden"],
+    )
+
+    # Log event that should be redacted
+    test_logger.log(
+        input="Normal input",
+        output="Normal output",
+        metadata={"api_key": "secret123", "user": "testuser"},
+    )
+
+    # Log normal event
+    test_logger.log(
+        input="Another input",
+        output="Another output",
+        tags=["normal"],
+    )
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+
+    # Should only have 2 logs (the first one was filtered out)
+    assert len(logs) == 2
+
+    # First log should have redacted api_key
+    log1 = logs[0]
+    assert log1["input"] == "Normal input"
+    assert log1["output"] == "Normal output"
+    assert log1["metadata"]["api_key"] == "***REDACTED***"
+    assert log1["metadata"]["user"] == "testuser"
+
+    # Second log should be unchanged
+    log2 = logs[1]
+    assert log2["input"] == "Another input"
+    assert log2["output"] == "Another output"
+    assert log2["tags"] == ["normal"]
+
+    # Clean up
+    braintrust.set_filtering_function(None)
+
+
+def test_filtering_function_experiment(with_memory_logger, with_simulate_login):
+    """Test that filtering function works with Experiment spans."""
+
+    # Track filtered span IDs so we can filter all events from that span
+    filtered_span_ids = set()
+
+    def filtering_function(event):
+        """Filter out spans with score below threshold."""
+        span_id = event.get("span_id")
+
+        # Skip events from already-filtered spans
+        if span_id and span_id in filtered_span_ids:
+            return None
+
+        # Skip spans with low scores
+        scores = event.get("scores", {})
+        if "accuracy" in scores and scores["accuracy"] < 0.5:
+            if span_id:
+                filtered_span_ids.add(span_id)
+            return None
+        return event
+
+    # Set filtering function globally
+    braintrust.set_filtering_function(filtering_function)
+
+    # Create test experiment
+    experiment = init_test_exp("test_project", "test_experiment")
+
+    # Log event with low score (should be filtered out)
+    experiment.log(
+        input="bad input",
+        output="bad output",
+        scores={"accuracy": 0.3},
+    )
+
+    # Log event with good score
+    experiment.log(
+        input="good input",
+        output="good output",
+        scores={"accuracy": 0.8},
+    )
+
+    # Log event without accuracy score (but with a different score)
+    experiment.log(
+        input="neutral input",
+        output="neutral output",
+        scores={"quality": 0.9},
+    )
+
+    experiment.flush()
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+
+    # Should only have 2 logs (the first one with low score was filtered out)
+    assert len(logs) == 2
+
+    log1 = logs[0]
+    assert log1["input"] == "good input"
+    assert log1["scores"]["accuracy"] == 0.8
+
+    log2 = logs[1]
+    assert log2["input"] == "neutral input"
+    assert log2["scores"]["quality"] == 0.9
+
+    # Clean up
+    braintrust.set_filtering_function(None)
+
+
+def test_filtering_function_with_child_spans(with_memory_logger, with_simulate_login):
+    """Test that filtering function works with nested spans."""
+
+    # Track filtered span IDs
+    filtered_span_ids = set()
+
+    def filtering_function(event):
+        """Filter out spans with specific names."""
+        span_id = event.get("span_id")
+
+        # Skip events from already-filtered spans
+        if span_id and span_id in filtered_span_ids:
+            return None
+
+        # Filter out spans named "internal_helper"
+        span_attrs = event.get("span_attributes", {})
+        if span_attrs.get("name") == "internal_helper":
+            if span_id:
+                filtered_span_ids.add(span_id)
+            return None
+
+        return event
+
+    # Set filtering function globally
+    braintrust.set_filtering_function(filtering_function)
+
+    # Create test logger
+    test_logger = init_test_logger("test_project")
+
+    # Create a parent span
+    with test_logger.start_span(name="parent_span") as parent:
+        # Log to parent (should be kept)
+        parent.log(input="parent input", output="result1")
+
+        # Create a child span that should be filtered out
+        with parent.start_span(name="internal_helper") as child:
+            child.log(input="hidden input", output="hidden output")
+
+        # Create another child span that should be kept
+        with parent.start_span(name="public_helper") as child2:
+            child2.log(input="public input", output="result2")
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+
+    # Should have events from parent_span and public_helper, but not internal_helper
+    # span.log() on existing spans creates merge events, so we get 2 events
+    assert len(logs) == 2
+
+    # First should be from parent_span
+    assert logs[0]["input"] == "parent input"
+    assert logs[0]["output"] == "result1"
+
+    # Second should be from public_helper
+    assert logs[1]["input"] == "public input"
+    assert logs[1]["output"] == "result2"
+
+    # Clean up
+    braintrust.set_filtering_function(None)
+
+
 def test_attachment_unreadable_path_logs_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="braintrust"):
         Attachment(
