@@ -16,7 +16,7 @@ import { queue } from "async";
 
 import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt } from "./framework2";
+import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
@@ -28,6 +28,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  RemoteEvalParameters,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -226,10 +227,17 @@ export interface Evaluator<
 
   /**
    * A set of parameters that will be passed to the evaluator.
-   * Can contain array values that will be converted to single values in the task.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-
-  parameters?: Parameters;
+  parameters?:
+    | Parameters
+    | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+    | Promise<
+        RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+      >;
 
   /**
    * An optional name for the experiment.
@@ -391,6 +399,7 @@ export type EvaluatorFile = {
     GenericFunction<unknown, unknown>
   >[];
   prompts: CodePrompt[];
+  parameters: CodeParameters[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -474,6 +483,7 @@ declare global {
 globalThis._evals = {
   functions: [],
   prompts: [],
+  parameters: [],
   evaluators: {},
   reporters: {},
 };
@@ -813,6 +823,32 @@ export function scorerName(
   return scorer.name || `scorer_${scorer_idx}`;
 }
 
+function applySchemaDefaults<T extends Record<string, unknown>>(
+  data: T,
+  schema: Record<string, unknown>,
+): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const result = { ...data } as T;
+
+  for (const [key, schemaDef] of Object.entries(schema)) {
+    if (key in result) {
+      continue;
+    }
+
+    if (
+      typeof schemaDef === "object" &&
+      schemaDef !== null &&
+      "default" in schemaDef &&
+      schemaDef.default !== undefined
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (result as Record<string, unknown>)[key] = schemaDef.default as any;
+    }
+  }
+
+  return result;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -871,10 +907,38 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    parameters = validateParameters(
-      parameters ?? {},
-      evaluator.parameters ?? {},
-    );
+    let resolvedEvaluatorParams = evaluator.parameters;
+    if (resolvedEvaluatorParams instanceof Promise) {
+      resolvedEvaluatorParams = await resolvedEvaluatorParams;
+    }
+
+    if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
+      // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
+      const loadedData =
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        resolvedEvaluatorParams.data as unknown as InferParameters<EvalParameters>;
+
+      // Apply schema defaults to fill in missing values
+      const dataWithDefaults = applySchemaDefaults(
+        loadedData,
+        resolvedEvaluatorParams.schema,
+      );
+
+      if (parameters && Object.keys(parameters).length > 0) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        parameters = {
+          ...dataWithDefaults,
+          ...parameters,
+        } as unknown as InferParameters<EvalParameters>;
+      } else {
+        parameters = dataWithDefaults;
+      }
+    } else if (resolvedEvaluatorParams) {
+      parameters = validateParameters(
+        parameters ?? {},
+        resolvedEvaluatorParams,
+      );
+    }
 
     if ("_type" in dataResult) {
       if (dataResult._type !== "BaseExperiment") {

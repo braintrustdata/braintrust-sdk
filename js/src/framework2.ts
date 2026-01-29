@@ -15,8 +15,6 @@ import {
   type PromptDataType as PromptData,
   ToolFunctionDefinition as toolFunctionDefinitionSchema,
   type ToolFunctionDefinitionType as ToolFunctionDefinition,
-  ChatCompletionMessageParam as chatCompletionMessageParamSchema,
-  ModelParams as modelParamsSchema,
   FunctionData as functionDataSchema,
   Project as projectSchema,
   ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
@@ -30,6 +28,13 @@ import {
   PromptRowWithId,
 } from "./logger";
 import { GenericFunction } from "./framework-types";
+import type { EvalParameters } from "./eval-parameters";
+import {
+  promptDefinitionToPromptData,
+  type PromptDefinition,
+} from "./prompt-schemas";
+import { zodToJsonSchema } from "./zod/utils";
+import type { EvalParameterSerializedSchema } from "../dev/types";
 
 interface BaseFnOpts {
   name: string;
@@ -61,6 +66,7 @@ export class Project {
   public readonly id?: string;
   public tools: ToolBuilder;
   public prompts: PromptBuilder;
+  public parameters: ParametersBuilder;
   public scorers: ScorerBuilder;
 
   private _publishableCodeFunctions: CodeFunction<
@@ -72,6 +78,7 @@ export class Project {
     GenericFunction<any, any>
   >[] = [];
   private _publishablePrompts: CodePrompt[] = [];
+  private _publishableParameters: CodeParameters[] = [];
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
@@ -79,6 +86,7 @@ export class Project {
     this.id = "id" in args ? args.id : undefined;
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
+    this.parameters = new ParametersBuilder(this);
     this.scorers = new ScorerBuilder(this);
   }
 
@@ -86,6 +94,13 @@ export class Project {
     this._publishablePrompts.push(prompt);
     if (globalThis._lazy_load) {
       globalThis._evals.prompts.push(prompt);
+    }
+  }
+
+  public addParameters(parameters: CodeParameters) {
+    this._publishableParameters.push(parameters);
+    if (globalThis._lazy_load) {
+      globalThis._evals.parameters.push(parameters);
     }
   }
 
@@ -489,38 +504,6 @@ interface PromptNoTrace {
   noTrace: boolean;
 }
 
-// This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
-export const promptContentsSchema = z.union([
-  z.object({
-    prompt: z.string(),
-  }),
-  z.object({
-    messages: z.array(chatCompletionMessageParamSchema),
-  }),
-]);
-
-export type PromptContents = z.infer<typeof promptContentsSchema>;
-
-export const promptDefinitionSchema = promptContentsSchema.and(
-  z.object({
-    model: z.string(),
-    params: modelParamsSchema.optional(),
-    templateFormat: z.enum(["mustache", "nunjucks", "none"]).optional(),
-  }),
-);
-
-export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
-
-export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
-  z.object({
-    tools: z.array(toolFunctionDefinitionSchema).optional(),
-  }),
-);
-
-export type PromptDefinitionWithTools = z.infer<
-  typeof promptDefinitionWithToolsSchema
->;
-
 export type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
@@ -585,35 +568,120 @@ export class PromptBuilder {
   }
 }
 
-export function promptDefinitionToPromptData(
-  promptDefinition: PromptDefinition,
-  rawTools?: ToolFunctionDefinition[],
-): PromptData {
-  const promptBlock: PromptBlockData =
-    "messages" in promptDefinition
-      ? {
-          type: "chat",
-          messages: promptDefinition.messages,
-          tools:
-            rawTools && rawTools.length > 0
-              ? JSON.stringify(rawTools)
-              : undefined,
-        }
-      : {
-          type: "completion",
-          content: promptDefinition.prompt,
-        };
+export interface ParametersOpts<S extends EvalParameters> {
+  name: string;
+  slug?: string;
+  description?: string;
+  schema: S;
+  ifExists?: IfExists;
+  metadata?: Record<string, unknown>;
+}
 
-  return {
-    prompt: promptBlock,
-    options: {
-      model: promptDefinition.model,
-      params: promptDefinition.params,
+export class CodeParameters {
+  public readonly project: Project;
+  public readonly name: string;
+  public readonly slug: string;
+  public readonly description?: string;
+  public readonly schema: EvalParameters;
+  public readonly ifExists?: IfExists;
+  public readonly metadata?: Record<string, unknown>;
+
+  constructor(
+    project: Project,
+    opts: {
+      name: string;
+      slug: string;
+      description?: string;
+      schema: EvalParameters;
+      ifExists?: IfExists;
+      metadata?: Record<string, unknown>;
     },
-    ...(promptDefinition.templateFormat
-      ? { template_format: promptDefinition.templateFormat }
-      : {}),
-  };
+  ) {
+    this.project = project;
+    this.name = opts.name;
+    this.slug = opts.slug;
+    this.description = opts.description;
+    this.schema = opts.schema;
+    this.ifExists = opts.ifExists;
+    this.metadata = opts.metadata;
+  }
+
+  async toFunctionDefinition(
+    projectNameToId: ProjectNameIdMap,
+  ): Promise<FunctionEvent> {
+    return {
+      project_id: await projectNameToId.resolve(this.project),
+      name: this.name,
+      slug: this.slug,
+      description: this.description ?? "",
+      function_type: "parameters",
+      function_data: {
+        type: "parameters",
+        data: {},
+        __schema: makeEvalParametersSchema(this.schema),
+      },
+      if_exists: this.ifExists,
+      metadata: this.metadata,
+    };
+  }
+}
+
+export class ParametersBuilder {
+  constructor(private readonly project: Project) {}
+
+  public create<S extends EvalParameters>(opts: ParametersOpts<S>): S {
+    const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
+
+    const codeParameters = new CodeParameters(this.project, {
+      name: opts.name,
+      slug,
+      description: opts.description,
+      schema: opts.schema,
+      ifExists: opts.ifExists,
+      metadata: opts.metadata,
+    });
+
+    this.project.addParameters(codeParameters);
+
+    return opts.schema;
+  }
+}
+
+export function makeEvalParametersSchema(
+  parameters: EvalParameters,
+): EvalParameterSerializedSchema {
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      if ("type" in value && value.type === "prompt") {
+        return [
+          name,
+          {
+            type: "prompt",
+            default: value.default
+              ? promptDefinitionToPromptData(value.default)
+              : undefined,
+            description: value.description,
+          },
+        ];
+      } else {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const schemaObj = zodToJsonSchema(value as z.ZodType);
+        return [
+          name,
+          {
+            type: "data",
+            schema: schemaObj,
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            default: (schemaObj as Record<string, unknown>).default,
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            description: (schemaObj as Record<string, unknown>).description as
+              | string
+              | undefined,
+          },
+        ];
+      }
+    }),
+  );
 }
 
 export interface FunctionEvent {
