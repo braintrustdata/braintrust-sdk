@@ -82,7 +82,6 @@ import {
   renderTemplateContent,
   type TemplateFormat,
 } from "./template/renderer";
-import { renderNunjucksString } from "./template/nunjucks-env";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -104,7 +103,6 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
-import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 
@@ -6747,10 +6745,7 @@ function renderTemplatedObject(
   if (typeof obj === "string") {
     const strict = !!options.strict;
     if (options.templateFormat === "nunjucks") {
-      if (strict) {
-        lintNunjucksTemplate(obj, args);
-      }
-      return renderNunjucksString(obj, args, strict);
+      return iso.renderNunjucksString(obj, args, { strict });
     }
     if (options.templateFormat === "mustache") {
       if (strict) {
@@ -7386,4 +7381,5 @@ export const _exportsForTestingOnly = {
   isGeneratorFunction,
   isAsyncGeneratorFunction,
   resetIdGenStateForTests,
+  isomorph: iso, // Expose isomorph for build type detection
 };

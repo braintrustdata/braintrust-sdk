@@ -1,5 +1,6 @@
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsparser from "@typescript-eslint/parser";
+import nodeImport from "eslint-plugin-node-import";
 import tsupConfigImport from "./tsup.config";
 
 // Handle both ESM and CJS module formats
@@ -30,6 +31,7 @@ export default [
     },
     plugins: {
       "@typescript-eslint": tseslint,
+      "node-import": nodeImport,
     },
     rules: {
       // Base TypeScript rules
@@ -54,6 +56,9 @@ export default [
       ],
       "no-unused-expressions": ["error", { allowShortCircuit: true }],
       "@typescript-eslint/no-unused-expressions": "off",
+      // Require node: protocol for Node.js built-in imports (for Deno compatibility)
+      // This plugin automatically detects ALL Node.js built-ins - no manual list needed!
+      "node-import/prefer-node-protocol": "error",
     },
   },
   {

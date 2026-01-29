@@ -30,6 +30,8 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
+  buildType: "browser" | "node" | "unknown";
+
   getRepoInfo: (
     settings?: GitMetadataSettings,
   ) => Promise<RepoInfo | undefined>;
@@ -73,15 +75,28 @@ export interface Common {
   // zlib (promisified and type-erased).
   gunzip?: (data: any) => Promise<any>;
   gzip?: (data: any) => Promise<any>;
+
+  // Nunjucks template rendering (lints if strict is true)
+  renderNunjucksString: (
+    template: string,
+    variables: Record<string, unknown>,
+    options?: { strict?: boolean },
+  ) => string;
 }
 
 const iso: Common = {
+  buildType: "unknown", // Will be set by configureBrowser() or configureNode()
   getRepoInfo: async (_settings) => undefined,
   getPastNAncestors: async () => [],
   getEnv: (_name) => undefined,
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
+  renderNunjucksString: () => {
+    throw new Error(
+      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
+    );
+  },
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
   writeln: (text: string) => console.log(text),
 };
