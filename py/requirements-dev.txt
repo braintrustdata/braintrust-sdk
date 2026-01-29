@@ -10,6 +10,7 @@ pydoc-markdown
 pylint
 pytest
 pytest-asyncio
+pytest-forked
 pytest-vcr
 
 -r requirements-build.txt

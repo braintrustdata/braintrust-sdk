@@ -324,6 +324,11 @@ export interface Evaluator<
    * Defaults to true.
    */
   summarizeScores?: boolean;
+
+  /**
+   * Flushes spans before calling scoring functions
+   */
+  flushBeforeScoring?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -542,6 +547,18 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    * });
    */
   returnResults?: boolean;
+  /**
+   * Whether to enable the span cache for this evaluation. The span cache stores span data on disk
+   * to minimize memory usage and allow scorers to read spans without server round-trips. Defaults to true.
+   * Set to false to disable caching if you are doing distributed evaluation or want to reduce disk I/O.
+   *
+   * @example
+   * // Disable span cache
+   * await Eval("my-eval", evaluator, {
+   *   enableCache: false
+   * });
+   */
+  enableCache?: boolean;
 }
 
 export function _initializeSpanContext() {
@@ -668,6 +685,7 @@ export async function Eval<
         ...evaluator,
         data,
       };
+      const enableCache = options.enableCache ?? true;
       let ret;
       if (options.parent) {
         ret = await withParent(
@@ -681,6 +699,7 @@ export async function Eval<
               options.stream,
               options.parameters,
               shouldCollectResults,
+              enableCache,
             ),
           evaluator.state,
         );
@@ -693,6 +712,7 @@ export async function Eval<
           options.stream,
           options.parameters,
           shouldCollectResults,
+          enableCache,
         );
       }
       progressReporter.stop();
@@ -807,6 +827,7 @@ export async function runEvaluator(
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters?: InferParameters<EvalParameters>,
   collectResults = true,
+  enableCache = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
@@ -817,6 +838,7 @@ export async function runEvaluator(
     stream,
     parameters,
     collectResults,
+    enableCache,
   );
 }
 
@@ -839,10 +861,14 @@ async function runEvaluatorInternal(
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters: InferParameters<EvalParameters> | undefined,
   collectResults: boolean,
+  enableCache: boolean,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   // Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
-  (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
+  // Only start if enableCache is true (default)
+  if (enableCache) {
+    (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
+  }
   try {
     if (typeof evaluator.data === "string") {
       throw new Error("Unimplemented: string data paths");
@@ -1069,6 +1095,10 @@ async function runEvaluatorInternal(
               rootSpan.log({ output, metadata, expected, tags });
             } else {
               rootSpan.log({ output, metadata, expected });
+            }
+
+            if (evaluator.flushBeforeScoring) {
+              await rootSpan.flush();
             }
 
             const scoringArgs = {
@@ -1373,9 +1403,13 @@ async function runEvaluatorInternal(
     );
   } finally {
     // Clean up disk-based span cache after eval completes and stop caching
-    const spanCache = (evaluator.state ?? _internalGetGlobalState())?.spanCache;
-    spanCache?.dispose();
-    spanCache?.stop();
+    // Only if it was enabled
+    if (enableCache) {
+      const spanCache = (evaluator.state ?? _internalGetGlobalState())
+        ?.spanCache;
+      spanCache?.dispose();
+      spanCache?.stop();
+    }
   }
 }
 

@@ -13,7 +13,7 @@ import {
   EvalScorer,
   runEvaluator,
 } from "./framework";
-import { _exportsForTestingOnly } from "./logger";
+import { _exportsForTestingOnly, BraintrustState } from "./logger";
 import { configureNode } from "./node";
 import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
@@ -1081,4 +1081,54 @@ describe("framework2 metadata support", () => {
       );
     });
   });
+});
+
+test("Eval with enableCache: false does not use span cache", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const state = new BraintrustState({
+    apiKey: "test-api-key",
+    appUrl: "https://example.com",
+  });
+
+  const startSpy = vi.spyOn(state.spanCache, "start");
+  const stopSpy = vi.spyOn(state.spanCache, "stop");
+
+  await Eval(
+    "test-enable-cache-false",
+    {
+      data: [{ input: 1, expected: 2 }],
+      task: (input) => input * 2,
+      scores: [],
+      state,
+    },
+    { noSendLogs: true, enableCache: false },
+  );
+
+  expect(startSpy).not.toHaveBeenCalled();
+  expect(stopSpy).not.toHaveBeenCalled();
+});
+
+test("Eval with enableCache: true (default) uses span cache", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const state = new BraintrustState({
+    apiKey: "test-api-key",
+    appUrl: "https://example.com",
+  });
+
+  const startSpy = vi.spyOn(state.spanCache, "start");
+  const stopSpy = vi.spyOn(state.spanCache, "stop");
+
+  await Eval(
+    "test-enable-cache-true",
+    {
+      data: [{ input: 1, expected: 2 }],
+      task: (input) => input * 2,
+      scores: [],
+      state,
+    },
+    { noSendLogs: true }, // enableCache defaults to true
+  );
+
+  expect(startSpy).toHaveBeenCalled();
+  expect(stopSpy).toHaveBeenCalled();
 });

@@ -15,7 +15,13 @@ def setup_genai(
     api_key: str | None = None,
     project_id: str | None = None,
     project_name: str | None = None,
-):
+) -> bool:
+    """
+    Setup Braintrust integration with Google GenAI.
+
+    Returns:
+        True if setup was successful, False if google-genai is not installed.
+    """
     span = current_span()
     if span == NOOP_SPAN:
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
@@ -27,11 +33,8 @@ def setup_genai(
         genai.Client = wrap_client(genai.Client)
         models.Models = wrap_models(models.Models)
         models.AsyncModels = wrap_async_models(models.AsyncModels)
-        pass
-    except ImportError as e:
-        logger.error(
-            f"Failed to import Google ADK agents: {e}. Google ADK is not installed. Please install it with: pip install google-adk"
-        )
+        return True
+    except ImportError:
         return False
 
 
