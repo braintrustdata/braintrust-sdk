@@ -124,3 +124,26 @@ jobs:
               draft: false,
               prerelease: false
             });
+
+  notify-failure:
+    needs: [validate, build-and-publish]
+    if: always() && (needs.validate.result == 'failure' || needs.build-and-publish.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Slack on failure
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "🚨 JavaScript SDK release failed"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "🚨 JavaScript SDK Release Failed"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Tag:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.event_name }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
