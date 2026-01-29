@@ -20,7 +20,7 @@ async def test_wrap_mcp_tool_marks_as_patched():
 
     # Verify it's marked as patched
     assert hasattr(wrapped_class, "_braintrust_patched")
-    assert wrapped_class._braintrust_patched is True
+    assert wrapped_class._braintrust_patched is True  # pylint: disable=no-member
 
 
 @pytest.mark.asyncio

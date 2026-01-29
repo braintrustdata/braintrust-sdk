@@ -1,5 +1,13 @@
 # Python SDK
 
+## Before Committing
+
+Always run lint before committing changes:
+
+```bash
+make lint                    # Run pylint + formatting checks
+```
+
 ## Setup
 
 To run examples or use optional integrations, install the extra dependencies:
