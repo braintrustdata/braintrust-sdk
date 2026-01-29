@@ -28,6 +28,10 @@ warnings.warn(
 )
 
 # Re-export everything from the new location for backward compatibility
+from contextlib import aclosing
+
+from braintrust import init_logger, start_span
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.wrappers.adk import (
     _determine_llm_call_type,
     _extract_metrics,
@@ -53,6 +57,11 @@ __all__ = [
     "wrap_runner",
     "wrap_flow",
     "wrap_mcp_tool",
+    # Re-exported from braintrust for backward compatibility
+    "aclosing",
+    "bt_safe_deep_copy",
+    "init_logger",
+    "start_span",
     # Internal functions also exported for backward compatibility
     "_determine_llm_call_type",
     "_is_patched",

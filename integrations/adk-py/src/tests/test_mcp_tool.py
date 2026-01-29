@@ -28,7 +28,7 @@ async def test_wrap_mcp_tool_marks_as_patched():
 async def test_mcp_tool_execution_creates_span():
     """Test that MCP tool execution creates proper trace spans."""
 
-    with patch("braintrust_adk.start_span") as mock_start_span:
+    with patch("braintrust.wrappers.adk.start_span") as mock_start_span:
         # Setup mock span
         mock_span = MagicMock()
         mock_span.__enter__ = MagicMock(return_value=mock_span)
@@ -70,7 +70,7 @@ async def test_mcp_tool_span_captures_tool_info():
     """Test that MCP tool spans capture tool name, args, and results."""
     from braintrust.span_types import SpanTypeAttribute
 
-    with patch("braintrust_adk.start_span") as mock_start_span:
+    with patch("braintrust.wrappers.adk.start_span") as mock_start_span:
         mock_span = MagicMock()
         mock_span.__enter__ = MagicMock(return_value=mock_span)
         mock_span.__exit__ = MagicMock(return_value=False)
@@ -121,7 +121,7 @@ async def test_mcp_tool_span_captures_tool_info():
 @pytest.mark.asyncio
 async def test_mcp_tool_error_handling():
     """Test that MCP tool errors are captured in spans."""
-    with patch("braintrust_adk.start_span") as mock_start_span:
+    with patch("braintrust.wrappers.adk.start_span") as mock_start_span:
         mock_span = MagicMock()
         mock_span.__enter__ = MagicMock(return_value=mock_span)
         mock_span.__exit__ = MagicMock(return_value=False)
@@ -189,8 +189,8 @@ async def test_setup_adk_patches_mcp_tool():
         },
         clear=False,
     ):
-        with patch("braintrust_adk.init_logger"):
-            with patch("braintrust_adk.wrap_mcp_tool") as mock_wrap:
+        with patch("braintrust.wrappers.adk.init_logger"):
+            with patch("braintrust.wrappers.adk.wrap_mcp_tool") as mock_wrap:
                 result = setup_adk(project_name="test")
 
                 # Verify wrap_mcp_tool was called
@@ -201,7 +201,7 @@ async def test_setup_adk_patches_mcp_tool():
 @pytest.mark.asyncio
 async def test_setup_adk_graceful_fallback_when_mcp_unavailable():
     """Test that setup_adk gracefully handles MCP not being installed."""
-    with patch("braintrust_adk.init_logger"):
+    with patch("braintrust.wrappers.adk.init_logger"):
         # This test is tricky - we need MCP import to fail but not break other imports
         # The actual behavior is tested in integration: when MCP is not available,
         # it gets ImportError from the google.adk.tools.mcp_tool module itself
