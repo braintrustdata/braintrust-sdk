@@ -100,6 +100,9 @@ export class Project {
   public addParameters(parameters: CodeParameters) {
     this._publishableParameters.push(parameters);
     if (globalThis._lazy_load) {
+      if (globalThis._evals.parameters == null)
+        globalThis._evals.parameters = [];
+
       globalThis._evals.parameters.push(parameters);
     }
   }

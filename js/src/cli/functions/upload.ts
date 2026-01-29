@@ -121,8 +121,10 @@ export async function uploadHandleBundles({
         prompts.push(await prompt.toFunctionDefinition(projectNameToId));
       }
 
-      for (const param of result.evaluator.parameters) {
-        prompts.push(await param.toFunctionDefinition(projectNameToId));
+      if (result.evaluator.parameters != null) {
+        for (const param of result.evaluator.parameters) {
+          prompts.push(await param.toFunctionDefinition(projectNameToId));
+        }
       }
     }
 
