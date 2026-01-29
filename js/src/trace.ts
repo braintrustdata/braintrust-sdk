@@ -1,5 +1,6 @@
 import { Expr } from "../btql/ast";
 import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
+import { invoke } from "./functions/invoke";
 
 export interface TraceOptions {
   objectType: "experiment" | "project_logs" | "playground_logs";
@@ -227,6 +228,18 @@ export class CachedSpanFetcher {
 }
 
 /**
+ * Options for getThread().
+ */
+export interface GetThreadOptions {
+  /**
+   * The preprocessor to use for extracting the thread.
+   * If not specified, uses the project default preprocessor,
+   * falling back to the global "thread" preprocessor.
+   */
+  preprocessor?: string;
+}
+
+/**
  * Interface for trace objects that can be used by scorers.
  * Both the SDK's LocalTrace class and the API wrapper's WrapperTrace implement this.
  */
@@ -237,6 +250,13 @@ export interface Trace {
     root_span_id: string;
   };
   getSpans(options?: { spanType?: string[] }): Promise<SpanData[]>;
+  /**
+   * Get the thread (preprocessed messages) for this trace.
+   * Uses the project default preprocessor, falling back to the global "thread" preprocessor.
+   * @param options Options for the thread extraction.
+   * @returns The preprocessed thread as an array of messages.
+   */
+  getThread(options?: GetThreadOptions): Promise<unknown[]>;
 }
 
 /**
@@ -256,6 +276,7 @@ export class LocalTrace implements Trace {
   private spansFlushed = false;
   private spansFlushPromise: Promise<void> | null = null;
   private cachedFetcher: CachedSpanFetcher;
+  private threadCache: Map<string, Promise<unknown[]>> = new Map();
 
   constructor({
     objectType,
@@ -336,6 +357,42 @@ export class LocalTrace implements Trace {
 
     // Fall back to CachedSpanFetcher for BTQL fetching with caching
     return this.cachedFetcher.getSpans({ spanType });
+  }
+
+  /**
+   * Get the thread (preprocessed messages) for this trace.
+   * Calls the API with the project_default preprocessor (which falls back to "thread").
+   */
+  async getThread(options?: GetThreadOptions): Promise<unknown[]> {
+    const cacheKey = options?.preprocessor ?? "project_default";
+
+    if (!this.threadCache.has(cacheKey)) {
+      const promise = this.fetchThread(options);
+      this.threadCache.set(cacheKey, promise);
+    }
+
+    return this.threadCache.get(cacheKey)!;
+  }
+
+  private async fetchThread(options?: GetThreadOptions): Promise<unknown[]> {
+    await this.ensureSpansReady();
+    await this.state.login({});
+
+    const result = await invoke({
+      globalFunction: options?.preprocessor ?? "project_default",
+      functionType: "preprocessor",
+      input: {
+        trace_ref: {
+          object_type: this.objectType,
+          object_id: this.objectId,
+          root_span_id: this.rootSpanId,
+        },
+      },
+      mode: "json",
+      state: this.state,
+    });
+
+    return Array.isArray(result) ? result : [];
   }
 
   private async ensureSpansReady() {
