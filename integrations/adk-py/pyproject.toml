@@ -1,11 +1,13 @@
 [project]
 name = "braintrust-adk"
-version = "1.0.0"
+version = "0.4.0"
 description = "DEPRECATED: ADK integration is now included in the main braintrust package"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "braintrust>=0.5.2",
+    "google-adk>=1.14.1",
+    "wrapt>=1.17.3",
 ]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]
