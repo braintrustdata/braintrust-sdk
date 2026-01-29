@@ -53,6 +53,7 @@ import {
   EvalParameters,
   InferParameters,
   validateParameters,
+  validateParametersWithJsonSchema,
 } from "./eval-parameters";
 
 export type BaseExperiment<
@@ -918,10 +919,7 @@ async function runEvaluatorInternal(
     }
 
     if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
-      // todo(josh): at this point, I have a JSON schema, but I don't have something to use that JSON schema to validate my data.
-      const loadedData =
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        resolvedEvaluatorParams.data as unknown as InferParameters<EvalParameters>;
+      const loadedData = resolvedEvaluatorParams.data;
 
       // Apply schema defaults to fill in missing values
       const dataWithDefaults = applySchemaDefaults(
@@ -930,14 +928,19 @@ async function runEvaluatorInternal(
       );
 
       if (parameters && Object.keys(parameters).length > 0) {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         parameters = {
           ...dataWithDefaults,
           ...parameters,
-        } as unknown as InferParameters<EvalParameters>;
+        };
       } else {
         parameters = dataWithDefaults;
       }
+
+      // Validate the merged parameters against the JSON schema
+      parameters = validateParametersWithJsonSchema(
+        parameters ?? {},
+        resolvedEvaluatorParams.schema,
+      );
     } else if (resolvedEvaluatorParams) {
       parameters = validateParameters(
         parameters ?? {},
