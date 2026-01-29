@@ -59,6 +59,10 @@ jobs:
       contents: write
       id-token: write
 
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+      is_prerelease: ${{ steps.set_version.outputs.is_prerelease }}
+
     env:
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
@@ -73,6 +77,24 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - name: Install npm 11.6.2
         run: npm install -g npm@11.6.2
+
+      - name: Determine version
+        id: set_version
+        working-directory: js
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag-based release: extract version from tag
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#js-sdk-v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          else
+            # Pre-release: compute version from package.json + run number
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            VERSION="${CURRENT_VERSION}-rc.${{ github.run_number }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          fi
 
       # Regular release path (tag-based)
       - name: Publish to npm (regular release)
@@ -130,24 +152,15 @@ jobs:
     if: always() && needs.build-and-publish.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Extract version from tag
-        id: version
-        run: |
-          TAG="${{ github.ref_name }}"
-          if [[ "$TAG" == js-sdk-v* ]]; then
-            VERSION="${TAG#js-sdk-v}"
-          else
-            VERSION="${{ github.run_number }}-rc"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-      - name: Post to Slack on success
+      - name: Post to Slack on success (stable release)
+        if: needs.build-and-publish.outputs.is_prerelease == 'false'
         uses: slackapi/slack-github-action@v2.1.1
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             channel: C0ABHT0SWA2
-            text: "✅ JavaScript SDK v${{ steps.version.outputs.version }} published"
+            text: "✅ JavaScript SDK v${{ needs.build-and-publish.outputs.version }} published"
             blocks:
               - type: "header"
                 text:
@@ -156,7 +169,25 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Version:* ${{ steps.version.outputs.version }}\n*Package:* <https://www.npmjs.com/package/braintrust|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  text: "*Version:* ${{ needs.build-and-publish.outputs.version }}\n*Package:* <https://www.npmjs.com/package/braintrust|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+      - name: Post to Slack on success (pre-release)
+        if: needs.build-and-publish.outputs.is_prerelease == 'true'
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "🧪 JavaScript SDK pre-release v${{ needs.build-and-publish.outputs.version }} published"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "🧪 JavaScript SDK Pre-release Published"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Version:* ${{ needs.build-and-publish.outputs.version }}\n*npm tag:* `rc` (install with `npm install braintrust@rc`)\n*Package:* <https://www.npmjs.com/package/braintrust|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
 
   notify-failure:
     needs: [validate, build-and-publish]
