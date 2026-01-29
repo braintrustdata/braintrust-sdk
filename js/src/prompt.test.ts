@@ -305,4 +305,44 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
       /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
+  test("throws unsupported error after configureBrowser()", async () => {
+    vi.resetModules();
+    const { configureBrowser } = await import("./browser-config");
+    const { Prompt: BrowserConfiguredPrompt } = await import("./logger");
+
+    configureBrowser();
+
+    const prompt = new BrowserConfiguredPrompt(
+      {
+        id: "1",
+        _xact_id: "xact_123",
+        created: "2023-10-01T00:00:00Z",
+        project_id: "project_123",
+        prompt_session_id: "session_123",
+        name: "test",
+        slug: "test",
+        prompt_data: {
+          template_format: "nunjucks",
+          options: {
+            model: "gpt-4o",
+          },
+          prompt: {
+            type: "chat",
+            messages: [
+              {
+                role: "user",
+                content: "Hello {% if name %}{{name}}{% endif %}",
+              },
+            ],
+          },
+        },
+      },
+      {},
+      true,
+    );
+
+    expect(() => prompt.build({ name: "World" })).toThrowError(
+      /Nunjucks templating requires @braintrust\/template-nunjucks/,
+    );
+  });
 });

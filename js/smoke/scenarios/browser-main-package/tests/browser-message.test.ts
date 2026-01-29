@@ -58,13 +58,13 @@ test.describe("Braintrust Main Package Browser Build", () => {
     expect(testResults.hasNewId).toBe(true);
     expect(testResults.hasTraceable).toBe(true);
 
-    // Expected message from browser-isomorph.ts
+    // Expected message from browser-config.ts
     const expectedMessage =
-      "Braintrust SDK Browser Build\n" +
-      "You are using a browser-compatible build from the main package.\n" +
-      "For optimal browser support consider:\n" +
-      "  npm install @braintrust/browser\n" +
-      '  import * as braintrust from "@braintrust/browser"\n\n';
+      "This entrypoint is no longer supported.\n\n" +
+      "You should be using entrypoints:\n\n" +
+      "- `/workerd` (cloudflare envs)\n" +
+      "- `/edge-light` (next-js or other edge envs)\n\n" +
+      "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n";
 
     // Verify the full informational message appears in console
     const hasInformationalMessage = consoleMessages.some(

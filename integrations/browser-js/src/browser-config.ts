@@ -1,15 +1,6 @@
 import { _internalIso as iso, _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
-// This is copied from next.js. It seems they define AsyncLocalStorage in the edge
-// environment, even though it's not defined in the browser.
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
-
-declare global {
-  var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
-}
-// End copied code
-
 let browserConfigured = false;
 
 export function configureBrowser() {
@@ -20,18 +11,7 @@ export function configureBrowser() {
   // Set build type indicator
   iso.buildType = "browser";
 
-  // Try to use native AsyncLocalStorage if available (edge runtimes)
-  // Otherwise fall back to als-browser polyfill
-  try {
-    if (typeof AsyncLocalStorage !== "undefined") {
-      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-    } else {
-      iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
-    }
-  } catch {
-    // Fallback to polyfill if native check fails
-    iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
-  }
+  iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
@@ -40,7 +20,7 @@ export function configureBrowser() {
     return process.env[name];
   };
 
-  // Noop implementations for Node.js-only features
+  // noop implementations for git config
   iso.getRepoInfo = async () => ({
     commit: null,
     branch: null,

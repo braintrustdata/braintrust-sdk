@@ -11,12 +11,14 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "braintrust": "./dist/cli.js"
-  },
   "browser": {
     "./dist/index.js": "./dist/browser.js",
-    "./dist/index.mjs": "./dist/browser.mjs"
+    "./dist/index.d.ts": "./dist/browser.d.ts",
+    "./dist/index.mjs": "./dist/browser.mjs",
+    "./dist/index.d.mts": "./dist/browser.d.mts"
+  },
+  "bin": {
+    "braintrust": "./dist/cli.js"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -32,6 +34,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.mjs"
+    },
+    "./browser": {
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.mjs"
     },
     "./node": {
       "types": "./dist/index.d.ts",
@@ -50,12 +57,6 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
-    },
-    "./browser": {
-      "types": "./dist/browser.d.ts",
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.js",
-      "default": "./dist/browser.mjs"
     }
   },
   "files": [

@@ -2,6 +2,16 @@
 // This file is only used for the /browser, /edge-light, /workerd exports
 
 import iso from "./isomorph";
+import { _internalSetInitialState } from "./logger";
+
+// This is copied from next.js. It seems they define AsyncLocalStorage in the edge
+// environment, even though it's not defined in the browser.
+import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
+
+declare global {
+  var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
+}
+// End copied code
 
 let messageShown = false;
 let browserConfigured = false;
@@ -9,7 +19,7 @@ let browserConfigured = false;
 /**
  * Configure the isomorph for browser environments.
  */
-export function configureBrowserIsomorph(): void {
+export function configureBrowser(): void {
   if (browserConfigured) {
     return;
   }
@@ -17,17 +27,25 @@ export function configureBrowserIsomorph(): void {
   // Show informational message once
   if (!messageShown && typeof console !== "undefined") {
     console.info(
-      "Braintrust SDK Browser Build\n" +
-        "You are using a browser-compatible build from the main package.\n" +
-        "For optimal browser support consider:\n" +
-        "  npm install @braintrust/browser\n" +
-        '  import * as braintrust from "@braintrust/browser"\n\n',
+      "This entrypoint is no longer supported.\n\n" +
+        "You should be using entrypoints:\n\n" +
+        "- `/workerd` (cloudflare envs)\n" +
+        "- `/edge-light` (next-js or other edge envs)\n\n" +
+        "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n",
     );
     messageShown = true;
   }
 
   // Configure browser-safe implementations
   iso.buildType = "browser";
+
+  try {
+    if (typeof AsyncLocalStorage !== "undefined") {
+      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    }
+  } catch {
+    // Ignore
+  }
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
@@ -58,5 +76,6 @@ export function configureBrowserIsomorph(): void {
     return hashHex.repeat(8).substring(0, 64);
   };
 
+  _internalSetInitialState();
   browserConfigured = true;
 }

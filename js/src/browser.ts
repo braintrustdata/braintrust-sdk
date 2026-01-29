@@ -9,8 +9,8 @@
  *   import * as braintrust from '@braintrust/browser';
  */
 
-import { configureBrowserIsomorph } from "./src/browser-isomorph";
+import { configureBrowser } from "./browser-config";
 
-configureBrowserIsomorph();
+configureBrowser();
 
-export * from "./src/exports";
+export * from "./exports";

@@ -58,12 +58,10 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
-  // Browser/edge exports with noop isomorph
+  // Browser/edge exports - single build used by browser, edge-light, and workerd
   {
     entry: {
-      browser: "browser.ts",
-      "edge-light": "edge-light.ts",
-      workerd: "workerd.ts",
+      browser: "src/browser.ts",
     },
     format: ["cjs", "esm"],
     outDir: "dist",

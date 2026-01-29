@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import * as braintrust from "braintrust";
 import { nunjucksPlugin } from "@braintrust/templates-nunjucks-js";
 
-// Force Node.js runtime (not edge)
 export const runtime = "nodejs";
 
 // Register plugin
