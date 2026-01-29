@@ -110,11 +110,19 @@ test.describe("Braintrust SDK Browser Tests", () => {
         name: `All tests (${smoke.sections.tests.passed} passed)`,
       });
     } else {
+      // Extract individual test failures for better error reporting
+      const failureDetails = smoke.sections.tests.failures
+        .map(
+          (f) =>
+            `  • ${f.testName}: ${f.error}${f.message ? ` (${f.message})` : ""}`,
+        )
+        .join("\n");
+
       results.push({
         status: "fail",
         name: "All tests",
         error: {
-          message: `Completed: ${smoke.sections.tests.completed}, Passed: ${smoke.sections.tests.passed}, Failed: ${smoke.sections.tests.failed}`,
+          message: `Completed: ${smoke.sections.tests.completed}, Passed: ${smoke.sections.tests.passed}, Failed: ${smoke.sections.tests.failed}\n\nFailed tests:\n${failureDetails}`,
         },
       });
     }

@@ -28,7 +28,7 @@ import {
   testEvalSmoke,
 } from "../../../shared";
 
-import * as braintrust from "braintrust";
+import * as braintrust from "@braintrust/browser";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,8 +73,9 @@ app.get("/api/test", async (c) => {
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,
-        (e) => e.message.includes("Nunjucks templating is not supported"),
-        "Nunjucks not supported in browser build",
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
       ),
     ],
   });

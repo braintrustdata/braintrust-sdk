@@ -4,6 +4,7 @@
 
 import {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -25,7 +26,10 @@ import {
   testTestingExports,
   testStateManagementExports,
   testBuildResolution,
-} from "../../../shared/dist/index.js";
+  testMustacheTemplate,
+  testNunjucksTemplate,
+  testEvalSmoke,
+} from "../../../../../../js/smoke/shared/dist/index.js";
 
 async function runSharedTestSuites() {
   const braintrust = await import("braintrust");
@@ -55,6 +59,14 @@ async function runSharedTestSuites() {
       testAsyncLocalStorageTraced,
       testNestedTraced,
       testCurrentSpan,
+      testEvalSmoke,
+      testMustacheTemplate,
+      expectFailure(
+        testNunjucksTemplate,
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
+      ),
     ],
   });
 

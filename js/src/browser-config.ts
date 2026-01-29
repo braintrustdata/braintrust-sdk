@@ -1,3 +1,6 @@
+// Browser-safe isomorph that noops Node.js features
+// This file is only used for the /browser, /edge-light, /workerd exports
+
 import iso from "./isomorph";
 import { _internalSetInitialState } from "./logger";
 
@@ -10,13 +13,30 @@ declare global {
 }
 // End copied code
 
+let messageShown = false;
 let browserConfigured = false;
-export function configureBrowser() {
+
+/**
+ * Configure the isomorph for browser environments.
+ */
+export function configureBrowser(): void {
   if (browserConfigured) {
     return;
   }
 
-  // Set build type indicator
+  // Show informational message once
+  if (!messageShown && typeof console !== "undefined") {
+    console.info(
+      "This entrypoint is no longer supported.\n\n" +
+        "You should be using entrypoints:\n\n" +
+        "- `/workerd` (cloudflare envs)\n" +
+        "- `/edge-light` (next-js or other edge envs)\n\n" +
+        "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n",
+    );
+    messageShown = true;
+  }
+
+  // Configure browser-safe implementations
   iso.buildType = "browser";
 
   try {
@@ -32,12 +52,6 @@ export function configureBrowser() {
       return undefined;
     }
     return process.env[name];
-  };
-
-  iso.renderNunjucksString = () => {
-    throw new Error(
-      "Nunjucks templating is not supported in this build. Use templateFormat: 'mustache' (or omit templateFormat).",
-    );
   };
 
   // Implement browser-compatible hash function using a simple hash algorithm

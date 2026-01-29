@@ -15,4 +15,5 @@ setup:
 	fi; \
 
 test: setup
-	deno test --sloppy-imports --allow-all tests/*.test.ts
+	@# Run only tests under the local tests/ directory
+	mise exec -- deno test --sloppy-imports --allow-all tests/*.test.ts

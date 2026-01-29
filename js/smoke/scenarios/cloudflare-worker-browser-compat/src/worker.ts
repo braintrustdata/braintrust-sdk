@@ -1,4 +1,4 @@
-import * as braintrust from "braintrust";
+import * as braintrust from "@braintrust/browser";
 import {
   runTests,
   expectFailure,
@@ -64,8 +64,9 @@ export default {
           testMustacheTemplate,
           expectFailure(
             testNunjucksTemplate,
-            (e) => e.message.includes("String template rendering. Disallowed"),
-            "Nunjucks evals not supported",
+            (e: { message: string }) =>
+              e.message.includes("requires @braintrust/template-nunjucks"),
+            "Nunjucks requires separate package",
           ),
         ],
       });

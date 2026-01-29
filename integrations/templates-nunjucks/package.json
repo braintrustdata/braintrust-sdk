@@ -1,0 +1,42 @@
+{
+  "name": "@braintrust/templates-nunjucks-js",
+  "version": "0.0.1",
+  "description": "Nunjucks templating support for the Braintrust JS SDK",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -r dist/*",
+    "test": "vitest run --exclude 'smoke/scenarios/**'"
+  },
+  "author": "Braintrust Data Inc.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "nunjucks": "^3.2.4"
+  },
+  "peerDependencies": {
+    "braintrust": ">=3.0.0"
+  },
+  "devDependencies": {
+    "@types/nunjucks": "^3.2.6",
+    "@types/node": "^20.10.5",
+    "braintrust": "workspace:*",
+    "tsup": "^8.5.1",
+    "typescript": "5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

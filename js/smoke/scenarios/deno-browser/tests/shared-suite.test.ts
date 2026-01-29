@@ -32,7 +32,7 @@ import {
   testNunjucksTemplate,
   testEvalSmoke,
 } from "@braintrust/smoke-test-shared";
-import * as braintrust from "braintrust";
+import * as braintrust from "@braintrust/browser";
 
 Deno.test("Run shared test suites (browser build)", async () => {
   const { failed } = await runTests({
@@ -65,8 +65,8 @@ Deno.test("Run shared test suites (browser build)", async () => {
       expectFailure(
         testNunjucksTemplate,
         (e: { message: string }) =>
-          e.message.includes("Nunjucks templating is not supported"),
-        "Nunjucks not supported in browser build",
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
       ),
     ],
   });

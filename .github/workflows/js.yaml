@@ -57,6 +57,14 @@ jobs:
           PACKED_TARBALL=$(npm pack --pack-destination artifacts)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
 
+      - name: Pack @braintrust/browser
+        id: prepare_browser_artifact
+        working-directory: integrations/browser-js
+        shell: bash
+        run: |
+          PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          echo "packed_browser_tarball=$PACKED_BROWSER_TARBALL" >> "$GITHUB_OUTPUT"
+
       - name: Build and pack @braintrust/otel
         id: prepare_otel_artifact
         shell: bash
@@ -89,11 +97,22 @@ jobs:
           PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
 
+      - name: Build and pack @braintrust/templates-nunjucks
+        id: prepare_templates_nunjucks_artifact
+        shell: bash
+        run: |
+          cd integrations/templates-nunjucks
+          pnpm run build
+          PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
+          echo "packed_nunjucks_tarball=$PACKED_NUNJUCKS_TARBALL" >> "$GITHUB_OUTPUT"
+
       - name: List artifacts before upload
         shell: bash
         run: |
           echo "Braintrust tarball: ${{ steps.prepare_artifact.outputs.packed_tarball }}"
+          echo "Browser tarball: ${{ steps.prepare_browser_artifact.outputs.packed_browser_tarball }}"
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
+          echo "Templates-nunjucks tarball: ${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
           ls -la js/artifacts/
 
       - name: Upload build artifacts
@@ -102,7 +121,9 @@ jobs:
           name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
           path: |
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
+            js/artifacts/${{ steps.prepare_browser_artifact.outputs.packed_browser_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
+            js/artifacts/${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
           retention-days: 1
 
   api-compatibility:
@@ -210,8 +231,15 @@ jobs:
         working-directory: js/smoke
         shell: bash
         run: |
-          # Use the same auto-discovery logic as the Makefile
-          SCENARIOS=$(command find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Discovering local and integration scenarios..."
+          SCRIPTDIR="../../integrations"
+          # Local scenarios (under js/smoke/scenarios): emit their directory names
+          LOCAL=$(find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | tr '\n' ' ')
+          # Integration scenarios: emit as integration/name
+          INTEGRATIONS=$(find "$SCRIPTDIR" -type f -path '*/smoke/scenarios/*/Makefile' 2>/dev/null | sed "s|^$SCRIPTDIR/||" | sed 's|/Makefile$||' | sed 's|/smoke/scenarios/|/|' | tr '\n' ' ')
+          ALL="${LOCAL} ${INTEGRATIONS}"
+          # Convert space-separated list to JSON array
+          SCENARIOS=$(printf "%s\n" $ALL | jq -R -s -c 'split("\n") | map(select(length>0))')
           echo "scenarios=$SCENARIOS" >> "$GITHUB_OUTPUT"
           echo "Discovered scenarios: $SCENARIOS"
 
@@ -255,11 +283,29 @@ jobs:
             fi
           done
 
+          # Copy browser tarball to well-known path
+          for f in braintrust-browser-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-browser-latest.tgz
+              echo "Copied $f to braintrust-browser-latest.tgz"
+              break
+            fi
+          done
+
           # Copy otel tarball to well-known path
           for f in braintrust-otel-[0-9]*.tgz; do
             if [ -f "$f" ]; then
               cp "$f" braintrust-otel-latest.tgz
               echo "Copied $f to braintrust-otel-latest.tgz"
+              break
+            fi
+          done
+
+          # Copy templates-nunjucks-js tarball to well-known path
+          for f in braintrust-templates-nunjucks-js-[0-9]*.tgz; do
+            if [ -f "$f" ]; then
+              cp "$f" braintrust-templates-nunjucks-js-latest.tgz
+              echo "Copied $f to braintrust-templates-nunjucks-js-latest.tgz"
               break
             fi
           done
@@ -278,7 +324,9 @@ jobs:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
+          BRAINTRUST_BROWSER_TAR: ../artifacts/braintrust-browser-latest.tgz
           BRAINTRUST_OTEL_TAR: ../artifacts/braintrust-otel-latest.tgz
+          BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR: ../artifacts/braintrust-templates-nunjucks-js-latest.tgz
           SMOKE_V2_SHARED_DIST: shared/dist
         run: |
           make test ${{ matrix.scenario }}

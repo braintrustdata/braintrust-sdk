@@ -32,7 +32,7 @@ import {
   testEvalSmoke,
 } from "../../../../../../../shared";
 
-import * as braintrust from "braintrust";
+import * as braintrust from "@braintrust/browser";
 
 export const runtime = "edge";
 
@@ -68,8 +68,9 @@ export async function GET() {
       testMustacheTemplate,
       expectFailure(
         testNunjucksTemplate,
-        (e) => e.message.includes("Nunjucks templating is not supported"),
-        "Nunjucks not supported in Edge Runtime",
+        (e: { message: string }) =>
+          e.message.includes("requires @braintrust/template-nunjucks"),
+        "Nunjucks requires separate package",
       ),
     ],
   });

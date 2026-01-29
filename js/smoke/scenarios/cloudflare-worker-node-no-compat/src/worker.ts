@@ -1,6 +1,7 @@
 import * as braintrust from "braintrust/node";
 import {
   runTests,
+  expectFailure,
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
@@ -61,7 +62,12 @@ export default {
           testCurrentSpan,
           testEvalSmoke,
           testMustacheTemplate,
-          testNunjucksTemplate,
+          expectFailure(
+            testNunjucksTemplate,
+            (e: { message: string }) =>
+              e.message.includes("requires @braintrust/template-nunjucks"),
+            "Nunjucks requires separate package",
+          ),
         ],
       });
 

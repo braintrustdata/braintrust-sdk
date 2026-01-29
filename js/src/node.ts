@@ -9,8 +9,6 @@ import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
-import { renderNunjucksString as nunjucksRender } from "./template/nunjucks-env";
-import { lintTemplate as nunjucksLint } from "./template/nunjucks-utils";
 import { promisify } from "node:util";
 import * as zlib from "node:zlib";
 
@@ -25,15 +23,6 @@ export function configureNode() {
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
   iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);
-  };
-  iso.renderNunjucksString = (template, variables, options = {}) => {
-    const strict = options.strict ?? false;
-
-    if (strict) {
-      nunjucksLint(template, variables);
-    }
-
-    return nunjucksRender(template, variables, { strict });
   };
   iso.basename = path.basename;
   iso.writeln = (text: string) => process.stdout.write(text + "\n");

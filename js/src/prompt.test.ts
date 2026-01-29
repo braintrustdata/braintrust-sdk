@@ -168,8 +168,9 @@ describe("prompt template_format", () => {
       true,
     );
 
-    const result = prompt.build({ name: "World" });
-    expect(result.messages[0].content).toBe("Hello World");
+    expect(() => prompt.build({ name: "World" })).toThrow(
+      "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+    );
   });
 
   test("defaults to mustache when no templateFormat specified", () => {
@@ -258,8 +259,11 @@ describe("prompt template_format", () => {
       true,
     );
 
-    const result = prompt.build({ text: "Hello" }, { flavor: "completion" });
-    expect(result.prompt).toBe("Complete this: Hello");
+    expect(() =>
+      prompt.build({ text: "Hello" }, { flavor: "completion" }),
+    ).toThrow(
+      "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+    );
   });
 });
 
@@ -298,10 +302,9 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
     );
 
     expect(() => prompt.build({ name: "World" })).toThrowError(
-      /Nunjucks templating is not supported in this build/,
+      /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
-
   test("throws unsupported error after configureBrowser()", async () => {
     vi.resetModules();
     const { configureBrowser } = await import("./browser-config");
@@ -339,7 +342,7 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
     );
 
     expect(() => prompt.build({ name: "World" })).toThrowError(
-      /Nunjucks templating is not supported in this build/,
+      /Nunjucks templating requires @braintrust\/template-nunjucks/,
     );
   });
 });
