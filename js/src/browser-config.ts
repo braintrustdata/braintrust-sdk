@@ -54,26 +54,18 @@ export function configureBrowser(): void {
     return process.env[name];
   };
 
-  iso.getRepoInfo = async () => ({
-    commit: null,
-    branch: null,
-    tag: null,
-    dirty: false,
-  });
-
-  iso.getCallerLocation = () => undefined;
-
-  // Browser-compatible hash function (simple hash algorithm, not cryptographic)
+  // Implement browser-compatible hash function using a simple hash algorithm
   iso.hash = (data: string): string => {
+    // Simple hash function for browser compatibility
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i);
       hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
-    // Convert to hex string and make it look like a SHA-256 hash length
+    // Convert to hex string
     const hashHex = (hash >>> 0).toString(16).padStart(8, "0");
-    return hashHex.repeat(8).substring(0, 64);
+    return hashHex.repeat(8).substring(0, 64); // Make it look like a SHA-256 hash length
   };
 
   _internalSetInitialState();
