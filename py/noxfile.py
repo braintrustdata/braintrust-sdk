@@ -50,6 +50,7 @@ VENDOR_PACKAGES = (
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
     "google.genai",
+    "google.adk",
     "temporalio",
 )
 
@@ -73,6 +74,8 @@ GENAI_VERSIONS = (LATEST,)
 DSPY_VERSIONS = (LATEST,)
 # temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
+# google-adk requires Python >= 3.10; minimum 1.14.1 per original braintrust-adk package
+GOOGLE_ADK_VERSIONS = (LATEST, "1.14.1")
 
 
 @nox.session()
@@ -142,6 +145,17 @@ def test_google_genai(session, version):
     _install_test_deps(session)
     _install(session, "google-genai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_google_genai.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", GOOGLE_ADK_VERSIONS, ids=GOOGLE_ADK_VERSIONS)
+def test_google_adk(session, version):
+    """Test Google ADK integration."""
+    _install_test_deps(session)
+    _install(session, "google-adk", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_adk.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_adk_mcp_tool.py")
     _run_core_tests(session)
 
 
@@ -267,6 +281,8 @@ def pylint(session):
     session.install("opentelemetry.instrumentation.openai")
     # langsmith is needed for the wrapper module but not in VENDOR_PACKAGES
     session.install("langsmith")
+    # google-adk is in VENDOR_PACKAGES but needs explicit install for pylint
+    session.install("google-adk")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
     files = result.strip().splitlines()
