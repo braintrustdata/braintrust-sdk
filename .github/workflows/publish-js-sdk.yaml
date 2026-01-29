@@ -125,6 +125,39 @@ jobs:
               prerelease: false
             });
 
+  notify-success:
+    needs: [validate, build-and-publish]
+    if: always() && needs.build-and-publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" == js-sdk-v* ]]; then
+            VERSION="${TAG#js-sdk-v}"
+          else
+            VERSION="${{ github.run_number }}-rc"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Post to Slack on success
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "✅ JavaScript SDK v${{ steps.version.outputs.version }} published"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "✅ JavaScript SDK Published"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Version:* ${{ steps.version.outputs.version }}\n*Package:* <https://www.npmjs.com/package/braintrust|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+
   notify-failure:
     needs: [validate, build-and-publish]
     if: always() && (needs.validate.result == 'failure' || needs.build-and-publish.result == 'failure')
