@@ -5,6 +5,7 @@ from contextlib import contextmanager
 
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 from braintrust.wrappers._anthropic_utils import Wrapper, extract_anthropic_usage, finalize_anthropic_tokens
+from wrapt import wrap_function_wrapper
 
 log = logging.getLogger(__name__)
 
@@ -358,3 +359,66 @@ def wrap_anthropic(client):
 
 def wrap_anthropic_client(client):
     return wrap_anthropic(client)
+
+
+def _apply_anthropic_wrapper(client):
+    """Apply tracing wrapper to an Anthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _apply_async_anthropic_wrapper(client):
+    """Apply tracing wrapper to an AsyncAnthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for Anthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_anthropic_wrapper(instance)
+
+
+def _async_anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for AsyncAnthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_async_anthropic_wrapper(instance)
+
+
+def patch_anthropic() -> bool:
+    """
+    Patch Anthropic to add Braintrust tracing globally.
+
+    After calling this, all new Anthropic() and AsyncAnthropic() clients
+    will automatically have tracing enabled.
+
+    Returns:
+        True if Anthropic was patched (or already patched), False if Anthropic is not installed.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_anthropic()
+
+        import anthropic
+        client = anthropic.Anthropic()
+        # All calls are now traced!
+        ```
+    """
+    try:
+        import anthropic
+
+        if getattr(anthropic, "__braintrust_wrapped__", False):
+            return True  # Already patched
+
+        wrap_function_wrapper("anthropic", "Anthropic.__init__", _anthropic_init_wrapper)
+        wrap_function_wrapper("anthropic", "AsyncAnthropic.__init__", _async_anthropic_init_wrapper)
+        anthropic.__braintrust_wrapped__ = True
+        return True
+
+    except ImportError:
+        return False

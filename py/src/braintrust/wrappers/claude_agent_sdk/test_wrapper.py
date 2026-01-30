@@ -23,6 +23,7 @@ from braintrust.wrappers.claude_agent_sdk._wrapper import (
     _create_client_wrapper_class,
     _create_tool_wrapper_class,
 )
+from braintrust.wrappers.test_utils import verify_autoinstrument_script
 
 PROJECT_NAME = "test-claude-agent-sdk"
 TEST_MODEL = "claude-haiku-4-5-20251001"
@@ -283,3 +284,11 @@ async def _multi_message_generator():
     """Generator yielding multiple messages."""
     yield _make_message("Part 1")
     yield _make_message("Part 2")
+
+
+class TestAutoInstrumentClaudeAgentSDK:
+    """Tests for auto_instrument() with Claude Agent SDK."""
+
+    def test_auto_instrument_claude_agent_sdk(self):
+        """Test auto_instrument patches Claude Agent SDK and creates spans."""
+        verify_autoinstrument_script("test_auto_claude_agent_sdk.py")

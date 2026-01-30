@@ -673,6 +673,7 @@ def _EvalCommon(
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
     state: BraintrustState | None = None,
+    enable_cache: bool = True,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -759,7 +760,7 @@ def _EvalCommon(
         async def run_to_completion():
             with parent_context(parent, state):
                 try:
-                    ret = await run_evaluator(experiment, evaluator, 0, [], stream, state)
+                    ret = await run_evaluator(experiment, evaluator, 0, [], stream, state, enable_cache)
                     reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
                     return ret
                 finally:
@@ -798,6 +799,7 @@ async def EvalAsync(
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
     state: BraintrustState | None = None,
+    enable_cache: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -855,6 +857,8 @@ async def EvalAsync(
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
     the object or span specified by this parent.
     :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
+    :param enable_cache: Whether to enable the span cache for this evaluation. Defaults to True. The span cache stores
+    span data on disk to minimize memory usage and allow scorers to read spans without server round-trips.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -883,6 +887,7 @@ async def EvalAsync(
         stream=stream,
         parent=parent,
         state=state,
+        enable_cache=enable_cache,
     )
 
     return await f()
@@ -918,6 +923,7 @@ def Eval(
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
     state: BraintrustState | None = None,
+    enable_cache: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -975,6 +981,8 @@ def Eval(
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
     the object or span specified by this parent.
     :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
+    :param enable_cache: Whether to enable the span cache for this evaluation. Defaults to True. The span cache stores
+    span data on disk to minimize memory usage and allow scorers to read spans without server round-trips.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -1005,6 +1013,7 @@ def Eval(
         stream=stream,
         parent=parent,
         state=state,
+        enable_cache=enable_cache,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1249,10 +1258,11 @@ async def run_evaluator(
     filters: list[Filter],
     stream: Callable[[SSEProgressEvent], None] | None = None,
     state: BraintrustState | None = None,
+    enable_cache: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
-        _run_evaluator_internal(experiment, evaluator, position, filters, stream, state), evaluator.timeout
+        _run_evaluator_internal(experiment, evaluator, position, filters, stream, state, enable_cache), evaluator.timeout
     )
 
     if experiment:
@@ -1280,6 +1290,7 @@ async def _run_evaluator_internal(
     filters: list[Filter],
     stream: Callable[[SSEProgressEvent], None] | None = None,
     state: BraintrustState | None = None,
+    enable_cache: bool = True,
 ):
     # Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
     if state is None:
@@ -1287,13 +1298,15 @@ async def _run_evaluator_internal(
 
         state = _internal_get_global_state()
 
-    state.span_cache.start()
+    if enable_cache:
+        state.span_cache.start()
     try:
         return await _run_evaluator_internal_impl(experiment, evaluator, position, filters, stream, state)
     finally:
         # Clean up disk-based span cache after eval completes and stop caching
-        state.span_cache.dispose()
-        state.span_cache.stop()
+        if enable_cache:
+            state.span_cache.dispose()
+            state.span_cache.stop()
 
 
 async def _run_evaluator_internal_impl(

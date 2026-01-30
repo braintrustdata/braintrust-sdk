@@ -833,6 +833,16 @@ def test_span_project_id_logged_in(with_memory_logger, with_simulate_login):
     )
 
 
+def test_span_export_disables_cache(with_memory_logger):
+    """Test that span.export() disables the span cache."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Exporting should disable the span cache
+        span.export()
+        assert logger.state.span_cache.disabled
+
+
 def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
     init_logger(project="test-project")
     span = logger.start_span(name="test-span")
