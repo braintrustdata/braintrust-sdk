@@ -150,6 +150,82 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(messages[0]).toMatchObject({ type: "assistant" });
     expect(messages[2]).toMatchObject({ type: "result" });
   });
+
+  test("injects PreToolUse and PostToolUse hooks for tracing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    // Consume the generator to trigger the query
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Verify hooks were injected
+    expect(capturedOptions).toBeDefined();
+    expect(capturedOptions.hooks).toBeDefined();
+    expect(capturedOptions.hooks.PreToolUse).toBeDefined();
+    expect(capturedOptions.hooks.PreToolUse.length).toBeGreaterThan(0);
+    expect(capturedOptions.hooks.PostToolUse).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUse.length).toBeGreaterThan(0);
+  });
+
+  test("preserves user-provided hooks when injecting tracing hooks", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+    const userPreHook = vi.fn().mockResolvedValue({});
+    const userPostHook = vi.fn().mockResolvedValue({});
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    // Consume the generator with user-provided hooks
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: {
+        model: "test-model",
+        hooks: {
+          PreToolUse: [{ hooks: [userPreHook] }],
+          PostToolUse: [{ hooks: [userPostHook] }],
+        },
+      },
+    })) {
+      // consume
+    }
+
+    // Verify user hooks are preserved AND our hooks are added
+    expect(capturedOptions.hooks.PreToolUse.length).toBeGreaterThanOrEqual(2);
+    expect(capturedOptions.hooks.PostToolUse.length).toBeGreaterThanOrEqual(2);
+
+    // User hooks should be first (they were provided first)
+    expect(capturedOptions.hooks.PreToolUse[0].hooks[0]).toBe(userPreHook);
+    expect(capturedOptions.hooks.PostToolUse[0].hooks[0]).toBe(userPostHook);
+  });
 });
 
 // Try to import the Claude Agent SDK - skip tests if not available
@@ -303,6 +379,7 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     });
 
     // Verify tool spans (calculator should be called at least twice: multiply, subtract)
+    // Note: Tool names from hooks include the MCP server prefix: mcp__<server>__<tool>
     const toolSpans = spans.filter(
       (s) => (s["span_attributes"] as Record<string, unknown>).type === "tool",
     );
@@ -313,11 +390,12 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     }
     expect(toolSpans.length).toBeGreaterThanOrEqual(1);
     toolSpans.forEach((span) => {
+      // Tool name includes MCP server prefix
       expect((span["span_attributes"] as Record<string, unknown>).name).toBe(
-        "calculator",
+        "mcp__calculator__calculator",
       );
       expect((span.metadata as Record<string, string>).tool_name).toBe(
-        "calculator",
+        "mcp__calculator__calculator",
       );
     });
 
