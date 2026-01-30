@@ -141,7 +141,12 @@ function createToolTracingHooks(
       spanAttributes: { type: SpanTypeAttribute.TOOL },
       event: {
         input: input.tool_input,
-        metadata: { tool_name: input.tool_name },
+        metadata: {
+          tool_name: input.tool_name,
+          tool_use_id: toolUseID,
+          session_id: input.session_id,
+          cwd: input.cwd,
+        },
       },
       parent: parentExport,
     });
@@ -174,7 +179,10 @@ function createToolTracingHooks(
       toolSpan.log({
         error: input.error,
         metadata: {
+          tool_name: input.tool_name,
+          tool_use_id: toolUseID,
           is_interrupt: input.is_interrupt,
+          session_id: input.session_id,
         },
       });
       toolSpan.end();
@@ -197,7 +205,7 @@ function createSubagentTracingHooks(
   activeSubagentSpans: Map<string, ReturnType<typeof startSpan>>,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
 ): { subagentStart: HookCallback; subagentStop: HookCallback } {
-  // Note: SubagentStart hook is not reliably called by the SDK.
+  // Note: SubagentStart hook is not reliably called by the SDK (see GitHub issue #14859).
   // The Task tool spawn is already traced via PreToolUse/PostToolUse.
   const subagentStart: HookCallback = async (input) => {
     if (input.hook_event_name !== "SubagentStart") {
@@ -212,6 +220,9 @@ function createSubagentTracingHooks(
         metadata: {
           agent_id: input.agent_id,
           agent_type: input.agent_type,
+          session_id: input.session_id,
+          cwd: input.cwd,
+          transcript_path: input.transcript_path,
         },
       },
       parent: parentExport,
@@ -236,8 +247,10 @@ function createSubagentTracingHooks(
     if (subagentSpan) {
       subagentSpan.log({
         metadata: {
+          agent_id: input.agent_id,
           agent_transcript_path: input.agent_transcript_path,
           stop_hook_active: input.stop_hook_active,
+          session_id: input.session_id,
         },
       });
       subagentSpan.end();
@@ -248,8 +261,10 @@ function createSubagentTracingHooks(
       if (toolSpan) {
         toolSpan.log({
           metadata: {
+            is_subagent: true,
             subagent_session_id: input.session_id,
             subagent_transcript_path: input.transcript_path,
+            subagent_stop_hook_active: input.stop_hook_active,
           },
         });
       }
