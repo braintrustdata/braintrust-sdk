@@ -1,0 +1,16 @@
+diff --git a/index.js b/index.js
+index 9581e19869e9df70ebecb7ff56313c0ccdcaf9a9..cd725f76d539218fe3c87c3003db3f6cf85ef91d 100644
+--- a/index.js
++++ b/index.js
+@@ -3,7 +3,10 @@
+ var sep = require('path').sep
+ 
+ module.exports = function (file) {
+-  var segments = file.split(sep)
++  // Normalize path separators to platform-native separator
++  // On Windows, replace forward slashes with backslashes so split works correctly
++  var normalizedFile = sep === '\\' ? file.replace(/\//g, '\\') : file
++  var segments = normalizedFile.split(sep)
+   var index = segments.lastIndexOf('node_modules')
+ 
+   if (index === -1) return
