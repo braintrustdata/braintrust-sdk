@@ -46,7 +46,6 @@ import {
   type AttachmentReferenceType as AttachmentReference,
   BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
   type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
-  InlineAttachmentReference as InlineAttachmentReferenceSchema,
   BraintrustModelParams as braintrustModelParamsSchema,
   ChatCompletionTool as chatCompletionToolSchema,
   type ChatCompletionToolType as ChatCompletionTool,
@@ -109,6 +108,18 @@ import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils"
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
+
+// Manual type definition for inline attachments (not in generated_types)
+const InlineAttachmentReferenceSchema = z.object({
+  type: z.literal("inline_attachment"),
+  src: z.string().min(1),
+  content_type: z.string().optional(),
+  filename: z.string().optional(),
+});
+
+type InlineAttachmentReference = z.infer<
+  typeof InlineAttachmentReferenceSchema
+>;
 
 // Context management interfaces
 export interface ContextParentSpanIds {
