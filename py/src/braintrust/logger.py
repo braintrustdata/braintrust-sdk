@@ -762,20 +762,10 @@ class HTTPConnection:
     def delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def get_json(self, object_type: str, args: Mapping[str, Any] | None = None, retries: int = 0) -> Mapping[str, Any]:
-        # FIXME[matt]: the retry logic seems to be unused and could be n*2 because of the the retry logic
-        # in the RetryRequestExceptionsAdapter. We should probably remove this.
-        tries = retries + 1
-        for i in range(tries):
-            resp = self.get(f"/{object_type}", params=args)
-            if i < tries - 1 and not resp.ok:
-                _logger.warning(f"Retrying API request {object_type} {args} {resp.status_code} {resp.text}")
-                continue
-            response_raise_for_status(resp)
-
-            return resp.json()
-        # Needed for type checking.
-        raise Exception("unreachable")
+    def get_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        resp = self.get(f"/{object_type}", params=args)
+        response_raise_for_status(resp)
+        return resp.json()
 
     def post_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Any:
         resp = self.post(f"/{object_type.lstrip('/')}", json=args)
@@ -939,15 +929,12 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
 
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            merged = merge_row_batch(logs)
-            first = merged[0]
-            for other in merged[1:]:
-                first.extend(other)
+            batch = merge_row_batch(logs)
 
             # Apply masking after merge, similar to HTTPBackgroundLogger
             if self.masking_function:
-                for i in range(len(first)):
-                    item = first[i]
+                for i in range(len(batch)):
+                    item = batch[i]
                     masked_item = item.copy()
 
                     # Only mask specific fields if they exist
@@ -965,9 +952,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
                             else:
                                 masked_item[field] = masked_value
 
-                    first[i] = masked_item
+                    batch[i] = masked_item
 
-            return first
+            return batch
 
 
 BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
@@ -1141,35 +1128,35 @@ class _HTTPBackgroundLogger:
             if len(all_items) == 0:
                 return
 
-            # Construct batches of records to flush in parallel and in sequence.
-            all_items_with_meta = [[stringify_with_overflow_meta(item) for item in bucket] for bucket in all_items]
+            # Construct batches of records to flush in parallel.
+            all_items_with_meta = [stringify_with_overflow_meta(item) for item in all_items]
             max_request_size_result = self._get_max_request_size()
-            batch_sets = batch_items(
+            batches = batch_items(
                 items=all_items_with_meta,
                 batch_max_num_items=batch_size,
                 batch_max_num_bytes=max_request_size_result["max_request_size"] // 2,
                 get_byte_size=lambda item: len(item.str_value),
             )
-            for batch_set in batch_sets:
-                post_promises = []
-                try:
-                    post_promises = [
-                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch, max_request_size_result)
-                        for batch in batch_set
-                    ]
-                except RuntimeError:
-                    # If the thread pool has shut down, e.g. because the process
-                    # is terminating, run the requests the old fashioned way.
-                    for batch in batch_set:
-                        self._submit_logs_request(batch, max_request_size_result)
 
-                concurrent.futures.wait(post_promises)
-                # Raise any exceptions from the promises as one group.
-                post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
-                if post_promise_exceptions:
-                    raise exceptiongroup.BaseExceptionGroup(
-                        f"Encountered the following errors while logging:", post_promise_exceptions
-                    )
+            post_promises = []
+            try:
+                post_promises = [
+                    HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch, max_request_size_result)
+                    for batch in batches
+                ]
+            except RuntimeError:
+                # If the thread pool has shut down, e.g. because the process
+                # is terminating, run the requests the old fashioned way.
+                for batch in batches:
+                    self._submit_logs_request(batch, max_request_size_result)
+
+            concurrent.futures.wait(post_promises)
+            # Raise any exceptions from the promises as one group.
+            post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
+            if post_promise_exceptions:
+                raise exceptiongroup.BaseExceptionGroup(
+                    f"Encountered the following errors while logging:", post_promise_exceptions
+                )
 
             attachment_errors: list[Exception] = []
             for attachment in attachments:
@@ -1190,42 +1177,40 @@ class _HTTPBackgroundLogger:
 
     def _unwrap_lazy_values(
         self, wrapped_items: Sequence[LazyValue[dict[str, Any]]]
-    ) -> tuple[list[list[dict[str, Any]]], list["BaseAttachment"]]:
+    ) -> tuple[list[dict[str, Any]], list["BaseAttachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
-                batched_items = merge_row_batch(unwrapped_items)
+                merged_items = merge_row_batch(unwrapped_items)
 
                 # Apply masking after merging but before sending to backend
                 if self.masking_function:
-                    for batch_idx in range(len(batched_items)):
-                        for item_idx in range(len(batched_items[batch_idx])):
-                            item = batched_items[batch_idx][item_idx]
-                            masked_item = item.copy()
+                    for item_idx in range(len(merged_items)):
+                        item = merged_items[item_idx]
+                        masked_item = item.copy()
 
-                            # Only mask specific fields if they exist
-                            for field in REDACTION_FIELDS:
-                                if field in item:
-                                    masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
-                                    if isinstance(masked_value, _MaskingError):
-                                        # Drop the field and add error message
-                                        if field in masked_item:
-                                            del masked_item[field]
-                                        if "error" in masked_item:
-                                            masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
-                                        else:
-                                            masked_item["error"] = masked_value.error_msg
+                        # Only mask specific fields if they exist
+                        for field in REDACTION_FIELDS:
+                            if field in item:
+                                masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                                if isinstance(masked_value, _MaskingError):
+                                    # Drop the field and add error message
+                                    if field in masked_item:
+                                        del masked_item[field]
+                                    if "error" in masked_item:
+                                        masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
                                     else:
-                                        masked_item[field] = masked_value
+                                        masked_item["error"] = masked_value.error_msg
+                                else:
+                                    masked_item[field] = masked_value
 
-                            batched_items[batch_idx][item_idx] = masked_item
+                        merged_items[item_idx] = masked_item
 
                 attachments: list["BaseAttachment"] = []
-                for batch in batched_items:
-                    for item in batch:
-                        _extract_attachments(item, attachments)
+                for item in merged_items:
+                    _extract_attachments(item, attachments)
 
-                return batched_items, attachments
+                return merged_items, attachments
             except Exception as e:
                 errmsg = "Encountered error when constructing records to flush"
                 is_retrying = i + 1 < self.num_tries
@@ -1386,7 +1371,7 @@ class _HTTPBackgroundLogger:
             return
         try:
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
-            items_with_meta = [stringify_with_overflow_meta(item) for bucket in all_items for item in bucket]
+            items_with_meta = [stringify_with_overflow_meta(item) for item in all_items]
             dataStr = construct_logs3_data(items_with_meta)
             attachment_str = bt_dumps([a.debug_info() for a in attachments])
             payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
@@ -3815,7 +3800,6 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                         "experiment_id": self.id,
                         "base_experiment_id": comparison_experiment_id,
                     },
-                    retries=3,
                 )
             except Exception as e:
                 _logger.warning(
@@ -4644,7 +4628,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 args={
                     "dataset_id": self.id,
                 },
-                retries=3,
             )
             data_summary = DataSummary(new_records=self.new_records, **data_summary_d)
 

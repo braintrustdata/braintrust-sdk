@@ -1985,6 +1985,14 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -2546,6 +2554,14 @@
             ],
             "items": {},
             "description": "Optional list of audit entries attached to this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -5277,6 +5293,14 @@
           },
           "_async_scoring_state": {
             "description": "The async scoring state for this event"
+          },
+          "facets": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "Facets for categorization (dictionary from facet id to value)"
           }
         },
         "required": [
@@ -7711,7 +7735,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "2e862e920ab0d7431f22882ce1bf3a5ba2a4b8ed"
+    "x-internal-git-sha": "eca06aa4158104c95db6e300ff586c995f9f82da"
   },
   "paths": {},
   "webhooks": {}

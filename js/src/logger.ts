@@ -2514,12 +2514,11 @@ export class TestBackgroundLogger implements BackgroundLogger {
       }
     }
 
-    const batch = mergeRowBatch(events);
-    let flatBatch = batch.flat();
+    let batch = mergeRowBatch(events);
 
     // Apply masking after merge, similar to HTTPBackgroundLogger
     if (this.maskingFunction) {
-      flatBatch = flatBatch.map((item) => {
+      batch = batch.map((item) => {
         const maskedItem = { ...item };
 
         // Only mask specific fields if they exist
@@ -2556,7 +2555,7 @@ export class TestBackgroundLogger implements BackgroundLogger {
       });
     }
 
-    return flatBatch;
+    return batch;
   }
 }
 
@@ -2791,39 +2790,37 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    // Construct batches of records to flush in parallel and in sequence.
-    const allItemsWithMeta = allItems.map((bucket) =>
-      bucket.map((item) => stringifyWithOverflowMeta(item)),
+    // Construct batches of records to flush in parallel.
+    const allItemsWithMeta = allItems.map((item) =>
+      stringifyWithOverflowMeta(item),
     );
     const maxRequestSizeResult = await this.getMaxRequestSize();
-    const batchSets = batchItems({
+    const batches = batchItems({
       items: allItemsWithMeta,
       batchMaxNumItems: batchSize,
       batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
       getByteSize: (item) => item.str.length,
     });
 
-    for (const batchSet of batchSets) {
-      const postPromises = batchSet.map((batch) =>
-        (async () => {
-          try {
-            await this.submitLogsRequest(batch, maxRequestSizeResult);
-            return { type: "success" } as const;
-          } catch (e) {
-            return { type: "error", value: e } as const;
-          }
-        })(),
+    const postPromises = batches.map((batch) =>
+      (async () => {
+        try {
+          await this.submitLogsRequest(batch, maxRequestSizeResult);
+          return { type: "success" } as const;
+        } catch (e) {
+          return { type: "error", value: e } as const;
+        }
+      })(),
+    );
+    const results = await Promise.all(postPromises);
+    const failingResultErrors = results
+      .map((r) => (r.type === "success" ? undefined : r.value))
+      .filter((r) => r !== undefined);
+    if (failingResultErrors.length) {
+      throw new AggregateError(
+        failingResultErrors,
+        `Encountered the following errors while logging:`,
       );
-      const results = await Promise.all(postPromises);
-      const failingResultErrors = results
-        .map((r) => (r.type === "success" ? undefined : r.value))
-        .filter((r) => r !== undefined);
-      if (failingResultErrors.length) {
-        throw new AggregateError(
-          failingResultErrors,
-          `Encountered the following errors while logging:`,
-        );
-      }
     }
 
     const attachmentErrors: unknown[] = [];
@@ -2850,7 +2847,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
+  ): Promise<[BackgroundLogEvent[], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
         const items = await Promise.all(wrappedItems.map((x) => x.get()));
@@ -2867,43 +2864,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
         // Apply masking after merge but before sending to backend
         if (this.maskingFunction) {
-          mergedItems = mergedItems.map((batch) =>
-            batch.map((item) => {
-              const maskedItem = { ...item };
+          mergedItems = mergedItems.map((item) => {
+            const maskedItem = { ...item };
 
-              // Only mask specific fields if they exist
-              for (const field of REDACTION_FIELDS) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                if ((item as any)[field] !== undefined) {
-                  const maskedValue = applyMaskingToField(
-                    this.maskingFunction!,
+            // Only mask specific fields if they exist
+            for (const field of REDACTION_FIELDS) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((item as any)[field] !== undefined) {
+                const maskedValue = applyMaskingToField(
+                  this.maskingFunction!,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (item as any)[field],
+                  field,
+                );
+                if (maskedValue instanceof MaskingError) {
+                  // Drop the field and add error message
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  delete (maskedItem as any)[field];
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  if ((maskedItem as any).error) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (item as any)[field],
-                    field,
-                  );
-                  if (maskedValue instanceof MaskingError) {
-                    // Drop the field and add error message
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    delete (maskedItem as any)[field];
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    if ((maskedItem as any).error) {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error =
-                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
-                    } else {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error = maskedValue.errorMsg;
-                    }
+                    (maskedItem as any).error =
+                      `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
                   } else {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (maskedItem as any)[field] = maskedValue;
+                    (maskedItem as any).error = maskedValue.errorMsg;
                   }
+                } else {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (maskedItem as any)[field] = maskedValue;
                 }
               }
+            }
 
-              return maskedItem as BackgroundLogEvent;
-            }),
-          );
+            return maskedItem as BackgroundLogEvent;
+          });
         }
 
         return [mergedItems, attachments];
@@ -3102,9 +3097,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await this.unwrapLazyValues(wrappedItems);
 
       const dataStr = constructLogs3Data(
-        allItems
-          .map((bucket) => bucket.map((x) => stringifyWithOverflowMeta(x)))
-          .flat(),
+        allItems.map((x) => stringifyWithOverflowMeta(x)),
       );
       const attachmentStr = JSON.stringify(
         allAttachments.map((a) => a.debugInfo()),
