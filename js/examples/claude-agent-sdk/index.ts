@@ -5,7 +5,9 @@
  * 1. Wrapping the Claude Agent SDK for automatic tracing
  * 2. SDK MCP tool (calculator) - local in-process tool
  * 3. Remote MCP server (braintrust) - stdio-based MCP server
- * 4. All tool calls traced via PreToolUse/PostToolUse hooks
+ * 4. Subagent spawning via Task tool
+ * 5. All tool calls traced via PreToolUse/PostToolUse hooks
+ * 6. Subagent lifecycle traced via SubagentStart/SubagentStop hooks
  *
  * Run: make run
  */
@@ -68,9 +70,10 @@ const calculator = tool(
 
 async function main() {
   console.log("Starting Claude Agent SDK example with Braintrust tracing...\n");
-  console.log("This example uses:");
+  console.log("This example demonstrates:");
   console.log("  - SDK MCP: calculator (local in-process tool)");
-  console.log("  - Remote MCP: braintrust (stdio server via npx)\n");
+  console.log("  - Remote MCP: braintrust (stdio server via npx)");
+  console.log("  - Subagents: math-expert (via Task tool)\n");
 
   // SDK MCP server (local, in-process)
   const calculatorServer = createSdkMcpServer({
@@ -87,11 +90,12 @@ async function main() {
     );
   }
 
-  const prompt = `Do two things:
+  const prompt = `Do three things:
 1. Use the calculator to multiply 25 by 4
-2. List my braintrust projects
+2. Spawn a math-expert subagent to calculate the factorial of 5 and explain what factorial means
+3. List my braintrust projects
 
-Report both results.`;
+Report all results.`;
 
   console.log(`Prompt: ${prompt}\n`);
 
@@ -100,6 +104,18 @@ Report both results.`;
     options: {
       model: "claude-sonnet-4-20250514",
       permissionMode: "bypassPermissions",
+      // Enable Task tool for subagent spawning
+      allowedTools: ["Task"],
+      // Define custom subagents
+      agents: {
+        "math-expert": {
+          description:
+            "Math specialist for complex calculations and explanations",
+          prompt:
+            "You are a math expert. Explain mathematical concepts clearly and perform calculations step by step.",
+          model: "haiku",
+        },
+      },
       mcpServers: {
         // SDK MCP (local)
         calculator: calculatorServer,
@@ -136,9 +152,6 @@ Report both results.`;
   }
 
   console.log("\n✓ Done! Check Braintrust for traces.");
-  console.log("  You should see tool spans for both:");
-  console.log("  - mcp__calculator__* (SDK MCP)");
-  console.log("  - mcp__braintrust__* (Remote MCP)");
 }
 
 main().catch(console.error);

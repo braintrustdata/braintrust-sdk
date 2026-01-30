@@ -226,6 +226,68 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(capturedOptions.hooks.PreToolUse[0].hooks[0]).toBe(userPreHook);
     expect(capturedOptions.hooks.PostToolUse[0].hooks[0]).toBe(userPostHook);
   });
+
+  test("injects PostToolUseFailure hook for error tracing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Verify PostToolUseFailure hook was injected
+    expect(capturedOptions.hooks).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUseFailure).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUseFailure.length).toBeGreaterThan(0);
+  });
+
+  test("injects SubagentStart and SubagentStop hooks for subagent tracing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Verify SubagentStart and SubagentStop hooks were injected
+    expect(capturedOptions.hooks).toBeDefined();
+    expect(capturedOptions.hooks.SubagentStart).toBeDefined();
+    expect(capturedOptions.hooks.SubagentStart.length).toBeGreaterThan(0);
+    expect(capturedOptions.hooks.SubagentStop).toBeDefined();
+    expect(capturedOptions.hooks.SubagentStop.length).toBeGreaterThan(0);
+  });
 });
 
 // Try to import the Claude Agent SDK - skip tests if not available
