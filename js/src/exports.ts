@@ -204,25 +204,8 @@ export {
   toolFunctionDefinitionSchema,
 } from "./framework2";
 
-export type { Trace, SpanData, GetThreadOptions } from "./trace";
+export type { Trace, SpanData } from "./trace";
 export { SpanFetcher, CachedSpanFetcher } from "./trace";
-
-export type {
-  LLMMessage,
-  PreprocessorResult,
-  ThreadTemplateVars,
-} from "./thread-utils";
-export {
-  isRoleContentMessage,
-  isLLMMessageArray,
-  formatMessageArrayAsText,
-  formatValueAsText,
-  stringifyPreprocessorResult,
-  IncrementalMerger,
-  mergeAndDeduplicateResults,
-  mergeAndStringify,
-  computeThreadTemplateVars,
-} from "./thread-utils";
 
 export type {
   ParentExperimentIds,
