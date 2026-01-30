@@ -829,35 +829,6 @@ export function scorerName(
   return scorer.name || `scorer_${scorer_idx}`;
 }
 
-interface ParametersSchema {
-  type: "object";
-  properties: Record<string, Record<string, unknown>>;
-  required?: string[];
-}
-
-function applySchemaDefaults<T extends Record<string, unknown>>(
-  data: T,
-  schema: Record<string, unknown>,
-): T {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const result = { ...data } as T;
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const typedSchema = schema as unknown as ParametersSchema;
-
-  for (const [key, propSchema] of Object.entries(typedSchema.properties)) {
-    if (key in result) {
-      continue;
-    }
-
-    if (propSchema.default !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-      (result as Record<string, unknown>)[key] = propSchema.default as any;
-    }
-  }
-
-  return result;
-}
-
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -922,26 +893,16 @@ async function runEvaluatorInternal(
     }
 
     if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
-      const loadedData = resolvedEvaluatorParams.data;
+      const mergedParameters =
+        parameters && Object.keys(parameters).length > 0
+          ? {
+              ...resolvedEvaluatorParams.data,
+              ...parameters,
+            }
+          : resolvedEvaluatorParams.data;
 
-      // Apply schema defaults to fill in missing values
-      const dataWithDefaults = applySchemaDefaults(
-        loadedData,
-        resolvedEvaluatorParams.schema,
-      );
-
-      if (parameters && Object.keys(parameters).length > 0) {
-        parameters = {
-          ...dataWithDefaults,
-          ...parameters,
-        };
-      } else {
-        parameters = dataWithDefaults;
-      }
-
-      // Validate the merged parameters against the JSON schema
       parameters = validateParametersWithJsonSchema(
-        parameters ?? {},
+        mergedParameters,
         resolvedEvaluatorParams.schema,
       );
     } else if (resolvedEvaluatorParams) {
