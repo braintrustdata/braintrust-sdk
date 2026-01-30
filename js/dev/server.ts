@@ -29,6 +29,7 @@ import {
   EvalCase,
   getSpanParentObject,
   initDataset,
+  RemoteEvalParameters,
 } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
@@ -38,14 +39,21 @@ import {
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
+  evalParametersSerializedHardCodedSchema,
+  EvalParameterSerializedSchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  evalParametersSerializedSchema,
+  ParametersSource,
 } from "./types";
-import { EvalParameters, validateParameters } from "../src/eval-parameters";
+import {
+  EvalParameters,
+  validateParameters,
+  validateParametersWithJsonSchema,
+} from "../src/eval-parameters";
 import { z } from "zod/v3";
-import { promptDefinitionToPromptData } from "../src/framework2";
-import { zodToJsonSchema } from "../src/zod/utils";
+import { makeEvalParametersHardCodedSchema } from "../src/framework2";
+import { ValidationError } from "ajv";
+
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -100,22 +108,50 @@ export function runDevServer(
   });
 
   // List endpoint - returns all available evaluators and their metadata
-  app.get("/list", checkAuthorized, (req, res) => {
-    const evalDefs: EvaluatorDefinitions = Object.fromEntries(
-      Object.entries(allEvaluators).map(([name, evaluator]) => [
-        name,
-        {
-          parameters: evaluator.parameters
-            ? makeEvalParametersSchema(evaluator.parameters)
-            : undefined,
+  app.get(
+    "/list",
+    checkAuthorized,
+    asyncHandler(async (req, res) => {
+      const evalDefs: EvaluatorDefinitions = {};
+
+      for (const [name, evaluator] of Object.entries(allEvaluators)) {
+        let parameters:
+          | EvalParameterSerializedSchema
+          | z.infer<typeof evalParametersSerializedHardCodedSchema>
+          | undefined;
+        let parametersSource: ParametersSource | undefined;
+
+        if (evaluator.parameters) {
+          const resolvedParams = await Promise.resolve(evaluator.parameters);
+
+          if (RemoteEvalParameters.isParameters(resolvedParams)) {
+            // Remote parameters - use JSON Schema format
+            parameters = resolvedParams.schema as EvalParameterSerializedSchema;
+            parametersSource = {
+              parametersId: resolvedParams.id,
+              slug: resolvedParams.slug,
+              name: resolvedParams.name,
+              projectId: resolvedParams.projectId,
+              version: resolvedParams.version,
+            };
+          } else {
+            // Local parameters - use legacy format for backwards compatibility
+            parameters = makeEvalParametersHardCodedSchema(resolvedParams);
+          }
+        }
+
+        evalDefs[name] = {
+          parameters,
+          parametersSource,
           scores: evaluator.scores.map((score, idx) => ({
             name: scorerName(score, idx),
           })),
-        },
-      ]),
-    );
-    res.json(evalDefs);
-  });
+        };
+      }
+
+      res.json(evalDefs);
+    }),
+  );
 
   app.post(
     "/eval",
@@ -146,24 +182,34 @@ export function runDevServer(
         return;
       }
 
-      if (
-        evaluator.parameters &&
-        Object.keys(evaluator.parameters).length > 0
-      ) {
+      if (evaluator.parameters) {
         try {
-          if (!evaluator.parameters) {
-            res.status(400).json({
-              error: `Evaluator '${name}' does not accept parameters`,
-            });
-            return;
-          }
+          const resolvedParameters = await Promise.resolve(
+            evaluator.parameters,
+          );
 
-          // This gets done again in the framework, but we do it here too to give a
-          // better error message.
-          validateParameters(parameters ?? {}, evaluator.parameters);
+          if (RemoteEvalParameters.isParameters(resolvedParameters)) {
+            let mergedParameters =
+              parameters && Object.keys(parameters).length > 0
+                ? {
+                    ...resolvedParameters,
+                    ...parameters,
+                  }
+                : resolvedParameters;
+            validateParametersWithJsonSchema(
+              mergedParameters,
+              resolvedParameters.schema,
+            );
+          } else if (Object.keys(resolvedParameters).length > 0) {
+            validateParameters(parameters ?? {}, resolvedParameters);
+          }
         } catch (e) {
           console.error("Error validating parameters", e);
-          if (e instanceof z.ZodError || e instanceof Error) {
+          if (
+            e instanceof z.ZodError ||
+            e instanceof ValidationError ||
+            e instanceof Error
+          ) {
             res.status(400).json({
               error: e.message,
             });
@@ -387,42 +433,4 @@ function makeScorer(
   });
 
   return ret;
-}
-
-export function makeEvalParametersSchema(
-  parameters: EvalParameters,
-): z.infer<typeof evalParametersSerializedSchema> {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
-          },
-        ];
-      } else {
-        // Since this schema is bundled, it won't pass an instanceof check. For
-        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
-        // Type instantiation is excessively deep and possibly infinite.` So
-        // just using `any` to turn off the typesystem.
-        //
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as any);
-        return [
-          name,
-          {
-            type: "data",
-            schema: schemaObj,
-            default: schemaObj.default,
-            description: schemaObj.description,
-          },
-        ];
-      }
-    }),
-  );
 }

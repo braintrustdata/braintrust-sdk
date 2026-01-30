@@ -24,6 +24,7 @@ export function loadModule({
     globalThis._evals = {
       functions: [],
       prompts: [],
+      parameters: [],
       evaluators: {},
       reporters: {},
     };

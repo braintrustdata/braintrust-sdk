@@ -75,6 +75,25 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 // 6 MB for the AWS lambda gateway (from our own testing).
 export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
+const parametersRowSchema = z.object({
+  id: z.string().uuid(),
+  _xact_id: z.string(),
+  project_id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  function_type: z.literal("parameters"),
+  function_data: z.object({
+    type: z.literal("parameters"),
+    data: z.record(z.unknown()).optional(),
+    __schema: z.record(z.unknown()),
+  }),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+});
+type ParametersRow = z.infer<typeof parametersRowSchema>;
+
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import {
@@ -94,6 +113,7 @@ import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
+import { ParametersCache } from "./prompt-cache/parameters-cache";
 import {
   addAzureBlobHeaders,
   getCurrentUnixTimestamp,
@@ -107,6 +127,7 @@ import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils"
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
+import type { EvalParameters, InferParameters } from "./eval-parameters";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -571,6 +592,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public parametersCache: ParametersCache;
   public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
@@ -611,6 +633,26 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+
+    const parametersMemoryCache = new LRUCache<string, RemoteEvalParameters>({
+      max:
+        Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const parametersDiskCache = canUseDiskCache()
+      ? new DiskCache<RemoteEvalParameters>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/parameters_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DISK_MAX")) ??
+            1 << 20,
+        })
+      : undefined;
+    this.parametersCache = new ParametersCache({
+      memoryCache: parametersMemoryCache,
+      diskCache: parametersDiskCache,
+    });
+
     this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
@@ -3862,6 +3904,63 @@ export type LoadPromptOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
+type LoadParametersBaseOptions = FullLoginOptions & {
+  state?: BraintrustState;
+};
+
+export type LoadParametersByIdOptions = LoadParametersBaseOptions & {
+  id: string;
+  version?: string;
+};
+
+export type LoadParametersByIdWithEnvOptions = LoadParametersBaseOptions & {
+  id: string;
+  environment: string;
+};
+
+export type LoadParametersByProjectNameOptions = LoadParametersBaseOptions & {
+  projectName: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectNameWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectName: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersByProjectIdOptions = LoadParametersBaseOptions & {
+  projectId: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectIdWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectId: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersOptions =
+  | LoadParametersByIdOptions
+  | LoadParametersByIdWithEnvOptions
+  | LoadParametersByProjectNameOptions
+  | LoadParametersByProjectNameWithEnvOptions
+  | LoadParametersByProjectIdOptions
+  | LoadParametersByProjectIdWithEnvOptions;
+
+type LoadParametersImplementationOptions = LoadParametersBaseOptions & {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  id?: string;
+  environment?: string;
+};
+
 /**
  * Load a prompt from the specified project.
  *
@@ -3871,7 +3970,7 @@ export type LoadPromptOptions = FullLoginOptions & {
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
  * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
- * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -4018,6 +4117,184 @@ export async function loadPrompt({
     console.warn("Failed to set prompt in cache:", e);
   }
   return prompt;
+}
+
+/**
+ * Load parameters from the specified project.
+ *
+ * @param options Options for configuring loadParameters().
+ * @param options.projectName The name of the project to load the parameters from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the parameters to load.
+ * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project and slug).
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns The parameters object.
+ * @throws If the parameters are not found.
+ * @throws If multiple parameters are found with the same slug in the same project (this should never happen).
+ *
+ * @example
+ * ```typescript
+ * const params = await loadParameters({
+ *  projectName: "My Project",
+ *  slug: "my-parameters",
+ * });
+ * ```
+ */
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export async function loadParameters<
+  S extends EvalParameters = EvalParameters,
+>({
+  projectName,
+  projectId,
+  slug,
+  version,
+  environment,
+  id,
+  appUrl,
+  apiKey,
+  orgName,
+  fetch,
+  forceLogin,
+  state: stateArg,
+}: LoadParametersImplementationOptions): Promise<
+  RemoteEvalParameters<true, true, InferParameters<S>>
+> {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
+    throw new Error("Must specify either projectName or projectId");
+  } else if (isEmpty(slug)) {
+    throw new Error("Must specify slug");
+  }
+
+  const state = stateArg ?? _globalState;
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    if (id) {
+      response = await state.apiConn().get_json(`v1/function/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/function", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+        function_type: "parameters",
+        ...(environment && { environment }),
+      });
+    }
+  } catch (e) {
+    if (environment || version) {
+      throw new Error(`Parameters not found with specified parameters: ${e}`);
+    }
+
+    console.warn(
+      "Failed to load parameters, attempting to fall back to cache:",
+      e,
+    );
+    let parameters;
+    if (id) {
+      parameters = await state.parametersCache.get({ id });
+      if (!parameters) {
+        throw new Error(
+          `Parameters with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      parameters = await state.parametersCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!parameters) {
+        throw new Error(
+          `Parameters ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
+  }
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    if (id) {
+      throw new Error(`Parameters with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Parameters ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
+  } else if (response.objects.length > 1) {
+    if (id) {
+      throw new Error(
+        `Multiple parameters found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple parameters found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
+  }
+
+  const metadata = parametersRowSchema.parse(response["objects"][0]);
+  const parameters = new RemoteEvalParameters(metadata);
+  try {
+    if (id) {
+      await state.parametersCache.set({ id }, parameters);
+    } else if (slug) {
+      await state.parametersCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        parameters,
+      );
+    }
+  } catch (e) {
+    console.warn("Failed to set parameters in cache:", e);
+  }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
 }
 
 /**
@@ -7161,6 +7438,90 @@ export class Prompt<
       },
       {},
       false,
+    );
+  }
+}
+
+export class RemoteEvalParameters<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+  T extends Record<string, unknown> = Record<string, unknown>,
+> {
+  private readonly __braintrust_parameters_marker = true;
+
+  constructor(private metadata: ParametersRow) {}
+
+  public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata.id as HasId extends true ? string : string | undefined;
+  }
+
+  public get projectId(): string | undefined {
+    return this.metadata.project_id;
+  }
+
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  public get version(): HasVersion extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata[TRANSACTION_ID_FIELD] as HasVersion extends true
+      ? TransactionId
+      : TransactionId | undefined;
+  }
+
+  public get schema(): Record<string, unknown> {
+    return this.metadata.function_data.__schema;
+  }
+
+  public get data(): T {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return (this.metadata.function_data.data ?? {}) as T;
+  }
+
+  public validate(data: unknown): boolean {
+    if (typeof data !== "object" || data === null) {
+      return false;
+    }
+    const schemaProps = this.schema.properties;
+    if (typeof schemaProps !== "object" || schemaProps === null) {
+      return true;
+    }
+    for (const key of Object.keys(schemaProps)) {
+      if (!(key in data)) {
+        const required = Array.isArray(this.schema.required)
+          ? this.schema.required
+          : [];
+        if (required.includes(key)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  public static isParameters(
+    x: unknown,
+  ): x is RemoteEvalParameters<boolean, boolean, Record<string, unknown>> {
+    return (
+      typeof x === "object" &&
+      x !== null &&
+      "__braintrust_parameters_marker" in x &&
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      (
+        x as unknown as RemoteEvalParameters<
+          boolean,
+          boolean,
+          Record<string, unknown>
+        >
+      ).__braintrust_parameters_marker === true
     );
   }
 }

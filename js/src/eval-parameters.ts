@@ -1,9 +1,10 @@
 import { z } from "zod/v3";
+import Ajv from "ajv";
 import { Prompt } from "./logger";
 import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
-} from "./framework2";
+} from "./prompt-schemas";
 import { PromptData as promptDataSchema } from "./generated_types";
 
 // Schema for evaluation parameters
@@ -70,4 +71,24 @@ export function validateParameters<
       }
     }),
   ) as InferParameters<Parameters>;
+}
+
+export function validateParametersWithJsonSchema<
+  T extends Record<string, unknown>,
+>(parameters: Record<string, unknown>, schema: Record<string, unknown>): T {
+  const ajv = new Ajv({ coerceTypes: true, useDefaults: true, strict: false });
+  const validate = ajv.compile(schema);
+
+  if (!validate(parameters)) {
+    const errorMessages = validate.errors
+      ?.map((err) => {
+        const path = err.instancePath || "root";
+        return `${path}: ${err.message}`;
+      })
+      .join(", ");
+    throw Error(`Invalid parameters: ${errorMessages}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return parameters as T;
 }
