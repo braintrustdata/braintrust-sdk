@@ -61,6 +61,14 @@ test("renderMessage with file content parts", () => {
     ],
   };
 
+  const variables = {
+    item: "document",
+    image_url: "https://example.com/image.png",
+    file_data: "base64data",
+    file_id: "file-456",
+    filename: "report.pdf",
+  };
+
   const rendered = renderMessage(
     (template) =>
       template
@@ -70,6 +78,7 @@ test("renderMessage with file content parts", () => {
         .replace("{{file_id}}", "file-456")
         .replace("{{filename}}", "report.pdf"),
     message,
+    variables,
   );
 
   expect(rendered.content).toEqual([
@@ -94,37 +103,23 @@ test("renderMessage with file content parts", () => {
   ]);
 });
 
-test("renderMessage expands image_url array from JSON string", () => {
+test("renderMessage expands attachment array via pre-template expansion", () => {
   const message = {
     role: "user" as const,
-    content: [
-      {
-        type: "text" as const,
-        text: "Look at these images:",
-      },
-      {
-        type: "image_url" as const,
-        image_url: {
-          url: "{{images}}",
-        },
-      },
-    ],
+    content: "{{images}}",
+  };
+
+  const variables = {
+    images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
   };
 
   const rendered = renderMessage(
-    (template) =>
-      template.replace(
-        "{{images}}",
-        '["https://example.com/img1.jpg","https://example.com/img2.jpg"]',
-      ),
+    (template) => template, // Template rendering shouldn't happen for attachment arrays
     message,
+    variables,
   );
 
   expect(rendered.content).toEqual([
-    {
-      type: "text",
-      text: "Look at these images:",
-    },
     {
       type: "image_url",
       image_url: {
@@ -140,84 +135,153 @@ test("renderMessage expands image_url array from JSON string", () => {
   ]);
 });
 
-test("renderMessage expands file array from JSON string (file_data)", () => {
+test("renderMessage expands inline attachment array via pre-template expansion", () => {
   const message = {
     role: "user" as const,
-    content: [
+    content: "{{images}}",
+  };
+
+  const variables = {
+    images: [
       {
-        type: "file" as const,
-        file: {
-          file_data: "{{files}}",
-          filename: "{{filenames}}",
-        },
+        type: "inline_attachment",
+        src: "data:image/png;base64,abc",
+        content_type: "image/png",
+      },
+      {
+        type: "inline_attachment",
+        src: "data:image/jpeg;base64,def",
+        content_type: "image/jpeg",
       },
     ],
   };
 
-  const rendered = renderMessage(
-    (template) =>
-      template
-        .replace(
-          "{{files}}",
-          '["data:text/plain;base64,SGVsbG8=","data:text/plain;base64,V29ybGQ="]',
-        )
-        .replace("{{filenames}}", '["hello.txt","world.txt"]'),
-    message,
-  );
+  const rendered = renderMessage((template) => template, message, variables);
 
   expect(rendered.content).toEqual([
     {
-      type: "file",
-      file: {
-        file_data: "data:text/plain;base64,SGVsbG8=",
-        filename: "hello.txt",
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/png;base64,abc",
+          content_type: "image/png",
+        },
       },
     },
     {
-      type: "file",
-      file: {
-        file_data: "data:text/plain;base64,V29ybGQ=",
-        filename: "world.txt",
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/jpeg;base64,def",
+          content_type: "image/jpeg",
+        },
       },
     },
   ]);
 });
 
-test("renderMessage expands file array from JSON string (file_id)", () => {
+test("renderMessage does NOT expand mixed content (text + variable)", () => {
   const message = {
     role: "user" as const,
-    content: [
-      {
-        type: "file" as const,
-        file: {
-          file_id: "{{fileIds}}",
-          filename: "{{filenames}}",
-        },
-      },
-    ],
+    content: "Look at {{images}}",
+  };
+
+  const variables = {
+    images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
   };
 
   const rendered = renderMessage(
-    (template) =>
-      template
-        .replace("{{fileIds}}", '["file-abc123","file-def456"]')
-        .replace("{{filenames}}", '["document1.pdf","document2.pdf"]'),
+    (template) => template.replace("{{images}}", "[array]"),
     message,
+    variables,
+  );
+
+  // Mixed content is not expanded - just rendered normally
+  expect(rendered.content).toBe("Look at [array]");
+});
+
+test("renderMessage expands nested attachment arrays via pre-template expansion", () => {
+  const message = {
+    role: "user" as const,
+    content: "{{data.images}}",
+  };
+
+  const variables = {
+    data: {
+      images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
+    },
+  };
+
+  const rendered = renderMessage(
+    (template) => template, // Template rendering shouldn't happen
+    message,
+    variables,
   );
 
   expect(rendered.content).toEqual([
     {
-      type: "file",
-      file: {
-        file_id: "file-abc123",
-        filename: "document1.pdf",
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img1.jpg",
       },
     },
     {
-      type: "file",
-      file: {
-        file_id: "file-def456",
-        filename: "document2.pdf",
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img2.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands deeply nested attachment arrays", () => {
+  const message = {
+    role: "user" as const,
+    content: "{{user.profile.images}}",
+  };
+
+  const variables = {
+    user: {
+      profile: {
+        images: [
+          {
+            type: "inline_attachment",
+            src: "data:image/png;base64,abc",
+            content_type: "image/png",
+          },
+          {
+            type: "inline_attachment",
+            src: "data:image/jpeg;base64,def",
+            content_type: "image/jpeg",
+          },
+        ],
+      },
+    },
+  };
+
+  const rendered = renderMessage((template) => template, message, variables);
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/png;base64,abc",
+          content_type: "image/png",
+        },
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/jpeg;base64,def",
+          content_type: "image/jpeg",
+        },
       },
     },
   ]);
@@ -236,10 +300,15 @@ test("renderMessage handles single image_url (no array)", () => {
     ],
   };
 
+  const variables = {
+    image: "https://example.com/single.jpg",
+  };
+
   const rendered = renderMessage(
     (template) =>
       template.replace("{{image}}", "https://example.com/single.jpg"),
     message,
+    variables,
   );
 
   expect(rendered.content).toEqual([
@@ -252,48 +321,40 @@ test("renderMessage handles single image_url (no array)", () => {
   ]);
 });
 
-test("renderMessage handles mixed content with array expansion", () => {
+test("renderMessage expands attachment arrays in structured content", () => {
+  // This tests the case where content is already an array with structured parts,
+  // and one part has a template variable for an attachment array
   const message = {
     role: "user" as const,
     content: [
-      {
-        type: "text" as const,
-        text: "Check out:",
-      },
-      {
-        type: "image_url" as const,
-        image_url: {
-          url: "{{images}}",
-        },
-      },
-      {
-        type: "text" as const,
-        text: "And these files:",
-      },
-      {
-        type: "file" as const,
-        file: {
-          file_id: "{{files}}",
-        },
-      },
+      { type: "text" as const, text: "Describe these images" },
+      { type: "image_url" as const, image_url: { url: "{{attachments}}" } },
     ],
   };
 
-  const rendered = renderMessage(
-    (template) =>
-      template
-        .replace("{{images}}", '["url1.jpg","url2.jpg"]')
-        .replace("{{files}}", '["file1","file2"]'),
-    message,
-  );
+  const variables = {
+    attachments: [
+      "https://example.com/img1.jpg",
+      "https://example.com/img2.jpg",
+    ],
+  };
 
+  const rendered = renderMessage((template) => template, message, variables);
+
+  // Should expand {{attachments}} into multiple image_url parts
   expect(rendered.content).toEqual([
-    { type: "text", text: "Check out:" },
-    { type: "image_url", image_url: { url: "url1.jpg" } },
-    { type: "image_url", image_url: { url: "url2.jpg" } },
-    { type: "text", text: "And these files:" },
-    { type: "file", file: { file_id: "file1" } },
-    { type: "file", file: { file_id: "file2" } },
+    {
+      type: "text",
+      text: "Describe these images",
+    },
+    {
+      type: "image_url",
+      image_url: { url: "https://example.com/img1.jpg" },
+    },
+    {
+      type: "image_url",
+      image_url: { url: "https://example.com/img2.jpg" },
+    },
   ]);
 });
 

@@ -3849,6 +3849,31 @@
           "replace"
         ]
       },
+      "InlineAttachmentReference": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "inline_attachment"
+            ]
+          },
+          "src": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "src"
+        ]
+      },
       "InvokeFunction": {
         "allOf": [
           {
@@ -7693,7 +7718,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "c99d1e6fbf062688da7f1f22394c72ea480fe81a"
+    "x-internal-git-sha": "941da0744ee9483c532d1e78d4e9c35423faf6bc"
   },
   "paths": {},
   "webhooks": {}

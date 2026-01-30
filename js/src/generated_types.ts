@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA c99d1e6fbf062688da7f1f22394c72ea480fe81a) -- do not modify
+// Auto-generated file (internal git SHA 941da0744ee9483c532d1e78d4e9c35423faf6bc) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -1202,6 +1202,15 @@ export const GroupScope = z.object({
 export type GroupScopeType = z.infer<typeof GroupScope>;
 export const IfExists = z.enum(["error", "ignore", "replace"]);
 export type IfExistsType = z.infer<typeof IfExists>;
+export const InlineAttachmentReference = z.object({
+  type: z.literal("inline_attachment"),
+  src: z.string().min(1),
+  content_type: z.string().optional(),
+  filename: z.string().optional(),
+});
+export type InlineAttachmentReferenceType = z.infer<
+  typeof InlineAttachmentReference
+>;
 export const InvokeParent = z.union([
   z.object({
     object_type: z.enum(["project_logs", "experiment", "playground_logs"]),

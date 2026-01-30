@@ -36,6 +36,7 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
+  getObjValueByPath,
 } from "../util/index";
 import {
   type AnyModelParamsType as AnyModelParam,
@@ -43,6 +44,7 @@ import {
   type AttachmentReferenceType as AttachmentReference,
   BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
   type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
+  InlineAttachmentReference as InlineAttachmentReferenceSchema,
   BraintrustModelParams as braintrustModelParamsSchema,
   ChatCompletionTool as chatCompletionToolSchema,
   type ChatCompletionToolType as ChatCompletionTool,
@@ -6396,29 +6398,67 @@ export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
 >;
 
-/**
- * Try to parse a string as a JSON array.
- * This handles cases where template engines stringify arrays when rendering template variables.
- * @param value The value to parse
- * @returns The parsed array, or null if not a valid JSON array
- */
-function tryParseStringAsArray(value: string): unknown[] | null {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
-    return null;
-  }
+function isAttachmentObject(value: unknown): boolean {
+  return (
+    BraintrustAttachmentReferenceSchema.safeParse(value).success ||
+    InlineAttachmentReferenceSchema.safeParse(value).success
+  );
+}
 
+// Simple URL validation all braintrust attachment urls or generic links
+function isURL(url: string): boolean {
   try {
-    const parsed = JSON.parse(trimmed);
-    return Array.isArray(parsed) ? parsed : null;
+    const parsedUrl = new URL(url.trim());
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
   } catch {
-    return null;
+    return false;
   }
+}
+
+/**
+ * Detect and expand attachment array variables before template rendering.
+ * Supports both simple variables ({{images}}) and nested paths ({{data.images}}).
+ * @param content The message content (should be a template variable like "{{images}}" or "{{data.images}}")
+ * @param variables The variables object with array values
+ * @returns Array of image_url parts if expansion occurred, null otherwise
+ */
+function expandAttachmentArrayPreTemplate(
+  content: unknown,
+  variables: Record<string, unknown>,
+): unknown[] | null {
+  if (typeof content !== "string") return null;
+
+  // Detect {{varName}} or {{nested.path}} pattern (exact match only - no mixed content)
+  // Supports: {{images}}, {{data.images}}, {{user.profile.images}}, etc.
+  const match = content.match(/^\{\{\s*([\w.]+)\s*\}\}$/);
+  if (!match) return null;
+
+  const varPath = match[1];
+
+  const value = varPath.includes(".")
+    ? getObjValueByPath(variables, varPath.split("."))
+    : variables[varPath];
+
+  if (!Array.isArray(value)) return null;
+
+  // Check if array contains attachments or image URLs (supports mixed arrays)
+  const allValid = value.every(
+    (v) => isAttachmentObject(v) || (typeof v === "string" && isURL(v)),
+  );
+
+  if (!allValid) return null;
+
+  // Expand directly to image_url parts, attachments have all been resolved to URLs already
+  return value.map((item) => ({
+    type: "image_url" as const,
+    image_url: { url: item },
+  }));
 }
 
 export function renderMessage<T extends Message>(
   render: (template: string) => string,
   message: T,
+  variables?: Record<string, unknown>,
 ): T {
   return {
     ...message,
@@ -6427,114 +6467,73 @@ export function renderMessage<T extends Message>(
           content: isEmpty(message.content)
             ? undefined
             : typeof message.content === "string"
-              ? render(message.content)
-              : message.content
-                  .map((c) => {
-                    switch (c.type) {
-                      case "text":
-                        return [{ ...c, text: render(c.text) }];
-                      case "image_url":
-                        if (isObject(c.image_url.url)) {
-                          throw new Error(
-                            "Attachments must be replaced with URLs before calling `build()`",
-                          );
-                        }
-                        const renderedUrl = render(c.image_url.url);
+              ? (() => {
+                  // Try pre-template expansion first for attachment arrays
+                  if (variables) {
+                    const expanded = expandAttachmentArrayPreTemplate(
+                      message.content,
+                      variables,
+                    );
+                    if (expanded) return expanded;
+                  }
 
-                        // Check if the rendered URL is a stringified array
-                        // This happens when template variables contain arrays of URLs
-                        // e.g., {{images}} where images = ["url1", "url2"]
-                        const parsedUrls = tryParseStringAsArray(renderedUrl);
-
-                        if (parsedUrls !== null) {
-                          // Expand array into multiple image_url blocks
-                          return parsedUrls.map((url) => ({
-                            type: "image_url" as const,
-                            image_url: { url: String(url) },
-                          }));
-                        }
-
-                        return [
-                          {
-                            ...c,
-                            image_url: {
-                              ...c.image_url,
-                              url: renderedUrl,
-                            },
-                          },
-                        ];
-                      case "file":
-                        const fileData = render(c.file.file_data || "");
-                        const fileId = c.file.file_id
-                          ? render(c.file.file_id)
-                          : undefined;
-                        const filename = c.file.filename
-                          ? render(c.file.filename)
-                          : undefined;
-
-                        const dataArr =
-                          tryParseStringAsArray(fileData)?.map(String) ?? null;
-                        const idArr = fileId
-                          ? tryParseStringAsArray(fileId)?.map(String) ?? null
-                          : null;
-                        const nameArr = filename
-                          ? tryParseStringAsArray(filename)?.map(String) ?? null
-                          : null;
-
-                        const arrays = [dataArr, idArr, nameArr].filter(
-                          (a): a is string[] => a !== null,
+                  return render(message.content);
+                })()
+              : message.content.flatMap((c) => {
+                  switch (c.type) {
+                    case "text":
+                      return [{ ...c, text: render(c.text) }];
+                    case "image_url":
+                      if (isObject(c.image_url.url)) {
+                        throw new Error(
+                          "Attachments must be replaced with URLs before calling `build()`",
                         );
+                      }
 
-                        if (arrays.length === 0) {
-                          return [
-                            {
-                              ...c,
-                              file: {
-                                ...(c.file.file_data && {
-                                  file_data: fileData,
-                                }),
-                                ...(c.file.file_id && { file_id: fileId }),
-                                ...(c.file.filename && { filename }),
-                              },
-                            },
-                          ];
+                      // Check if the URL is a template variable for an attachment array
+                      if (variables) {
+                        const expanded = expandAttachmentArrayPreTemplate(
+                          c.image_url.url,
+                          variables,
+                        );
+                        if (expanded) {
+                          // Return the expanded array of image_url parts
+                          return expanded;
                         }
+                      }
 
-                        const len = arrays[0].length;
-                        if (!arrays.every((a) => a.length === len)) {
-                          throw new Error(
-                            `file field array lengths must match (expected ${len})`,
-                          );
-                        }
-
-                        return Array.from({ length: len }, (_, i) => ({
-                          type: "file" as const,
-                          file: {
-                            ...(dataArr
-                              ? { file_data: dataArr[i] }
-                              : c.file.file_data
-                                ? { file_data: fileData }
-                                : {}),
-
-                            ...(idArr
-                              ? { file_id: idArr[i] }
-                              : c.file.file_id
-                                ? { file_id: fileId! }
-                                : {}),
-
-                            ...(nameArr
-                              ? { filename: nameArr[i] }
-                              : c.file.filename
-                                ? { filename }
-                                : {}),
+                      // Otherwise render the URL template normally
+                      return [
+                        {
+                          ...c,
+                          image_url: {
+                            ...c.image_url,
+                            url: render(c.image_url.url),
                           },
-                        }));
-                      default:
-                        const _exhaustiveCheck: never = c;
-                        return _exhaustiveCheck;
-                    }
-                  })
-                  .flat(),
+                        },
+                      ];
+                    case "file":
+                      return [
+                        {
+                          ...c,
+                          file: {
+                            ...(c.file.file_data && {
+                              file_data: render(c.file.file_data),
+                            }),
+                            ...(c.file.file_id && {
+                              file_id: render(c.file.file_id),
+                            }),
+                            ...(c.file.filename && {
+                              filename: render(c.file.filename),
+                            }),
+                          },
+                        },
+                      ];
+                    default:
+                      const _exhaustiveCheck: never = c;
+                      return _exhaustiveCheck;
+                  }
+                }),
         }
       : {}),
     ...("tool_calls" in message
@@ -6946,7 +6945,7 @@ export class Prompt<
         });
 
       const baseMessages = (prompt.messages || []).map((m) =>
-        renderMessage(render, m),
+        renderMessage(render, m, variables),
       );
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 
