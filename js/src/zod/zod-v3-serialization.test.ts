@@ -39,14 +39,12 @@ describe("makeEvalParametersSchema with Zod v3", () => {
     };
 
     const result = makeEvalParametersSchema(parameters);
-    console.log(result);
-    expect(result.instructions).toBeDefined();
-    expect(result.instructions.type).toBe("data");
-    expect(result.instructions.schema).toStrictEqual(EXPECTED_STRING_SCHEMA);
-    expect(result.instructions.description).toBe(
-      "The instructions for the agent",
+
+    expect(result.type).toBe("object");
+    expect(result.properties.instructions).toStrictEqual(
+      EXPECTED_STRING_SCHEMA,
     );
-    expect(result.instructions.default).toBe("You are a helpful assistant.");
+    expect(result.required).toBeUndefined();
   });
 
   test("number schema serializes correctly", () => {
@@ -61,10 +59,9 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     const result = makeEvalParametersSchema(parameters);
 
-    expect(result.temperature.type).toBe("data");
-    expect(result.temperature.schema).toStrictEqual(EXPECTED_NUMBER_SCHEMA);
-    expect(result.temperature.description).toBe("Temperature for LLM");
-    expect(result.temperature.default).toBe(0.7);
+    expect(result.type).toBe("object");
+    expect(result.properties.temperature).toStrictEqual(EXPECTED_NUMBER_SCHEMA);
+    expect(result.required).toBeUndefined();
   });
 
   test("object schema serializes correctly", () => {
@@ -79,9 +76,9 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     const result = makeEvalParametersSchema(parameters);
 
-    expect(result.config.type).toBe("data");
-    expect(result.config.schema).toStrictEqual(EXPECTED_OBJECT_SCHEMA);
-    expect(result.config.description).toBe("Configuration object");
+    expect(result.type).toBe("object");
+    expect(result.properties.config).toStrictEqual(EXPECTED_OBJECT_SCHEMA);
+    expect(result.required).toContain("config");
   });
 
   test("enum schema serializes correctly", () => {
@@ -94,10 +91,9 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     const result = makeEvalParametersSchema(parameters);
 
-    expect(result.mode.type).toBe("data");
-    expect(result.mode.schema).toStrictEqual(EXPECTED_ENUM_SCHEMA);
-    expect(result.mode.description).toBe("Processing mode");
-    expect(result.mode.default).toBe("balanced");
+    expect(result.type).toBe("object");
+    expect(result.properties.mode).toStrictEqual(EXPECTED_ENUM_SCHEMA);
+    expect(result.required).toBeUndefined();
   });
 
   test("array schema serializes correctly", () => {
@@ -110,9 +106,21 @@ describe("makeEvalParametersSchema with Zod v3", () => {
 
     const result = makeEvalParametersSchema(parameters);
 
-    expect(result.tags.type).toBe("data");
-    expect(result.tags.schema).toStrictEqual(EXPECTED_ARRAY_SCHEMA);
-    expect(result.tags.description).toBe("Tags for filtering");
-    expect(result.tags.default).toEqual(["default"]);
+    expect(result.type).toBe("object");
+    expect(result.properties.tags).toStrictEqual(EXPECTED_ARRAY_SCHEMA);
+    expect(result.required).toBeUndefined();
+  });
+
+  test("required fields are tracked correctly", () => {
+    const parameters = {
+      requiredField: z.string(),
+      optionalField: z.string().default("default value"),
+    };
+
+    const result = makeEvalParametersSchema(parameters);
+
+    expect(result.type).toBe("object");
+    expect(result.required).toContain("requiredField");
+    expect(result.required).not.toContain("optionalField");
   });
 });
