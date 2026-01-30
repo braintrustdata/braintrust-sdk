@@ -45,12 +45,14 @@ import {
   EvaluatorManifest,
   ParametersSource,
 } from "./types";
-import { EvalParameters, validateParameters } from "../src/eval-parameters";
-import { z } from "zod/v3";
 import {
-  makeEvalParametersSchema,
-  makeEvalParametersHardCodedSchema,
-} from "../src/framework2";
+  EvalParameters,
+  validateParameters,
+  validateParametersWithJsonSchema,
+} from "../src/eval-parameters";
+import { z } from "zod/v3";
+import { makeEvalParametersHardCodedSchema } from "../src/framework2";
+import { ValidationError } from "ajv";
 
 export interface DevServerOpts {
   host: string;
@@ -186,15 +188,28 @@ export function runDevServer(
             evaluator.parameters,
           );
 
-          if (
-            !RemoteEvalParameters.isParameters(resolvedParameters) &&
-            Object.keys(resolvedParameters).length > 0
-          ) {
+          if (RemoteEvalParameters.isParameters(resolvedParameters)) {
+            let mergedParameters =
+              parameters && Object.keys(parameters).length > 0
+                ? {
+                    ...resolvedParameters,
+                    ...parameters,
+                  }
+                : resolvedParameters;
+            validateParametersWithJsonSchema(
+              mergedParameters,
+              resolvedParameters.schema,
+            );
+          } else if (Object.keys(resolvedParameters).length > 0) {
             validateParameters(parameters ?? {}, resolvedParameters);
           }
         } catch (e) {
           console.error("Error validating parameters", e);
-          if (e instanceof z.ZodError || e instanceof Error) {
+          if (
+            e instanceof z.ZodError ||
+            e instanceof ValidationError ||
+            e instanceof Error
+          ) {
             res.status(400).json({
               error: e.message,
             });
