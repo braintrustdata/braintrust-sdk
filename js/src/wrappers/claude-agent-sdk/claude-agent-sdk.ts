@@ -161,9 +161,14 @@ function createToolTracingHooks(
     }
 
     const toolSpan = activeToolSpans.get(toolUseID);
-    if (toolSpan) {
+    if (!toolSpan) {
+      return {};
+    }
+
+    try {
       toolSpan.log({ output: input.tool_response });
       toolSpan.end();
+    } finally {
       activeToolSpans.delete(toolUseID);
     }
     return {};
@@ -175,7 +180,11 @@ function createToolTracingHooks(
     }
 
     const toolSpan = activeToolSpans.get(toolUseID);
-    if (toolSpan) {
+    if (!toolSpan) {
+      return {};
+    }
+
+    try {
       toolSpan.log({
         error: input.error,
         metadata: {
@@ -186,6 +195,7 @@ function createToolTracingHooks(
         },
       });
       toolSpan.end();
+    } finally {
       activeToolSpans.delete(toolUseID);
     }
     return {};
@@ -232,43 +242,55 @@ function createSubagentTracingHooks(
     return {};
   };
 
-  // SubagentStop is called but without agent_id in current SDK.
+  // SubagentStop is called but without agent_id in current SDK (GitHub issue #14859).
   // We use toolUseID to add metadata to the existing Task tool span.
   const subagentStop: HookCallback = async (input, toolUseID) => {
     if (input.hook_event_name !== "SubagentStop") {
       return {};
     }
 
-    // Try to find span by agent_id first (if SubagentStart was called)
-    const subagentSpan = input.agent_id
-      ? activeSubagentSpans.get(input.agent_id)
-      : undefined;
+    // If SubagentStart was called, close the subagent span
+    if (input.agent_id) {
+      const subagentSpan = activeSubagentSpans.get(input.agent_id);
+      if (!subagentSpan) {
+        return {};
+      }
 
-    if (subagentSpan) {
-      subagentSpan.log({
-        metadata: {
-          agent_id: input.agent_id,
-          agent_transcript_path: input.agent_transcript_path,
-          stop_hook_active: input.stop_hook_active,
-          session_id: input.session_id,
-        },
-      });
-      subagentSpan.end();
-      activeSubagentSpans.delete(input.agent_id);
-    } else if (toolUseID) {
-      // Fallback: add subagent metadata to the Task tool span
-      const toolSpan = activeToolSpans.get(toolUseID);
-      if (toolSpan) {
-        toolSpan.log({
+      try {
+        subagentSpan.log({
           metadata: {
-            is_subagent: true,
-            subagent_session_id: input.session_id,
-            subagent_transcript_path: input.transcript_path,
-            subagent_stop_hook_active: input.stop_hook_active,
+            agent_id: input.agent_id,
+            agent_transcript_path: input.agent_transcript_path,
+            stop_hook_active: input.stop_hook_active,
+            session_id: input.session_id,
           },
         });
+        subagentSpan.end();
+      } finally {
+        activeSubagentSpans.delete(input.agent_id);
       }
+      return {};
     }
+
+    // Fallback: SubagentStart wasn't called (current SDK behavior).
+    // Add subagent metadata to the Task tool span instead.
+    if (!toolUseID) {
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    toolSpan.log({
+      metadata: {
+        is_subagent: true,
+        subagent_session_id: input.session_id,
+        subagent_transcript_path: input.transcript_path,
+        subagent_stop_hook_active: input.stop_hook_active,
+      },
+    });
     return {};
   };
 
