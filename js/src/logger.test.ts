@@ -1384,4 +1384,110 @@ describe("filtering functionality", () => {
     expect(loggedNames).not.toContain("sibling"); // Filtered
     expect(loggedNames).not.toContain("descendant"); // Also filtered (cascaded)
   });
+
+  /**
+   * Test what happens when the ROOT span is filtered.
+   *
+   * Given:
+   *     root  <-- FILTERED
+   *       parent
+   *         child
+   *         sibling
+   *           descendant
+   *
+   * Result: All spans still logged, but parent becomes orphan.
+   * The internal hierarchy (parent->child, parent->sibling, sibling->descendant) is preserved.
+   * UI will create synthetic root and put parent under it as orphan.
+   */
+  test("filtering root span - descendants preserve internal hierarchy but parent becomes orphan", async () => {
+    const filteredSpanIds = new Set<string>();
+
+    const filterRoot = (event: any): any | null => {
+      const spanId = event.span_id;
+      if (spanId && filteredSpanIds.has(spanId)) {
+        return null;
+      }
+
+      const spanName = event.span_attributes?.name ?? "";
+      if (spanName === "root") {
+        if (spanId) {
+          filteredSpanIds.add(spanId);
+        }
+        return null;
+      }
+
+      return event;
+    };
+
+    setFilteringFunction(filterRoot);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    const root = logger.startSpan({ name: "root" });
+    const rootSpanId = root.spanId;
+    const rootRootSpanId = root.rootSpanId;
+
+    const parent = root.startSpan({ name: "parent" });
+    const parentSpanId = parent.spanId;
+
+    const child = parent.startSpan({ name: "child" });
+    child.log({ input: "child data" });
+    child.end();
+
+    const sibling = parent.startSpan({ name: "sibling" });
+    const siblingSpanId = sibling.spanId;
+
+    const descendant = sibling.startSpan({ name: "descendant" });
+    descendant.log({ input: "descendant data" });
+    descendant.end();
+
+    sibling.end();
+    parent.end();
+    root.end();
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    // Verify root was filtered but all others are logged
+    const loggedNames = events.map((e: any) => e.span_attributes?.name);
+    expect(loggedNames).not.toContain("root"); // Filtered
+    expect(loggedNames).toContain("parent");
+    expect(loggedNames).toContain("child");
+    expect(loggedNames).toContain("sibling");
+    expect(loggedNames).toContain("descendant");
+
+    // Get each span's log
+    const parentLog = events.find(
+      (e: any) => e.span_attributes?.name === "parent",
+    );
+    const childLog = events.find(
+      (e: any) => e.span_attributes?.name === "child",
+    );
+    const siblingLog = events.find(
+      (e: any) => e.span_attributes?.name === "sibling",
+    );
+    const descendantLog = events.find(
+      (e: any) => e.span_attributes?.name === "descendant",
+    );
+
+    // All spans still have root_span_id pointing to the filtered root
+    expect(parentLog.root_span_id).toBe(rootRootSpanId);
+    expect(childLog.root_span_id).toBe(rootRootSpanId);
+    expect(siblingLog.root_span_id).toBe(rootRootSpanId);
+    expect(descendantLog.root_span_id).toBe(rootRootSpanId);
+
+    // Parent's span_parents points to filtered root (making it an orphan in UI)
+    expect(parentLog.span_parents).toContain(rootSpanId);
+
+    // But the internal hierarchy is preserved:
+    // child and sibling are children of parent
+    expect(childLog.span_parents).toContain(parentSpanId);
+    expect(siblingLog.span_parents).toContain(parentSpanId);
+
+    // descendant is child of sibling
+    expect(descendantLog.span_parents).toContain(siblingSpanId);
+  });
 });

@@ -2342,6 +2342,112 @@ def test_filtering_with_cascade_to_fix_orphans(with_memory_logger, with_simulate
     braintrust.set_filtering_function(None)
 
 
+def test_filtering_root_span_all_descendants_become_orphans(with_memory_logger, with_simulate_login):
+    """
+    Test what happens when the ROOT span is filtered.
+
+    Given this tree:
+        root  <-- FILTERED
+          parent
+            child
+            sibling
+              descendant
+
+    Question: Will descendants maintain their relative structure?
+        parent
+          child
+          sibling
+            descendant
+
+    Answer: NO. All spans become orphans because:
+    1. All spans have root_span_id pointing to the filtered root
+    2. parent has span_parents pointing to root (which doesn't exist)
+    3. UI will create a synthetic root and put parent under it as orphan
+    4. child/sibling are children of parent (which exists), so they're NOT orphans
+    5. descendant is child of sibling (which exists), so it's NOT an orphan
+
+    So the structure will be:
+        [synthetic root]
+          parent  <-- orphan (its span_parents points to filtered root)
+            child
+            sibling
+              descendant
+
+    The internal hierarchy is preserved, but parent becomes an orphan.
+    """
+    filtered_span_ids = set()
+
+    def filter_root(event):
+        span_id = event.get("span_id")
+        if span_id and span_id in filtered_span_ids:
+            return None
+
+        span_name = event.get("span_attributes", {}).get("name", "")
+        if span_name == "root":
+            if span_id:
+                filtered_span_ids.add(span_id)
+            return None
+
+        return event
+
+    braintrust.set_filtering_function(filter_root)
+
+    test_logger = init_test_logger("test_project")
+
+    with test_logger.start_span(name="root") as root:
+        root_span_id = root.span_id
+        root_root_span_id = root.root_span_id
+
+        with root.start_span(name="parent") as parent:
+            parent_span_id = parent.span_id
+
+            with parent.start_span(name="child") as child:
+                child.log(input="child data")
+                child_span_id = child.span_id
+
+            with parent.start_span(name="sibling") as sibling:
+                sibling_span_id = sibling.span_id
+
+                with sibling.start_span(name="descendant") as descendant:
+                    descendant.log(input="descendant data")
+                    descendant_span_id = descendant.span_id
+
+    logs = with_memory_logger.pop()
+
+    # Verify root was filtered but all others are logged
+    logged_names = [l.get("span_attributes", {}).get("name") for l in logs]
+    assert "root" not in logged_names  # Filtered
+    assert "parent" in logged_names
+    assert "child" in logged_names
+    assert "sibling" in logged_names
+    assert "descendant" in logged_names
+
+    # Get each span's log
+    parent_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "parent")
+    child_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "child")
+    sibling_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "sibling")
+    descendant_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "descendant")
+
+    # All spans still have root_span_id pointing to the filtered root
+    assert parent_log["root_span_id"] == root_root_span_id
+    assert child_log["root_span_id"] == root_root_span_id
+    assert sibling_log["root_span_id"] == root_root_span_id
+    assert descendant_log["root_span_id"] == root_root_span_id
+
+    # Parent's span_parents points to filtered root (making it an orphan in UI)
+    assert root_span_id in parent_log["span_parents"]
+
+    # But the internal hierarchy is preserved:
+    # child and sibling are children of parent
+    assert parent_span_id in child_log["span_parents"]
+    assert parent_span_id in sibling_log["span_parents"]
+
+    # descendant is child of sibling
+    assert sibling_span_id in descendant_log["span_parents"]
+
+    braintrust.set_filtering_function(None)
+
+
 def test_attachment_unreadable_path_logs_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="braintrust"):
         Attachment(
