@@ -51,9 +51,8 @@ def setup_pydantic_ai(
         wrap_model_classes()
 
         return True
-    except ImportError as e:
-        logger.error(f"Failed to import Pydantic AI: {e}")
-        logger.error("Pydantic AI is not installed. Please install it with: pip install pydantic-ai-slim")
+    except ImportError:
+        # Not installed - this is expected when using auto_instrument()
         return False
 
 

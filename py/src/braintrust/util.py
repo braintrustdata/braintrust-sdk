@@ -1,5 +1,7 @@
 import inspect
 import json
+import math
+import os
 import sys
 import threading
 import urllib.parse
@@ -8,6 +10,24 @@ from dataclasses import dataclass
 from typing import Any, Generic, Literal, TypedDict, TypeVar, Union
 
 from requests import HTTPError, Response
+
+
+def parse_env_var_float(name: str, default: float) -> float:
+    """Parse a float from an environment variable, returning default if invalid.
+
+    Returns the default value if the env var is missing, empty, not a valid
+    float, NaN, or infinity.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        result = float(value)
+        if math.isnan(result) or math.isinf(result):
+            return default
+        return result
+    except (ValueError, TypeError):
+        return default
 
 GLOBAL_PROJECT = "Global"
 BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"

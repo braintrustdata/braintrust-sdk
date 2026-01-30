@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 21146f64bf5ad1eadd3a99d186274728e25e5399) -- do not modify"""
+"""Auto-generated file (internal git SHA 7178200dd3c7869f27b677260303cda0b798bf42) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -53,6 +53,7 @@ from ._generated_types import (
     Group,
     GroupScope,
     IfExists,
+    ImageRenderingMode,
     InvokeFunction,
     InvokeParent,
     MCPServer,
@@ -163,6 +164,7 @@ __all__ = [
     "Group",
     "GroupScope",
     "IfExists",
+    "ImageRenderingMode",
     "InvokeFunction",
     "InvokeParent",
     "MCPServer",

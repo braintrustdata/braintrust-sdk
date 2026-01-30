@@ -1,3 +1,5 @@
+import { ChatAnthropic } from "@langchain/anthropic";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
 import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
@@ -1075,4 +1077,160 @@ it("should handle nested agent action with parent run id", async () => {
     root_span_id,
     span_parents: [root_span_id],
   });
+});
+
+it("should extract prompt caching tokens from Anthropic response", async () => {
+  const logs: LogsRequest[] = [];
+
+  const ANTHROPIC_RESPONSE_WITH_CACHE = {
+    model: "claude-sonnet-4-5-20250929",
+    id: "msg_01PKL7azhWzdzdXC5yojHG6V",
+    type: "message",
+    role: "assistant",
+    content: [
+      {
+        type: "text",
+        text: 'The first type of testing mentioned is **Unit Testing**, which is described as "Testing individual components or functions in isolation."',
+      },
+    ],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: 14,
+      cache_creation_input_tokens: 2042,
+      cache_read_input_tokens: 0,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 0,
+        ephemeral_1h_input_tokens: 0,
+      },
+      output_tokens: 27,
+      service_tier: "standard",
+    },
+  };
+
+  const ANTHROPIC_RESPONSE_WITH_CACHE_READ = {
+    model: "claude-sonnet-4-5-20250929",
+    id: "msg_01PjHqPkFstyG2Bcqum9XKD8",
+    type: "message",
+    role: "assistant",
+    content: [
+      {
+        type: "text",
+        text: 'Based on the document:\n\n1. **First type of testing mentioned:** Unit Testing - described as "Testing individual components or functions in isolation"\n\n2. **Python testing frameworks mentioned:** \n   - pytest (described as "Feature-rich testing framework")\n   - unittest (described as "Built-in Python testing module")',
+      },
+    ],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: 23,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 2042,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 0,
+        ephemeral_1h_input_tokens: 0,
+      },
+      output_tokens: 71,
+      service_tier: "standard",
+    },
+  };
+
+  const anthropicResponses = [
+    ANTHROPIC_RESPONSE_WITH_CACHE,
+    ANTHROPIC_RESPONSE_WITH_CACHE_READ,
+  ];
+
+  server.use(
+    http.post("https://api.anthropic.com/v1/messages", ({ request }) => {
+      const message = anthropicResponses.shift();
+      return HttpResponse.json(message);
+    }),
+
+    http.post(/.+logs.+/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      console.log(logs.slice(-1)[0]);
+      return HttpResponse.json(["cache-tokens-span-id"]);
+    }),
+  );
+
+  const model = new ChatAnthropic({ model: "claude-sonnet-4-5-20250929" });
+
+  // Use a long system message to simulate cache-eligible content
+  const longText = `
+# Comprehensive Guide to Software Testing Methods
+
+Software testing is a critical component of the software development lifecycle.
+This guide covers various testing methodologies, best practices, and tools.
+
+## Types of Testing
+- Unit Testing: Testing individual components or functions in isolation
+- Integration Testing: Testing how components work together
+- End-to-End Testing: Testing the entire application flow
+
+## Python Testing Tools
+- pytest: Feature-rich testing framework
+- unittest: Built-in Python testing module
+`.repeat(20); // Repeat to ensure enough tokens for caching
+
+  const messages = [
+    new SystemMessage({
+      content: [
+        {
+          type: "text",
+          text: longText,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+    }),
+    new HumanMessage("What is the first type of testing mentioned?"),
+  ];
+
+  // First invocation - should create cache
+  await model.invoke(messages, { callbacks: [handler] });
+
+  await flush();
+
+  const { spans: firstSpans } = logsToSpans(logs);
+  logs.length = 0; // Clear logs for next invocation
+
+  const firstLlmSpan = firstSpans.find(
+    (s) => s.span_attributes?.type === "llm",
+  );
+
+  expect(firstLlmSpan).toBeDefined();
+  expect(firstLlmSpan?.metrics).toMatchObject({
+    prompt_tokens: 14,
+    completion_tokens: 27,
+  });
+
+  console.log(firstLlmSpan?.metrics);
+
+  // After fix: should have cache creation tokens
+  expect(firstLlmSpan?.metrics?.prompt_cache_creation_tokens).toBe(2042);
+
+  // Second invocation - should read from cache
+  await model.invoke(
+    [
+      ...messages,
+      new HumanMessage("What testing framework is mentioned for Python?"),
+    ],
+    { callbacks: [handler] },
+  );
+
+  await flush();
+
+  const { spans: secondSpans } = logsToSpans(logs);
+
+  const secondLlmSpan = secondSpans.find(
+    (s) => s.span_attributes?.type === "llm",
+  );
+
+  expect(secondLlmSpan).toBeDefined();
+  expect(secondLlmSpan?.metrics).toMatchObject({
+    prompt_tokens: 23,
+    completion_tokens: 71,
+  });
+
+  // After fix: should have cache read tokens
+  expect(secondLlmSpan?.metrics?.prompt_cached_tokens).toBe(2042);
 });
