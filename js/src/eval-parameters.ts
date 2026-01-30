@@ -73,47 +73,11 @@ export function validateParameters<
   ) as InferParameters<Parameters>;
 }
 
-export function serializedSchemaToJsonSchema(
-  serializedSchema: Record<string, unknown>,
-): Record<string, unknown> {
-  const properties: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(serializedSchema)) {
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "type" in value &&
-      value.type === "data" &&
-      "schema" in value
-    ) {
-      properties[key] = value.schema;
-    } else if (
-      typeof value === "object" &&
-      value !== null &&
-      "type" in value &&
-      value.type === "prompt"
-    ) {
-      properties[key] = { type: "object" };
-    }
-  }
-
-  return {
-    type: "object",
-    properties,
-    additionalProperties: true,
-  };
-}
-
 export function validateParametersWithJsonSchema<
   T extends Record<string, unknown>,
->(
-  parameters: Record<string, unknown>,
-  serializedSchema: Record<string, unknown>,
-): T {
-  const jsonSchema = serializedSchemaToJsonSchema(serializedSchema);
-
+>(parameters: Record<string, unknown>, schema: Record<string, unknown>): T {
   const ajv = new Ajv({ coerceTypes: true, useDefaults: true, strict: false });
-  const validate = ajv.compile(jsonSchema);
+  const validate = ajv.compile(schema);
 
   if (!validate(parameters)) {
     const errorMessages = validate.errors

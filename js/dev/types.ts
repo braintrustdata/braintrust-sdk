@@ -31,7 +31,8 @@ export type EvaluatorManifest = Record<
   EvaluatorDef<unknown, unknown, unknown, BaseMetadata>
 >;
 
-export const evalParametersSerializedSchema = z.record(
+// Legacy format - kept for backwards compatibility
+export const evalParametersSerializedHardCodedSchema = z.record(
   z.string(),
   z.union([
     z.object({
@@ -41,12 +42,20 @@ export const evalParametersSerializedSchema = z.record(
     }),
     z.object({
       type: z.literal("data"),
-      schema: z.record(z.unknown()), // JSON Schema
+      schema: z.record(z.unknown()),
       default: z.unknown().optional(),
       description: z.string().optional(),
     }),
   ]),
 );
+
+// New JSON Schema format
+export const evalParametersSerializedSchema = z.object({
+  type: z.literal("object"),
+  properties: z.record(z.string(), z.record(z.unknown())),
+  required: z.array(z.string()).optional(),
+  additionalProperties: z.boolean().optional(),
+});
 
 export type EvalParameterSerializedSchema = z.infer<
   typeof evalParametersSerializedSchema
@@ -63,7 +72,12 @@ export const parametersSourceSchema = z.object({
 export type ParametersSource = z.infer<typeof parametersSourceSchema>;
 
 export const evaluatorDefinitionSchema = z.object({
-  parameters: evalParametersSerializedSchema.optional(),
+  parameters: z
+    .union([
+      evalParametersSerializedHardCodedSchema,
+      evalParametersSerializedSchema,
+    ])
+    .optional(),
   parametersSource: parametersSourceSchema.optional(),
   scores: z.array(z.object({ name: z.string() })).optional(),
 });

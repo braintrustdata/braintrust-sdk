@@ -829,26 +829,29 @@ export function scorerName(
   return scorer.name || `scorer_${scorer_idx}`;
 }
 
+interface ParametersSchema {
+  type: "object";
+  properties: Record<string, Record<string, unknown>>;
+  required?: string[];
+}
+
 function applySchemaDefaults<T extends Record<string, unknown>>(
   data: T,
   schema: Record<string, unknown>,
 ): T {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   const result = { ...data } as T;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const typedSchema = schema as unknown as ParametersSchema;
 
-  for (const [key, schemaDef] of Object.entries(schema)) {
+  for (const [key, propSchema] of Object.entries(typedSchema.properties)) {
     if (key in result) {
       continue;
     }
 
-    if (
-      typeof schemaDef === "object" &&
-      schemaDef !== null &&
-      "default" in schemaDef &&
-      schemaDef.default !== undefined
-    ) {
+    if (propSchema.default !== undefined) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-      (result as Record<string, unknown>)[key] = schemaDef.default as any;
+      (result as Record<string, unknown>)[key] = propSchema.default as any;
     }
   }
 

@@ -39,6 +39,7 @@ import {
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
+  evalParametersSerializedHardCodedSchema,
   EvalParameterSerializedSchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
@@ -46,7 +47,11 @@ import {
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
-import { makeEvalParametersSchema } from "../src/framework2";
+import {
+  makeEvalParametersSchema,
+  makeEvalParametersHardCodedSchema,
+} from "../src/framework2";
+
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -108,13 +113,17 @@ export function runDevServer(
       const evalDefs: EvaluatorDefinitions = {};
 
       for (const [name, evaluator] of Object.entries(allEvaluators)) {
-        let parameters: EvalParameterSerializedSchema | undefined;
+        let parameters:
+          | EvalParameterSerializedSchema
+          | z.infer<typeof evalParametersSerializedHardCodedSchema>
+          | undefined;
         let parametersSource: ParametersSource | undefined;
 
         if (evaluator.parameters) {
           const resolvedParams = await Promise.resolve(evaluator.parameters);
 
           if (RemoteEvalParameters.isParameters(resolvedParams)) {
+            // Remote parameters - use JSON Schema format
             parameters = resolvedParams.schema as EvalParameterSerializedSchema;
             parametersSource = {
               parametersId: resolvedParams.id,
@@ -124,7 +133,8 @@ export function runDevServer(
               version: resolvedParams.version,
             };
           } else {
-            parameters = makeEvalParametersSchema(resolvedParams);
+            // Local parameters - use legacy format for backwards compatibility
+            parameters = makeEvalParametersHardCodedSchema(resolvedParams);
           }
         }
 

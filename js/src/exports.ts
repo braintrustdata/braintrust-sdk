@@ -274,4 +274,5 @@ export type { EvalParameters } from "./eval-parameters";
 export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
+  evalParametersSerializedSchema,
 } from "../dev/types";

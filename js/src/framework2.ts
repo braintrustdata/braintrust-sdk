@@ -650,41 +650,112 @@ export class ParametersBuilder {
   }
 }
 
+// Legacy format - creates the old parameter format for backwards compatibility
+export function makeEvalParametersHardCodedSchema(
+  parameters: EvalParameters,
+): Record<
+  string,
+  | {
+      type: "prompt";
+      default?: PromptData;
+      description?: string;
+    }
+  | {
+      type: "data";
+      schema: Record<string, unknown>;
+      default?: unknown;
+      description?: string;
+    }
+> {
+  const result: Record<
+    string,
+    | {
+        type: "prompt";
+        default?: PromptData;
+        description?: string;
+      }
+    | {
+        type: "data";
+        schema: Record<string, unknown>;
+        default?: unknown;
+        description?: string;
+      }
+  > = {};
+
+  for (const [name, value] of Object.entries(parameters)) {
+    if ("type" in value && value.type === "prompt") {
+      const defaultPromptData = value.default
+        ? promptDefinitionToPromptData(value.default)
+        : undefined;
+
+      result[name] = {
+        type: "prompt",
+        ...(value.description ? { description: value.description } : {}),
+        ...(defaultPromptData ? { default: defaultPromptData } : {}),
+      };
+    } else {
+      // Data parameter - convert Zod schema to JSON Schema
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const schemaObj = zodToJsonSchema(value as z.ZodType) as Record<
+        string,
+        unknown
+      >;
+
+      result[name] = {
+        type: "data",
+        schema: schemaObj,
+        ...("default" in schemaObj ? { default: schemaObj.default } : {}),
+      };
+    }
+  }
+
+  return result;
+}
+
+// New JSON Schema format
 export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): EvalParameterSerializedSchema {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
-          },
-        ];
-      } else {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as z.ZodType);
-        return [
-          name,
-          {
-            type: "data",
-            schema: schemaObj,
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            default: (schemaObj as Record<string, unknown>).default,
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            description: (schemaObj as Record<string, unknown>).description as
-              | string
-              | undefined,
-          },
-        ];
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required: string[] = [];
+
+  for (const [name, value] of Object.entries(parameters)) {
+    if ("type" in value && value.type === "prompt") {
+      const defaultPromptData = value.default
+        ? promptDefinitionToPromptData(value.default)
+        : undefined;
+
+      properties[name] = {
+        type: "object",
+        "x-bt-type": "prompt",
+        ...(value.description ? { description: value.description } : {}),
+        ...(defaultPromptData ? { default: defaultPromptData } : {}),
+      };
+
+      if (!defaultPromptData) {
+        required.push(name);
       }
-    }),
-  );
+    } else {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const schemaObj = zodToJsonSchema(value as z.ZodType) as Record<
+        string,
+        unknown
+      >;
+
+      properties[name] = schemaObj;
+
+      if (!("default" in schemaObj)) {
+        required.push(name);
+      }
+    }
+  }
+
+  return {
+    type: "object",
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+    additionalProperties: true,
+  };
 }
 
 export interface FunctionEvent {
