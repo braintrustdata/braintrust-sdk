@@ -3269,6 +3269,8 @@ def _update_span_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
+    root_span_id: str | None = None,
+    span_id: str | None = None,
     **event: Any,
 ):
     update_event = _validate_and_sanitize_experiment_log_partial_args(
@@ -3287,6 +3289,8 @@ def _update_span_impl(
     def compute_record():
         return dict(
             id=id,
+            root_span_id=root_span_id,
+            span_id=span_id,
             **update_event,
             **parent_ids(),
             **{
@@ -3318,6 +3322,8 @@ def update_span(exported: str, **event: Any) -> None:
         parent_object_type=components.object_type,
         parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
         id=components.row_id,
+        root_span_id=components.root_span_id,
+        span_id=components.span_id,
         **event,
     )
 
