@@ -117,6 +117,46 @@ type HookCallbackMatcher = {
 };
 
 /**
+ * Parsed MCP tool name components.
+ */
+type ParsedToolName = {
+  /** Display name for spans (e.g., "math/calculator" or raw name if not MCP) */
+  displayName: string;
+  /** The actual tool name without MCP prefix */
+  toolName: string;
+  /** MCP server name, if this is an MCP tool */
+  mcpServer?: string;
+  /** The raw tool name as provided by the SDK */
+  rawToolName: string;
+};
+
+/**
+ * Parses MCP tool names in the format "mcp__<server>__<tool>" into components.
+ * Falls back to using the raw name if parsing fails.
+ */
+function parseToolName(rawToolName: string): ParsedToolName {
+  // MCP tools follow the pattern: mcp__<server>__<tool>
+  const mcpMatch = rawToolName.match(/^mcp__([^_]+)__(.+)$/);
+
+  if (mcpMatch) {
+    const [, mcpServer, toolName] = mcpMatch;
+    return {
+      displayName: `tool: ${mcpServer}/${toolName}`,
+      toolName,
+      mcpServer,
+      rawToolName,
+    };
+  }
+
+  // Not an MCP tool, use raw name with "tool:" prefix
+  return {
+    displayName: `tool: ${rawToolName}`,
+    toolName: rawToolName,
+    rawToolName,
+  };
+}
+
+/**
  * Creates PreToolUse, PostToolUse, and PostToolUseFailure hooks for tracing all tool calls (including remote MCPs).
  * The hooks use toolUseID to correlate pre/post events and manage span lifecycle.
  */
@@ -135,15 +175,22 @@ function createToolTracingHooks(
       return {};
     }
 
+    const parsed = parseToolName(input.tool_name);
     const parentExport = await parentSpanExportPromise;
     const toolSpan = startSpan({
-      name: input.tool_name,
+      name: parsed.displayName,
       spanAttributes: { type: SpanTypeAttribute.TOOL },
       event: {
         input: input.tool_input,
         metadata: {
-          tool_name: input.tool_name,
-          tool_use_id: toolUseID,
+          // GenAI semantic conventions
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          // MCP-specific metadata (if applicable)
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
+          // Raw tool name for debugging
+          raw_tool_name: parsed.rawToolName,
+          // Session context
           session_id: input.session_id,
           cwd: input.cwd,
         },
@@ -184,12 +231,14 @@ function createToolTracingHooks(
       return {};
     }
 
+    const parsed = parseToolName(input.tool_name);
     try {
       toolSpan.log({
         error: input.error,
         metadata: {
-          tool_name: input.tool_name,
-          tool_use_id: toolUseID,
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
           is_interrupt: input.is_interrupt,
           session_id: input.session_id,
         },

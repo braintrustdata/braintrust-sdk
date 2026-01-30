@@ -452,13 +452,15 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     }
     expect(toolSpans.length).toBeGreaterThanOrEqual(1);
     toolSpans.forEach((span) => {
-      // Tool name includes MCP server prefix
+      // Span name is parsed MCP format: tool: server/tool
       expect((span["span_attributes"] as Record<string, unknown>).name).toBe(
-        "mcp__calculator__calculator",
+        "tool: calculator/calculator",
       );
-      expect((span.metadata as Record<string, string>).tool_name).toBe(
-        "mcp__calculator__calculator",
-      );
+      // Metadata uses GenAI semantic conventions
+      const metadata = span.metadata as Record<string, string>;
+      expect(metadata["gen_ai.tool.name"]).toBe("calculator");
+      expect(metadata["mcp.server"]).toBe("calculator");
+      expect(metadata["raw_tool_name"]).toBe("mcp__calculator__calculator");
     });
 
     // Verify span hierarchy (all children should reference the root task span)

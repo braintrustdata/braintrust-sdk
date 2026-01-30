@@ -3,7 +3,7 @@
  *
  * Demonstrates:
  * 1. Wrapping the Claude Agent SDK for automatic tracing
- * 2. SDK MCP tool (calculator) - local in-process tool
+ * 2. SDK MCP server (math) with calculator tool - local in-process
  * 3. Remote MCP server (braintrust) - stdio-based MCP server
  * 4. Subagent spawning via Task tool
  * 5. All tool calls traced via PreToolUse/PostToolUse hooks
@@ -71,13 +71,15 @@ const calculator = tool(
 async function main() {
   console.log("Starting Claude Agent SDK example with Braintrust tracing...\n");
   console.log("This example demonstrates:");
-  console.log("  - SDK MCP: calculator (local in-process tool)");
+  console.log(
+    "  - SDK MCP: math server with calculator tool (local in-process)",
+  );
   console.log("  - Remote MCP: braintrust (stdio server via npx)");
   console.log("  - Subagents: math-expert (via Task tool)\n");
 
   // SDK MCP server (local, in-process)
-  const calculatorServer = createSdkMcpServer({
-    name: "calculator",
+  const mathServer = createSdkMcpServer({
+    name: "math",
     version: "1.0.0",
     tools: [calculator],
   });
@@ -118,7 +120,7 @@ Report all results.`;
       },
       mcpServers: {
         // SDK MCP (local)
-        calculator: calculatorServer,
+        math: mathServer,
         // Remote MCP (stdio) - Braintrust MCP server
         braintrust: {
           type: "stdio",
