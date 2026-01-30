@@ -1778,12 +1778,16 @@ function updateSpanImpl({
   parentObjectType,
   parentObjectId,
   id,
+  root_span_id,
+  span_id,
   event,
 }: {
   state: BraintrustState;
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   id: string;
+  root_span_id?: string;
+  span_id?: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
   const updateEvent = deepCopyEvent(
@@ -1801,6 +1805,8 @@ function updateSpanImpl({
 
   const record = new LazyValue(async () => ({
     id,
+    root_span_id,
+    span_id,
     ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
@@ -1837,6 +1843,8 @@ export function updateSpan({
       spanComponentsToObjectIdLambda(resolvedState, components),
     ),
     id: components.data.row_id,
+    root_span_id: components.data.root_span_id,
+    span_id: components.data.span_id,
     event,
   });
 }
