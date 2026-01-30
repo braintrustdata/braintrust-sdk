@@ -44,10 +44,7 @@ verify-build: _check-git-clean build test-wheel
 verify: lint test
 
 install-build-deps:
-	# Ensure pip is at a known version first for reproducible builds
 	python -m pip install uv==0.7.8
-	# Use 'python -m pip' to ensure we're using python's pip
-	# https://pip.pypa.io/en/latest/user_guide/
 	python -m uv pip install -e .
 	python -m uv pip install -r requirements-build.txt
 
