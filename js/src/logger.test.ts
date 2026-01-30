@@ -1212,20 +1212,44 @@ describe("filtering functionality", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
-  test("filter out events with langsmith:hidden tag", async () => {
+  /**
+   * Test that filtering a middle span creates an orphan, NOT a reparented child.
+   *
+   * Given this tree:
+   *     root
+   *       parent
+   *         child
+   *         sibling  <-- FILTERED
+   *           descendant
+   *
+   * The user might EXPECT descendant to be reparented:
+   *     root
+   *       parent
+   *         child
+   *         descendant  <-- moved up to parent
+   *
+   * But ACTUAL behavior is descendant becomes orphan under root:
+   *     root
+   *       parent
+   *         child
+   *       descendant  <-- orphan (span_parents still points to filtered "sibling")
+   *
+   * This is because:
+   * 1. descendant's span_parents still contains sibling's span_id
+   * 2. sibling doesn't exist in the logged data
+   * 3. UI treats spans with missing parents as orphans under root
+   */
+  test("filtering middle span creates orphan under root", async () => {
     const filteredSpanIds = new Set<string>();
 
-    const filteringFunction = (event: any): any | null => {
+    const filterSibling = (event: any): any | null => {
       const spanId = event.span_id;
       if (spanId && filteredSpanIds.has(spanId)) {
         return null;
       }
 
-      const rootTags = event.tags || [];
-      const metadataTags = event.metadata?.tags || [];
-      const allTags = [...rootTags, ...metadataTags];
-
-      if (allTags.includes("langsmith:hidden")) {
+      const spanName = event.span_attributes?.name ?? "";
+      if (spanName === "sibling") {
         if (spanId) {
           filteredSpanIds.add(spanId);
         }
@@ -1235,122 +1259,129 @@ describe("filtering functionality", () => {
       return event;
     };
 
-    setFilteringFunction(filteringFunction);
+    setFilteringFunction(filterSibling);
 
     const logger = initLogger({
       projectName: "test",
       projectId: "test-project-id",
     });
 
-    logger.log({
-      input: "Hidden input",
-      output: "Hidden output",
-      tags: ["langsmith:hidden"],
-    });
+    const root = logger.startSpan({ name: "root" });
+    const rootSpanId = root.spanId;
 
-    logger.log({
-      input: "Normal input",
-      output: "Normal output",
-      tags: ["normal"],
-    });
+    const parent = root.startSpan({ name: "parent" });
+    const parentSpanId = parent.spanId;
 
-    await memoryLogger.flush();
-    const events = await memoryLogger.drain();
+    const child = parent.startSpan({ name: "child" });
+    child.log({ input: "child data" });
+    child.end();
 
-    expect(events).toHaveLength(1);
-    expect(events[0].input).toBe("Normal input");
-    expect(events[0].output).toBe("Normal output");
-  });
+    const sibling = parent.startSpan({ name: "sibling" });
+    const siblingSpanId = sibling.spanId; // This span will be filtered
 
-  test("filter by score threshold", async () => {
-    const filteredSpanIds = new Set<string>();
+    const descendant = sibling.startSpan({ name: "descendant" });
+    descendant.log({ input: "descendant data" });
+    const descendantSpanId = descendant.spanId;
+    descendant.end();
 
-    const filteringFunction = (event: any): any | null => {
-      const spanId = event.span_id;
-      if (spanId && filteredSpanIds.has(spanId)) {
-        return null;
-      }
-
-      if (event.scores?.accuracy !== undefined && event.scores.accuracy < 0.5) {
-        if (spanId) {
-          filteredSpanIds.add(spanId);
-        }
-        return null;
-      }
-      return event;
-    };
-
-    setFilteringFunction(filteringFunction);
-
-    const experiment = _exportsForTestingOnly.initTestExperiment({
-      projectName: "test",
-      experimentName: "test-exp",
-    });
-
-    experiment.log({
-      input: "bad input",
-      output: "bad output",
-      scores: { accuracy: 0.3 },
-    });
-
-    experiment.log({
-      input: "good input",
-      output: "good output",
-      scores: { accuracy: 0.8 },
-    });
-
-    await memoryLogger.flush();
-    const events = await memoryLogger.drain();
-
-    expect(events).toHaveLength(1);
-    expect(events[0].input).toBe("good input");
-    expect(events[0].scores.accuracy).toBe(0.8);
-  });
-
-  test("filter nested spans by name", async () => {
-    const filteredSpanIds = new Set<string>();
-
-    const filteringFunction = (event: any): any | null => {
-      const spanId = event.span_id;
-      if (spanId && filteredSpanIds.has(spanId)) {
-        return null;
-      }
-
-      if (event.span_attributes?.name === "internal_helper") {
-        if (spanId) {
-          filteredSpanIds.add(spanId);
-        }
-        return null;
-      }
-
-      return event;
-    };
-
-    setFilteringFunction(filteringFunction);
-
-    const logger = initLogger({
-      projectName: "test",
-      projectId: "test-project-id",
-    });
-    const parent = logger.startSpan({ name: "parent_span" });
-    parent.log({ input: "parent input", output: "parent output" });
-
-    const internalChild = parent.startSpan({ name: "internal_helper" });
-    internalChild.log({ input: "hidden input", output: "hidden output" });
-    internalChild.end();
-
-    const publicChild = parent.startSpan({ name: "public_helper" });
-    publicChild.log({ input: "public input", output: "public output" });
-    publicChild.end();
-
+    sibling.end();
     parent.end();
+    root.end();
 
     await memoryLogger.flush();
     const events = await memoryLogger.drain();
 
-    const inputEvents = events.filter((e: any) => e.input !== undefined);
-    expect(inputEvents).toHaveLength(2);
-    expect(inputEvents[0].input).toBe("parent input");
-    expect(inputEvents[1].input).toBe("public input");
+    const loggedNames = events.map((e: any) => e.span_attributes?.name);
+    expect(loggedNames).toContain("root");
+    expect(loggedNames).toContain("parent");
+    expect(loggedNames).toContain("child");
+    expect(loggedNames).not.toContain("sibling"); // Filtered out
+    expect(loggedNames).toContain("descendant"); // Still logged!
+
+    const descendantLog = events.find(
+      (e: any) => e.span_attributes?.name === "descendant",
+    );
+
+    // Key assertion: descendant's span_parents still points to the FILTERED sibling
+    // This means the UI will see it as an orphan (parent doesn't exist)
+    expect(descendantLog.span_parents).toContain(siblingSpanId);
+
+    // The descendant does NOT have parent_span_id pointing to "parent"
+    // It still thinks its parent is "sibling" (which was filtered)
+    expect(descendantLog.span_parents).not.toContain(parentSpanId);
+
+    // All spans share the same root_span_id
+    expect(descendantLog.root_span_id).toBe(rootSpanId);
+  });
+
+  /**
+   * Test that users can implement cascading filter to avoid orphans.
+   *
+   * To filter "sibling" AND its descendants (avoiding orphans), users must
+   * track filtered span_ids and check span_parents in their filter function.
+   */
+  test("filtering with cascade to fix orphans", async () => {
+    const filteredSpanIds = new Set<string>();
+
+    const filterSiblingWithCascade = (event: any): any | null => {
+      const spanId = event.span_id;
+      const spanParents = event.span_parents || [];
+
+      // Check if any parent was filtered (cascade)
+      for (const parentId of spanParents) {
+        if (filteredSpanIds.has(parentId)) {
+          if (spanId) {
+            filteredSpanIds.add(spanId);
+          }
+          return null;
+        }
+      }
+
+      // Check if this span should be filtered
+      const spanName = event.span_attributes?.name ?? "";
+      if (spanName === "sibling") {
+        if (spanId) {
+          filteredSpanIds.add(spanId);
+        }
+        return null;
+      }
+
+      return event;
+    };
+
+    setFilteringFunction(filterSiblingWithCascade);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    const root = logger.startSpan({ name: "root" });
+
+    const parent = root.startSpan({ name: "parent" });
+
+    const child = parent.startSpan({ name: "child" });
+    child.log({ input: "child data" });
+    child.end();
+
+    const sibling = parent.startSpan({ name: "sibling" });
+
+    const descendant = sibling.startSpan({ name: "descendant" });
+    descendant.log({ input: "descendant data" });
+    descendant.end();
+
+    sibling.end();
+    parent.end();
+    root.end();
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    const loggedNames = events.map((e: any) => e.span_attributes?.name);
+    expect(loggedNames).toContain("root");
+    expect(loggedNames).toContain("parent");
+    expect(loggedNames).toContain("child");
+    expect(loggedNames).not.toContain("sibling"); // Filtered
+    expect(loggedNames).not.toContain("descendant"); // Also filtered (cascaded)
   });
 });

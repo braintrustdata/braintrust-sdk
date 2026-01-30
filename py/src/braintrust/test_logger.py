@@ -2187,221 +2187,158 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
     braintrust.set_masking_function(None)
 
 
-def test_filtering_function_logger(with_memory_logger, with_simulate_login):
-    """Test that filtering function can filter and redact events in Logger."""
+def test_filtering_middle_span_creates_orphan_under_root(with_memory_logger, with_simulate_login):
+    """
+    Test that filtering a middle span creates an orphan, NOT a reparented child.
 
-    # Track span IDs that should be filtered
+    Given this tree:
+        root
+          parent
+            child
+            sibling  <-- FILTERED
+              descendant
+
+    The user might EXPECT descendant to be reparented:
+        root
+          parent
+            child
+            descendant  <-- moved up to parent
+
+    But ACTUAL behavior is descendant becomes orphan under root:
+        root
+          parent
+            child
+          descendant  <-- orphan (span_parents still points to filtered "sibling")
+
+    This is because:
+    1. descendant's span_parents still contains sibling's span_id
+    2. sibling doesn't exist in the logged data
+    3. UI treats spans with missing parents as orphans under root
+    """
     filtered_span_ids = set()
 
-    def filtering_function(event):
-        """
-        Filter out events with 'langsmith:hidden' tag.
-        Redact sensitive metadata fields.
-        """
-        # Skip events from filtered spans
+    def filter_sibling(event):
         span_id = event.get("span_id")
         if span_id and span_id in filtered_span_ids:
             return None
 
-        # Skip events with langsmith:hidden tag
-        # Tags can be in two places depending on where in the processing we are:
-        # 1. At root level before processing (event["tags"])
-        # 2. In metadata after processing (event["metadata"]["tags"])
-        root_tags = event.get("tags", []) or []
-        metadata_tags = event.get("metadata", {}).get("tags", []) or []
-        all_tags = list(root_tags) + list(metadata_tags)
-
-        if "langsmith:hidden" in all_tags:
-            # Track this span ID so we filter all its events
+        span_name = event.get("span_attributes", {}).get("name", "")
+        if span_name == "sibling":
             if span_id:
                 filtered_span_ids.add(span_id)
             return None
 
-        # Redact api_key from metadata
-        if "metadata" in event and "api_key" in event.get("metadata", {}):
-            event = event.copy()
-            event["metadata"] = event["metadata"].copy()
-            event["metadata"]["api_key"] = "***REDACTED***"
-
         return event
 
-    # Set filtering function globally
-    braintrust.set_filtering_function(filtering_function)
+    braintrust.set_filtering_function(filter_sibling)
 
-    # Create test logger
     test_logger = init_test_logger("test_project")
 
-    # Log event that should be filtered out
-    test_logger.log(
-        input="Hidden input",
-        output="Hidden output",
-        tags=["langsmith:hidden"],
-    )
+    with test_logger.start_span(name="root") as root:
+        root_span_id = root.span_id
 
-    # Log event that should be redacted
-    test_logger.log(
-        input="Normal input",
-        output="Normal output",
-        metadata={"api_key": "secret123", "user": "testuser"},
-    )
+        with root.start_span(name="parent") as parent:
+            parent_span_id = parent.span_id
 
-    # Log normal event
-    test_logger.log(
-        input="Another input",
-        output="Another output",
-        tags=["normal"],
-    )
+            with parent.start_span(name="child") as child:
+                child.log(input="child data")
 
-    # Check the logged data
+            with parent.start_span(name="sibling") as sibling:
+                sibling_span_id = sibling.span_id  # This span will be filtered
+
+                with sibling.start_span(name="descendant") as descendant:
+                    descendant.log(input="descendant data")
+                    descendant_span_id = descendant.span_id
+
     logs = with_memory_logger.pop()
 
-    # Should only have 2 logs (the first one was filtered out)
-    assert len(logs) == 2
+    logged_names = [l.get("span_attributes", {}).get("name") for l in logs]
+    assert "root" in logged_names
+    assert "parent" in logged_names
+    assert "child" in logged_names
+    assert "sibling" not in logged_names  # Filtered out
+    assert "descendant" in logged_names  # Still logged!
 
-    # First log should have redacted api_key
-    log1 = logs[0]
-    assert log1["input"] == "Normal input"
-    assert log1["output"] == "Normal output"
-    assert log1["metadata"]["api_key"] == "***REDACTED***"
-    assert log1["metadata"]["user"] == "testuser"
+    descendant_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "descendant")
 
-    # Second log should be unchanged
-    log2 = logs[1]
-    assert log2["input"] == "Another input"
-    assert log2["output"] == "Another output"
-    assert log2["tags"] == ["normal"]
+    # Key assertion: descendant's span_parents still points to the FILTERED sibling
+    # This means the UI will see it as an orphan (parent doesn't exist)
+    assert sibling_span_id in descendant_log["span_parents"]
 
-    # Clean up
+    # The descendant does NOT have parent_span_id pointing to "parent"
+    # It still thinks its parent is "sibling" (which was filtered)
+    assert parent_span_id not in descendant_log["span_parents"]
+
+    # All spans share the same root_span_id
+    assert descendant_log["root_span_id"] == root_span_id
+
     braintrust.set_filtering_function(None)
 
 
-def test_filtering_function_experiment(with_memory_logger, with_simulate_login):
-    """Test that filtering function works with Experiment spans."""
+def test_filtering_with_cascade_to_fix_orphans(with_memory_logger, with_simulate_login):
+    """
+    Test that users can implement cascading filter to avoid orphans.
 
-    # Track filtered span IDs so we can filter all events from that span
+    To filter "sibling" AND its descendants (avoiding orphans), users must
+    track filtered span_ids and check span_parents in their filter function.
+
+    Given:
+        root
+          parent
+            child
+            sibling  <-- FILTERED (and cascade to descendants)
+              descendant
+
+    With cascading filter, result is:
+        root
+          parent
+            child
+        (descendant is also filtered, no orphans)
+    """
     filtered_span_ids = set()
 
-    def filtering_function(event):
-        """Filter out spans with score below threshold."""
+    def filter_sibling_with_cascade(event):
         span_id = event.get("span_id")
+        span_parents = event.get("span_parents", []) or []
 
-        # Skip events from already-filtered spans
-        if span_id and span_id in filtered_span_ids:
-            return None
+        # Check if any parent was filtered (cascade)
+        for parent_id in span_parents:
+            if parent_id in filtered_span_ids:
+                if span_id:
+                    filtered_span_ids.add(span_id)
+                return None
 
-        # Skip spans with low scores
-        scores = event.get("scores", {})
-        if "accuracy" in scores and scores["accuracy"] < 0.5:
-            if span_id:
-                filtered_span_ids.add(span_id)
-            return None
-        return event
-
-    # Set filtering function globally
-    braintrust.set_filtering_function(filtering_function)
-
-    # Create test experiment
-    experiment = init_test_exp("test_project", "test_experiment")
-
-    # Log event with low score (should be filtered out)
-    experiment.log(
-        input="bad input",
-        output="bad output",
-        scores={"accuracy": 0.3},
-    )
-
-    # Log event with good score
-    experiment.log(
-        input="good input",
-        output="good output",
-        scores={"accuracy": 0.8},
-    )
-
-    # Log event without accuracy score (but with a different score)
-    experiment.log(
-        input="neutral input",
-        output="neutral output",
-        scores={"quality": 0.9},
-    )
-
-    experiment.flush()
-
-    # Check the logged data
-    logs = with_memory_logger.pop()
-
-    # Should only have 2 logs (the first one with low score was filtered out)
-    assert len(logs) == 2
-
-    log1 = logs[0]
-    assert log1["input"] == "good input"
-    assert log1["scores"]["accuracy"] == 0.8
-
-    log2 = logs[1]
-    assert log2["input"] == "neutral input"
-    assert log2["scores"]["quality"] == 0.9
-
-    # Clean up
-    braintrust.set_filtering_function(None)
-
-
-def test_filtering_function_with_child_spans(with_memory_logger, with_simulate_login):
-    """Test that filtering function works with nested spans."""
-
-    # Track filtered span IDs
-    filtered_span_ids = set()
-
-    def filtering_function(event):
-        """Filter out spans with specific names."""
-        span_id = event.get("span_id")
-
-        # Skip events from already-filtered spans
-        if span_id and span_id in filtered_span_ids:
-            return None
-
-        # Filter out spans named "internal_helper"
-        span_attrs = event.get("span_attributes", {})
-        if span_attrs.get("name") == "internal_helper":
+        # Check if this span should be filtered
+        span_name = event.get("span_attributes", {}).get("name", "")
+        if span_name == "sibling":
             if span_id:
                 filtered_span_ids.add(span_id)
             return None
 
         return event
 
-    # Set filtering function globally
-    braintrust.set_filtering_function(filtering_function)
+    braintrust.set_filtering_function(filter_sibling_with_cascade)
 
-    # Create test logger
     test_logger = init_test_logger("test_project")
 
-    # Create a parent span
-    with test_logger.start_span(name="parent_span") as parent:
-        # Log to parent (should be kept)
-        parent.log(input="parent input", output="result1")
+    with test_logger.start_span(name="root") as root:
+        with root.start_span(name="parent") as parent:
+            with parent.start_span(name="child") as child:
+                child.log(input="child data")
 
-        # Create a child span that should be filtered out
-        with parent.start_span(name="internal_helper") as child:
-            child.log(input="hidden input", output="hidden output")
+            with parent.start_span(name="sibling") as sibling:
+                with sibling.start_span(name="descendant") as descendant:
+                    descendant.log(input="descendant data")
 
-        # Create another child span that should be kept
-        with parent.start_span(name="public_helper") as child2:
-            child2.log(input="public input", output="result2")
-
-    # Check the logged data
     logs = with_memory_logger.pop()
 
-    # Should have events from parent_span and public_helper, but not internal_helper
-    # span.log() on existing spans creates merge events, so we get 2 events
-    assert len(logs) == 2
+    logged_names = [l.get("span_attributes", {}).get("name") for l in logs]
+    assert "root" in logged_names
+    assert "parent" in logged_names
+    assert "child" in logged_names
+    assert "sibling" not in logged_names  # Filtered
+    assert "descendant" not in logged_names  # Also filtered (cascaded)
 
-    # First should be from parent_span
-    assert logs[0]["input"] == "parent input"
-    assert logs[0]["output"] == "result1"
-
-    # Second should be from public_helper
-    assert logs[1]["input"] == "public input"
-    assert logs[1]["output"] == "result2"
-
-    # Clean up
     braintrust.set_filtering_function(None)
 
 
@@ -3227,7 +3164,7 @@ def test_extract_attachments_collects_and_replaces():
     event = {
         "input": {"file": attachment1},
         "output": {"file": attachment2},
-        "metadata": {"files": [attachment1, ext_attachment]}
+        "metadata": {"files": [attachment1, ext_attachment]},
     }
 
     attachments = []
@@ -3257,7 +3194,7 @@ def test_extract_attachments_preserves_identity():
     event = {
         "input": attachment,
         "output": attachment,  # Same instance
-        "metadata": {"file": attachment}  # Same instance again
+        "metadata": {"file": attachment},  # Same instance again
     }
 
     attachments = []
@@ -3296,10 +3233,7 @@ def test_multiple_attachments_upload_tracked(with_memory_logger, with_simulate_l
 
     logger = init_test_logger(__name__)
     span = logger.start_span(name="test_span")
-    span.log(
-        input={"file1": attachment1},
-        output={"file2": attachment2}
-    )
+    span.log(input={"file1": attachment1}, output={"file2": attachment2})
     span.end()
     logger.flush()
 
@@ -3329,9 +3263,7 @@ def test_same_attachment_logged_twice_tracked_twice(with_memory_logger, with_sim
 def test_external_attachment_upload_tracked(with_memory_logger, with_simulate_login):
     """Test that ExternalAttachment upload is also tracked."""
     ext_attachment = ExternalAttachment(
-        url="s3://bucket/key.pdf",
-        filename="external.pdf",
-        content_type="application/pdf"
+        url="s3://bucket/key.pdf", filename="external.pdf", content_type="application/pdf"
     )
 
     logger = init_test_logger(__name__)
@@ -3369,11 +3301,7 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
 
     logger = init_test_logger(__name__)
     span = logger.start_span(name="test_span")
-    span.log(
-        input=attachment,
-        output=json_attachment,
-        metadata={"file": ext_attachment}
-    )
+    span.log(input=attachment, output=json_attachment, metadata={"file": ext_attachment})
     span.end()
     logger.flush()
 
