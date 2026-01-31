@@ -41,6 +41,362 @@ type SdkMcpToolDefinition<T> = {
 };
 
 /**
+ * Hook types from @anthropic-ai/claude-agent-sdk
+ */
+type HookEvent =
+  | "PreToolUse"
+  | "PostToolUse"
+  | "PostToolUseFailure"
+  | "SubagentStart"
+  | "SubagentStop";
+
+type BaseHookInput = {
+  session_id: string;
+  transcript_path: string;
+  cwd: string;
+  permission_mode?: string;
+};
+
+type PreToolUseHookInput = BaseHookInput & {
+  hook_event_name: "PreToolUse";
+  tool_name: string;
+  tool_input: unknown;
+};
+
+type PostToolUseHookInput = BaseHookInput & {
+  hook_event_name: "PostToolUse";
+  tool_name: string;
+  tool_input: unknown;
+  tool_response: unknown;
+};
+
+type PostToolUseFailureHookInput = BaseHookInput & {
+  hook_event_name: "PostToolUseFailure";
+  tool_name: string;
+  tool_input: unknown;
+  error: string;
+  is_interrupt?: boolean;
+};
+
+type SubagentStartHookInput = BaseHookInput & {
+  hook_event_name: "SubagentStart";
+  agent_id: string;
+  agent_type: string;
+};
+
+type SubagentStopHookInput = BaseHookInput & {
+  hook_event_name: "SubagentStop";
+  agent_id: string;
+  agent_transcript_path?: string;
+  stop_hook_active?: boolean;
+};
+
+type HookInput =
+  | PreToolUseHookInput
+  | PostToolUseHookInput
+  | PostToolUseFailureHookInput
+  | SubagentStartHookInput
+  | SubagentStopHookInput;
+
+type HookJSONOutput = {
+  continue?: boolean;
+  decision?: "approve" | "block";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+};
+
+type HookCallback = (
+  input: HookInput,
+  toolUseID: string | undefined,
+  options: { signal: AbortSignal },
+) => Promise<HookJSONOutput>;
+
+type HookCallbackMatcher = {
+  matcher?: string;
+  hooks: HookCallback[];
+};
+
+/**
+ * Parsed MCP tool name components.
+ */
+type ParsedToolName = {
+  /** Display name for spans (e.g., "math/calculator" or raw name if not MCP) */
+  displayName: string;
+  /** The actual tool name without MCP prefix */
+  toolName: string;
+  /** MCP server name, if this is an MCP tool */
+  mcpServer?: string;
+  /** The raw tool name as provided by the SDK */
+  rawToolName: string;
+};
+
+/**
+ * Parses MCP tool names in the format "mcp__<server>__<tool>" into components.
+ * Falls back to using the raw name if parsing fails.
+ */
+function parseToolName(rawToolName: string): ParsedToolName {
+  // MCP tools follow the pattern: mcp__<server>__<tool>
+  const mcpMatch = rawToolName.match(/^mcp__([^_]+)__(.+)$/);
+
+  if (mcpMatch) {
+    const [, mcpServer, toolName] = mcpMatch;
+    return {
+      displayName: `tool: ${mcpServer}/${toolName}`,
+      toolName,
+      mcpServer,
+      rawToolName,
+    };
+  }
+
+  // Not an MCP tool, use raw name with "tool:" prefix
+  return {
+    displayName: `tool: ${rawToolName}`,
+    toolName: rawToolName,
+    rawToolName,
+  };
+}
+
+/**
+ * Creates PreToolUse, PostToolUse, and PostToolUseFailure hooks for tracing all tool calls (including remote MCPs).
+ * The hooks use toolUseID to correlate pre/post events and manage span lifecycle.
+ */
+function createToolTracingHooks(
+  parentSpanExportPromise: Promise<
+    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
+  >,
+  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+): {
+  preToolUse: HookCallback;
+  postToolUse: HookCallback;
+  postToolUseFailure: HookCallback;
+} {
+  const preToolUse: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PreToolUse" || !toolUseID) {
+      return {};
+    }
+
+    const parsed = parseToolName(input.tool_name);
+    const parentExport = await parentSpanExportPromise;
+    const toolSpan = startSpan({
+      name: parsed.displayName,
+      spanAttributes: { type: SpanTypeAttribute.TOOL },
+      event: {
+        input: input.tool_input,
+        metadata: {
+          // GenAI semantic conventions
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          // MCP-specific metadata (if applicable)
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
+          // Raw tool name for debugging
+          raw_tool_name: parsed.rawToolName,
+          // Session context
+          session_id: input.session_id,
+          cwd: input.cwd,
+        },
+      },
+      parent: parentExport,
+    });
+
+    activeToolSpans.set(toolUseID, toolSpan);
+    return {};
+  };
+
+  const postToolUse: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PostToolUse" || !toolUseID) {
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    try {
+      toolSpan.log({ output: input.tool_response });
+      toolSpan.end();
+    } finally {
+      activeToolSpans.delete(toolUseID);
+    }
+    return {};
+  };
+
+  const postToolUseFailure: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PostToolUseFailure" || !toolUseID) {
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    const parsed = parseToolName(input.tool_name);
+    try {
+      toolSpan.log({
+        error: input.error,
+        metadata: {
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
+          is_interrupt: input.is_interrupt,
+          session_id: input.session_id,
+        },
+      });
+      toolSpan.end();
+    } finally {
+      activeToolSpans.delete(toolUseID);
+    }
+    return {};
+  };
+
+  return { preToolUse, postToolUse, postToolUseFailure };
+}
+
+/**
+ * Creates SubagentStart and SubagentStop hooks for tracing subagent executions.
+ * The hooks use agent_id to correlate start/stop events and manage span lifecycle.
+ */
+function createSubagentTracingHooks(
+  parentSpanExportPromise: Promise<
+    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
+  >,
+  activeSubagentSpans: Map<string, ReturnType<typeof startSpan>>,
+  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+): { subagentStart: HookCallback; subagentStop: HookCallback } {
+  // Note: SubagentStart hook is not reliably called by the SDK (see GitHub issue #14859).
+  // The Task tool spawn is already traced via PreToolUse/PostToolUse.
+  const subagentStart: HookCallback = async (input) => {
+    if (input.hook_event_name !== "SubagentStart") {
+      return {};
+    }
+
+    const parentExport = await parentSpanExportPromise;
+    const subagentSpan = startSpan({
+      name: `Subagent: ${input.agent_type}`,
+      spanAttributes: { type: SpanTypeAttribute.TASK },
+      event: {
+        metadata: {
+          agent_id: input.agent_id,
+          agent_type: input.agent_type,
+          session_id: input.session_id,
+          cwd: input.cwd,
+          transcript_path: input.transcript_path,
+        },
+      },
+      parent: parentExport,
+    });
+
+    activeSubagentSpans.set(input.agent_id, subagentSpan);
+    return {};
+  };
+
+  // SubagentStop is called but without agent_id in current SDK (GitHub issue #14859).
+  // We use toolUseID to add metadata to the existing Task tool span.
+  const subagentStop: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "SubagentStop") {
+      return {};
+    }
+
+    // If SubagentStart was called, close the subagent span
+    if (input.agent_id) {
+      const subagentSpan = activeSubagentSpans.get(input.agent_id);
+      if (!subagentSpan) {
+        return {};
+      }
+
+      try {
+        subagentSpan.log({
+          metadata: {
+            agent_id: input.agent_id,
+            agent_transcript_path: input.agent_transcript_path,
+            stop_hook_active: input.stop_hook_active,
+            session_id: input.session_id,
+          },
+        });
+        subagentSpan.end();
+      } finally {
+        activeSubagentSpans.delete(input.agent_id);
+      }
+      return {};
+    }
+
+    // Fallback: SubagentStart wasn't called (current SDK behavior).
+    // Add subagent metadata to the Task tool span instead.
+    if (!toolUseID) {
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    toolSpan.log({
+      metadata: {
+        is_subagent: true,
+        subagent_session_id: input.session_id,
+        subagent_transcript_path: input.transcript_path,
+        subagent_stop_hook_active: input.stop_hook_active,
+      },
+    });
+    return {};
+  };
+
+  return { subagentStart, subagentStop };
+}
+
+/**
+ * Injects tracing hooks into query options, preserving any user-provided hooks.
+ */
+function injectTracingHooks(
+  options: QueryOptions,
+  parentSpanExportPromise: Promise<
+    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
+  >,
+  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+  activeSubagentSpans: Map<string, ReturnType<typeof startSpan>>,
+): QueryOptions {
+  const { preToolUse, postToolUse, postToolUseFailure } =
+    createToolTracingHooks(parentSpanExportPromise, activeToolSpans);
+
+  const { subagentStart, subagentStop } = createSubagentTracingHooks(
+    parentSpanExportPromise,
+    activeSubagentSpans,
+    activeToolSpans,
+  );
+
+  const existingHooks = options.hooks ?? {};
+
+  return {
+    ...options,
+    hooks: {
+      ...existingHooks,
+      PreToolUse: [
+        ...(existingHooks.PreToolUse ?? []),
+        { hooks: [preToolUse] } as HookCallbackMatcher,
+      ],
+      PostToolUse: [
+        ...(existingHooks.PostToolUse ?? []),
+        { hooks: [postToolUse] } as HookCallbackMatcher,
+      ],
+      PostToolUseFailure: [
+        ...(existingHooks.PostToolUseFailure ?? []),
+        { hooks: [postToolUseFailure] } as HookCallbackMatcher,
+      ],
+      SubagentStart: [
+        ...(existingHooks.SubagentStart ?? []),
+        { hooks: [subagentStart] } as HookCallbackMatcher,
+      ],
+      SubagentStop: [
+        ...(existingHooks.SubagentStop ?? []),
+        { hooks: [subagentStop] } as HookCallbackMatcher,
+      ],
+    },
+  };
+}
+
+/**
  * Filters options to include only specific serializable fields for logging.
  */
 function filterSerializableOptions(
@@ -149,9 +505,27 @@ function wrapClaudeAgentQuery<
           ? defaultThis ?? thisArg
           : thisArg;
 
+      // Track active tool and subagent spans for hook-based tracing
+      const activeToolSpans = new Map<string, ReturnType<typeof startSpan>>();
+      const activeSubagentSpans = new Map<
+        string,
+        ReturnType<typeof startSpan>
+      >();
+
+      // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs) and subagents
+      const optionsWithHooks = injectTracingHooks(
+        options,
+        span.export(),
+        activeToolSpans,
+        activeSubagentSpans,
+      );
+
+      // Create modified argArray with injected hooks
+      const modifiedArgArray = [{ ...params, options: optionsWithHooks }];
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const originalGenerator: any = withCurrent(span, () =>
-        Reflect.apply(target, invocationTarget, argArray),
+        Reflect.apply(target, invocationTarget, modifiedArgArray),
       );
 
       // Create wrapped async generator that maintains span context
@@ -265,48 +639,6 @@ function wrapClaudeAgentQuery<
   });
 
   return proxy;
-}
-
-/**
- * Wraps a Claude Agent SDK tool definition to add Braintrust tracing for tool executions.
- * Internal use only - use wrapClaudeAgentSDK instead.
- */
-function wrapClaudeAgentTool<T>(
-  toolDef: SdkMcpToolDefinition<T>,
-): SdkMcpToolDefinition<T> {
-  const originalHandler = toolDef.handler;
-
-  const wrappedHandler: ToolHandler<T> = (args, extra) =>
-    traced(
-      async (span) => {
-        span.log({
-          input: args,
-          metadata: {
-            tool_name: toolDef.name,
-            tool_description: toolDef.description,
-          },
-        });
-
-        const result = await originalHandler(args, extra);
-
-        span.log({
-          output: result,
-        });
-
-        return result;
-      },
-      {
-        name: `${toolDef.name}`,
-        spanAttributes: {
-          type: SpanTypeAttribute.TOOL,
-        },
-      },
-    );
-
-  return {
-    ...toolDef,
-    handler: wrappedHandler,
-  };
 }
 
 /**
@@ -486,34 +818,12 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
         return wrappedQuery;
       }
 
+      // Tool tracing is now handled via PreToolUse/PostToolUse hooks injected in wrapClaudeAgentQuery.
+      // We just pass through the original tool function - no need to wrap it.
       if (prop === "tool" && typeof value === "function") {
-        const toolFn = value as typeof value;
-
-        const wrappedToolFactory = new Proxy(toolFn, {
-          apply(toolTarget, thisArg, argArray) {
-            const invocationTarget =
-              thisArg === receiver || thisArg === undefined ? target : thisArg;
-
-            const toolDef = Reflect.apply(
-              toolTarget,
-              invocationTarget,
-              argArray,
-            );
-            if (
-              toolDef &&
-              typeof toolDef === "object" &&
-              "handler" in toolDef
-            ) {
-              return wrapClaudeAgentTool(
-                toolDef as SdkMcpToolDefinition<unknown>,
-              );
-            }
-            return toolDef;
-          },
-        });
-
-        cache.set(prop, wrappedToolFactory);
-        return wrappedToolFactory;
+        const bound = (value as Function).bind(target);
+        cache.set(prop, bound);
+        return bound;
       }
 
       if (typeof value === "function") {
