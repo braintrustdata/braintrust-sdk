@@ -63,10 +63,28 @@ class PromptChatBlock(SerializableDataClass):
 PromptBlockData = Union[PromptCompletionBlock, PromptChatBlock]
 
 
+TemplateFormat = Literal["mustache", "jinja", "none"]
+
+
 @dataclass
 class PromptData(SerializableDataClass):
     prompt: PromptBlockData | None = None
     options: PromptOptions | None = None
+    template_format: TemplateFormat | None = None
+
+    @classmethod
+    def from_dict_deep(cls, d: dict):
+        d2 = dict(d)
+        if d2.get("template_format") == "nunjucks":
+            d2["template_format"] = "jinja"
+        return super().from_dict_deep(d2)
+
+    def as_dict(self):
+        """Serialize to dict, converting jinja back to nunjucks for API compatibility."""
+        result = super().as_dict()
+        if result.get("template_format") == "jinja":
+            result["template_format"] = "nunjucks"
+        return result
 
 
 @dataclass
