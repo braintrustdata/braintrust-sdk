@@ -9,16 +9,19 @@ import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
-import { promisify } from "util";
-import * as zlib from "zlib";
+import { promisify } from "node:util";
+import * as zlib from "node:zlib";
 
 export function configureNode() {
+  // Set build type indicator
+  iso.buildType = "node";
+
   iso.getRepoInfo = getRepoInfo;
   iso.getPastNAncestors = getPastNAncestors;
   iso.getEnv = (name) => process.env[name];
   iso.getCallerLocation = getCallerLocation;
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-  iso.processOn = (event: string, handler: (code: any) => void) => {
+  iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);
   };
   iso.basename = path.basename;

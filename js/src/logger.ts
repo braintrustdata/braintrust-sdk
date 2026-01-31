@@ -80,9 +80,8 @@ import Mustache from "mustache";
 import {
   parseTemplateFormat,
   renderTemplateContent,
-  type TemplateFormat,
 } from "./template/renderer";
-import { renderNunjucksString } from "./template/nunjucks-env";
+import type { TemplateFormat } from "./template/registry";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -104,7 +103,6 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
-import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 
@@ -6738,28 +6736,15 @@ function renderTemplatedObject(
   options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    const strict = !!options.strict;
-    if (options.templateFormat === "nunjucks") {
-      if (strict) {
-        lintNunjucksTemplate(obj, args);
-      }
-      return renderNunjucksString(obj, args, strict);
-    }
-    if (options.templateFormat === "mustache") {
-      if (strict) {
-        lintMustacheTemplate(obj, args);
-      }
-      return Mustache.render(obj, args, undefined, {
-        escape: (value) => {
-          if (typeof value === "string") {
-            return value;
-          } else {
-            return JSON.stringify(value);
-          }
-        },
-      });
-    }
-    return obj;
+    return renderTemplateContent(
+      obj,
+      args,
+      (value) => (typeof value === "string" ? value : JSON.stringify(value)),
+      {
+        strict: options.strict,
+        templateFormat: options.templateFormat,
+      },
+    );
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
@@ -7379,4 +7364,5 @@ export const _exportsForTestingOnly = {
   isGeneratorFunction,
   isAsyncGeneratorFunction,
   resetIdGenStateForTests,
+  isomorph: iso, // Expose isomorph for build type detection
 };

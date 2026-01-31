@@ -26,23 +26,14 @@ export interface TestingExports {
   clearTestBackgroundLogger: () => void;
 }
 
-export interface TestAdapters {
-  initLogger: (options: {
-    projectName: string;
-    projectId?: string;
-  }) => LoggerInstance;
-  testingExports: TestingExports;
-  backgroundLogger: BackgroundLogger;
-  canUseFileSystem: boolean;
-  canUseCLI: boolean;
-  environment: string;
-}
-
 export interface TestResult {
-  success: boolean;
-  testName: string;
+  status: "pass" | "fail" | "xfail"; // xfail = expected failure
+  name: string;
   message?: string;
-  error?: Error;
+  error?: {
+    message: string;
+    stack?: string;
+  };
 }
 
 // ---- Braintrust module surface types ----

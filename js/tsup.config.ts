@@ -1,4 +1,6 @@
 import { defineConfig } from "tsup";
+import fs from "node:fs";
+import { builtinModules } from "node:module";
 
 export default defineConfig([
   {
@@ -6,6 +8,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist",
     external: ["zod"],
+    removeNodeProtocol: false,
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -16,22 +19,9 @@ export default defineConfig([
     clean: true,
   },
   {
-    entry: ["src/browser.ts"],
-    format: ["cjs", "esm"],
-    outDir: "dist",
-    external: ["zod"],
-    dts: {
-      // Split DTS generation to reduce memory usage
-      compilerOptions: {
-        skipLibCheck: true,
-      },
-    },
-    splitting: true,
-    clean: false,
-  },
-  {
     entry: { cli: "src/cli/index.ts" },
     format: ["cjs"],
+    removeNodeProtocol: false,
     outDir: "dist",
     external: ["esbuild", "prettier", "typescript", "zod"],
     // CLI doesn't need DTS
@@ -42,6 +32,7 @@ export default defineConfig([
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",
+    removeNodeProtocol: false,
     external: ["esbuild", "prettier", "typescript", "zod"],
     dts: {
       // Split DTS generation to reduce memory usage
@@ -57,6 +48,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "util/dist",
     external: ["esbuild", "prettier", "typescript", "zod"],
+    removeNodeProtocol: false,
     dts: {
       // Split DTS generation to reduce memory usage
       compilerOptions: {
@@ -65,5 +57,19 @@ export default defineConfig([
     },
     splitting: true,
     clean: true,
+  },
+  // Browser/edge exports - single build used by browser, edge-light, and workerd
+  {
+    entry: {
+      browser: "src/browser.ts",
+    },
+    format: ["cjs", "esm"],
+    outDir: "dist",
+    external: ["zod"],
+    removeNodeProtocol: false,
+    platform: "browser",
+    splitting: false,
+    dts: true,
+    clean: false,
   },
 ]);
