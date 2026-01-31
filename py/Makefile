@@ -52,7 +52,8 @@ install-dev: install-build-deps
 	python -m uv pip install -r requirements-dev.txt
 
 install-optional:
-	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai dspy langsmith
+	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai dspy langsmith \
+		langchain langchain-openai tenacity
 	python -m uv pip install -e .[temporal,otel]
 
 .DEFAULT_GOAL := help

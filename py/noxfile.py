@@ -43,6 +43,7 @@ VENDOR_PACKAGES = (
     "openai",
     "openai-agents",
     # pydantic_ai is NOT included here - it has dedicated test sessions with version-specific handling
+    # langchain is NOT included here - it has dedicated test sessions with version-specific handling
     "autoevals",
     "braintrust_core",
     "litellm",
@@ -73,6 +74,10 @@ GENAI_VERSIONS = (LATEST,)
 DSPY_VERSIONS = (LATEST,)
 # temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
+# langchain requires Python >= 3.10
+# Note: langchain ecosystem packages have tight version coupling, so we pin
+# entire sets of compatible versions rather than testing "latest"
+LANGCHAIN_VERSIONS = ("0.3.27",)
 
 
 @nox.session()
@@ -194,6 +199,33 @@ def test_dspy(session, version):
 
 
 @nox.session()
+@nox.parametrize("version", LANGCHAIN_VERSIONS, ids=LANGCHAIN_VERSIONS)
+def test_langchain(session, version):
+    """Test LangChain integration."""
+    # langchain requires Python >= 3.10
+    if sys.version_info < (3, 10):
+        session.skip("langchain tests require Python >= 3.10")
+    _install_test_deps(session)
+    # Install all langchain packages together with compatible versions
+    # These versions are from the tested uv.lock in integrations/langchain-py/
+    if version == "0.3.27":
+        session.install(
+            "langchain==0.3.27",
+            "langchain-openai==0.3.35",
+            "langchain-anthropic==0.3.22",
+            "langgraph>=0.2.1,<0.4.0",
+            "tenacity",  # Required by callbacks.py
+            "pydantic",  # Required by tests
+        )
+    else:
+        # Fallback for other versions - let resolver figure it out
+        _install(session, "langchain", version)
+        session.install("langchain-openai", "langchain-anthropic>=0.3.20", "langgraph>=0.2.1,<0.4.0", "tenacity", "pydantic")
+    _run_tests(session, f"{WRAPPER_DIR}/test_langchain.py")
+    _run_core_tests(session)
+
+
+@nox.session()
 @nox.parametrize("version", AUTOEVALS_VERSIONS, ids=AUTOEVALS_VERSIONS)
 def test_autoevals(session, version):
     # Run all of our core tests with autoevals installed. Some tests
@@ -267,6 +299,8 @@ def pylint(session):
     session.install("opentelemetry.instrumentation.openai")
     # langsmith is needed for the wrapper module but not in VENDOR_PACKAGES
     session.install("langsmith")
+    # langchain dependencies for the langchain wrapper (pinned compatible versions)
+    session.install("langchain==0.3.27", "langchain-openai==0.3.35", "langchain-anthropic==0.3.22", "langgraph>=0.2.1,<0.4.0", "tenacity")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
     files = result.strip().splitlines()
