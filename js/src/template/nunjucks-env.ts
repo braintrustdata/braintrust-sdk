@@ -3,10 +3,16 @@ import type { Environment as NunjucksEnvironment } from "nunjucks";
 import { SyncLazyValue } from "../util";
 
 const createNunjucksEnv = (throwOnUndefined: boolean): NunjucksEnvironment => {
-  return new nunjucks.Environment(null, {
-    autoescape: true,
+  // html autoescape is turned off
+  const env = new nunjucks.Environment(null, {
+    autoescape: false,
     throwOnUndefined,
   });
+
+  // Add 'tojson' as an alias for 'dump' to match Python Jinja2
+  env.addFilter("tojson", (value: unknown) => JSON.stringify(value));
+
+  return env;
 };
 
 const nunjucksEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
@@ -17,7 +23,10 @@ const nunjucksStrictEnv = new SyncLazyValue<NunjucksEnvironment>(() =>
   createNunjucksEnv(true),
 );
 
-export function getNunjucksEnv(strict = false): NunjucksEnvironment {
+export function getNunjucksEnv(options?: {
+  strict?: boolean;
+}): NunjucksEnvironment {
+  const strict = options?.strict ?? false;
   return strict ? nunjucksStrictEnv.get() : nunjucksEnv.get();
 }
 
@@ -27,7 +36,7 @@ export function renderNunjucksString(
   strict = false,
 ): string {
   try {
-    return getNunjucksEnv(strict).renderString(template, variables);
+    return getNunjucksEnv({ strict }).renderString(template, variables);
   } catch (error) {
     if (
       error instanceof Error &&
