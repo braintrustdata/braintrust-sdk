@@ -1993,107 +1993,6 @@
             ],
             "additionalProperties": {},
             "description": "Facets for categorization (dictionary from facet id to value)"
-          },
-          "classifications": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "description": "Stable classification identifier"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
-                  },
-                  "confidence": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Optional confidence score for the classification"
-                  },
-                  "metadata": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "additionalProperties": {},
-                    "description": "Optional metadata associated with the classification"
-                  },
-                  "source": {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/SavedFunctionId"
-                      },
-                      {
-                        "anyOf": [
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "function"
-                                ]
-                              },
-                              "id": {
-                                "type": "string"
-                              },
-                              "version": {
-                                "type": "string",
-                                "description": "The version of the function"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "id"
-                            ],
-                            "title": "function"
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "global"
-                                ]
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "function_type": {
-                                "$ref": "#/components/schemas/FunctionTypeEnum"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "name"
-                            ],
-                            "title": "global"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "description": "Optional function identifier that produced the classification"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "id"
-                ]
-              }
-            },
-            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -2663,107 +2562,6 @@
             ],
             "additionalProperties": {},
             "description": "Facets for categorization (dictionary from facet id to value)"
-          },
-          "classifications": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "description": "Stable classification identifier"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
-                  },
-                  "confidence": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Optional confidence score for the classification"
-                  },
-                  "metadata": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "additionalProperties": {},
-                    "description": "Optional metadata associated with the classification"
-                  },
-                  "source": {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/SavedFunctionId"
-                      },
-                      {
-                        "anyOf": [
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "function"
-                                ]
-                              },
-                              "id": {
-                                "type": "string"
-                              },
-                              "version": {
-                                "type": "string",
-                                "description": "The version of the function"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "id"
-                            ],
-                            "title": "function"
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "global"
-                                ]
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "function_type": {
-                                "$ref": "#/components/schemas/FunctionTypeEnum"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "name"
-                            ],
-                            "title": "global"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "description": "Optional function identifier that produced the classification"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "id"
-                ]
-              }
-            },
-            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -2789,10 +2587,6 @@
               },
               "id": {
                 "type": "string"
-              },
-              "version": {
-                "type": "string",
-                "description": "The version of the function"
               }
             },
             "required": [
@@ -3442,7 +3236,7 @@
           "completion",
           "score",
           "facet",
-          "classification",
+          "tag",
           "any"
         ]
       },
@@ -4578,10 +4372,6 @@
               },
               "id": {
                 "type": "string"
-              },
-              "version": {
-                "type": "string",
-                "description": "The version of the function"
               }
             },
             "required": [
@@ -5511,107 +5301,6 @@
             ],
             "additionalProperties": {},
             "description": "Facets for categorization (dictionary from facet id to value)"
-          },
-          "classifications": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "description": "Stable classification identifier"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "Original label of the classification item, which is useful for search and indexing purposes"
-                  },
-                  "confidence": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Optional confidence score for the classification"
-                  },
-                  "metadata": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "additionalProperties": {},
-                    "description": "Optional metadata associated with the classification"
-                  },
-                  "source": {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/SavedFunctionId"
-                      },
-                      {
-                        "anyOf": [
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "function"
-                                ]
-                              },
-                              "id": {
-                                "type": "string"
-                              },
-                              "version": {
-                                "type": "string",
-                                "description": "The version of the function"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "id"
-                            ],
-                            "title": "function"
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "enum": [
-                                  "global"
-                                ]
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "function_type": {
-                                "$ref": "#/components/schemas/FunctionTypeEnum"
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "name"
-                            ],
-                            "title": "global"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "description": "Optional function identifier that produced the classification"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "id"
-                ]
-              }
-            },
-            "description": "Classifications for this event (dictionary from classification name to items)"
           }
         },
         "required": [
@@ -7069,10 +6758,6 @@
               },
               "id": {
                 "type": "string"
-              },
-              "version": {
-                "type": "string",
-                "description": "The version of the function"
               }
             },
             "required": [
@@ -7282,7 +6967,8 @@
           "automation",
           "facet",
           "preprocessor",
-          "classifier"
+          "classifier",
+          "review"
         ],
         "description": "Type of the span, for display purposes only"
       },
@@ -8049,7 +7735,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "7178200dd3c7869f27b677260303cda0b798bf42"
+    "x-internal-git-sha": "eca06aa4158104c95db6e300ff586c995f9f82da"
   },
   "paths": {},
   "webhooks": {}
