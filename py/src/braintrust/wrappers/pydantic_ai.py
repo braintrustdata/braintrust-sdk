@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import logging
 import sys
 import time
@@ -49,6 +50,16 @@ def setup_pydantic_ai(
         )
 
         wrap_model_classes()
+
+        # Patch StreamedResponseSync to propagate context to background threads
+        try:
+            if hasattr(direct_module, "StreamedResponseSync"):
+                wrap_function_wrapper(
+                    direct_module.StreamedResponseSync, "_start_producer", _create_start_producer_wrapper()
+                )
+                logger.debug("Pydantic AI StreamedResponseSync context propagation patching successful")
+        except Exception as e:
+            logger.warning(f"Failed to patch StreamedResponseSync context propagation: {e}")
 
         return True
     except ImportError:
@@ -1133,6 +1144,34 @@ def _extract_response_metrics(
                 metrics["completion_reasoning_tokens"] = float(usage.details.reasoning_tokens)
 
     return metrics if metrics else None
+
+
+def _create_start_producer_wrapper():
+    """Create wrapper for StreamedResponseSync._start_producer to propagate context.
+
+    StreamedResponseSync._start_producer creates a background thread that doesn't
+    inherit contextvars. This wrapper ensures Braintrust context flows to that thread
+    so nested instrumentation (like wrap_openai) creates properly parented spans.
+    """
+
+    def wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any) -> None:
+        ctx = contextvars.copy_context()
+        original_async_producer = instance._async_producer
+
+        def _context_wrapped_async_producer() -> None:
+            try:
+                ctx.run(original_async_producer)
+            except Exception as e:
+                logger.debug(f"Failed to run async producer in captured context: {e}")
+                original_async_producer()
+
+        instance._async_producer = _context_wrapped_async_producer
+        try:
+            return wrapped(*args, **kwargs)
+        finally:
+            instance._async_producer = original_async_producer
+
+    return wrapper
 
 
 def _is_patched(obj: Any) -> bool:
