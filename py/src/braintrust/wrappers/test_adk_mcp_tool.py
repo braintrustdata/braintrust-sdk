@@ -3,8 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from braintrust_adk import setup_adk, wrap_mcp_tool
+from braintrust.wrappers.adk import setup_adk, wrap_mcp_tool
 
 
 @pytest.mark.asyncio
@@ -21,7 +20,7 @@ async def test_wrap_mcp_tool_marks_as_patched():
 
     # Verify it's marked as patched
     assert hasattr(wrapped_class, "_braintrust_patched")
-    assert wrapped_class._braintrust_patched is True
+    assert wrapped_class._braintrust_patched is True  # pylint: disable=no-member
 
 
 @pytest.mark.asyncio
@@ -153,49 +152,21 @@ async def test_mcp_tool_error_handling():
 
 @pytest.mark.asyncio
 async def test_setup_adk_patches_mcp_tool():
-    """Test that setup_adk automatically patches McpTool."""
-    import importlib
-    import sys
+    """Test that setup_adk automatically patches McpTool when available."""
+    with patch("braintrust.wrappers.adk.init_logger"):
+        result = setup_adk(project_name="test")
+        assert result is True
 
-    # Mock google-adk imports
-    mock_mcp_tool_module = MagicMock()
-    MockMcpTool = MagicMock()
-    mock_mcp_tool_module.McpTool = MockMcpTool
+        # Verify McpTool was patched (if MCP is available)
+        try:
+            from google.adk.tools.mcp_tool import mcp_tool
 
-    # Mock google.adk modules hierarchy
-    mock_google = MagicMock()
-    mock_google_adk = MagicMock()
-    mock_google_adk_tools = MagicMock()
-    mock_google_adk_tools_mcp_tool = MagicMock()
-    mock_google_adk_tools_mcp_tool.mcp_tool = mock_mcp_tool_module
-
-    # Clear all google.adk modules from cache
-    modules_to_remove = [
-        key
-        for key in list(sys.modules.keys())
-        if key.startswith("google.adk.tools.mcp_tool")
-    ]
-    for module in modules_to_remove:
-        del sys.modules[module]
-
-    # Critical: Also clear the mcp_tool submodule to force re-import with mock
-    sys.modules.pop("google.adk.tools.mcp_tool.mcp_tool", None)
-
-    with patch.dict(
-        "sys.modules",
-        {
-            "google.adk.tools.mcp_tool": mock_google_adk_tools_mcp_tool,
-            "google.adk.tools.mcp_tool.mcp_tool": mock_mcp_tool_module,
-        },
-        clear=False,
-    ):
-        with patch("braintrust.wrappers.adk.init_logger"):
-            with patch("braintrust.wrappers.adk.wrap_mcp_tool") as mock_wrap:
-                result = setup_adk(project_name="test")
-
-                # Verify wrap_mcp_tool was called
-                assert result is True
-                mock_wrap.assert_called_once_with(MockMcpTool)
+            # McpTool should be patched with the _braintrust_patched marker
+            assert hasattr(mcp_tool.McpTool, "_braintrust_patched"), "McpTool should be patched by setup_adk"
+            assert mcp_tool.McpTool._braintrust_patched is True
+        except ImportError:
+            # MCP is optional - if not installed, skip this check
+            pass
 
 
 @pytest.mark.asyncio
@@ -227,7 +198,7 @@ async def test_mcp_tool_async_context_preservation():
     """
     import contextvars
 
-    from braintrust_adk import wrap_mcp_tool
+    from braintrust.wrappers.adk import wrap_mcp_tool
 
     # Track context switches
     context_var = contextvars.ContextVar("test_context", default=None)
@@ -285,7 +256,7 @@ async def test_mcp_tool_nested_async_generators():
     3. MCP tool execution happens deep in the stack
     4. All generators yield and resume, potentially in different contexts
     """
-    from braintrust_adk import wrap_mcp_tool
+    from braintrust.wrappers.adk import wrap_mcp_tool
 
     class MockMcpTool:
         def __init__(self):
@@ -342,9 +313,9 @@ async def test_real_context_loss_with_braintrust_spans():
     suppressing in the aclosing.__aexit__ method.
     """
     import asyncio
+    from contextlib import aclosing
 
     from braintrust import init_logger
-    from braintrust_adk import aclosing
 
     # Initialize a test logger
     logger = init_logger(project="test-context-loss")

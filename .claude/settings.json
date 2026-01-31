@@ -45,6 +45,7 @@
       "Bash(cd:*)",
       "Bash(set:*)",
       "Bash(sort:*)",
+      "Bash(uv:*)",
       "Bash(.nox/*/bin/pytest:*)",
       "Bash(.nox/*/bin/python:*)",
       "Bash(.nox/*/bin/pip:*)",
