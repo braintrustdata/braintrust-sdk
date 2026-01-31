@@ -66,4 +66,17 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
+  {
+    entry: ["src/instrumentation/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "dist/instrumentation",
+    external: ["dc-browser", "@braintrust/instrumentation-core", "zod"],
+    dts: {
+      compilerOptions: {
+        skipLibCheck: true,
+      },
+    },
+    splitting: false,
+    clean: true,
+  },
 ]);

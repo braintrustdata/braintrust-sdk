@@ -4,10 +4,13 @@ packages:
   - integrations/*
   - internal/golden
   - js/src/wrappers/*
-  - "!js/vendor/**"
-  - "!internal/golden/*"
+  - '!js/vendor/**'
+  - '!internal/golden/*'
 
 ignoredBuiltDependencies:
   - esbuild
   - msw
   - protobufjs
+
+patchedDependencies:
+  module-details-from-path@1.0.4: patches/module-details-from-path@1.0.4.patch
