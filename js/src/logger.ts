@@ -6717,18 +6717,7 @@ export function renderMessage<T extends Message>(
           content: isEmpty(message.content)
             ? undefined
             : typeof message.content === "string"
-              ? (() => {
-                  // Try pre-template expansion first for attachment arrays
-                  if (variables) {
-                    const expanded = expandAttachmentArrayPreTemplate(
-                      message.content,
-                      variables,
-                    );
-                    if (expanded) return expanded;
-                  }
-
-                  return render(message.content);
-                })()
+              ? render(message.content)
               : message.content.flatMap((c) => {
                   switch (c.type) {
                     case "text":

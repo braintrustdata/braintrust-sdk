@@ -103,10 +103,15 @@ test("renderMessage with file content parts", () => {
   ]);
 });
 
-test("renderMessage expands attachment array via pre-template expansion", () => {
+test("renderMessage expands attachment array in image_url parts", () => {
   const message = {
     role: "user" as const,
-    content: "{{images}}",
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{images}}" },
+      },
+    ],
   };
 
   const variables = {
@@ -135,10 +140,15 @@ test("renderMessage expands attachment array via pre-template expansion", () => 
   ]);
 });
 
-test("renderMessage expands inline attachment array via pre-template expansion", () => {
+test("renderMessage expands inline attachment array in image_url parts", () => {
   const message = {
     role: "user" as const,
-    content: "{{images}}",
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{images}}" },
+      },
+    ],
   };
 
   const variables = {
@@ -202,10 +212,15 @@ test("renderMessage does NOT expand mixed content (text + variable)", () => {
   expect(rendered.content).toBe("Look at [array]");
 });
 
-test("renderMessage expands nested attachment arrays via pre-template expansion", () => {
+test("renderMessage expands nested attachment arrays in image_url parts", () => {
   const message = {
     role: "user" as const,
-    content: "{{data.images}}",
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{data.images}}" },
+      },
+    ],
   };
 
   const variables = {
@@ -236,10 +251,15 @@ test("renderMessage expands nested attachment arrays via pre-template expansion"
   ]);
 });
 
-test("renderMessage expands deeply nested attachment arrays", () => {
+test("renderMessage expands deeply nested attachment arrays in image_url parts", () => {
   const message = {
     role: "user" as const,
-    content: "{{user.profile.images}}",
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{user.profile.images}}" },
+      },
+    ],
   };
 
   const variables = {
