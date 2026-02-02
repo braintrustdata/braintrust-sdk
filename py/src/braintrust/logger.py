@@ -1576,7 +1576,13 @@ def init(
     :returns: The experiment object.
     """
 
-    state: BraintrustState = state or _state
+    # If no explicit state is provided but api_key or app_url is specified,
+    # create an isolated state to avoid conflicts with the global state
+    if state is None:
+        if api_key is not None or app_url is not None:
+            state = BraintrustState()
+        else:
+            state = _state
 
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
@@ -1739,7 +1745,13 @@ def init_dataset(
     :returns: The dataset object.
     """
 
-    state = state or _state
+    # If no explicit state is provided but api_key or app_url is specified,
+    # create an isolated state to avoid conflicts with the global state
+    if state is None:
+        if api_key is not None or app_url is not None:
+            state = BraintrustState()
+        else:
+            state = _state
 
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -1820,7 +1832,13 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
-    state = state or _state
+    # If no explicit state is provided but api_key or app_url is specified,
+    # create an isolated state to avoid conflicts with the global state
+    if state is None:
+        if api_key is not None or app_url is not None:
+            state = BraintrustState()
+        else:
+            state = _state
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
     link_args = {
