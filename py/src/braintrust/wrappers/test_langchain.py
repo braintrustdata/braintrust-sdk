@@ -359,14 +359,10 @@ def test_tool_usage(logger_memory_logger: LoggerMemoryLogger):
 @pytest.mark.vcr
 def test_langgraph_state_management(logger_memory_logger: LoggerMemoryLogger):
     from langchain_openai import ChatOpenAI
+    from langgraph.graph import END, START, StateGraph
 
     logger, memory_logger = logger_memory_logger
     assert not memory_logger.pop()
-
-    try:
-        from langgraph.graph import END, START, StateGraph
-    except ImportError:
-        pytest.skip("langgraph not installed")
 
     handler = BraintrustCallbackHandler(logger=logger)
     model = ChatOpenAI(
