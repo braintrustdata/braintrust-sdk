@@ -1766,11 +1766,12 @@ def init_dataset(
     )
 
 
-def _compute_logger_metadata(project_name: str | None = None, project_id: str | None = None):
-    login()
-    org_id = _state.org_id
+def _compute_logger_metadata(
+    state: "BraintrustState", project_name: str | None = None, project_id: str | None = None
+):
+    org_id = state.org_id
     if project_id is None:
-        response = _state.app_conn().post_json(
+        response = state.app_conn().post_json(
             "api/project/register",
             {
                 "project_name": project_name or GLOBAL_PROJECT,
@@ -1783,7 +1784,7 @@ def _compute_logger_metadata(project_name: str | None = None, project_id: str | 
             project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
         )
     elif project_name is None:
-        response = _state.app_conn().get_json("api/project", {"id": project_id})
+        response = state.app_conn().get_json("api/project", {"id": project_id})
         return OrgProjectMetadata(
             org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
         )
@@ -1831,7 +1832,7 @@ def init_logger(
 
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
-        return _compute_logger_metadata(**compute_metadata_args)
+        return _compute_logger_metadata(state, **compute_metadata_args)
 
     # For loggers, enable queue size limit enforcement (bounded queue)
     state.enforce_queue_size_limit(True)
@@ -3400,7 +3401,12 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callab
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
     elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
         captured_compute_object_metadata_args = components.compute_object_metadata_args
-        return lambda: _compute_logger_metadata(**captured_compute_object_metadata_args).project.id
+
+        def compute_project_id():
+            login()
+            return _compute_logger_metadata(_state, **captured_compute_object_metadata_args).project.id
+
+        return compute_project_id
     else:
         raise Exception(f"Unknown object type: {components.object_type}")
 
