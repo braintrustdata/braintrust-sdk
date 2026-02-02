@@ -3174,3 +3174,104 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
     assert attachment in with_memory_logger.upload_attempts
     assert json_attachment in with_memory_logger.upload_attempts
     assert ext_attachment in with_memory_logger.upload_attempts
+
+
+class TestImplicitStateIsolation(TestCase):
+    """Test that passing api_key or app_url creates an isolated BraintrustState."""
+
+    def test_init_logger_with_api_key_creates_isolated_state(self):
+        """Test that init_logger with api_key creates a new isolated state."""
+        from braintrust.logger import BraintrustState, _state
+
+        # Create a logger with an explicit api_key
+        logger_a = init_logger(
+            project="test-project",
+            project_id="test-project-id",
+            api_key="test-api-key-a",
+            set_current=False,
+        )
+
+        # The logger should have its own state, not the global _state
+        assert logger_a.state is not _state
+        assert isinstance(logger_a.state, BraintrustState)
+
+    def test_init_logger_with_app_url_creates_isolated_state(self):
+        """Test that init_logger with app_url creates a new isolated state."""
+        from braintrust.logger import BraintrustState, _state
+
+        # Create a logger with an explicit app_url
+        logger_a = init_logger(
+            project="test-project",
+            project_id="test-project-id",
+            app_url="https://custom.braintrust.dev",
+            set_current=False,
+        )
+
+        # The logger should have its own state, not the global _state
+        assert logger_a.state is not _state
+        assert isinstance(logger_a.state, BraintrustState)
+
+    def test_init_logger_without_api_key_uses_global_state(self):
+        """Test that init_logger without api_key uses the global state."""
+        from braintrust.logger import _state
+
+        # Create a logger without api_key or app_url
+        logger_a = init_logger(
+            project="test-project",
+            project_id="test-project-id",
+            set_current=False,
+        )
+
+        # The logger should use the global _state
+        assert logger_a.state is _state
+
+    def test_multiple_loggers_with_different_api_keys_have_separate_states(self):
+        """Test that multiple loggers with different api_keys have separate states."""
+        # Create two loggers with different api_keys
+        logger_a = init_logger(
+            project="test-project-a",
+            project_id="test-project-id-a",
+            api_key="test-api-key-a",
+            set_current=False,
+        )
+
+        logger_b = init_logger(
+            project="test-project-b",
+            project_id="test-project-id-b",
+            api_key="test-api-key-b",
+            set_current=False,
+        )
+
+        # Each logger should have its own separate state
+        assert logger_a.state is not logger_b.state
+
+    def test_init_with_api_key_creates_isolated_state(self):
+        """Test that init (experiment) with api_key creates a new isolated state."""
+        from braintrust.logger import BraintrustState, _state
+
+        # Create an experiment with an explicit api_key
+        experiment = braintrust.init(
+            project="test-project",
+            experiment="test-experiment",
+            api_key="test-api-key",
+            set_current=False,
+        )
+
+        # The experiment should have its own state, not the global _state
+        assert experiment.state is not _state
+        assert isinstance(experiment.state, BraintrustState)
+
+    def test_init_dataset_with_api_key_creates_isolated_state(self):
+        """Test that init_dataset with api_key creates a new isolated state."""
+        from braintrust.logger import BraintrustState, _state
+
+        # Create a dataset with an explicit api_key
+        dataset = braintrust.init_dataset(
+            project="test-project",
+            name="test-dataset",
+            api_key="test-api-key",
+        )
+
+        # The dataset should have its own state, not the global _state
+        assert dataset.state is not _state
+        assert isinstance(dataset.state, BraintrustState)
