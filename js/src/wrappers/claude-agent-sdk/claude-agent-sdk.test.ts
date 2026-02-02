@@ -257,37 +257,8 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(capturedOptions.hooks.PostToolUseFailure.length).toBeGreaterThan(0);
   });
 
-  test("injects SubagentStart and SubagentStop hooks for subagent tracing", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let capturedOptions: any;
-
-    const mockSDK = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query: (params: any) => {
-        capturedOptions = params.options;
-        const generator = (async function* () {
-          yield { type: "result", result: "done" };
-        })();
-        return generator;
-      },
-    };
-
-    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
-
-    for await (const _msg of wrappedSDK.query({
-      prompt: "test",
-      options: { model: "test-model" },
-    })) {
-      // consume
-    }
-
-    // Verify SubagentStart and SubagentStop hooks were injected
-    expect(capturedOptions.hooks).toBeDefined();
-    expect(capturedOptions.hooks.SubagentStart).toBeDefined();
-    expect(capturedOptions.hooks.SubagentStart.length).toBeGreaterThan(0);
-    expect(capturedOptions.hooks.SubagentStop).toBeDefined();
-    expect(capturedOptions.hooks.SubagentStop.length).toBeGreaterThan(0);
-  });
+  // FIXME: Add subagent hook tests when SDK supports SubagentStart/SubagentStop properly.
+  // See: https://github.com/anthropics/claude-code/issues/14859
 });
 
 // Try to import the Claude Agent SDK - skip tests if not available
@@ -460,7 +431,9 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
       const metadata = span.metadata as Record<string, string>;
       expect(metadata["gen_ai.tool.name"]).toBe("calculator");
       expect(metadata["mcp.server"]).toBe("calculator");
-      expect(metadata["raw_tool_name"]).toBe("mcp__calculator__calculator");
+      expect(metadata["claude_agent_sdk.raw_tool_name"]).toBe(
+        "mcp__calculator__calculator",
+      );
     });
 
     // Verify span hierarchy (all children should reference the root task span)

@@ -120,7 +120,7 @@ type HookCallbackMatcher = {
  * Parsed MCP tool name components.
  */
 type ParsedToolName = {
-  /** Display name for spans (e.g., "math/calculator" or raw name if not MCP) */
+  /** Display name for spans (e.g., "tool: math/calculator" or "tool: rawName") */
   displayName: string;
   /** The actual tool name without MCP prefix */
   toolName: string;
@@ -129,6 +129,62 @@ type ParsedToolName = {
   /** The raw tool name as provided by the SDK */
   rawToolName: string;
 };
+
+/**
+ * MCP server configuration from query options.
+ */
+type McpServerConfig = {
+  type?: "stdio" | "sse" | "http" | "sdk";
+  url?: string;
+  command?: string;
+  args?: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+};
+
+type McpServersConfig = Record<string, McpServerConfig>;
+
+/**
+ * Extracts MCP server metadata for span logging.
+ */
+function getMcpServerMetadata(
+  serverName: string | undefined,
+  mcpServers: McpServersConfig | undefined,
+): Record<string, unknown> {
+  if (!serverName || !mcpServers) {
+    return {};
+  }
+
+  const serverConfig = mcpServers[serverName];
+  if (!serverConfig) {
+    return {};
+  }
+
+  const metadata: Record<string, unknown> = {};
+
+  // Determine server type
+  if (serverConfig.type) {
+    metadata["mcp.type"] = serverConfig.type;
+  } else if (typeof serverConfig === "object" && "transport" in serverConfig) {
+    // SDK MCP servers have a transport property
+    metadata["mcp.type"] = "sdk";
+  }
+
+  // Add URL for sse/http types
+  if (serverConfig.url) {
+    metadata["mcp.url"] = serverConfig.url;
+  }
+
+  // Add command for stdio type
+  if (serverConfig.command) {
+    metadata["mcp.command"] = serverConfig.command;
+    if (serverConfig.args) {
+      metadata["mcp.args"] = serverConfig.args.join(" ");
+    }
+  }
+
+  return metadata;
+}
 
 /**
  * Parses MCP tool names in the format "mcp__<server>__<tool>" into components.
@@ -165,6 +221,7 @@ function createToolTracingHooks(
     Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
   >,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+  mcpServers: McpServersConfig | undefined,
 ): {
   preToolUse: HookCallback;
   postToolUse: HookCallback;
@@ -176,6 +233,7 @@ function createToolTracingHooks(
     }
 
     const parsed = parseToolName(input.tool_name);
+    const mcpMetadata = getMcpServerMetadata(parsed.mcpServer, mcpServers);
     const parentExport = await parentSpanExportPromise;
     const toolSpan = startSpan({
       name: parsed.displayName,
@@ -186,13 +244,13 @@ function createToolTracingHooks(
           // GenAI semantic conventions
           "gen_ai.tool.name": parsed.toolName,
           "gen_ai.tool.call.id": toolUseID,
-          // MCP-specific metadata (if applicable)
+          // MCP-specific metadata
           ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
-          // Raw tool name for debugging
-          raw_tool_name: parsed.rawToolName,
-          // Session context
-          session_id: input.session_id,
-          cwd: input.cwd,
+          ...mcpMetadata,
+          // Claude SDK metadata
+          "claude_agent_sdk.raw_tool_name": parsed.rawToolName,
+          "claude_agent_sdk.session_id": input.session_id,
+          "claude_agent_sdk.cwd": input.cwd,
         },
       },
       parent: parentExport,
@@ -239,8 +297,8 @@ function createToolTracingHooks(
           "gen_ai.tool.name": parsed.toolName,
           "gen_ai.tool.call.id": toolUseID,
           ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
-          is_interrupt: input.is_interrupt,
-          session_id: input.session_id,
+          "claude_agent_sdk.is_interrupt": input.is_interrupt,
+          "claude_agent_sdk.session_id": input.session_id,
         },
       });
       toolSpan.end();
@@ -253,98 +311,9 @@ function createToolTracingHooks(
   return { preToolUse, postToolUse, postToolUseFailure };
 }
 
-/**
- * Creates SubagentStart and SubagentStop hooks for tracing subagent executions.
- * The hooks use agent_id to correlate start/stop events and manage span lifecycle.
- */
-function createSubagentTracingHooks(
-  parentSpanExportPromise: Promise<
-    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
-  >,
-  activeSubagentSpans: Map<string, ReturnType<typeof startSpan>>,
-  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
-): { subagentStart: HookCallback; subagentStop: HookCallback } {
-  // Note: SubagentStart hook is not reliably called by the SDK (see GitHub issue #14859).
-  // The Task tool spawn is already traced via PreToolUse/PostToolUse.
-  const subagentStart: HookCallback = async (input) => {
-    if (input.hook_event_name !== "SubagentStart") {
-      return {};
-    }
-
-    const parentExport = await parentSpanExportPromise;
-    const subagentSpan = startSpan({
-      name: `Subagent: ${input.agent_type}`,
-      spanAttributes: { type: SpanTypeAttribute.TASK },
-      event: {
-        metadata: {
-          agent_id: input.agent_id,
-          agent_type: input.agent_type,
-          session_id: input.session_id,
-          cwd: input.cwd,
-          transcript_path: input.transcript_path,
-        },
-      },
-      parent: parentExport,
-    });
-
-    activeSubagentSpans.set(input.agent_id, subagentSpan);
-    return {};
-  };
-
-  // SubagentStop is called but without agent_id in current SDK (GitHub issue #14859).
-  // We use toolUseID to add metadata to the existing Task tool span.
-  const subagentStop: HookCallback = async (input, toolUseID) => {
-    if (input.hook_event_name !== "SubagentStop") {
-      return {};
-    }
-
-    // If SubagentStart was called, close the subagent span
-    if (input.agent_id) {
-      const subagentSpan = activeSubagentSpans.get(input.agent_id);
-      if (!subagentSpan) {
-        return {};
-      }
-
-      try {
-        subagentSpan.log({
-          metadata: {
-            agent_id: input.agent_id,
-            agent_transcript_path: input.agent_transcript_path,
-            stop_hook_active: input.stop_hook_active,
-            session_id: input.session_id,
-          },
-        });
-        subagentSpan.end();
-      } finally {
-        activeSubagentSpans.delete(input.agent_id);
-      }
-      return {};
-    }
-
-    // Fallback: SubagentStart wasn't called (current SDK behavior).
-    // Add subagent metadata to the Task tool span instead.
-    if (!toolUseID) {
-      return {};
-    }
-
-    const toolSpan = activeToolSpans.get(toolUseID);
-    if (!toolSpan) {
-      return {};
-    }
-
-    toolSpan.log({
-      metadata: {
-        is_subagent: true,
-        subagent_session_id: input.session_id,
-        subagent_transcript_path: input.transcript_path,
-        subagent_stop_hook_active: input.stop_hook_active,
-      },
-    });
-    return {};
-  };
-
-  return { subagentStart, subagentStop };
-}
+// FIXME: Add subagent tracing when SDK supports it.
+// Currently SubagentStart hook is never called and SubagentStop lacks agent_id.
+// See: https://github.com/anthropics/claude-code/issues/14859
 
 /**
  * Injects tracing hooks into query options, preserving any user-provided hooks.
@@ -355,16 +324,14 @@ function injectTracingHooks(
     Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
   >,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
-  activeSubagentSpans: Map<string, ReturnType<typeof startSpan>>,
 ): QueryOptions {
+  const mcpServers = options.mcpServers as McpServersConfig | undefined;
   const { preToolUse, postToolUse, postToolUseFailure } =
-    createToolTracingHooks(parentSpanExportPromise, activeToolSpans);
-
-  const { subagentStart, subagentStop } = createSubagentTracingHooks(
-    parentSpanExportPromise,
-    activeSubagentSpans,
-    activeToolSpans,
-  );
+    createToolTracingHooks(
+      parentSpanExportPromise,
+      activeToolSpans,
+      mcpServers,
+    );
 
   const existingHooks = options.hooks ?? {};
 
@@ -383,14 +350,6 @@ function injectTracingHooks(
       PostToolUseFailure: [
         ...(existingHooks.PostToolUseFailure ?? []),
         { hooks: [postToolUseFailure] } as HookCallbackMatcher,
-      ],
-      SubagentStart: [
-        ...(existingHooks.SubagentStart ?? []),
-        { hooks: [subagentStart] } as HookCallbackMatcher,
-      ],
-      SubagentStop: [
-        ...(existingHooks.SubagentStop ?? []),
-        { hooks: [subagentStop] } as HookCallbackMatcher,
       ],
     },
   };
@@ -505,19 +464,14 @@ function wrapClaudeAgentQuery<
           ? defaultThis ?? thisArg
           : thisArg;
 
-      // Track active tool and subagent spans for hook-based tracing
+      // Track active tool spans for hook-based tracing
       const activeToolSpans = new Map<string, ReturnType<typeof startSpan>>();
-      const activeSubagentSpans = new Map<
-        string,
-        ReturnType<typeof startSpan>
-      >();
 
-      // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs) and subagents
+      // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs)
       const optionsWithHooks = injectTracingHooks(
         options,
         span.export(),
         activeToolSpans,
-        activeSubagentSpans,
       );
 
       // Create modified argArray with injected hooks
