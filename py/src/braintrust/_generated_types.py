@@ -167,6 +167,10 @@ AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoring
 class PreprocessorPreprocessor(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class PreprocessorPreprocessor2(TypedDict):
@@ -638,6 +642,10 @@ class ExperimentEventContext(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
@@ -668,6 +676,10 @@ class ExternalAttachmentReference(TypedDict):
 class Preprocessor1Preprocessor1(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class Preprocessor1Preprocessor12(TypedDict):
@@ -803,7 +815,7 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classif
 
 
 FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag'
 ]
 """
 The type of global function. Defaults to 'scorer'.
@@ -811,7 +823,7 @@ The type of global function. Defaults to 'scorer'.
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier'
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag'
 ]
 
 
@@ -1108,6 +1120,12 @@ class GroupScope(TypedDict):
 IfExists: TypeAlias = Literal['error', 'ignore', 'replace']
 
 
+ImageRenderingMode: TypeAlias = Literal['auto', 'click_to_load', 'blocked']
+"""
+Controls how images are rendered in the UI: 'auto' loads images automatically, 'click_to_load' shows a placeholder until clicked, 'blocked' prevents image loading entirely
+"""
+
+
 class InvokeFunctionInvokeFunction(TypedDict):
     function_id: str
     """
@@ -1311,6 +1329,10 @@ class ModelParamsModelParams4(TypedDict):
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
@@ -1390,6 +1412,7 @@ class Organization(TypedDict):
     """
     Date of organization creation
     """
+    image_rendering_mode: NotRequired[ImageRenderingMode | None]
 
 
 Permission: TypeAlias = Literal[
@@ -2078,6 +2101,10 @@ class RunEvalMcpAuth(TypedDict):
 class SavedFunctionIdSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class SavedFunctionIdSavedFunctionId1(TypedDict):
@@ -2590,6 +2617,14 @@ class DatasetEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
+    """
 
 
 class EvalStatusPage(TypedDict):
@@ -3101,6 +3136,14 @@ class ExperimentEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
+    """
 
 
 class GraphNodeGraphNode7(TypedDict):
@@ -3223,6 +3266,14 @@ class ProjectLogsEvent(TypedDict):
     """
     The async scoring state for this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
+    """
 
 
 class ProjectScore(TypedDict):
@@ -3330,7 +3381,9 @@ class View(TypedDict):
         'classifiers',
         'logs',
         'monitor',
-        'for_review',
+        'for_review_project_log',
+        'for_review_experiments',
+        'for_review_datasets',
     ]
     """
     Type of object that the view corresponds to.

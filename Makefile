@@ -30,6 +30,15 @@ ${VENV_PRE_COMMIT}: ${VENV_PYTHON_PACKAGES}
 develop: ${VENV_PRE_COMMIT}
 	@echo "--\nRun "source env.sh" to enter development mode!"
 
+.PHONY: install-dev
+install-dev:
+	mise install
+
+.PHONY: install-deps
+install-deps:
+	cd py && make install-dev
+	pnpm install
+
 fixup:
 	source env.sh && pre-commit run --all-files
 

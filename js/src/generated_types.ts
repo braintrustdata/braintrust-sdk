@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 2e862e920ab0d7431f22882ce1bf3a5ba2a4b8ed) -- do not modify
+// Auto-generated file (internal git SHA eca06aa4158104c95db6e300ff586c995f9f82da) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -543,6 +543,7 @@ export const DatasetEvent = z.object({
   origin: ObjectReferenceNullish.optional(),
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
@@ -697,6 +698,7 @@ export const ExperimentEvent = z.object({
   origin: ObjectReferenceNullish.optional(),
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
@@ -1479,6 +1481,7 @@ export const ProjectLogsEvent = z.object({
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
   _async_scoring_state: z.unknown().optional(),
+  facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 export type ProjectLogsEventType = z.infer<typeof ProjectLogsEvent>;
 export const ProjectScoreType = z.enum([
