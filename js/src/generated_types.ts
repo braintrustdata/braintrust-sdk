@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA eca06aa4158104c95db6e300ff586c995f9f82da) -- do not modify
+// Auto-generated file (internal git SHA 0ccf14923bf595cab7e1ea50eb8565168cb24e18) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -231,7 +231,11 @@ export const FunctionTypeEnum = z.enum([
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
@@ -242,6 +246,73 @@ export const NullableSavedFunctionId = z.union([
 export type NullableSavedFunctionIdType = z.infer<
   typeof NullableSavedFunctionId
 >;
+export const TopicMapReport = z.object({
+  version: z.literal(1),
+  created_at: z.string().optional(),
+  settings: z.object({
+    algorithm: z.enum(["hdbscan", "kmeans", "hierarchical"]),
+    dimension_reduction: z.enum(["umap", "pca", "none"]),
+    vector_field: z.string(),
+    embedding_model: z.string(),
+    n_clusters: z.union([z.number(), z.null()]).optional(),
+    umap_dimensions: z.union([z.number(), z.null()]).optional(),
+    min_cluster_size: z.union([z.number(), z.null()]).optional(),
+    min_samples: z.union([z.number(), z.null()]).optional(),
+  }),
+  query_settings: z
+    .object({
+      hierarchy_threshold: z.union([z.number(), z.null()]),
+      auto_naming: z.boolean(),
+      skip_cache: z.boolean(),
+      viz_mode: z.enum(["bar", "scatter"]),
+      naming_model: z.string(),
+    })
+    .partial(),
+  clusters: z.array(
+    z.object({
+      cluster_id: z.number(),
+      parent_cluster_id: z.union([z.number(), z.null()]).optional(),
+      topic_id: z.string(),
+      count: z.number(),
+      sample_texts: z.array(z.string()),
+      samples: z.array(
+        z.object({
+          id: z.string(),
+          text: z.string(),
+          root_span_id: z.string(),
+          span_id: z.string(),
+        }),
+      ),
+      name: z.string().optional(),
+      description: z.string().optional(),
+      keywords: z.array(z.string()).optional(),
+      centroid: z.array(z.number()).optional(),
+      parent_id: z.union([z.number(), z.null()]).optional(),
+      is_leaf: z.boolean().optional(),
+      depth: z.number().optional(),
+    }),
+  ),
+  embedding_points: z
+    .array(
+      z.object({
+        x: z.number(),
+        y: z.number(),
+        cluster: z.number(),
+        text: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export type TopicMapReportType = z.infer<typeof TopicMapReport>;
+export const TopicMapData = z.object({
+  type: z.literal("topic_map"),
+  source_facet: z.string(),
+  embedding_model: z.string(),
+  bundle_key: z.string(),
+  distance_threshold: z.number().optional(),
+  report: TopicMapReport.optional(),
+});
+export type TopicMapDataType = z.infer<typeof TopicMapData>;
 export const BatchedFacetData = z.object({
   type: z.literal("batched_facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -250,9 +321,19 @@ export const BatchedFacetData = z.object({
       name: z.string(),
       prompt: z.string(),
       model: z.string().optional(),
+      embedding_model: z.string().optional(),
       no_match_pattern: z.string().optional(),
     }),
   ),
+  topic_maps: z
+    .record(
+      z.object({
+        function_name: z.string(),
+        topic_map_id: z.string().optional(),
+        topic_map_data: TopicMapData,
+      }),
+    )
+    .optional(),
 });
 export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
@@ -518,6 +599,19 @@ export const ObjectReferenceNullish = z.union([
   z.null(),
 ]);
 export type ObjectReferenceNullishType = z.infer<typeof ObjectReferenceNullish>;
+export const SavedFunctionId = z.union([
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
+]);
+export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const DatasetEvent = z.object({
   id: z.string(),
   _xact_id: z.string(),
@@ -544,6 +638,38 @@ export const DatasetEvent = z.object({
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
   facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
+  classifications: z
+    .union([
+      z.record(
+        z.array(
+          z.object({
+            id: z.string(),
+            label: z.string().optional(),
+            confidence: z.union([z.number(), z.null()]).optional(),
+            metadata: z
+              .union([z.object({}).partial().passthrough(), z.null()])
+              .optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
+          }),
+        ),
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 export type DatasetEventType = z.infer<typeof DatasetEvent>;
 export const EnvVar = z.object({
@@ -699,10 +825,46 @@ export const ExperimentEvent = z.object({
   comments: z.union([z.array(z.unknown()), z.null()]).optional(),
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
   facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
+  classifications: z
+    .union([
+      z.record(
+        z.array(
+          z.object({
+            id: z.string(),
+            label: z.string().optional(),
+            confidence: z.union([z.number(), z.null()]).optional(),
+            metadata: z
+              .union([z.object({}).partial().passthrough(), z.null()])
+              .optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
+          }),
+        ),
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 export type ExperimentEventType = z.infer<typeof ExperimentEvent>;
 export const ExtendedSavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
+  z.object({
+    type: z.literal("function"),
+    id: z.string(),
+    version: z.string().optional(),
+  }),
   z.object({
     type: z.literal("global"),
     name: z.string(),
@@ -722,6 +884,7 @@ export const FacetData = z.object({
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
   prompt: z.string(),
   model: z.string().optional(),
+  embedding_model: z.string().optional(),
   no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
@@ -832,15 +995,6 @@ export const PromptParserNullish = z.union([
   z.null(),
 ]);
 export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
-export const SavedFunctionId = z.union([
-  z.object({ type: z.literal("function"), id: z.string() }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-  }),
-]);
-export type SavedFunctionIdType = z.infer<typeof SavedFunctionId>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -1028,6 +1182,7 @@ export const FunctionData = z.union([
   }),
   FacetData,
   BatchedFacetData,
+  TopicMapData.and(z.unknown()),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -1065,7 +1220,13 @@ export const Function = z.object({
     .optional(),
 });
 export type FunctionType = z.infer<typeof Function>;
-export const FunctionFormat = z.enum(["llm", "code", "global", "graph"]);
+export const FunctionFormat = z.enum([
+  "llm",
+  "code",
+  "global",
+  "graph",
+  "topic_map",
+]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
 export const PromptData = z
   .object({
@@ -1162,7 +1323,7 @@ export const FunctionOutputType = z.enum([
   "completion",
   "score",
   "facet",
-  "tag",
+  "classification",
   "any",
 ]);
 export type FunctionOutputTypeType = z.infer<typeof FunctionOutputType>;
@@ -1482,6 +1643,38 @@ export const ProjectLogsEvent = z.object({
   audit_data: z.union([z.array(z.unknown()), z.null()]).optional(),
   _async_scoring_state: z.unknown().optional(),
   facets: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
+  classifications: z
+    .union([
+      z.record(
+        z.array(
+          z.object({
+            id: z.string(),
+            label: z.string().optional(),
+            confidence: z.union([z.number(), z.null()]).optional(),
+            metadata: z
+              .union([z.object({}).partial().passthrough(), z.null()])
+              .optional(),
+            source: SavedFunctionId.and(
+              z.union([
+                z.object({
+                  type: z.literal("function"),
+                  id: z.string(),
+                  version: z.string().optional(),
+                }),
+                z.object({
+                  type: z.literal("global"),
+                  name: z.string(),
+                  function_type: FunctionTypeEnum.optional().default("scorer"),
+                }),
+                z.null(),
+              ]),
+            ).optional(),
+          }),
+        ),
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 export type ProjectLogsEventType = z.infer<typeof ProjectLogsEvent>;
 export const ProjectScoreType = z.enum([
