@@ -34,7 +34,10 @@ import {
   type PromptDefinition,
 } from "./prompt-schemas";
 import { zodToJsonSchema } from "./zod/utils";
-import type { EvalParameterSerializedSchema } from "../dev/types";
+import type {
+  EvalParameterSerializedSchema,
+  evalParametersSerializedHardCodedSchema,
+} from "../dev/types";
 
 interface BaseFnOpts {
   name: string;
@@ -653,65 +656,41 @@ export class ParametersBuilder {
 // Legacy format - creates the old parameter format for backwards compatibility
 export function makeEvalParametersHardCodedSchema(
   parameters: EvalParameters,
-): Record<
-  string,
-  | {
-      type: "prompt";
-      default?: PromptData;
-      description?: string;
-    }
-  | {
-      type: "data";
-      schema: Record<string, unknown>;
-      default?: unknown;
-      description?: string;
-    }
-> {
-  const result: Record<
-    string,
-    | {
-        type: "prompt";
-        default?: PromptData;
-        description?: string;
+): z.infer<typeof evalParametersSerializedHardCodedSchema> {
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      if ("type" in value && value.type === "prompt") {
+        return [
+          name,
+          {
+            type: "prompt",
+            default: value.default
+              ? promptDefinitionToPromptData(value.default)
+              : undefined,
+            description: value.description,
+          },
+        ];
+      } else {
+        // Since this schema is bundled, it won't pass an instanceof check. For
+        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
+        // Type instantiation is excessively deep and possibly infinite.` So
+        // just using `any` to turn off the typesystem.
+        //
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const schemaObj = zodToJsonSchema(value as unknown as z.ZodType);
+        return [
+          name,
+          {
+            type: "data",
+            schema: schemaObj,
+            default: schemaObj.default,
+            description: schemaObj.description,
+          },
+        ];
       }
-    | {
-        type: "data";
-        schema: Record<string, unknown>;
-        default?: unknown;
-        description?: string;
-      }
-  > = {};
-
-  for (const [name, value] of Object.entries(parameters)) {
-    if ("type" in value && value.type === "prompt") {
-      const defaultPromptData = value.default
-        ? promptDefinitionToPromptData(value.default)
-        : undefined;
-
-      result[name] = {
-        type: "prompt",
-        ...(value.description ? { description: value.description } : {}),
-        ...(defaultPromptData ? { default: defaultPromptData } : {}),
-      };
-    } else {
-      // Data parameter - convert Zod schema to JSON Schema
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const schemaObj = zodToJsonSchema(value as z.ZodType) as Record<
-        string,
-        unknown
-      >;
-
-      result[name] = {
-        type: "data",
-        schema: schemaObj,
-        ...("default" in schemaObj ? { default: schemaObj.default } : {}),
-      };
-    }
-  }
-
-  return result;
+    }),
+  );
 }
-
 // New JSON Schema format
 export function makeEvalParametersSchema(
   parameters: EvalParameters,
