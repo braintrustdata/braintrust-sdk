@@ -272,8 +272,8 @@ function createToolTracingHooks(
 
     try {
       toolSpan.log({ output: input.tool_response });
-      toolSpan.end();
     } finally {
+      toolSpan.end();
       activeToolSpans.delete(toolUseID);
     }
     return {};
@@ -301,8 +301,8 @@ function createToolTracingHooks(
           "claude_agent_sdk.session_id": input.session_id,
         },
       });
-      toolSpan.end();
     } finally {
+      toolSpan.end();
       activeToolSpans.delete(toolUseID);
     }
     return {};

@@ -257,6 +257,214 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(capturedOptions.hooks.PostToolUseFailure.length).toBeGreaterThan(0);
   });
 
+  test("PreToolUse hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PreToolUse hook with undefined toolUseID
+    const preToolUseHook = capturedOptions.hooks.PreToolUse[0].hooks[0];
+    const result = await preToolUseHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUse hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PostToolUse hook with undefined toolUseID
+    const postToolUseHook = capturedOptions.hooks.PostToolUse[0].hooks[0];
+    const result = await postToolUseHook(
+      {
+        hook_event_name: "PostToolUse",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        tool_response: { result: "success" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUseFailure hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PostToolUseFailure hook with undefined toolUseID
+    const postToolUseFailureHook =
+      capturedOptions.hooks.PostToolUseFailure[0].hooks[0];
+    const result = await postToolUseFailureHook(
+      {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        error: "Tool execution failed",
+        is_interrupt: false,
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUseFailure hook logs error to span", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    const preToolUseHook = capturedOptions.hooks.PreToolUse[0].hooks[0];
+    const postToolUseFailureHook =
+      capturedOptions.hooks.PostToolUseFailure[0].hooks[0];
+    const toolUseID = "test-tool-use-id";
+
+    // First, call PreToolUse to create the span
+    await preToolUseHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "mcp__server__tool",
+        tool_input: { arg: "value" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      toolUseID,
+      { signal: new AbortController().signal },
+    );
+
+    // Then call PostToolUseFailure to log the error and end the span
+    const result = await postToolUseFailureHook(
+      {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "mcp__server__tool",
+        tool_input: { arg: "value" },
+        error: "Tool execution failed: connection timeout",
+        is_interrupt: false,
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      toolUseID,
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object (hook completed successfully)
+    expect(result).toEqual({});
+
+    // Verify span was created and ended (check via background logger)
+    const spans = await backgroundLogger.drain();
+    const toolSpan = spans?.find(
+      (s) => (s["span_attributes"] as Record<string, unknown>).type === "tool",
+    );
+
+    // Tool span should exist and have error logged
+    expect(toolSpan).toBeDefined();
+    expect(toolSpan?.error).toBe("Tool execution failed: connection timeout");
+  });
+
   // FIXME: Add subagent hook tests when SDK supports SubagentStart/SubagentStop properly.
   // See: https://github.com/anthropics/claude-code/issues/14859
 });
