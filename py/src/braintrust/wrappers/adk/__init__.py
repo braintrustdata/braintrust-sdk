@@ -384,9 +384,6 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
         # Convert to dict if it's a model object
         request_dict = cast(dict[str, Any], bt_safe_deep_copy(llm_request))
 
-        # Check if there are tools in the config
-        has_tools = bool(request_dict.get("config", {}).get("tools"))
-
         # Check the conversation history for function responses
         contents = request_dict.get("contents", [])
         has_function_response = False
@@ -409,7 +406,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
                     if function_calls and len(function_calls) > 0:
                         response_has_function_call = True
                 except Exception:
-                    pass
+                    logger.debug("Failed to get function calls from response", exc_info=True)
 
             # Fallback: Check the response dict structure
             if not response_has_function_call:
@@ -450,6 +447,7 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
             return "direct_response"
 
     except Exception:
+        logger.debug("Failed to determine LLM call type", exc_info=True)
         return "unknown"
 
 
