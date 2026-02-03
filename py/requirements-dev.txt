@@ -1,6 +1,6 @@
 # Also include build dependencies
 black
-datamodel-code-generator
+datamodel-code-generator>=0.53.0
 flake8
 flake8-isort
 isort==5.12.0

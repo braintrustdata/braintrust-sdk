@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypeAlias, TypedDict
 
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired
 
 AclObjectType: TypeAlias = Literal[
     'organization',
@@ -593,7 +593,7 @@ class ExperimentEventMetadata(TypedDict):
     """
 
 
-class ExperimentEventMetrics(TypedDict, extra_items=float):
+class ExperimentEventMetrics(TypedDict):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the experiment event started
@@ -854,7 +854,7 @@ FunctionTypeEnumNullish: TypeAlias = Literal[
 ]
 
 
-class GitMetadataSettings(TypedDict, closed=True):
+class GitMetadataSettings(TypedDict):
     collect: Literal['all', 'none', 'some']
     fields: NotRequired[
         Sequence[
@@ -1613,7 +1613,7 @@ class ProjectLogsEventMetadata(TypedDict):
     """
 
 
-class ProjectLogsEventMetrics(TypedDict, extra_items=float):
+class ProjectLogsEventMetrics(TypedDict):
     start: NotRequired[float | None]
     """
     A unix timestamp recording when the section of code which produced the project logs event started
