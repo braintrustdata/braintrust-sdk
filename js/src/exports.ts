@@ -210,6 +210,7 @@ export { SpanFetcher, CachedSpanFetcher } from "./trace";
 export type {
   LLMMessage,
   PreprocessorResult,
+  StringifyOptions,
   ThreadTemplateVars,
 } from "./thread-utils";
 export {
