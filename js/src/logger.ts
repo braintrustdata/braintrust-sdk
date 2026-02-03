@@ -6651,7 +6651,8 @@ export type DefaultPromptArgs = Partial<
 function isAttachmentObject(value: unknown): boolean {
   return (
     BraintrustAttachmentReferenceSchema.safeParse(value).success ||
-    InlineAttachmentReferenceSchema.safeParse(value).success
+    InlineAttachmentReferenceSchema.safeParse(value).success ||
+    ExternalAttachmentReferenceSchema.safeParse(value).success
   );
 }
 
