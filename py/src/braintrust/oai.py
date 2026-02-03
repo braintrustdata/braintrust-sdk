@@ -312,19 +312,25 @@ class ChatCompletionWrapper:
 
                 # pylint: disable=unsubscriptable-object
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
+                    function_arg = tool_delta.get("function", {})
                     tool_calls = (tool_calls or []) + [
                         {
-                            "id": delta["tool_calls"][0]["id"],
-                            "type": delta["tool_calls"][0]["type"],
+                            "id": tool_delta.get("id"),
+                            "type": tool_delta.get("type"),
                             "function": {
-                                "name": delta["tool_calls"][0]["function"]["name"],
-                                "arguments": delta["tool_calls"][0]["function"]["arguments"] or "",
+                                "name": function_arg.get("name"),
+                                "arguments": function_arg.get("arguments") or "",
                             },
                         }
                     ]
                 else:
                     # pylint: disable=unsubscriptable-object
-                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"] or ""
+                    # append to existing tool call
+                    function_arg = tool_delta.get("function", {})
+                    args = function_arg.get("arguments") or ""
+                    if isinstance(args, str):
+                        # pylint: disable=unsubscriptable-object
+                        tool_calls[-1]["function"]["arguments"] += args
 
         return {
             "metrics": metrics,
