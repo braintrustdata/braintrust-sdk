@@ -1,0 +1,14 @@
+[project]
+name = "golden"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "braintrust",
+    "google-adk>=1.14.1",
+]
+
+[tool.uv.sources]
+braintrust = { path = "../../py", editable = true }
+braintrust-adk = { path = "../../integrations/adk-py", editable = true }
