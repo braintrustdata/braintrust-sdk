@@ -1,16 +1,16 @@
 import {
-  test,
-  expect,
-  describe,
-  beforeEach,
-  beforeAll,
   afterEach,
-  vi,
   assert,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
 } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import { initLogger, _exportsForTestingOnly, Attachment } from "../logger";
+import { _exportsForTestingOnly, Attachment, initLogger } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 
@@ -149,10 +149,203 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
     expect(metrics.tokens).toBeDefined();
   });
 
-  // TODO[matt]
-  test("test with tools", async (context) => {
-    // TODO[matt]
-    context.skip();
+  test("test client.messages.create with tools (non-streaming)", async () => {
+    const tools = [
+      {
+        name: "get_weather",
+        description: "Get the current weather in a given location",
+        input_schema: {
+          type: "object",
+          properties: {
+            location: {
+              type: "string",
+              description: "The city and state, e.g. San Francisco, CA",
+            },
+            unit: {
+              type: "string",
+              enum: ["celsius", "fahrenheit"],
+              description: "The unit of temperature",
+            },
+          },
+          required: ["location"],
+        },
+      },
+    ];
+
+    const response = await client.messages.create({
+      model: TEST_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: "What's the weather in San Francisco?",
+        },
+      ],
+      max_tokens: 200,
+      tools,
+      temperature: 0.01,
+    });
+
+    expect(response).toBeDefined();
+    expect(response.content).toBeDefined();
+
+    const toolUseBlock = response.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(toolUseBlock).toBeDefined();
+    expect(toolUseBlock).toHaveProperty("name", "get_weather");
+    expect(toolUseBlock).toHaveProperty("input");
+    expect(toolUseBlock.input).toHaveProperty("location");
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+
+    expect(span.output).toBeDefined();
+    expect(span.output.content).toBeDefined();
+
+    const outputToolUse = span.output.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(outputToolUse).toBeDefined();
+    expect(outputToolUse.name).toBe("get_weather");
+    expect(outputToolUse.input).toBeDefined();
+
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
+  });
+
+  test("test client.messages.create with tools and stream=true", async () => {
+    const tools = [
+      {
+        name: "calculate",
+        description: "Perform a mathematical calculation",
+        input_schema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["add", "subtract", "multiply", "divide"],
+            },
+            a: { type: "number" },
+            b: { type: "number" },
+          },
+          required: ["operation", "a", "b"],
+        },
+      },
+    ];
+
+    const response = await client.messages.create({
+      model: TEST_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: "What is 15 plus 27?",
+        },
+      ],
+      max_tokens: 200,
+      tools,
+      temperature: 0.01,
+      stream: true,
+    });
+
+    for await (const event of response) {
+      // Just consume the events
+    }
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+
+    const outputToolUse = span.output.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(outputToolUse).toBeDefined();
+    expect(outputToolUse.name).toBe("calculate");
+    expect(outputToolUse.input).toBeDefined();
+    expect(outputToolUse.input.operation).toBe("add");
+    expect(outputToolUse.input.a).toBe(15);
+    expect(outputToolUse.input.b).toBe(27);
+
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
+  });
+
+  test("test client.beta.messages.create with tools and stream=true", async () => {
+    const tools = [
+      {
+        name: "get_stock_price",
+        description: "Get the current stock price",
+        input_schema: {
+          type: "object",
+          properties: {
+            symbol: {
+              type: "string",
+              description: "The stock ticker symbol",
+            },
+          },
+          required: ["symbol"],
+        },
+      },
+    ];
+
+    const response = await client.beta.messages.create({
+      model: TEST_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: "What's the price of AAPL stock?",
+        },
+      ],
+      max_tokens: 200,
+      tools,
+      temperature: 0.01,
+      stream: true,
+    });
+
+    for await (const event of response) {
+      // Just consume the events
+    }
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+    expect(span.output).toBeDefined();
+
+    const outputToolUse = span.output.content.find(
+      (block: any) => block.type === "tool_use",
+    );
+    expect(outputToolUse).toBeDefined();
+    expect(outputToolUse.name).toBe("get_stock_price");
+    expect(outputToolUse.input).toBeDefined();
+    expect(outputToolUse.input.symbol).toBeDefined();
+    expect(typeof outputToolUse.input.symbol).toBe("string");
+
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
   });
 
   test("test client.message.create with stream=true", async () => {
@@ -262,6 +455,8 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
       usage.cache_creation_input_tokens,
     );
     expect(metrics.prompt_cached_tokens).toBe(usage.cache_read_input_tokens);
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
     expect(startTime <= metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
@@ -327,6 +522,7 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
         tokens: expect.any(Number),
         start: expect.any(Number),
         end: expect.any(Number),
+        time_to_first_token: expect.any(Number),
       },
     });
 
@@ -572,7 +768,8 @@ function assertValidMetrics(metrics: any, start: number, end: number) {
   expect(metrics).toBeDefined();
   expect(metrics.start).toBeDefined();
   expect(metrics.end).toBeDefined();
-  //expect(metrics.time_to_first_token).toBeDefined();
+  expect(metrics.time_to_first_token).toBeDefined();
+  expect(metrics.time_to_first_token).toBeGreaterThanOrEqual(0);
   for (const [key, value] of Object.entries(metrics)) {
     expect(value).toBeDefined();
     // if "tokens" is in key, it should be greater than 0

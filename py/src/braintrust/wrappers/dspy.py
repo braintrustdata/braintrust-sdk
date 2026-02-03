@@ -47,10 +47,11 @@ Advanced Usage with LiteLLM Patching:
     ```
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from braintrust.logger import current_span, start_span
 from braintrust.span_types import SpanTypeAttribute
+from wrapt import wrap_function_wrapper
 
 # Note: For detailed token and cost metrics, use patch_litellm() before importing DSPy.
 # The DSPy callback focuses on execution flow and span hierarchy.
@@ -58,9 +59,9 @@ from braintrust.span_types import SpanTypeAttribute
 try:
     from dspy.utils.callback import BaseCallback
 except ImportError:
-    raise ImportError(
-        "DSPy is not installed. Please install it with: pip install dspy"
-    )
+    raise ImportError("DSPy is not installed. Please install it with: pip install dspy")
+
+__all__ = ["BraintrustDSpyCallback", "patch_dspy"]
 
 
 class BraintrustDSpyCallback(BaseCallback):
@@ -130,13 +131,13 @@ class BraintrustDSpyCallback(BaseCallback):
         """Initialize the Braintrust DSPy callback handler."""
         super().__init__()
         # Map call_id to span objects for proper nesting
-        self._spans: Dict[str, Any] = {}
+        self._spans: dict[str, Any] = {}
 
     def on_lm_start(
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a language model call.
 
@@ -174,8 +175,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_lm_end(
         self,
         call_id: str,
-        outputs: Optional[Dict[str, Any]],
-        exception: Optional[Exception] = None,
+        outputs: dict[str, Any] | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a language model call.
 
@@ -205,7 +206,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a DSPy module execution.
 
@@ -236,8 +237,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_module_end(
         self,
         call_id: str,
-        outputs: Optional[Any],
-        exception: Optional[Exception] = None,
+        outputs: Any | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a DSPy module execution.
 
@@ -274,7 +275,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of a tool invocation.
 
@@ -309,8 +310,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_tool_end(
         self,
         call_id: str,
-        outputs: Optional[Dict[str, Any]],
-        exception: Optional[Exception] = None,
+        outputs: dict[str, Any] | None,
+        exception: Exception | None = None,
     ):
         """Log the end of a tool invocation.
 
@@ -340,7 +341,7 @@ class BraintrustDSpyCallback(BaseCallback):
         self,
         call_id: str,
         instance: Any,
-        inputs: Dict[str, Any],
+        inputs: dict[str, Any],
     ):
         """Log the start of an evaluation run.
 
@@ -374,8 +375,8 @@ class BraintrustDSpyCallback(BaseCallback):
     def on_evaluate_end(
         self,
         call_id: str,
-        outputs: Optional[Any],
-        exception: Optional[Exception] = None,
+        outputs: Any | None,
+        exception: Exception | None = None,
     ):
         """Log the end of an evaluation run.
 
@@ -414,4 +415,52 @@ class BraintrustDSpyCallback(BaseCallback):
             span.end()
 
 
-__all__ = ["BraintrustDSpyCallback"]
+def _configure_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for dspy.configure that auto-adds BraintrustDSpyCallback."""
+    callbacks = kwargs.get("callbacks")
+    if callbacks is None:
+        callbacks = []
+    else:
+        callbacks = list(callbacks)
+
+    # Check if already has Braintrust callback
+    has_bt_callback = any(isinstance(cb, BraintrustDSpyCallback) for cb in callbacks)
+    if not has_bt_callback:
+        callbacks.append(BraintrustDSpyCallback())
+
+    kwargs["callbacks"] = callbacks
+    return wrapped(*args, **kwargs)
+
+
+def patch_dspy() -> bool:
+    """
+    Patch DSPy to automatically add Braintrust tracing callback.
+
+    After calling this, all calls to dspy.configure() will automatically
+    include the BraintrustDSpyCallback.
+
+    Returns:
+        True if DSPy was patched (or already patched), False if DSPy is not installed.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_dspy()
+
+        import dspy
+        lm = dspy.LM("openai/gpt-4o-mini")
+        dspy.configure(lm=lm)  # BraintrustDSpyCallback auto-added!
+        ```
+    """
+    try:
+        import dspy
+
+        if getattr(dspy, "__braintrust_wrapped__", False):
+            return True  # Already patched
+
+        wrap_function_wrapper("dspy", "configure", _configure_wrapper)
+        dspy.__braintrust_wrapped__ = True
+        return True
+
+    except ImportError:
+        return False

@@ -30,6 +30,15 @@ ${VENV_PRE_COMMIT}: ${VENV_PYTHON_PACKAGES}
 develop: ${VENV_PRE_COMMIT}
 	@echo "--\nRun "source env.sh" to enter development mode!"
 
+.PHONY: install-dev
+install-dev:
+	mise install
+
+.PHONY: install-deps
+install-deps:
+	cd py && make install-dev
+	pnpm install
+
 fixup:
 	source env.sh && pre-commit run --all-files
 
@@ -70,6 +79,23 @@ js-docs: js-build
 	cd js && make docs
 
 js-verify-ci: js-docs js-test
+
+js-test-otel-docker:
+	@echo "Building Docker images for otel-js tests..."
+	@if [ -z "$$NODE_VERSION" ]; then \
+		NODE_VER=22; \
+	else \
+		NODE_VER=$$NODE_VERSION; \
+	fi; \
+	echo "Building otel-v1 test container..."; \
+	docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=$$NODE_VER --build-arg TEST_DIR=otel-v1 -t otel-js-test-v1 . && \
+	echo "Building otel-v2 test container..."; \
+	docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=$$NODE_VER --build-arg TEST_DIR=otel-v2 -t otel-js-test-v2 .
+	@echo "Running otel-v1 tests in Docker container..."
+	@docker run --rm otel-js-test-v1
+	@echo "Running otel-v2 tests in Docker container..."
+	@docker run --rm otel-js-test-v2
+	@echo "✅ All otel-js Docker tests passed"
 
 
 # -------------------------------------------------------------------------------------------------

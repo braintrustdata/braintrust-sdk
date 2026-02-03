@@ -5,7 +5,6 @@ import {
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3EnumSchema,
-  spanObjectTypeV3ToString,
 } from "./span_identifier_v3";
 import {
   ParentExperimentIds,
@@ -21,6 +20,7 @@ import {
 } from "./bytes";
 import { z } from "zod/v3";
 import { InvokeFunctionType as InvokeFunctionRequest } from "./generated_types";
+import { mergeDicts } from "./object_util";
 
 const ENCODING_VERSION_NUMBER_V4 = 4;
 
@@ -320,4 +320,24 @@ export function parseParent(
           propagated_event: parent.propagated_event,
         }).toStr()
       : undefined;
+}
+
+/**
+ * Creates a propagatedEvent for scorer spans by merging the purpose into
+ * any existing propagatedEvent from the parent span.
+ *
+ * @param parent - The parent span export string, or undefined if no parent
+ * @returns A propagatedEvent with span_attributes.purpose set to "scorer",
+ *          merged with any existing propagatedEvent from the parent
+ */
+export function makeScorerPropagatedEvent(
+  parent: string | undefined,
+): Record<string, unknown> {
+  const parentPropagatedEvent = parent
+    ? SpanComponentsV4.fromStr(parent).data.propagated_event ?? {}
+    : {};
+  return mergeDicts(
+    { ...parentPropagatedEvent },
+    { span_attributes: { purpose: "scorer" } },
+  );
 }

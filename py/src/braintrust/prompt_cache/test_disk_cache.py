@@ -39,7 +39,7 @@ class TestDiskCache(unittest.TestCase):
             "a\nb",
         ]
         for k in weird_keys:
-            time.sleep(0.05)  # make sure the mtimes are different
+            time.sleep(0.01)  # make sure the mtimes are different
             self.cache.set(k, data)
             result = self.cache.get(k)
             assert data == result
@@ -61,7 +61,7 @@ class TestDiskCache(unittest.TestCase):
         # Fill cache beyond max size (3).
         for i in range(3):
             self.cache.set(f"key{i}", {"value": i})
-            time.sleep(0.1)  # wait to ensure different mtimes
+            time.sleep(0.01)  # wait to ensure different mtimes
 
         # Add one more to trigger eviction.
         self.cache.set("key3", {"value": 3})
@@ -75,7 +75,7 @@ class TestDiskCache(unittest.TestCase):
         # Fill cache beyond max size (3).
         for i in range(3):
             self.cache.set(f"key{i}", {"value": i})
-            time.sleep(0.1)  # wait to ensure different mtimes
+            time.sleep(0.01)  # wait to ensure different mtimes
 
         # Add one more to trigger eviction.
         self.cache.set("key3", {"value": 3})

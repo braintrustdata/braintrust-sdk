@@ -29,6 +29,7 @@ extras_require = {
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],
+    "temporal": ["temporalio>=1.19.0; python_version>='3.10'"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
@@ -48,12 +49,13 @@ setuptools.setup(
     },
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
         "Operating System :: OS Independent",
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     package_data={"braintrust": ["py.typed"]},
-    python_requires=">=3.8.0",
+    python_requires=">=3.10.0",
     entry_points={"console_scripts": ["braintrust = braintrust.cli.__main__:main"]},
     install_requires=install_requires,
     extras_require=extras_require,

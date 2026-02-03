@@ -19,13 +19,17 @@ on:
 jobs:
   build-and-publish-test:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Required for PyPI trusted publishing
+
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      TWINE_USERNAME: __token__
-      TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      PYPI_REPO: testpypi
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +43,64 @@ jobs:
         working-directory: py
         run: |
           make install-dev
-      - name: Verify, build and publish to TestPyPI
+      - name: Build and verify
         working-directory: py
         run: |
-          make publish-to-testpypi
+          make verify-build
+      - name: Get version from built wheel
+        id: get_version
+        run: |
+          WHEEL=$(ls py/dist/*.whl | head -n 1)
+          VERSION=$(echo "$WHEEL" | sed -n 's/.*braintrust-\([^-]*\)-.*/\1/p')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: py/dist/
+
+  notify-success:
+    needs: build-and-publish-test
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Slack on success
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "🧪 Python SDK pre-release v${{ needs.build-and-publish-test.outputs.version }} published to TestPyPI"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "🧪 Python SDK Pre-release Published"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Version:* ${{ needs.build-and-publish-test.outputs.version }}\n*Ref:* ${{ github.event.inputs.ref }}\n*Install:* `pip install -i https://test.pypi.org/simple/ braintrust==${{ needs.build-and-publish-test.outputs.version }}`\n*Package:* <https://test.pypi.org/project/braintrust/|braintrust (TestPyPI)>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+
+  notify-failure:
+    needs: build-and-publish-test
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Slack on failure
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "🚨 Python SDK TestPyPI release failed"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "🚨 Python SDK TestPyPI Release Failed"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Ref:* ${{ github.event.inputs.ref }}\n*Commit:* ${{ github.sha }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"

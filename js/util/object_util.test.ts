@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, describe } from "vitest";
 import {
   mapAt,
   forEachMissingKey,
@@ -183,4 +183,62 @@ test("mapAt basic", () => {
   expect(mapAt(m, 4)).toBe("hello");
   expect(mapAt(m, 5)).toBe("goodbye");
   expect(() => mapAt(m, 6)).toThrowError("Map does not contain key 6");
+});
+
+describe("tags set-union merge", () => {
+  test("tags arrays are merged as sets by default", () => {
+    const a = { tags: ["a", "b"] };
+    const b = { tags: ["b", "c"] };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.tags).toEqual(["a", "b", "c"]);
+  });
+
+  test("tags merge deduplicates values", () => {
+    const a = { tags: ["a", "b", "c"] };
+    const b = { tags: ["a", "b", "c", "d"] };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.tags).toEqual(["a", "b", "c", "d"]);
+  });
+
+  test("tags merge works when mergeInto has no tags", () => {
+    const a: Record<string, unknown> = { other: "data" };
+    const b = { tags: ["a", "b"] };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.tags).toEqual(["a", "b"]);
+  });
+
+  test("tags merge works when mergeFrom has no tags", () => {
+    const a = { tags: ["a", "b"] };
+    const b: Record<string, unknown> = { other: "data" };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.tags).toEqual(["a", "b"]);
+  });
+
+  test("tags are replaced when included in mergePaths", () => {
+    const a = { tags: ["a", "b"] };
+    const b = { tags: ["c", "d"] };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [["tags"]] });
+    expect(a.tags).toEqual(["c", "d"]);
+  });
+
+  test("empty tags array clears tags", () => {
+    const a = { tags: ["a", "b"] };
+    const b = { tags: [] as string[] };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [["tags"]] });
+    expect(a.tags).toEqual([]);
+  });
+
+  test("null tags replaces tags", () => {
+    const a: Record<string, unknown> = { tags: ["a", "b"] };
+    const b: Record<string, unknown> = { tags: null };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.tags).toEqual(null);
+  });
+
+  test("set-union only applies to top-level tags field", () => {
+    const a = { metadata: { tags: ["a", "b"] } };
+    const b = { metadata: { tags: ["c", "d"] } };
+    mergeDictsWithPaths({ mergeInto: a, mergeFrom: b, mergePaths: [] });
+    expect(a.metadata.tags).toEqual(["c", "d"]);
+  });
 });

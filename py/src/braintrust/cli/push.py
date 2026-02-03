@@ -13,10 +13,9 @@ import sys
 import tempfile
 import textwrap
 import zipfile
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
-
 from braintrust.framework import _set_lazy_load
 
 from .. import api_conn, login, org_id, proxy_conn
@@ -25,7 +24,7 @@ from ..generated_types import IfExists
 from ..util import add_azure_blob_headers
 
 
-def _pkg_install_arg(pkg) -> Optional[str]:
+def _pkg_install_arg(pkg) -> str | None:
     try:
         dist = importlib.metadata.distribution(pkg)
         direct_url = dist._path / "direct_url.json"  # type: ignore
@@ -74,11 +73,11 @@ class _ProjectRootImporter(importlib.abc.MetaPathFinder):
         self._project_root, self._path_rest = sys.path[0], sys.path[1:]
         self._sources = []
 
-    def _under_project_root(self, path: List[str]) -> bool:
+    def _under_project_root(self, path: list[str]) -> bool:
         """Returns true if all paths in `path` are under the project root."""
         return all(p.startswith(self._project_root) for p in path)
 
-    def _under_rest(self, path: List[str]) -> bool:
+    def _under_rest(self, path: list[str]) -> bool:
         """Returns true if any path in `path` is under one of the remaining paths in `sys.path`."""
         return any(p.startswith(pr) for p in path for pr in self._path_rest)
 
@@ -95,11 +94,11 @@ class _ProjectRootImporter(importlib.abc.MetaPathFinder):
             self._sources.append(spec.origin)
         return spec
 
-    def sources(self) -> List[str]:
+    def sources(self) -> list[str]:
         return self._sources
 
 
-def _import_module(name: str, path: str) -> List[str]:
+def _import_module(name: str, path: str) -> list[str]:
     """Imports the module and returns the list of source files
     of all modules imported in the process.
 
@@ -121,7 +120,7 @@ def _py_version() -> str:
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
-def _run_install(install_args: List[str], packages_dir: str):
+def _run_install(install_args: list[str], packages_dir: str):
     subprocess.run(
         [
             "uv",
@@ -139,7 +138,7 @@ def _run_install(install_args: List[str], packages_dir: str):
     )
 
 
-def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Optional[str]) -> str:
+def _upload_bundle(entry_module_name: str, sources: list[str], requirements: str | None) -> str:
     _check_uv()
 
     resp = proxy_conn().post_json(
@@ -213,7 +212,7 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 
 
 def _collect_function_function_defs(
-    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
+    project_ids: ProjectIdCache, functions: list[dict[str, Any]], bundle_id: str, if_exists: IfExists
 ) -> None:
     for i, f in enumerate(global_.functions):
         source = inspect.getsource(f.handler)
@@ -250,6 +249,8 @@ def _collect_function_function_defs(
             },
             "if_exists": f.if_exists if f.if_exists else if_exists,
         }
+        if f.metadata is not None:
+            j["metadata"] = f.metadata
         if f.parameters is None:
             raise ValueError(f"Function {f.name} has no supplied parameters")
         j["function_schema"] = {
@@ -261,7 +262,7 @@ def _collect_function_function_defs(
 
 
 def _collect_prompt_function_defs(
-    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
+    project_ids: ProjectIdCache, functions: list[dict[str, Any]], if_exists: IfExists
 ) -> None:
     for p in global_.prompts:
         functions.append(p.to_function_definition(if_exists, project_ids))
@@ -299,7 +300,7 @@ def run(args):
         raise
 
     project_ids = ProjectIdCache()
-    functions: List[Dict[str, Any]] = []
+    functions: list[dict[str, Any]] = []
     if len(global_.functions) > 0:
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
         _collect_function_function_defs(project_ids, functions, bundle_id, args.if_exists)

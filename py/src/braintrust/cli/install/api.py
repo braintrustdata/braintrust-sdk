@@ -4,7 +4,6 @@ import textwrap
 import time
 
 from botocore.exceptions import ClientError
-
 from braintrust.logger import app_conn, login
 
 # pylint: disable=no-name-in-module
@@ -30,8 +29,6 @@ PARAMS = {
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
     "ManagedPostgres": "managed_postgres",
-    "ManagedClickhouse": "managed_clickhouse",
-    "ClickhouseInstanceType": "clickhouse_instance_type",
     "PostgresVersion": "postgres_version",
     "OutboundRateLimitWindowMinutes": "outbound_rate_limit_window_minutes",
     "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
@@ -179,19 +176,6 @@ def build_parser(subparsers, parents):
         default=None,
     )
 
-    # Clickhouse
-    parser.add_argument(
-        "--managed-clickhouse",
-        help="Spin up a Clickhouse Instance for faster analytics",
-        default=None,
-        choices=[None, "true", "false"],
-    )
-    parser.add_argument(
-        "--clickhouse-instance-type",
-        help="The instance type for the Clickhouse instance",
-        default=None,
-    )
-
     # ElastiCacheClusterId
     parser.add_argument("--elasticache-cluster-host", help="The ElastiCacheCluster host to use", default=None)
     parser.add_argument(
@@ -235,11 +219,6 @@ def build_parser(subparsers, parents):
         "--postgres-url",
         help="[Advanced] The postgres URL to use (if you are connecting to another VPC)",
         default=None,
-    )
-    parser.add_argument("--clickhouse-pg-url", help="[Advanced] The clickhouse PG URL to use", default=None)
-    parser.add_argument("--clickhouse-connect-url", help="[Advanced] The clickhouse connect URL to use", default=None)
-    parser.add_argument(
-        "--clickhouse-catchup-etl-arn", help="[Advanced] The clickhouse catchup ETL ARN to use", default=None
     )
 
     # To configure your org
@@ -321,9 +300,6 @@ def main(args):
         PARAMS["ElastiCacheClusterHost"] = "elasticache_cluster_host"
         PARAMS["ElastiCacheClusterPort"] = "elasticache_cluster_port"
         PARAMS["PostgresUrl"] = "postgres_url"
-        PARAMS["ClickhouseCatchupEtlArn"] = "clickhouse_catchup_etl_arn"
-        PARAMS["ClickhouseConnectUrl"] = "clickhouse_connect_url"
-        PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
         PARAMS["EnableBrainstore"] = "enable_brainstore"
         PARAMS["BrainstoreInstanceKeyPairName"] = "brainstore_instance_key_pair_name"
         PARAMS["BrainstoreLicenseKey"] = "brainstore_license_key"
@@ -350,7 +326,7 @@ def main(args):
             textwrap.dedent(
                 f"""\
             Stack with name {args.name} does not exist. Either create it manually by following
-            https://www.braintrust.dev/docs/guides/self-hosting/aws or use the --create flag."""
+            https://www.braintrust.dev/docs/admin/self-hosting/aws or use the --create flag."""
             )
         )
         exit(1)

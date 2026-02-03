@@ -5,6 +5,7 @@ export const ID_FIELD = "id";
 
 export const IS_MERGE_FIELD = "_is_merge";
 export const MERGE_PATHS_FIELD = "_merge_paths";
+export const ARRAY_DELETE_FIELD = "_array_delete";
 
 export const AUDIT_SOURCE_FIELD = "_audit_source";
 export const AUDIT_METADATA_FIELD = "_audit_metadata";
@@ -15,6 +16,16 @@ export const PARENT_ID_FIELD = "_parent_id";
 
 export const ASYNC_SCORING_CONTROL_FIELD = "_async_scoring_control";
 export const SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring";
+
+// Keys that identify which object (experiment, dataset, project logs, etc.) a row belongs to.
+export const OBJECT_ID_KEYS = [
+  "experiment_id",
+  "dataset_id",
+  "prompt_session_id",
+  "project_id",
+  "log_id",
+  "function_data",
+] as const;
 
 // While transaction ids are convertible to 64-bit integers (BigInts in JS), we
 // prefer to treat them as strings so they uniformly serialize/deserialize as

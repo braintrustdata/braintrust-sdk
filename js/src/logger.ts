@@ -24,6 +24,8 @@ import {
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
+  OBJECT_DELETE_FIELD,
+  OBJECT_ID_KEYS,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanComponentsV4,
@@ -68,10 +70,20 @@ import {
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+export const LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+// 6 MB for the AWS lambda gateway (from our own testing).
+export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
+import {
+  parseTemplateFormat,
+  renderTemplateContent,
+  type TemplateFormat,
+} from "./template/renderer";
+import { renderNunjucksString } from "./template/nunjucks-env";
+
 import { z, ZodError } from "zod/v3";
 import {
   BraintrustStream,
@@ -91,13 +103,21 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate } from "./mustache-utils";
+import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
+import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
+import { SpanCache, CachedSpan } from "./span-cache";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
   rootSpanId: string;
   spanParents: string[];
+}
+
+export class LoginInvalidOrgError extends Error {
+  constructor(public message: string) {
+    super(message);
+  }
 }
 
 // Fields that should be passed to the masking function
@@ -210,6 +230,14 @@ export interface Span extends Exportable {
    * Parent span IDs of the span.
    */
   spanParents: string[];
+
+  getParentInfo():
+    | {
+        objectType: SpanObjectTypeV3;
+        objectId: LazyValue<string>;
+        computeObjectMetadataArgs: Record<string, unknown> | undefined;
+      }
+    | undefined;
 
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -337,13 +365,6 @@ export interface Span extends Exportable {
    */
   state(): BraintrustState;
 
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined;
-
   // For type identification.
   kind: "span";
 }
@@ -383,34 +404,25 @@ class BraintrustContextManager extends ContextManager {
   }
 }
 
-function getSpanComponentsClass():
-  | typeof SpanComponentsV3
-  | typeof SpanComponentsV4 {
-  const useV4 =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-  return useV4 ? SpanComponentsV4 : SpanComponentsV3;
+// make sure to update @braintrust/otel package
+declare global {
+  var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
+  var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
+  var BRAINTRUST_SPAN_COMPONENT: SpanComponent | undefined;
+}
+
+type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
+
+function getSpanComponentsClass(): SpanComponent {
+  return globalThis.BRAINTRUST_SPAN_COMPONENT
+    ? globalThis.BRAINTRUST_SPAN_COMPONENT
+    : SpanComponentsV3;
 }
 
 export function getContextManager(): ContextManager {
-  const useOtel =
-    typeof process !== "undefined" &&
-    process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true";
-
-  if (useOtel) {
-    try {
-      const { OtelContextManager } = require("./otel/context") as {
-        OtelContextManager: new () => ContextManager;
-      };
-      return new OtelContextManager();
-    } catch {
-      console.warn(
-        "OTEL not available, falling back to Braintrust-only context manager",
-      );
-    }
-  }
-
-  return new BraintrustContextManager();
+  return globalThis.BRAINTRUST_CONTEXT_MANAGER
+    ? new globalThis.BRAINTRUST_CONTEXT_MANAGER()
+    : new BraintrustContextManager();
 }
 
 /**
@@ -440,6 +452,10 @@ export class NoopSpan implements Span {
     _1?: StartSpanArgs & SetCurrentArg,
   ): R {
     return callback(this);
+  }
+
+  public getParentInfo() {
+    return undefined;
   }
 
   public startSpan(_1?: StartSpanArgs) {
@@ -480,10 +496,6 @@ export class NoopSpan implements Span {
 
   public state() {
     return _internalGetGlobalState();
-  }
-
-  public _getOtelParent(): string | undefined {
-    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -559,8 +571,10 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
+  private _otelFlushCallback: (() => Promise<void>) | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -597,6 +611,7 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+    this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
   public resetLoginInfo() {
@@ -632,6 +647,24 @@ export class BraintrustState {
       this._contextManager = getContextManager();
     }
     return this._contextManager;
+  }
+
+  /**
+   * Register an OTEL flush callback. This is called by @braintrust/otel
+   * when it initializes a BraintrustSpanProcessor/Exporter.
+   */
+  public registerOtelFlush(callback: () => Promise<void>): void {
+    this._otelFlushCallback = callback;
+  }
+
+  /**
+   * Flush OTEL spans if a callback is registered.
+   * Called during ensureSpansFlushed to ensure OTEL spans are visible in BTQL.
+   */
+  public async flushOtel(): Promise<void> {
+    if (this._otelFlushCallback) {
+      await this._otelFlushCallback();
+    }
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -905,6 +938,22 @@ export function _internalSetInitialState() {
  */
 export const _internalGetGlobalState = () => _globalState;
 
+/**
+ * Register a callback to flush OTEL spans. This is called by @braintrust/otel
+ * when it initializes a BraintrustSpanProcessor/Exporter.
+ *
+ * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
+ * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ *
+ * Also disables the span cache, since OTEL spans aren't in the local cache
+ * and we need BTQL to see the complete span tree (both native + OTEL spans).
+ */
+export function registerOtelFlush(callback: () => Promise<void>): void {
+  _globalState?.registerOtelFlush(callback);
+  // Disable span cache since OTEL spans aren't in the local cache
+  _globalState?.spanCache?.disable();
+}
+
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
@@ -1124,9 +1173,17 @@ interface OrgProjectMetadata {
   project: ObjectMetadata;
 }
 
+export interface LinkArgs {
+  org_name?: string;
+  app_url?: string;
+  project_name?: string;
+  project_id?: string;
+}
+
 export interface LogOptions<IsAsyncFlush> {
   asyncFlush?: IsAsyncFlush;
   computeMetadataArgs?: Record<string, any>;
+  linkArgs?: LinkArgs;
 }
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
@@ -1285,7 +1342,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await checkResponse(
           await fetch(signedUrl, {
-            method: "PUT",
+            method: "PUT" satisfies RequestInit["method"],
             headers,
             body: data,
           }),
@@ -1854,6 +1911,33 @@ function getErrPermlink(msg: string) {
   return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
 }
 
+function _getAppUrl(appUrl?: string | null): string {
+  return (
+    appUrl || iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev"
+  );
+}
+
+function _getOrgName(orgName?: string | null): string | undefined {
+  return orgName || iso.getEnv("BRAINTRUST_ORG_NAME") || undefined;
+}
+
+/**
+ * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+ * if we have the info, otherwise return null.
+ * Resolution order: state -> linkArgs -> env var
+ */
+function _getLinkBaseUrl(
+  state: BraintrustState,
+  linkArgs?: LinkArgs,
+): string | null {
+  const appUrl = _getAppUrl(state.appUrl || linkArgs?.app_url);
+  const orgName = _getOrgName(state.orgName || linkArgs?.org_name);
+  if (!orgName) {
+    return null;
+  }
+  return `${appUrl}/app/${orgName}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -2006,6 +2090,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
   private computeMetadataArgs: Record<string, any> | undefined;
+  private _linkArgs: LinkArgs | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -2021,6 +2106,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     this.lazyMetadata = lazyMetadata;
     this._asyncFlush = logOptions.asyncFlush;
     this.computeMetadataArgs = logOptions.computeMetadataArgs;
+    this._linkArgs = logOptions.linkArgs;
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -2227,6 +2313,15 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   get asyncFlush(): IsAsyncFlush | undefined {
     return this._asyncFlush;
   }
+
+  /**
+   * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
+   * if we have the info, otherwise return null.
+   * Resolution order: state -> linkArgs -> env var
+   */
+  public _getLinkBaseUrl(): string | null {
+    return _getLinkBaseUrl(this.state, this._linkArgs);
+  }
 }
 
 function castLogger<ToB extends boolean, FromB extends boolean>(
@@ -2242,8 +2337,134 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-function constructLogs3Data(items: string[]) {
-  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+export const logs3OverflowUploadSchema = z.object({
+  method: z.enum(["PUT", "POST"]),
+  signedUrl: z.string().url(),
+  headers: z.record(z.string()).optional(),
+  fields: z.record(z.string()).optional(),
+  key: z.string().min(1),
+});
+export type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+
+export type Logs3OverflowInputRow = {
+  object_ids: Record<string, unknown>;
+  is_delete?: boolean;
+  input_row: {
+    byte_size: number;
+  };
+};
+
+type LogItemWithMeta = {
+  str: string;
+  overflowMeta: Logs3OverflowInputRow;
+};
+
+function constructLogs3Data(items: LogItemWithMeta[]) {
+  return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
+}
+
+export function constructLogs3OverflowRequest(key: string) {
+  return {
+    rows: {
+      type: LOGS3_OVERFLOW_REFERENCE_TYPE,
+      key,
+    },
+    api_version: 2,
+  };
+}
+
+export function pickLogs3OverflowObjectIds(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const objectIds: Record<string, unknown> = {};
+  for (const key of OBJECT_ID_KEYS) {
+    if (key in row) {
+      objectIds[key] = row[key];
+    }
+  }
+  return objectIds;
+}
+
+/**
+ * Upload a logs3 overflow payload to the signed URL.
+ * This is a standalone function that can be used by both SDK and app code.
+ *
+ * @param upload - The overflow upload metadata from the API
+ * @param payload - The JSON payload string to upload
+ * @param fetchFn - Optional custom fetch function (defaults to global fetch)
+ */
+export async function uploadLogs3OverflowPayload(
+  upload: Logs3OverflowUpload,
+  payload: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  if (upload.method === "POST") {
+    if (!upload.fields) {
+      throw new Error("Missing logs3 overflow upload fields");
+    }
+    if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+      throw new Error("FormData is not available for logs3 overflow upload");
+    }
+    const form = new FormData();
+    for (const [key, value] of Object.entries(upload.fields)) {
+      form.append(key, value);
+    }
+    const contentType = upload.fields["Content-Type"] ?? "application/json";
+    form.append("file", new Blob([payload], { type: contentType }));
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(upload.headers ?? {})) {
+      if (key.toLowerCase() !== "content-type") {
+        headers[key] = value;
+      }
+    }
+    const response = await fetchFn(upload.signedUrl, {
+      method: "POST" satisfies RequestInit["method"],
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+      );
+    }
+    return;
+  }
+  const headers: Record<string, string> = { ...(upload.headers ?? {}) };
+  addAzureBlobHeaders(headers, upload.signedUrl);
+  const response = await fetchFn(upload.signedUrl, {
+    method: "PUT" satisfies RequestInit["method"],
+    headers,
+    body: payload,
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+    );
+  }
+}
+
+function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
+  const str = JSON.stringify(item);
+  const record = item as Record<string, unknown>;
+  return {
+    str,
+    overflowMeta: {
+      object_ids: pickLogs3OverflowObjectIds(record),
+      is_delete: record[OBJECT_DELETE_FIELD] === true,
+      input_row: {
+        byte_size: utf8ByteLength(str),
+      },
+    },
+  };
+}
+
+export function utf8ByteLength(value: string) {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
 }
 
 function now() {
@@ -2293,12 +2514,11 @@ export class TestBackgroundLogger implements BackgroundLogger {
       }
     }
 
-    const batch = mergeRowBatch(events);
-    let flatBatch = batch.flat();
+    let batch = mergeRowBatch(events);
 
     // Apply masking after merge, similar to HTTPBackgroundLogger
     if (this.maskingFunction) {
-      flatBatch = flatBatch.map((item) => {
+      batch = batch.map((item) => {
         const maskedItem = { ...item };
 
         // Only mask specific fields if they exist
@@ -2335,7 +2555,7 @@ export class TestBackgroundLogger implements BackgroundLogger {
       });
     }
 
-    return flatBatch;
+    return batch;
   }
 }
 
@@ -2355,14 +2575,18 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
-  // 6 MB for the AWS lambda gateway (from our own testing).
-  public maxRequestSize: number = 6 * 1024 * 1024;
+  private maxRequestSizeOverride: number | null = null;
+  private _maxRequestSizePromise: Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> | null = null;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+  public flushChunkSize: number = 25;
 
   private _disabled = false;
 
@@ -2389,7 +2613,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
     const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
     if (!isNaN(maxRequestSizeEnv)) {
-      this.maxRequestSize = maxRequestSizeEnv;
+      this.maxRequestSizeOverride = maxRequestSizeEnv;
     }
 
     const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -2400,6 +2624,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const queueDropExceedingMaxsizeEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE"),
     );
+
     if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
@@ -2411,6 +2636,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     );
     if (!isNaN(queueDropLoggingPeriodEnv)) {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
+    }
+
+    const flushChunkSizeEnv = Number(
+      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
+    );
+    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
+      this.flushChunkSize = flushChunkSizeEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2463,6 +2695,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
+  private getMaxRequestSize(): Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> {
+    if (!this._maxRequestSizePromise) {
+      this._maxRequestSizePromise = (async () => {
+        let serverLimit: number | null = null;
+        try {
+          const conn = await this.apiConn.get();
+          const versionInfo = await conn.get_json("version");
+          serverLimit =
+            z
+              .object({ logs3_payload_max_bytes: z.number().nullish() })
+              .parse(versionInfo).logs3_payload_max_bytes ?? null;
+        } catch (e) {
+          console.warn("Failed to fetch version info for payload limit:", e);
+        }
+        const validServerLimit =
+          serverLimit !== null && serverLimit > 0 ? serverLimit : null;
+        const canUseOverflow = validServerLimit !== null;
+        let maxRequestSize = DEFAULT_MAX_REQUEST_SIZE;
+        if (this.maxRequestSizeOverride !== null) {
+          maxRequestSize =
+            validServerLimit !== null
+              ? Math.min(this.maxRequestSizeOverride, validServerLimit)
+              : this.maxRequestSizeOverride;
+        } else if (validServerLimit !== null) {
+          maxRequestSize = validServerLimit;
+        }
+        return { maxRequestSize, canUseOverflow };
+      })();
+    }
+    return this._maxRequestSizePromise;
+  }
+
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -2488,42 +2755,72 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     // Drain the queue.
     const wrappedItems = this.queue.drain();
 
+    if (wrappedItems.length === 0) {
+      return;
+    }
+
+    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
+
+    let index = 0;
+    while (index < wrappedItems.length) {
+      const chunk = wrappedItems.slice(index, index + chunkSize);
+      await this.flushWrappedItemsChunk(chunk, batchSize);
+      index += chunk.length;
+    }
+    // Clear the array once at the end to allow garbage collection
+    // More efficient than filling with undefined after each chunk
+    wrappedItems.length = 0;
+
+    // If more items were added while we were flushing, flush again
+    if (this.queue.length() > 0) {
+      await this.flushOnce(args);
+    }
+  }
+
+  private async flushWrappedItemsChunk(
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
+    batchSize: number,
+  ) {
+    if (!wrappedItems.length) {
+      return;
+    }
+
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
     }
 
-    // Construct batches of records to flush in parallel and in sequence.
-    const allItemsStr = allItems.map((bucket) =>
-      bucket.map((item) => JSON.stringify(item)),
+    // Construct batches of records to flush in parallel.
+    const allItemsWithMeta = allItems.map((item) =>
+      stringifyWithOverflowMeta(item),
     );
-    const batchSets = batchItems({
-      items: allItemsStr,
+    const maxRequestSizeResult = await this.getMaxRequestSize();
+    const batches = batchItems({
+      items: allItemsWithMeta,
       batchMaxNumItems: batchSize,
-      batchMaxNumBytes: this.maxRequestSize / 2,
+      batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
+      getByteSize: (item) => item.str.length,
     });
 
-    for (const batchSet of batchSets) {
-      const postPromises = batchSet.map((batch) =>
-        (async () => {
-          try {
-            await this.submitLogsRequest(batch);
-            return { type: "success" } as const;
-          } catch (e) {
-            return { type: "error", value: e } as const;
-          }
-        })(),
+    const postPromises = batches.map((batch) =>
+      (async () => {
+        try {
+          await this.submitLogsRequest(batch, maxRequestSizeResult);
+          return { type: "success" } as const;
+        } catch (e) {
+          return { type: "error", value: e } as const;
+        }
+      })(),
+    );
+    const results = await Promise.all(postPromises);
+    const failingResultErrors = results
+      .map((r) => (r.type === "success" ? undefined : r.value))
+      .filter((r) => r !== undefined);
+    if (failingResultErrors.length) {
+      throw new AggregateError(
+        failingResultErrors,
+        `Encountered the following errors while logging:`,
       );
-      const results = await Promise.all(postPromises);
-      const failingResultErrors = results
-        .map((r) => (r.type === "success" ? undefined : r.value))
-        .filter((r) => r !== undefined);
-      if (failingResultErrors.length) {
-        throw new AggregateError(
-          failingResultErrors,
-          `Encountered the following errors while logging:`,
-        );
-      }
     }
 
     const attachmentErrors: unknown[] = [];
@@ -2546,16 +2843,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         `Encountered the following errors while uploading attachments:`,
       );
     }
-
-    // If more items were added while we were flushing, flush again
-    if (this.queue.length() > 0) {
-      await this.flushOnce(args);
-    }
   }
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
+  ): Promise<[BackgroundLogEvent[], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
         const items = await Promise.all(wrappedItems.map((x) => x.get()));
@@ -2572,43 +2864,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
         // Apply masking after merge but before sending to backend
         if (this.maskingFunction) {
-          mergedItems = mergedItems.map((batch) =>
-            batch.map((item) => {
-              const maskedItem = { ...item };
+          mergedItems = mergedItems.map((item) => {
+            const maskedItem = { ...item };
 
-              // Only mask specific fields if they exist
-              for (const field of REDACTION_FIELDS) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                if ((item as any)[field] !== undefined) {
-                  const maskedValue = applyMaskingToField(
-                    this.maskingFunction!,
+            // Only mask specific fields if they exist
+            for (const field of REDACTION_FIELDS) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((item as any)[field] !== undefined) {
+                const maskedValue = applyMaskingToField(
+                  this.maskingFunction!,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (item as any)[field],
+                  field,
+                );
+                if (maskedValue instanceof MaskingError) {
+                  // Drop the field and add error message
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  delete (maskedItem as any)[field];
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  if ((maskedItem as any).error) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (item as any)[field],
-                    field,
-                  );
-                  if (maskedValue instanceof MaskingError) {
-                    // Drop the field and add error message
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    delete (maskedItem as any)[field];
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    if ((maskedItem as any).error) {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error =
-                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
-                    } else {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error = maskedValue.errorMsg;
-                    }
+                    (maskedItem as any).error =
+                      `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
                   } else {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (maskedItem as any)[field] = maskedValue;
+                    (maskedItem as any).error = maskedValue.errorMsg;
                   }
+                } else {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (maskedItem as any)[field] = maskedValue;
                 }
               }
+            }
 
-              return maskedItem as BackgroundLogEvent;
-            }),
-          );
+            return maskedItem as BackgroundLogEvent;
+          });
         }
 
         return [mergedItems, attachments];
@@ -2638,9 +2928,55 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     throw new Error("Impossible");
   }
 
-  private async submitLogsRequest(items: string[]): Promise<void> {
+  private async requestLogs3OverflowUpload(
+    conn: HTTPConnection,
+    args: { rows: Logs3OverflowInputRow[]; sizeBytes: number },
+  ): Promise<Logs3OverflowUpload> {
+    let response: unknown;
+    try {
+      response = await conn.post_json("logs3/overflow", {
+        content_type: "application/json",
+        size_bytes: args.sizeBytes,
+        rows: args.rows,
+      });
+    } catch (error) {
+      const errorStr = JSON.stringify(error);
+      throw new Error(
+        `Failed to request logs3 overflow upload URL: ${errorStr}`,
+      );
+    }
+
+    try {
+      return logs3OverflowUploadSchema.parse(response);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const errorStr = JSON.stringify(error.flatten());
+        throw new Error(`Invalid response from API server: ${errorStr}`);
+      }
+      throw error;
+    }
+  }
+
+  private async _uploadLogs3OverflowPayload(
+    conn: HTTPConnection,
+    upload: Logs3OverflowUpload,
+    payload: string,
+  ): Promise<void> {
+    // Delegate to the public function, using the connection's fetch
+    await uploadLogs3OverflowPayload(upload, payload, conn.fetch.bind(conn));
+  }
+
+  private async submitLogsRequest(
+    items: LogItemWithMeta[],
+    {
+      maxRequestSize,
+      canUseOverflow,
+    }: { maxRequestSize: number; canUseOverflow: boolean },
+  ): Promise<void> {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
+    const payloadBytes = utf8ByteLength(dataStr);
+    const useOverflow = canUseOverflow && payloadBytes > maxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
@@ -2648,11 +2984,35 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
 
+    let overflowUpload: Logs3OverflowUpload | null = null;
+    const overflowRows = useOverflow
+      ? items.map((item) => item.overflowMeta)
+      : null;
+
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
-        await conn.post_json("logs3", dataStr);
+        if (overflowRows) {
+          if (!overflowUpload) {
+            const currentUpload = await this.requestLogs3OverflowUpload(conn, {
+              rows: overflowRows,
+              sizeBytes: payloadBytes,
+            });
+            await this._uploadLogs3OverflowPayload(
+              conn,
+              currentUpload,
+              dataStr,
+            );
+            overflowUpload = currentUpload;
+          }
+          await conn.post_json(
+            "logs3",
+            constructLogs3OverflowRequest(overflowUpload.key),
+          );
+        } else {
+          await conn.post_json("logs3", dataStr);
+        }
       } catch (e) {
         error = e;
       }
@@ -2672,7 +3032,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const errMsg = `log request failed. Elapsed time: ${
         (now() - startTime) / 1000
       } seconds. Payload size: ${
-        dataStr.length
+        payloadBytes
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
@@ -2737,7 +3097,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await this.unwrapLazyValues(wrappedItems);
 
       const dataStr = constructLogs3Data(
-        allItems.map((x) => JSON.stringify(x)),
+        allItems.map((x) => stringifyWithOverflowMeta(x)),
       );
       const attachmentStr = JSON.stringify(
         allAttachments.map((a) => a.debugInfo()),
@@ -2829,10 +3189,18 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
+/**
+ * Reference to a dataset by ID and optional version.
+ */
+export interface DatasetRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
-  dataset?: AnyDataset;
+  dataset?: AnyDataset | DatasetRef;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3043,8 +3411,21 @@ export function init<IsOpen extends boolean = false>(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = await dataset.id;
-        args["dataset_version"] = await dataset.version();
+        if (
+          "id" in dataset &&
+          typeof dataset.id === "string" &&
+          !("__braintrust_dataset_marker" in dataset)
+        ) {
+          // Simple {id: ..., version?: ...} object
+          args["dataset_id"] = dataset.id;
+          if ("version" in dataset && dataset.version !== undefined) {
+            args["dataset_version"] = dataset.version;
+          }
+        } else {
+          // Full Dataset object
+          args["dataset_id"] = await (dataset as AnyDataset).id;
+          args["dataset_version"] = await (dataset as AnyDataset).version();
+        }
       }
 
       if (isPublic !== undefined) {
@@ -3093,7 +3474,13 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const ret = new Experiment(state, lazyMetadata, dataset);
+  const ret = new Experiment(
+    state,
+    lazyMetadata,
+    dataset !== undefined && "version" in dataset
+      ? (dataset as AnyDataset)
+      : undefined,
+  );
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
@@ -3426,6 +3813,13 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_id: projectId,
   };
 
+  const linkArgs = {
+    org_name: orgName,
+    app_url: appUrl,
+    project_name: projectName,
+    project_id: projectId,
+  };
+
   const state = stateArg ?? _globalState;
 
   // Enable queue size limit enforcement for initLogger() calls
@@ -3448,6 +3842,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
+    linkArgs,
   });
   if (options.setCurrent ?? true) {
     state.currentLogger = ret as Logger<false>;
@@ -3656,6 +4051,12 @@ export interface LoginOptions {
    * Calls this function if there's an error in the background flusher.
    */
   onFlushError?: (error: unknown) => void;
+  /**
+   * If true, disables the local span cache used to optimize scorer access
+   * to trace data. When disabled, scorers will always fetch spans from the
+   * server. Defaults to false.
+   */
+  disableSpanCache?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4438,7 +4839,9 @@ function _saveOrgInfo(
   org_name: string | undefined,
 ) {
   if (org_info.length === 0) {
-    throw new Error("This user is not part of any organizations.");
+    throw new LoginInvalidOrgError(
+      "This user is not part of any organizations.",
+    );
   }
 
   for (const org of org_info) {
@@ -4453,7 +4856,7 @@ function _saveOrgInfo(
   }
 
   if (state.orgId === undefined) {
-    throw new Error(
+    throw new LoginInvalidOrgError(
       `Organization ${org_name} not found. Must be one of ${org_info
         .map((x: any) => x.name)
         .join(", ")}`,
@@ -4746,16 +5149,20 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-export const INTERNAL_BTQL_LIMIT = 1000;
-const MAX_BTQL_ITERATIONS = 10000;
+export const DEFAULT_FETCH_BATCH_SIZE = 1000;
+export const MAX_BTQL_ITERATIONS = 10000;
 
-class ObjectFetcher<RecordType>
+export class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
-    private objectType: "dataset" | "experiment",
+    private objectType:
+      | "dataset"
+      | "experiment"
+      | "project_logs"
+      | "playground_logs",
     private pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
@@ -4770,9 +5177,88 @@ class ObjectFetcher<RecordType>
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
-  async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
-    const records = await this.fetchedData();
-    for (const record of records) {
+  private async *fetchRecordsFromApi(
+    batchSize: number | undefined,
+  ): AsyncGenerator<WithTransactionId<RecordType>> {
+    const state = await this.getState();
+    const objectId = await this.id;
+    const limit = batchSize ?? DEFAULT_FETCH_BATCH_SIZE;
+    let cursor = undefined;
+    let iterations = 0;
+    while (true) {
+      const resp = await state.apiConn().post(
+        `btql`,
+        {
+          query: {
+            ...this._internal_btql,
+            select: [
+              {
+                op: "star",
+              },
+            ],
+            from: {
+              op: "function",
+              name: {
+                op: "ident",
+                name: [this.objectType],
+              },
+              args: [
+                {
+                  op: "literal",
+                  value: objectId,
+                },
+              ],
+            },
+            cursor,
+            limit,
+          },
+          use_columnstore: false,
+          brainstore_realtime: true,
+          query_source: `js_sdk_object_fetcher_${this.objectType}`,
+          ...(this.pinnedVersion !== undefined
+            ? {
+                version: this.pinnedVersion,
+              }
+            : {}),
+        },
+        { headers: { "Accept-Encoding": "gzip" } },
+      );
+      const respJson = await resp.json();
+      const mutate = this.mutateRecord;
+      for (const record of respJson.data ?? []) {
+        yield mutate
+          ? mutate(record)
+          : (record as WithTransactionId<RecordType>);
+      }
+      if (!respJson.cursor) {
+        break;
+      }
+      cursor = respJson.cursor;
+      iterations++;
+      if (iterations > MAX_BTQL_ITERATIONS) {
+        throw new Error("Too many BTQL iterations");
+      }
+    }
+  }
+
+  /**
+   * Fetch all records from the object.
+   *
+   * @param options Optional parameters for fetching.
+   * @param options.batchSize The number of records to fetch per request. Defaults to 1000.
+   * @returns An async generator of records.
+   */
+  async *fetch(options?: {
+    batchSize?: number;
+  }): AsyncGenerator<WithTransactionId<RecordType>> {
+    if (this._fetchedData !== undefined) {
+      for (const record of this._fetchedData) {
+        yield record;
+      }
+      return;
+    }
+
+    for await (const record of this.fetchRecordsFromApi(options?.batchSize)) {
       yield record;
     }
   }
@@ -4781,63 +5267,13 @@ class ObjectFetcher<RecordType>
     return this.fetch();
   }
 
-  async fetchedData() {
+  async fetchedData(options?: { batchSize?: number }) {
     if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      let data: WithTransactionId<RecordType>[] | undefined = undefined;
-      let cursor = undefined;
-      let iterations = 0;
-      while (true) {
-        const resp = await state.apiConn().post(
-          `btql`,
-          {
-            query: {
-              ...this._internal_btql,
-              select: [
-                {
-                  op: "star",
-                },
-              ],
-              from: {
-                op: "function",
-                name: {
-                  op: "ident",
-                  name: [this.objectType],
-                },
-                args: [
-                  {
-                    op: "literal",
-                    value: await this.id,
-                  },
-                ],
-              },
-              cursor,
-              limit: INTERNAL_BTQL_LIMIT,
-            },
-            use_columnstore: false,
-            brainstore_realtime: true,
-            ...(this.pinnedVersion !== undefined
-              ? {
-                  version: this.pinnedVersion,
-                }
-              : {}),
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        const respJson = await resp.json();
-        data = (data ?? []).concat(respJson.data);
-        if (!respJson.cursor) {
-          break;
-        }
-        cursor = respJson.cursor;
-        iterations++;
-        if (iterations > MAX_BTQL_ITERATIONS) {
-          throw new Error("Too many BTQL iterations");
-        }
+      const data: WithTransactionId<RecordType>[] = [];
+      for await (const record of this.fetchRecordsFromApi(options?.batchSize)) {
+        data.push(record);
       }
-      this._fetchedData = this.mutateRecord
-        ? data?.map(this.mutateRecord)
-        : data;
+      this._fetchedData = data;
     }
     return this._fetchedData || [];
   }
@@ -4846,13 +5282,12 @@ class ObjectFetcher<RecordType>
     this._fetchedData = undefined;
   }
 
-  public async version() {
+  public async version(options?: { batchSize?: number }) {
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
-      const fetchedData = await this.fetchedData();
       let maxVersion: string | undefined = undefined;
-      for (const record of fetchedData) {
+      for await (const record of this.fetch(options)) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
         if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
@@ -5255,8 +5690,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     Input,
     Expected,
     Metadata = DefaultMetadataType,
-  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
-    const records = this.fetch();
+  >(options?: {
+    batchSize?: number;
+  }): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
+    const records = this.fetch(options);
 
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
@@ -5376,6 +5813,7 @@ export class SpanImpl implements Span {
   private parentObjectType: SpanObjectTypeV3;
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
+
   private _id: string;
   private _spanId: string;
   private _rootSpanId: string;
@@ -5466,6 +5904,16 @@ export class SpanImpl implements Span {
     this.isMerge = true;
   }
 
+  public getParentInfo() {
+    return {
+      objectType: this.parentObjectType,
+      objectId: this.parentObjectId,
+      computeObjectMetadataArgs: this.parentComputeObjectMetadataArgs && {
+        ...this.parentComputeObjectMetadataArgs,
+      },
+    };
+  }
+
   public get id(): string {
     return this._id;
   }
@@ -5522,8 +5970,23 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
-      throw new Error("Tags can only be logged to the root span");
+    // Write to local span cache for scorer access
+    // Only cache experiment spans - regular logs don't need caching
+    if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const cachedSpan: CachedSpan = {
+        input: partialRecord.input,
+        output: partialRecord.output,
+        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        span_id: this._spanId,
+        span_parents: this._spanParents,
+        span_attributes:
+          partialRecord.span_attributes as CachedSpan["span_attributes"],
+      };
+      this._state.spanCache.queueWrite(
+        this._rootSpanId,
+        this._spanId,
+        cachedSpan,
+      );
     }
 
     const computeRecord = async () => ({
@@ -5631,8 +6094,12 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
+    // Disable span cache since remote function spans won't be in the local cache
+    this._state.spanCache.disable();
+
     return new (getSpanComponentsClass())({
       object_type: this.parentObjectType,
+
       ...(this.parentComputeObjectMetadataArgs &&
       !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
@@ -5656,21 +6123,32 @@ export class SpanImpl implements Span {
     }
 
     try {
-      const orgName = this._state.orgName;
-      if (!orgName) {
-        throw new Error("log-in-or-provide-org-name");
+      let baseUrl: string | null = null;
+
+      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
+        // For PROJECT_LOGS, use Logger's _getLinkBaseUrl which checks
+        // state -> linkArgs -> env var (matches Python)
+        const curLogger = this._state.currentLogger;
+        if (curLogger) {
+          baseUrl = curLogger._getLinkBaseUrl();
+        }
       }
 
-      return this._link(orgName);
+      // For EXPERIMENT or if Logger not available, fall back to state -> env var
+      if (!baseUrl) {
+        baseUrl = _getLinkBaseUrl(this._state);
+        if (!baseUrl) {
+          throw new Error("log-in-or-provide-org-name");
+        }
+      }
+
+      return this._link(baseUrl);
     } catch (e) {
       return getErrPermlink(e instanceof Error ? e.message : String(e));
     }
   }
 
-  _link(orgName: string): string {
-    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
-    const baseUrl = `${appUrl}/app/${orgName}`;
-
+  _link(baseUrl: string): string {
     // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
     // Nothing in this module should have the possibility of blocking with the lone exception of
     // flush() which should be a clear exception. We shouldn't build on it and
@@ -5726,54 +6204,6 @@ export class SpanImpl implements Span {
 
   public state(): BraintrustState {
     return this._state;
-  }
-
-  /**
-   * Internal method to get the OTEL parent string for this span.
-   * This is used by OtelContextManager to set the braintrust.parent attribute.
-   * @returns A string like "project_id:X" or "experiment_id:X", or undefined if no parent
-   */
-  _getOtelParent(): string | undefined {
-    if (!this.parentObjectType) {
-      return undefined;
-    }
-
-    try {
-      if (this.parentObjectType === SpanObjectTypeV3.PROJECT_LOGS) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-        const args = this.parentComputeObjectMetadataArgs;
-
-        if (id) {
-          return `project_id:${id}`;
-        }
-
-        const projectName = args?.project_name;
-        if (projectName) {
-          return `project_name:${projectName}`;
-        }
-      } else if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
-        const syncResult = this.parentObjectId.getSync();
-        const id = syncResult.value;
-
-        // If not resolved yet, trigger async resolution as a fallback
-        // This shouldn't typically happen since Eval() resolves experiment IDs early,
-        // but we keep this as a safety net for other use cases.
-        if (!syncResult.resolved) {
-          this.parentObjectId.get().catch(() => {
-            // Ignore errors, matching Python's except clause behavior
-          });
-        }
-
-        if (id) {
-          return `experiment_id:${id}`;
-        }
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-
-    return undefined;
   }
 
   // Custom inspect for Node.js console.log
@@ -6234,6 +6664,19 @@ export function renderMessage<T extends Message>(
                           url: render(c.image_url.url),
                         },
                       };
+                    case "file":
+                      return {
+                        ...c,
+                        file: {
+                          file_data: render(c.file.file_data || ""),
+                          ...(c.file.file_id && {
+                            file_id: render(c.file.file_id),
+                          }),
+                          ...(c.file.filename && {
+                            filename: render(c.file.filename),
+                          }),
+                        },
+                      };
                     default:
                       const _exhaustiveCheck: never = c;
                       return _exhaustiveCheck;
@@ -6292,21 +6735,31 @@ export function deserializePlainStringAsJSON(s: string) {
 function renderTemplatedObject(
   obj: unknown,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    if (options.strict) {
-      lintTemplate(obj, args);
+    const strict = !!options.strict;
+    if (options.templateFormat === "nunjucks") {
+      if (strict) {
+        lintNunjucksTemplate(obj, args);
+      }
+      return renderNunjucksString(obj, args, strict);
     }
-    return Mustache.render(obj, args, undefined, {
-      escape: (value) => {
-        if (typeof value === "string") {
-          return value;
-        } else {
-          return JSON.stringify(value);
-        }
-      },
-    });
+    if (options.templateFormat === "mustache") {
+      if (strict) {
+        lintMustacheTemplate(obj, args);
+      }
+      return Mustache.render(obj, args, undefined, {
+        escape: (value) => {
+          if (typeof value === "string") {
+            return value;
+          } else {
+            return JSON.stringify(value);
+          }
+        },
+      });
+    }
+    return obj;
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
@@ -6323,8 +6776,11 @@ function renderTemplatedObject(
 export function renderPromptParams(
   params: ModelParams | undefined,
   args: Record<string, unknown>,
-  options: { strict?: boolean },
+  options: { strict?: boolean; templateFormat?: TemplateFormat } = {},
 ): ModelParams | undefined {
+  const templateFormat = parseTemplateFormat(options.templateFormat);
+  const strict = !!options.strict;
+
   const schemaParsed = z
     .object({
       response_format: z.object({
@@ -6339,7 +6795,10 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, {
+      strict,
+      templateFormat,
+    });
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -6409,6 +6868,10 @@ export class Prompt<
     return this.getParsedPromptData()?.options || {};
   }
 
+  public get templateFormat(): string | null | undefined {
+    return this.getParsedPromptData()?.template_format;
+  }
+
   public get promptData(): PromptData {
     return this.getParsedPromptData()!;
   }
@@ -6426,6 +6889,7 @@ export class Prompt<
       flavor?: Flavor;
       messages?: Message[];
       strict?: boolean;
+      templateFormat?: TemplateFormat;
     } = {},
   ): CompiledPrompt<Flavor> {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -6433,6 +6897,7 @@ export class Prompt<
       flavor: options.flavor ?? "chat",
       messages: options.messages,
       strict: options.strict,
+      templateFormat: options.templateFormat,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -6452,6 +6917,7 @@ export class Prompt<
       messages?: Message[];
       strict?: boolean;
       state?: BraintrustState;
+      templateFormat?: TemplateFormat;
     } = {},
   ): Promise<CompiledPrompt<Flavor>> {
     const hydrated =
@@ -6463,6 +6929,7 @@ export class Prompt<
       flavor: options.flavor ?? "chat",
       messages: options.messages,
       strict: options.strict,
+      templateFormat: options.templateFormat,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -6472,6 +6939,7 @@ export class Prompt<
       flavor: Flavor;
       messages?: Message[];
       strict?: boolean;
+      templateFormat?: TemplateFormat;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -6528,10 +6996,16 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    // Use template_format from prompt data if available, otherwise fall back to the option or default to mustache
+    const promptDataTemplateFormat = this.templateFormat;
+    const resolvedTemplateFormat = parseTemplateFormat(
+      options.templateFormat ?? promptDataTemplateFormat,
+    );
+
     const renderedPrompt = Prompt.renderPrompt({
       prompt,
       buildArgs,
-      options,
+      options: { ...options, templateFormat: resolvedTemplateFormat },
     });
 
     if (flavor === "chat") {
@@ -6543,7 +7017,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
@@ -6561,7 +7038,10 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...renderPromptParams(params, variables, {
+          strict: options.strict,
+          templateFormat: resolvedTemplateFormat,
+        }),
         ...spanInfo,
         prompt: renderedPrompt.content,
       } as CompiledPrompt<Flavor>;
@@ -6580,6 +7060,7 @@ export class Prompt<
     options: {
       strict?: boolean;
       messages?: Message[];
+      templateFormat?: TemplateFormat;
     };
   }): PromptBlockData {
     const escape = (v: unknown) => {
@@ -6602,16 +7083,14 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
-    if (prompt.type === "chat") {
-      const render = (template: string) => {
-        if (options.strict) {
-          lintTemplate(template, variables);
-        }
+    const templateFormat = parseTemplateFormat(options.templateFormat);
 
-        return Mustache.render(template, variables, undefined, {
-          escape,
+    if (prompt.type === "chat") {
+      const render = (template: string) =>
+        renderTemplateContent(template, variables, escape, {
+          strict: options.strict,
+          templateFormat: templateFormat,
         });
-      };
 
       const baseMessages = (prompt.messages || []).map((m) =>
         renderMessage(render, m),
@@ -6641,15 +7120,13 @@ export class Prompt<
         );
       }
 
-      if (options.strict) {
-        lintTemplate(prompt.content, variables);
-      }
-
+      const content = renderTemplateContent(prompt.content, variables, escape, {
+        strict: options.strict,
+        templateFormat: templateFormat,
+      });
       return {
         type: "completion",
-        content: Mustache.render(prompt.content, variables, undefined, {
-          escape,
-        }),
+        content,
       };
     } else {
       const _: never = prompt;

@@ -35,13 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write # Required for PyPI trusted publishing
 
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      TWINE_USERNAME: __token__
-      TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
     steps:
@@ -52,11 +51,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Build, Verify and Publish
+      - name: Build and verify
         working-directory: py
         run: |
           make install-dev
-          make build
+          make verify-build
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -64,9 +63,9 @@ jobs:
           path: py/dist/
           retention-days: 5
       - name: Publish to PyPI
-        working-directory: py
-        run: |
-          make publish-to-pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: py/dist/
 
       # Create GitHub Release
       - name: Generate release notes
@@ -92,3 +91,55 @@ jobs:
               draft: false,
               prerelease: false
             });
+
+  notify-success:
+    needs: [validate, build-and-publish]
+    if: always() && needs.build-and-publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#py-sdk-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Post to Slack on success
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "✅ Python SDK v${{ steps.version.outputs.version }} published"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "✅ Python SDK Published"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Version:* ${{ steps.version.outputs.version }}\n*Package:* <https://pypi.org/project/braintrust/|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+
+  notify-failure:
+    needs: [validate, build-and-publish]
+    if: always() && (needs.validate.result == 'failure' || needs.build-and-publish.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Slack on failure
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0ABHT0SWA2
+            text: "🚨 Python SDK release failed"
+            blocks:
+              - type: "header"
+                text:
+                  type: "plain_text"
+                  text: "🚨 Python SDK Release Failed"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Tag:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"

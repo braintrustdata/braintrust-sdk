@@ -1,20 +1,27 @@
 import logging
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any
 
-from wrapt import wrap_function_wrapper
-
+from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
 from braintrust.span_types import SpanTypeAttribute
+from wrapt import wrap_function_wrapper
 
 logger = logging.getLogger(__name__)
 
 
 def setup_genai(
-    api_key: Optional[str] = None,
-    project_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-):
+    api_key: str | None = None,
+    project_id: str | None = None,
+    project_name: str | None = None,
+) -> bool:
+    """
+    Setup Braintrust integration with Google GenAI.
+
+    Returns:
+        True if setup was successful, False if google-genai is not installed.
+    """
     span = current_span()
     if span == NOOP_SPAN:
         init_logger(project=project_name, api_key=api_key, project_id=project_id)
@@ -26,11 +33,8 @@ def setup_genai(
         genai.Client = wrap_client(genai.Client)
         models.Models = wrap_models(models.Models)
         models.AsyncModels = wrap_async_models(models.AsyncModels)
-        pass
-    except ImportError as e:
-        logger.error(
-            f"Failed to import Google ADK agents: {e}. Google ADK is not installed. Please install it with: pip install google-adk"
-        )
+        return True
+    except ImportError:
         return False
 
 
@@ -148,8 +152,8 @@ def wrap_async_models(AsyncModels: Any):
     return AsyncModels
 
 
-def _serialize_input(api_client: Any, input: Dict[str, Any]):
-    config = _try_dict(input.get("config"))
+def _serialize_input(api_client: Any, input: dict[str, Any]):
+    config = bt_safe_deep_copy(input.get("config"))
 
     if config is not None:
         tools = _serialize_tools(api_client, input)
@@ -223,7 +227,7 @@ def _serialize_content_item(item: Any) -> Any:
     return item
 
 
-def _serialize_tools(api_client: Any, input: Optional[Any]):
+def _serialize_tools(api_client: Any, input: Any | None):
     try:
         from google.genai.models import (
             _GenerateContentParameters_to_mldev,  # pyright: ignore [reportPrivateUsage]
@@ -242,7 +246,7 @@ def _serialize_tools(api_client: Any, input: Optional[Any]):
         return None
 
 
-def omit(obj: Dict[str, Any], keys: Iterable[str]):
+def omit(obj: dict[str, Any], keys: Iterable[str]):
     return {k: v for k, v in obj.items() if k not in keys}
 
 
@@ -254,11 +258,11 @@ def mark_patched(obj: Any):
     return setattr(obj, "_braintrust_patched", True)
 
 
-def get_args_kwargs(args: List[str], kwargs: Dict[str, Any], keys: Iterable[str]):
+def get_args_kwargs(args: list[str], kwargs: dict[str, Any], keys: Iterable[str]):
     return {k: args[i] if args else kwargs.get(k) for i, k in enumerate(keys)}, omit(kwargs, keys)
 
 
-def _extract_generate_content_metrics(response: Any, start: float) -> Dict[str, Any]:
+def _extract_generate_content_metrics(response: Any, start: float) -> dict[str, Any]:
     """Extract metrics from a non-streaming generate_content response."""
     end_time = time.time()
     metrics = dict(
@@ -297,8 +301,8 @@ def _extract_generate_content_metrics(response: Any, start: float) -> Dict[str, 
 
 
 def _aggregate_generate_content_chunks(
-    chunks: List[Any], start: float, first_token_time: Optional[float] = None
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    chunks: list[Any], start: float, first_token_time: float | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Aggregate streaming chunks into a single response with metrics."""
     end_time = time.time()
     metrics = dict(
@@ -410,11 +414,11 @@ def _aggregate_generate_content_chunks(
     return aggregated, clean_metrics
 
 
-def clean(obj: Dict[str, Any]) -> Dict[str, Any]:
+def clean(obj: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in obj.items() if v is not None}
 
 
-def get_path(obj: Dict[str, Any], path: str, default: Any = None) -> Optional[Any]:
+def get_path(obj: dict[str, Any], path: str, default: Any = None) -> Any | None:
     keys = path.split(".")
     current = obj
 
@@ -424,17 +428,3 @@ def get_path(obj: Dict[str, Any], path: str, default: Any = None) -> Optional[An
         current = current[key]
 
     return current
-
-
-def _try_dict(obj: Any) -> Optional[Dict[str, Any]]:
-    try:
-        return obj.model_dump()
-    except AttributeError:
-        pass
-
-    try:
-        return obj.dump()
-    except AttributeError:
-        pass
-
-    return obj

@@ -1,12 +1,13 @@
 import logging
+import time
 import warnings
 from contextlib import contextmanager
 
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 from braintrust.wrappers._anthropic_utils import Wrapper, extract_anthropic_usage, finalize_anthropic_tokens
+from wrapt import wrap_function_wrapper
 
 log = logging.getLogger(__name__)
-
 
 
 # This tracer depends on an internal anthropic method used to merge
@@ -65,10 +66,12 @@ class AsyncMessages(Wrapper):
 
     async def __create_with_stream_false(self, *args, **kwargs):
         span = _start_span("anthropic.messages.create", kwargs)
+        request_start_time = time.time()
         try:
             result = await self.__messages.create(*args, **kwargs)
+            ttft = time.time() - request_start_time
             with _catch_exceptions():
-                _log_message_to_span(result, span)
+                _log_message_to_span(result, span, time_to_first_token=ttft)
             return result
         except Exception as e:
             with _catch_exceptions():
@@ -79,6 +82,7 @@ class AsyncMessages(Wrapper):
 
     async def __create_with_stream_true(self, *args, **kwargs):
         span = _start_span("anthropic.messages.stream", kwargs)
+        request_start_time = time.time()
         try:
             stream = await self.__messages.create(*args, **kwargs)
         except Exception as e:
@@ -87,7 +91,7 @@ class AsyncMessages(Wrapper):
                 span.end()
             raise
 
-        traced_stream = TracedMessageStream(stream, span)
+        traced_stream = TracedMessageStream(stream, span, request_start_time)
 
         async def async_stream():
             try:
@@ -101,15 +105,17 @@ class AsyncMessages(Wrapper):
                 with _catch_exceptions():
                     msg = traced_stream._get_final_traced_message()
                     if msg:
-                        _log_message_to_span(msg, span)
+                        ttft = traced_stream._get_time_to_first_token()
+                        _log_message_to_span(msg, span, time_to_first_token=ttft)
                     span.end()
 
         return async_stream()
 
     def stream(self, *args, **kwargs):
         span = _start_span("anthropic.messages.stream", kwargs)
+        request_start_time = time.time()
         stream = self.__messages.stream(*args, **kwargs)
-        return TracedMessageStreamManager(stream, span)
+        return TracedMessageStreamManager(stream, span, request_start_time)
 
 
 class AsyncBeta(Wrapper):
@@ -150,9 +156,11 @@ class Messages(Wrapper):
             return self.__trace_stream(self.__messages.create, *args, **kwargs)
 
         span = _start_span("anthropic.messages.create", kwargs)
+        request_start_time = time.time()
         try:
             msg = self.__messages.create(*args, **kwargs)
-            _log_message_to_span(msg, span)
+            ttft = time.time() - request_start_time
+            _log_message_to_span(msg, span, time_to_first_token=ttft)
             return msg
         except Exception as e:
             span.log(error=e)
@@ -162,8 +170,9 @@ class Messages(Wrapper):
 
     def __trace_stream(self, stream_func, *args, **kwargs):
         span = _start_span("anthropic.messages.stream", kwargs)
+        request_start_time = time.time()
         s = stream_func(*args, **kwargs)
-        return TracedMessageStreamManager(s, span)
+        return TracedMessageStreamManager(s, span, request_start_time)
 
 
 class Beta(Wrapper):
@@ -177,20 +186,21 @@ class Beta(Wrapper):
 
 
 class TracedMessageStreamManager(Wrapper):
-    def __init__(self, msg_stream_mgr, span):
+    def __init__(self, msg_stream_mgr, span, request_start_time: float):
         super().__init__(msg_stream_mgr)
         self.__msg_stream_mgr = msg_stream_mgr
         self.__traced_message_stream = None
         self.__span = span
+        self.__request_start_time = request_start_time
 
     async def __aenter__(self):
         ms = await self.__msg_stream_mgr.__aenter__()
-        self.__traced_message_stream = TracedMessageStream(ms, self.__span)
+        self.__traced_message_stream = TracedMessageStream(ms, self.__span, self.__request_start_time)
         return self.__traced_message_stream
 
     def __enter__(self):
         ms = self.__msg_stream_mgr.__enter__()
-        self.__traced_message_stream = TracedMessageStream(ms, self.__span)
+        self.__traced_message_stream = TracedMessageStream(ms, self.__span, self.__request_start_time)
         return self.__traced_message_stream
 
     def __aexit__(self, exc_type, exc_value, traceback):
@@ -212,7 +222,8 @@ class TracedMessageStreamManager(Wrapper):
             tms = self.__traced_message_stream
             msg = tms._get_final_traced_message()
             if msg:
-                _log_message_to_span(msg, self.__span)
+                ttft = tms._get_time_to_first_token()
+                _log_message_to_span(msg, self.__span, time_to_first_token=ttft)
             if exc_type:
                 log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
             self.__span.end()
@@ -223,15 +234,20 @@ class TracedMessageStream(Wrapper):
     makes sense at a time
     """
 
-    def __init__(self, msg_stream, span):
+    def __init__(self, msg_stream, span, request_start_time: float):
         super().__init__(msg_stream)
         self.__msg_stream = msg_stream
         self.__span = span
         self.__metrics = {}
         self.__snapshot = None
+        self.__request_start_time = request_start_time
+        self.__time_to_first_token: float | None = None
 
     def _get_final_traced_message(self):
         return self.__snapshot
+
+    def _get_time_to_first_token(self):
+        return self.__time_to_first_token
 
     def __await__(self):
         return self.__msg_stream.__await__()
@@ -255,6 +271,10 @@ class TracedMessageStream(Wrapper):
         return m
 
     def __process_message(self, m):
+        # Track time to first token on the first message
+        if self.__time_to_first_token is None:
+            self.__time_to_first_token = time.time() - self.__request_start_time
+
         with _catch_exceptions():
             self.__snapshot = accumulate_event(event=m, current_snapshot=self.__snapshot)
 
@@ -293,21 +313,26 @@ def _start_span(name, kwargs):
     return NOOP_SPAN
 
 
-def _log_message_to_span(message, span):
+def _log_message_to_span(message, span, time_to_first_token: float | None = None):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
         usage = getattr(message, "usage", {})
         metrics = finalize_anthropic_tokens(extract_anthropic_usage(usage))
 
+        # Add time_to_first_token if provided
+        if time_to_first_token is not None:
+            metrics["time_to_first_token"] = time_to_first_token
+
         # Create output dict with only truthy values for role and content
         output = {
-            k: v for k, v in {
-                "role": getattr(message, "role", None),
-                "content": getattr(message, "content", None)
-            }.items() if v
+            k: v
+            for k, v in {"role": getattr(message, "role", None), "content": getattr(message, "content", None)}.items()
+            if v
         } or None
 
         span.log(output=output, metrics=metrics)
+
+
 @contextmanager
 def _catch_exceptions():
     try:
@@ -334,3 +359,66 @@ def wrap_anthropic(client):
 
 def wrap_anthropic_client(client):
     return wrap_anthropic(client)
+
+
+def _apply_anthropic_wrapper(client):
+    """Apply tracing wrapper to an Anthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _apply_async_anthropic_wrapper(client):
+    """Apply tracing wrapper to an AsyncAnthropic client instance in-place."""
+    wrapped = wrap_anthropic(client)
+    client.messages = wrapped.messages
+    if hasattr(wrapped, "beta"):
+        client.beta = wrapped.beta
+
+
+def _anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for Anthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_anthropic_wrapper(instance)
+
+
+def _async_anthropic_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for AsyncAnthropic.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_async_anthropic_wrapper(instance)
+
+
+def patch_anthropic() -> bool:
+    """
+    Patch Anthropic to add Braintrust tracing globally.
+
+    After calling this, all new Anthropic() and AsyncAnthropic() clients
+    will automatically have tracing enabled.
+
+    Returns:
+        True if Anthropic was patched (or already patched), False if Anthropic is not installed.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_anthropic()
+
+        import anthropic
+        client = anthropic.Anthropic()
+        # All calls are now traced!
+        ```
+    """
+    try:
+        import anthropic
+
+        if getattr(anthropic, "__braintrust_wrapped__", False):
+            return True  # Already patched
+
+        wrap_function_wrapper("anthropic", "Anthropic.__init__", _anthropic_init_wrapper)
+        wrap_function_wrapper("anthropic", "AsyncAnthropic.__init__", _async_anthropic_init_wrapper)
+        anthropic.__braintrust_wrapped__ = True
+        return True
+
+    except ImportError:
+        return False

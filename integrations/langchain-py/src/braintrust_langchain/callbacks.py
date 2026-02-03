@@ -2,14 +2,13 @@ import json
 import logging
 import re
 import time
+from collections.abc import Mapping, Sequence
+from re import Pattern
 from typing import (
     Any,
     Dict,
     List,
-    Mapping,
     Optional,
-    Pattern,
-    Sequence,
     Set,
     TypedDict,
     Union,
@@ -37,49 +36,49 @@ class LogEvent(TypedDict):
     output: NotRequired[Any]
     expected: NotRequired[Any]
     error: NotRequired[str]
-    tags: NotRequired[Optional[Sequence[str]]]
-    scores: NotRequired[Mapping[str, Union[int, float]]]
+    tags: NotRequired[Sequence[str] | None]
+    scores: NotRequired[Mapping[str, int | float]]
     metadata: NotRequired[Mapping[str, Any]]
-    metrics: NotRequired[Mapping[str, Union[int, float]]]
+    metrics: NotRequired[Mapping[str, int | float]]
     id: NotRequired[str]
     dataset_record_id: NotRequired[str]
 
 
 class BraintrustCallbackHandler(BaseCallbackHandler):
-    root_run_id: Optional[UUID] = None
+    root_run_id: UUID | None = None
 
     def __init__(
         self,
-        logger: Optional[Union[Logger, Span]] = None,
+        logger: Logger | Span | None = None,
         debug: bool = False,
-        exclude_metadata_props: Optional[Pattern[str]] = None,
+        exclude_metadata_props: Pattern[str] | None = None,
     ):
         self.logger = logger
-        self.spans: Dict[UUID, Span] = {}
+        self.spans: dict[UUID, Span] = {}
         self.debug = debug  # DEPRECATED
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
-        self.skipped_runs: Set[UUID] = set()
+        self.skipped_runs: set[UUID] = set()
         # Set run_inline=True to avoid thread executor in async contexts
         # This ensures memory logger context is preserved
         self.run_inline = True
 
-        self._start_times: Dict[UUID, float] = {}
-        self._first_token_times: Dict[UUID, float] = {}
-        self._ttft_ms: Dict[UUID, float] = {}
+        self._start_times: dict[UUID, float] = {}
+        self._first_token_times: dict[UUID, float] = {}
+        self._ttft_ms: dict[UUID, float] = {}
 
     def _start_span(
         self,
-        parent_run_id: Optional[UUID],
+        parent_run_id: UUID | None,
         run_id: UUID,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = SpanTypeAttribute.TASK,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        event: Optional[LogEvent] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = SpanTypeAttribute.TASK,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        event: LogEvent | None = None,
     ) -> Any:
         if run_id in self.spans:
             # XXX: See graph test case of an example where this _may_ be intended.
@@ -153,16 +152,16 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
     def _end_span(
         self,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        input: Optional[Any] = None,
-        output: Optional[Any] = None,
-        expected: Optional[Any] = None,
-        error: Optional[str] = None,
-        tags: Optional[Sequence[str]] = None,
-        scores: Optional[Mapping[str, Union[int, float]]] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
-        metrics: Optional[Mapping[str, Union[int, float]]] = None,
-        dataset_record_id: Optional[str] = None,
+        parent_run_id: UUID | None = None,
+        input: Any | None = None,
+        output: Any | None = None,
+        expected: Any | None = None,
+        error: str | None = None,
+        tags: Sequence[str] | None = None,
+        scores: Mapping[str, int | float] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+        metrics: Mapping[str, int | float] | None = None,
+        dataset_record_id: str | None = None,
     ) -> Any:
         if run_id not in self.spans:
             return
@@ -210,7 +209,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,  # TODO: response=
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
@@ -224,7 +223,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,  # TODO: some metadata
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
@@ -234,7 +233,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
@@ -244,7 +243,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, error=str(error), metadata={**kwargs})
@@ -255,7 +254,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         action: AgentAction,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -271,21 +270,21 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         finish: AgentFinish,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, output=finish, metadata={**kwargs})
 
     def on_chain_start(
         self,
-        serialized: Dict[str, Any],
-        inputs: Dict[str, Any],
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        name: str | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         tags = tags or []
@@ -322,25 +321,25 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
     def on_chain_end(
         self,
-        outputs: Dict[str, Any],
+        outputs: dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, output=outputs, tags=tags, metadata={**kwargs})
 
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        name: Optional[str] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        name: str | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_times[run_id] = time.perf_counter()
@@ -367,15 +366,15 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
     def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
-        messages: List[List["BaseMessage"]],
+        serialized: dict[str, Any],
+        messages: list[list["BaseMessage"]],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        name: Optional[str] = None,
-        invocation_params: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        name: str | None = None,
+        invocation_params: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_times[run_id] = time.perf_counter()
@@ -408,8 +407,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         if run_id not in self.spans:
@@ -439,15 +438,15 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        inputs: Optional[Dict[str, Any]] = None,
-        name: Optional[str] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
+        name: str | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -475,21 +474,21 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         output: Any,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, output=output, metadata={**kwargs})
 
     def on_retriever_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         query: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        name: Optional[str] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        name: str | None = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -514,7 +513,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         documents: Sequence[Document],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         self._end_span(run_id, output=documents, metadata={**kwargs})
@@ -523,9 +522,9 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self,
         token: str,
         *,
-        chunk: Optional[Union["GenerationChunk", "ChatGenerationChunk"]] = None,  # type: ignore
+        chunk: Union["GenerationChunk", "ChatGenerationChunk"] | None = None,  # type: ignore
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         if run_id not in self._first_token_times:
@@ -540,7 +539,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         text: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         pass
@@ -550,7 +549,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         retry_state: RetryCallState,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         pass
@@ -561,14 +560,14 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         data: Any,
         *,
         run_id: UUID,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         pass
 
 
-def clean_object(obj: Dict[str, Any]) -> Dict[str, Any]:
+def clean_object(obj: dict[str, Any]) -> dict[str, Any]:
     return {
         k: v
         for k, v in obj.items()
@@ -583,17 +582,16 @@ def safe_parse_serialized_json(input_str: str) -> Any:
         return input_str
 
 
-def last_item(items: List[Any]) -> Any:
+def last_item(items: list[Any]) -> Any:
     return items[-1] if items else None
 
 
 def _walk_generations(response: LLMResult):
     for generations in response.generations or []:
-        for generation in generations or []:
-            yield generation
+        yield from generations or []
 
 
-def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
+def _get_model_name_from_response(response: LLMResult) -> str | None:
     model_name = None
     for generation in _walk_generations(response):
         message = getattr(generation, "message", None)
@@ -608,7 +606,7 @@ def _get_model_name_from_response(response: LLMResult) -> Optional[str]:
             break
 
     if not model_name:
-        llm_output: Dict[str, Any] = response.llm_output or {}
+        llm_output: dict[str, Any] = response.llm_output or {}
         model_name = llm_output.get("model_name") or llm_output.get("model") or ""
 
     return model_name
@@ -635,8 +633,20 @@ def _get_metrics_from_response(response: LLMResult):
                 )
             )
 
+            # Extract cache tokens from nested input_token_details (LangChain format)
+            # Maps to Braintrust's standard cache token metric names
+            input_token_details = usage_metadata.get("input_token_details")
+            if input_token_details and isinstance(input_token_details, dict):
+                cache_read = input_token_details.get("cache_read")
+                cache_creation = input_token_details.get("cache_creation")
+
+                if cache_read is not None:
+                    metrics["prompt_cached_tokens"] = cache_read
+                if cache_creation is not None:
+                    metrics["prompt_cache_creation_tokens"] = cache_creation
+
     if not metrics or not any(metrics.values()):
-        llm_output: Dict[str, Any] = response.llm_output or {}
+        llm_output: dict[str, Any] = response.llm_output or {}
         metrics = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
 
     return clean_object(metrics)

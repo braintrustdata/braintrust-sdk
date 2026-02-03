@@ -1,11 +1,9 @@
 import {
   FunctionId as functionIdSchema,
-  InvokeFunction as InvokeFunctionRequestSchema,
   type InvokeFunctionType as InvokeFunctionRequest,
-  ChatCompletionMessageParam as MessageSchema,
   type ChatCompletionMessageParamType as Message,
-  StreamingMode as StreamingModeSchema,
   type StreamingModeType as StreamingMode,
+  type FunctionTypeEnumType as FunctionType,
 } from "../generated_types";
 import {
   _internalGetGlobalState,
@@ -37,6 +35,11 @@ export interface InvokeFunctionArgs<
    */
   projectName?: string;
   /**
+   * The ID of the project to use for execution context (API keys, project defaults, etc.).
+   * This is not the project the function belongs to, but the project context for the invocation.
+   */
+  projectId?: string;
+  /**
    * The slug of the function to invoke.
    */
   slug?: string;
@@ -45,6 +48,10 @@ export interface InvokeFunctionArgs<
    * The name of the global function to invoke.
    */
   globalFunction?: string;
+  /**
+   * The type of the global function to invoke. If unspecified, defaults to 'scorer' for backward compatibility.
+   */
+  functionType?: FunctionType;
   /**
    * The ID of the prompt session to invoke the function from.
    */
@@ -152,6 +159,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     mode,
     schema,
     strict,
+    projectId,
     ...functionIdArgs
   } = args;
 
@@ -175,6 +183,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     project_name: functionIdArgs.projectName,
     slug: functionIdArgs.slug,
     global_function: functionIdArgs.globalFunction,
+    function_type: functionIdArgs.functionType,
     prompt_session_id: functionIdArgs.promptSessionId,
     prompt_session_function_id: functionIdArgs.promptSessionFunctionId,
     version: functionIdArgs.version,
@@ -197,10 +206,18 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     strict,
   };
 
+  const headers: Record<string, string> = {
+    Accept: stream ? "text/event-stream" : "application/json",
+  };
+  if (projectId) {
+    headers["x-bt-project-id"] = projectId;
+  }
+  if (orgName) {
+    headers["x-bt-org-name"] = orgName;
+  }
+
   const resp = await state.proxyConn().post(`function/invoke`, request, {
-    headers: {
-      Accept: stream ? "text/event-stream" : "application/json",
-    },
+    headers,
   });
 
   if (stream) {
@@ -244,17 +261,24 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  * @param options.projectName The project name containing the function.
  * @param options.slug The slug of the function to invoke.
  * @param options.version Optional version of the function to use. Defaults to latest.
+ * @param options.state Optional Braintrust state to use.
  * @returns A function that can be used as a task or scorer in Eval().
  */
 export function initFunction({
   projectName,
   slug,
   version,
+  state,
 }: {
   projectName: string;
   slug: string;
   version?: string;
+  state?: BraintrustState;
 }) {
+  // Disable span cache since remote function spans won't be in the local cache
+  const s = state ?? _internalGetGlobalState();
+  s?.spanCache?.disable();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
     return await invoke({

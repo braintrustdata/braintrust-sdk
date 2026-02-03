@@ -6,7 +6,7 @@ import {
   convertDataToBlob,
   getExtensionFromMediaType,
 } from "../attachment-utils";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { zodToJsonSchema } from "../../zod/utils";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
@@ -29,9 +29,50 @@ interface WrapAISDKOptions {
 }
 
 /**
+ * Detects if an object is an ES module namespace (ModuleRecord).
+ *
+ * ES module namespaces have immutable, non-configurable properties that cause
+ * Proxy invariant violations when trying to return wrapped versions of functions.
+ *
+ * Detection strategy:
+ * 1. Check constructor.name === 'Module' (most reliable, suggested by Stephen)
+ * 2. Fallback: Check if properties are non-configurable (catches edge cases)
+ *
+ * @param obj - Object to check
+ * @returns true if obj appears to be an ES module namespace
+ */
+function isModuleNamespace(obj: any): boolean {
+  if (!obj || typeof obj !== "object") {
+    return false;
+  }
+
+  // Primary detection: Check if constructor is 'Module'
+  // ES module namespaces have constructor.name === 'Module'
+  if (obj.constructor?.name === "Module") {
+    return true;
+  }
+
+  // Fallback: Check if properties are non-configurable
+  // This catches cases where constructor check might not work
+  try {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return false;
+
+    const firstKey = keys[0];
+    const descriptor = Object.getOwnPropertyDescriptor(obj, firstKey);
+    // Module namespace properties are non-configurable and non-writable
+    return descriptor
+      ? !descriptor.configurable && !descriptor.writable
+      : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Wraps Vercel AI SDK methods with Braintrust tracing. Returns wrapped versions
- * of generateText, streamText, generateObject, and streamObject that automatically
- * create spans and log inputs, outputs, and metrics.
+ * of generateText, streamText, generateObject, streamObject, Agent, experimental_Agent,
+ * and ToolLoopAgent that automatically create spans and log inputs, outputs, and metrics.
  *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns Object with AI SDK methods with Braintrust tracing
@@ -41,61 +82,174 @@ interface WrapAISDKOptions {
  * import { wrapAISDK } from "braintrust";
  * import * as ai from "ai";
  *
- * const { generateText, streamText, generateObject, streamObject } = wrapAISDK(ai);
+ * const { generateText, streamText, generateObject, streamObject, Agent } = wrapAISDK(ai);
  *
  * const result = await generateText({
  *   model: openai("gpt-4"),
  *   prompt: "Hello world"
  * });
+ *
+ * const agent = new Agent({ model: openai("gpt-4") });
+ * const agentResult = await agent.generate({ prompt: "Hello from agent" });
  * ```
  */
-export function wrapAISDK(aiSDK: any, options: WrapAISDKOptions = {}) {
-  return new Proxy(aiSDK, {
+export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
+  // Handle null/undefined early - can't create Proxy with non-objects
+  if (!aiSDK || typeof aiSDK !== "object") {
+    return aiSDK;
+  }
+
+  // Handle ES module namespaces (ModuleRecords) that have non-configurable properties.
+  // These cause Proxy invariant violations because we return wrapped functions instead
+  // of the original values. Using prototype chain preserves all properties (enumerable
+  // and non-enumerable) while avoiding invariants since the target has no own properties.
+  // See: https://github.com/braintrustdata/braintrust-sdk/pull/1259
+  const target = isModuleNamespace(aiSDK)
+    ? Object.setPrototypeOf({}, aiSDK)
+    : aiSDK;
+
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy(target as unknown as any, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
-          return wrapGenerateText(original, options);
+          return wrapGenerateText(original, options, aiSDK);
         case "streamText":
-          return wrapStreamText(original, options);
+          return wrapStreamText(original, options, aiSDK);
         case "generateObject":
-          return wrapGenerateObject(original, options);
+          return wrapGenerateObject(original, options, aiSDK);
         case "streamObject":
-          return wrapStreamObject(original, options);
+          return wrapStreamObject(original, options, aiSDK);
+        case "Agent":
+        case "Experimental_Agent":
+        case "ToolLoopAgent":
+          return original ? wrapAgentClass(original, options) : original;
       }
       return original;
     },
-  });
+  }) as T;
 }
 
-const wrapGenerateText = (
-  generateText: any,
+export const wrapAgentClass = (
+  AgentClass: any,
   options: WrapAISDKOptions = {},
 ) => {
-  return async function wrappedGenerateText(params: any) {
+  return new Proxy(AgentClass, {
+    construct(target, args, newTarget) {
+      const instance = Reflect.construct(target, args, newTarget);
+      return new Proxy(instance, {
+        get(instanceTarget, prop, instanceReceiver) {
+          const original = Reflect.get(instanceTarget, prop, instanceTarget);
+
+          if (prop === "generate") {
+            return wrapAgentGenerate(original, instanceTarget, options);
+          }
+
+          if (prop === "stream") {
+            return wrapAgentStream(original, instanceTarget, options);
+          }
+
+          // Bind methods to the actual instance to preserve private field access
+          if (typeof original === "function") {
+            return original.bind(instanceTarget);
+          }
+
+          return original;
+        },
+      });
+    },
+  });
+};
+
+const wrapAgentGenerate = (
+  generate: any,
+  instance: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return async (params: any) =>
+    makeGenerateTextWrapper(
+      `${instance.constructor.name}.generate`,
+      options,
+      generate.bind(instance), // as of v5 this is just streamText under the hood
+      // Follows what the AI SDK does under the hood when calling generateText
+    )({ ...instance.settings, ...params });
+};
+
+const wrapAgentStream = (
+  stream: any,
+  instance: any,
+  options: WrapAISDKOptions = {},
+) => {
+  return (params: any) =>
+    makeStreamTextWrapper(
+      `${instance.constructor.name}.stream`,
+      options,
+      stream.bind(instance), // as of v5 this is just streamText under the hood
+      undefined, // aiSDK not needed since model is already on instance
+    )({ ...instance.settings, ...params });
+};
+
+const makeGenerateTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  generateText: any,
+  aiSDK?: any,
+) => {
+  const wrapper = async function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
+
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(params);
+
     return traced(
       async (span) => {
         const result = await generateText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
         });
+
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
 
         span.log({
           output: await processOutput(result, options.denyOutputPaths),
           metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
         });
 
         return result;
       },
       {
-        name: "generateText",
+        name: spanName || name,
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
         },
         event: {
-          input: processInputAttachments(params),
+          input: processedInput,
           metadata: {
-            model: serializeModel(params.model),
+            ...spanInfoMetadata,
+            model,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -105,36 +259,96 @@ const wrapGenerateText = (
       },
     );
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
 };
 
-const wrapGenerateObject = (
-  generateObject: any,
-  options: WrapAISDKOptions = {},
-) => {
-  return async function wrappedGenerateObject(params: any) {
+/**
+ * Resolves a model string ID to a model instance using AI SDK's global provider.
+ * This mirrors the internal resolveLanguageModel function in AI SDK.
+ */
+const resolveModel = (model: any, ai: any): any => {
+  if (typeof model !== "string") {
+    return model;
+  }
+  // Use AI SDK's global provider if set, otherwise fall back to gateway
+  const provider =
+    (globalThis as any).AI_SDK_DEFAULT_PROVIDER ?? ai?.gateway ?? null;
+  if (provider && typeof provider.languageModel === "function") {
+    return provider.languageModel(model);
+  }
+  // If no provider available, return as-is (AI SDK will resolve it)
+  return model;
+};
+
+/**
+ * Wraps a model's doGenerate method to create a span for each LLM call.
+ * This allows visibility into each step of a multi-round tool interaction.
+ */
+const wrapModel = (model: any, ai?: any): any => {
+  // Resolve string model IDs to model instances
+  const resolvedModel = resolveModel(model, ai);
+
+  if (
+    !resolvedModel ||
+    typeof resolvedModel !== "object" ||
+    typeof resolvedModel.doGenerate !== "function"
+  ) {
+    return model; // Return original if we can't wrap
+  }
+
+  // Already wrapped - avoid double wrapping
+  if (resolvedModel._braintrustWrapped) {
+    return resolvedModel;
+  }
+
+  const originalDoGenerate = resolvedModel.doGenerate.bind(resolvedModel);
+  const originalDoStream = resolvedModel.doStream?.bind(resolvedModel);
+
+  const { model: modelId, provider } =
+    serializeModelWithProvider(resolvedModel);
+
+  const wrappedDoGenerate = async (options: any) => {
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(options);
+
     return traced(
       async (span) => {
-        const result = await generateObject({
-          ...params,
-          tools: wrapTools(params.tools),
-        });
+        const result = await originalDoGenerate(options);
+
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
+        if (result.finishReason !== undefined) {
+          resolvedMetadata.finish_reason = result.finishReason;
+        }
 
         span.log({
-          output: processOutput(result, options.denyOutputPaths),
+          output: await processOutput(result),
           metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
         });
 
         return result;
       },
       {
-        name: "generateObject",
+        name: "doGenerate",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
         event: {
-          input: processInputAttachments(params),
+          input: processedInput,
           metadata: {
-            model: serializeModel(params.model),
+            model: modelId,
+            ...(provider ? { provider } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -144,19 +358,24 @@ const wrapGenerateObject = (
       },
     );
   };
-};
 
-const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
-  return function wrappedStreamText(params: any) {
+  const wrappedDoStream = async (options: any) => {
+    const startTime = Date.now();
+    let receivedFirst = false;
+
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(options);
+
     const span = startSpan({
-      name: "streamText",
+      name: "doStream",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
       event: {
-        input: processInputAttachments(params),
+        input: processedInput,
         metadata: {
-          model: serializeModel(params.model),
+          model: modelId,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -165,12 +384,280 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       },
     });
 
+    const result = await originalDoStream(options);
+
+    // Accumulate streamed content for output logging
+    const output: Record<string, unknown> = {};
+    let text = "";
+    let reasoning = "";
+    const toolCalls: unknown[] = [];
+    let object: unknown = undefined; // For structured output / streamObject
+
+    // Helper to extract text from various chunk formats
+    const extractTextDelta = (chunk: any): string => {
+      // Try all known property names for text deltas
+      if (typeof chunk.textDelta === "string") return chunk.textDelta;
+      if (typeof chunk.delta === "string") return chunk.delta;
+      if (typeof chunk.text === "string") return chunk.text;
+      // For content property (some providers use this)
+      if (typeof chunk.content === "string") return chunk.content;
+      return "";
+    };
+
+    const transformStream = new TransformStream({
+      async transform(chunk, controller) {
+        // Track time to first token on any chunk type
+        if (!receivedFirst) {
+          receivedFirst = true;
+          span.log({
+            metrics: {
+              time_to_first_token: (Date.now() - startTime) / 1000,
+            },
+          });
+        }
+
+        switch (chunk.type) {
+          case "text-delta":
+            text += extractTextDelta(chunk);
+            break;
+          case "reasoning-delta":
+            // Reasoning chunks use delta or text property
+            if (chunk.delta) {
+              reasoning += chunk.delta;
+            } else if (chunk.text) {
+              reasoning += chunk.text;
+            }
+            break;
+          case "tool-call":
+            toolCalls.push(chunk);
+            break;
+          case "object":
+            // Structured output - capture the final object
+            object = chunk.object;
+            break;
+          case "raw":
+            // Raw chunks may contain text content for structured output / JSON mode
+            // The rawValue often contains the delta text from the provider
+            if (chunk.rawValue) {
+              const rawVal = chunk.rawValue as any;
+              // OpenAI format: rawValue.delta.content or rawValue.choices[0].delta.content
+              if (rawVal.delta?.content) {
+                text += rawVal.delta.content;
+              } else if (rawVal.choices?.[0]?.delta?.content) {
+                text += rawVal.choices[0].delta.content;
+              } else if (typeof rawVal.text === "string") {
+                text += rawVal.text;
+              } else if (typeof rawVal.content === "string") {
+                text += rawVal.content;
+              }
+            }
+            break;
+          case "finish":
+            output.text = text;
+            output.reasoning = reasoning;
+            output.toolCalls = toolCalls;
+            output.finishReason = chunk.finishReason;
+            output.usage = chunk.usage;
+
+            // Include object for structured output if captured
+            if (object !== undefined) {
+              output.object = object;
+            }
+
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(output);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+            if (chunk.finishReason !== undefined) {
+              resolvedMetadata.finish_reason = chunk.finishReason;
+            }
+
+            span.log({
+              output: await processOutput(output),
+              metrics: extractTokenMetrics(output),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
+            });
+            span.end();
+            break;
+        }
+        controller.enqueue(chunk);
+      },
+    });
+
+    return {
+      ...result,
+      stream: result.stream.pipeThrough(transformStream),
+    };
+  };
+
+  return new Proxy(resolvedModel, {
+    get(target, prop, receiver) {
+      if (prop === "_braintrustWrapped") {
+        return true;
+      }
+      if (prop === "doGenerate") {
+        return wrappedDoGenerate;
+      }
+      if (prop === "doStream" && originalDoStream) {
+        return wrappedDoStream;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+};
+
+const wrapGenerateText = (
+  generateText: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return makeGenerateTextWrapper("generateText", options, generateText, aiSDK);
+};
+
+const wrapGenerateObject = (
+  generateObject: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return async function generateObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
+
+    // Process input attachments (including async Output.object resolution for v6)
+    const processedInput = await processInputAttachments(params);
+
+    return traced(
+      async (span) => {
+        const result = await generateObject({
+          ...params,
+          model: wrapModel(params.model, aiSDK),
+          tools: wrapTools(params.tools),
+        });
+
+        const output = await processOutput(result, options.denyOutputPaths);
+
+        // Extract resolved model/provider from gateway routing if available
+        const gatewayInfo = extractGatewayRoutingInfo(result);
+        const resolvedMetadata: Record<string, unknown> = {};
+        if (gatewayInfo?.provider) {
+          resolvedMetadata.provider = gatewayInfo.provider;
+        }
+        if (gatewayInfo?.model) {
+          resolvedMetadata.model = gatewayInfo.model;
+        }
+
+        span.log({
+          output,
+          metrics: extractTokenMetrics(result),
+          ...(Object.keys(resolvedMetadata).length > 0
+            ? { metadata: resolvedMetadata }
+            : {}),
+        });
+
+        return result;
+      },
+      {
+        name: spanName || "generateObject",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+          ...spanInfoAttrs,
+        },
+        event: {
+          input: processedInput,
+          metadata: {
+            ...spanInfoMetadata,
+            model,
+            ...(provider ? { provider } : {}),
+            braintrust: {
+              integration_name: "ai-sdk",
+              sdk_language: "typescript",
+            },
+          },
+        },
+      },
+    );
+  };
+};
+
+const makeStreamTextWrapper = (
+  name: string,
+  options: WrapAISDKOptions,
+  streamText: any,
+  aiSDK?: any,
+) => {
+  // Note: streamText returns a sync result (stream object), so we cannot make this async
+  // For v6, Output.object responseFormat is a Promise - we handle this by:
+  // 1. Processing input synchronously (v5 works, v6 gets placeholder)
+  // 2. Updating the span with resolved schema when Promise completes
+  const wrapper = function (allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
+
+    // Process input attachments synchronously
+    // v5: responseFormat is a plain object - captured fully
+    // v6: responseFormat is a Promise - captured as placeholder, then updated when resolved
+    const { input: processedInput, outputPromise } =
+      processInputAttachmentsSync(params);
+
+    const span = startSpan({
+      name: spanName || name,
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
+      },
+      event: {
+        input: processedInput,
+        metadata: {
+          ...spanInfoMetadata,
+          model,
+          ...(provider ? { provider } : {}),
+          braintrust: {
+            integration_name: "ai-sdk",
+            sdk_language: "typescript",
+          },
+        },
+      },
+    });
+
+    // v6: Update input with resolved output schema when Promise completes
+    if (outputPromise) {
+      outputPromise
+        .then((resolvedData) => {
+          span.log({ input: { ...processedInput, ...resolvedData } });
+        })
+        .catch(() => {
+          // Silently ignore resolution errors - placeholder will be used
+        });
+    }
+
     try {
       const startTime = Date.now();
       let receivedFirst = false;
       const result = withCurrent(span, () =>
         streamText({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -187,9 +674,22 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
           onFinish: async (event: any) => {
             params.onFinish?.(event);
 
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(event);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
             });
 
             span.end();
@@ -252,22 +752,56 @@ const wrapStreamText = (streamText: any, options: WrapAISDKOptions = {}) => {
       throw error;
     }
   };
+  Object.defineProperty(wrapper, "name", { value: name, writable: false });
+  return wrapper;
+};
+
+const wrapStreamText = (
+  streamText: any,
+  options: WrapAISDKOptions = {},
+  aiSDK?: any,
+) => {
+  return makeStreamTextWrapper("streamText", options, streamText, aiSDK);
 };
 
 const wrapStreamObject = (
   streamObject: any,
   options: WrapAISDKOptions = {},
+  aiSDK?: any,
 ) => {
-  return function wrappedStreamObject(params: any) {
+  // Note: streamObject returns a sync result (stream object), so we cannot make this async
+  // For v6, Output.object responseFormat is a Promise - we handle this by:
+  // 1. Processing input synchronously (v5 works, v6 gets placeholder)
+  // 2. Updating the span with resolved schema when Promise completes
+  return function streamObjectWrapper(allParams: any) {
+    // Extract span_info from params (used by Braintrust-managed prompts)
+    const { span_info, ...params } = allParams;
+    const {
+      metadata: spanInfoMetadata,
+      name: spanName,
+      spanAttributes: spanInfoAttrs,
+    } = span_info ?? {};
+
+    const { model, provider } = serializeModelWithProvider(params.model);
+
+    // Process input attachments synchronously
+    // v5: responseFormat is a plain object - captured fully
+    // v6: responseFormat is a Promise - captured as placeholder, then updated when resolved
+    const { input: processedInput, outputPromise } =
+      processInputAttachmentsSync(params);
+
     const span = startSpan({
-      name: "streamObject",
+      name: spanName || "streamObject",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
+        ...spanInfoAttrs,
       },
       event: {
-        input: processInputAttachments(params),
+        input: processedInput,
         metadata: {
-          model: serializeModel(params.model),
+          ...spanInfoMetadata,
+          model,
+          ...(provider ? { provider } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -276,6 +810,17 @@ const wrapStreamObject = (
       },
     });
 
+    // v6: Update input with resolved output schema when Promise completes
+    if (outputPromise) {
+      outputPromise
+        .then((resolvedData) => {
+          span.log({ input: { ...processedInput, ...resolvedData } });
+        })
+        .catch(() => {
+          // Silently ignore resolution errors - placeholder will be used
+        });
+    }
+
     try {
       const startTime = Date.now();
       let receivedFirst = false;
@@ -283,6 +828,7 @@ const wrapStreamObject = (
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
+          model: wrapModel(params.model, aiSDK),
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -298,9 +844,22 @@ const wrapStreamObject = (
           onFinish: async (event: any) => {
             params.onFinish?.(event);
 
+            // Extract resolved model/provider from gateway routing if available
+            const gatewayInfo = extractGatewayRoutingInfo(event);
+            const resolvedMetadata: Record<string, unknown> = {};
+            if (gatewayInfo?.provider) {
+              resolvedMetadata.provider = gatewayInfo.provider;
+            }
+            if (gatewayInfo?.model) {
+              resolvedMetadata.model = gatewayInfo.model;
+            }
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
               metrics: extractTokenMetrics(event),
+              ...(Object.keys(resolvedMetadata).length > 0
+                ? { metadata: resolvedMetadata }
+                : {}),
             });
 
             span.end();
@@ -395,6 +954,22 @@ const wrapTools = (tools: any) => {
   return wrappedTools;
 };
 
+/**
+ * Checks if a value is an AsyncGenerator.
+ * AsyncGenerators are returned by async generator functions (async function* () {})
+ * and must be iterated to consume their yielded values.
+ */
+const isAsyncGenerator = (value: any): value is AsyncGenerator => {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof value[Symbol.asyncIterator] === "function" &&
+    typeof value.next === "function" &&
+    typeof value.return === "function" &&
+    typeof value.throw === "function"
+  );
+};
+
 const wrapToolExecute = (tool: any, name: string) => {
   // Only wrap tools that have an execute function (created with tool() helper)
   // AI SDK v3-v6: tool({ description, inputSchema/parameters, execute })
@@ -410,13 +985,50 @@ const wrapToolExecute = (tool: any, name: string) => {
     return new Proxy(tool, {
       get(target, prop) {
         if (prop === "execute") {
-          return (...args: any[]) =>
-            traced(
+          // Return a function that handles both regular async functions and async generators
+          const wrappedExecute = (...args: any[]) => {
+            const result = originalExecute.apply(target, args);
+
+            // Check if the result is an async generator (from async function* () {})
+            // AI SDK v5 supports async generator tools that yield intermediate status updates
+            if (isAsyncGenerator(result)) {
+              // Return a wrapper async generator that:
+              // 1. Iterates through the original generator
+              // 2. Yields all intermediate values (so consumers see status updates)
+              // 3. Tracks and logs the final yielded value as the tool output
+              return (async function* () {
+                const span = startSpan({
+                  name,
+                  spanAttributes: {
+                    type: SpanTypeAttribute.TOOL,
+                  },
+                });
+                span.log({ input: args.length === 1 ? args[0] : args });
+
+                try {
+                  let lastValue: any;
+                  for await (const value of result) {
+                    lastValue = value;
+                    yield value;
+                  }
+                  // Log the final yielded value as the output
+                  span.log({ output: lastValue });
+                } catch (error) {
+                  span.log({ error: serializeError(error) });
+                  throw error;
+                } finally {
+                  span.end();
+                }
+              })();
+            }
+
+            // For regular async functions, use traced as before
+            return traced(
               async (span) => {
                 span.log({ input: args.length === 1 ? args[0] : args });
-                const result = await originalExecute.apply(target, args);
-                span.log({ output: result });
-                return result;
+                const awaitedResult = await result;
+                span.log({ output: awaitedResult });
+                return awaitedResult;
               },
               {
                 name,
@@ -425,6 +1037,8 @@ const wrapToolExecute = (tool: any, name: string) => {
                 },
               },
             );
+          };
+          return wrappedExecute;
         }
         return target[prop];
       },
@@ -487,6 +1101,84 @@ const serializeError = (error: unknown) => {
 const serializeModel = (model: any) => {
   return typeof model === "string" ? model : model?.modelId;
 };
+
+/**
+ * Parses a gateway model string like "openai/gpt-5-mini" into provider and model.
+ * Returns { provider, model } if parseable, otherwise { model } only.
+ */
+function parseGatewayModelString(modelString: string): {
+  model: string;
+  provider?: string;
+} {
+  if (!modelString || typeof modelString !== "string") {
+    return { model: modelString };
+  }
+  const slashIndex = modelString.indexOf("/");
+  if (slashIndex > 0 && slashIndex < modelString.length - 1) {
+    return {
+      provider: modelString.substring(0, slashIndex),
+      model: modelString.substring(slashIndex + 1),
+    };
+  }
+  return { model: modelString };
+}
+
+/**
+ * Extracts model ID and effective provider from a model object or string.
+ * Provider precedence: model.provider > parsed from gateway-style modelId string.
+ *
+ * @param model - Either a model object (with modelId and optional provider) or a model string
+ */
+function serializeModelWithProvider(model: any): {
+  model: string;
+  provider?: string;
+} {
+  const modelId = typeof model === "string" ? model : model?.modelId;
+  // Provider can be set directly on the model object (e.g., AI SDK model instances)
+  const explicitProvider =
+    typeof model === "object" ? model?.provider : undefined;
+
+  if (!modelId) {
+    return { model: modelId, provider: explicitProvider };
+  }
+
+  const parsed = parseGatewayModelString(modelId);
+  return {
+    model: parsed.model,
+    provider: explicitProvider || parsed.provider,
+  };
+}
+
+/**
+ * Extracts gateway routing info from the result's providerMetadata.
+ * This provides the actual resolved provider and model used by the gateway.
+ */
+function extractGatewayRoutingInfo(result: any): {
+  model?: string;
+  provider?: string;
+} | null {
+  // Check steps for gateway routing info (multi-step results)
+  if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
+    const routing = result.steps[0]?.providerMetadata?.gateway?.routing;
+    if (routing) {
+      return {
+        provider: routing.resolvedProvider || routing.finalProvider,
+        model: routing.resolvedProviderApiModelId,
+      };
+    }
+  }
+
+  // Check direct providerMetadata (single-step results)
+  const routing = result?.providerMetadata?.gateway?.routing;
+  if (routing) {
+    return {
+      provider: routing.resolvedProvider || routing.finalProvider,
+      model: routing.resolvedProviderApiModelId,
+    };
+  }
+
+  return null;
+}
 
 /**
  * Detects if an object is a Zod schema
@@ -563,7 +1255,208 @@ const processTool = (tool: any): any => {
   return processed;
 };
 
-const processInputAttachments = (input: any) => {
+/**
+ * Detects if an object is an AI SDK Output object (from Output.object() or Output.text())
+ * Output objects have a responseFormat property (function, object, or Promise).
+ * AI SDK v5: { type: "object", responseFormat: { type: "json", schema: {...} } }
+ * AI SDK v6: { responseFormat: Promise<{ type: "json", schema: {...} }> }
+ */
+const isOutputObject = (value: any): boolean => {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  // Check for responseFormat property - this is the key indicator
+  if (!("responseFormat" in value)) {
+    return false;
+  }
+
+  // v5: Has type: "object" or "text"
+  if (value.type === "object" || value.type === "text") {
+    return true;
+  }
+
+  // v6 and other cases: responseFormat is a Promise, object, or function
+  if (
+    typeof value.responseFormat === "function" ||
+    typeof value.responseFormat === "object"
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Serializes an AI SDK Output object for logging
+ * Extracts the response format including schema for structured outputs
+ * Handles v5 (plain object), v6 (Promise), and function-based responseFormat
+ */
+const serializeOutputObject = (output: any, model: any): any => {
+  try {
+    const result: any = {};
+
+    // Include type if present (v5 has this)
+    if (output.type) {
+      result.type = output.type;
+    }
+
+    // responseFormat can be:
+    // 1. A function (edge case) - need to call it
+    // 2. A Promise (v6) - return the Promise to be resolved by logger
+    // 3. A plain object (v5) - can use directly
+    let responseFormat: any;
+
+    if (typeof output.responseFormat === "function") {
+      // Call responseFormat to get the schema
+      // For logging purposes, we create a mock model that claims to support structured outputs
+      // to ensure we always extract the schema when available
+      const mockModelForSchema = {
+        supportsStructuredOutputs: true,
+        ...(model || {}),
+      };
+      responseFormat = output.responseFormat({ model: mockModelForSchema });
+    } else if (
+      output.responseFormat != null &&
+      typeof output.responseFormat === "object"
+    ) {
+      // Could be a Promise or a plain object
+      responseFormat = output.responseFormat;
+    }
+
+    if (responseFormat) {
+      // If responseFormat is a Promise (v6), wrap it to handle Zod schema conversion
+      if (typeof responseFormat.then === "function") {
+        // Return a Promise that resolves to the formatted output
+        // The logger will need to handle this Promise
+        result.response_format = Promise.resolve(responseFormat).then(
+          (resolved) => {
+            // Convert Zod schema to JSON Schema if needed
+            if (resolved.schema && isZodSchema(resolved.schema)) {
+              return {
+                ...resolved,
+                schema: serializeZodSchema(resolved.schema),
+              };
+            }
+            return resolved;
+          },
+        );
+      } else {
+        // Plain object - convert Zod schema if needed
+        if (responseFormat.schema && isZodSchema(responseFormat.schema)) {
+          responseFormat = {
+            ...responseFormat,
+            schema: serializeZodSchema(responseFormat.schema),
+          };
+        }
+        result.response_format = responseFormat;
+      }
+    }
+
+    return result;
+  } catch {
+    // If extraction fails, return a minimal representation
+    return {
+      response_format: null,
+    };
+  }
+};
+
+/**
+ * Result from sync input processing.
+ * For v6, includes a Promise to resolve the async output schema.
+ */
+interface ProcessInputSyncResult {
+  input: any;
+  // v6: Promise that resolves to { output: { response_format: {...} } } when available
+  outputPromise?: Promise<any>;
+}
+
+/**
+ * Synchronous version of processInputAttachments for stream wrappers.
+ * For v5: responseFormat is a plain object - captured fully
+ * For v6: responseFormat is a Promise - returns initial input + Promise for update
+ */
+const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
+  if (!input) return { input };
+
+  const processed: any = { ...input };
+
+  // Process messages array if present
+  if (input.messages && Array.isArray(input.messages)) {
+    processed.messages = input.messages.map(processMessage);
+  }
+
+  // Process prompt - can be an array of messages (provider-level format) or an object
+  if (input.prompt && typeof input.prompt === "object") {
+    if (Array.isArray(input.prompt)) {
+      // Provider-level format: prompt is an array of messages
+      processed.prompt = input.prompt.map(processMessage);
+    } else {
+      // High-level format: prompt is an object with potential attachments
+      processed.prompt = processPromptContent(input.prompt);
+    }
+  }
+
+  // Process tools to convert Zod schemas to JSON Schema
+  if (input.tools) {
+    processed.tools = processTools(input.tools);
+  }
+
+  // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
+  if (input.schema && isZodSchema(input.schema)) {
+    processed.schema = serializeZodSchema(input.schema);
+  }
+
+  // Process callOptionsSchema (used by ToolLoopAgent and other agents)
+  if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
+    processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  // Track if we need async resolution for v6
+  let outputPromise: Promise<any> | undefined;
+
+  // Process output schema for generateText/streamText with Output.object()
+  // v5: responseFormat is a plain object with schema - serialize it
+  // v6: responseFormat is a Promise - store placeholder and return Promise for update
+  if (input.output && isOutputObject(input.output)) {
+    const serialized = serializeOutputObject(input.output, input.model);
+
+    // Check if response_format is a Promise (v6)
+    if (
+      serialized.response_format &&
+      typeof serialized.response_format.then === "function"
+    ) {
+      // v6: Store placeholder now, resolve Promise for later update
+      processed.output = { ...serialized, response_format: {} };
+      outputPromise = serialized.response_format.then(
+        (resolvedFormat: any) => ({
+          output: { ...serialized, response_format: resolvedFormat },
+        }),
+      );
+    } else {
+      // v5: response_format is already resolved
+      processed.output = serialized;
+    }
+  }
+
+  // Remove prepareCall function from logs (not serializable and not useful)
+  if (
+    "prepareCall" in processed &&
+    typeof processed.prepareCall === "function"
+  ) {
+    processed.prepareCall = "[Function]";
+  }
+
+  return { input: processed, outputPromise };
+};
+
+/**
+ * Async version of processInputAttachments for non-stream wrappers.
+ * For v5: responseFormat is a plain object - captured fully
+ * For v6: responseFormat is a Promise - awaited and captured fully
+ */
+const processInputAttachments = async (input: any): Promise<any> => {
   if (!input) return input;
 
   const processed: any = { ...input };
@@ -573,18 +1466,56 @@ const processInputAttachments = (input: any) => {
     processed.messages = input.messages.map(processMessage);
   }
 
-  // Process prompt if it's an object with potential attachments
-  if (
-    input.prompt &&
-    typeof input.prompt === "object" &&
-    !Array.isArray(input.prompt)
-  ) {
-    processed.prompt = processPromptContent(input.prompt);
+  // Process prompt - can be an array of messages (provider-level format) or an object
+  if (input.prompt && typeof input.prompt === "object") {
+    if (Array.isArray(input.prompt)) {
+      // Provider-level format: prompt is an array of messages
+      processed.prompt = input.prompt.map(processMessage);
+    } else {
+      // High-level format: prompt is an object with potential attachments
+      processed.prompt = processPromptContent(input.prompt);
+    }
   }
 
   // Process tools to convert Zod schemas to JSON Schema
   if (input.tools) {
     processed.tools = processTools(input.tools);
+  }
+
+  // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
+  if (input.schema && isZodSchema(input.schema)) {
+    processed.schema = serializeZodSchema(input.schema);
+  }
+
+  // Process callOptionsSchema (used by ToolLoopAgent and other agents)
+  if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
+    processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  // Process output schema for generateText/streamText with Output.object()
+  // The output field contains an Output object with a responseFormat property
+  // v5: { type: "json", schema: {...JSON Schema...} } - sync
+  // v6: Promise<{ type: "json", schema: {...JSON Schema...} }> - await it
+  if (input.output && isOutputObject(input.output)) {
+    const serialized = serializeOutputObject(input.output, input.model);
+
+    // v6: If response_format is a Promise, await it
+    if (
+      serialized.response_format &&
+      typeof serialized.response_format.then === "function"
+    ) {
+      serialized.response_format = await serialized.response_format;
+    }
+
+    processed.output = serialized;
+  }
+
+  // Remove prepareCall function from logs (not serializable and not useful)
+  if (
+    "prepareCall" in processed &&
+    typeof processed.prepareCall === "function"
+  ) {
+    processed.prepareCall = "[Function]";
   }
 
   return processed;
@@ -812,6 +1743,7 @@ const extractGetterValues = (obj: any): any => {
   // List of known getters from AI SDK result objects
   const getterNames = [
     "text",
+    "object",
     "finishReason",
     "usage",
     "toolCalls",
@@ -916,115 +1848,194 @@ const convertFileToAttachment = (file: any, index: number): any => {
   }
 };
 
+function firstNumber(...values: unknown[]): number | undefined {
+  for (const v of values) {
+    if (typeof v === "number") {
+      return v;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Extracts all token metrics from usage data.
  * Handles various provider formats and naming conventions for token counts.
  */
 export function extractTokenMetrics(result: any): Record<string, number> {
   const metrics: Record<string, number> = {};
-  const usage = result?.usage;
+
+  // Agent results use totalUsage, other results use usage
+  // Try totalUsage first (for Agent calls), then fall back to usage
+  let usage = result?.totalUsage || result?.usage;
+
+  // If usage is not directly accessible, try as a getter
+  if (!usage && result) {
+    try {
+      if ("totalUsage" in result && typeof result.totalUsage !== "function") {
+        usage = result.totalUsage;
+      } else if ("usage" in result && typeof result.usage !== "function") {
+        usage = result.usage;
+      }
+    } catch {
+      // Ignore errors accessing getters
+    }
+  }
 
   if (!usage) {
     return metrics;
   }
 
-  // Prompt tokens (AI SDK v5 uses inputTokens)
-  if (usage.inputTokens !== undefined) {
-    metrics.prompt_tokens = usage.inputTokens;
-  } else if (usage.promptTokens !== undefined) {
-    metrics.prompt_tokens = usage.promptTokens;
-  } else if (usage.prompt_tokens !== undefined) {
-    metrics.prompt_tokens = usage.prompt_tokens;
+  // Prompt tokens (AI SDK v5 uses inputTokens, which can be a number or object with .total)
+  const promptTokens = firstNumber(
+    usage.inputTokens?.total,
+    usage.inputTokens,
+    usage.promptTokens,
+    usage.prompt_tokens,
+  );
+  if (promptTokens !== undefined) {
+    metrics.prompt_tokens = promptTokens;
   }
 
-  // Completion tokens (AI SDK v5 uses outputTokens)
-  if (usage.outputTokens !== undefined) {
-    metrics.completion_tokens = usage.outputTokens;
-  } else if (usage.completionTokens !== undefined) {
-    metrics.completion_tokens = usage.completionTokens;
-  } else if (usage.completion_tokens !== undefined) {
-    metrics.completion_tokens = usage.completion_tokens;
+  // Completion tokens (AI SDK v5 uses outputTokens, which can be a number or object with .total)
+  const completionTokens = firstNumber(
+    usage.outputTokens?.total,
+    usage.outputTokens,
+    usage.completionTokens,
+    usage.completion_tokens,
+  );
+  if (completionTokens !== undefined) {
+    metrics.completion_tokens = completionTokens;
   }
 
   // Total tokens
-  if (usage.totalTokens !== undefined) {
-    metrics.tokens = usage.totalTokens;
-  } else if (usage.tokens !== undefined) {
-    metrics.tokens = usage.tokens;
-  } else if (usage.total_tokens !== undefined) {
-    metrics.tokens = usage.total_tokens;
+  const totalTokens = firstNumber(
+    usage.totalTokens,
+    usage.tokens,
+    usage.total_tokens,
+  );
+  if (totalTokens !== undefined) {
+    metrics.tokens = totalTokens;
   }
 
-  // Prompt cached tokens (AI SDK v5 uses cachedInputTokens)
-  if (
-    usage.cachedInputTokens !== undefined ||
-    usage.promptCachedTokens !== undefined ||
-    usage.prompt_cached_tokens !== undefined
-  ) {
-    metrics.prompt_cached_tokens =
-      usage.cachedInputTokens ||
-      usage.promptCachedTokens ||
-      usage.prompt_cached_tokens;
+  // Prompt cached tokens (can be nested in inputTokens.cacheRead or top-level)
+  const promptCachedTokens = firstNumber(
+    usage.inputTokens?.cacheRead,
+    usage.cachedInputTokens,
+    usage.promptCachedTokens,
+    usage.prompt_cached_tokens,
+  );
+  if (promptCachedTokens !== undefined) {
+    metrics.prompt_cached_tokens = promptCachedTokens;
   }
 
   // Prompt cache creation tokens
-  if (
-    usage.promptCacheCreationTokens !== undefined ||
-    usage.prompt_cache_creation_tokens !== undefined
-  ) {
-    metrics.prompt_cache_creation_tokens =
-      usage.promptCacheCreationTokens || usage.prompt_cache_creation_tokens;
+  const promptCacheCreationTokens = firstNumber(
+    usage.promptCacheCreationTokens,
+    usage.prompt_cache_creation_tokens,
+  );
+  if (promptCacheCreationTokens !== undefined) {
+    metrics.prompt_cache_creation_tokens = promptCacheCreationTokens;
   }
 
   // Prompt reasoning tokens
-  if (
-    usage.promptReasoningTokens !== undefined ||
-    usage.prompt_reasoning_tokens !== undefined
-  ) {
-    metrics.prompt_reasoning_tokens =
-      usage.promptReasoningTokens || usage.prompt_reasoning_tokens;
+  const promptReasoningTokens = firstNumber(
+    usage.promptReasoningTokens,
+    usage.prompt_reasoning_tokens,
+  );
+  if (promptReasoningTokens !== undefined) {
+    metrics.prompt_reasoning_tokens = promptReasoningTokens;
   }
 
   // Completion cached tokens
-  if (
-    usage.completionCachedTokens !== undefined ||
-    usage.completion_cached_tokens !== undefined
-  ) {
-    metrics.completion_cached_tokens =
-      usage.completionCachedTokens || usage.completion_cached_tokens;
+  const completionCachedTokens = firstNumber(
+    usage.completionCachedTokens,
+    usage.completion_cached_tokens,
+  );
+  if (completionCachedTokens !== undefined) {
+    metrics.completion_cached_tokens = completionCachedTokens;
   }
 
-  // Completion reasoning tokens
-  if (
-    usage.reasoningTokens !== undefined ||
-    usage.completionReasoningTokens !== undefined ||
-    usage.completion_reasoning_tokens !== undefined ||
-    usage.reasoning_tokens !== undefined ||
-    usage.thinkingTokens !== undefined ||
-    usage.thinking_tokens !== undefined
-  ) {
-    const reasoningTokenCount =
-      usage.reasoningTokens ||
-      usage.completionReasoningTokens ||
-      usage.completion_reasoning_tokens ||
-      usage.reasoning_tokens ||
-      usage.thinkingTokens ||
-      usage.thinking_tokens;
-
+  // Completion reasoning tokens (can be nested in outputTokens.reasoning)
+  const reasoningTokenCount = firstNumber(
+    usage.outputTokens?.reasoning,
+    usage.reasoningTokens,
+    usage.completionReasoningTokens,
+    usage.completion_reasoning_tokens,
+    usage.reasoning_tokens,
+    usage.thinkingTokens,
+    usage.thinking_tokens,
+  );
+  if (reasoningTokenCount !== undefined) {
     metrics.completion_reasoning_tokens = reasoningTokenCount;
     metrics.reasoning_tokens = reasoningTokenCount;
   }
 
   // Completion audio tokens
-  if (
-    usage.completionAudioTokens !== undefined ||
-    usage.completion_audio_tokens !== undefined
-  ) {
-    metrics.completion_audio_tokens =
-      usage.completionAudioTokens || usage.completion_audio_tokens;
+  const completionAudioTokens = firstNumber(
+    usage.completionAudioTokens,
+    usage.completion_audio_tokens,
+  );
+  if (completionAudioTokens !== undefined) {
+    metrics.completion_audio_tokens = completionAudioTokens;
+  }
+
+  // Extract cost from providerMetadata.gateway.cost (e.g., from Vercel AI Gateway)
+  // For multi-step results, sum up costs from all steps
+  const cost = extractCostFromResult(result);
+  if (cost !== undefined) {
+    metrics.estimated_cost = cost;
   }
 
   return metrics;
+}
+
+function extractCostFromResult(result: any): number | undefined {
+  // Check for cost in steps (multi-step results like generateText with tools)
+  if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
+    let totalCost = 0;
+    let foundCost = false;
+    for (const step of result.steps) {
+      const gateway = step?.providerMetadata?.gateway;
+      // Check cost first, then fall back to marketCost (Vercel AI Gateway)
+      const stepCost =
+        parseGatewayCost(gateway?.cost) ||
+        parseGatewayCost(gateway?.marketCost);
+      if (stepCost !== undefined && stepCost > 0) {
+        totalCost += stepCost;
+        foundCost = true;
+      }
+    }
+    if (foundCost) {
+      return totalCost;
+    }
+  }
+
+  // Check for cost directly on result.providerMetadata (single-step results)
+  const gateway = result?.providerMetadata?.gateway;
+  // Check cost first, then fall back to marketCost (Vercel AI Gateway)
+  const directCost =
+    parseGatewayCost(gateway?.cost) || parseGatewayCost(gateway?.marketCost);
+  if (directCost !== undefined && directCost > 0) {
+    return directCost;
+  }
+
+  return undefined;
+}
+
+function parseGatewayCost(cost: unknown): number | undefined {
+  if (cost === undefined || cost === null) {
+    return undefined;
+  }
+  if (typeof cost === "number") {
+    return cost;
+  }
+  if (typeof cost === "string") {
+    const parsed = parseFloat(cost);
+    if (!isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
 }
 
 const deepCopy = (obj: Record<string, unknown>) => {

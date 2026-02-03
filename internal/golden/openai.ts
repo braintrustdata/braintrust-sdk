@@ -1,7 +1,9 @@
 import { wrapOpenAI, initLogger, traced } from "braintrust";
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { z } from "zod";
 
 // Path from sdk/js/examples/openai to sdk/fixtures
 const FIXTURES_DIR = join(__dirname, "fixtures");
@@ -885,6 +887,167 @@ async function testErrorHandling() {
   );
 }
 
+// Test 21: Structured output
+async function testStructuredOutput() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 21: Structured Output ===");
+
+      const recipeSchema = z.object({
+        name: z.string(),
+        ingredients: z.array(
+          z.object({
+            name: z.string(),
+            amount: z.string(),
+          }),
+        ),
+        steps: z.array(z.string()),
+      });
+
+      const response = await client.chat.completions.parse({
+        model: "gpt-4o",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "user",
+            content: "Generate a simple recipe for chocolate chip cookies.",
+          },
+        ],
+        response_format: zodResponseFormat(recipeSchema, "recipe"),
+      });
+
+      const recipe = response.choices[0].message.parsed;
+      console.log("Parsed recipe:");
+      console.log(`Name: ${recipe?.name}`);
+      console.log(`Ingredients: ${recipe?.ingredients?.length}`);
+      console.log(`Steps: ${recipe?.steps?.length}`);
+
+      return response;
+    },
+    { name: "test_structured_output" },
+  );
+}
+
+// Test 22: Streaming structured output
+async function testStreamingStructuredOutput() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 22: Streaming Structured Output ===");
+
+      const productSchema = z.object({
+        name: z.string(),
+        description: z.string(),
+        price: z.number(),
+        features: z.array(z.string()),
+      });
+
+      const stream = client.chat.completions.stream({
+        model: "gpt-4o",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Generate a product description for a wireless bluetooth headphone.",
+          },
+        ],
+        response_format: zodResponseFormat(productSchema, "product"),
+      });
+
+      await stream.done();
+    },
+    { name: "test_streaming_structured_output" },
+  );
+}
+
+// Test 23: Structured output with context (multi-turn equivalent)
+async function testStructuredOutputWithContext() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 23: Structured Output with Context ===");
+
+      const comparisonSchema = z.object({
+        recommendation: z.enum(["phone-123", "laptop-456", "neither"]),
+        reasoning: z.string(),
+        priceComparison: z.object({
+          cheaper: z.string(),
+          priceDifference: z.number(),
+        }),
+        overallRating: z.object({
+          phone: z.number(),
+          laptop: z.number(),
+        }),
+      });
+
+      // Simulate the tool results that would be gathered in AI SDK's multi-turn
+      const productInfo = {
+        "phone-123": {
+          name: "SuperPhone X",
+          price: 999,
+          specs: "6.5 inch display, 128GB storage, 12MP camera",
+        },
+        "laptop-456": {
+          name: "ProBook Ultra",
+          price: 1499,
+          specs: "15 inch display, 512GB SSD, 16GB RAM",
+        },
+      };
+
+      const reviews = {
+        "phone-123": {
+          rating: 4.5,
+          comments: ["Great camera!", "Battery lasts all day", "A bit pricey"],
+        },
+        "laptop-456": {
+          rating: 4.2,
+          comments: ["Fast performance", "Good display", "Heavy to carry"],
+        },
+      };
+
+      const response = await client.chat.completions.parse({
+        model: "gpt-4o",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful shopping assistant. Use the provided product information to make recommendations.",
+          },
+          {
+            role: "user",
+            content: `Compare phone-123 and laptop-456. Here is the product info and reviews:
+
+Product Info:
+- phone-123: ${JSON.stringify(productInfo["phone-123"])}
+- laptop-456: ${JSON.stringify(productInfo["laptop-456"])}
+
+Reviews:
+- phone-123: ${JSON.stringify(reviews["phone-123"])}
+- laptop-456: ${JSON.stringify(reviews["laptop-456"])}
+
+Give me a structured comparison with your recommendation.`,
+          },
+        ],
+        response_format: zodResponseFormat(comparisonSchema, "comparison"),
+      });
+
+      const comparison = response.choices[0].message.parsed;
+      console.log("Product comparison:");
+      console.log(`Recommendation: ${comparison?.recommendation}`);
+      console.log(`Reasoning: ${comparison?.reasoning}`);
+      console.log(`Cheaper: ${comparison?.priceComparison?.cheaper}`);
+      console.log(
+        `Price difference: $${comparison?.priceComparison?.priceDifference}`,
+      );
+      console.log(`Phone rating: ${comparison?.overallRating?.phone}`);
+      console.log(`Laptop rating: ${comparison?.overallRating?.laptop}`);
+
+      return response;
+    },
+    { name: "test_structured_output_with_context" },
+  );
+}
+
 // Run all tests
 async function runAllTests() {
   const tests = [
@@ -908,6 +1071,9 @@ async function runAllTests() {
     testResponseFormat,
     testMultipleCompletions,
     testErrorHandling,
+    testStructuredOutput,
+    testStreamingStructuredOutput,
+    testStructuredOutputWithContext,
   ];
 
   for (const test of tests) {

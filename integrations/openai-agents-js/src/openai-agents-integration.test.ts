@@ -876,5 +876,235 @@ describe(
       );
       assert.equal(metrics.tokens, 1668, "Should have total tokens");
     });
+
+    test("Response span extracts cached tokens from usage", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      // Create a mock trace
+      const trace: any = {
+        traceId: "test-trace-cached-response",
+        name: "cached-response-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      // Create a mock Response span with cached tokens
+      const responseSpan: any = {
+        spanId: "test-response-span",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _input: "test input",
+          _response: {
+            output: "test output",
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              total_tokens: 150,
+              input_tokens_details: {
+                cached_tokens: 80, // check for this later
+              },
+            },
+          },
+        },
+        error: null,
+      };
+
+      // Process the span
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      // Get the logged spans
+      const spans = await backgroundLogger.drain();
+
+      // Find the response span
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+
+      assert.ok(responseSpanLog, "Response span should be logged");
+
+      // Verify metrics were extracted
+      const metrics = (responseSpanLog as any).metrics;
+      assert.ok(metrics, "Response span should have metrics");
+      assert.equal(metrics.prompt_tokens, 100, "Should have prompt_tokens");
+      assert.equal(
+        metrics.completion_tokens,
+        50,
+        "Should have completion_tokens",
+      );
+      assert.equal(metrics.tokens, 150, "Should have total tokens");
+      assert.equal(
+        metrics.prompt_cached_tokens,
+        80,
+        "Should extract cached_tokens to prompt_cached_tokens",
+      );
+    });
+
+    test("Response span handles zero cached tokens correctly", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-zero-cached",
+        name: "zero-cached-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const responseSpan: any = {
+        spanId: "test-response-span-zero",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _response: {
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              input_tokens_details: {
+                cached_tokens: 0, // Zero is a valid value
+              },
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      const spans = await backgroundLogger.drain();
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+      const metrics = (responseSpanLog as any).metrics;
+
+      // Zero should be logged, not skipped
+      assert.equal(
+        metrics.prompt_cached_tokens,
+        0,
+        "Should log cached_tokens even when zero",
+      );
+    });
+
+    test("Response span handles missing cached tokens gracefully", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-no-cached",
+        name: "no-cached-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const responseSpan: any = {
+        spanId: "test-response-span-no-cached",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _response: {
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              // No input_tokens_details at all
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      const spans = await backgroundLogger.drain();
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+      const metrics = (responseSpanLog as any).metrics;
+
+      // Should not have prompt_cached_tokens if not present in usage
+      assert.isUndefined(
+        metrics.prompt_cached_tokens,
+        "Should not add prompt_cached_tokens if not in usage",
+      );
+    });
+
+    test("Generation span extracts cached tokens from usage", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-cached-generation",
+        name: "cached-generation-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const generationSpan: any = {
+        spanId: "test-generation-span",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "generation",
+          input: [{ role: "user", content: "test" }],
+          output: [{ role: "assistant", content: "response" }],
+          model: "gpt-4o-mini",
+          usage: {
+            input_tokens: 200,
+            output_tokens: 75,
+            total_tokens: 275,
+            input_tokens_details: {
+              cached_tokens: 150, // Test Generation span extraction
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(generationSpan);
+      await processor.onSpanEnd(generationSpan);
+
+      const spans = await backgroundLogger.drain();
+      const generationSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+
+      assert.ok(generationSpanLog, "Generation span should be logged");
+
+      const metrics = (generationSpanLog as any).metrics;
+      assert.ok(metrics, "Generation span should have metrics");
+      assert.equal(metrics.prompt_tokens, 200, "Should have prompt_tokens");
+      assert.equal(
+        metrics.completion_tokens,
+        75,
+        "Should have completion_tokens",
+      );
+      assert.equal(
+        metrics.prompt_cached_tokens,
+        150,
+        "Should extract cached_tokens from Generation span",
+      );
+    });
   },
 );

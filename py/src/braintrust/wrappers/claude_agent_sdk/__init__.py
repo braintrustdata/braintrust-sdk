@@ -16,7 +16,6 @@ Usage (imports can be before or after setup):
 """
 
 import logging
-from typing import Optional
 
 from braintrust.logger import NOOP_SPAN, current_span, init_logger
 
@@ -28,9 +27,9 @@ __all__ = ["setup_claude_agent_sdk"]
 
 
 def setup_claude_agent_sdk(
-    api_key: Optional[str] = None,
-    project_id: Optional[str] = None,
-    project: Optional[str] = None,
+    api_key: str | None = None,
+    project_id: str | None = None,
+    project: str | None = None,
 ) -> bool:
     """
     Setup Braintrust integration with Claude Agent SDK. Will automatically patch the SDK for automatic tracing.
@@ -106,7 +105,6 @@ def setup_claude_agent_sdk(
                         setattr(module, "tool", wrapped_tool_fn)
 
         return True
-    except ImportError as e:
-        logger.error(f"Failed to import Claude Agent SDK: {e}")
-        logger.error("claude-agent-sdk is not installed. Please install it with: pip install claude-agent-sdk")
+    except ImportError:
+        # Not installed - this is expected when using auto_instrument()
         return False

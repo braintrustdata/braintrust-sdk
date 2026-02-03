@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import { wrapAISDK, initLogger, traced } from "braintrust";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
@@ -7,41 +8,58 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import type { LanguageModel } from "ai";
 
+console.log("Running ai sdk version:", require("ai/package.json").version);
+console.log(
+  process.env.AI_GATEWAY_API_KEY
+    ? "using ai gateway"
+    : "using ai provider directly",
+);
+
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
-console.log("Running ai sdk version:", require("ai/package.json").version);
+const gpt5mini = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-5-mini"
+  : openai("gpt-5-mini");
+
+const gpt4o = process.env.AI_GATEWAY_API_KEY
+  ? "openai/gpt-4o"
+  : openai("gpt-4o");
+
+const claudeSonnet45 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-sonnet-4-5"
+  : anthropic("claude-sonnet-4-5");
+
+const claudeSonnet37 = process.env.AI_GATEWAY_API_KEY
+  ? "anthropic/claude-3-7-sonnet-latest"
+  : anthropic("claude-3-7-sonnet-latest");
 
 initLogger({
   projectName: "golden-ts-ai-sdk-v5",
 });
 
-const SHOULD_WRAP = (process.env.WRAP || "true") === "true";
-
 const {
   generateText,
   streamText,
-  generateObject: _generateObject,
-  streamObject: _streamObject,
-} = SHOULD_WRAP ? wrapAISDK(ai) : ai;
+  generateObject,
+  streamObject,
+  Experimental_Agent: Agent,
+} = wrapAISDK(ai);
 
 // Test 1: Basic completion
 async function testBasicCompletion() {
   return traced(
     async () => {
-      console.log("\n=== Test 1: Basic Completion ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
           model: model as LanguageModel,
           prompt: "What is the capital of France?",
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          prompt: "What is the capital of France?",
+        });
       }
     },
     { name: "test_basic_completion" },
@@ -52,27 +70,29 @@ async function testBasicCompletion() {
 async function testMultiTurn() {
   return traced(
     async () => {
-      console.log("\n=== Test 2: Multi-turn Conversation ===");
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          { role: "user" as const, content: "Hi, my name is Alice." },
+          {
+            role: "assistant" as const,
+            content: "Hello Alice! Nice to meet you.",
+          },
+          {
+            role: "user" as const,
+            content: "What did I just tell you my name was?",
+          },
+        ];
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            { role: "user", content: "Hi, my name is Alice." },
-            { role: "assistant", content: "Hello Alice! Nice to meet you." },
-            {
-              role: "user",
-              content: "What did I just tell you my name was?",
-            },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_multi_turn" },
@@ -83,21 +103,19 @@ async function testMultiTurn() {
 async function testSystemPrompt() {
   return traced(
     async () => {
-      console.log("\n=== Test 3: System Prompt ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
           model: model as LanguageModel,
           system: "You are a pirate. Always respond in pirate speak.",
           prompt: "Tell me about the weather.",
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+          system: "You are a pirate. Always respond in pirate speak.",
+        }).generate({
+          prompt: "Tell me about the weather.",
+        });
       }
     },
     { name: "test_system_prompt" },
@@ -108,23 +126,23 @@ async function testSystemPrompt() {
 async function testStreaming() {
   return traced(
     async () => {
-      console.log("\n=== Test 4: Streaming ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await streamText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const result = streamText({
           model: model as LanguageModel,
           prompt: "Count from 1 to 10 slowly.",
         });
 
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
+        for await (const _ of result.textStream) {
         }
-        console.log("\n");
+
+        const agentResult = new Agent({
+          model: model as LanguageModel,
+        }).stream({
+          prompt: "Count from 1 to 10 slowly.",
+        });
+
+        for await (const _ of agentResult.textStream) {
+        }
       }
     },
     { name: "test_streaming" },
@@ -135,35 +153,35 @@ async function testStreaming() {
 async function testImageInput() {
   return traced(
     async () => {
-      console.log("\n=== Test 5: Image Input ===");
       const base64Image = readFileSync(
         `${FIXTURES_DIR}/test-image.png`,
         "base64",
       );
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          {
+            role: "user" as const,
+            content: [
+              {
+                type: "image" as const,
+                image: `data:image/png;base64,${base64Image}`,
+              },
+              { type: "text" as const, text: "What color is this image?" },
+            ],
+          },
+        ];
+
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  image: `data:image/png;base64,${base64Image}`,
-                },
-                { type: "text", text: "What color is this image?" },
-              ],
-            },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_image_input" },
@@ -174,41 +192,40 @@ async function testImageInput() {
 async function testDocumentInput() {
   return traced(
     async () => {
-      console.log("\n=== Test 6: Document Input ===");
       const base64Pdf = readFileSync(
         `${FIXTURES_DIR}/test-document.pdf`,
         "base64",
       );
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          {
+            role: "user" as const,
+            content: [
+              {
+                type: "file" as const,
+                data: base64Pdf,
+                mediaType: "application/pdf",
+                filename: "test-document.pdf",
+              },
+              {
+                type: "text" as const,
+                text: "What is in this document?",
+              },
+            ],
+          },
+        ];
 
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            {
-              role: "user" as const,
-              content: [
-                {
-                  type: "file" as const,
-                  data: base64Pdf,
-                  mediaType: "application/pdf",
-                  filename: "test-document.pdf",
-                },
-                {
-                  type: "text" as const,
-                  text: "What is in this document?",
-                },
-              ],
-            },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_document_input" },
@@ -219,9 +236,6 @@ async function testDocumentInput() {
 async function testTemperatureVariations() {
   return traced(
     async () => {
-      console.log("\n=== Test 7: Temperature Variations ===");
-
-      // OpenAI supports both temperature and topP together
       const openaiConfigs = [
         { temperature: 0.0, topP: 1.0 },
         { temperature: 1.0, topP: 0.9 },
@@ -235,27 +249,25 @@ async function testTemperatureVariations() {
         { topP: 0.9 },
       ];
 
-      for (const [provider, model, configs] of [
-        ["openai", openai("gpt-5-mini"), openaiConfigs],
-        ["anthropic", anthropic("claude-sonnet-4-5"), anthropicConfigs],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
+      for (const [model, configs] of [
+        [gpt5mini, openaiConfigs],
+        [claudeSonnet45, anthropicConfigs],
+      ]) {
+        // @ts-ignore
         for (const config of configs) {
-          const configStr = `temp=${config.temperature ?? "default"}, top_p=${
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            (config as { topP?: number }).topP ?? "default"
-          }`;
-          console.log(`Config: ${configStr}`);
-          const result = await generateText({
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          await generateText({
             model: model as LanguageModel,
             ...config,
             prompt: "Say something creative.",
           });
-          console.log(result.text);
+
+          await new Agent({
+            model: model as LanguageModel,
+            ...config,
+          }).generate({
+            prompt: "Say something creative.",
+          });
         }
-        console.log();
       }
     },
     { name: "test_temperature_variations" },
@@ -266,25 +278,22 @@ async function testTemperatureVariations() {
 async function testStopSequences() {
   return traced(
     async () => {
-      console.log("\n=== Test 8: Stop Sequences ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        const stopSequences = provider === "openai" ? ["END", "\n\n"] : ["END"];
-
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const [model, stopSequences] of [
+        [gpt5mini, ["END", "\n\n"]],
+        [claudeSonnet45, ["END"]],
+      ] satisfies [LanguageModel, string[]][]) {
+        await generateText({
           model: model as LanguageModel,
           stopSequences,
           prompt: "Write a short story about a robot.",
         });
-        console.log(result.text);
-        console.log(`Stop reason: ${result.finishReason}`);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+          stopSequences,
+        }).generate({
+          prompt: "Write a short story about a robot.",
+        });
       }
     },
     { name: "test_stop_sequences" },
@@ -295,20 +304,17 @@ async function testStopSequences() {
 async function testMetadata() {
   return traced(
     async () => {
-      console.log("\n=== Test 9: Metadata ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
           model: model as LanguageModel,
           prompt: "Hello!",
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          prompt: "Hello!",
+        });
       }
     },
     { name: "test_metadata" },
@@ -319,28 +325,28 @@ async function testMetadata() {
 async function testLongContext() {
   return traced(
     async () => {
-      console.log("\n=== Test 10: Long Context ===");
       const longText = "The quick brown fox jumps over the lazy dog. ".repeat(
         100,
       );
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          {
+            role: "user" as const,
+            content: `Here is a long text:\n\n${longText}\n\nHow many times does the word "fox" appear?`,
+          },
+        ];
+
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            {
-              role: "user",
-              content: `Here is a long text:\n\n${longText}\n\nHow many times does the word "fox" appear?`,
-            },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_long_context" },
@@ -351,40 +357,39 @@ async function testLongContext() {
 async function testMixedContent() {
   return traced(
     async () => {
-      console.log("\n=== Test 11: Mixed Content Types ===");
       const base64Image = readFileSync(
         `${FIXTURES_DIR}/test-image.png`,
         "base64",
       );
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: "First, look at this image:" },
+              {
+                type: "image" as const,
+                image: `data:image/png;base64,${base64Image}`,
+              },
+              {
+                type: "text" as const,
+                text: "Now describe what you see and explain why it matters.",
+              },
+            ],
+          },
+        ];
 
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "First, look at this image:" },
-                {
-                  type: "image",
-                  image: `data:image/png;base64,${base64Image}`,
-                },
-                {
-                  type: "text",
-                  text: "Now describe what you see and explain why it matters.",
-                },
-              ],
-            },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_mixed_content" },
@@ -395,23 +400,22 @@ async function testMixedContent() {
 async function testPrefill() {
   return traced(
     async () => {
-      console.log("\n=== Test 12: Prefill ===");
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const messages = [
+          { role: "user" as const, content: "Write a haiku about coding." },
+          { role: "assistant" as const, content: "Here is a haiku:" },
+        ];
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        await generateText({
           model: model as LanguageModel,
-          messages: [
-            { role: "user", content: "Write a haiku about coding." },
-            { role: "assistant", content: "Here is a haiku:" },
-          ],
+          messages,
         });
-        console.log(result.text);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+        }).generate({
+          messages,
+        });
       }
     },
     { name: "test_prefill" },
@@ -422,29 +426,25 @@ async function testPrefill() {
 async function testShortMaxTokens() {
   return traced(
     async () => {
-      console.log("\n=== Test 13: Very Short Max Tokens ===");
-
-      for (const [provider, model] of [
-        ["openai", openai("gpt-4o")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt4o, claudeSonnet45]) {
+        await generateText({
           model: model as LanguageModel,
           prompt: "What is AI?",
           maxOutputTokens: 16, // ai-sdk requirement for 16 or more
         });
-        console.log(result.text?.slice(0, 20) + "...");
-        console.log(`Stop reason: ${result.finishReason}`);
-        console.log();
+
+        await new Agent({
+          model: model as LanguageModel,
+          maxOutputTokens: 16,
+        }).generate({
+          prompt: "What is AI?",
+        });
       }
     },
     { name: "test_short_max_tokens" },
   );
 }
 
-// Type for weather tool args
 interface WeatherToolArgs {
   location: string;
   unit?: "celsius" | "fahrenheit";
@@ -457,13 +457,22 @@ interface CalculateToolArgs {
   b: number;
 }
 
+// Type for store price tool args
+interface StorePriceToolArgs {
+  store: string;
+  item: string;
+}
+
+// Type for discount tool args
+interface ApplyDiscountToolArgs {
+  total: number;
+  discountCode: string;
+}
+
 // Test 14: Tool use
 async function testToolUse() {
   return traced(
     async () => {
-      console.log("\n=== Test 14: Tool Use ===");
-
-      // Define tool with proper typing
       const weatherTool = ai.tool({
         description: "Get the current weather for a location",
         inputSchema: z.object({
@@ -471,21 +480,13 @@ async function testToolUse() {
           unit: z.enum(["celsius", "fahrenheit"]).optional(),
         }),
         execute: async (args: unknown) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           const typedArgs = args as WeatherToolArgs;
           return `22 degrees ${typedArgs.unit || "celsius"} and sunny in ${typedArgs.location}`;
         },
       });
 
-      for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
-      ] as const) {
-        console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
-
-        // @ts-ignore - Type instantiation depth issue with tools
-        const result = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
           model: model as LanguageModel,
           tools: {
             get_weather: weatherTool,
@@ -493,21 +494,14 @@ async function testToolUse() {
           prompt: "What is the weather like in Paris, France?",
         });
 
-        console.log("Response content:");
-        if (result.text) {
-          console.log(`Text: ${result.text}`);
-        }
-
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          result.toolCalls.forEach((call, i) => {
-            console.log(`Tool use block ${i}:`);
-            console.log(`  Tool: ${call.toolName}`);
-            if ("args" in call) {
-              console.log(`  Input: ${JSON.stringify(call.args)}`);
-            }
-          });
-        }
-        console.log();
+        await new Agent({
+          model: model as LanguageModel,
+          tools: {
+            get_weather: weatherTool,
+          },
+        }).generate({
+          prompt: "What is the weather like in Paris, France?",
+        });
       }
     },
     { name: "test_tool_use" },
@@ -518,9 +512,6 @@ async function testToolUse() {
 async function testToolUseWithResult() {
   return traced(
     async () => {
-      console.log("\n=== Test 15: Tool Use With Result ===");
-
-      // Define tool with proper typing
       const calculateTool = {
         description: "Perform a mathematical calculation",
         inputSchema: z.object({
@@ -529,7 +520,6 @@ async function testToolUseWithResult() {
           b: z.number(),
         }),
         execute: async (args: unknown) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           const typedArgs = args as CalculateToolArgs;
           switch (typedArgs.operation) {
             case "add":
@@ -548,9 +538,90 @@ async function testToolUseWithResult() {
         },
       };
 
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            calculate: calculateTool,
+          },
+          prompt: "What is 127 multiplied by 49? Use the calculate tool.",
+          stopWhen: ai.stepCountIs(2),
+        });
+
+        await new Agent({
+          model: model as LanguageModel,
+          tools: {
+            calculate: calculateTool,
+          },
+        }).generate({
+          prompt: "What is 127 multiplied by 49?  Use the calculate tool.",
+        });
+      }
+    },
+    { name: "test_tool_use_with_result" },
+  );
+}
+
+// Test 16: Multi-round tool use (to see LLM ↔ tool roundtrips)
+async function testMultiRoundToolUse() {
+  return traced(
+    async () => {
+      console.log("\n=== Test 16: Multi-Round Tool Use ===");
+
+      const getStorePriceTool = ai.tool({
+        description: "Get the price of an item from a specific store",
+        inputSchema: z.object({
+          store: z
+            .string()
+            .describe("The store name (e.g., 'StoreA', 'StoreB')"),
+          item: z.string().describe("The item to get the price for"),
+        }),
+        execute: async (args: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const typedArgs = args as StorePriceToolArgs;
+          const prices: Record<string, Record<string, number>> = {
+            StoreA: { laptop: 999, mouse: 25, keyboard: 75 },
+            StoreB: { laptop: 1099, mouse: 20, keyboard: 80 },
+          };
+          const price = prices[typedArgs.store]?.[typedArgs.item] ?? 0;
+          return JSON.stringify({
+            store: typedArgs.store,
+            item: typedArgs.item,
+            price,
+          });
+        },
+      });
+
+      const applyDiscountTool = ai.tool({
+        description: "Apply a discount code to a total amount",
+        inputSchema: z.object({
+          total: z.number().describe("The total amount before discount"),
+          discountCode: z.string().describe("The discount code to apply"),
+        }),
+        execute: async (args: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const typedArgs = args as ApplyDiscountToolArgs;
+          const discounts: Record<string, number> = {
+            SAVE10: 0.1,
+            SAVE20: 0.2,
+            HALF: 0.5,
+          };
+          const discountRate = discounts[typedArgs.discountCode] ?? 0;
+          const discountAmount = typedArgs.total * discountRate;
+          const finalTotal = typedArgs.total - discountAmount;
+          return JSON.stringify({
+            originalTotal: typedArgs.total,
+            discountCode: typedArgs.discountCode,
+            discountRate: `${discountRate * 100}%`,
+            discountAmount,
+            finalTotal,
+          });
+        },
+      });
+
       for (const [provider, model] of [
-        ["openai", openai("gpt-5-mini")],
-        ["anthropic", anthropic("claude-sonnet-4-5")],
+        ["openai", gpt5mini],
+        ["anthropic", claudeSonnet45],
       ] as const) {
         console.log(`${provider.charAt(0).toUpperCase() + provider.slice(1)}:`);
 
@@ -558,28 +629,50 @@ async function testToolUseWithResult() {
         const result = await generateText({
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
+          system:
+            "You are a shopping assistant. When asked about prices, always get the price from each store mentioned, then apply any discount codes. Use the tools provided.",
           tools: {
-            calculate: calculateTool,
+            get_store_price: getStorePriceTool,
+            apply_discount: applyDiscountTool,
           },
-          prompt: "What is 127 multiplied by 49?",
-          maxToolRoundtrips: 2,
+          toolChoice: "required",
+          prompt:
+            "I want to buy a laptop. Get the price from StoreA and StoreB, then apply the discount code SAVE20 to whichever is cheaper.",
+          stopWhen: ai.stepCountIs(3),
         });
 
-        console.log("First response:");
+        console.log("\nRoundtrip summary:");
+        console.log(`Total tool calls: ${result.toolCalls?.length ?? 0}`);
+        console.log(`Total tool results: ${result.toolResults?.length ?? 0}`);
+
         if (result.toolCalls && result.toolCalls.length > 0) {
-          const toolCall = result.toolCalls[0];
-          console.log(`Tool called: ${toolCall.toolName}`);
-          if ("args" in toolCall) {
-            console.log(`Input: ${JSON.stringify(toolCall.args)}`);
-          }
+          result.toolCalls.forEach((call, i) => {
+            console.log(`  Tool call ${i + 1}: ${call.toolName}`);
+            if ("args" in call) {
+              console.log(`    Args: ${JSON.stringify(call.args)}`);
+            }
+          });
+        }
+
+        if (result.toolResults && result.toolResults.length > 0) {
+          result.toolResults.forEach((res, i) => {
+            console.log(`  Tool result ${i + 1}: ${res.toolName}`);
+            console.log(`    Result: ${JSON.stringify(res.result)}`);
+          });
         }
 
         console.log("\nFinal response:");
         console.log(result.text);
+        console.log(`Steps count: ${result.steps?.length ?? 0}`);
+        result.steps?.forEach((step, i) => {
+          console.log(
+            `  Step ${i + 1}: ${step.toolCalls?.length ?? 0} tool calls`,
+          );
+        });
         console.log();
       }
     },
-    { name: "test_tool_use_with_result" },
+    { name: "test_multi_round_tool_use" },
   );
 }
 
@@ -587,13 +680,9 @@ async function testToolUseWithResult() {
 async function testReasoning() {
   return traced(
     async () => {
-      console.log("\n=== Test 18: Reasoning Tokens & Follow-up ===");
-
-      for (const [provider, model, modelName, options] of [
+      for (const [model, options] of [
         [
-          "openai",
-          openai("gpt-5-mini"),
-          "gpt-5-mini",
+          gpt5mini,
           {
             providerOptions: {
               openai: {
@@ -604,9 +693,7 @@ async function testReasoning() {
           },
         ],
         [
-          "anthropic",
-          anthropic("claude-3-7-sonnet-latest"),
-          "claude-3-7-sonnet",
+          claudeSonnet37,
           {
             providerOptions: {
               anthropic: {
@@ -618,47 +705,213 @@ async function testReasoning() {
             },
           },
         ],
-      ] as const) {
-        console.log(
-          `${provider.charAt(0).toUpperCase() + provider.slice(1)} (${modelName}):`,
-        );
+      ]) {
+        const messages = [
+          {
+            role: "user" as const,
+            content:
+              "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
+          },
+        ];
 
         const firstResult = await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
-          messages: [
-            {
-              role: "user",
-              content:
-                "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
-            },
-          ],
+          messages,
           ...options,
         });
 
         await generateText({
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           model: model as LanguageModel,
           messages: [
-            {
-              role: "user",
-              content:
-                "Look at this sequence: 2, 6, 12, 20, 30. What is the pattern and what would be the formula for the nth term?",
-            },
+            ...messages,
             ...firstResult.response.messages,
             {
-              role: "user",
+              role: "user" as const,
               content:
                 "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
             },
           ],
           ...options,
         });
+
+        const agent = new Agent({
+          model: model as LanguageModel,
+          ...options,
+        });
+
+        const agentFirstResult = await agent.generate({
+          messages,
+        });
+
+        await agent.generate({
+          messages: [
+            ...messages,
+            ...agentFirstResult.response.messages,
+            {
+              role: "user" as const,
+              content:
+                "Using the pattern you discovered, what would be the 10th term? And can you find the sum of the first 10 terms?",
+            },
+          ],
+        });
       }
     },
     {
       name: "test_reasoning",
     },
+  );
+}
+
+// Test 18: Structured output
+async function testStructuredOutput() {
+  return traced(
+    async () => {
+      const recipeSchema = z.object({
+        name: z.string(),
+        ingredients: z.array(
+          z.object({
+            name: z.string(),
+            amount: z.string(),
+          }),
+        ),
+        steps: z.array(z.string()),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateObject({
+          model: model as LanguageModel,
+          schema: recipeSchema,
+          prompt: "Generate a simple recipe for chocolate chip cookies.",
+        });
+      }
+    },
+    { name: "test_structured_output" },
+  );
+}
+
+// Test 19: Streaming structured output
+async function testStreamingStructuredOutput() {
+  return traced(
+    async () => {
+      const productSchema = z.object({
+        name: z.string(),
+        description: z.string(),
+        price: z.number(),
+        features: z.array(z.string()),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        const result = streamObject({
+          model: model as LanguageModel,
+          schema: productSchema,
+          prompt:
+            "Generate a product description for a wireless bluetooth headphone.",
+        });
+
+        for await (const _ of result.partialObjectStream) {
+        }
+      }
+    },
+    { name: "test_streaming_structured_output" },
+  );
+}
+
+// Test 20: Structured output with context (multi-turn with tools)
+// Uses tools to force multiple rounds before producing structured output
+async function testStructuredOutputWithContext() {
+  return traced(
+    async () => {
+      const getProductInfoTool = ai.tool({
+        description: "Get product information including price and specs",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const products: Record<
+            string,
+            { name: string; price: number; specs: string }
+          > = {
+            "phone-123": {
+              name: "SuperPhone X",
+              price: 999,
+              specs: "6.5 inch display, 128GB storage, 12MP camera",
+            },
+            "laptop-456": {
+              name: "ProBook Ultra",
+              price: 1499,
+              specs: "15 inch display, 512GB SSD, 16GB RAM",
+            },
+          };
+          return (
+            products[typedArgs.productId] || {
+              name: "Unknown",
+              price: 0,
+              specs: "N/A",
+            }
+          );
+        },
+      });
+
+      const getReviewsTool = ai.tool({
+        description: "Get customer reviews for a product",
+        inputSchema: z.object({
+          productId: z.string(),
+        }),
+        execute: async (args: unknown) => {
+          const typedArgs = args as { productId: string };
+          const reviews: Record<
+            string,
+            { rating: number; comments: string[] }
+          > = {
+            "phone-123": {
+              rating: 4.5,
+              comments: [
+                "Great camera!",
+                "Battery lasts all day",
+                "A bit pricey",
+              ],
+            },
+            "laptop-456": {
+              rating: 4.2,
+              comments: ["Fast performance", "Good display", "Heavy to carry"],
+            },
+          };
+          return reviews[typedArgs.productId] || { rating: 0, comments: [] };
+        },
+      });
+
+      const comparisonSchema = z.object({
+        recommendation: z.enum(["phone-123", "laptop-456", "neither"]),
+        reasoning: z.string(),
+        priceComparison: z.object({
+          cheaper: z.string(),
+          priceDifference: z.number(),
+        }),
+        overallRating: z.object({
+          phone: z.number(),
+          laptop: z.number(),
+        }),
+      });
+
+      for (const model of [gpt5mini, claudeSonnet45]) {
+        await generateText({
+          model: model as LanguageModel,
+          tools: {
+            get_product_info: getProductInfoTool,
+            get_reviews: getReviewsTool,
+          },
+          toolChoice: "required",
+          system:
+            "You are a helpful shopping assistant. Use the tools to gather product information before making recommendations.",
+          prompt:
+            "Compare phone-123 and laptop-456. Look up their info and reviews, then give me a structured comparison with your recommendation.",
+          experimental_output: ai.Output.object({ schema: comparisonSchema }),
+          stopWhen: ai.stepCountIs(4),
+        });
+      }
+    },
+    { name: "test_structured_output_with_context" },
   );
 }
 
@@ -680,7 +933,11 @@ async function runAllTests() {
     testShortMaxTokens,
     testToolUse,
     testToolUseWithResult,
+    testMultiRoundToolUse,
     testReasoning,
+    testStructuredOutput,
+    testStreamingStructuredOutput,
+    testStructuredOutputWithContext,
   ];
 
   for (const test of tests) {
@@ -691,8 +948,6 @@ async function runAllTests() {
       console.error(`Test ${test.name} failed:`, error);
     }
   }
-
-  console.log("\n=== All tests completed ===");
 }
 
 runAllTests().catch(console.error);

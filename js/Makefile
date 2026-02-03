@@ -9,19 +9,19 @@ help:
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
-	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
-	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make test-google-genai  - Run Google GenAI wrapper tests"
-	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests"
-	@echo "  make test-mastra        - Run Mastra wrapper tests"
+	@echo "  make test-ai-sdk        - Run AI SDK wrapper tests (v5 + v6)"
+	@echo "  make test-ai-sdk-v5     - Run AI SDK v5 wrapper tests"
+	@echo "  make test-ai-sdk-v6     - Run AI SDK v6 wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
+	@echo "  make test-api-compat    - Run API compatibility tests"
+	@echo "  make test-smoke         - Run smoke tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-google-genai test-ai-sdk test-mastra test-claude-agent-sdk test-latest install-optional-deps publish-beta-local
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -53,16 +53,13 @@ test-google-genai-latest:
 # AI SDK testing
 # -------------------------------------------------------------------------------------------------
 
-test-ai-sdk:
-	cd src/wrappers/ai-sdk && pnpm install && pnpm test
+test-ai-sdk: test-ai-sdk-v5 test-ai-sdk-v6
 
+test-ai-sdk-v5:
+	cd src/wrappers/ai-sdk/tests/v5 && pnpm install --ignore-workspace && pnpm test
 
-# -------------------------------------------------------------------------------------------------
-# Mastra testing
-# -------------------------------------------------------------------------------------------------
-
-test-mastra:
-	cd src/wrappers/mastra && pnpm install && pnpm test
+test-ai-sdk-v6:
+	cd src/wrappers/ai-sdk/tests/v6 && pnpm install --ignore-workspace && pnpm test
 
 # -------------------------------------------------------------------------------------------------
 # Claude Agent SDK testing
@@ -70,27 +67,6 @@ test-mastra:
 
 test-claude-agent-sdk:
 	cd src/wrappers/claude-agent-sdk && pnpm install && pnpm test
-
-
-# -------------------------------------------------------------------------------------------------
-# OpenTelemetry testing
-# -------------------------------------------------------------------------------------------------
-
-# test-otel-installed tests with OpenTelemetry installed
-test-otel-installed:
-	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http" "@opentelemetry/core"
-	pnpm test:otel
-
-# test-otel-missing tests with OpenTelemetry removed from all workspaces
-test-otel-missing:
-	pnpm prune
-	@echo "Manually removing OpenTelemetry from workspace..."
-	@ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo .); \
-	find $$ROOT -type d -path "*/node_modules/@opentelemetry*" -prune -exec rm -rf {} +
-	pnpm test:otel-no-deps
-	# restore workspace
-	pnpm install
 
 
 # -------------------------------------------------------------------------------------------------
@@ -115,17 +91,12 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
 		"openai" \
-		"@anthropic-ai/sdk" \
-		"@opentelemetry/api" \
-		"@opentelemetry/sdk-trace-base" \
-		"@opentelemetry/exporter-trace-otlp-http" \
-		"@opentelemetry/core" \
-		"@opentelemetry/context-async-hooks"
+		"@anthropic-ai/sdk"
 
 
 # Test everything but the wrappers.
@@ -133,11 +104,15 @@ test-core:
 	pnpm prune
 	pnpm test
 
+# Test API compatibility
+test-api-compat:
+	pnpm test:api-compat
+
 # Test everything
-test: test-core test-otel test-openai test-anthropic test-google-genai
+test: test-core test-openai test-anthropic test-google-genai test-ai-sdk
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-otel test-anthropic-latest test-openai-latest test-google-genai
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk
 
 
 prune:
@@ -175,3 +150,45 @@ endef
 
 clean:
 	npm run clean
+
+# -------------------------------------------------------------------------------------------------
+# Smoke tests
+# -------------------------------------------------------------------------------------------------
+
+# Marker file to track when smoke tests were last prepared
+SMOKE_PREPARE_MARKER := smoke/.prepare-marker
+SMOKE_DIR := smoke
+
+# Run smoke tests (prepares if source changed)
+# Usage: make test-smoke [TEST_NAME...]
+test-smoke:
+	@if [ ! -f "$(SMOKE_PREPARE_MARKER)" ]; then \
+		echo "⚠ Smoke tests not prepared, preparing..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ -n "$$(find src -type f \( -name '*.ts' -o -name '*.tsx' \) -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
+		echo "⚠ SDK source files changed, preparing smoke tests..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ -n "$$(find dist -type f -name '*.js' -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
+		echo "⚠ SDK build artifacts changed, preparing smoke tests..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	elif [ ! -d "artifacts" ] || [ -z "$$(ls artifacts/*.tgz 2>/dev/null | head -1)" ]; then \
+		echo "⚠ Smoke test artifacts missing, preparing..."; \
+		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
+	else \
+		echo "✓ Smoke tests are up to date"; \
+	fi
+	@echo "Running smoke tests..."
+	@EXIT_CODE=0; \
+	cd $(SMOKE_DIR) && ./run-tests.sh $(filter-out test-smoke,$(MAKECMDGOALS)) || EXIT_CODE=$$?; \
+	echo ""; \
+	echo "Restoring package files..."; \
+	for dir in tests/*/; do \
+		if [ -f "$$dir/package.json" ] && grep -q '"restore"' "$$dir/package.json" 2>/dev/null; then \
+			(cd "$$dir" && npm run restore >/dev/null 2>&1 && echo "  ✓ Restored $$(basename $$dir)") || true; \
+		fi; \
+	done; \
+	exit $$EXIT_CODE
+
+# Allow passing test names as make targets (they become no-ops)
+cloudflare-worker deno nextjs-instrumentation otel-v1 span span-jest:
+	@:

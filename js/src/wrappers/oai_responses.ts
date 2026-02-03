@@ -400,6 +400,13 @@ function apiPromiseProxy(
           );
         };
       }
+      // Handle withResponse() - must call on original target to access private #client field
+      if (name === "withResponse") {
+        return async () => {
+          const { data, response } = await target.withResponse();
+          return { data: onThen(data), response };
+        };
+      }
       return Reflect.get(target, name, receiver);
     },
   });

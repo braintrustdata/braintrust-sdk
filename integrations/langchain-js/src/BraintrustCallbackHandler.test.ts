@@ -1,7 +1,9 @@
+import { ChatAnthropic } from "@langchain/anthropic";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
 import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
-import { END, START, StateGraph, StateGraphArgs } from "@langchain/langgraph";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush, initLogger, NOOP_SPAN } from "braintrust";
 import { http, HttpResponse } from "msw";
@@ -666,6 +668,7 @@ it("should handle parallel runnable execution", async () => {
       root_span_id,
     },
     {
+      // Updated for LangGraph 1.x API using Annotation
       span_attributes: { name: "RunnableSequence", type: "task" },
       input: { topic: "bear" },
       root_span_id,
@@ -700,29 +703,32 @@ it("should handle LangGraph state management", async () => {
     }),
   );
 
-  // derived from: https://techcommunity.microsoft.com/blog/educatordeveloperblog/an-absolute-beginners-guide-to-langgraph-js/4212496
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type HelloWorldGraphState = Record<string, any>;
+  const GraphState = Annotation.Root({
+    message: Annotation<string>({
+      reducer: (_, y) => y,
+      default: () => "",
+    }),
+  });
 
-  const graphStateChannels: StateGraphArgs<HelloWorldGraphState>["channels"] =
-    {};
+  type State = typeof GraphState.State;
+  type StateUpdate = typeof GraphState.Update;
 
   const model = new ChatOpenAI({
     model: "gpt-4o-mini-2024-07-18",
     callbacks: [handler],
   });
 
-  async function sayHello(state: HelloWorldGraphState) {
+  async function sayHello(_: State): Promise<StateUpdate> {
     const res = await model.invoke("Say hello");
-    return res.content;
+    return { message: typeof res.content === "string" ? res.content : "" };
   }
 
-  function sayBye(state: HelloWorldGraphState) {
+  function sayBye(_: State): StateUpdate {
     console.log(`From the 'sayBye' node: Bye world!`);
     return {};
   }
 
-  const graphBuilder = new StateGraph({ channels: graphStateChannels }) // Add our nodes to the Graph
+  const graphBuilder = new StateGraph(GraphState) // Add our nodes to the Graph
     .addNode("sayHello", sayHello)
     .addNode("sayBye", sayBye) // Add the edges between nodes
     .addEdge(START, "sayHello")
@@ -865,4 +871,366 @@ it("should handle chain inputs/outputs with null/undefined values", async () => 
       root_span_id,
     },
   ]);
+});
+
+it("should handle agent action and agent end callbacks", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["agent-span-id"]);
+    }),
+  );
+
+  const agentAction = {
+    tool: "calculator",
+    toolInput: { operation: "multiply", a: 3, b: 12 },
+    log: "Invoking calculator with multiply 3 * 12",
+  };
+
+  const agentFinish = {
+    returnValues: { output: "The result is 36" },
+    log: "Final answer: 36",
+  };
+
+  await handler.handleAgentAction(agentAction, "agent-run-1", undefined, [
+    "agent-test",
+  ]);
+
+  await handler.handleAgentEnd(agentFinish, "agent-run-1", undefined, [
+    "agent-test",
+  ]);
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans).toMatchObject([
+    {
+      span_attributes: {
+        name: "calculator",
+        type: "llm",
+      },
+      input: {
+        tool: "calculator",
+        toolInput: { operation: "multiply", a: 3, b: 12 },
+        log: "Invoking calculator with multiply 3 * 12",
+      },
+      output: {
+        returnValues: { output: "The result is 36" },
+        log: "Final answer: 36",
+      },
+      metadata: {
+        tags: ["agent-test"],
+      },
+      span_id: root_span_id,
+      root_span_id,
+    },
+  ]);
+});
+
+it("should handle agent action with string toolInput", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["agent-string-span-id"]);
+    }),
+  );
+
+  const agentAction = {
+    tool: "search",
+    toolInput: "What is the weather in Paris?",
+    log: "Searching for weather information",
+  };
+
+  const agentFinish = {
+    returnValues: { output: "It is sunny and 22 degrees in Paris" },
+    log: "Search complete",
+  };
+
+  await handler.handleAgentAction(agentAction, "agent-run-2", undefined, [
+    "search-test",
+  ]);
+
+  await handler.handleAgentEnd(agentFinish, "agent-run-2", undefined, [
+    "search-test",
+  ]);
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans).toMatchObject([
+    {
+      span_attributes: {
+        name: "search",
+        type: "llm",
+      },
+      input: {
+        tool: "search",
+        toolInput: "What is the weather in Paris?",
+        log: "Searching for weather information",
+      },
+      output: {
+        returnValues: { output: "It is sunny and 22 degrees in Paris" },
+        log: "Search complete",
+      },
+      metadata: {
+        tags: ["search-test"],
+      },
+      span_id: root_span_id,
+      root_span_id,
+    },
+  ]);
+});
+
+it("should handle nested agent action with parent run id", async () => {
+  const logs: LogsRequest[] = [];
+
+  server.use(
+    http.post(/.+logs/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      return HttpResponse.json(["nested-agent-span-id"]);
+    }),
+  );
+
+  await handler.handleChainStart(
+    { id: ["AgentExecutor"], lc: 1, type: "not_implemented" },
+    { input: "Calculate 3 * 12" },
+    "parent-run-1",
+    undefined,
+    ["agent-executor"],
+  );
+
+  const agentAction = {
+    tool: "calculator",
+    toolInput: { a: 3, b: 12, operation: "multiply" },
+    log: "Using calculator tool",
+  };
+
+  await handler.handleAgentAction(
+    agentAction,
+    "child-agent-run",
+    "parent-run-1",
+    ["agent-action"],
+  );
+
+  const agentFinish = {
+    returnValues: { output: "36" },
+    log: "Calculation complete",
+  };
+
+  await handler.handleAgentEnd(agentFinish, "child-agent-run", "parent-run-1", [
+    "agent-action",
+  ]);
+
+  await handler.handleChainEnd(
+    { output: "The answer is 36" },
+    "parent-run-1",
+    undefined,
+    ["agent-executor"],
+  );
+
+  await flush();
+
+  const { spans, root_span_id } = logsToSpans(logs);
+
+  expect(spans.length).toBe(2);
+
+  expect(spans[0]).toMatchObject({
+    span_attributes: {
+      name: "AgentExecutor",
+      type: "task",
+    },
+    input: { input: "Calculate 3 * 12" },
+    output: { output: "The answer is 36" },
+    metadata: {
+      tags: ["agent-executor"],
+    },
+    span_id: root_span_id,
+    root_span_id,
+  });
+
+  expect(spans[1]).toMatchObject({
+    span_attributes: {
+      name: "calculator",
+      type: "llm",
+    },
+    input: {
+      tool: "calculator",
+      toolInput: { a: 3, b: 12, operation: "multiply" },
+      log: "Using calculator tool",
+    },
+    output: {
+      returnValues: { output: "36" },
+      log: "Calculation complete",
+    },
+    metadata: {
+      tags: ["agent-action"],
+    },
+    root_span_id,
+    span_parents: [root_span_id],
+  });
+});
+
+it("should extract prompt caching tokens from Anthropic response", async () => {
+  const logs: LogsRequest[] = [];
+
+  const ANTHROPIC_RESPONSE_WITH_CACHE = {
+    model: "claude-sonnet-4-5-20250929",
+    id: "msg_01PKL7azhWzdzdXC5yojHG6V",
+    type: "message",
+    role: "assistant",
+    content: [
+      {
+        type: "text",
+        text: 'The first type of testing mentioned is **Unit Testing**, which is described as "Testing individual components or functions in isolation."',
+      },
+    ],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: 14,
+      cache_creation_input_tokens: 2042,
+      cache_read_input_tokens: 0,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 0,
+        ephemeral_1h_input_tokens: 0,
+      },
+      output_tokens: 27,
+      service_tier: "standard",
+    },
+  };
+
+  const ANTHROPIC_RESPONSE_WITH_CACHE_READ = {
+    model: "claude-sonnet-4-5-20250929",
+    id: "msg_01PjHqPkFstyG2Bcqum9XKD8",
+    type: "message",
+    role: "assistant",
+    content: [
+      {
+        type: "text",
+        text: 'Based on the document:\n\n1. **First type of testing mentioned:** Unit Testing - described as "Testing individual components or functions in isolation"\n\n2. **Python testing frameworks mentioned:** \n   - pytest (described as "Feature-rich testing framework")\n   - unittest (described as "Built-in Python testing module")',
+      },
+    ],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: 23,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 2042,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 0,
+        ephemeral_1h_input_tokens: 0,
+      },
+      output_tokens: 71,
+      service_tier: "standard",
+    },
+  };
+
+  const anthropicResponses = [
+    ANTHROPIC_RESPONSE_WITH_CACHE,
+    ANTHROPIC_RESPONSE_WITH_CACHE_READ,
+  ];
+
+  server.use(
+    http.post("https://api.anthropic.com/v1/messages", ({ request }) => {
+      const message = anthropicResponses.shift();
+      return HttpResponse.json(message);
+    }),
+
+    http.post(/.+logs.+/, async ({ request }) => {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      logs.push((await request.json()) as LogsRequest);
+      console.log(logs.slice(-1)[0]);
+      return HttpResponse.json(["cache-tokens-span-id"]);
+    }),
+  );
+
+  const model = new ChatAnthropic({ model: "claude-sonnet-4-5-20250929" });
+
+  // Use a long system message to simulate cache-eligible content
+  const longText = `
+# Comprehensive Guide to Software Testing Methods
+
+Software testing is a critical component of the software development lifecycle.
+This guide covers various testing methodologies, best practices, and tools.
+
+## Types of Testing
+- Unit Testing: Testing individual components or functions in isolation
+- Integration Testing: Testing how components work together
+- End-to-End Testing: Testing the entire application flow
+
+## Python Testing Tools
+- pytest: Feature-rich testing framework
+- unittest: Built-in Python testing module
+`.repeat(20); // Repeat to ensure enough tokens for caching
+
+  const messages = [
+    new SystemMessage({
+      content: [
+        {
+          type: "text",
+          text: longText,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+    }),
+    new HumanMessage("What is the first type of testing mentioned?"),
+  ];
+
+  // First invocation - should create cache
+  await model.invoke(messages, { callbacks: [handler] });
+
+  await flush();
+
+  const { spans: firstSpans } = logsToSpans(logs);
+  logs.length = 0; // Clear logs for next invocation
+
+  const firstLlmSpan = firstSpans.find(
+    (s) => s.span_attributes?.type === "llm",
+  );
+
+  expect(firstLlmSpan).toBeDefined();
+  expect(firstLlmSpan?.metrics).toMatchObject({
+    prompt_tokens: 14,
+    completion_tokens: 27,
+  });
+
+  console.log(firstLlmSpan?.metrics);
+
+  // After fix: should have cache creation tokens
+  expect(firstLlmSpan?.metrics?.prompt_cache_creation_tokens).toBe(2042);
+
+  // Second invocation - should read from cache
+  await model.invoke(
+    [
+      ...messages,
+      new HumanMessage("What testing framework is mentioned for Python?"),
+    ],
+    { callbacks: [handler] },
+  );
+
+  await flush();
+
+  const { spans: secondSpans } = logsToSpans(logs);
+
+  const secondLlmSpan = secondSpans.find(
+    (s) => s.span_attributes?.type === "llm",
+  );
+
+  expect(secondLlmSpan).toBeDefined();
+  expect(secondLlmSpan?.metrics).toMatchObject({
+    prompt_tokens: 23,
+    completion_tokens: 71,
+  });
+
+  // After fix: should have cache read tokens
+  expect(secondLlmSpan?.metrics?.prompt_cached_tokens).toBe(2042);
 });

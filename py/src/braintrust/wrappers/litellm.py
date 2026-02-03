@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from types import TracebackType
-from typing import Any, Callable
+from typing import Any
 
 from braintrust.logger import Span, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -631,12 +631,15 @@ def serialize_response_format(response_format: Any) -> Any:
         return response_format
 
 
-def patch_litellm():
+def patch_litellm() -> bool:
     """
     Patch LiteLLM to add Braintrust tracing.
 
     This wraps litellm.completion and litellm.acompletion to automatically
     create Braintrust spans with detailed token metrics, timing, and costs.
+
+    Returns:
+        True if LiteLLM was patched (or already patched), False if LiteLLM is not installed.
 
     Example:
         ```python
@@ -655,10 +658,14 @@ def patch_litellm():
     """
     try:
         import litellm
-        if not hasattr(litellm, '_braintrust_wrapped'):
+
+        if not hasattr(litellm, "_braintrust_wrapped"):
             wrapped = wrap_litellm(litellm)
             litellm.completion = wrapped.completion
             litellm.acompletion = wrapped.acompletion
+            litellm.responses = wrapped.responses
+            litellm.aresponses = wrapped.aresponses
             litellm._braintrust_wrapped = True
+        return True
     except ImportError:
-        pass  # litellm not available
+        return False

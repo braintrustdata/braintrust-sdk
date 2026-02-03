@@ -1,6 +1,7 @@
-import path from "path";
-import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
+import type { Trace } from "./trace";
+import iso from "./isomorph";
+import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
@@ -35,10 +36,15 @@ interface BaseFnOpts {
   slug: string;
   description: string;
   ifExists: IfExists;
+  metadata?: Record<string, unknown>;
 }
 
 export { toolFunctionDefinitionSchema };
 // ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
+
+// Safe access to __filename (only exists in Node.js CJS)
+const currentFilename =
+  typeof __filename !== "undefined" ? __filename : "unknown";
 
 type NameOrId = { name: string } | { id: string };
 
@@ -175,14 +181,14 @@ export class ToolBuilder {
     let resolvedName = name ?? handler.name;
 
     if (resolvedName.trim().length === 0) {
-      resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
+      resolvedName = `Tool ${iso.basename(currentFilename)} ${this.taskCounter}`;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tool: CodeFunction<any, any, any> = new CodeFunction(this.project, {
       handler,
       name: resolvedName,
-      slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+      slug: slug ?? slugify(resolvedName, { lower: true, strict: true }),
       type: "tool",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
       parameters: parameters as any,
@@ -217,10 +223,10 @@ export class ScorerBuilder {
       resolvedName = opts.handler.name;
     }
     if (!resolvedName || resolvedName.trim().length === 0) {
-      resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
+      resolvedName = `Scorer ${iso.basename(currentFilename)} ${this.taskCounter}`;
     }
     const slug =
-      opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });
+      opts.slug ?? slugify(resolvedName, { lower: true, strict: true });
 
     if ("handler" in opts) {
       const scorer: CodeFunction<
@@ -284,12 +290,14 @@ export type CodeOpts<
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
+  metadata?: Record<string, unknown>;
 } & Schema<Params, Returns>;
 
 type ScorerPromptOpts = Partial<BaseFnOpts> &
   PromptOpts<false, false, false, false> & {
     useCot: boolean;
     choiceScores: Record<string, number>;
+    metadata?: Record<string, unknown>;
   };
 
 // A more correct ScorerArgs than that in core/js/src/score.ts.
@@ -298,6 +306,7 @@ type ScorerArgs<Output, Input> = {
   expected?: Output;
   input?: Input;
   metadata?: Record<string, unknown>;
+  trace?: Trace;
 };
 
 type Exact<T, Shape> = T extends Shape
@@ -306,7 +315,7 @@ type Exact<T, Shape> = T extends Shape
     : never
   : never;
 
-export type ScorerOpts<
+type ScorerOptsUnion<
   Output,
   Input,
   Params,
@@ -315,6 +324,16 @@ export type ScorerOpts<
 > =
   | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
   | ScorerPromptOpts;
+
+export type ScorerOpts<
+  Output,
+  Input,
+  Params,
+  Returns,
+  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
+> = ScorerOptsUnion<Output, Input, Params, Returns, Fn> & {
+  metadata?: Record<string, unknown>;
+};
 
 export class CodeFunction<
   Input,
@@ -329,6 +348,7 @@ export class CodeFunction<
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
   public readonly ifExists?: IfExists;
+  public readonly metadata?: Record<string, unknown>;
 
   constructor(
     public readonly project: Project,
@@ -346,6 +366,7 @@ export class CodeFunction<
     this.type = opts.type;
 
     this.ifExists = opts.ifExists;
+    this.metadata = opts.metadata;
 
     this.parameters = opts.parameters;
     this.returns = opts.returns;
@@ -385,6 +406,7 @@ export class CodePrompt {
   public readonly id?: string;
   public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
+  public readonly metadata?: Record<string, unknown>;
 
   constructor(
     project: Project,
@@ -405,6 +427,7 @@ export class CodePrompt {
     this.description = opts.description;
     this.id = opts.id;
     this.functionType = functionType;
+    this.metadata = opts.metadata;
   }
 
   async toFunctionDefinition(
@@ -445,6 +468,7 @@ export class CodePrompt {
       function_type: this.functionType,
       prompt_data,
       if_exists: this.ifExists,
+      metadata: this.metadata,
     };
   }
 }
@@ -481,6 +505,7 @@ export const promptDefinitionSchema = promptContentsSchema.and(
   z.object({
     model: z.string(),
     params: modelParamsSchema.optional(),
+    templateFormat: z.enum(["mustache", "nunjucks", "none"]).optional(),
   }),
 );
 
@@ -530,8 +555,7 @@ export class PromptBuilder {
       }
     }
 
-    const slug =
-      opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
+    const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
 
     const promptData: PromptData = promptDefinitionToPromptData(opts, rawTools);
 
@@ -586,6 +610,9 @@ export function promptDefinitionToPromptData(
       model: promptDefinition.model,
       params: promptDefinition.params,
     },
+    ...(promptDefinition.templateFormat
+      ? { template_format: promptDefinition.templateFormat }
+      : {}),
   };
 }
 
@@ -598,6 +625,7 @@ export interface FunctionEvent {
   function_data: z.infer<typeof functionDataSchema>;
   function_type?: FunctionType;
   if_exists?: IfExists;
+  metadata?: Record<string, unknown>;
 }
 
 export class ProjectNameIdMap {

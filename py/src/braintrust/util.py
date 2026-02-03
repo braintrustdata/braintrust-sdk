@@ -1,11 +1,33 @@
 import inspect
+import json
+import math
+import os
 import sys
 import threading
 import urllib.parse
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from typing import Any, Generic, Literal, TypedDict, TypeVar, Union
 
 from requests import HTTPError, Response
+
+
+def parse_env_var_float(name: str, default: float) -> float:
+    """Parse a float from an environment variable, returning default if invalid.
+
+    Returns the default value if the env var is missing, empty, not a valid
+    float, NaN, or infinity.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        result = float(value)
+        if math.isnan(result) or math.isinf(result):
+            return default
+        return result
+    except (ValueError, TypeError):
+        return default
 
 GLOBAL_PROJECT = "Global"
 BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"
@@ -28,11 +50,16 @@ def coalesce(*args):
     return None
 
 
+# Fields that automatically use set-union merge semantics (unless in merge_paths).
+_SET_UNION_FIELDS = frozenset(["tags"])
+
+
 def merge_dicts_with_paths(
-    merge_into: Dict[str, Any], merge_from: Mapping[str, Any], path: Tuple[str, ...], merge_paths: Set[Tuple[str]]
-) -> Dict[str, Any]:
+    merge_into: dict[str, Any], merge_from: Mapping[str, Any], path: tuple[str, ...], merge_paths: set[tuple[str, ...]]
+) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
-    merge_paths."""
+    merge_paths. For fields in _SET_UNION_FIELDS (like "tags"), arrays are merged as sets (union)
+    unless the field is explicitly listed in merge_paths (opt-out to replacement)."""
 
     if not isinstance(merge_into, dict):
         raise ValueError("merge_into must be a dictionary")
@@ -42,7 +69,22 @@ def merge_dicts_with_paths(
     for k, merge_from_v in merge_from.items():
         full_path = path + (k,)
         merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
+
+        # Check if this field should use set-union merge (e.g., "tags" at top level)
+        is_set_union_field = len(path) == 0 and k in _SET_UNION_FIELDS and full_path not in merge_paths
+
+        if is_set_union_field and isinstance(merge_into_v, list) and isinstance(merge_from_v, list):
+            # Set-union merge: combine arrays, deduplicate using JSON for objects
+            seen: set[str] = set()
+            combined = []
+            for item in merge_into_v + list(merge_from_v):
+                # Use JSON serialization for consistent object comparison
+                item_key = json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item)
+                if item_key not in seen:
+                    seen.add(item_key)
+                    combined.append(item)
+            merge_into[k] = combined
+        elif isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
             merge_dicts_with_paths(merge_into_v, merge_from_v, full_path, merge_paths)
         else:
             merge_into[k] = merge_from_v
@@ -50,7 +92,7 @@ def merge_dicts_with_paths(
     return merge_into
 
 
-def merge_dicts(merge_into: Dict[str, Any], merge_from: Mapping[str, Any]) -> Dict[str, Any]:
+def merge_dicts(merge_into: dict[str, Any], merge_from: Mapping[str, Any]) -> dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
@@ -92,7 +134,7 @@ class CallerLocation(TypedDict):
     caller_lineno: int
 
 
-def get_caller_location() -> Optional[CallerLocation]:
+def get_caller_location() -> CallerLocation | None:
     frame = inspect.currentframe()
     while frame:
         frame = frame.f_back
@@ -145,7 +187,7 @@ class LazyValue(Generic[T]):
         return self._state.has_succeeded
 
     @property
-    def value(self) -> Optional[T]:
+    def value(self) -> T | None:
         return self._state.value if self._state.has_succeeded == True else None
 
     def get(self) -> T:
@@ -167,7 +209,7 @@ class LazyValue(Generic[T]):
             if self.mutex:
                 self.mutex.release()
 
-    def get_sync(self) -> Tuple[bool, Optional[T]]:
+    def get_sync(self) -> tuple[bool, T | None]:
         """Returns a tuple of (has_succeeded, value) without triggering evaluation."""
         if self._state.has_succeeded:
             # should be fine without the mutex check
@@ -206,7 +248,7 @@ def bt_iscoroutinefunction(f):
     return inspect.iscoroutinefunction(f) or inspect.isasyncgenfunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
 
 
-def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:
+def add_azure_blob_headers(headers: dict[str, str], url: str) -> None:
     # According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
     # there is no way to avoid including this.
     if "blob.core.windows.net" in url:

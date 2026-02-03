@@ -21,6 +21,8 @@ export function configureNode() {
   iso.processOn = (event: string, handler: (code: any) => void) => {
     process.on(event, handler);
   };
+  iso.basename = path.basename;
+  iso.writeln = (text: string) => process.stdout.write(text + "\n");
   iso.pathJoin = path.join;
   iso.pathDirname = path.dirname;
   iso.mkdir = fs.mkdir;
@@ -32,6 +34,13 @@ export function configureNode() {
   iso.utimes = fs.utimes;
   iso.unlink = fs.unlink;
   iso.homedir = os.homedir;
+  iso.tmpdir = os.tmpdir;
+  iso.writeFileSync = fsSync.writeFileSync;
+  iso.appendFileSync = fsSync.appendFileSync;
+  iso.readFileSync = (filename: string, encoding: string) =>
+    fsSync.readFileSync(filename, encoding as BufferEncoding);
+  iso.unlinkSync = fsSync.unlinkSync;
+  iso.openFile = fs.open;
   iso.gzip = promisify(zlib.gzip);
   iso.gunzip = promisify(zlib.gunzip);
   iso.hash = (data) => crypto.createHash("sha256").update(data).digest("hex");

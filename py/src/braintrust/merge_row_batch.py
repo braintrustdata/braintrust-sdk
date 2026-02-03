@@ -1,13 +1,15 @@
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TypeVar
 
-from .db_fields import IS_MERGE_FIELD, PARENT_ID_FIELD
-from .graph_util import UndirectedGraph, topological_sort, undirected_connected_components
+from .db_fields import IS_MERGE_FIELD
+
+T = TypeVar("T")
 from .util import merge_dicts
 
-_MergedRowKey = Tuple[Optional[Any], ...]
+_MergedRowKey = tuple[Optional[Any], ...]
 
 
-def _generate_merged_row_key(row: Mapping[str, Any], use_parent_id_for_id: bool = False) -> _MergedRowKey:
+def _generate_merged_row_key(row: dict[str, Any]) -> _MergedRowKey:
     return tuple(
         row.get(k)
         for k in [
@@ -17,7 +19,7 @@ def _generate_merged_row_key(row: Mapping[str, Any], use_parent_id_for_id: bool 
             "dataset_id",
             "prompt_session_id",
             "log_id",
-            PARENT_ID_FIELD if use_parent_id_for_id else "id",
+            "id",
         ]
     )
 
@@ -33,7 +35,7 @@ MERGE_ROW_SKIP_FIELDS = [
 ]
 
 
-def _pop_merge_row_skip_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+def _pop_merge_row_skip_fields(row: dict[str, Any]) -> dict[str, Any]:
     popped = {}
     for field in MERGE_ROW_SKIP_FIELDS:
         if field in row:
@@ -41,19 +43,16 @@ def _pop_merge_row_skip_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     return popped
 
 
-def _restore_merge_row_skip_fields(row: Dict[str, Any], skip_fields: Dict[str, Any]):
+def _restore_merge_row_skip_fields(row: dict[str, Any], skip_fields: dict[str, Any]):
     for field in MERGE_ROW_SKIP_FIELDS:
         row.pop(field, None)
         if field in skip_fields:
             row[field] = skip_fields[field]
 
 
-def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+def merge_row_batch(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     """Given a batch of rows, merges conflicting rows together to end up with a
-    set of rows to insert. Returns a set of de-conflicted rows, as a list of
-    lists, where separate lists contain "independent" rows which can be
-    processed concurrently, while the rows in each list must be processed in
-    order, as later rows may depend on earlier ones.
+    set of rows to insert. Returns a set of de-conflicted rows as a flat list.
 
     Note that the returned rows will be the same objects as the input `rows`,
     meaning they are mutated in place.
@@ -98,7 +97,7 @@ def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]
                 "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrust.dev for help"
             )
 
-    row_groups: Dict[_MergedRowKey, Dict[str, Any]] = {}
+    row_groups: dict[_MergedRowKey, dict[str, Any]] = {}
     for row in rows:
         key = _generate_merged_row_key(row)
         existing_row = row_groups.get(key)
@@ -117,65 +116,31 @@ def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]
         else:
             row_groups[key] = row
 
-    merged = list(row_groups.values())
-
-    # Now that we have just one row per id, we can bucket and order the rows by
-    # their PARENT_ID_FIELD relationships.
-    row_to_label = {_generate_merged_row_key(r): i for i, r in enumerate(merged)}
-
-    # Form a graph where edges go from parents to their children.
-    graph = {i: set() for i in range(len(merged))}
-    for i, r in enumerate(merged):
-        parent_id = r.get(PARENT_ID_FIELD)
-        if not parent_id:
-            continue
-        parent_row_key = _generate_merged_row_key(r, use_parent_id_for_id=True)
-        parent_label = row_to_label.get(parent_row_key)
-        if parent_label is not None:
-            graph[parent_label].add(i)
-
-    # Group together all the connected components of the undirected graph to get
-    # all groups of rows which each row in a group has a PARENT_ID_FIELD
-    # relationship with at least one other row in the group.
-    connected_components = undirected_connected_components(
-        UndirectedGraph(vertices=set(graph.keys()), edges=set((k, v) for k, vs in graph.items() for v in vs))
-    )
-
-    # For each connected row group, run topological sort over that subgraph to
-    # get an ordering of rows where parents come before children.
-    buckets = [topological_sort(graph, visitation_order=cc) for cc in connected_components]
-    return [[merged[i] for i in bucket] for bucket in buckets]
+    return list(row_groups.values())
 
 
 def batch_items(
-    items: List[List[str]], batch_max_num_items: Optional[int] = None, batch_max_num_bytes: Optional[int] = None
-) -> List[List[List[str]]]:
-    """Repartition the given list of items into sets of batches which can be
-    published in parallel or in sequence.
-
-    Output-wise, each outer List[List[str]] is a set of batches which must be
-    published in sequence. Within each set of batches, each individual List[str]
-    batch may be published in parallel with all other batches in its set,
-    retaining the order within the batch. So from outside to inside, it goes
-    ordered -> parallel -> ordered.
+    items: list[T],
+    batch_max_num_items: int | None = None,
+    batch_max_num_bytes: int | None = None,
+    get_byte_size: Callable[[T], int] | None = None,
+) -> list[list[T]]:
+    """Repartition the given list of items into batches.
 
     Arguments:
 
-    - `items` is a list of ordered buckets, where the constraint is that items
-      in different buckets can be published in parallel, while items within a
-      bucket must be published in sequence. That means that if two items are in
-      the same bucket, they will either appear in the same innermost List[str]
-      in the output, or in separate List[List[str]] batch sets, with their
-      relative order preserved. If two items are in different buckets, they can
-      appear in different List[str] batches.
+    - `items` is a list of items to batch.
 
-    - `batch_max_num_items` is the maximum number of items in each List[str]
-      batch. If not provided, there is no limit on the number of items.
+    - `batch_max_num_items` is the maximum number of items in each batch.
+      If not provided, there is no limit on the number of items.
 
-    - `batch_max_num_bytes` is the maximum number of bytes (computed as
-      `sum(len(item) for item in batch)`) in each List[str] batch. If an
-      individual item exceeds `batch_max_num_bytes` in size, we will place it in
-      its own batch. If not provided, there is no limit on the number of bytes.
+    - `batch_max_num_bytes` is the maximum number of bytes in each batch.
+      If an individual item exceeds `batch_max_num_bytes` in size, we
+      will place it in its own batch. If not provided, there is no limit on
+      the number of bytes.
+
+    - `get_byte_size` is a function that returns the byte size of an item.
+      If not provided, defaults to `len(item)` (works for strings).
     """
 
     if batch_max_num_items is not None and batch_max_num_items <= 0:
@@ -183,60 +148,36 @@ def batch_items(
     if batch_max_num_bytes is not None and batch_max_num_bytes < 0:
         raise ValueError(f"batch_max_num_bytes must be nonnegative; got {batch_max_num_bytes}")
 
-    output = []
-    next_items = []
-    batch_set = []
-    batch = []
+    if get_byte_size is None:
+
+        def get_byte_size(item: T) -> int:
+            return len(item)  # type: ignore[arg-type]
+
+    output: list[list[T]] = []
+    batch: list[T] = []
     batch_len = 0
 
-    def add_to_batch(item):
+    def add_to_batch(item: T) -> None:
         nonlocal batch_len
         batch.append(item)
-        batch_len += len(item)
+        batch_len += get_byte_size(item)
 
-    def flush_batch():
+    def flush_batch() -> None:
         nonlocal batch, batch_len
-        batch_set.append(batch)
+        output.append(batch)
         batch = []
         batch_len = 0
 
-    while items:
-        for bucket in items:
-            i = 0
-            for item in bucket:
-                if len(batch) == 0 or (
-                    (batch_max_num_bytes is None or len(item) + batch_len < batch_max_num_bytes)
-                    and (batch_max_num_items is None or len(batch) < batch_max_num_items)
-                ):
-                    add_to_batch(item)
-                elif i == 0:
-                    # If the very first item in the bucket fills the batch, we
-                    # can flush this batch and start a new one which includes
-                    # this item.
-                    flush_batch()
-                    add_to_batch(item)
-                else:
-                    break
-                i += 1
-            # If we didn't completely exhaust the bucket, save it for the next
-            # batch set.
-            if i < len(bucket):
-                next_items.append(bucket[i:])
-            # If we have filled the batch, flush it.
-            if (batch_max_num_bytes is not None and batch_len >= batch_max_num_bytes) or (
-                batch_max_num_items is not None and len(batch) >= batch_max_num_items
-            ):
-                flush_batch()
-
-        # We've finished an iteration through all the buckets. Anything
-        # remaining in `next_items` will need to be processed in a subsequent
-        # batch set, so flush our remaining batch and the batch set, and use
-        # next_items for the next iteration.
-        if batch:
+    for item in items:
+        item_size = get_byte_size(item)
+        if len(batch) > 0 and not (
+            (batch_max_num_bytes is None or item_size + batch_len < batch_max_num_bytes)
+            and (batch_max_num_items is None or len(batch) < batch_max_num_items)
+        ):
             flush_batch()
-        if batch_set:
-            output.append(batch_set)
-            batch_set = []
-        items, next_items = next_items, []
+        add_to_batch(item)
+
+    if len(batch) > 0:
+        flush_batch()
 
     return output

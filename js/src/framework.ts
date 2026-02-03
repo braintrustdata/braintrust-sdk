@@ -1,20 +1,23 @@
-import { Score, SpanTypeAttribute, mergeDicts } from "../util/index";
 import {
-  GitMetadataSettings as GitMetadataSettingsSchema,
+  makeScorerPropagatedEvent,
+  mergeDicts,
+  Score,
+  SpanComponentsV3,
+  SpanTypeAttribute,
+  spanObjectTypeV3ToTypedString,
+} from "../util/index";
+import {
   type GitMetadataSettingsType as GitMetadataSettings,
-  ObjectReference as ObjectReferenceSchema,
   type ObjectReferenceType as ObjectReference,
-  RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
-  SSEProgressEventData as SSEProgressEventDataSchema,
   type SSEProgressEventDataType as SSEProgressEventData,
 } from "./generated_types";
 import { queue } from "async";
 
-import chalk from "chalk";
-import pluralize from "pluralize";
+import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt } from "./framework2";
+import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
@@ -24,9 +27,7 @@ import {
   Experiment,
   ExperimentSummary,
   FullInitOptions,
-  MetricSummary,
   NOOP_SPAN,
-  ScoreSummary,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -37,8 +38,15 @@ import {
   traced,
   withCurrent,
   withParent,
+  _internalGetGlobalState,
 } from "./logger";
-import { BarProgressReporter, ProgressReporter } from "./progress";
+import type { ProgressReporter } from "./reporters/types";
+import { SimpleProgressReporter } from "./reporters/progress";
+import type {
+  ReporterOpts,
+  ReporterBody,
+  ReporterDef,
+} from "./reporters/types";
 import { isEmpty, InternalAbortError } from "./util";
 import {
   EvalParameters,
@@ -161,6 +169,7 @@ export type EvalScorerArgs<
   Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
+  trace?: Trace;
 };
 
 export type OneOrMoreScores = Score | number | null | Array<Score>;
@@ -315,6 +324,11 @@ export interface Evaluator<
    * Defaults to true.
    */
   summarizeScores?: boolean;
+
+  /**
+   * Flushes spans before calling scoring functions
+   */
+  flushBeforeScoring?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -328,8 +342,11 @@ export class EvalResultWithSummary<
     public results: EvalResult<Input, Output, Expected, Metadata>[],
   ) {}
 
+  /**
+   * @deprecated Use `summary` instead.
+   */
   toString(): string {
-    return formatExperimentSummary(this.summary);
+    return JSON.stringify(this.summary);
   }
 
   [Symbol.for("nodejs.util.inspect.custom")](): string {
@@ -347,42 +364,11 @@ export class EvalResultWithSummary<
   }
 }
 
-export interface ReporterOpts {
-  verbose: boolean;
-  jsonl: boolean;
-}
-
-export interface ReporterBody<EvalReport> {
-  /**
-   * A function that takes an evaluator and its result and returns a report.
-   *
-   * @param evaluator
-   * @param result
-   * @param opts
-   */
-  reportEval(
-    // These any's are required because these function specifications don't know
-    // or need to know the types of the input/output/etc for the evaluator.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any, any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result: EvalResultWithSummary<any, any, any, any>,
-    opts: ReporterOpts,
-  ): Promise<EvalReport> | EvalReport;
-
-  /**
-   * A function that takes all evaluator results and returns a boolean indicating
-   * whether the run was successful. If you return false, the `braintrust eval`
-   * command will exit with a non-zero status code.
-   *
-   * @param reports
-   */
-  reportRun(reports: EvalReport[]): boolean | Promise<boolean>;
-}
-
-export type ReporterDef<EvalReport> = {
-  name: string;
-} & ReporterBody<EvalReport>;
+export type {
+  ReporterOpts,
+  ReporterBody,
+  ReporterDef,
+} from "./reporters/types";
 
 function makeEvalName(projectName: string, experimentName?: string) {
   let out = projectName;
@@ -466,12 +452,27 @@ export type SpanContext = {
   NOOP_SPAN: typeof NOOP_SPAN;
 };
 
+function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+  );
+}
+
+function isIterable<T>(value: unknown): value is Iterable<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Iterable<T>)[Symbol.iterator] === "function"
+  );
+}
+
 declare global {
-  // eslint-disable-next-line no-var
   var _evals: EvaluatorFile;
-  // eslint-disable-next-line no-var
+
   var _spanContext: SpanContext | undefined;
-  // eslint-disable-next-line no-var
+
   var _lazy_load: boolean;
 }
 
@@ -519,6 +520,45 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    * The parameters to use for the evaluator.
    */
   parameters?: InferParameters<Parameters>;
+  /**
+   * Whether to retain the per-example Eval results and return them from Eval().
+   *
+   * When `true` (default): All evaluation results are collected in memory and returned,
+   * allowing inspection of individual test case inputs, outputs, scores, and metadata.
+   * This is convenient for interactive analysis but can consume significant memory for
+   * large datasets (e.g., millions of examples).
+   *
+   * When `false`: Individual results are not retained in memory. Only aggregate score
+   * statistics are computed incrementally. The returned `results` array will be empty,
+   * but the `summary` will still contain accurate score aggregates. This is suitable for:
+   * - Large-scale evaluations (millions of examples)
+   * - Memory-constrained environments
+   * - Scenarios where only aggregate metrics are needed
+   *
+   * Note: When `false`, you cannot access individual test case results after evaluation.
+   * If you need to inspect specific failures or outputs, keep this as `true`.
+   *
+   * Defaults to `true` for backwards compatibility.
+   *
+   * @example
+   * // Memory-efficient evaluation of a large dataset
+   * await Eval("large-eval", evaluator, {
+   *   returnResults: false  // Only keep aggregate scores
+   * });
+   */
+  returnResults?: boolean;
+  /**
+   * Whether to enable the span cache for this evaluation. The span cache stores span data on disk
+   * to minimize memory usage and allow scorers to read spans without server round-trips. Defaults to true.
+   * Set to false to disable caching if you are doing distributed evaluation or want to reduce disk I/O.
+   *
+   * @example
+   * // Disable span cache
+   * await Eval("my-eval", evaluator, {
+   *   enableCache: false
+   * });
+   */
+  enableCache?: boolean;
 }
 
 export function _initializeSpanContext() {
@@ -586,7 +626,8 @@ export async function Eval<
     );
   }
 
-  const progressReporter = options.progress ?? new BarProgressReporter();
+  const progressReporter = options.progress ?? new SimpleProgressReporter();
+  const shouldCollectResults = options.returnResults ?? true;
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -627,7 +668,7 @@ export async function Eval<
     if (
       experiment &&
       typeof process !== "undefined" &&
-      process.env?.BRAINTRUST_OTEL_COMPAT?.toLowerCase() === "true"
+      globalThis.BRAINTRUST_CONTEXT_MANAGER !== undefined
     ) {
       await experiment._waitForId();
     }
@@ -644,6 +685,7 @@ export async function Eval<
         ...evaluator,
         data,
       };
+      const enableCache = options.enableCache ?? true;
       let ret;
       if (options.parent) {
         ret = await withParent(
@@ -656,6 +698,8 @@ export async function Eval<
               [],
               options.stream,
               options.parameters,
+              shouldCollectResults,
+              enableCache,
             ),
           evaluator.state,
         );
@@ -667,6 +711,8 @@ export async function Eval<
           [],
           options.stream,
           options.parameters,
+          shouldCollectResults,
+          enableCache,
         );
       }
       progressReporter.stop();
@@ -677,9 +723,9 @@ export async function Eval<
       return ret;
     } finally {
       if (experiment) {
-        experiment.flush().catch(console.error);
+        await experiment.flush().catch(console.error);
       } else if (options.parent) {
-        flush().catch(console.error);
+        await flush().catch(console.error);
       }
     }
   } finally {
@@ -780,6 +826,8 @@ export async function runEvaluator(
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters?: InferParameters<EvalParameters>,
+  collectResults = true,
+  enableCache = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
@@ -789,6 +837,8 @@ export async function runEvaluator(
     filters,
     stream,
     parameters,
+    collectResults,
+    enableCache,
   );
 }
 
@@ -810,325 +860,393 @@ async function runEvaluatorInternal(
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
   parameters: InferParameters<EvalParameters> | undefined,
+  collectResults: boolean,
+  enableCache: boolean,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  if (typeof evaluator.data === "string") {
-    throw new Error("Unimplemented: string data paths");
+  // Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
+  // Only start if enableCache is true (default)
+  if (enableCache) {
+    (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
   }
-  let dataResult =
-    typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
-
-  parameters = validateParameters(parameters ?? {}, evaluator.parameters ?? {});
-
-  if ("_type" in dataResult) {
-    if (dataResult._type !== "BaseExperiment") {
-      // For some reason, the typesystem won't let me check if dataResult._type === "BaseExperiment"
-      throw new Error("Invalid _type");
+  try {
+    if (typeof evaluator.data === "string") {
+      throw new Error("Unimplemented: string data paths");
     }
-    if (!experiment) {
-      throw new Error(
-        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)",
-      );
-    }
-    let name = dataResult.name;
-    if (isEmpty(name)) {
-      const baseExperiment = await experiment.fetchBaseExperiment();
-      if (!baseExperiment) {
-        throw new Error("BaseExperiment() failed to fetch base experiment");
-      }
-      name = baseExperiment.name;
-    }
+    let dataResult =
+      typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    dataResult = initExperiment(evaluator.state, {
-      ...(evaluator.projectId
-        ? { projectId: evaluator.projectId }
-        : { project: evaluator.projectName }),
-      experiment: name,
-      open: true,
-    }).asDataset();
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let data: EvalCase<any, any, any>[] = [];
-  if (dataResult instanceof Promise) {
-    data = await dataResult;
-  } else if (Symbol.asyncIterator in dataResult) {
-    // TODO: Eventually, we may want to support pushing the async generator logic
-    // down into the evaluator, so we can avoid materializing large datasets
-    data = [];
-    for await (const d of dataResult) {
-      data.push(d);
-    }
-  } else {
-    data = dataResult;
-  }
-
-  const dataWithTrials = data
-    .filter((d) => filters.every((f) => evaluateFilter(d, f)))
-    .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map((trialIndex) => ({
-        datum,
-        trialIndex,
-      })),
+    parameters = validateParameters(
+      parameters ?? {},
+      evaluator.parameters ?? {},
     );
 
-  progressReporter.start(evaluator.evalName, dataWithTrials.length);
-  interface EvalResult {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    input: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    output: any;
-    tags?: string[];
-    metadata: Record<string, unknown>;
-    scores: Record<string, number | null>;
-    error: unknown;
-    origin?: ObjectReference;
-  }
-  const results: EvalResult[] = [];
-  const q = queue(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async ({
-      datum,
-      trialIndex,
-    }: {
-      datum: EvalCase<any, any, any>;
-      trialIndex: number;
-    }) => {
-      const eventDataset: Dataset | undefined = experiment
-        ? experiment.dataset
-        : Dataset.isDataset(evaluator.data)
-          ? evaluator.data
-          : undefined;
+    if ("_type" in dataResult) {
+      if (dataResult._type !== "BaseExperiment") {
+        // For some reason, the typesystem won't let me check if dataResult._type === "BaseExperiment"
+        throw new Error("Invalid _type");
+      }
+      if (!experiment) {
+        throw new Error(
+          "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)",
+        );
+      }
+      let name = dataResult.name;
+      if (isEmpty(name)) {
+        const baseExperiment = await experiment.fetchBaseExperiment();
+        if (!baseExperiment) {
+          throw new Error("BaseExperiment() failed to fetch base experiment");
+        }
+        name = baseExperiment.name;
+      }
 
-      const baseEvent: StartSpanArgs = {
-        name: "eval",
-        spanAttributes: {
-          type: SpanTypeAttribute.EVAL,
-        },
-        event: {
-          input: datum.input,
-          expected: "expected" in datum ? datum.expected : undefined,
-          tags: datum.tags,
-          origin:
-            eventDataset && datum.id && datum._xact_id
-              ? {
-                  object_type: "dataset",
-                  object_id: await eventDataset.id,
-                  id: datum.id,
-                  created: datum.created,
-                  _xact_id: datum._xact_id,
-                }
-              : undefined,
-          ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
-        },
-      };
+      dataResult = initExperiment(evaluator.state, {
+        ...(evaluator.projectId
+          ? { projectId: evaluator.projectId }
+          : { project: evaluator.projectName }),
+        experiment: name,
+        open: true,
+      }).asDataset();
+    }
 
-      const callback = async (rootSpan: Span) => {
-        let metadata: Record<string, unknown> = {
-          ...("metadata" in datum ? datum.metadata : {}),
-        };
-        const expected = "expected" in datum ? datum.expected : undefined;
-        let output: unknown = undefined;
-        let error: unknown | undefined = undefined;
-        let tags: string[] = [...(datum.tags ?? [])];
-        const scores: Record<string, number | null> = {};
-        const scorerNames = evaluator.scores.map(scorerName);
-        let unhandledScores: string[] | null = scorerNames;
-        try {
-          const meta = (o: Record<string, unknown>) =>
-            (metadata = { ...metadata, ...o });
+    const resolvedDataResult =
+      dataResult instanceof Promise ? await dataResult : dataResult;
 
-          await rootSpan.traced(
-            async (span: Span) => {
-              const hooksForTask: EvalHooks<
-                unknown,
-                Record<string, unknown>,
-                EvalParameters
-              > = {
-                meta,
-                metadata,
-                expected,
-                span,
-                parameters: parameters ?? {},
-                reportProgress: (event: TaskProgressEvent) => {
-                  stream?.({
-                    ...event,
-                    id: rootSpan.id,
-                    origin: baseEvent.event?.origin,
-                    name: evaluator.evalName,
-                    object_type: "task",
-                  });
-                },
-                trialIndex,
-                tags,
-              };
-
-              const outputResult = evaluator.task(datum.input, hooksForTask);
-              if (outputResult instanceof Promise) {
-                output = await outputResult;
-              } else {
-                output = outputResult;
-              }
-
-              tags = hooksForTask.tags ?? [];
-
-              span.log({ output });
-            },
-            {
-              name: "task",
-              spanAttributes: { type: SpanTypeAttribute.TASK },
-              event: { input: datum.input },
-            },
-          );
-          if (tags.length) {
-            rootSpan.log({ output, metadata, expected, tags });
-          } else {
-            rootSpan.log({ output, metadata, expected });
+    const dataIterable: AsyncIterable<EvalCase<any, any, any>> = (() => {
+      if (isAsyncIterable<EvalCase<any, any, any>>(resolvedDataResult)) {
+        return resolvedDataResult;
+      }
+      if (
+        Array.isArray(resolvedDataResult) ||
+        isIterable<EvalCase<any, any, any>>(resolvedDataResult)
+      ) {
+        const iterable = resolvedDataResult as Iterable<
+          EvalCase<any, any, any>
+        >;
+        return (async function* () {
+          for (const datum of iterable) {
+            yield datum;
           }
+        })();
+      }
+      throw new Error(
+        "Evaluator data must be an array, iterable, or async iterable",
+      );
+    })();
 
-          const scoringArgs = {
+    progressReporter.start(evaluator.evalName, 0);
+
+    const experimentIdPromise: Promise<string | undefined> | undefined =
+      experiment
+        ? (async () => {
+            try {
+              return await experiment.id;
+            } catch {
+              return undefined;
+            }
+          })()
+        : undefined;
+
+    const collectedResults: EvalResult<any, any, any, any>[] = [];
+    const localScoreAccumulator: ScoreAccumulator | null = experiment
+      ? null
+      : {};
+    let cancelled = false;
+    let scheduledTrials = 0;
+    const q = queue(
+      async ({
+        datum,
+        trialIndex,
+      }: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        datum: EvalCase<any, any, any>;
+        trialIndex: number;
+      }) => {
+        if (cancelled) {
+          return;
+        }
+        const eventDataset: Dataset | undefined = experiment
+          ? experiment.dataset
+          : Dataset.isDataset(evaluator.data)
+            ? evaluator.data
+            : undefined;
+
+        const baseEvent: StartSpanArgs = {
+          name: "eval",
+          spanAttributes: {
+            type: SpanTypeAttribute.EVAL,
+          },
+          event: {
             input: datum.input,
             expected: "expected" in datum ? datum.expected : undefined,
-            metadata,
-            output,
+            tags: datum.tags,
+            origin:
+              eventDataset && datum.id && datum._xact_id
+                ? {
+                    object_type: "dataset",
+                    object_id: await eventDataset.id,
+                    id: datum.id,
+                    created: datum.created,
+                    _xact_id: datum._xact_id,
+                  }
+                : undefined,
+            ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
+          },
+        };
+
+        const callback = async (rootSpan: Span) => {
+          const state = evaluator.state ?? _internalGetGlobalState();
+          const ensureSpansFlushed = async () => {
+            // Flush native Braintrust spans
+            if (experiment) {
+              await flush({ state: experiment.loggingState });
+            } else if (state) {
+              await flush({ state });
+            } else {
+              await flush();
+            }
+
+            // Also flush OTEL spans if registered
+            if (state) {
+              await state.flushOtel();
+            }
           };
-          const scoreResults = await Promise.all(
-            evaluator.scores.map(async (score, score_idx) => {
-              try {
-                const runScorer = async (span: Span) => {
-                  const scoreResult = score(scoringArgs);
-                  const scoreValue =
-                    scoreResult instanceof Promise
-                      ? await scoreResult
-                      : scoreResult;
 
-                  if (scoreValue === null) {
-                    return null;
-                  }
+          const parentStr = state.currentParent.getStore();
+          const parentComponents = parentStr
+            ? SpanComponentsV3.fromStr(parentStr)
+            : null;
 
-                  if (Array.isArray(scoreValue)) {
-                    for (const s of scoreValue) {
-                      if (!(typeof s === "object" && !isEmpty(s))) {
-                        throw new Error(
-                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                            s,
-                          )}`,
-                        );
-                      }
-                    }
-                  }
+          const trace = state
+            ? new LocalTrace({
+                objectType: parentComponents
+                  ? spanObjectTypeV3ToTypedString(
+                      parentComponents.data.object_type,
+                    )
+                  : "experiment",
+                objectId:
+                  parentComponents?.data.object_id ??
+                  (experimentIdPromise
+                    ? (await experimentIdPromise) ?? ""
+                    : ""),
+                rootSpanId: rootSpan.rootSpanId,
+                ensureSpansFlushed,
+                state,
+              })
+            : undefined;
 
-                  const results = Array.isArray(scoreValue)
-                    ? scoreValue
-                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                      ? [scoreValue]
-                      : [
-                          {
-                            name: scorerNames[score_idx],
-                            score: scoreValue,
-                          },
-                        ];
+          let metadata: Record<string, unknown> = {
+            ...("metadata" in datum ? datum.metadata : {}),
+          };
+          const expected = "expected" in datum ? datum.expected : undefined;
+          let output: unknown = undefined;
+          let error: unknown | undefined = undefined;
+          let tags: string[] = [...(datum.tags ?? [])];
+          const scores: Record<string, number | null> = {};
+          const scorerNames = evaluator.scores.map(scorerName);
+          let unhandledScores: string[] | null = scorerNames;
+          try {
+            const meta = (o: Record<string, unknown>) =>
+              (metadata = { ...metadata, ...o });
 
-                  const getOtherFields = (s: Score) => {
-                    const { metadata: _metadata, name: _name, ...rest } = s;
-                    return rest;
-                  };
-
-                  const resultMetadata =
-                    results.length === 1
-                      ? results[0].metadata
-                      : results.reduce(
-                          (prev, s) =>
-                            mergeDicts(prev, {
-                              [s.name]: s.metadata,
-                            }),
-                          {},
-                        );
-
-                  const resultOutput =
-                    results.length === 1
-                      ? getOtherFields(results[0])
-                      : results.reduce(
-                          (prev, s) =>
-                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                          {},
-                        );
-
-                  const scores = results.reduce(
-                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                    {},
-                  );
-
-                  span.log({
-                    output: resultOutput,
-                    metadata: resultMetadata,
-                    scores: scores,
-                  });
-                  return results;
+            await rootSpan.traced(
+              async (span: Span) => {
+                const hooksForTask: EvalHooks<
+                  unknown,
+                  Record<string, unknown>,
+                  EvalParameters
+                > = {
+                  meta,
+                  metadata,
+                  expected,
+                  span,
+                  parameters: parameters ?? {},
+                  reportProgress: (event: TaskProgressEvent) => {
+                    stream?.({
+                      ...event,
+                      id: rootSpan.id,
+                      origin: baseEvent.event?.origin,
+                      name: evaluator.evalName,
+                      object_type: "task",
+                    });
+                  },
+                  trialIndex,
+                  tags,
                 };
 
-                const results = await rootSpan.traced(runScorer, {
-                  name: scorerNames[score_idx],
-                  spanAttributes: {
-                    type: SpanTypeAttribute.SCORE,
-                  },
-                  event: { input: scoringArgs },
-                });
-                return { kind: "score", value: results } as const;
-              } catch (e) {
-                return { kind: "error", value: e } as const;
-              }
-            }),
-          );
-          // Resolve each promise on its own so that we can separate the passing
-          // from the failing ones.
-          const failingScorersAndResults: { name: string; error: unknown }[] =
-            [];
-          scoreResults.forEach((results, i) => {
-            const name = scorerNames[i];
-            if (results.kind === "score") {
-              (results.value || []).forEach((result) => {
-                scores[result.name] = result.score;
-              });
+                const outputResult = evaluator.task(datum.input, hooksForTask);
+                if (outputResult instanceof Promise) {
+                  output = await outputResult;
+                } else {
+                  output = outputResult;
+                }
+
+                tags = hooksForTask.tags ?? [];
+
+                span.log({ output });
+              },
+              {
+                name: "task",
+                spanAttributes: { type: SpanTypeAttribute.TASK },
+                event: { input: datum.input },
+              },
+            );
+            if (tags.length) {
+              rootSpan.log({ output, metadata, expected, tags });
             } else {
-              failingScorersAndResults.push({ name, error: results.value });
+              rootSpan.log({ output, metadata, expected });
             }
-          });
 
-          unhandledScores = null;
-          if (failingScorersAndResults.length) {
-            const scorerErrors = Object.fromEntries(
-              failingScorersAndResults.map(({ name, error }) => [
-                name,
-                error instanceof Error ? error.stack : `${error}`,
-              ]),
+            if (evaluator.flushBeforeScoring) {
+              await rootSpan.flush();
+            }
+
+            const scoringArgs = {
+              input: datum.input,
+              expected: "expected" in datum ? datum.expected : undefined,
+              metadata,
+              output,
+              trace,
+            };
+            const scoreResults = await Promise.all(
+              evaluator.scores.map(async (score, score_idx) => {
+                try {
+                  const runScorer = async (span: Span) => {
+                    const scoreResult = score(scoringArgs);
+                    const scoreValue =
+                      scoreResult instanceof Promise
+                        ? await scoreResult
+                        : scoreResult;
+
+                    if (scoreValue === null) {
+                      return null;
+                    }
+
+                    if (Array.isArray(scoreValue)) {
+                      for (const s of scoreValue) {
+                        if (!(typeof s === "object" && !isEmpty(s))) {
+                          throw new Error(
+                            `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                              s,
+                            )}`,
+                          );
+                        }
+                      }
+                    }
+
+                    const results = Array.isArray(scoreValue)
+                      ? scoreValue
+                      : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                        ? [scoreValue]
+                        : [
+                            {
+                              name: scorerNames[score_idx],
+                              score: scoreValue,
+                            },
+                          ];
+
+                    const getOtherFields = (s: Score) => {
+                      const { metadata: _metadata, name: _name, ...rest } = s;
+                      return rest;
+                    };
+
+                    const resultMetadata =
+                      results.length === 1
+                        ? results[0].metadata
+                        : results.reduce(
+                            (prev, s) =>
+                              mergeDicts(prev, {
+                                [s.name]: s.metadata,
+                              }),
+                            {},
+                          );
+
+                    const resultOutput =
+                      results.length === 1
+                        ? getOtherFields(results[0])
+                        : results.reduce(
+                            (prev, s) =>
+                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                            {},
+                          );
+
+                    const scores = results.reduce(
+                      (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                      {},
+                    );
+
+                    span.log({
+                      output: resultOutput,
+                      metadata: resultMetadata,
+                      scores: scores,
+                    });
+                    return results;
+                  };
+
+                  // Exclude trace from logged input since it contains internal state
+                  // that shouldn't be serialized (spansFlushPromise, spansFlushed, etc.)
+                  const { trace: _trace, ...scoringArgsForLogging } =
+                    scoringArgs;
+                  const results = await rootSpan.traced(runScorer, {
+                    name: scorerNames[score_idx],
+                    spanAttributes: {
+                      type: SpanTypeAttribute.SCORE,
+                      purpose: "scorer",
+                    },
+                    propagatedEvent: makeScorerPropagatedEvent(
+                      await rootSpan.export(),
+                    ),
+                    event: { input: scoringArgsForLogging },
+                  });
+                  return { kind: "score", value: results } as const;
+                } catch (e) {
+                  return { kind: "error", value: e } as const;
+                }
+              }),
             );
-            metadata["scorer_errors"] = scorerErrors;
-            rootSpan.log({
-              metadata: { scorer_errors: scorerErrors },
+            // Resolve each promise on its own so that we can separate the passing
+            // from the failing ones.
+            const failingScorersAndResults: { name: string; error: unknown }[] =
+              [];
+            scoreResults.forEach((results, i) => {
+              const name = scorerNames[i];
+              if (results.kind === "score") {
+                (results.value || []).forEach((result) => {
+                  scores[result.name] = result.score;
+                });
+              } else {
+                failingScorersAndResults.push({ name, error: results.value });
+              }
             });
-            const names = Object.keys(scorerErrors).join(", ");
-            const errors = failingScorersAndResults.map((item) => item.error);
-            unhandledScores = Object.keys(scorerErrors);
-            console.warn(
-              `Found exceptions for the following scorers: ${names}`,
-              errors,
-            );
-          }
-        } catch (e) {
-          logSpanError(rootSpan, e);
-          error = e;
-        } finally {
-          progressReporter.increment(evaluator.evalName);
-        }
 
-        results.push({
-          input: datum.input,
-          ...("expected" in datum ? { expected: datum.expected } : {}),
-          output,
-          tags: tags.length ? tags : undefined,
-          metadata,
-          scores: {
+            unhandledScores = null;
+            if (failingScorersAndResults.length) {
+              const scorerErrors = Object.fromEntries(
+                failingScorersAndResults.map(({ name, error }) => [
+                  name,
+                  error instanceof Error ? error.stack : `${error}`,
+                ]),
+              );
+              metadata["scorer_errors"] = scorerErrors;
+              rootSpan.log({
+                metadata: { scorer_errors: scorerErrors },
+              });
+              const names = Object.keys(scorerErrors).join(", ");
+              const errors = failingScorersAndResults.map((item) => item.error);
+              unhandledScores = Object.keys(scorerErrors);
+              console.warn(
+                `Found exceptions for the following scorers: ${names}`,
+                errors,
+              );
+            }
+          } catch (e) {
+            logSpanError(rootSpan, e);
+            error = e;
+          } finally {
+            progressReporter.increment(evaluator.evalName);
+          }
+
+          const mergedScores = {
             ...(evaluator.errorScoreHandler && unhandledScores
               ? evaluator.errorScoreHandler({
                   rootSpan,
@@ -1137,63 +1255,166 @@ async function runEvaluatorInternal(
                 })
               : undefined),
             ...scores,
-          },
-          error,
-          origin: baseEvent.event?.origin,
-        });
-      };
+          } as Record<string, number | null>;
 
-      if (!experiment) {
-        // This will almost always be a no-op span, but it means that if the Eval
-        // is run in the context of a different type of span, it will be logged.
-        return await traced(callback, {
-          ...baseEvent,
-          state: evaluator.state,
-        });
-      } else {
-        return await experiment.traced(callback, baseEvent);
-      }
-    },
-    Math.max(evaluator.maxConcurrency ?? dataWithTrials.length, 1),
-  );
-  q.push(dataWithTrials);
+          if (localScoreAccumulator) {
+            accumulateScores(localScoreAccumulator, mergedScores);
+          }
 
-  const cancel = async () => {
-    await new Promise((_, reject) => {
-      if (evaluator.timeout) {
-        setTimeout(() => {
-          reject(new InternalAbortError("Evaluator timed out"));
-        }, evaluator.timeout);
-      }
-      if (evaluator.signal) {
-        evaluator.signal.addEventListener("abort", () => {
-          reject(new InternalAbortError("Evaluator aborted"));
-        });
-      }
-    });
-  };
+          if (collectResults) {
+            collectedResults.push({
+              input: datum.input,
+              ...("expected" in datum ? { expected: datum.expected } : {}),
+              output,
+              tags: tags.length ? tags : undefined,
+              metadata,
+              scores: mergedScores,
+              error,
+              origin: baseEvent.event?.origin,
+            });
+          }
+        };
 
-  // wait for tasks to be completed or the evaluator to be cancelled
-  // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
-  try {
-    await Promise.race([q.drain(), cancel()]);
-  } catch (e) {
-    if (e instanceof InternalAbortError) {
+        if (!experiment) {
+          // This will almost always be a no-op span, but it means that if the Eval
+          // is run in the context of a different type of span, it will be logged.
+          return await traced(callback, {
+            ...baseEvent,
+            state: evaluator.state,
+          });
+        } else {
+          const result = await experiment.traced(callback, baseEvent);
+          // Flush logs after each task to provide backpressure and prevent memory accumulation
+          // when maxConcurrency is set. This ensures logs are sent before the next task starts,
+          // preventing unbounded memory growth with large log payloads.
+          if (evaluator.maxConcurrency !== undefined) {
+            await experiment.flush();
+          }
+          return result;
+        }
+      },
+      Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
+    );
+
+    const enqueuePromise = (async () => {
+      for await (const datum of dataIterable) {
+        if (cancelled) {
+          break;
+        }
+        if (!filters.every((f) => evaluateFilter(datum, f))) {
+          continue;
+        }
+        const trialCount = evaluator.trialCount ?? 1;
+        for (let trialIndex = 0; trialIndex < trialCount; trialIndex++) {
+          if (cancelled) {
+            break;
+          }
+          scheduledTrials++;
+          progressReporter.setTotal?.(evaluator.evalName, scheduledTrials);
+          q.push({ datum, trialIndex });
+        }
+      }
+    })();
+
+    const cancel = async () => {
+      await new Promise<never>((_, reject) => {
+        // If already cancelled, reject immediately
+        if (cancelled) {
+          reject(new InternalAbortError("Evaluator already cancelled"));
+          return;
+        }
+
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        let abortHandler: (() => void) | undefined;
+
+        const rejectOnce = (error: InternalAbortError) => {
+          if (cancelled) {
+            return;
+          }
+          cancelled = true;
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
+          if (abortHandler && evaluator.signal) {
+            evaluator.signal.removeEventListener("abort", abortHandler);
+          }
+          reject(error);
+        };
+
+        if (evaluator.timeout) {
+          timeoutId = setTimeout(() => {
+            rejectOnce(new InternalAbortError("Evaluator timed out"));
+          }, evaluator.timeout);
+        }
+        if (evaluator.signal) {
+          abortHandler = () => {
+            rejectOnce(new InternalAbortError("Evaluator aborted"));
+          };
+          evaluator.signal.addEventListener("abort", abortHandler);
+        }
+      });
+    };
+
+    const waitForQueue = (async () => {
+      await enqueuePromise;
+      if (q.idle()) {
+        return;
+      }
+      await q.drain();
+    })();
+
+    // wait for tasks to be completed or the evaluator to be cancelled
+    // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+    try {
+      await Promise.race([waitForQueue, cancel()]);
+    } catch (e) {
+      // Always kill the queue to prevent hanging tasks and memory leaks
       q.kill();
+
+      if (e instanceof InternalAbortError) {
+        // Log cancellation for debugging
+        if (iso.getEnv("BRAINTRUST_VERBOSE")) {
+          console.warn("Evaluator cancelled:", (e as Error).message);
+        }
+      }
+
+      throw e;
+    } finally {
+      // Ensure results are cleared if not collecting to free memory
+      if (!collectResults) {
+        collectedResults.length = 0;
+      }
     }
 
-    throw e;
+    const summary = experiment
+      ? await experiment.summarize({
+          summarizeScores: evaluator.summarizeScores,
+        })
+      : buildLocalSummary(
+          evaluator,
+          collectResults ? collectedResults : [],
+          localScoreAccumulator ?? undefined,
+        );
+
+    return new EvalResultWithSummary(
+      summary,
+      collectResults ? collectedResults : [],
+    );
+  } finally {
+    // Clean up disk-based span cache after eval completes and stop caching
+    // Only if it was enabled
+    if (enableCache) {
+      const spanCache = (evaluator.state ?? _internalGetGlobalState())
+        ?.spanCache;
+      spanCache?.dispose();
+      spanCache?.stop();
+    }
   }
-
-  const summary = experiment
-    ? await experiment.summarize({ summarizeScores: evaluator.summarizeScores })
-    : buildLocalSummary(evaluator, results);
-
-  return new EvalResultWithSummary(summary, results);
 }
 
-export const error = chalk.bold.red;
-export const warning = chalk.hex("#FFA500"); // Orange color
+export const error = (text: string) => `Error: ${text}`;
+export const warning = (text: string) => `Warning: ${text}`;
 
 export function logError(e: unknown, verbose: boolean) {
   if (!verbose) {
@@ -1203,22 +1424,45 @@ export function logError(e: unknown, verbose: boolean) {
   }
 }
 
+type ScoreAccumulator = {
+  [name: string]: { total: number; count: number };
+};
+
+function accumulateScores(
+  accumulator: ScoreAccumulator,
+  scores: Record<string, number | null>,
+) {
+  for (const [name, score] of Object.entries(scores)) {
+    if (score === null || score === undefined) {
+      continue;
+    }
+    const existing = accumulator[name] ?? { total: 0, count: 0 };
+    accumulator[name] = {
+      total: existing.total + score,
+      count: existing.count + 1,
+    };
+  }
+}
+
+function ensureScoreAccumulator(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  results: EvalResult<any, any, any, any>[],
+) {
+  const accumulator: ScoreAccumulator = {};
+  for (const result of results) {
+    accumulateScores(accumulator, result.scores);
+  }
+  return accumulator;
+}
+
 export function buildLocalSummary(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
+  precomputedScores?: ScoreAccumulator,
 ): ExperimentSummary {
-  const scoresByName: { [name: string]: { total: number; count: number } } = {};
-  for (const result of results) {
-    for (const [name, score] of Object.entries(result.scores)) {
-      const { total, count } = scoresByName[name] || { total: 0, count: 0 };
-      if (score === null) {
-        continue;
-      }
-      scoresByName[name] = { total: total + score, count: count + 1 };
-    }
-  }
+  const scoresByName = precomputedScores ?? ensureScoreAccumulator(results);
 
   return {
     projectName: evaluator.projectName,
@@ -1228,7 +1472,7 @@ export function buildLocalSummary(
         name,
         {
           name,
-          score: total / count,
+          score: count === 0 ? 0 : total / count,
           improvements: 0,
           regressions: 0,
         },
@@ -1253,13 +1497,7 @@ export function reportFailures<
     // of their tasks.
     console.error(
       warning(
-        `Evaluator ${evaluator.evalName} failed with ${pluralize(
-          "error",
-          failingResults.length,
-          true,
-        )}. This evaluation ("${
-          evaluator.evalName
-        }") will not be fully logged.`,
+        `Evaluator ${evaluator.evalName} failed with ${failingResults.length} error${failingResults.length === 1 ? "" : "s"}. This evaluation ("${evaluator.evalName}") will not be fully logged.`,
       ),
     );
     if (jsonl) {
@@ -1287,6 +1525,9 @@ export function reportFailures<
  * of each evaluation to the console, and will return false (i.e. fail) if any of the
  * evaluations return an error.
  */
+/**
+ * Simple plain-text reporter for framework - no fancy formatting dependencies
+ */
 export const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
@@ -1305,64 +1546,103 @@ export const defaultReporter: ReporterDef<boolean> = {
       reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
-    // process.stdout.write will not do intelligent formatting, like cut off long lines
-    process.stdout.write(
-      jsonl ? JSON.stringify(summary) : formatExperimentSummary(summary),
-    );
-    process.stdout.write("\n");
+    if (jsonl) {
+      iso.writeln(JSON.stringify(summary));
+    } else {
+      // Simple plain-text output without fancy formatting
+      iso.writeln("Experiment summary");
+      iso.writeln("==================");
+
+      if (summary.comparisonExperimentName) {
+        iso.writeln(
+          `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)`,
+        );
+        iso.writeln("");
+      }
+
+      const hasScores = Object.keys(summary.scores).length > 0;
+      const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
+      const hasComparison = !!summary.comparisonExperimentName;
+
+      if (hasScores || hasMetrics) {
+        if (hasComparison) {
+          iso.writeln(
+            "Name                Value      Change     Improvements Regressions",
+          );
+          iso.writeln(
+            "----------------------------------------------------------------",
+          );
+        }
+
+        // Scores
+        for (const score of Object.values(summary.scores)) {
+          const scorePercent = (score.score * 100).toFixed(2);
+          const scoreValue = `${scorePercent}%`;
+
+          if (hasComparison) {
+            let diffString = "-";
+            if (!isEmpty(score.diff)) {
+              const diffPercent = (score.diff! * 100).toFixed(2);
+              const diffSign = score.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
+            }
+
+            const improvements =
+              score.improvements > 0 ? score.improvements.toString() : "-";
+            const regressions =
+              score.regressions > 0 ? score.regressions.toString() : "-";
+
+            iso.writeln(
+              `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(`${score.name.padEnd(20)} ${scoreValue.padStart(15)}`);
+          }
+        }
+
+        // Metrics
+        for (const metric of Object.values(summary.metrics ?? {})) {
+          const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
+          const formattedValue = metric.metric.toFixed(fractionDigits);
+          const metricValue =
+            metric.unit === "$"
+              ? `${metric.unit}${formattedValue}`
+              : `${formattedValue}${metric.unit}`;
+
+          if (hasComparison) {
+            let diffString = "-";
+            if (!isEmpty(metric.diff)) {
+              const diffPercent = (metric.diff! * 100).toFixed(2);
+              const diffSign = metric.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
+            }
+
+            const improvements =
+              metric.improvements > 0 ? metric.improvements.toString() : "-";
+            const regressions =
+              metric.regressions > 0 ? metric.regressions.toString() : "-";
+
+            iso.writeln(
+              `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(
+              `${metric.name.padEnd(20)} ${metricValue.padStart(15)}`,
+            );
+          }
+        }
+      }
+
+      if (summary.experimentUrl) {
+        iso.writeln("");
+        iso.writeln(`View results for ${summary.experimentName}`);
+        iso.writeln(`See results at ${summary.experimentUrl}`);
+      }
+    }
+    iso.writeln("");
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {
     return evalReports.every((r) => r);
   },
 };
-
-function formatExperimentSummary(summary: ExperimentSummary) {
-  let comparisonLine = "";
-  if (summary.comparisonExperimentName) {
-    comparisonLine = `${summary.experimentName} compared to ${summary.comparisonExperimentName}:\n`;
-  }
-  const longestScoreName = Math.max(
-    ...Object.values(summary.scores).map((score) => score.name.length),
-  );
-  const longestMetricName = Math.max(
-    ...Object.values(summary.metrics ?? {}).map((metric) => metric.name.length),
-  );
-  return (
-    `\n=========================SUMMARY=========================\n${comparisonLine}` +
-    Object.values(summary.scores)
-      .map((score) => formatScoreSummary(score, longestScoreName))
-      .join("\n") +
-    (Object.keys(summary.scores).length ? "\n\n" : "") +
-    Object.values(summary.metrics ?? {})
-      .map((metric) => formatMetricSummary(metric, longestMetricName))
-      .join("\n") +
-    (Object.keys(summary.metrics ?? {}).length ? "\n\n" : "") +
-    (summary.experimentUrl
-      ? `See results for ${summary.experimentName} at ${summary.experimentUrl}`
-      : "")
-  );
-}
-
-function formatScoreSummary(summary: ScoreSummary, longestScoreName: number) {
-  const diffString = isEmpty(summary.diff)
-    ? ""
-    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
-  const scoreName = `'${summary.name}'`.padEnd(longestScoreName + 2);
-  return `${(summary.score * 100).toFixed(
-    2,
-  )}%${diffString} ${scoreName} score\t(${summary.improvements} improvements, ${
-    summary.regressions
-  } regressions)`;
-}
-
-function formatMetricSummary(
-  summary: MetricSummary,
-  longestMetricName: number,
-) {
-  const fractionDigits = Number.isInteger(summary.metric) ? 0 : 2;
-  const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
-  return `${summary.metric.toFixed(fractionDigits)}${summary.unit} ${metricName}\t(${
-    summary.improvements
-  } improvements, ${summary.regressions} regressions)`;
-}

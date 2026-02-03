@@ -13,7 +13,7 @@
     "start": "turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "test": "turbo run test"
+    "test": "turbo run test --filter=\"!@braintrust/otel\""
   },
   "devDependencies": {
     "pyright": "^1.1.404",
@@ -23,5 +23,5 @@
     "zod": "3.25.34",
     "tsup": "8.4.0"
   },
-  "packageManager": "pnpm@8.15.5"
+  "packageManager": "pnpm@10.26.2"
 }

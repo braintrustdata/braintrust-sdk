@@ -1,9 +1,66 @@
+import os
 import unittest
 from typing import List
 
 import pytest
 
-from .util import LazyValue, mask_api_key
+from .util import LazyValue, mask_api_key, merge_dicts_with_paths, parse_env_var_float
+
+
+class TestParseEnvVarFloat:
+    """Tests for parse_env_var_float helper."""
+
+    def test_returns_default_when_env_not_set(self):
+        assert parse_env_var_float("NONEXISTENT_VAR_12345", 42.0) == 42.0
+
+    def test_parses_valid_float(self):
+        os.environ["TEST_FLOAT"] = "123.45"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 0.0) == 123.45
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_nan(self):
+        os.environ["TEST_FLOAT"] = "nan"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_inf(self):
+        os.environ["TEST_FLOAT"] = "inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_negative_inf(self):
+        os.environ["TEST_FLOAT"] = "-inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_empty_string(self):
+        os.environ["TEST_FLOAT"] = ""
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_invalid_string(self):
+        os.environ["TEST_FLOAT"] = "not_a_number"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_allows_negative_values(self):
+        os.environ["TEST_FLOAT"] = "-5.5"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 0.0) == -5.5
+        finally:
+            del os.environ["TEST_FLOAT"]
 
 
 class TestLazyValue(unittest.TestCase):
@@ -160,3 +217,53 @@ def test_mask_api_key():
     assert mask_api_key("12345") == "12*45"
     for i in ["", "1", "12", "123", "1234"]:
         assert mask_api_key(i) == "*" * len(i)
+
+
+class TestTagsSetUnionMerge:
+    def test_tags_arrays_are_merged_as_sets_by_default(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": ["b", "c"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b", "c"}
+
+    def test_tags_merge_deduplicates_values(self):
+        a = {"tags": ["a", "b", "c"]}
+        b = {"tags": ["a", "b", "c", "d"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b", "c", "d"}
+
+    def test_tags_merge_works_when_merge_into_has_no_tags(self):
+        a = {"other": "data"}
+        b = {"tags": ["a", "b"]}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b"}
+
+    def test_tags_merge_works_when_merge_from_has_no_tags(self):
+        a = {"tags": ["a", "b"]}
+        b = {"other": "data"}
+        merge_dicts_with_paths(a, b, (), set())
+        assert set(a["tags"]) == {"a", "b"}
+
+    def test_tags_are_replaced_when_included_in_merge_paths(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": ["c", "d"]}
+        merge_dicts_with_paths(a, b, (), {("tags",)})
+        assert a["tags"] == ["c", "d"]
+
+    def test_empty_tags_array_clears_tags_when_in_merge_paths(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": []}
+        merge_dicts_with_paths(a, b, (), {("tags",)})
+        assert a["tags"] == []
+
+    def test_none_tags_replaces_tags(self):
+        a = {"tags": ["a", "b"]}
+        b = {"tags": None}
+        merge_dicts_with_paths(a, b, (), set())
+        assert a["tags"] is None
+
+    def test_set_union_only_applies_to_top_level_tags_field(self):
+        a = {"metadata": {"tags": ["a", "b"]}}
+        b = {"metadata": {"tags": ["c", "d"]}}
+        merge_dicts_with_paths(a, b, (), set())
+        assert a["metadata"]["tags"] == ["c", "d"]

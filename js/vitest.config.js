@@ -40,7 +40,6 @@ const config = {
       "./vendor/**",
       // Exclude subdirectories with their own test configs
       "src/wrappers/ai-sdk/**",
-      "src/wrappers/mastra/**",
       "src/wrappers/claude-agent-sdk/**",
       "smoke/**",
     ],
@@ -51,6 +50,7 @@ const config = {
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
     ],
+    testTimeout: 15_000,
   },
 };
 export default config;

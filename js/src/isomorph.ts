@@ -33,7 +33,7 @@ export interface Common {
   getRepoInfo: (
     settings?: GitMetadataSettings,
   ) => Promise<RepoInfo | undefined>;
-  getPastNAncestors: () => Promise<string[]>;
+  getPastNAncestors: (n?: number, remote?: string) => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
@@ -42,7 +42,11 @@ export interface Common {
   // hash a string. not guaranteed to be crypto safe.
   hash?: (data: string) => string;
 
-  // Filesystem operations.
+  // Cross-platform utilities.
+  basename: (filepath: string) => string;
+  writeln: (text: string) => void;
+
+  // Filesystem operations (async).
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
   mkdir?: (
@@ -57,6 +61,14 @@ export interface Common {
   stat?: (path: string) => Promise<any>; // type-erased
   statSync?: (path: string) => any; // type-erased
   homedir?: () => string;
+  tmpdir?: () => string;
+
+  // Filesystem operations (sync) - for span cache.
+  writeFileSync?: (filename: string, data: string) => void;
+  appendFileSync?: (filename: string, data: string) => void;
+  readFileSync?: (filename: string, encoding: string) => string;
+  unlinkSync?: (path: string) => void;
+  openFile?: (path: string, flags: string) => Promise<any>; // fs.promises.FileHandle, type-erased
 
   // zlib (promisified and type-erased).
   gunzip?: (data: any) => Promise<any>;
@@ -70,5 +82,7 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   processOn: (_0, _1) => {},
+  basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
+  writeln: (text: string) => console.log(text),
 };
 export default iso;

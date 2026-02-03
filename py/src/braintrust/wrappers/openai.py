@@ -3,11 +3,10 @@ Exports `BraintrustTracingProcessor`, a `tracing.TracingProcessor` that logs tra
 """
 
 import datetime
-from typing import Any, Dict, Optional, Union
-
-from agents import tracing
+from typing import Any
 
 import braintrust
+from agents import tracing
 from braintrust.logger import NOOP_SPAN
 
 
@@ -41,13 +40,13 @@ def _span_name(span: tracing.Span[Any]) -> str:
         return "Unknown"
 
 
-def _timestamp_from_maybe_iso(timestamp: Optional[str]) -> Optional[float]:
+def _timestamp_from_maybe_iso(timestamp: str | None) -> float | None:
     if timestamp is None:
         return None
     return datetime.datetime.fromisoformat(timestamp).timestamp()
 
 
-def _maybe_timestamp_elapsed(end: Optional[str], start: Optional[str]) -> Optional[float]:
+def _maybe_timestamp_elapsed(end: str | None, start: str | None) -> float | None:
     if start is None or end is None:
         return None
     return (datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)).total_seconds()
@@ -62,11 +61,11 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             If `None`, the current span, experiment, or logger will be selected exactly as in `braintrust.start_span`.
     """
 
-    def __init__(self, logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None):
+    def __init__(self, logger: braintrust.Span | braintrust.Experiment | braintrust.Logger | None = None):
         self._logger = logger
-        self._spans: Dict[str, braintrust.Span] = {}
-        self._first_input: Dict[str, Any] = {}
-        self._last_output: Dict[str, Any] = {}
+        self._spans: dict[str, braintrust.Span] = {}
+        self._first_input: dict[str, Any] = {}
+        self._last_output: dict[str, Any] = {}
 
     def on_trace_start(self, trace: tracing.Trace) -> None:
         trace_meta = trace.export() or {}
@@ -77,13 +76,13 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
 
         current_context = braintrust.current_span()
         if current_context != NOOP_SPAN:
-            self._spans[trace.trace_id] = current_context.start_span(
+            span = current_context.start_span(
                 name=trace.name,
                 span_attributes={"type": "task", "name": trace.name},
                 metadata=metadata,
             )
         elif self._logger is not None:
-            self._spans[trace.trace_id] = self._logger.start_span(
+            span = self._logger.start_span(
                 span_attributes={"type": "task", "name": trace.name},
                 span_id=trace.trace_id,
                 root_span_id=trace.trace_id,
@@ -92,13 +91,16 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
         else:
-            self._spans[trace.trace_id] = braintrust.start_span(
+            span = braintrust.start_span(
                 id=trace.trace_id,
                 span_attributes={"type": "task", "name": trace.name},
                 metadata=metadata,
                 # TODO(sachin): Add start time when SDK provides it.
                 # start_time=_timestamp_from_maybe_iso(trace.started_at),
             )
+        if span != NOOP_SPAN:
+            span.set_current()
+        self._spans[trace.trace_id] = span
 
     def on_trace_end(self, trace: tracing.Trace) -> None:
         span = self._spans.pop(trace.trace_id)
@@ -107,10 +109,11 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         trace_last_output = self._last_output.pop(trace.trace_id, None)
         span.log(input=trace_first_input, output=trace_last_output)
         span.end()
+        span.unset_current()
         # TODO(sachin): Add end time when SDK provides it.
         # span.end(_timestamp_from_maybe_iso(trace.ended_at))
 
-    def _agent_log_data(self, span: tracing.Span[tracing.AgentSpanData]) -> Dict[str, Any]:
+    def _agent_log_data(self, span: tracing.Span[tracing.AgentSpanData]) -> dict[str, Any]:
         return {
             "metadata": {
                 "tools": span.span_data.tools,
@@ -119,7 +122,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             }
         }
 
-    def _response_log_data(self, span: tracing.Span[tracing.ResponseSpanData]) -> Dict[str, Any]:
+    def _response_log_data(self, span: tracing.Span[tracing.ResponseSpanData]) -> dict[str, Any]:
         data = {}
         if span.span_data.input is not None:
             data["input"] = span.span_data.input
@@ -142,13 +145,13 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
 
         return data
 
-    def _function_log_data(self, span: tracing.Span[tracing.FunctionSpanData]) -> Dict[str, Any]:
+    def _function_log_data(self, span: tracing.Span[tracing.FunctionSpanData]) -> dict[str, Any]:
         return {
             "input": span.span_data.input,
             "output": span.span_data.output,
         }
 
-    def _handoff_log_data(self, span: tracing.Span[tracing.HandoffSpanData]) -> Dict[str, Any]:
+    def _handoff_log_data(self, span: tracing.Span[tracing.HandoffSpanData]) -> dict[str, Any]:
         return {
             "metadata": {
                 "from_agent": span.span_data.from_agent,
@@ -156,14 +159,14 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             }
         }
 
-    def _guardrail_log_data(self, span: tracing.Span[tracing.GuardrailSpanData]) -> Dict[str, Any]:
+    def _guardrail_log_data(self, span: tracing.Span[tracing.GuardrailSpanData]) -> dict[str, Any]:
         return {
             "metadata": {
                 "triggered": span.span_data.triggered,
             }
         }
 
-    def _generation_log_data(self, span: tracing.Span[tracing.GenerationSpanData]) -> Dict[str, Any]:
+    def _generation_log_data(self, span: tracing.Span[tracing.GenerationSpanData]) -> dict[str, Any]:
         metrics = {}
         ttft = _maybe_timestamp_elapsed(span.ended_at, span.started_at)
 
@@ -196,10 +199,10 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             "metrics": metrics,
         }
 
-    def _custom_log_data(self, span: tracing.Span[tracing.CustomSpanData]) -> Dict[str, Any]:
+    def _custom_log_data(self, span: tracing.Span[tracing.CustomSpanData]) -> dict[str, Any]:
         return span.span_data.data
 
-    def _log_data(self, span: tracing.Span[Any]) -> Dict[str, Any]:
+    def _log_data(self, span: tracing.Span[Any]) -> dict[str, Any]:
         if isinstance(span.span_data, tracing.AgentSpanData):
             return self._agent_log_data(span)
         elif isinstance(span.span_data, tracing.ResponseSpanData):

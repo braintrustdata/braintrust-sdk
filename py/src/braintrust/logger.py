@@ -18,24 +18,16 @@ import traceback
 import types
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from functools import partial, wraps
 from multiprocessing import cpu_count
 from types import TracebackType
 from typing import (
     Any,
-    Callable,
     Dict,
     Generic,
-    Iterator,
-    List,
     Literal,
-    Mapping,
-    MutableMapping,
     Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
     TypedDict,
     TypeVar,
     Union,
@@ -53,14 +45,13 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import context, id_gen
-from .bt_json import bt_dumps
+from .bt_json import bt_dumps, bt_safe_deep_copy
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
+    OBJECT_DELETE_FIELD,
+    OBJECT_ID_KEYS,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -98,6 +89,7 @@ from .util import (
     get_caller_location,
     mask_api_key,
     merge_dicts,
+    parse_env_var_float,
     response_raise_for_status,
 )
 
@@ -106,8 +98,33 @@ from .util import (
 REDACTION_FIELDS = ["input", "output", "expected", "metadata", "context", "scores", "metrics"]
 from .xact_ids import prettify_xact
 
-Metadata = Dict[str, Any]
+Metadata = dict[str, Any]
 DATA_API_VERSION = 2
+LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow"
+# 6 MB for the AWS lambda gateway (from our own testing).
+DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024
+
+
+@dataclasses.dataclass
+class Logs3OverflowInputRow:
+    object_ids: dict[str, Any]
+    has_comment: bool
+    is_delete: bool
+    byte_size: int
+
+
+@dataclasses.dataclass
+class LogItemWithMeta:
+    str_value: str
+    overflow_meta: Logs3OverflowInputRow
+
+
+class DatasetRef(TypedDict, total=False):
+    """Reference to a dataset by ID and optional version."""
+
+    id: str
+    version: str
+
 
 T = TypeVar("T")
 TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
@@ -120,7 +137,7 @@ DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
 def _get_exporter():
-    """ Return the active exporter (e.g. the version of SpanComponentsv*) """
+    """Return the active exporter (e.g. the version of SpanComponentsv*)"""
     use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
     return SpanComponentsV4 if use_v4 else SpanComponentsV3
 
@@ -160,12 +177,12 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
     @abstractmethod
     def start_span(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
         **event: Any,
     ) -> "Span":
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
@@ -223,7 +240,7 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
 
     @abstractmethod
-    def end(self, end_time: Optional[float] = None) -> float:
+    def end(self, end_time: float | None = None) -> float:
         """Log an end time to the span (defaults to the current time). Returns the logged time.
 
         Will be invoked automatically if the span is bound to a context manager.
@@ -237,15 +254,15 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """Flush any pending rows to the server."""
 
     @abstractmethod
-    def close(self, end_time: Optional[float] = None) -> float:
+    def close(self, end_time: float | None = None) -> float:
         """Alias for `end`."""
 
     @abstractmethod
     def set_attributes(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
     ) -> None:
         """Set the span's name, type, or other attributes. These attributes will be attached to all log events within the span.
         The attributes are equivalent to the arguments to start_span.
@@ -278,6 +295,10 @@ class _NoopSpan(Span):
     def id(self):
         return ""
 
+    @property
+    def propagated_event(self):
+        return None
+
     def log(self, **event: Any):
         pass
 
@@ -286,17 +307,17 @@ class _NoopSpan(Span):
 
     def start_span(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
         **event: Any,
     ):
         return self
 
-    def end(self, end_time: Optional[float] = None) -> float:
+    def end(self, end_time: float | None = None) -> float:
         return end_time or time.time()
 
     def export(self):
@@ -311,14 +332,14 @@ class _NoopSpan(Span):
     def flush(self):
         pass
 
-    def close(self, end_time: Optional[float] = None) -> float:
+    def close(self, end_time: float | None = None) -> float:
         return self.end(end_time)
 
     def set_attributes(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
     ):
         pass
 
@@ -333,9 +354,9 @@ class _NoopSpan(Span):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ):
         pass
 
@@ -347,11 +368,18 @@ NOOP_SPAN_PERMALINK = "https://www.braintrust.dev/noop-span"
 class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
-        self.current_experiment: Optional[Experiment] = None
-        self.current_logger: contextvars.ContextVar[Optional[Logger]] = contextvars.ContextVar(
+        self.current_experiment: Experiment | None = None
+        # We use both a ContextVar and a plain attribute for the current logger:
+        # - _cv_logger (ContextVar): Provides async context isolation so different
+        #   async tasks can have different loggers without affecting each other.
+        # - _local_logger (plain attribute): Fallback for threads, since ContextVars
+        #   don't propagate to new threads. This way if users don't want to do
+        #   anything specific they'll always have a "global logger"
+        self._cv_logger: contextvars.ContextVar[Logger | None] = contextvars.ContextVar(
             "braintrust_current_logger", default=None
         )
-        self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+        self._local_logger: Logger | None = None
+        self.current_parent: contextvars.ContextVar[str | None] = contextvars.ContextVar(
             "braintrust_current_parent", default=None
         )
         self.current_span: contextvars.ContextVar[Span] = contextvars.ContextVar(
@@ -360,7 +388,6 @@ class BraintrustState:
 
         # Context manager is dynamically selected based on current environment
         self._context_manager = None
-        self._last_otel_setting = None
         self._context_manager_lock = threading.Lock()
 
         def default_get_api_conn():
@@ -401,26 +428,32 @@ class BraintrustState:
             ),
         )
 
-    def reset_login_info(self):
-        self.app_url: Optional[str] = None
-        self.app_public_url: Optional[str] = None
-        self.login_token: Optional[str] = None
-        self.org_id: Optional[str] = None
-        self.org_name: Optional[str] = None
-        self.api_url: Optional[str] = None
-        self.proxy_url: Optional[str] = None
-        self.logged_in: bool = False
-        self.git_metadata_settings: Optional[GitMetadataSettings] = None
+        from braintrust.span_cache import SpanCache
 
-        self._app_conn: Optional[HTTPConnection] = None
-        self._api_conn: Optional[HTTPConnection] = None
-        self._proxy_conn: Optional[HTTPConnection] = None
-        self._user_info: Optional[Mapping[str, Any]] = None
+        self.span_cache = SpanCache()
+        self._otel_flush_callback: Any | None = None
+
+    def reset_login_info(self):
+        self.app_url: str | None = None
+        self.app_public_url: str | None = None
+        self.login_token: str | None = None
+        self.org_id: str | None = None
+        self.org_name: str | None = None
+        self.api_url: str | None = None
+        self.proxy_url: str | None = None
+        self.logged_in: bool = False
+        self.git_metadata_settings: GitMetadataSettings | None = None
+
+        self._app_conn: HTTPConnection | None = None
+        self._api_conn: HTTPConnection | None = None
+        self._proxy_conn: HTTPConnection | None = None
+        self._user_info: Mapping[str, Any] | None = None
 
     def reset_parent_state(self):
         # reset possible parent state for tests
         self.current_experiment = None
-        self.current_logger.set(None)
+        self._cv_logger.set(None)
+        self._local_logger = None
         self.current_parent.set(None)
         self.current_span.set(NOOP_SPAN)
 
@@ -429,9 +462,14 @@ class BraintrustState:
         # which are controlled by env vars.
         self._id_generator = None
 
+    def _reset_context_manager(self):
+        # used in tests when we want to test with a different context manager
+        # which is controlled by BRAINTRUST_OTEL_COMPAT env var.
+        self._context_manager = None
+
     @property
     def id_generator(self):
-        """ Return the active id generator. """
+        """Return the active id generator."""
         # While we probably only need one id generator per process (and it's configured with env vars), it's part of state
         # so that we could possibly have parallel tests using different id generators.
         if self._id_generator is None:
@@ -441,19 +479,31 @@ class BraintrustState:
     @property
     def context_manager(self):
         """Get the appropriate context manager based on current environment."""
-        import os
-        current_otel_setting = os.environ.get('BRAINTRUST_OTEL_COMPAT', '')
-
-        # Cache the context manager unless the environment variable changed
-        if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+        # Cache the context manager on first access
+        if self._context_manager is None:
             with self._context_manager_lock:
                 # Double-check after acquiring lock
-                if self._context_manager is None or self._last_otel_setting != current_otel_setting:
+                if self._context_manager is None:
                     from braintrust.context import get_context_manager
+
                     self._context_manager = get_context_manager()
-                    self._last_otel_setting = current_otel_setting
 
         return self._context_manager
+
+    def register_otel_flush(self, callback: Any) -> None:
+        """
+        Register an OTEL flush callback. This is called by the OTEL integration
+        when it initializes a span processor/exporter.
+        """
+        self._otel_flush_callback = callback
+
+    async def flush_otel(self) -> None:
+        """
+        Flush OTEL spans if a callback is registered.
+        Called during ensure_spans_flushed to ensure OTEL spans are visible in BTQL.
+        """
+        if self._otel_flush_callback:
+            await self._otel_flush_callback()
 
     def copy_state(self, other: "BraintrustState"):
         """Copy login information from another BraintrustState instance."""
@@ -464,7 +514,8 @@ class BraintrustState:
                 if k
                 not in (
                     "current_experiment",
-                    "current_logger",
+                    "_cv_logger",
+                    "_local_logger",
                     "current_parent",
                     "current_span",
                     "_global_bg_logger",
@@ -478,9 +529,9 @@ class BraintrustState:
 
     def login(
         self,
-        app_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        org_name: Optional[str] = None,
+        app_url: str | None = None,
+        api_key: str | None = None,
+        org_name: str | None = None,
         force_login: bool = False,
     ) -> None:
         if not force_login and self.logged_in:
@@ -535,10 +586,6 @@ class BraintrustState:
             self._user_info = self.api_conn().get_json("ping")
         return self._user_info
 
-    def set_user_info_if_null(self, info: Mapping[str, Any]):
-        if not self._user_info:
-            self._user_info = info
-
     def global_bg_logger(self) -> "_BackgroundLogger":
         return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
 
@@ -556,7 +603,7 @@ class BraintrustState:
         bg_logger = self._global_bg_logger.get()
         bg_logger.enforce_queue_size_limit(enforce)
 
-    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+    def set_masking_function(self, masking_function: Callable[[Any], Any] | None) -> None:
         """Set the masking function on the background logger."""
         self.global_bg_logger().set_masking_function(masking_function)
 
@@ -564,7 +611,7 @@ class BraintrustState:
 _state: BraintrustState = None  # type: ignore
 
 
-_http_adapter: Optional[HTTPAdapter] = None
+_http_adapter: HTTPAdapter | None = None
 
 
 def set_http_adapter(adapter: HTTPAdapter) -> None:
@@ -600,14 +647,28 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
         base_num_retries: Maximum number of retries before giving up and re-raising the exception.
         backoff_factor: A multiplier used to determine the time to wait between retries.
                        The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+        default_timeout_secs: Default timeout in seconds for requests that don't specify one.
+                             Prevents indefinite hangs on stale connections.
     """
 
-    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+    def __init__(
+        self,
+        *args: Any,
+        base_num_retries: int = 0,
+        backoff_factor: float = 0.5,
+        default_timeout_secs: float = 60,
+        **kwargs: Any,
+    ):
         self.base_num_retries = base_num_retries
         self.backoff_factor = backoff_factor
+        self.default_timeout_secs = default_timeout_secs
         super().__init__(*args, **kwargs)
 
     def send(self, *args, **kwargs):
+        # Apply default timeout if none provided to prevent indefinite hangs
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.default_timeout_secs
+
         num_prev_retries = 0
         while True:
             try:
@@ -619,6 +680,14 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                 if num_prev_retries < self.base_num_retries:
+                    if isinstance(e, requests.exceptions.ReadTimeout):
+                        # Clear all connection pools to discard stale connections. This
+                        # fixes hangs caused by NAT gateways silently dropping idle TCP
+                        # connections (e.g., Azure's ~4 min timeout). close() calls
+                        # PoolManager.clear() which is thread-safe: in-flight requests
+                        # keep their checked-out connections, and new requests create
+                        # fresh pools on demand.
+                        self.close()
                     # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
                     sleep_s = self.backoff_factor * (2**num_prev_retries)
                     print("Retrying request after error:", e, file=sys.stderr)
@@ -630,7 +699,7 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
 
 
 class HTTPConnection:
-    def __init__(self, base_url: str, adapter: Optional[HTTPAdapter] = None):
+    def __init__(self, base_url: str, adapter: HTTPAdapter | None = None):
         self.base_url = base_url
         self.token = None
         self.adapter = adapter
@@ -640,14 +709,16 @@ class HTTPConnection:
     def ping(self) -> bool:
         try:
             resp = self.get("ping")
-            _state.set_user_info_if_null(resp.json())
             return resp.ok
         except requests.exceptions.ConnectionError:
             return False
 
     def make_long_lived(self) -> None:
         if not self.adapter:
-            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
+            timeout_secs = parse_env_var_float("BRAINTRUST_HTTP_TIMEOUT", 60.0)
+            self.adapter = RetryRequestExceptionsAdapter(
+                base_num_retries=10, backoff_factor=0.5, default_timeout_secs=timeout_secs
+            )
         self._reset()
 
     @staticmethod
@@ -659,7 +730,7 @@ class HTTPConnection:
         self.token = token
         self._set_session_token()
 
-    def _set_adapter(self, adapter: Optional[HTTPAdapter]) -> None:
+    def _set_adapter(self, adapter: HTTPAdapter | None) -> None:
         self.adapter = adapter
 
     def _reset(self, **retry_kwargs: Any) -> None:
@@ -691,22 +762,12 @@ class HTTPConnection:
     def delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def get_json(
-        self, object_type: str, args: Optional[Mapping[str, Any]] = None, retries: int = 0
-    ) -> Mapping[str, Any]:
-        tries = retries + 1
-        for i in range(tries):
-            resp = self.get(f"/{object_type}", params=args)
-            if i < tries - 1 and not resp.ok:
-                _logger.warning(f"Retrying API request {object_type} {args} {resp.status_code} {resp.text}")
-                continue
-            response_raise_for_status(resp)
+    def get_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        resp = self.get(f"/{object_type}", params=args)
+        response_raise_for_status(resp)
+        return resp.json()
 
-            return resp.json()
-        # Needed for type checking.
-        raise Exception("unreachable")
-
-    def post_json(self, object_type: str, args: Optional[Mapping[str, Any]] = None) -> Any:
+    def post_json(self, object_type: str, args: Mapping[str, Any] | None = None) -> Any:
         resp = self.post(f"/{object_type.lstrip('/')}", json=args)
         response_raise_for_status(resp)
         return resp.json()
@@ -742,18 +803,41 @@ def construct_json_array(items: Sequence[str]):
     return "[" + ",".join(items) + "]"
 
 
-def construct_logs3_data(items: Sequence[str]):
-    rowsS = construct_json_array(items)
+def construct_logs3_data(items: Sequence[LogItemWithMeta]):
+    rowsS = construct_json_array([item.str_value for item in items])
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
-def _check_json_serializable(event):
-    try:
-        return bt_dumps(event)
-    except TypeError as e:
-        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+def construct_logs3_overflow_request(key: str, size_bytes: int | None = None) -> dict[str, Any]:
+    rows: dict[str, Any] = {"type": LOGS3_OVERFLOW_REFERENCE_TYPE, "key": key}
+    if size_bytes is not None:
+        rows["size_bytes"] = size_bytes
+    return {"rows": rows, "api_version": DATA_API_VERSION}
 
 
+def pick_logs3_overflow_object_ids(row: Mapping[str, Any]) -> dict[str, Any]:
+    object_ids: dict[str, Any] = {}
+    for key in OBJECT_ID_KEYS:
+        if key in row:
+            object_ids[key] = row[key]
+    return object_ids
+
+
+def stringify_with_overflow_meta(item: dict[str, Any]) -> LogItemWithMeta:
+    str_value = bt_dumps(item)
+    return LogItemWithMeta(
+        str_value=str_value,
+        overflow_meta=Logs3OverflowInputRow(
+            object_ids=pick_logs3_overflow_object_ids(item),
+            has_comment="comment" in item,
+            is_delete=item.get(OBJECT_DELETE_FIELD) is True,
+            byte_size=utf8_byte_length(str_value),
+        ),
+    )
+
+
+def utf8_byte_length(value: str) -> int:
+    return len(value.encode("utf-8"))
 
 
 class _MaskingError:
@@ -792,11 +876,11 @@ def _apply_masking_to_field(masking_function: Callable[[Any], Any], data: Any, f
 
 class _BackgroundLogger(ABC):
     @abstractmethod
-    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+    def log(self, *args: LazyValue[dict[str, Any]]) -> None:
         pass
 
     @abstractmethod
-    def flush(self, batch_size: Optional[int] = None):
+    def flush(self, batch_size: int | None = None):
         pass
 
 
@@ -804,21 +888,36 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def __init__(self):
         self.lock = threading.Lock()
         self.logs = []
-        self.masking_function: Optional[Callable[[Any], Any]] = None
+        self.masking_function: Callable[[Any], Any] | None = None
+        self.upload_attempts: list[BaseAttachment] = []  # Track upload attempts
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
         pass
 
-    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+    def log(self, *args: LazyValue[dict[str, Any]]) -> None:
         with self.lock:
             self.logs.extend(args)
 
-    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+    def set_masking_function(self, masking_function: Callable[[Any], Any] | None) -> None:
         """Set the masking function for the memory logger."""
         self.masking_function = masking_function
 
-    def flush(self, batch_size: Optional[int] = None):
-        pass
+    def flush(self, batch_size: int | None = None):
+        """Flush the memory logger, extracting attachments and tracking upload attempts."""
+        with self.lock:
+            if not self.logs:
+                return
+
+            # Unwrap lazy values and extract attachments
+            logs = [l.get() for l in self.logs]
+
+            # Extract attachments from all logs
+            attachments: list[BaseAttachment] = []
+            for log in logs:
+                _extract_attachments(log, attachments)
+
+            # Track upload attempts (don't actually call upload() in tests)
+            self.upload_attempts.extend(attachments)
 
     def pop(self):
         with self.lock:
@@ -830,15 +929,12 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
 
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            merged = merge_row_batch(logs)
-            first = merged[0]
-            for other in merged[1:]:
-                first.extend(other)
+            batch = merge_row_batch(logs)
 
             # Apply masking after merge, similar to HTTPBackgroundLogger
             if self.masking_function:
-                for i in range(len(first)):
-                    item = first[i]
+                for i in range(len(batch)):
+                    item = batch[i]
                     masked_item = item.copy()
 
                     # Only mask specific fields if they exist
@@ -856,9 +952,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
                             else:
                                 masked_item[field] = masked_value
 
-                    first[i] = masked_item
+                    batch[i] = masked_item
 
-            return first
+            return batch
 
 
 BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
@@ -871,9 +967,12 @@ BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
 class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
-        self.masking_function: Optional[Callable[[Any], Any]] = None
+        self.masking_function: Callable[[Any], Any] | None = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
+        self._max_request_size_override: int | None = None
+        self._max_request_size_result: dict[str, Any] | None = None
+        self._max_request_size_lock = threading.Lock()
 
         try:
             self.sync_flush = bool(int(os.environ["BRAINTRUST_SYNC_FLUSH"]))
@@ -881,10 +980,9 @@ class _HTTPBackgroundLogger:
             self.sync_flush = False
 
         try:
-            self.max_request_size = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
+            self._max_request_size_override = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
         except:
-            # 6 MB for the AWS lambda gateway (from our own testing).
-            self.max_request_size = 6 * 1024 * 1024
+            pass
 
         try:
             self.default_batch_size = int(os.environ["BRAINTRUST_DEFAULT_BATCH_SIZE"])
@@ -925,6 +1023,9 @@ class _HTTPBackgroundLogger:
         self.logger = logging.getLogger("braintrust")
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
 
+        # Counter for tracking overflow uploads (useful for testing)
+        self._overflow_upload_count = 0
+
         atexit.register(self._finalize)
 
     def enforce_queue_size_limit(self, enforce: bool) -> None:
@@ -934,7 +1035,7 @@ class _HTTPBackgroundLogger:
         """
         self.queue.enforce_queue_size_limit(enforce)
 
-    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+    def log(self, *args: LazyValue[dict[str, Any]]) -> None:
         self._start()
         dropped_items = []
         for event in args:
@@ -981,7 +1082,39 @@ class _HTTPBackgroundLogger:
                     else:
                         raise
 
-    def flush(self, batch_size: Optional[int] = None):
+    def _get_max_request_size(self) -> dict[str, Any]:
+        if self._max_request_size_result is not None:
+            return self._max_request_size_result
+        with self._max_request_size_lock:
+            if self._max_request_size_result is not None:
+                return self._max_request_size_result
+            server_limit: int | None = None
+            try:
+                conn = self.api_conn.get()
+                info = conn.get_json("version")
+                limit = info.get("logs3_payload_max_bytes")
+                if isinstance(limit, (int, float)) and int(limit) > 0:
+                    server_limit = int(limit)
+            except Exception as e:
+                print(f"Failed to fetch version info for payload limit: {e}", file=self.outfile)
+            valid_server_limit = server_limit if server_limit is not None and server_limit > 0 else None
+            can_use_overflow = valid_server_limit is not None
+            max_request_size = DEFAULT_MAX_REQUEST_SIZE
+            if self._max_request_size_override is not None:
+                max_request_size = (
+                    min(self._max_request_size_override, valid_server_limit)
+                    if valid_server_limit is not None
+                    else self._max_request_size_override
+                )
+            elif valid_server_limit is not None:
+                max_request_size = valid_server_limit
+            self._max_request_size_result = {
+                "max_request_size": max_request_size,
+                "can_use_overflow": can_use_overflow,
+            }
+            return self._max_request_size_result
+
+    def flush(self, batch_size: int | None = None):
         if batch_size is None:
             batch_size = self.default_batch_size
 
@@ -995,32 +1128,37 @@ class _HTTPBackgroundLogger:
             if len(all_items) == 0:
                 return
 
-            # Construct batches of records to flush in parallel and in sequence.
-            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
-            batch_sets = batch_items(
-                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
+            # Construct batches of records to flush in parallel.
+            all_items_with_meta = [stringify_with_overflow_meta(item) for item in all_items]
+            max_request_size_result = self._get_max_request_size()
+            batches = batch_items(
+                items=all_items_with_meta,
+                batch_max_num_items=batch_size,
+                batch_max_num_bytes=max_request_size_result["max_request_size"] // 2,
+                get_byte_size=lambda item: len(item.str_value),
             )
-            for batch_set in batch_sets:
-                post_promises = []
-                try:
-                    post_promises = [
-                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
-                    ]
-                except RuntimeError:
-                    # If the thread pool has shut down, e.g. because the process
-                    # is terminating, run the requests the old fashioned way.
-                    for batch in batch_set:
-                        self._submit_logs_request(batch)
 
-                concurrent.futures.wait(post_promises)
-                # Raise any exceptions from the promises as one group.
-                post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
-                if post_promise_exceptions:
-                    raise exceptiongroup.BaseExceptionGroup(
-                        f"Encountered the following errors while logging:", post_promise_exceptions
-                    )
+            post_promises = []
+            try:
+                post_promises = [
+                    HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch, max_request_size_result)
+                    for batch in batches
+                ]
+            except RuntimeError:
+                # If the thread pool has shut down, e.g. because the process
+                # is terminating, run the requests the old fashioned way.
+                for batch in batches:
+                    self._submit_logs_request(batch, max_request_size_result)
 
-            attachment_errors: List[Exception] = []
+            concurrent.futures.wait(post_promises)
+            # Raise any exceptions from the promises as one group.
+            post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
+            if post_promise_exceptions:
+                raise exceptiongroup.BaseExceptionGroup(
+                    f"Encountered the following errors while logging:", post_promise_exceptions
+                )
+
+            attachment_errors: list[Exception] = []
             for attachment in attachments:
                 try:
                     result = attachment.upload()
@@ -1038,43 +1176,41 @@ class _HTTPBackgroundLogger:
                 )
 
     def _unwrap_lazy_values(
-        self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
-    ) -> Tuple[List[List[Dict[str, Any]]], List["BaseAttachment"]]:
+        self, wrapped_items: Sequence[LazyValue[dict[str, Any]]]
+    ) -> tuple[list[dict[str, Any]], list["BaseAttachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
-                batched_items = merge_row_batch(unwrapped_items)
+                merged_items = merge_row_batch(unwrapped_items)
 
                 # Apply masking after merging but before sending to backend
                 if self.masking_function:
-                    for batch_idx in range(len(batched_items)):
-                        for item_idx in range(len(batched_items[batch_idx])):
-                            item = batched_items[batch_idx][item_idx]
-                            masked_item = item.copy()
+                    for item_idx in range(len(merged_items)):
+                        item = merged_items[item_idx]
+                        masked_item = item.copy()
 
-                            # Only mask specific fields if they exist
-                            for field in REDACTION_FIELDS:
-                                if field in item:
-                                    masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
-                                    if isinstance(masked_value, _MaskingError):
-                                        # Drop the field and add error message
-                                        if field in masked_item:
-                                            del masked_item[field]
-                                        if "error" in masked_item:
-                                            masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
-                                        else:
-                                            masked_item["error"] = masked_value.error_msg
+                        # Only mask specific fields if they exist
+                        for field in REDACTION_FIELDS:
+                            if field in item:
+                                masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                                if isinstance(masked_value, _MaskingError):
+                                    # Drop the field and add error message
+                                    if field in masked_item:
+                                        del masked_item[field]
+                                    if "error" in masked_item:
+                                        masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
                                     else:
-                                        masked_item[field] = masked_value
+                                        masked_item["error"] = masked_value.error_msg
+                                else:
+                                    masked_item[field] = masked_value
 
-                            batched_items[batch_idx][item_idx] = masked_item
+                        merged_items[item_idx] = masked_item
 
-                attachments: List["BaseAttachment"] = []
-                for batch in batched_items:
-                    for item in batch:
-                        _extract_attachments(item, attachments)
+                attachments: list["BaseAttachment"] = []
+                for item in merged_items:
+                    _extract_attachments(item, attachments)
 
-                return batched_items, attachments
+                return merged_items, attachments
             except Exception as e:
                 errmsg = "Encountered error when constructing records to flush"
                 is_retrying = i + 1 < self.num_tries
@@ -1097,21 +1233,120 @@ class _HTTPBackgroundLogger:
         )
         return [], []
 
-    def _submit_logs_request(self, items: Sequence[str]):
+    def _request_logs3_overflow_upload(
+        self, conn: HTTPConnection, payload_size_bytes: int, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        try:
+            resp = conn.post(
+                "/logs3/overflow",
+                json={"content_type": "application/json", "size_bytes": payload_size_bytes, "rows": rows},
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            raise RuntimeError(f"Failed to request logs3 overflow upload URL: {e}") from e
+
+        method = payload.get("method")
+        if method not in ("PUT", "POST"):
+            raise RuntimeError(f"Invalid response from API server (method must be PUT or POST): {payload}")
+        signed_url = payload.get("signedUrl")
+        headers = payload.get("headers")
+        fields = payload.get("fields")
+        key = payload.get("key")
+        if not isinstance(signed_url, str) or not isinstance(key, str):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "PUT" and not isinstance(headers, dict):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+        if method == "POST" and not isinstance(fields, dict):
+            raise RuntimeError(f"Invalid response from API server: {payload}")
+
+        if method == "PUT":
+            add_azure_blob_headers(headers, signed_url)
+
+        return {
+            "method": method,
+            "signed_url": signed_url,
+            "headers": headers if isinstance(headers, dict) else {},
+            "fields": fields if isinstance(fields, dict) else {},
+            "key": key,
+        }
+
+    def _upload_logs3_overflow_payload(self, upload: dict[str, Any], payload: str) -> None:
+        obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+        method = upload["method"]
+        if method == "POST":
+            fields = upload.get("fields")
+            if not isinstance(fields, dict):
+                raise RuntimeError("Missing logs3 overflow upload fields")
+            content_type = fields.get("Content-Type", "application/json")
+            headers = {k: v for k, v in upload.get("headers", {}).items() if k.lower() != "content-type"}
+            obj_response = obj_conn.post(
+                upload["signed_url"],
+                headers=headers,
+                data=fields,
+                files={"file": ("logs3.json", payload.encode("utf-8"), content_type)},
+            )
+        else:
+            obj_response = obj_conn.put(
+                upload["signed_url"],
+                headers=upload["headers"],
+                data=payload.encode("utf-8"),
+            )
+        obj_response.raise_for_status()
+
+    def _submit_logs_request(self, items: Sequence[LogItemWithMeta], max_request_size_result: dict[str, Any]):
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
+        payload_bytes = utf8_byte_length(dataStr)
+        max_request_size = max_request_size_result["max_request_size"]
+        can_use_overflow = max_request_size_result["can_use_overflow"]
+        use_overflow = can_use_overflow and payload_bytes > max_request_size
         if self.all_publish_payloads_dir:
             _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+        overflow_upload: dict[str, Any] | None = None
+        overflow_rows = (
+            [
+                {
+                    "object_ids": item.overflow_meta.object_ids,
+                    "has_comment": item.overflow_meta.has_comment,
+                    "is_delete": item.overflow_meta.is_delete,
+                    "input_row": {"byte_size": item.overflow_meta.byte_size},
+                }
+                for item in items
+            ]
+            if use_overflow
+            else None
+        )
         for i in range(self.num_tries):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataStr)
-            if resp.ok:
+            resp = None
+            error = None
+            try:
+                if overflow_rows:
+                    if overflow_upload is None:
+                        current_upload = self._request_logs3_overflow_upload(conn, payload_bytes, overflow_rows)
+                        self._upload_logs3_overflow_payload(current_upload, dataStr)
+                        overflow_upload = current_upload
+                    resp = conn.post(
+                        "/logs3",
+                        json=construct_logs3_overflow_request(overflow_upload["key"], payload_bytes),
+                    )
+                else:
+                    resp = conn.post("/logs3", data=dataStr.encode("utf-8"))
+            except Exception as e:
+                error = e
+            if error is None and resp is not None and resp.ok:
+                if overflow_rows:
+                    self._overflow_upload_count += 1
                 return
-            resp_errmsg = f"{resp.status_code}: {resp.text}"
+            if error is None and resp is not None:
+                resp_errmsg = f"{resp.status_code}: {resp.text}"
+            else:
+                resp_errmsg = str(error)
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {payload_bytes}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
                 _HTTPBackgroundLogger._write_payload_to_dir(
@@ -1136,14 +1371,15 @@ class _HTTPBackgroundLogger:
             return
         try:
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
-            dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            items_with_meta = [stringify_with_overflow_meta(item) for item in all_items]
+            dataStr = construct_logs3_data(items_with_meta)
             attachment_str = bt_dumps([a.debug_info() for a in attachments])
             payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
                 _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
-        except Exception as e:
+        except Exception:
             traceback.print_exc(file=self.outfile)
 
     def _register_dropped_item_count(self, num_items):
@@ -1179,7 +1415,7 @@ class _HTTPBackgroundLogger:
     def internal_replace_api_conn(self, api_conn: HTTPConnection):
         self.api_conn = LazyValue(lambda: api_conn, use_mutex=False)
 
-    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]):
+    def set_masking_function(self, masking_function: Callable[[Any], Any] | None):
         """Set or update the masking function."""
         self.masking_function = masking_function
 
@@ -1221,7 +1457,7 @@ def _internal_with_memory_background_logger():
 class ObjectMetadata:
     id: str
     name: str
-    full_info: Dict[str, Any]
+    full_info: dict[str, Any]
 
 
 @dataclasses.dataclass
@@ -1250,69 +1486,69 @@ class OrgProjectMetadata:
 # this.
 @overload
 def init(
-    project: Optional[str] = ...,
-    experiment: Optional[str] = ...,
-    description: Optional[str] = ...,
+    project: str | None = ...,
+    experiment: str | None = ...,
+    description: str | None = ...,
     dataset: Optional["Dataset"] = ...,
     open: Literal[False] = ...,
-    base_experiment: Optional[str] = ...,
+    base_experiment: str | None = ...,
     is_public: bool = ...,
-    app_url: Optional[str] = ...,
-    api_key: Optional[str] = ...,
-    org_name: Optional[str] = ...,
-    metadata: Optional[Metadata] = ...,
-    git_metadata_settings: Optional[GitMetadataSettings] = ...,
+    app_url: str | None = ...,
+    api_key: str | None = ...,
+    org_name: str | None = ...,
+    metadata: Metadata | None = ...,
+    git_metadata_settings: GitMetadataSettings | None = ...,
     set_current: bool = ...,
-    update: Optional[bool] = ...,
-    project_id: Optional[str] = ...,
-    base_experiment_id: Optional[str] = ...,
-    repo_info: Optional[RepoInfo] = ...,
-    state: Optional[BraintrustState] = ...,
+    update: bool | None = ...,
+    project_id: str | None = ...,
+    base_experiment_id: str | None = ...,
+    repo_info: RepoInfo | None = ...,
+    state: BraintrustState | None = ...,
 ) -> "Experiment": ...
 
 
 @overload
 def init(
-    project: Optional[str] = ...,
-    experiment: Optional[str] = ...,
-    description: Optional[str] = ...,
+    project: str | None = ...,
+    experiment: str | None = ...,
+    description: str | None = ...,
     dataset: Optional["Dataset"] = ...,
     open: Literal[True] = ...,
-    base_experiment: Optional[str] = ...,
+    base_experiment: str | None = ...,
     is_public: bool = ...,
-    app_url: Optional[str] = ...,
-    api_key: Optional[str] = ...,
-    org_name: Optional[str] = ...,
-    metadata: Optional[Metadata] = ...,
-    git_metadata_settings: Optional[GitMetadataSettings] = ...,
+    app_url: str | None = ...,
+    api_key: str | None = ...,
+    org_name: str | None = ...,
+    metadata: Metadata | None = ...,
+    git_metadata_settings: GitMetadataSettings | None = ...,
     set_current: bool = ...,
-    update: Optional[bool] = ...,
-    project_id: Optional[str] = ...,
-    base_experiment_id: Optional[str] = ...,
-    repo_info: Optional[RepoInfo] = ...,
-    state: Optional[BraintrustState] = ...,
+    update: bool | None = ...,
+    project_id: str | None = ...,
+    base_experiment_id: str | None = ...,
+    repo_info: RepoInfo | None = ...,
+    state: BraintrustState | None = ...,
 ) -> "ReadonlyExperiment": ...
 
 
 def init(
-    project: Optional[str] = None,
-    experiment: Optional[str] = None,
-    description: Optional[str] = None,
-    dataset: Optional["Dataset"] = None,
+    project: str | None = None,
+    experiment: str | None = None,
+    description: str | None = None,
+    dataset: Optional["Dataset"] | DatasetRef = None,
     open: bool = False,
-    base_experiment: Optional[str] = None,
+    base_experiment: str | None = None,
     is_public: bool = False,
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
-    metadata: Optional[Metadata] = None,
-    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
+    metadata: Metadata | None = None,
+    git_metadata_settings: GitMetadataSettings | None = None,
     set_current: bool = True,
-    update: Optional[bool] = None,
-    project_id: Optional[str] = None,
-    base_experiment_id: Optional[str] = None,
-    repo_info: Optional[RepoInfo] = None,
-    state: Optional[BraintrustState] = None,
+    update: bool | None = None,
+    project_id: str | None = None,
+    base_experiment_id: str | None = None,
+    repo_info: RepoInfo | None = None,
+    state: BraintrustState | None = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1411,12 +1647,19 @@ def init(
             args["base_exp_id"] = base_experiment_id
         elif base_experiment is not None:
             args["base_experiment"] = base_experiment
-        else:
+        elif merged_git_metadata_settings and merged_git_metadata_settings.collect != "none":
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
         if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
+            if isinstance(dataset, dict):
+                # Simple {"id": ..., "version": ...} dict
+                args["dataset_id"] = dataset["id"]
+                if "version" in dataset:
+                    args["dataset_version"] = dataset["version"]
+            else:
+                # Full Dataset object
+                args["dataset_id"] = dataset.id
+                args["dataset_version"] = dataset.version
 
         if is_public is not None:
             args["public"] = is_public
@@ -1447,7 +1690,11 @@ def init(
     # For experiments, disable queue size limit enforcement (unlimited queue)
     state.enforce_queue_size_limit(False)
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
+    ret = Experiment(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        dataset=dataset if isinstance(dataset, Dataset) else None,
+        state=state,
+    )
     if set_current:
         state.current_experiment = ret
     return ret
@@ -1460,18 +1707,18 @@ def init_experiment(*args, **kwargs) -> Union["Experiment", "ReadonlyExperiment"
 
 
 def init_dataset(
-    project: Optional[str] = None,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    version: Optional[Union[str, int]] = None,
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
-    project_id: Optional[str] = None,
-    metadata: Optional[Metadata] = None,
+    project: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    version: str | int | None = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
+    project_id: str | None = None,
+    metadata: Metadata | None = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
-    _internal_btql: Optional[Dict[str, Any]] = None,
-    state: Optional[BraintrustState] = None,
+    _internal_btql: dict[str, Any] | None = None,
+    state: BraintrustState | None = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1519,7 +1766,7 @@ def init_dataset(
     )
 
 
-def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Optional[str] = None):
+def _compute_logger_metadata(project_name: str | None = None, project_id: str | None = None):
     login()
     org_id = _state.org_id
     if project_id is None:
@@ -1547,15 +1794,15 @@ def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Opt
 
 
 def init_logger(
-    project: Optional[str] = None,
-    project_id: Optional[str] = None,
+    project: str | None = None,
+    project_id: str | None = None,
     async_flush: bool = True,
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
     force_login: bool = False,
     set_current: bool = True,
-    state: Optional[BraintrustState] = None,
+    state: BraintrustState | None = None,
 ) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -1599,22 +1846,23 @@ def init_logger(
     if set_current:
         if _state is None:
             raise RuntimeError("_state is None in init_logger. This should never happen.")
-        _state.current_logger.set(ret)
+        _state._cv_logger.set(ret)
+        _state._local_logger = ret
     return ret
 
 
 def load_prompt(
-    project: Optional[str] = None,
-    slug: Optional[str] = None,
-    version: Optional[Union[str, int]] = None,
-    project_id: Optional[str] = None,
-    id: Optional[str] = None,
-    defaults: Optional[Mapping[str, Any]] = None,
+    project: str | None = None,
+    slug: str | None = None,
+    version: str | int | None = None,
+    project_id: str | None = None,
+    id: str | None = None,
+    defaults: Mapping[str, Any] | None = None,
     no_trace: bool = False,
-    environment: Optional[str] = None,
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
+    environment: str | None = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
 ) -> "Prompt":
     """
     Loads a prompt from the specified project.
@@ -1737,9 +1985,9 @@ login_lock = threading.RLock()
 
 
 def login(
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
     force_login: bool = False,
 ) -> None:
     """
@@ -1762,10 +2010,29 @@ def login(
         _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
 
+def register_otel_flush(callback: Any) -> None:
+    """
+    Register a callback to flush OTEL spans. This is called by the OTEL integration
+    when it initializes a span processor/exporter.
+
+    When ensure_spans_flushed is called (e.g., before a BTQL query in scorers),
+    this callback will be invoked to ensure OTEL spans are flushed to the server.
+
+    Also disables the span cache, since OTEL spans aren't in the local cache
+    and we need BTQL to see the complete span tree (both native + OTEL spans).
+
+    :param callback: The async callback function to flush OTEL spans.
+    """
+    global _state
+    _state.register_otel_flush(callback)
+    # Disable span cache since OTEL spans aren't in the local cache
+    _state.span_cache.disable()
+
+
 def login_to_state(
-    app_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    org_name: Optional[str] = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
 ) -> BraintrustState:
     app_url = _get_app_url(app_url)
 
@@ -1845,7 +2112,7 @@ def login_to_state(
     return state
 
 
-def set_masking_function(masking_function: Optional[Callable[[Any], Any]]) -> None:
+def set_masking_function(masking_function: Callable[[Any], Any] | None) -> None:
     """
     Set a global masking function that will be applied to all logged data before sending to Braintrust.
     The masking function will be applied after records are merged but before they are sent to the backend.
@@ -1872,7 +2139,7 @@ def log(**event: Any) -> str:
     return e.log(**event)
 
 
-def summarize(summarize_scores: bool = True, comparison_experiment_id: Optional[str] = None) -> "ExperimentSummary":
+def summarize(summarize_scores: bool = True, comparison_experiment_id: str | None = None) -> "ExperimentSummary":
     """
     Summarize the current experiment, including the scores (compared to the closest reference experiment) and metadata.
 
@@ -1901,7 +2168,7 @@ def current_experiment() -> Optional["Experiment"]:
 def current_logger() -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
 
-    return _state.current_logger.get()
+    return _state._cv_logger.get() or _state._local_logger
 
 
 def current_span() -> Span:
@@ -1911,14 +2178,14 @@ def current_span() -> Span:
     """
 
     span_info = _state.context_manager.get_current_span_info()
-    if span_info and hasattr(span_info.span_object, 'span_id'):
+    if span_info and hasattr(span_info.span_object, "span_id"):
         # This is a BT span
         return span_info.span_object
     return NOOP_SPAN
 
 
 @contextlib.contextmanager
-def parent_context(parent: Optional[str], state: Optional[BraintrustState] = None):
+def parent_context(parent: str | None, state: BraintrustState | None = None):
     """
     Context manager to temporarily set the parent context for spans.
 
@@ -1939,7 +2206,9 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
         state.current_parent.reset(token)
 
 
-def get_span_parent_object(parent: Optional[str] = None, state: Optional[BraintrustState] = None) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
+def get_span_parent_object(
+    parent: str | None = None, state: BraintrustState | None = None
+) -> Union[SpanComponentsV4, "Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context.
     Applies precedence: current span > propagated parent string > experiment > logger."""
 
@@ -1967,24 +2236,14 @@ def get_span_parent_object(parent: Optional[str] = None, state: Optional[Braintr
 
 def _try_log_input(span, f_sig, f_args, f_kwargs):
     if f_sig:
-        bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
-        input_serializable = bound_args
+        input_data = f_sig.bind(*f_args, **f_kwargs).arguments
     else:
-        input_serializable = dict(args=f_args, kwargs=f_kwargs)
-    try:
-        _check_json_serializable(input_serializable)
-    except Exception as e:
-        input_serializable = "<input not json-serializable>: " + str(e)
-    span.log(input=input_serializable)
+        input_data = dict(args=f_args, kwargs=f_kwargs)
+    span.log(input=input_data)
 
 
 def _try_log_output(span, output):
-    output_serializable = output
-    try:
-        _check_json_serializable(output)
-    except Exception as e:
-        output_serializable = "<output not json-serializable>: " + str(e)
-    span.log(output=output_serializable)
+    span.log(output=output)
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -2153,14 +2412,14 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
 
 
 def start_span(
-    name: Optional[str] = None,
-    type: Optional[SpanTypeAttribute] = None,
-    span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-    start_time: Optional[float] = None,
-    set_current: Optional[bool] = None,
-    parent: Optional[str] = None,
-    propagated_event: Optional[Dict[str, Any]] = None,
-    state: Optional[BraintrustState] = None,
+    name: str | None = None,
+    type: SpanTypeAttribute | None = None,
+    span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+    start_time: float | None = None,
+    set_current: bool | None = None,
+    parent: str | None = None,
+    propagated_event: dict[str, Any] | None = None,
+    state: BraintrustState | None = None,
     **event: Any,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
@@ -2263,7 +2522,7 @@ def validate_tags(tags: Sequence[str]) -> None:
         seen.add(tag)
 
 
-def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachment"]) -> None:
+def _extract_attachments(event: dict[str, Any], attachments: list["BaseAttachment"]) -> None:
     """
     Helper function for uploading attachments. Recursively extracts `Attachment`
     and `ExternalAttachment` values and replaces them with their associated
@@ -2280,13 +2539,13 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachmen
             return v.reference  # Attachment cannot be nested.
 
         # Recursive case: object.
-        if isinstance(v, Dict):
+        if isinstance(v, dict):
             for k, v2 in v.items():
                 v[k] = _helper(v2)
             return v
 
         # Recursive case: array.
-        if isinstance(v, List):
+        if isinstance(v, list):
             for i in range(len(v)):
                 v[i] = _helper(v[i])
             return v
@@ -2306,7 +2565,7 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     """
 
     def _helper(v: Any) -> Any:
-        if isinstance(v, Dict):
+        if isinstance(v, dict):
             # Base case: AttachmentReference.
             if v.get("type") == "braintrust_attachment" or v.get("type") == "external_attachment":
                 return ReadonlyAttachment(cast(AttachmentReference, v))
@@ -2317,7 +2576,7 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
                 return v
 
         # Recursive case: array.
-        if isinstance(v, List):
+        if isinstance(v, list):
             for i in range(len(v)):
                 v[i] = _helper(v[i])
             return v
@@ -2331,30 +2590,7 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     return event
 
 
-def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
+def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> dict[str, Any]:
     scores = event.get("scores")
     if scores:
         for name, score in scores.items():
@@ -2434,49 +2670,6 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
     return event
 
 
-def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
-    """
-    Creates a deep copy of the given event. Replaces references to user objects
-    with placeholder strings to ensure serializability, except for `Attachment`
-    and `ExternalAttachment` objects, which are preserved and not deep-copied.
-    """
-
-    def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Mapping):
-            # Prevent dict keys from holding references to user data. Note that
-            # `bt_json` already coerces keys to string, a behavior that comes from
-            # `json.dumps`. However, that runs at log upload time, while we want to
-            # cut out all the references to user objects synchronously in this
-            # function.
-            return {str(k): _deep_copy_object(v[k]) for k in v}
-        elif isinstance(v, (List, Tuple, Set)):
-            return [_deep_copy_object(x) for x in v]
-        elif isinstance(v, Span):
-            return "<span>"
-        elif isinstance(v, Experiment):
-            return "<experiment>"
-        elif isinstance(v, Dataset):
-            return "<dataset>"
-        elif isinstance(v, Logger):
-            return "<logger>"
-        elif isinstance(v, BaseAttachment):
-            return v
-        elif isinstance(v, ReadonlyAttachment):
-            return v.reference
-        elif isinstance(v, (int, float, str, bool)) or v is None:
-            # Skip roundtrip for primitive types.
-            return v
-        else:
-            # Note: we avoid using copy.deepcopy, because it's difficult to
-            # guarantee the independence of such copied types from their origin.
-            # E.g. the original type could have a `__del__` method that alters
-            # some shared internal state, and we need this deep copy to be
-            # fully-independent from the original.
-            return json.loads(bt_dumps(v))
-
-    return _deep_copy_object(event)
-
-
 class ObjectIterator(Generic[T]):
     def __init__(self, refetch_fn: Callable[[], Sequence[T]]):
         self.refetch_fn = refetch_fn
@@ -2495,7 +2688,7 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-INTERNAL_BTQL_LIMIT = 1000
+DEFAULT_FETCH_BATCH_SIZE = 1000
 MAX_BTQL_ITERATIONS = 10000
 
 
@@ -2503,9 +2696,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
         object_type: str,
-        pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
-        _internal_btql: Optional[Dict[str, Any]] = None,
+        pinned_version: None | int | str = None,
+        mutate_record: Callable[[TMapping], TMapping] | None = None,
+        _internal_btql: dict[str, Any] | None = None,
     ):
         self.object_type = object_type
 
@@ -2519,10 +2712,10 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[List[TMapping]] = None
+        self._fetched_data: list[TMapping] | None = None
         self._internal_btql = _internal_btql
 
-    def fetch(self) -> Iterator[TMapping]:
+    def fetch(self, batch_size: int | None = None) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -2535,9 +2728,10 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             print(record)
         ```
 
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
         :returns: An iterator over the records.
         """
-        return ObjectIterator(self._refetch)
+        return ObjectIterator(lambda: self._refetch(batch_size=batch_size))
 
     def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
@@ -2556,8 +2750,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     @abstractmethod
     def id(self) -> str: ...
 
-    def _refetch(self) -> List[TMapping]:
+    def _refetch(self, batch_size: int | None = None) -> list[TMapping]:
         state = self._get_state()
+        limit = batch_size if batch_size is not None else DEFAULT_FETCH_BATCH_SIZE
         if self._fetched_data is None:
             cursor = None
             data = None
@@ -2582,11 +2777,12 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 ],
                             },
                             "cursor": cursor,
-                            "limit": INTERNAL_BTQL_LIMIT,
+                            "limit": limit,
                             **(self._internal_btql or {}),
                         },
                         "use_columnstore": False,
                         "brainstore_realtime": True,
+                        "query_source": f"py_sdk_object_fetcher_{self.object_type}",
                         **({"version": self._pinned_version} if self._pinned_version is not None else {}),
                     },
                     headers={
@@ -2595,7 +2791,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                 )
                 response_raise_for_status(resp)
                 resp_json = resp.json()
-                data = (data or []) + cast(List[TMapping], resp_json["data"])
+                data = (data or []) + cast(list[TMapping], resp_json["data"])
                 if not resp_json.get("cursor", None):
                     break
                 cursor = resp_json.get("cursor", None)
@@ -2652,7 +2848,7 @@ class Attachment(BaseAttachment):
     def __init__(
         self,
         *,
-        data: Union[str, bytes, bytearray],
+        data: str | bytes | bytearray,
         filename: str,
         content_type: str,
     ):
@@ -2723,7 +2919,7 @@ class Attachment(BaseAttachment):
             try:
                 data = self._data.get()
             except Exception as e:
-                raise IOError(f"Failed to read file: {e}") from e
+                raise OSError(f"Failed to read file: {e}") from e
 
             signed_url = metadata.get("signedUrl")
             headers = metadata.get("headers")
@@ -2776,7 +2972,7 @@ class Attachment(BaseAttachment):
 
         return LazyValue(error_wrapper, use_mutex=True)
 
-    def _init_data(self, data: Union[str, bytes, bytearray]) -> LazyValue[bytes]:
+    def _init_data(self, data: str | bytes | bytearray) -> LazyValue[bytes]:
         if isinstance(data, str):
             self._ensure_file_readable(data)
 
@@ -2994,11 +3190,11 @@ def _log_feedback_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
-    scores: Optional[Mapping[str, Union[int, float]]] = None,
-    expected: Optional[Any] = None,
-    tags: Optional[Sequence[str]] = None,
-    comment: Optional[str] = None,
-    metadata: Optional[Mapping[str, Any]] = None,
+    scores: Mapping[str, int | float] | None = None,
+    expected: Any | None = None,
+    tags: Sequence[str] | None = None,
+    comment: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
     source: Literal["external", "app", "api", None] = None,
 ):
     if source is None:
@@ -3023,7 +3219,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3079,7 +3275,7 @@ def _update_span_impl(
         event=event,
     )
 
-    update_event = _deep_copy_event(update_event)
+    update_event = bt_safe_deep_copy(update_event)
 
     def parent_ids():
         exporter = _get_exporter()
@@ -3135,15 +3331,16 @@ class ParentSpanIds:
 @dataclasses.dataclass
 class SpanIds:
     """The three IDs that define a span's position in the trace tree."""
+
     span_id: str
     root_span_id: str
-    span_parents: Optional[List[str]]
+    span_parents: list[str] | None
 
 
 def _resolve_span_ids(
-    span_id: Optional[str],
-    root_span_id: Optional[str],
-    parent_span_ids: Optional[ParentSpanIds],
+    span_id: str | None,
+    root_span_id: str | None,
+    parent_span_ids: ParentSpanIds | None,
     lookup_span_parent: bool,
     id_generator: "id_gen.IDGenerator",
     context_manager: "context.ContextManager",
@@ -3171,9 +3368,7 @@ def _resolve_span_ids(
     # If we have explicit parent span ids, use them.
     if parent_span_ids:
         return SpanIds(
-            span_id=span_id,
-            root_span_id=parent_span_ids.root_span_id,
-            span_parents=[parent_span_ids.span_id]
+            span_id=span_id, root_span_id=parent_span_ids.root_span_id, span_parents=[parent_span_ids.span_id]
         )
 
     # If we're using the context manager, get to see if there's an active parent
@@ -3182,9 +3377,7 @@ def _resolve_span_ids(
         parent_info = context_manager.get_parent_span_ids()
         if parent_info:
             return SpanIds(
-                span_id=span_id,
-                root_span_id=parent_info.root_span_id,
-                span_parents=parent_info.span_parents
+                span_id=span_id, root_span_id=parent_info.root_span_id, span_parents=parent_info.span_parents
             )
 
     # No parent - create new root span
@@ -3195,11 +3388,7 @@ def _resolve_span_ids(
     else:
         resolved_root_span_id = id_generator.get_trace_id()
 
-    return SpanIds(
-        span_id=span_id,
-        root_span_id=resolved_root_span_id,
-        span_parents=None
-    )
+    return SpanIds(span_id=span_id, root_span_id=resolved_root_span_id, span_parents=None)
 
 
 def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callable[[], str]:
@@ -3225,7 +3414,7 @@ def span_components_to_object_id(components: SpanComponentsV4) -> str:
     return _span_components_to_object_id_lambda(components)()
 
 
-def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] = None) -> str:
+def permalink(slug: str, org_name: str | None = None, app_url: str | None = None) -> str:
     """
     Format a permalink to the Braintrust application for viewing the span represented by the provided `slug`.
 
@@ -3274,19 +3463,19 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
 
 
 def _start_span_parent_args(
-    parent: Optional[str],
+    parent: str | None,
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
-    parent_compute_object_metadata_args: Optional[Dict[str, Any]],
-    parent_span_ids: Optional[ParentSpanIds],
-    propagated_event: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    parent_compute_object_metadata_args: dict[str, Any] | None,
+    parent_span_ids: ParentSpanIds | None,
+    propagated_event: dict[str, Any] | None,
+) -> dict[str, Any]:
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
@@ -3319,7 +3508,6 @@ def _start_span_parent_args(
     )
 
 
-
 @dataclasses.dataclass
 class ExperimentIdentifier:
     id: str
@@ -3335,9 +3523,9 @@ class _ExperimentDatasetEvent(TypedDict):
 
     id: str
     _xact_id: str
-    input: Optional[Any]
-    expected: Optional[Any]
-    tags: Optional[Sequence[str]]
+    input: Any | None
+    expected: Any | None
+    tags: Sequence[str] | None
 
 
 class ExperimentDatasetIterator:
@@ -3383,7 +3571,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
-        state: Optional[BraintrustState] = None,
+        state: BraintrustState | None = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
@@ -3434,16 +3622,16 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
 
     def log(
         self,
-        input: Optional[Any] = None,
-        output: Optional[Any] = None,
-        expected: Optional[Any] = None,
-        error: Optional[str] = None,
-        tags: Optional[Sequence[str]] = None,
-        scores: Optional[Mapping[str, Union[int, float]]] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
-        metrics: Optional[Mapping[str, Union[int, float]]] = None,
-        id: Optional[str] = None,
-        dataset_record_id: Optional[str] = None,
+        input: Any | None = None,
+        output: Any | None = None,
+        expected: Any | None = None,
+        error: str | None = None,
+        tags: Sequence[str] | None = None,
+        scores: Mapping[str, int | float] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+        metrics: Mapping[str, int | float] | None = None,
+        id: str | None = None,
+        dataset_record_id: str | None = None,
         allow_concurrent_with_spans: bool = False,
     ) -> str:
         """
@@ -3488,11 +3676,11 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def log_feedback(
         self,
         id: str,
-        scores: Optional[Mapping[str, Union[int, float]]] = None,
-        expected: Optional[Any] = None,
-        tags: Optional[Sequence[str]] = None,
-        comment: Optional[str] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
+        scores: Mapping[str, int | float] | None = None,
+        expected: Any | None = None,
+        tags: Sequence[str] | None = None,
+        comment: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
         source: Literal["external", "app", "api", None] = None,
     ) -> None:
         """
@@ -3520,13 +3708,13 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
 
     def start_span(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        propagated_event: dict[str, Any] | None = None,
         **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the experiment. The name defaults to "root" and the span type to "eval".
@@ -3560,7 +3748,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             **event,
         )
 
-    def fetch_base_experiment(self) -> Optional[ExperimentIdentifier]:
+    def fetch_base_experiment(self) -> ExperimentIdentifier | None:
         state = self._get_state()
         conn = state.app_conn()
 
@@ -3577,7 +3765,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             return None
 
     def summarize(
-        self, summarize_scores: bool = True, comparison_experiment_id: Optional[str] = None
+        self, summarize_scores: bool = True, comparison_experiment_id: str | None = None
     ) -> "ExperimentSummary":
         """
         Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
@@ -3612,7 +3800,6 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                         "experiment_id": self.id,
                         "base_experiment_id": comparison_experiment_id,
                     },
-                    retries=3,
                 )
             except Exception as e:
                 _logger.warning(
@@ -3664,13 +3851,13 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
 
     def _start_span_impl(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        propagated_event: dict[str, Any] | None = None,
         lookup_span_parent: bool = True,
         **event: Any,
     ) -> Span:
@@ -3700,9 +3887,9 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         del exc_type, exc_value, traceback
 
@@ -3715,7 +3902,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def __init__(
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
-        state: Optional[BraintrustState] = None,
+        state: BraintrustState | None = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.state = state or _state
@@ -3740,8 +3927,14 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         self._lazy_metadata.get()
         return self.state
 
-    def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
-        return ExperimentDatasetIterator(self.fetch())
+    def as_dataset(self, batch_size: int | None = None) -> Iterator[_ExperimentDatasetEvent]:
+        """
+        Return the experiment's data as a dataset iterator.
+
+        :param batch_size: The number of records to fetch per request. Defaults to 1000.
+        :returns: An iterator over the experiment data as dataset records.
+        """
+        return ExperimentDatasetIterator(self.fetch(batch_size=batch_size))
 
 
 _EXEC_COUNTER_LOCK = threading.Lock()
@@ -3760,19 +3953,19 @@ class SpanImpl(Span):
         self,
         parent_object_type: SpanObjectTypeV3,
         parent_object_id: LazyValue[str],
-        parent_compute_object_metadata_args: Optional[Dict[str, Any]],
-        parent_span_ids: Optional[ParentSpanIds],
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        default_root_type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        event: Optional[Dict[str, Any]] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
-        span_id: Optional[str] = None,
-        root_span_id: Optional[str] = None,
-        state: Optional[BraintrustState] = None,
+        parent_compute_object_metadata_args: dict[str, Any] | None,
+        parent_span_ids: ParentSpanIds | None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        default_root_type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        event: dict[str, Any] | None = None,
+        propagated_event: dict[str, Any] | None = None,
+        span_id: str | None = None,
+        root_span_id: str | None = None,
+        state: BraintrustState | None = None,
         lookup_span_parent: bool = True,
     ):
         if span_attributes is None:
@@ -3785,11 +3978,11 @@ class SpanImpl(Span):
         self.state = state or _state
 
         self.can_set_current = cast(bool, coalesce(set_current, True))
-        self._logged_end_time: Optional[float] = None
+        self._logged_end_time: float | None = None
 
         # Context token for proper cleanup - used by both OTEL and Braintrust context managers
         # This is set by the context manager when the span becomes active
-        self._context_token: Optional[Any] = None
+        self._context_token: Any | None = None
 
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
@@ -3822,7 +4015,7 @@ class SpanImpl(Span):
             _EXEC_COUNTER += 1
             exec_counter = _EXEC_COUNTER
 
-        internal_data: Dict[str, Any] = dict(
+        internal_data: dict[str, Any] = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
@@ -3864,9 +4057,9 @@ class SpanImpl(Span):
 
     def set_attributes(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Mapping[str, Any]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: Mapping[str, Any] | None = None,
     ) -> None:
         self.log_internal(
             internal_data={
@@ -3884,9 +4077,7 @@ class SpanImpl(Span):
     def log(self, **event: Any) -> None:
         return self.log_internal(event=event, internal_data=None)
 
-    def log_internal(
-        self, event: Optional[Dict[str, Any]] = None, internal_data: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def log_internal(self, event: dict[str, Any] | None = None, internal_data: dict[str, Any] | None = None) -> None:
         serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
 
         # We both check for serializability and round-trip `partial_record`
@@ -3894,7 +4085,7 @@ class SpanImpl(Span):
         # cutting out any reference to user objects when the object is logged
         # asynchronously, so that in case the objects are modified, the logging
         # is unaffected.
-        partial_record: Dict[str, Any] = dict(
+        partial_record: dict[str, Any] = dict(
             id=self.id,
             span_id=self.span_id,
             root_span_id=self.root_span_id,
@@ -3903,15 +4094,26 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        _check_json_serializable(partial_record)
-        serializable_partial_record = _deep_copy_event(partial_record)
+        serializable_partial_record = bt_safe_deep_copy(partial_record)
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
+        # Write to local span cache for scorer access
+        # Only cache experiment spans - regular logs don't need caching
+        if self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            from braintrust.span_cache import CachedSpan
 
-        def compute_record() -> Dict[str, Any]:
+            cached_span = CachedSpan(
+                span_id=self.span_id,
+                input=serializable_partial_record.get("input"),
+                output=serializable_partial_record.get("output"),
+                metadata=serializable_partial_record.get("metadata"),
+                span_parents=self.span_parents,
+                span_attributes=serializable_partial_record.get("span_attributes"),
+            )
+            self.state.span_cache.queue_write(self.root_span_id, self.span_id, cached_span)
+
+        def compute_record() -> dict[str, Any]:
             exporter = _get_exporter()
             return dict(
                 **serializable_partial_record,
@@ -3934,13 +4136,13 @@ class SpanImpl(Span):
 
     def start_span(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        propagated_event: dict[str, Any] | None = None,
         **event: Any,
     ) -> Span:
         if parent:
@@ -3972,7 +4174,7 @@ class SpanImpl(Span):
             state=self.state,
         )
 
-    def end(self, end_time: Optional[float] = None) -> float:
+    def end(self, end_time: float | None = None) -> float:
         internal_data = {}
         if not self._logged_end_time:
             end_time = end_time or time.time()
@@ -3994,6 +4196,9 @@ class SpanImpl(Span):
         use_v4 = os.getenv("BRAINTRUST_OTEL_COMPAT", "false").lower() == "true"
         span_components_class = SpanComponentsV4 if use_v4 else SpanComponentsV3
 
+        # Disable span cache since remote function spans won't be in the local cache
+        self.state.span_cache.disable()
+
         return span_components_class(
             object_type=self.parent_object_type,
             object_id=object_id,
@@ -4007,7 +4212,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger.get()
+            cur_logger = self.state._cv_logger.get() or self.state._local_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -4060,10 +4265,20 @@ class SpanImpl(Span):
             self._context_token = self.state.context_manager.set_current_span(self)
 
     def unset_current(self):
+        """
+        Unset current span context.
+
+        Note: self._context_token may be None if set_current() failed.
+        This is safe - context_manager.unset_current_span() handles None.
+        """
         if self.can_set_current:
-            # Pass the stored token to context manager for cleanup
-            self.state.context_manager.unset_current_span(self._context_token)
-            self._context_token = None
+            try:
+                self.state.context_manager.unset_current_span(self._context_token)
+            except Exception as e:
+                logging.debug(f"Failed to unset current span: {e}")
+            finally:
+                # Always clear the token reference
+                self._context_token = None
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -4074,8 +4289,15 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            self.unset_current()
-            self.end()
+            try:
+                self.unset_current()
+            except Exception as e:
+                logging.debug(f"Failed to unset current in __exit__: {e}")
+
+            try:
+                self.end()
+            except Exception as e:
+                logging.warning(f"Error ending span: {e}")
 
     def _get_parent_info(self):
         if self.parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
@@ -4117,13 +4339,13 @@ class SpanImpl(Span):
 
 
 def log_exc_info_to_span(
-    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+    span: Span, exc_type: type[BaseException], exc_value: BaseException, tb: TracebackType | None
 ) -> None:
     error = stringify_exception(exc_type, exc_value, tb)
     span.log(error=error)
 
 
-def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:
+def stringify_exception(exc_type: type[BaseException], exc_value: BaseException, tb: TracebackType | None) -> str:
     return "".join(
         traceback.format_exception_only(exc_type, exc_value)
         + ["\nTraceback (most recent call last):\n"]
@@ -4138,8 +4360,8 @@ def _strip_nones(d: T, deep: bool) -> T:
 
 
 def split_logging_data(
-    event: Optional[Dict[str, Any]], internal_data: Optional[Dict[str, Any]]
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    event: dict[str, Any] | None, internal_data: dict[str, Any] | None
+) -> tuple[dict[str, Any], dict[str, Any]]:
     # There should be no overlap between the dictionaries being merged,
     # except for `sanitized` and `internal_data`, where the former overrides
     # the latter.
@@ -4147,8 +4369,8 @@ def split_logging_data(
     sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
     merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
 
-    serializable_partial_record: Dict[str, Any] = {}
-    lazy_partial_record: Dict[str, Any] = {}
+    serializable_partial_record: dict[str, Any] = {}
+    lazy_partial_record: dict[str, Any] = {}
     for k, v in sanitized_and_internal_data.items():
         if isinstance(v, BraintrustStream):
             # Python has weird semantics with loop variables and lambda functions, so we
@@ -4175,10 +4397,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def __init__(
         self,
         lazy_metadata: LazyValue[ProjectDatasetMetadata],
-        version: Union[None, int, str] = None,
+        version: None | int | str = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
-        _internal_btql: Optional[Dict[str, Any]] = None,
-        state: Optional[BraintrustState] = None,
+        _internal_btql: dict[str, Any] | None = None,
+        state: BraintrustState | None = None,
     ):
         if legacy:
             eprint(
@@ -4186,7 +4408,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             )
 
         def mutate_record(r: DatasetEvent) -> DatasetEvent:
-            _enrich_attachments(cast(Dict[str, Any], r))
+            _enrich_attachments(cast(dict[str, Any], r))
             return ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
@@ -4233,10 +4455,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
     def _validate_event(
         self,
-        metadata: Optional[Dict[str, Any]] = None,
-        expected: Optional[Any] = None,
-        output: Optional[Any] = None,
-        tags: Optional[Sequence[str]] = None,
+        metadata: dict[str, Any] | None = None,
+        expected: Any | None = None,
+        output: Any | None = None,
+        tags: Sequence[str] | None = None,
     ):
         if metadata is not None:
             if not isinstance(metadata, dict):
@@ -4253,7 +4475,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
     def _create_args(
         self, id, input=None, expected=None, metadata=None, tags=None, output=None, is_merge=False
-    ) -> LazyValue[Dict[str, Any]]:
+    ) -> LazyValue[dict[str, Any]]:
         expected_value = expected if expected is not None else output
 
         args = _populate_args(
@@ -4271,10 +4493,9 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args[IS_MERGE_FIELD] = True
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
-        _check_json_serializable(args)
-        args = _deep_copy_event(args)
+        args = bt_safe_deep_copy(args)
 
-        def compute_args() -> Dict[str, Any]:
+        def compute_args() -> dict[str, Any]:
             return dict(
                 **args,
                 dataset_id=self.id,
@@ -4284,12 +4505,12 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
     def insert(
         self,
-        input: Optional[Any] = None,
-        expected: Optional[Any] = None,
-        tags: Optional[Sequence[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        id: Optional[str] = None,
-        output: Optional[Any] = None,
+        input: Any | None = None,
+        expected: Any | None = None,
+        tags: Sequence[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        id: str | None = None,
+        output: Any | None = None,
     ) -> str:
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
@@ -4328,10 +4549,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def update(
         self,
         id: str,
-        input: Optional[Any] = None,
-        expected: Optional[Any] = None,
-        tags: Optional[Sequence[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        input: Any | None = None,
+        expected: Any | None = None,
+        tags: Sequence[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
@@ -4375,8 +4596,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
-        _check_json_serializable(partial_args)
-        partial_args = _deep_copy_event(partial_args)
+        partial_args = bt_safe_deep_copy(partial_args)
 
         def compute_args():
             return dict(
@@ -4408,7 +4628,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 args={
                     "dataset_id": self.id,
                 },
-                retries=3,
             )
             data_summary = DataSummary(new_records=self.new_records, **data_summary_d)
 
@@ -4443,7 +4662,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 def render_message(render: Callable[[str], str], message: PromptMessage):
     base = {k: v for (k, v) in message.as_dict().items() if v is not None}
     # TODO: shouldn't load_prompt guarantee content is a PromptMessage?
-    content = cast(Union[str, List[Union[TextPart, ImagePart]], Dict[str, Any]], message.content)
+    content = cast(Union[str, list[Union[TextPart, ImagePart]], dict[str, Any]], message.content)
     if content is not None:
         if isinstance(content, str):
             base["content"] = render(content)
@@ -4464,6 +4683,18 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                         {
                             **c,
                             "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                        }
+                    )
+                elif c["type"] == "file":
+                    rendered_content.append(
+                        {
+                            **c,
+                            "file": {
+                                **c["file"],
+                                "file_data": render(c["file"]["file_data"]),
+                                **({} if "file_id" not in c["file"] else {"file_id": render(c["file"]["file_id"])}),
+                                **({} if "filename" not in c["file"] else {"filename": render(c["file"]["filename"])}),
+                            },
                         }
                     )
                 else:
@@ -4495,7 +4726,7 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
 
 
 def _create_custom_render():
-    def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
+    def _get_key(key: str, scopes: list[dict[str, Any]], warn: bool) -> Any:
         thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
         if isinstance(thing, str):
             return thing
@@ -4535,7 +4766,7 @@ def render_templated_object(obj: Any, args: Any) -> Any:
     return obj
 
 
-def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+def render_prompt_params(params: dict[str, Any], args: Any) -> dict[str, Any]:
     if not params:
         return params
 
@@ -4560,7 +4791,7 @@ def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
     return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
 
 
-def render_mustache(template: str, data: Any, *, strict: bool = False, renderer: Optional[Callable[..., Any]] = None):
+def render_mustache(template: str, data: Any, *, strict: bool = False, renderer: Callable[..., Any] | None = None):
     if renderer is None:
         renderer = chevron.render
 
@@ -4637,7 +4868,7 @@ class Prompt:
         return self._lazy_metadata.get().slug
 
     @property
-    def prompt(self) -> Optional[PromptBlockData]:
+    def prompt(self) -> PromptBlockData | None:
         return self._lazy_metadata.get().prompt_data.prompt
 
     @property
@@ -4734,7 +4965,7 @@ class Prompt:
 
 
 class Project:
-    def __init__(self, name: Optional[str] = None, id: Optional[str] = None):
+    def __init__(self, name: str | None = None, id: str | None = None):
         self._name = name
         self._id = id
         self.init_lock = threading.RLock()
@@ -4774,9 +5005,9 @@ class Logger(Exportable):
         self,
         lazy_metadata: LazyValue[OrgProjectMetadata],
         async_flush: bool = True,
-        compute_metadata_args: Optional[Dict] = None,
-        link_args: Optional[Dict] = None,
-        state: Optional[BraintrustState] = None,
+        compute_metadata_args: dict | None = None,
+        link_args: dict | None = None,
+        state: BraintrustState | None = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -4816,15 +5047,15 @@ class Logger(Exportable):
 
     def log(
         self,
-        input: Optional[Any] = None,
-        output: Optional[Any] = None,
-        expected: Optional[Any] = None,
-        error: Optional[str] = None,
-        tags: Optional[Sequence[str]] = None,
-        scores: Optional[Mapping[str, Union[int, float]]] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
-        metrics: Optional[Mapping[str, Union[int, float]]] = None,
-        id: Optional[str] = None,
+        input: Any | None = None,
+        output: Any | None = None,
+        expected: Any | None = None,
+        error: str | None = None,
+        tags: Sequence[str] | None = None,
+        scores: Mapping[str, int | float] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+        metrics: Mapping[str, int | float] | None = None,
+        id: str | None = None,
         allow_concurrent_with_spans: bool = False,
     ) -> str:
         """
@@ -4869,11 +5100,11 @@ class Logger(Exportable):
     def log_feedback(
         self,
         id: str,
-        scores: Optional[Mapping[str, Union[int, float]]] = None,
-        expected: Optional[Any] = None,
-        tags: Optional[Sequence[str]] = None,
-        comment: Optional[str] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
+        scores: Mapping[str, int | float] | None = None,
+        expected: Any | None = None,
+        tags: Sequence[str] | None = None,
+        comment: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
         source: Literal["external", "app", "api", None] = None,
     ) -> None:
         """
@@ -4901,15 +5132,15 @@ class Logger(Exportable):
 
     def start_span(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
-        span_id: Optional[str] = None,
-        root_span_id: Optional[str] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        propagated_event: dict[str, Any] | None = None,
+        span_id: str | None = None,
+        root_span_id: str | None = None,
         **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
@@ -4947,15 +5178,15 @@ class Logger(Exportable):
 
     def _start_span_impl(
         self,
-        name: Optional[str] = None,
-        type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
-        start_time: Optional[float] = None,
-        set_current: Optional[bool] = None,
-        parent: Optional[str] = None,
-        propagated_event: Optional[Dict[str, Any]] = None,
-        span_id: Optional[str] = None,
-        root_span_id: Optional[str] = None,
+        name: str | None = None,
+        type: SpanTypeAttribute | None = None,
+        span_attributes: SpanAttributes | Mapping[str, Any] | None = None,
+        start_time: float | None = None,
+        set_current: bool | None = None,
+        parent: str | None = None,
+        propagated_event: dict[str, Any] | None = None,
+        span_id: str | None = None,
+        root_span_id: str | None = None,
         lookup_span_parent: bool = True,
         **event: Any,
     ) -> Span:
@@ -5005,7 +5236,7 @@ class Logger(Exportable):
     def __enter__(self) -> "Logger":
         return self
 
-    def _get_link_base_url(self) -> Optional[str]:
+    def _get_link_base_url(self) -> str | None:
         """Return the base of link urls (e.g. https://braintrust.dev/app/my-org-name/) if we have the info
         otherwise return None.
         """
@@ -5041,11 +5272,11 @@ class ScoreSummary(SerializableDataClass):
     score: float
     """Average score across all examples."""
 
-    improvements: Optional[int]
+    improvements: int | None
     """Number of improvements in the score."""
-    regressions: Optional[int]
+    regressions: int | None
     """Number of regressions in the score."""
-    diff: Optional[float] = None
+    diff: float | None = None
     """Difference in score between the current and reference experiment."""
 
     def __str__(self):
@@ -5076,15 +5307,15 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: Union[float, int]
+    metric: float | int
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
-    improvements: Optional[int]
+    improvements: int | None
     """Number of improvements in the metric."""
-    regressions: Optional[int]
+    regressions: int | None
     """Number of regressions in the metric."""
-    diff: Optional[float] = None
+    diff: float | None = None
     """Difference in metric between the current and reference experiment."""
 
     def __str__(self):
@@ -5110,21 +5341,21 @@ class ExperimentSummary(SerializableDataClass):
 
     project_name: str
     """Name of the project that the experiment belongs to."""
-    project_id: Optional[str]
+    project_id: str | None
     """ID of the project. May be `None` if the eval was run locally."""
-    experiment_id: Optional[str]
+    experiment_id: str | None
     """ID of the experiment. May be `None` if the eval was run locally."""
     experiment_name: str
     """Name of the experiment."""
-    project_url: Optional[str]
+    project_url: str | None
     """URL to the project's page in the Braintrust app."""
-    experiment_url: Optional[str]
+    experiment_url: str | None
     """URL to the experiment's page in the Braintrust app."""
-    comparison_experiment_name: Optional[str]
+    comparison_experiment_name: str | None
     """The experiment scores are baselined against."""
-    scores: Dict[str, ScoreSummary]
+    scores: dict[str, ScoreSummary]
     """Summary of the experiment's scores."""
-    metrics: Dict[str, MetricSummary]
+    metrics: dict[str, MetricSummary]
     """Summary of the experiment's metrics."""
 
     def __str__(self):
@@ -5173,7 +5404,7 @@ class DatasetSummary(SerializableDataClass):
     """URL to the project's page in the Braintrust app."""
     dataset_url: str
     """URL to the experiment's page in the Braintrust app."""
-    data_summary: Optional[DataSummary]
+    data_summary: DataSummary | None
     """Summary of the dataset's data."""
 
     def __str__(self):
@@ -5188,7 +5419,8 @@ class DatasetSummary(SerializableDataClass):
 
 
 class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
-    # Returns Any because Future is not generic in Python 3.8.
+    # Returns Any because Future[T] generic typing was stabilized in Python 3.9,
+    # but we maintain compatibility with older type checkers.
     def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         # Capture all current context variables
         context = contextvars.copy_context()
@@ -5200,7 +5432,7 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         return super().submit(wrapped_fn, *args, **kwargs)
 
 
-def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
+def get_prompt_versions(project_id: str, prompt_id: str) -> list[str]:
     """
     Get the versions for a specific prompt.
 
@@ -5260,13 +5492,13 @@ def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
     ]
 
 
-def _get_app_url(app_url: Optional[str] = None) -> str:
+def _get_app_url(app_url: str | None = None) -> str:
     if app_url:
         return app_url
     return os.getenv("BRAINTRUST_APP_URL", DEFAULT_APP_URL)
 
 
-def _get_org_name(org_name: Optional[str] = None) -> Optional[str]:
+def _get_org_name(org_name: str | None = None) -> str | None:
     if org_name:
         return org_name
     return os.getenv("BRAINTRUST_ORG_NAME")

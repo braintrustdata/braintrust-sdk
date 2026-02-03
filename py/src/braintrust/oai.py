@@ -1,8 +1,13 @@
 import abc
+import base64
+import re
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
-from .logger import Span, start_span
+from wrapt import wrap_function_wrapper
+
+from .logger import Attachment, Span, start_span
 from .span_types import SpanTypeAttribute
 from .util import merge_dicts
 
@@ -68,8 +73,77 @@ def log_headers(response: Any, span: Span):
         )
 
 
+def _convert_data_url_to_attachment(data_url: str, filename: str | None = None) -> Attachment | str:
+    """Helper function to convert data URL to an Attachment."""
+    data_url_match = re.match(r"^data:([^;]+);base64,(.+)$", data_url)
+    if not data_url_match:
+        return data_url
+
+    mime_type, base64_data = data_url_match.groups()
+
+    try:
+        binary_data = base64.b64decode(base64_data)
+
+        if filename is None:
+            extension = mime_type.split("/")[1] if "/" in mime_type else "bin"
+            prefix = "image" if mime_type.startswith("image/") else "document"
+            filename = f"{prefix}.{extension}"
+
+        attachment = Attachment(data=binary_data, filename=filename, content_type=mime_type)
+
+        return attachment
+    except Exception:
+        return data_url
+
+
+def _process_attachments_in_input(input_data: Any) -> Any:
+    """Process input to convert data URL images and base64 documents to Attachment objects."""
+    if isinstance(input_data, list):
+        return [_process_attachments_in_input(item) for item in input_data]
+
+    if isinstance(input_data, dict):
+        # Check for OpenAI's image_url format with data URLs
+        if (
+            input_data.get("type") == "image_url"
+            and isinstance(input_data.get("image_url"), dict)
+            and isinstance(input_data["image_url"].get("url"), str)
+        ):
+            processed_url = _convert_data_url_to_attachment(input_data["image_url"]["url"])
+            return {
+                **input_data,
+                "image_url": {
+                    **input_data["image_url"],
+                    "url": processed_url,
+                },
+            }
+
+        # Check for OpenAI's file format with data URL (e.g., PDFs)
+        if (
+            input_data.get("type") == "file"
+            and isinstance(input_data.get("file"), dict)
+            and isinstance(input_data["file"].get("file_data"), str)
+        ):
+            file_filename = input_data["file"].get("filename")
+            processed_file_data = _convert_data_url_to_attachment(
+                input_data["file"]["file_data"],
+                filename=file_filename if isinstance(file_filename, str) else None,
+            )
+            return {
+                **input_data,
+                "file": {
+                    **input_data["file"],
+                    "file_data": processed_file_data,
+                },
+            }
+
+        # Recursively process nested objects
+        return {key: _process_attachments_in_input(value) for key, value in input_data.items()}
+
+    return input_data
+
+
 class ChatCompletionWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
 
@@ -183,28 +257,32 @@ class ChatCompletionWrapper:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
         params = prettify_params(params)
         messages = params.pop("messages", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(messages)
+
         return merge_dicts(
             ret,
             {
-                "input": messages,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[dict[str, Any]]) -> dict[str, Any]:
         role = None
         content = None
-        tool_calls: Optional[List[Any]] = None
+        tool_calls: list[Any] | None = None
         finish_reason = None
-        metrics: Dict[str, float] = {}
+        metrics: dict[str, float] = {}
         for result in all_results:
             usage = result.get("usage")
             if usage:
@@ -266,7 +344,7 @@ class ChatCompletionWrapper:
 
 
 class ResponseWrapper:
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str = "openai.responses.create"):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str = "openai.responses.create"):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
         self.name = name
@@ -375,23 +453,27 @@ class ResponseWrapper:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
         params = prettify_params(params)
         input_data = params.pop("input", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(input_data)
+
         return merge_dicts(
             ret,
             {
-                "input": input_data,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )
 
     @classmethod
-    def _parse_event_from_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_event_from_result(cls, result: dict[str, Any]) -> dict[str, Any]:
         """Parse event from response result"""
         data = {"metrics": {}}
 
@@ -411,7 +493,7 @@ class ResponseWrapper:
         return data
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[Any]) -> dict[str, Any]:
         """Process streaming results - minimal version focused on metrics extraction."""
         metrics = {}
         output = []
@@ -494,13 +576,13 @@ class ResponseWrapper:
 
 
 class BaseWrapper(abc.ABC):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str):
         self._create_fn = create_fn
         self._acreate_fn = acreate_fn
         self._name = name
 
     @abc.abstractmethod
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span):
         """Process the API response and log relevant information to the span."""
         pass
 
@@ -538,27 +620,30 @@ class BaseWrapper(abc.ABC):
             return raw_response
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
         params = prettify_params(params)
-        input = params.pop("input", None)
+        input_data = params.pop("input", None)
+
+        # Process attachments in input (convert data URLs to Attachment objects)
+        processed_input = _process_attachments_in_input(input_data)
 
         return merge_dicts(
             ret,
             {
-                "input": input,
+                "input": processed_input,
                 "metadata": {**params, "provider": "openai"},
             },
         )
 
 
 class EmbeddingWrapper(BaseWrapper):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         super().__init__(create_fn, acreate_fn, "Embedding")
 
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span):
         usage = response.get("usage")
         metrics = _parse_metrics_from_usage(usage)
         span.log(
@@ -570,7 +655,7 @@ class EmbeddingWrapper(BaseWrapper):
 
 
 class ModerationWrapper(BaseWrapper):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None):
         super().__init__(create_fn, acreate_fn, "Moderation")
 
     def process_output(self, response: Any, span: Span):
@@ -817,7 +902,7 @@ TOKEN_PREFIX_MAP = {
 }
 
 
-def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
+def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
     # For simplicity, this function handles all the different APIs
     metrics = {}
 
@@ -848,10 +933,10 @@ def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
 
 
 def _is_numeric(v):
-    return isinstance(v, (int, float, complex))
+    return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
 
 
-def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
     # Filter out NOT_GIVEN parameters
     # https://linear.app/braintrustdata/issue/BRA-2467
     ret = {k: v for k, v in params.items() if not _is_not_given(v)}
@@ -861,7 +946,7 @@ def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
     return ret
 
 
-def _try_to_dict(obj: Any) -> Dict[str, Any]:
+def _try_to_dict(obj: Any) -> dict[str, Any]:
     if isinstance(obj, dict):
         return obj
     # convert a pydantic object to a dict
@@ -906,3 +991,52 @@ def _is_not_given(value: Any) -> bool:
         return type_name == "NotGiven"
     except Exception:
         return False
+
+
+def _openai_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for OpenAI.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_openai_wrapper(instance)
+
+
+def patch_openai() -> bool:
+    """
+    Patch OpenAI to add Braintrust tracing globally.
+
+    After calling this, all new OpenAI() and AsyncOpenAI() clients
+    will automatically have tracing enabled.
+
+    Returns:
+        True if OpenAI was patched (or already patched), False if OpenAI is not installed.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_openai()
+
+        import openai
+        client = openai.OpenAI()
+        # All calls are now traced!
+        ```
+    """
+    try:
+        import openai
+
+        if getattr(openai, "__braintrust_wrapped__", False):
+            return True  # Already patched
+
+        wrap_function_wrapper("openai", "OpenAI.__init__", _openai_init_wrapper)
+        wrap_function_wrapper("openai", "AsyncOpenAI.__init__", _openai_init_wrapper)
+        openai.__braintrust_wrapped__ = True
+        return True
+
+    except ImportError:
+        return False
+
+
+def _apply_openai_wrapper(client):
+    """Apply tracing wrapper to an OpenAI client instance in-place."""
+    wrapped = wrap_openai(client)
+    for attr in ("chat", "responses", "embeddings", "moderations", "beta"):
+        if hasattr(wrapped, attr):
+            setattr(client, attr, getattr(wrapped, attr))
