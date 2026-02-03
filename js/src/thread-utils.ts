@@ -8,7 +8,11 @@
  */
 
 import iso from "./isomorph";
-import { isObject } from "../util/index";
+import {
+  isObject,
+  stringToUint8Array,
+  uint8ArrayToString,
+} from "../util/index";
 
 /**
  * A message with role and content fields (LLM chat message format).
@@ -17,6 +21,13 @@ export interface LLMMessage {
   role: string;
   content: unknown;
 }
+
+export type StringifyOptions = {
+  maxBytes?: number;
+};
+
+const DEFAULT_PREPROCESSOR_MAX_BYTES = 100_000;
+const TRUNCATION_MARKER = "[middle truncated]";
 
 /**
  * Result of running a preprocessor.
@@ -35,6 +46,165 @@ export function isRoleContentMessage(item: unknown): item is LLMMessage {
  */
 export function isLLMMessageArray(value: unknown): value is LLMMessage[] {
   return Array.isArray(value) && value.every(isRoleContentMessage);
+}
+
+function utf8ByteLength(text: string): number {
+  return stringToUint8Array(text).length;
+}
+
+function sliceStringByBytes(
+  text: string,
+  maxBytes: number,
+  fromStart: boolean,
+): string {
+  if (maxBytes <= 0) {
+    return "";
+  }
+
+  const encoded = stringToUint8Array(text);
+  if (encoded.length <= maxBytes) {
+    return text;
+  }
+
+  return uint8ArrayToString(
+    fromStart
+      ? encoded.subarray(0, maxBytes)
+      : encoded.subarray(encoded.length - maxBytes),
+  );
+}
+
+function truncateRawStringByBytes(text: string, maxBytes: number): string {
+  const encoded = stringToUint8Array(text);
+  if (encoded.length <= maxBytes) {
+    return text;
+  }
+
+  const marker = `\n\n${TRUNCATION_MARKER}\n\n`;
+  const markerBytes = utf8ByteLength(marker);
+  if (markerBytes >= maxBytes) {
+    return sliceStringByBytes(marker, maxBytes, true);
+  }
+
+  const remaining = maxBytes - markerBytes;
+  const headBytes = Math.floor(remaining * 0.6);
+  const tailBytes = remaining - headBytes;
+
+  const head = uint8ArrayToString(encoded.subarray(0, headBytes));
+  const tail = uint8ArrayToString(encoded.subarray(encoded.length - tailBytes));
+  return head + marker + tail;
+}
+
+function takeFromStart(
+  parts: string[],
+  joinerBytes: number,
+  budget: number,
+): { parts: string[]; nextIndex: number } {
+  const selected: string[] = [];
+  let used = 0;
+  let index = 0;
+
+  while (index < parts.length) {
+    const part = parts[index];
+    const partBytes = utf8ByteLength(part);
+    const extra = selected.length > 0 ? joinerBytes : 0;
+    if (used + extra + partBytes <= budget) {
+      selected.push(part);
+      used += extra + partBytes;
+      index++;
+      continue;
+    }
+
+    const remaining = budget - used - extra;
+    if (remaining > 0) {
+      selected.push(sliceStringByBytes(part, remaining, true));
+    }
+    index++;
+    break;
+  }
+
+  return { parts: selected, nextIndex: index };
+}
+
+function takeFromEnd(
+  parts: string[],
+  joinerBytes: number,
+  budget: number,
+  minIndex: number,
+): string[] {
+  const selected: string[] = [];
+  let used = 0;
+  let index = parts.length - 1;
+
+  while (index >= minIndex) {
+    const part = parts[index];
+    const partBytes = utf8ByteLength(part);
+    const extra = selected.length > 0 ? joinerBytes : 0;
+    if (used + extra + partBytes <= budget) {
+      selected.unshift(part);
+      used += extra + partBytes;
+      index--;
+      continue;
+    }
+
+    const remaining = budget - used - extra;
+    if (remaining > 0) {
+      selected.unshift(sliceStringByBytes(part, remaining, false));
+    }
+    break;
+  }
+
+  return selected;
+}
+
+function joinPartsWithTruncation(
+  parts: string[],
+  joiner: string,
+  maxBytes: number,
+): string {
+  if (parts.length === 0) {
+    return "";
+  }
+
+  if (!Number.isFinite(maxBytes)) {
+    return parts.join(joiner);
+  }
+
+  const joinerBytes = utf8ByteLength(joiner);
+  let totalBytes = 0;
+  for (let i = 0; i < parts.length; i++) {
+    totalBytes += utf8ByteLength(parts[i]);
+    if (i > 0) {
+      totalBytes += joinerBytes;
+    }
+  }
+
+  if (totalBytes <= maxBytes) {
+    return parts.join(joiner);
+  }
+
+  if (parts.length === 1) {
+    return truncateRawStringByBytes(parts[0], maxBytes);
+  }
+
+  const markerBytes = utf8ByteLength(TRUNCATION_MARKER);
+  const overhead = markerBytes + 2 * joinerBytes;
+  if (overhead >= maxBytes) {
+    return sliceStringByBytes(TRUNCATION_MARKER, maxBytes, true);
+  }
+
+  const available = maxBytes - overhead;
+  const headBudget = Math.floor(available * 0.6);
+  const tailBudget = available - headBudget;
+
+  const head = takeFromStart(parts, joinerBytes, headBudget);
+  const tail = takeFromEnd(parts, joinerBytes, tailBudget, head.nextIndex);
+
+  const combined = [...head.parts, TRUNCATION_MARKER, ...tail];
+  return combined.join(joiner);
+}
+
+function resolveMaxBytes(options?: StringifyOptions): number {
+  return options?.maxBytes ?? DEFAULT_PREPROCESSOR_MAX_BYTES;
 }
 
 /**
@@ -226,7 +396,11 @@ function extractTextContent(content: unknown): string {
 /**
  * Format an array of LLM messages as human-readable text.
  */
-export function formatMessageArrayAsText(messages: LLMMessage[]): string {
+function formatMessageArrayAsTextInternal(
+  messages: LLMMessage[],
+  options: StringifyOptions | undefined,
+  allowTruncate: boolean,
+): string {
   const pendingToolCalls = new Map<string, PendingToolCall>();
   for (const msg of messages) {
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
@@ -253,15 +427,30 @@ export function formatMessageArrayAsText(messages: LLMMessage[]): string {
     }
   }
 
-  return parts.join("\n\n");
+  return allowTruncate
+    ? joinPartsWithTruncation(parts, "\n\n", resolveMaxBytes(options))
+    : parts.join("\n\n");
+}
+
+export function formatMessageArrayAsText(
+  messages: LLMMessage[],
+  options?: StringifyOptions,
+): string {
+  return formatMessageArrayAsTextInternal(messages, options, true);
 }
 
 /**
  * Format a single value as text.
  */
-export function formatValueAsText(value: unknown): string {
+function formatValueAsTextInternal(
+  value: unknown,
+  options: StringifyOptions | undefined,
+  allowTruncate: boolean,
+): string {
   if (typeof value === "string") {
-    return value;
+    return allowTruncate
+      ? truncateRawStringByBytes(value, resolveMaxBytes(options))
+      : value;
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -271,9 +460,14 @@ export function formatValueAsText(value: unknown): string {
   }
   if (Array.isArray(value)) {
     if (isLLMMessageArray(value)) {
-      return formatMessageArrayAsText(value);
+      return formatMessageArrayAsTextInternal(value, options, allowTruncate);
     }
-    return value.map((item) => formatValueAsText(item)).join("\n---\n");
+    const parts = value.map((item) =>
+      formatValueAsTextInternal(item, options, false),
+    );
+    return allowTruncate
+      ? joinPartsWithTruncation(parts, "\n---\n", resolveMaxBytes(options))
+      : parts.join("\n---\n");
   }
   if (isObject(value)) {
     const entries = Object.entries(value);
@@ -285,13 +479,26 @@ export function formatValueAsText(value: unknown): string {
         v === null,
     );
     if (allSimple && entries.length > 0) {
-      return entries
-        .map(([k, v]) => `${k}: ${v === null ? "null" : String(v)}`)
-        .join("\n");
+      const parts = entries.map(
+        ([k, v]) => `${k}: ${v === null ? "null" : String(v)}`,
+      );
+      return allowTruncate
+        ? joinPartsWithTruncation(parts, "\n", resolveMaxBytes(options))
+        : parts.join("\n");
     }
-    return JSON.stringify(value);
+    const json = JSON.stringify(value);
+    return allowTruncate
+      ? truncateRawStringByBytes(json, resolveMaxBytes(options))
+      : json;
   }
   return String(value);
+}
+
+export function formatValueAsText(
+  value: unknown,
+  options?: StringifyOptions,
+): string {
+  return formatValueAsTextInternal(value, options, true);
 }
 
 /**
@@ -299,24 +506,32 @@ export function formatValueAsText(value: unknown): string {
  */
 export function stringifyPreprocessorResult(
   result: PreprocessorResult,
+  options?: StringifyOptions,
 ): string | null {
   if (result === null) {
     return null;
   }
   if (typeof result === "string") {
-    return result;
+    return truncateRawStringByBytes(result, resolveMaxBytes(options));
   }
   if (Array.isArray(result)) {
     if (isLLMMessageArray(result)) {
-      return formatMessageArrayAsText(result);
+      return formatMessageArrayAsText(result, options);
     }
     const allStrings = result.every((item) => typeof item === "string");
     if (allStrings) {
-      return result.map((item) => String(item)).join("\n");
+      return joinPartsWithTruncation(
+        result.map((item) => String(item)),
+        "\n",
+        resolveMaxBytes(options),
+      );
     }
-    return result.map((item) => formatValueAsText(item)).join("\n---\n");
+    const parts = result.map((item) =>
+      formatValueAsTextInternal(item, options, false),
+    );
+    return joinPartsWithTruncation(parts, "\n---\n", resolveMaxBytes(options));
   }
-  return formatValueAsText(result);
+  return formatValueAsTextInternal(result, options, true);
 }
 
 function computeHash(value: unknown): string {
@@ -345,6 +560,11 @@ function extractItems(result: PreprocessorResult): unknown[] {
 export class IncrementalMerger {
   private seen = new Set<string>();
   private merged: unknown[] = [];
+  private maxBytes?: number;
+
+  constructor(options?: StringifyOptions) {
+    this.maxBytes = options?.maxBytes;
+  }
 
   add(result: PreprocessorResult): void {
     const items = extractItems(result);
@@ -365,16 +585,31 @@ export class IncrementalMerger {
     return this.merged.length > 0;
   }
 
-  stringify(): string | null {
+  stringify(options?: StringifyOptions): string | null {
     if (this.merged.length === 0) {
       return null;
     }
 
     if (isLLMMessageArray(this.merged)) {
-      return formatMessageArrayAsText(this.merged);
+      return formatMessageArrayAsText(this.merged, {
+        maxBytes: options?.maxBytes ?? this.maxBytes,
+      });
     }
 
-    return this.merged.map((item) => formatValueAsText(item)).join("\n---\n");
+    const parts = this.merged.map((item) =>
+      formatValueAsTextInternal(
+        item,
+        { maxBytes: options?.maxBytes ?? this.maxBytes },
+        false,
+      ),
+    );
+    return joinPartsWithTruncation(
+      parts,
+      "\n---\n",
+      resolveMaxBytes({
+        maxBytes: options?.maxBytes ?? this.maxBytes,
+      }),
+    );
   }
 
   toJSON(): unknown[] | null {
@@ -403,12 +638,13 @@ export function mergeAndDeduplicateResults(
  */
 export function mergeAndStringify(
   results: PreprocessorResult[],
+  options?: StringifyOptions,
 ): string | null {
-  const merger = new IncrementalMerger();
+  const merger = new IncrementalMerger(options);
   for (const result of results) {
     merger.add(result);
   }
-  return merger.stringify();
+  return merger.stringify(options);
 }
 
 /**
