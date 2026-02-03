@@ -1,5 +1,5 @@
 /**
- * Tests for zod v4 compatibility with makeEvalParametersSchema
+ * Tests for zod v4 compatibility with serializeEvalParametersToStaticParametersSchema
  *
  * This file tests makeEvalParametersSchema specifically with zod v4.
  * See zod-v3-serialization.test.ts for zod v3 specific tests.
@@ -8,7 +8,6 @@
 import { test, describe, beforeEach, expect } from "vitest";
 import * as zodModule from "zod";
 import { z } from "zod";
-import { makeEvalParametersHardCodedSchema } from "../framework2";
 import {
   EXPECTED_STRING_SCHEMA,
   EXPECTED_NUMBER_SCHEMA,
@@ -16,6 +15,7 @@ import {
   EXPECTED_ENUM_SCHEMA,
   EXPECTED_ARRAY_SCHEMA,
 } from "./zod-serialization-test-shared";
+import { serializeEvalParametersToStaticParametersSchema } from "../framework2";
 // Detect which zod version is installed by checking for v4-specific properties
 function getInstalledZodVersion(): 3 | 4 {
   const testSchema = zodModule.z.string();
@@ -36,7 +36,7 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default("You are a helpful assistant."),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
     expect(result.instructions).toBeDefined();
     expect(result.instructions.type).toBe("data");
     expect(
@@ -58,7 +58,7 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default(0.7),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.temperature.type).toBe("data");
     expect(
@@ -78,7 +78,7 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .describe("Configuration object"),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.config.type).toBe("data");
     expect(result.config.type === "data" && result.config.schema).toStrictEqual(
@@ -95,7 +95,7 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default("balanced"),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.mode.type).toBe("data");
     expect(result.mode.type === "data" && result.mode.schema).toStrictEqual(
@@ -113,7 +113,7 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default(["default"]),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.tags.type).toBe("data");
     expect(result.tags.type === "data" && result.tags.schema).toStrictEqual(

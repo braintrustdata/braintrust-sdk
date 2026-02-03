@@ -29,7 +29,6 @@ import {
   EvalCase,
   getSpanParentObject,
   initDataset,
-  RemoteEvalParameters,
 } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
@@ -39,20 +38,14 @@ import {
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
-  evalParametersSerializedHardCodedSchema,
-  EvalParameterSerializedSchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  ParametersSource,
+  type SerializedParametersContainer,
 } from "./types";
-import {
-  EvalParameters,
-  validateParameters,
-  validateParametersWithJsonSchema,
-} from "../src/eval-parameters";
+import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
-import { makeEvalParametersHardCodedSchema } from "../src/framework2";
 import { ValidationError } from "ajv";
+import { serializeRemoteEvalParametersContainer } from "../src/framework2";
 
 export interface DevServerOpts {
   host: string;
@@ -115,34 +108,15 @@ export function runDevServer(
       const evalDefs: EvaluatorDefinitions = {};
 
       for (const [name, evaluator] of Object.entries(allEvaluators)) {
-        let parameters:
-          | EvalParameterSerializedSchema
-          | z.infer<typeof evalParametersSerializedHardCodedSchema>
-          | undefined;
-        let parametersSource: ParametersSource | undefined;
+        let parameters: SerializedParametersContainer | undefined;
 
         if (evaluator.parameters) {
           const resolvedParams = await Promise.resolve(evaluator.parameters);
-
-          if (RemoteEvalParameters.isParameters(resolvedParams)) {
-            // Remote parameters - use JSON Schema format
-            parameters = resolvedParams.schema as EvalParameterSerializedSchema;
-            parametersSource = {
-              parametersId: resolvedParams.id,
-              slug: resolvedParams.slug,
-              name: resolvedParams.name,
-              projectId: resolvedParams.projectId,
-              version: resolvedParams.version,
-            };
-          } else {
-            // Local parameters - use legacy format for backwards compatibility
-            parameters = makeEvalParametersHardCodedSchema(resolvedParams);
-          }
+          parameters = serializeRemoteEvalParametersContainer(resolvedParams);
         }
 
         evalDefs[name] = {
           parameters,
-          parametersSource,
           scores: evaluator.scores.map((score, idx) => ({
             name: scorerName(score, idx),
           })),
@@ -184,25 +158,7 @@ export function runDevServer(
 
       if (evaluator.parameters) {
         try {
-          const resolvedParameters = await Promise.resolve(
-            evaluator.parameters,
-          );
-
-          if (RemoteEvalParameters.isParameters(resolvedParameters)) {
-            let mergedParameters =
-              parameters && Object.keys(parameters).length > 0
-                ? {
-                    ...resolvedParameters,
-                    ...parameters,
-                  }
-                : resolvedParameters;
-            validateParametersWithJsonSchema(
-              mergedParameters,
-              resolvedParameters.schema,
-            );
-          } else if (Object.keys(resolvedParameters).length > 0) {
-            validateParameters(parameters ?? {}, resolvedParameters);
-          }
+          await validateParameters(parameters ?? {}, evaluator.parameters);
         } catch (e) {
           console.error("Error validating parameters", e);
           if (

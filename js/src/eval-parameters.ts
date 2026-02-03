@@ -1,6 +1,6 @@
 import { z } from "zod/v3";
 import Ajv from "ajv";
-import { Prompt } from "./logger";
+import { Prompt, RemoteEvalParameters } from "./logger";
 import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
@@ -34,7 +34,49 @@ export type InferParameters<T extends EvalParameters> = {
   [K in keyof T]: InferParameterValue<T[K]>;
 };
 
-export function validateParameters<
+export async function validateParameters<
+  Parameters extends EvalParameters = EvalParameters,
+  T extends Record<string, unknown> = InferParameters<Parameters>,
+>(
+  parameters: Record<string, unknown>,
+  parameterSchema: Parameters | Promise<unknown> | unknown,
+): Promise<T> {
+  let resolvedSchema = parameterSchema;
+  if (resolvedSchema instanceof Promise) {
+    resolvedSchema = await resolvedSchema;
+  }
+
+  // If no schema is provided, return parameters as-is
+  if (resolvedSchema === undefined || resolvedSchema === null) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return parameters as T;
+  }
+
+  if (RemoteEvalParameters.isParameters(resolvedSchema)) {
+    const mergedParameters =
+      parameters && Object.keys(parameters).length > 0
+        ? {
+            ...resolvedSchema.data,
+            ...parameters,
+          }
+        : resolvedSchema.data;
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return validateParametersWithJsonSchema(
+      mergedParameters,
+      resolvedSchema.schema,
+    ) as T;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return validateParametersWithZod(
+    parameters,
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    resolvedSchema as Parameters,
+  ) as T;
+}
+
+function validateParametersWithZod<
   Parameters extends EvalParameters = EvalParameters,
 >(
   parameters: Record<string, unknown>,
@@ -73,9 +115,10 @@ export function validateParameters<
   ) as InferParameters<Parameters>;
 }
 
-export function validateParametersWithJsonSchema<
-  T extends Record<string, unknown>,
->(parameters: Record<string, unknown>, schema: Record<string, unknown>): T {
+function validateParametersWithJsonSchema<T extends Record<string, unknown>>(
+  parameters: Record<string, unknown>,
+  schema: Record<string, unknown>,
+): T {
   const ajv = new Ajv({ coerceTypes: true, useDefaults: true, strict: false });
   const validate = ajv.compile(schema);
 

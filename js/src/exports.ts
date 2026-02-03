@@ -85,7 +85,6 @@ export {
   loadParameters,
   loadPrompt,
   log,
-  RemoteEvalParameters as Parameters,
   logError,
   login,
   loginToState,
@@ -260,5 +259,4 @@ export type { EvalParameters } from "./eval-parameters";
 export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
-  evalParametersSerializedSchema,
 } from "../dev/types";

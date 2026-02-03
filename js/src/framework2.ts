@@ -26,6 +26,7 @@ import {
   login,
   Prompt,
   PromptRowWithId,
+  RemoteEvalParameters,
 } from "./logger";
 import { GenericFunction } from "./framework-types";
 import type { EvalParameters } from "./eval-parameters";
@@ -35,8 +36,9 @@ import {
 } from "./prompt-schemas";
 import { zodToJsonSchema } from "./zod/utils";
 import type {
-  EvalParameterSerializedSchema,
-  evalParametersSerializedHardCodedSchema,
+  ParametersSchema,
+  StaticParametersSchema,
+  SerializedParametersContainer,
 } from "../dev/types";
 
 interface BaseFnOpts {
@@ -624,7 +626,7 @@ export class CodeParameters {
       function_data: {
         type: "parameters",
         data: {},
-        __schema: makeEvalParametersSchema(this.schema),
+        __schema: serializeEvalParameterstoParametersSchema(this.schema),
       },
       if_exists: this.ifExists,
       metadata: this.metadata,
@@ -653,10 +655,9 @@ export class ParametersBuilder {
   }
 }
 
-// Legacy format - creates the old parameter format for backwards compatibility
-export function makeEvalParametersHardCodedSchema(
+export function serializeEvalParametersToStaticParametersSchema(
   parameters: EvalParameters,
-): z.infer<typeof evalParametersSerializedHardCodedSchema> {
+): StaticParametersSchema {
   return Object.fromEntries(
     Object.entries(parameters).map(([name, value]) => {
       if ("type" in value && value.type === "prompt") {
@@ -691,10 +692,10 @@ export function makeEvalParametersHardCodedSchema(
     }),
   );
 }
-// New JSON Schema format
-export function makeEvalParametersSchema(
+
+export function serializeEvalParameterstoParametersSchema(
   parameters: EvalParameters,
-): EvalParameterSerializedSchema {
+): ParametersSchema {
   const properties: Record<string, Record<string, unknown>> = {};
   const required: string[] = [];
 
@@ -734,6 +735,31 @@ export function makeEvalParametersSchema(
     properties,
     ...(required.length > 0 ? { required } : {}),
     additionalProperties: true,
+  };
+}
+
+export function serializeRemoteEvalParametersContainer(
+  parameters: EvalParameters | RemoteEvalParameters<boolean, boolean>,
+): SerializedParametersContainer {
+  if (RemoteEvalParameters.isParameters(parameters)) {
+    return {
+      type: "braintrust.parameters",
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      schema: parameters.schema as ParametersSchema,
+      source: {
+        parametersId: parameters.id,
+        slug: parameters.slug,
+        name: parameters.name,
+        projectId: parameters.projectId,
+        version: parameters.version,
+      },
+    };
+  }
+
+  return {
+    type: "braintrust.staticParameters",
+    schema: serializeEvalParametersToStaticParametersSchema(parameters),
+    source: null,
   };
 }
 

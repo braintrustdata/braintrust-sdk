@@ -1,14 +1,13 @@
 /**
- * Tests for zod v3 compatibility with makeEvalParametersSchema
+ * Tests for zod v3 compatibility with serializeEvalParametersToStaticParametersSchema
  *
- * This file tests makeEvalParametersSchema specifically with zod v3.
+ * This file tests serializeEvalParametersToStaticParametersSchema specifically with zod v3.
  * See zod-v4-serialization.test.ts for zod v4 specific tests.
  */
 
 import { test, describe, beforeEach, expect } from "vitest";
 import * as zodModule from "zod";
 import { z } from "zod";
-import { makeEvalParametersHardCodedSchema } from "../framework2";
 import {
   EXPECTED_STRING_SCHEMA,
   EXPECTED_NUMBER_SCHEMA,
@@ -16,6 +15,10 @@ import {
   EXPECTED_ENUM_SCHEMA,
   EXPECTED_ARRAY_SCHEMA,
 } from "./zod-serialization-test-shared";
+import {
+  serializeEvalParametersToStaticParametersSchema,
+  serializeRemoteEvalParametersContainer,
+} from "../framework2";
 // Detect which zod version is installed by checking for v4-specific properties
 function getInstalledZodVersion(): 3 | 4 {
   const testSchema = zodModule.z.string();
@@ -23,7 +26,7 @@ function getInstalledZodVersion(): 3 | 4 {
   return "_zod" in (testSchema as any) ? 4 : 3;
 }
 
-describe("makeEvalParametersSchema with Zod v3", () => {
+describe("serializeEvalParametersToStaticParametersSchema with Zod v3", () => {
   beforeEach(() => {
     const version = getInstalledZodVersion();
     expect(version).toBe(3);
@@ -37,7 +40,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
         .default("You are a helpful assistant."),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
     console.log(result);
     expect(result.instructions).toBeDefined();
     expect(result.instructions.type).toBe("data");
@@ -60,7 +63,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
         .default(0.7),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     result.temperature.type;
 
@@ -82,7 +85,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
         .describe("Configuration object"),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.config.type).toBe("data");
     expect(result.config.type === "data" && result.config.schema).toStrictEqual(
@@ -99,7 +102,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
         .default("balanced"),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.mode.type).toBe("data");
     expect(result.mode.type === "data" && result.mode.schema).toStrictEqual(
@@ -117,7 +120,7 @@ describe("makeEvalParametersSchema with Zod v3", () => {
         .default(["default"]),
     };
 
-    const result = makeEvalParametersHardCodedSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.tags.type).toBe("data");
     expect(result.tags.type === "data" && result.tags.schema).toStrictEqual(
@@ -125,5 +128,30 @@ describe("makeEvalParametersSchema with Zod v3", () => {
     );
     expect(result.tags.description).toBe("Tags for filtering");
     expect(result.tags.default).toEqual(["default"]);
+  });
+});
+
+describe("serializeRemoteEvalParametersContainer with Zod v3", () => {
+  beforeEach(() => {
+    const version = getInstalledZodVersion();
+    expect(version).toBe(3);
+  });
+
+  test("local parameters are serialized with legacyParameters type", () => {
+    const parameters = {
+      instructions: z
+        .string()
+        .describe("The instructions for the agent")
+        .default("You are a helpful assistant."),
+    };
+
+    const result = serializeRemoteEvalParametersContainer(parameters);
+
+    expect(result.type).toBe("braintrust.staticParameters");
+    expect(result.source).toBeNull();
+    if (result.type === "braintrust.staticParameters") {
+      expect(result.schema.instructions).toBeDefined();
+      expect(result.schema.instructions.type).toBe("data");
+    }
   });
 });

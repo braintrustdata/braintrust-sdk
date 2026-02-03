@@ -53,7 +53,6 @@ import {
   EvalParameters,
   InferParameters,
   validateParameters,
-  validateParametersWithJsonSchema,
 } from "./eval-parameters";
 
 export type BaseExperiment<
@@ -887,30 +886,10 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    let resolvedEvaluatorParams = evaluator.parameters;
-    if (resolvedEvaluatorParams instanceof Promise) {
-      resolvedEvaluatorParams = await resolvedEvaluatorParams;
-    }
-
-    if (RemoteEvalParameters.isParameters(resolvedEvaluatorParams)) {
-      const mergedParameters =
-        parameters && Object.keys(parameters).length > 0
-          ? {
-              ...resolvedEvaluatorParams.data,
-              ...parameters,
-            }
-          : resolvedEvaluatorParams.data;
-
-      parameters = validateParametersWithJsonSchema(
-        mergedParameters,
-        resolvedEvaluatorParams.schema,
-      );
-    } else if (resolvedEvaluatorParams) {
-      parameters = validateParameters(
-        parameters ?? {},
-        resolvedEvaluatorParams,
-      );
-    }
+    parameters = await validateParameters(
+      parameters ?? {},
+      evaluator.parameters,
+    );
 
     if ("_type" in dataResult) {
       if (dataResult._type !== "BaseExperiment") {
