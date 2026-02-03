@@ -1141,29 +1141,31 @@ async def test_current_logger_async_context_isolation(with_simulate_login, with_
 
 
 def test_span_set_current(with_memory_logger):
-    """Test that span.set_current() makes the span accessible via current_span()."""
+    """Test that set_current parameter controls whether span is automatically set as current."""
     init_test_logger(__name__)
 
     # Store initial current span
     initial_current = braintrust.current_span()
 
-    # Start a span that can be set as current (default behavior)
+    # Start a span with set_current=True (default behavior)
+    # The span should immediately become the current span
     span1 = logger.start_span(name="test-span-1")
 
-    # Initially, it should not be the current span
-    assert braintrust.current_span() != span1
-
-    # Call set_current() on the span
-    span1.set_current()
-
-    # Verify it's now the current span
+    # With set_current=True (default), it should immediately be the current span
     assert braintrust.current_span() == span1
 
-    # Test that spans with set_current=False cannot be set as current
-    span2 = logger.start_span(name="test-span-2", set_current=False)
-    span2.set_current()  # This should not change the current span
+    # Calling set_current() again should be idempotent
+    span1.set_current()
+    assert braintrust.current_span() == span1
 
-    # Current span should still be span1
+    # Test that spans with set_current=False are NOT automatically set as current
+    span2 = logger.start_span(name="test-span-2", set_current=False)
+
+    # Current span should still be span1 (span2 was not set as current)
+    assert braintrust.current_span() == span1
+
+    # Calling set_current() on span2 should not work because can_set_current=False
+    span2.set_current()
     assert braintrust.current_span() == span1
 
     span1.end()
@@ -2558,6 +2560,48 @@ def test_span_start_span_with_exported_span_parent(with_memory_logger):
     )
     assert active_context_span_id not in child_log.get("span_parents", []), (
         "child should NOT have active_context_span_id in span_parents"
+    )
+
+
+def test_start_span_set_current_without_context_manager(with_memory_logger):
+    """Test that start_span(set_current=True) actually sets the span as current without using a context manager.
+
+    This reproduces issue #1317 where OpenAI calls within a tool span appear as siblings instead of children
+    because the tool span was created with set_current=True but without using a context manager.
+    """
+    from braintrust import start_span
+    from braintrust.test_helpers import init_test_exp
+
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    # Simulate creating a tool span with set_current=True but WITHOUT using "with" statement
+    tool_span = experiment.start_span(name="tool_call", type="tool", set_current=True)
+    tool_span.log(input={"query": "test"})
+    tool_span_id = tool_span.span_id
+    root_span_id = tool_span.root_span_id
+
+    # Simulate an OpenAI wrapper creating a nested span (like wrap_openai does)
+    # This should inherit from the tool_span since it was set as current
+    llm_span = start_span(name="LLM Call", type="llm")
+    llm_span.log(output={"result": "embedding"})
+    llm_span.end()
+
+    # End the tool span
+    tool_span.end()
+
+    logs = with_memory_logger.pop()
+
+    # Find the tool and LLM spans
+    tool_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "tool_call")
+    llm_log = next(l for l in logs if l.get("span_attributes", {}).get("name") == "LLM Call")
+
+    # The LLM span should be a CHILD of the tool span, not a sibling
+    assert llm_log["root_span_id"] == root_span_id, (
+        "LLM span should have the same root_span_id as tool span"
+    )
+    assert tool_span_id in llm_log.get("span_parents", []), (
+        f"LLM span should have tool_span_id {tool_span_id} in span_parents, "
+        f"but got span_parents={llm_log.get('span_parents')}"
     )
 
 

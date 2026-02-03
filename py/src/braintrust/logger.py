@@ -3984,6 +3984,9 @@ class SpanImpl(Span):
         # This is set by the context manager when the span becomes active
         self._context_token: Any | None = None
 
+        # Track whether set_current() was called in __init__ so we don't call it again in __enter__
+        self._set_current_in_init = False
+
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_compute_object_metadata_args = parent_compute_object_metadata_args
@@ -4050,6 +4053,12 @@ class SpanImpl(Span):
         self._is_merge = False
         self.log_internal(event=event, internal_data=internal_data)
         self._is_merge = True
+
+        # If set_current=True was passed, make this span current immediately
+        # This allows spans created without context managers to be used as parents
+        if self.can_set_current:
+            self.set_current()
+            self._set_current_in_init = True
 
     @property
     def id(self) -> str:
@@ -4281,7 +4290,10 @@ class SpanImpl(Span):
                 self._context_token = None
 
     def __enter__(self) -> Span:
-        self.set_current()
+        # Only call set_current() if it wasn't already called in __init__
+        # This prevents calling it twice and losing the correct context token
+        if not self._set_current_in_init:
+            self.set_current()
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
