@@ -1429,6 +1429,22 @@ def _internal_get_global_state() -> BraintrustState:
     return _state
 
 
+def _resolve_state(
+    state: "BraintrustState | None", api_key: str | None, app_url: str | None
+) -> "BraintrustState":
+    """Resolve the state to use for a logger/experiment/dataset.
+
+    If an explicit state is provided, use it. Otherwise, if api_key or app_url
+    is specified, create a new isolated BraintrustState to avoid conflicts with
+    the global state. If neither is specified, use the global state.
+    """
+    if state is not None:
+        return state
+    if api_key is not None or app_url is not None:
+        return BraintrustState()
+    return _state
+
+
 _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
@@ -1576,13 +1592,7 @@ def init(
     :returns: The experiment object.
     """
 
-    # If no explicit state is provided but api_key or app_url is specified,
-    # create an isolated state to avoid conflicts with the global state
-    if state is None:
-        if api_key is not None or app_url is not None:
-            state = BraintrustState()
-        else:
-            state = _state
+    state = _resolve_state(state, api_key, app_url)
 
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
@@ -1745,13 +1755,7 @@ def init_dataset(
     :returns: The dataset object.
     """
 
-    # If no explicit state is provided but api_key or app_url is specified,
-    # create an isolated state to avoid conflicts with the global state
-    if state is None:
-        if api_key is not None or app_url is not None:
-            state = BraintrustState()
-        else:
-            state = _state
+    state = _resolve_state(state, api_key, app_url)
 
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -1832,13 +1836,7 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
-    # If no explicit state is provided but api_key or app_url is specified,
-    # create an isolated state to avoid conflicts with the global state
-    if state is None:
-        if api_key is not None or app_url is not None:
-            state = BraintrustState()
-        else:
-            state = _state
+    state = _resolve_state(state, api_key, app_url)
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
     link_args = {
