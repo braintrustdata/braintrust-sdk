@@ -8,6 +8,7 @@ from openai._types import NOT_GIVEN
 from pydantic import BaseModel
 
 from braintrust import logger, wrap_openai
+from braintrust.oai import ChatCompletionWrapper
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
 
@@ -330,6 +331,103 @@ def test_openai_responses_sparse_indices(memory_logger):
     assert annotations[1] == {"text": "Second annotation"}
     assert annotations[2] == {}  # Gap should be empty dict
     assert annotations[3] == {"text": "Fourth annotation"}
+
+    # No spans should be generated from this unit test
+    assert not memory_logger.pop()
+
+
+def test_chat_completion_streaming_none_arguments(memory_logger):
+    """Test that ChatCompletionWrapper handles None arguments in tool calls (e.g., GLM-4.6 behavior)."""
+    assert not memory_logger.pop()
+
+    # Simulate streaming results with None arguments in tool calls
+    # This mimics the behavior of GLM-4.6 which returns {'arguments': None, 'name': 'weather'}
+    all_results = [
+        # First chunk: initial tool call with None arguments
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_123",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": None,  # GLM-4.6 returns None here
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": None,
+                }
+            ],
+        },
+        # Second chunk: subsequent tool call arguments (also None)
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": None,  # Subsequent chunks can also have None
+                                }
+                            }
+                        ],
+                    },
+                    "finish_reason": None,
+                }
+            ],
+        },
+        # Third chunk: actual arguments
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": '{"city": "New York"}',
+                                }
+                            }
+                        ],
+                    },
+                    "finish_reason": None,
+                }
+            ],
+        },
+        # Final chunk
+        {
+            "choices": [
+                {
+                    "delta": {},
+                    "finish_reason": "tool_calls",
+                }
+            ],
+        },
+    ]
+
+    # Process the results
+    wrapper = ChatCompletionWrapper(None, None)
+    result = wrapper._postprocess_streaming_results(all_results)
+
+    # Verify the output was built correctly
+    assert "output" in result
+    assert len(result["output"]) == 1
+    message = result["output"][0]["message"]
+    assert message["role"] == "assistant"
+    assert message["tool_calls"] is not None
+    assert len(message["tool_calls"]) == 1
+
+    # Verify the tool call was assembled correctly despite None arguments
+    tool_call = message["tool_calls"][0]
+    assert tool_call["id"] == "call_123"
+    assert tool_call["type"] == "function"
+    assert tool_call["function"]["name"] == "get_weather"
+    # The arguments should be the concatenation: "" + "" + '{"city": "New York"}'
+    assert tool_call["function"]["arguments"] == '{"city": "New York"}'
 
     # No spans should be generated from this unit test
     assert not memory_logger.pop()

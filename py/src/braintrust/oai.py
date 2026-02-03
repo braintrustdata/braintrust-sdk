@@ -246,7 +246,7 @@ class ChatCompletionWrapper:
                     ]
                 else:
                     # pylint: disable=unsubscriptable-object
-                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"] or ""
 
         return {
             "metrics": metrics,
