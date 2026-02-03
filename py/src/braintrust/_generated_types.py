@@ -194,6 +194,10 @@ class BatchedFacetDataFacet(TypedDict):
     """
     The model to use for facet extraction
     """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
+    """
     no_match_pattern: NotRequired[str | None]
     """
     Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
@@ -746,15 +750,11 @@ class FunctionDataFunctionData2(TypedDict):
     """
 
 
-class FunctionDataFunctionData4SchemaProperties(TypedDict):
-    type: NotRequired[str | None]
-    description: NotRequired[str | None]
-    default: NotRequired[Any | None]
-
-
 class FunctionDataFunctionData4Schema(TypedDict):
-    type: NotRequired[Literal['object'] | None]
-    properties: NotRequired[Mapping[str, FunctionDataFunctionData4SchemaProperties] | None]
+    type: Literal['object']
+    properties: Mapping[str, Mapping[str, Any]]
+    required: NotRequired[Sequence[str] | None]
+    additionalProperties: NotRequired[bool | None]
 
 
 class FunctionDataFunctionData4(TypedDict):
@@ -765,11 +765,11 @@ class FunctionDataFunctionData4(TypedDict):
     """
     __schema: FunctionDataFunctionData4Schema
     """
-    JSON Schema describing the structure and types of the parameters data
+    JSON Schema format for parameters
     """
 
 
-FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
+FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph', 'topic_map']
 
 
 class FunctionIdFunctionId(TypedDict):
@@ -838,7 +838,7 @@ FunctionObjectType: TypeAlias = Literal[
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'tag', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
 
 
 FunctionTypeEnum: TypeAlias = Literal[
@@ -2263,6 +2263,64 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
+class TopicMapReportSettings(TypedDict):
+    algorithm: Literal['hdbscan', 'kmeans', 'hierarchical']
+    dimension_reduction: Literal['umap', 'pca', 'none']
+    vector_field: str
+    embedding_model: str
+    n_clusters: NotRequired[int | None]
+    umap_dimensions: NotRequired[int | None]
+    min_cluster_size: NotRequired[int | None]
+    min_samples: NotRequired[int | None]
+
+
+class TopicMapReportQuerySettings(TypedDict):
+    hierarchy_threshold: NotRequired[int | None]
+    auto_naming: NotRequired[bool | None]
+    skip_cache: NotRequired[bool | None]
+    viz_mode: NotRequired[Literal['bar', 'scatter'] | None]
+    naming_model: NotRequired[str | None]
+
+
+class TopicMapReportClusterSample(TypedDict):
+    id: str
+    text: str
+    root_span_id: str
+    span_id: str
+
+
+class TopicMapReportCluster(TypedDict):
+    cluster_id: float
+    parent_cluster_id: NotRequired[float | None]
+    topic_id: str
+    count: float
+    sample_texts: Sequence[str]
+    samples: Sequence[TopicMapReportClusterSample]
+    name: NotRequired[str | None]
+    description: NotRequired[str | None]
+    keywords: NotRequired[Sequence[str] | None]
+    centroid: NotRequired[Sequence[float] | None]
+    parent_id: NotRequired[float | None]
+    is_leaf: NotRequired[bool | None]
+    depth: NotRequired[float | None]
+
+
+class TopicMapReportEmbeddingPoint(TypedDict):
+    x: float
+    y: float
+    cluster: float
+    text: NotRequired[str | None]
+
+
+class TopicMapReport(TypedDict):
+    version: Literal[1]
+    created_at: NotRequired[str | None]
+    settings: TopicMapReportSettings
+    query_settings: TopicMapReportQuerySettings
+    clusters: Sequence[TopicMapReportCluster]
+    embedding_points: NotRequired[Sequence[TopicMapReportEmbeddingPoint] | None]
+
+
 class TraceScope(TypedDict):
     type: Literal['trace']
     idle_seconds: NotRequired[float | None]
@@ -2527,12 +2585,6 @@ class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreproces
 Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
 
 
-class BatchedFacetData(TypedDict):
-    type: Literal['batched_facet']
-    preprocessor: NotRequired[Preprocessor | None]
-    facets: Sequence[BatchedFacetDataFacet]
-
-
 ChatCompletionContentPart: TypeAlias = (
     ChatCompletionContentPartTextWithTitle
     | ChatCompletionContentPartImageWithTitle
@@ -2787,6 +2839,10 @@ class FacetData(TypedDict):
     model: NotRequired[str | None]
     """
     The model to use for facet extraction
+    """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
     """
     no_match_pattern: NotRequired[str | None]
     """
@@ -3071,9 +3127,52 @@ class SpanAttributes(TypedDict):
     type: NotRequired[SpanType | None]
 
 
+class TopicMapData(TypedDict):
+    type: Literal['topic_map']
+    source_facet: str
+    """
+    The facet field name to use as input for classification
+    """
+    embedding_model: str
+    """
+    The embedding model to use for embedding facet values
+    """
+    bundle_key: str
+    """
+    Key of the topic map bundle in code_bundles bucket
+    """
+    distance_threshold: NotRequired[float | None]
+    """
+    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    """
+    report: NotRequired[TopicMapReport | None]
+
+
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
+
+
+class BatchedFacetDataTopicMaps(TypedDict):
+    function_name: str
+    """
+    The name of the topic map function
+    """
+    topic_map_id: NotRequired[str | None]
+    """
+    The id of the topic map function
+    """
+    topic_map_data: TopicMapData
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
+    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
+    """
+    Topic maps that depend on facets in this batch, keyed by source facet name
+    """
 
 
 class ExperimentEvent(TypedDict):
@@ -3646,6 +3745,7 @@ FunctionData: TypeAlias = (
     | FacetData
     | BatchedFacetData
     | FunctionDataFunctionData4
+    | TopicMapData
 )
 
 

@@ -711,6 +711,10 @@
                   "type": "string",
                   "description": "The model to use for facet extraction"
                 },
+                "embedding_model": {
+                  "type": "string",
+                  "description": "The embedding model to use for vectorizing facet results."
+                },
                 "no_match_pattern": {
                   "type": "string",
                   "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
@@ -721,6 +725,30 @@
                 "prompt"
               ]
             }
+          },
+          "topic_maps": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "function_name": {
+                  "type": "string",
+                  "description": "The name of the topic map function"
+                },
+                "topic_map_id": {
+                  "type": "string",
+                  "description": "The id of the topic map function"
+                },
+                "topic_map_data": {
+                  "$ref": "#/components/schemas/TopicMapData"
+                }
+              },
+              "required": [
+                "function_name",
+                "topic_map_data"
+              ]
+            },
+            "description": "Topic maps that depend on facets in this batch, keyed by source facet name"
           }
         },
         "required": [
@@ -2907,6 +2935,10 @@
             "type": "string",
             "description": "The model to use for facet extraction"
           },
+          "embedding_model": {
+            "type": "string",
+            "description": "The embedding model to use for vectorizing facet results."
+          },
           "no_match_pattern": {
             "type": "string",
             "description": "Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'"
@@ -3260,19 +3292,24 @@
                     "type": "object",
                     "additionalProperties": {
                       "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string"
-                        },
-                        "description": {
-                          "type": "string"
-                        },
-                        "default": {}
-                      }
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean"
                   }
                 },
-                "description": "JSON Schema describing the structure and types of the parameters data"
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "description": "JSON Schema format for parameters"
               }
             },
             "required": [
@@ -3281,6 +3318,16 @@
               "__schema"
             ],
             "title": "parameters"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TopicMapData"
+              },
+              {
+                "title": "topic_map"
+              }
+            ]
           }
         ]
       },
@@ -3290,7 +3337,8 @@
           "llm",
           "code",
           "global",
-          "graph"
+          "graph",
+          "topic_map"
         ]
       },
       "FunctionId": {
@@ -7472,6 +7520,264 @@
           "function"
         ]
       },
+      "TopicMapData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "topic_map"
+            ]
+          },
+          "source_facet": {
+            "type": "string",
+            "description": "The facet field name to use as input for classification"
+          },
+          "embedding_model": {
+            "type": "string",
+            "description": "The embedding model to use for embedding facet values"
+          },
+          "bundle_key": {
+            "type": "string",
+            "description": "Key of the topic map bundle in code_bundles bucket"
+          },
+          "distance_threshold": {
+            "type": "number",
+            "description": "Maximum distance to nearest centroid. If exceeded, returns no_match."
+          },
+          "report": {
+            "$ref": "#/components/schemas/TopicMapReport"
+          }
+        },
+        "required": [
+          "type",
+          "source_facet",
+          "embedding_model",
+          "bundle_key"
+        ]
+      },
+      "TopicMapReport": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "hdbscan",
+                  "kmeans",
+                  "hierarchical"
+                ]
+              },
+              "dimension_reduction": {
+                "type": "string",
+                "enum": [
+                  "umap",
+                  "pca",
+                  "none"
+                ]
+              },
+              "vector_field": {
+                "type": "string"
+              },
+              "embedding_model": {
+                "type": "string"
+              },
+              "n_clusters": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "umap_dimensions": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "min_cluster_size": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "min_samples": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "algorithm",
+              "dimension_reduction",
+              "vector_field",
+              "embedding_model"
+            ]
+          },
+          "query_settings": {
+            "type": "object",
+            "properties": {
+              "hierarchy_threshold": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "auto_naming": {
+                "type": "boolean"
+              },
+              "skip_cache": {
+                "type": "boolean"
+              },
+              "viz_mode": {
+                "type": "string",
+                "enum": [
+                  "bar",
+                  "scatter"
+                ]
+              },
+              "naming_model": {
+                "type": "string"
+              }
+            }
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cluster_id": {
+                  "type": "number"
+                },
+                "parent_cluster_id": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "topic_id": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "sample_texts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "samples": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "root_span_id": {
+                        "type": "string"
+                      },
+                      "span_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "text",
+                      "root_span_id",
+                      "span_id"
+                    ]
+                  }
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "centroid": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "parent_id": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "is_leaf": {
+                  "type": "boolean"
+                },
+                "depth": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "cluster_id",
+                "topic_id",
+                "count",
+                "sample_texts",
+                "samples"
+              ]
+            }
+          },
+          "embedding_points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "cluster": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "cluster"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "settings",
+          "query_settings",
+          "clusters"
+        ],
+        "description": "Saved clustering report for UI rehydration"
+      },
       "TraceScope": {
         "type": "object",
         "properties": {
@@ -8109,7 +8415,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "90f443d1f251497373abd15112abb5c4f92dd8ec"
+    "x-internal-git-sha": "2822255bed426d5442adc880a8f71b8a378de3d4"
   },
   "paths": {},
   "webhooks": {}

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 90f443d1f251497373abd15112abb5c4f92dd8ec) -- do not modify
+// Auto-generated file (internal git SHA 2822255bed426d5442adc880a8f71b8a378de3d4) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -247,6 +247,73 @@ export const NullableSavedFunctionId = z.union([
 export type NullableSavedFunctionIdType = z.infer<
   typeof NullableSavedFunctionId
 >;
+export const TopicMapReport = z.object({
+  version: z.literal(1),
+  created_at: z.string().optional(),
+  settings: z.object({
+    algorithm: z.enum(["hdbscan", "kmeans", "hierarchical"]),
+    dimension_reduction: z.enum(["umap", "pca", "none"]),
+    vector_field: z.string(),
+    embedding_model: z.string(),
+    n_clusters: z.union([z.number(), z.null()]).optional(),
+    umap_dimensions: z.union([z.number(), z.null()]).optional(),
+    min_cluster_size: z.union([z.number(), z.null()]).optional(),
+    min_samples: z.union([z.number(), z.null()]).optional(),
+  }),
+  query_settings: z
+    .object({
+      hierarchy_threshold: z.union([z.number(), z.null()]),
+      auto_naming: z.boolean(),
+      skip_cache: z.boolean(),
+      viz_mode: z.enum(["bar", "scatter"]),
+      naming_model: z.string(),
+    })
+    .partial(),
+  clusters: z.array(
+    z.object({
+      cluster_id: z.number(),
+      parent_cluster_id: z.union([z.number(), z.null()]).optional(),
+      topic_id: z.string(),
+      count: z.number(),
+      sample_texts: z.array(z.string()),
+      samples: z.array(
+        z.object({
+          id: z.string(),
+          text: z.string(),
+          root_span_id: z.string(),
+          span_id: z.string(),
+        }),
+      ),
+      name: z.string().optional(),
+      description: z.string().optional(),
+      keywords: z.array(z.string()).optional(),
+      centroid: z.array(z.number()).optional(),
+      parent_id: z.union([z.number(), z.null()]).optional(),
+      is_leaf: z.boolean().optional(),
+      depth: z.number().optional(),
+    }),
+  ),
+  embedding_points: z
+    .array(
+      z.object({
+        x: z.number(),
+        y: z.number(),
+        cluster: z.number(),
+        text: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export type TopicMapReportType = z.infer<typeof TopicMapReport>;
+export const TopicMapData = z.object({
+  type: z.literal("topic_map"),
+  source_facet: z.string(),
+  embedding_model: z.string(),
+  bundle_key: z.string(),
+  distance_threshold: z.number().optional(),
+  report: TopicMapReport.optional(),
+});
+export type TopicMapDataType = z.infer<typeof TopicMapData>;
 export const BatchedFacetData = z.object({
   type: z.literal("batched_facet"),
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
@@ -255,9 +322,19 @@ export const BatchedFacetData = z.object({
       name: z.string(),
       prompt: z.string(),
       model: z.string().optional(),
+      embedding_model: z.string().optional(),
       no_match_pattern: z.string().optional(),
     }),
   ),
+  topic_maps: z
+    .record(
+      z.object({
+        function_name: z.string(),
+        topic_map_id: z.string().optional(),
+        topic_map_data: TopicMapData,
+      }),
+    )
+    .optional(),
 });
 export type BatchedFacetDataType = z.infer<typeof BatchedFacetData>;
 export const BraintrustModelParams = z
@@ -807,6 +884,7 @@ export const FacetData = z.object({
   preprocessor: NullableSavedFunctionId.and(z.unknown()).optional(),
   prompt: z.string(),
   model: z.string().optional(),
+  embedding_model: z.string().optional(),
   no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
@@ -1109,21 +1187,14 @@ export const FunctionData = z.union([
   z.object({
     type: z.literal("parameters"),
     data: z.object({}).partial().passthrough(),
-    __schema: z
-      .object({
-        type: z.literal("object"),
-        properties: z.record(
-          z
-            .object({
-              type: z.string(),
-              description: z.string(),
-              default: z.unknown(),
-            })
-            .partial(),
-        ),
-      })
-      .partial(),
+    __schema: z.object({
+      type: z.literal("object"),
+      properties: z.record(z.object({}).partial().passthrough()),
+      required: z.array(z.string()).optional(),
+      additionalProperties: z.boolean().optional(),
+    }),
   }),
+  TopicMapData.and(z.unknown()),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -1161,7 +1232,13 @@ export const Function = z.object({
     .optional(),
 });
 export type FunctionType = z.infer<typeof Function>;
-export const FunctionFormat = z.enum(["llm", "code", "global", "graph"]);
+export const FunctionFormat = z.enum([
+  "llm",
+  "code",
+  "global",
+  "graph",
+  "topic_map",
+]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
 export const PromptData = z
   .object({
