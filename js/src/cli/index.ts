@@ -320,6 +320,7 @@ async function initFile({
         const evaluator = evaluateBuildResults(inFile, result) || {
           functions: [],
           prompts: [],
+          parameters: [],
           evaluators: {},
           reporters: {},
         };

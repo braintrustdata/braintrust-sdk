@@ -617,9 +617,9 @@ function areFunctionSignaturesCompatible(
 ): boolean {
   // Extract function name and parameters
   const parseFunctionSig = (sig: string) => {
-    // Match: export function name(params): returnType
+    // Match: export function name(params): returnType OR function name(params): returnType (for re-exports)
     const match = sig.match(
-      /export\s+function\s+(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/,
+      /(?:export\s+)?(?:declare\s+)?function\s+(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/,
     );
     if (!match) return null;
 
@@ -752,8 +752,8 @@ function areTypeAliasSignaturesCompatible(
 ): boolean {
   // Extract type name and definition
   const parseTypeSig = (sig: string) => {
-    // Match: export type Name = Definition
-    const match = sig.match(/export\s+type\s+(\w+)\s*=\s*(.+)$/);
+    // Match: export type Name = Definition OR type Name = Definition (for re-exports)
+    const match = sig.match(/(?:export\s+)?type\s+(\w+)\s*=\s*(.+)$/);
     if (!match) return null;
 
     return {
@@ -772,8 +772,21 @@ function areTypeAliasSignaturesCompatible(
   const oldDef = oldParsed.definition;
   const newDef = newParsed.definition;
 
-  // Check if it's a union type
-  const isUnion = (def: string) => def.includes("|");
+  // Check if it's a union type (at top level, not inside braces/brackets/parens)
+  const isUnion = (def: string) => {
+    let depth = 0;
+    for (let i = 0; i < def.length; i++) {
+      const char = def[i];
+      if (char === "<" || char === "{" || char === "(") {
+        depth++;
+      } else if (char === ">" || char === "}" || char === ")") {
+        depth--;
+      } else if (char === "|" && depth === 0) {
+        return true; // Found a pipe at top level
+      }
+    }
+    return false;
+  };
 
   if (isUnion(oldDef) || isUnion(newDef)) {
     // Parse union members
@@ -832,51 +845,70 @@ function areTypeAliasSignaturesCompatible(
     ): Map<string, { type: string; optional: boolean }> => {
       const props = new Map<string, { type: string; optional: boolean }>();
 
-      // Extract content between { and }
-      const bodyMatch = def.match(/\{([^}]*)\}/);
-      if (!bodyMatch) return props;
+      // Extract content between { and } (handle nested braces)
+      let braceDepth = 0;
+      let startIdx = -1;
+      for (let i = 0; i < def.length; i++) {
+        if (def[i] === "{") {
+          if (braceDepth === 0) startIdx = i + 1;
+          braceDepth++;
+        } else if (def[i] === "}") {
+          braceDepth--;
+          if (braceDepth === 0 && startIdx !== -1) {
+            const body = def.substring(startIdx, i);
 
-      const body = bodyMatch[1];
-      let depth = 0;
-      let current = "";
-      let propName = "";
-      let isOptional = false;
-      let inPropName = true;
+            // Parse properties from body
+            let depth = 0;
+            let current = "";
+            let propName = "";
+            let isOptional = false;
+            let inPropName = true;
 
-      for (let i = 0; i < body.length; i++) {
-        const char = body[i];
+            for (let j = 0; j < body.length; j++) {
+              const char = body[j];
 
-        if (char === "<" || char === "{" || char === "(") {
-          depth++;
-          if (!inPropName) current += char;
-        } else if (char === ">" || char === "}" || char === ")") {
-          depth--;
-          if (!inPropName) current += char;
-        } else if (char === "?" && depth === 0 && inPropName) {
-          isOptional = true;
-        } else if (char === ":" && depth === 0 && inPropName) {
-          inPropName = false;
-          propName = current.trim();
-          current = "";
-        } else if (char === ";" && depth === 0) {
-          if (propName) {
-            props.set(propName, { type: current.trim(), optional: isOptional });
-          }
-          current = "";
-          propName = "";
-          isOptional = false;
-          inPropName = true;
-        } else {
-          if (inPropName) {
-            if (char.trim()) current += char;
-          } else {
-            current += char;
+              if (char === "<" || char === "{" || char === "(") {
+                depth++;
+                if (!inPropName) current += char;
+              } else if (char === ">" || char === "}" || char === ")") {
+                depth--;
+                if (!inPropName) current += char;
+              } else if (char === "?" && depth === 0 && inPropName) {
+                isOptional = true;
+              } else if (char === ":" && depth === 0 && inPropName) {
+                inPropName = false;
+                propName = current.trim();
+                current = "";
+              } else if (char === ";" && depth === 0) {
+                if (propName) {
+                  props.set(propName, {
+                    type: current.trim(),
+                    optional: isOptional,
+                  });
+                }
+                current = "";
+                propName = "";
+                isOptional = false;
+                inPropName = true;
+              } else {
+                if (inPropName) {
+                  if (char.trim()) current += char;
+                } else {
+                  current += char;
+                }
+              }
+            }
+
+            if (propName && current.trim()) {
+              props.set(propName, {
+                type: current.trim(),
+                optional: isOptional,
+              });
+            }
+
+            break;
           }
         }
-      }
-
-      if (propName && current.trim()) {
-        props.set(propName, { type: current.trim(), optional: isOptional });
       }
 
       return props;
@@ -894,9 +926,17 @@ function areTypeAliasSignaturesCompatible(
         return false;
       }
 
-      if (oldProp.type !== newProp.type) {
-        // Property type changed - breaking change
-        return false;
+      // Normalize types for comparison
+      const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
+      const oldTypeNorm = normalizeType(oldProp.type);
+      const newTypeNorm = normalizeType(newProp.type);
+
+      if (oldTypeNorm !== newTypeNorm) {
+        // Check if it's a union type widening (backwards compatible)
+        if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
+          // Property type changed in an incompatible way - breaking change
+          return false;
+        }
       }
 
       // If old prop was required, new can be required or optional (compatible)
@@ -933,9 +973,9 @@ function areEnumSignaturesCompatible(
 ): boolean {
   // Extract enum name and members
   const parseEnumSig = (sig: string) => {
-    // Match: export enum Name { members } or declare enum Name { members } or enum Name { members }
+    // Match: export enum Name { members } OR declare enum Name { members } OR enum Name { members } (for re-exports)
     const match = sig.match(
-      /(?:export\s+|declare\s+)?enum\s+(\w+)\s*\{([^}]*)\}/,
+      /(?:export\s+)?(?:declare\s+)?enum\s+(\w+)\s*\{([^}]*)\}/,
     );
     if (!match) return null;
 
@@ -1009,6 +1049,69 @@ function areEnumSignaturesCompatible(
 
   // New members are allowed
   return true;
+}
+
+/**
+ * Checks if a type change represents union widening (backwards compatible).
+ * Returns true if oldType is a subset of newType (e.g., T -> T | U | V).
+ */
+function isUnionTypeWidening(oldType: string, newType: string): boolean {
+  // Check if newType is a union that includes oldType
+  const isUnion = (type: string) => type.includes("|");
+
+  if (!isUnion(newType)) {
+    // New type is not a union, so it's not widening
+    return false;
+  }
+
+  // Parse union members from newType
+  const parseUnionMembers = (type: string): Set<string> => {
+    const members = new Set<string>();
+    let depth = 0;
+    let current = "";
+
+    for (let i = 0; i < type.length; i++) {
+      const char = type[i];
+
+      if (char === "<" || char === "{" || char === "(") {
+        depth++;
+        current += char;
+      } else if (char === ">" || char === "}" || char === ")") {
+        depth--;
+        current += char;
+      } else if (char === "|" && depth === 0) {
+        if (current.trim()) {
+          members.add(current.trim());
+        }
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    if (current.trim()) {
+      members.add(current.trim());
+    }
+
+    return members;
+  };
+
+  const newMembers = parseUnionMembers(newType);
+
+  // Check if oldType (or oldType as a union) is a subset of newType
+  if (isUnion(oldType)) {
+    const oldMembers = parseUnionMembers(oldType);
+    // All old members must be in new members
+    for (const oldMember of oldMembers) {
+      if (!newMembers.has(oldMember)) {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    // oldType is a single type - check if it's in the new union
+    return newMembers.has(oldType);
+  }
 }
 
 /**
@@ -1119,8 +1222,11 @@ function areInterfaceSignaturesCompatible(
     const newTypeNorm = normalizeType(newField.type);
 
     if (oldTypeNorm !== newTypeNorm) {
-      // Field type changed - breaking change
-      return false;
+      // Check if it's a union type widening (backwards compatible)
+      if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
+        // Field type changed in an incompatible way - breaking change
+        return false;
+      }
     }
 
     // Check if required field became optional - that's compatible
@@ -1477,6 +1583,41 @@ function findDifference(before: string, after: string): string {
   return `First difference at position ${diffStart}:\n    Before: ...${beforeContext}...\n    After:  ...${afterContext}...`;
 }
 
+describe("isUnionTypeWidening", () => {
+  test("should recognize single type becoming union", () => {
+    const result = isUnionTypeWidening("string", "string | number");
+    expect(result).toBe(true);
+  });
+
+  test("should recognize type not in union", () => {
+    const result = isUnionTypeWidening("boolean", "string | number");
+    expect(result).toBe(false);
+  });
+
+  test("should handle complex types in union", () => {
+    const result = isUnionTypeWidening("string", "string | URL");
+    expect(result).toBe(true);
+  });
+
+  test("should handle union to larger union", () => {
+    const result = isUnionTypeWidening(
+      "string | number",
+      "string | number | boolean",
+    );
+    expect(result).toBe(true);
+  });
+
+  test("should reject narrowing union", () => {
+    const result = isUnionTypeWidening("string | number", "string");
+    expect(result).toBe(false);
+  });
+
+  test("should reject non-union to non-union change", () => {
+    const result = isUnionTypeWidening("string", "number");
+    expect(result).toBe(false);
+  });
+});
+
 describe("areInterfaceSignaturesCompatible", () => {
   test("should allow adding optional fields to interface", () => {
     const oldInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush?: IsAsyncFlush; computeMetadataArgs?: Record<string, any>; }`;
@@ -1521,6 +1662,30 @@ describe("areInterfaceSignaturesCompatible", () => {
   test("should reject making optional field required", () => {
     const oldInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush?: IsAsyncFlush; }`;
     const newInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush: IsAsyncFlush; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(false);
+  });
+
+  test("should allow widening field type to union (single type to union)", () => {
+    const oldInterface = `export interface EvalOptions<Parameters> { parameters?: Parameters; }`;
+    const newInterface = `export interface EvalOptions<Parameters> { parameters?: Parameters | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>> | Promise<RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>>; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should allow widening field type to union (simple case)", () => {
+    const oldInterface = `export interface Config { value: string; }`;
+    const newInterface = `export interface Config { value: string | number; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should reject narrowing field type from union", () => {
+    const oldInterface = `export interface Config { value: string | number; }`;
+    const newInterface = `export interface Config { value: string; }`;
 
     const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
     expect(result).toBe(false);
@@ -1630,6 +1795,18 @@ describe("areTypeAliasSignaturesCompatible", () => {
     const oldType = `export type Foo = string`;
     const newType = `export type Foo = { value: string }`;
     expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(false);
+  });
+
+  test("should allow widening object type property to union", () => {
+    const oldType = `export type Config = { host: string; port: number; }`;
+    const newType = `export type Config = { host: string | URL; port: number; }`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
+  });
+
+  test("should allow adding optional field to object type (EvaluatorFile scenario)", () => {
+    const oldType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
+    const newType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; parameters?: CodeParameters[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
   });
 });
 

@@ -40,12 +40,13 @@ import {
   evalBodySchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  evalParametersSerializedSchema,
+  type SerializedParametersContainer,
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod/v3";
-import { promptDefinitionToPromptData } from "../src/framework2";
-import { zodToJsonSchema } from "../src/zod/utils";
+import { ValidationError } from "ajv";
+import { serializeRemoteEvalParametersContainer } from "../src/framework2";
+
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -100,22 +101,31 @@ export function runDevServer(
   });
 
   // List endpoint - returns all available evaluators and their metadata
-  app.get("/list", checkAuthorized, (req, res) => {
-    const evalDefs: EvaluatorDefinitions = Object.fromEntries(
-      Object.entries(allEvaluators).map(([name, evaluator]) => [
-        name,
-        {
-          parameters: evaluator.parameters
-            ? makeEvalParametersSchema(evaluator.parameters)
-            : undefined,
+  app.get(
+    "/list",
+    checkAuthorized,
+    asyncHandler(async (req, res) => {
+      const evalDefs: EvaluatorDefinitions = {};
+
+      for (const [name, evaluator] of Object.entries(allEvaluators)) {
+        let parameters: SerializedParametersContainer | undefined;
+
+        if (evaluator.parameters) {
+          const resolvedParams = await Promise.resolve(evaluator.parameters);
+          parameters = serializeRemoteEvalParametersContainer(resolvedParams);
+        }
+
+        evalDefs[name] = {
+          parameters,
           scores: evaluator.scores.map((score, idx) => ({
             name: scorerName(score, idx),
           })),
-        },
-      ]),
-    );
-    res.json(evalDefs);
-  });
+        };
+      }
+
+      res.json(evalDefs);
+    }),
+  );
 
   app.post(
     "/eval",
@@ -146,24 +156,16 @@ export function runDevServer(
         return;
       }
 
-      if (
-        evaluator.parameters &&
-        Object.keys(evaluator.parameters).length > 0
-      ) {
+      if (evaluator.parameters) {
         try {
-          if (!evaluator.parameters) {
-            res.status(400).json({
-              error: `Evaluator '${name}' does not accept parameters`,
-            });
-            return;
-          }
-
-          // This gets done again in the framework, but we do it here too to give a
-          // better error message.
-          validateParameters(parameters ?? {}, evaluator.parameters);
+          await validateParameters(parameters ?? {}, evaluator.parameters);
         } catch (e) {
           console.error("Error validating parameters", e);
-          if (e instanceof z.ZodError || e instanceof Error) {
+          if (
+            e instanceof z.ZodError ||
+            e instanceof ValidationError ||
+            e instanceof Error
+          ) {
             res.status(400).json({
               error: e.message,
             });
@@ -387,42 +389,4 @@ function makeScorer(
   });
 
   return ret;
-}
-
-export function makeEvalParametersSchema(
-  parameters: EvalParameters,
-): z.infer<typeof evalParametersSerializedSchema> {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
-          },
-        ];
-      } else {
-        // Since this schema is bundled, it won't pass an instanceof check. For
-        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
-        // Type instantiation is excessively deep and possibly infinite.` So
-        // just using `any` to turn off the typesystem.
-        //
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as any);
-        return [
-          name,
-          {
-            type: "data",
-            schema: schemaObj,
-            default: schemaObj.default,
-            description: schemaObj.description,
-          },
-        ];
-      }
-    }),
-  );
 }
