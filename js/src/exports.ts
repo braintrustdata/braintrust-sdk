@@ -82,6 +82,7 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  loadParameters,
   loadPrompt,
   log,
   logError,
@@ -195,9 +196,6 @@ export type {
   CodeOpts,
   CreateProjectOpts,
   FunctionEvent,
-  PromptContents,
-  PromptDefinition,
-  PromptDefinitionWithTools,
   PromptOpts,
   ScorerOpts,
 } from "./framework2";
@@ -211,32 +209,21 @@ export {
   ScorerBuilder,
   ToolBuilder,
   projects,
+  toolFunctionDefinitionSchema,
+} from "./framework2";
+
+export {
   promptContentsSchema,
   promptDefinitionSchema,
   promptDefinitionToPromptData,
   promptDefinitionWithToolsSchema,
-  toolFunctionDefinitionSchema,
-} from "./framework2";
+  PromptContents,
+  PromptDefinition,
+  PromptDefinitionWithTools,
+} from "./prompt-schemas";
 
 export type { Trace, SpanData, GetThreadOptions } from "./trace";
 export { SpanFetcher, CachedSpanFetcher } from "./trace";
-
-export type {
-  LLMMessage,
-  PreprocessorResult,
-  ThreadTemplateVars,
-} from "./thread-utils";
-export {
-  isRoleContentMessage,
-  isLLMMessageArray,
-  formatMessageArrayAsText,
-  formatValueAsText,
-  stringifyPreprocessorResult,
-  IncrementalMerger,
-  mergeAndDeduplicateResults,
-  mergeAndStringify,
-  computeThreadTemplateVars,
-} from "./thread-utils";
 
 export type {
   ParentExperimentIds,
@@ -261,6 +248,7 @@ export type {
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
+  ParametersSource,
 } from "../dev/types";
 
 export type { EvalParameters } from "./eval-parameters";

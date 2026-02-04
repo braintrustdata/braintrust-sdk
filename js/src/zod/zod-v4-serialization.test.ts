@@ -1,5 +1,5 @@
 /**
- * Tests for zod v4 compatibility with makeEvalParametersSchema
+ * Tests for zod v4 compatibility with serializeEvalParametersToStaticParametersSchema
  *
  * This file tests makeEvalParametersSchema specifically with zod v4.
  * See zod-v3-serialization.test.ts for zod v3 specific tests.
@@ -8,7 +8,6 @@
 import { test, describe, beforeEach, expect } from "vitest";
 import * as zodModule from "zod";
 import { z } from "zod";
-import { makeEvalParametersSchema } from "../../dev/server";
 import {
   EXPECTED_STRING_SCHEMA,
   EXPECTED_NUMBER_SCHEMA,
@@ -16,13 +15,13 @@ import {
   EXPECTED_ENUM_SCHEMA,
   EXPECTED_ARRAY_SCHEMA,
 } from "./zod-serialization-test-shared";
+import { serializeEvalParametersToStaticParametersSchema } from "../framework2";
 // Detect which zod version is installed by checking for v4-specific properties
 function getInstalledZodVersion(): 3 | 4 {
   const testSchema = zodModule.z.string();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return "_zod" in (testSchema as any) ? 4 : 3;
 }
-
 describe("makeEvalParametersSchema with Zod v4", () => {
   beforeEach(() => {
     const version = getInstalledZodVersion();
@@ -37,10 +36,12 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default("You are a helpful assistant."),
     };
 
-    const result = makeEvalParametersSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
     expect(result.instructions).toBeDefined();
     expect(result.instructions.type).toBe("data");
-    expect(result.instructions.schema).toMatchObject(EXPECTED_STRING_SCHEMA);
+    expect(
+      result.instructions.type === "data" && result.instructions.schema,
+    ).toStrictEqual(EXPECTED_STRING_SCHEMA);
     expect(result.instructions.description).toBe(
       "The instructions for the agent",
     );
@@ -57,10 +58,12 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default(0.7),
     };
 
-    const result = makeEvalParametersSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.temperature.type).toBe("data");
-    expect(result.temperature.schema).toMatchObject(EXPECTED_NUMBER_SCHEMA);
+    expect(
+      result.temperature.type === "data" && result.temperature.schema,
+    ).toStrictEqual(EXPECTED_NUMBER_SCHEMA);
     expect(result.temperature.description).toBe("Temperature for LLM");
     expect(result.temperature.default).toBe(0.7);
   });
@@ -75,10 +78,12 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .describe("Configuration object"),
     };
 
-    const result = makeEvalParametersSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.config.type).toBe("data");
-    expect(result.config.schema).toMatchObject(EXPECTED_OBJECT_SCHEMA);
+    expect(result.config.type === "data" && result.config.schema).toStrictEqual(
+      EXPECTED_OBJECT_SCHEMA,
+    );
     expect(result.config.description).toBe("Configuration object");
   });
 
@@ -90,10 +95,12 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default("balanced"),
     };
 
-    const result = makeEvalParametersSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.mode.type).toBe("data");
-    expect(result.mode.schema).toMatchObject(EXPECTED_ENUM_SCHEMA);
+    expect(result.mode.type === "data" && result.mode.schema).toStrictEqual(
+      EXPECTED_ENUM_SCHEMA,
+    );
     expect(result.mode.description).toBe("Processing mode");
     expect(result.mode.default).toBe("balanced");
   });
@@ -106,10 +113,12 @@ describe("makeEvalParametersSchema with Zod v4", () => {
         .default(["default"]),
     };
 
-    const result = makeEvalParametersSchema(parameters);
+    const result = serializeEvalParametersToStaticParametersSchema(parameters);
 
     expect(result.tags.type).toBe("data");
-    expect(result.tags.schema).toMatchObject(EXPECTED_ARRAY_SCHEMA);
+    expect(result.tags.type === "data" && result.tags.schema).toStrictEqual(
+      EXPECTED_ARRAY_SCHEMA,
+    );
     expect(result.tags.description).toBe("Tags for filtering");
     expect(result.tags.default).toEqual(["default"]);
   });
