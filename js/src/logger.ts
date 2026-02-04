@@ -39,6 +39,7 @@ import {
   isArray,
   isObject,
 } from "../util/index";
+import { slugify } from "../util/string_util";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -65,6 +66,7 @@ import {
   type PromptSessionEventType as PromptSessionEvent,
   type RepoInfoType as RepoInfo,
   type PromptBlockDataType as PromptBlockData,
+  type IfExistsType,
 } from "./generated_types";
 
 const BRAINTRUST_ATTACHMENT =
@@ -3737,6 +3739,132 @@ export function initDataset<
     legacy,
     _internal_btql,
   );
+}
+
+/**
+ * Configuration for a sandbox runtime.
+ */
+export interface SandboxConfig {
+  /** The type of sandbox runtime. Currently only "modal" is supported. */
+  type: "modal";
+  /** Reference to the sandbox snapshot. */
+  snapshotRef: string;
+}
+
+/**
+ * Options for registering a sandbox function.
+ */
+export interface RegisterSandboxOptions {
+  /** Name of the sandbox function. */
+  name: string;
+  /** Name of the project to register the sandbox in. */
+  project: string;
+  /** Sandbox configuration (type and snapshot reference). */
+  sandbox: SandboxConfig;
+  /** Optional list of eval files available in the sandbox. */
+  evals?: string[];
+  /** URL-friendly identifier. Defaults to slugified name. */
+  slug?: string;
+  /** Optional description. */
+  description?: string;
+  /** Optional metadata. */
+  metadata?: Record<string, unknown>;
+  /** What to do if function already exists. Defaults to "replace". */
+  ifExists?: IfExistsType;
+  /** Braintrust API key. Uses BRAINTRUST_API_KEY env var if not provided. */
+  apiKey?: string;
+  /** Braintrust app URL. Uses default if not provided. */
+  appUrl?: string;
+  /** Organization name. */
+  orgName?: string;
+}
+
+/**
+ * Result of registering a sandbox.
+ */
+export interface RegisterSandboxResult {
+  /** Unique identifier for the sandbox function. */
+  id: string;
+  /** Name of the sandbox function. */
+  name: string;
+  /** URL-friendly identifier. */
+  slug: string;
+  /** Project ID the sandbox is registered in. */
+  projectId: string;
+}
+
+/**
+ * Register a sandbox function with Braintrust.
+ *
+ * @param options Configuration for the sandbox to register.
+ * @returns The registered sandbox function details.
+ *
+ * @example
+ * ```typescript
+ * const result = await registerSandbox({
+ *   name: "My Sandbox",
+ *   project: "My Project",
+ *   evals: ["./my-eval.eval.ts"],
+ *   sandbox: {
+ *     type: "modal",
+ *     snapshotRef: "sb-xxx",
+ *   },
+ * });
+ * console.log(result.id);
+ * ```
+ */
+export async function registerSandbox(
+  options: RegisterSandboxOptions,
+): Promise<RegisterSandboxResult> {
+  const state = _internalGetGlobalState();
+  await login({
+    apiKey: options.apiKey,
+    appUrl: options.appUrl,
+    orgName: options.orgName,
+  });
+
+  // Get project ID via project registration
+  const projectResponse = await state
+    .appConn()
+    .post_json("api/project/register", {
+      project_name: options.project,
+      org_id: state.orgId,
+    });
+  const projectId = projectResponse.project.id;
+
+  // Build function definition
+  const resolvedSlug =
+    options.slug ?? slugify(options.name, { lower: true, strict: true });
+  const functionDef: Record<string, unknown> = {
+    project_id: projectId,
+    org_name: state.orgName,
+    name: options.name,
+    slug: resolvedSlug,
+    function_type: "sandbox",
+    function_data: {
+      type: "sandbox",
+      runtimeType: options.sandbox.type,
+      snapshot_ref: options.sandbox.snapshotRef,
+      evalFiles: options.evals,
+    },
+    if_exists: options.ifExists ?? "replace",
+  };
+  if (options.description !== undefined) {
+    functionDef.description = options.description;
+  }
+  if (options.metadata !== undefined) {
+    functionDef.metadata = options.metadata;
+  }
+
+  // Insert function via API - use v1/function endpoint which returns the created function
+  const response = await state.apiConn().post_json("v1/function", functionDef);
+
+  return {
+    id: response.id,
+    name: response.name,
+    slug: response.slug,
+    projectId,
+  };
 }
 
 /**

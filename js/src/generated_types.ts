@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 0b04b7522464ca9495413174b0034dc457bf6356) -- do not modify
+// Auto-generated file (internal git SHA ec20534a23b40aa4c24eecabbf20363e3c59c1ea) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -229,6 +229,7 @@ export const FunctionTypeEnum = z.enum([
   "classifier",
   "tag",
   "parameters",
+  "sandbox",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -685,7 +686,7 @@ export const EnvVar = z.object({
     .optional(),
   secret_type: z.union([z.string(), z.null()]).optional(),
   secret_category: z
-    .enum(["env_var", "ai_provider"])
+    .enum(["env_var", "ai_provider", "sandbox_provider"])
     .optional()
     .default("env_var"),
 });
@@ -1057,6 +1058,7 @@ export const FunctionTypeEnumNullish = z.union([
     "classifier",
     "tag",
     "parameters",
+    "sandbox",
   ]),
   z.null(),
 ]);
@@ -1150,6 +1152,85 @@ export const GraphData = z.object({
   edges: z.record(GraphEdge),
 });
 export type GraphDataType = z.infer<typeof GraphData>;
+export const PromptData = z
+  .object({
+    prompt: PromptBlockDataNullish,
+    options: PromptOptionsNullish,
+    parser: PromptParserNullish,
+    tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
+    mcp: z.union([
+      z.record(
+        z.union([
+          z.object({
+            type: z.literal("id"),
+            id: z.string().uuid(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+          z.object({
+            type: z.literal("url"),
+            url: z.string(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+        ]),
+      ),
+      z.null(),
+    ]),
+    origin: z.union([
+      z
+        .object({
+          prompt_id: z.string(),
+          project_id: z.string(),
+          prompt_version: z.string(),
+        })
+        .partial(),
+      z.null(),
+    ]),
+  })
+  .partial();
+export type PromptDataType = z.infer<typeof PromptData>;
+export const SandboxData = z.object({
+  type: z.literal("sandbox"),
+  provider: z.literal("modal"),
+  snapshot_ref: z.string(),
+  evalFiles: z.array(z.string()).optional(),
+  evalEntries: z
+    .record(
+      z
+        .object({
+          parameters: z.record(
+            z.union([
+              z.object({
+                type: z.literal("prompt"),
+                default: PromptData.optional(),
+                description: z.string().optional(),
+              }),
+              z.object({
+                type: z.literal("data"),
+                schema: z.object({}).partial().passthrough(),
+                default: z.unknown().optional(),
+                description: z.string().optional(),
+              }),
+            ]),
+          ),
+        })
+        .partial(),
+    )
+    .optional(),
+});
+export type SandboxDataType = z.infer<typeof SandboxData>;
+export const SandboxTaskData = z.object({
+  type: z.literal("sandbox_task"),
+  function_id: z.string(),
+  eval_name: z.string(),
+  parameters: z.object({}).partial().passthrough().optional(),
+});
+export type SandboxTaskDataType = z.infer<typeof SandboxTaskData>;
 export const FunctionData = z.union([
   z.object({ type: z.literal("prompt") }),
   z.object({
@@ -1196,6 +1277,8 @@ export const FunctionData = z.union([
     }),
   }),
   TopicMapData.and(z.unknown()),
+  SandboxData,
+  SandboxTaskData,
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
 export const Function = z.object({
@@ -1241,48 +1324,6 @@ export const FunctionFormat = z.enum([
   "topic_map",
 ]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
-export const PromptData = z
-  .object({
-    prompt: PromptBlockDataNullish,
-    options: PromptOptionsNullish,
-    parser: PromptParserNullish,
-    tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
-    template_format: z.union([
-      z.enum(["mustache", "nunjucks", "none"]),
-      z.null(),
-    ]),
-    mcp: z.union([
-      z.record(
-        z.union([
-          z.object({
-            type: z.literal("id"),
-            id: z.string().uuid(),
-            is_disabled: z.boolean().optional(),
-            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
-          }),
-          z.object({
-            type: z.literal("url"),
-            url: z.string(),
-            is_disabled: z.boolean().optional(),
-            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
-          }),
-        ]),
-      ),
-      z.null(),
-    ]),
-    origin: z.union([
-      z
-        .object({
-          prompt_id: z.string(),
-          project_id: z.string(),
-          prompt_version: z.string(),
-        })
-        .partial(),
-      z.null(),
-    ]),
-  })
-  .partial();
-export type PromptDataType = z.infer<typeof PromptData>;
 export const FunctionId = z.union([
   z.object({ function_id: z.string(), version: z.string().optional() }),
   z.object({
@@ -1331,6 +1372,7 @@ export const FunctionObjectType = z.enum([
   "facet",
   "classifier",
   "parameters",
+  "sandbox",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum([

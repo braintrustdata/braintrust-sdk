@@ -39,6 +39,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+import slugify
 import urllib3
 from braintrust.functions.stream import BraintrustStream
 from requests.adapters import HTTPAdapter
@@ -60,6 +61,7 @@ from .generated_types import (
     AttachmentStatus,
     DatasetEvent,
     ExperimentEvent,
+    IfExists,
     PromptOptions,
     SpanAttributes,
 )
@@ -1763,6 +1765,110 @@ def init_dataset(
         legacy=use_output,
         _internal_btql=_internal_btql,
         state=state,
+    )
+
+
+@dataclasses.dataclass
+class SandboxConfig:
+    """Configuration for a sandbox runtime."""
+
+    type: Literal["modal"]
+    """The type of sandbox runtime. Currently only "modal" is supported."""
+    snapshot_ref: str
+    """Reference to the sandbox snapshot."""
+
+
+@dataclasses.dataclass
+class RegisterSandboxResult:
+    """Result of registering a sandbox."""
+
+    id: str
+    """Unique identifier for the sandbox function."""
+    name: str
+    """Name of the sandbox function."""
+    slug: str
+    """URL-friendly identifier."""
+    project_id: str
+    """Project ID the sandbox is registered in."""
+
+
+def register_sandbox(
+    name: str,
+    project: str,
+    sandbox: SandboxConfig,
+    *,
+    evals: list[str] | None = None,
+    slug: str | None = None,
+    description: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    if_exists: IfExists | None = None,
+    api_key: str | None = None,
+    app_url: str | None = None,
+    org_name: str | None = None,
+) -> RegisterSandboxResult:
+    """Register a sandbox function with Braintrust.
+
+    :param name: Name of the sandbox function.
+    :param project: Name of the project to register the sandbox in.
+    :param sandbox: Sandbox configuration (type and snapshot reference).
+    :param evals: Optional list of eval files available in the sandbox.
+    :param slug: URL-friendly identifier. Defaults to slugified name.
+    :param description: Optional description.
+    :param metadata: Optional metadata dict.
+    :param if_exists: What to do if function already exists. Defaults to "replace".
+    :param api_key: Braintrust API key. Uses BRAINTRUST_API_KEY env var if not provided.
+    :param app_url: Braintrust app URL. Uses default if not provided.
+    :param org_name: Organization name.
+    :returns: RegisterSandboxResult with id, name, slug, and project_id.
+
+    Example::
+
+        from braintrust import register_sandbox, SandboxConfig
+
+        result = register_sandbox(
+            name="My Sandbox",
+            project="My Project",
+            evals=["./my-eval.eval.py"],
+            sandbox=SandboxConfig(type="modal", snapshot_ref="sb-xxx"),
+        )
+        print(result.id)
+    """
+    state = _state
+    state.login(api_key=api_key, app_url=app_url, org_name=org_name)
+
+    project_response = state.app_conn().post_json(
+        "api/project/register", {"project_name": project, "org_id": state.org_id}
+    )
+    project_id = project_response["project"]["id"]
+
+    resolved_slug = slug or slugify.slugify(name, lowercase=True)
+    function_def: dict[str, Any] = {
+        "project_id": project_id,
+        "org_name": state.org_name,
+        "name": name,
+        "slug": resolved_slug,
+        "function_type": "sandbox",
+        "function_data": {
+            "type": "sandbox",
+            "runtimeType": sandbox.type,
+            "snapshot_ref": sandbox.snapshot_ref,
+            "evalFiles": evals,
+        },
+        "if_exists": if_exists or "replace",
+    }
+    if description is not None:
+        function_def["description"] = description
+    if metadata is not None:
+        function_def["metadata"] = metadata
+
+    # Insert function via API - use v1/function endpoint which returns the created function
+    response = state.api_conn().post_json("v1/function", function_def)
+
+    return RegisterSandboxResult(
+        id=response["id"],
+        name=response["name"],
+        slug=response["slug"],
+        project_id=project_id,
     )
 
 
@@ -3473,17 +3579,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)

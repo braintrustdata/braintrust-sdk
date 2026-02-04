@@ -2195,7 +2195,8 @@
             "type": "string",
             "enum": [
               "env_var",
-              "ai_provider"
+              "ai_provider",
+              "sandbox_provider"
             ],
             "default": "env_var",
             "description": "The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys"
@@ -3328,6 +3329,12 @@
                 "title": "topic_map"
               }
             ]
+          },
+          {
+            "$ref": "#/components/schemas/SandboxData"
+          },
+          {
+            "$ref": "#/components/schemas/SandboxTaskData"
           }
         ]
       },
@@ -3538,7 +3545,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "parameters"
+          "parameters",
+          "sandbox"
         ]
       },
       "FunctionOutputType": {
@@ -3563,7 +3571,8 @@
           "facet",
           "classifier",
           "tag",
-          "parameters"
+          "parameters",
+          "sandbox"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3583,7 +3592,8 @@
           "facet",
           "classifier",
           "tag",
-          "parameters"
+          "parameters",
+          "sandbox"
         ]
       },
       "GitMetadataSettings": {
@@ -7163,6 +7173,130 @@
           "scores"
         ]
       },
+      "SandboxData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "sandbox"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "modal"
+            ]
+          },
+          "snapshot_ref": {
+            "type": "string",
+            "description": "sandbox snapshot ref"
+          },
+          "evalFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which eval files should be run in this sandbox"
+          },
+          "evalEntries": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "prompt"
+                            ]
+                          },
+                          "default": {
+                            "$ref": "#/components/schemas/PromptData"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "data"
+                            ]
+                          },
+                          "schema": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "default": {},
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "schema"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "description": "The eval entries available in this sandbox"
+          }
+        },
+        "required": [
+          "type",
+          "provider",
+          "snapshot_ref"
+        ],
+        "title": "sandbox"
+      },
+      "SandboxTaskData": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "sandbox_task"
+            ]
+          },
+          "function_id": {
+            "type": "string",
+            "description": "The sandbox function ID"
+          },
+          "eval_name": {
+            "type": "string",
+            "description": "Which eval to run from the sandbox"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Sandbox parameter values"
+          }
+        },
+        "required": [
+          "type",
+          "function_id",
+          "eval_name"
+        ],
+        "description": "A task that runs an eval from a sandbox function",
+        "title": "sandbox_task"
+      },
       "SavedFunctionId": {
         "anyOf": [
           {
@@ -8416,7 +8550,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "0b04b7522464ca9495413174b0034dc457bf6356"
+    "x-internal-git-sha": "ec20534a23b40aa4c24eecabbf20363e3c59c1ea"
   },
   "paths": {},
   "webhooks": {}

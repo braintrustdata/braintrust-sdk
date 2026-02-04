@@ -543,7 +543,7 @@ class EnvVar(TypedDict):
     """
     Optional classification for the secret (for example, the AI provider name)
     """
-    secret_category: NotRequired[Literal['env_var', 'ai_provider'] | None]
+    secret_category: NotRequired[Literal['env_var', 'ai_provider', 'sandbox_provider'] | None]
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
@@ -834,7 +834,17 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier', 'parameters'
+    'prompt',
+    'tool',
+    'scorer',
+    'task',
+    'workflow',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -842,7 +852,17 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classif
 
 
 FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 """
 The type of global function. Defaults to 'scorer'.
@@ -850,7 +870,17 @@ The type of global function. Defaults to 'scorer'.
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -2125,6 +2155,29 @@ class RunEvalMcpAuth(TypedDict):
     """
 
 
+class SandboxDataEvalEntriesParameters1(TypedDict):
+    type: Literal['data']
+    schema: Mapping[str, Any]
+    default: NotRequired[Any | None]
+    description: NotRequired[str | None]
+
+
+class SandboxTaskData(TypedDict):
+    type: Literal['sandbox_task']
+    function_id: str
+    """
+    The sandbox function ID
+    """
+    eval_name: str
+    """
+    Which eval to run from the sandbox
+    """
+    parameters: NotRequired[Mapping[str, Any] | None]
+    """
+    Sandbox parameter values
+    """
+
+
 class SavedFunctionIdSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
@@ -2219,7 +2272,7 @@ class SpanScope(TypedDict):
 
 
 SpanType: TypeAlias = Literal[
-    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier', 'review'
 ]
 """
 Type of the span, for display purposes only
@@ -3483,6 +3536,33 @@ class TaskTask14(TaskTask6, TaskTask7):
 Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
 
 
+class SandboxDataEvalEntriesParameters(TypedDict):
+    type: Literal['prompt']
+    default: NotRequired[PromptData | None]
+    description: NotRequired[str | None]
+
+
+class SandboxDataEvalEntries(TypedDict):
+    parameters: NotRequired[Mapping[str, SandboxDataEvalEntriesParameters | SandboxDataEvalEntriesParameters1] | None]
+
+
+class SandboxData(TypedDict):
+    type: Literal['sandbox']
+    provider: Literal['modal']
+    snapshot_ref: str
+    """
+    sandbox snapshot ref
+    """
+    evalFiles: NotRequired[Sequence[str] | None]
+    """
+    Which eval files should be run in this sandbox
+    """
+    evalEntries: NotRequired[Mapping[str, SandboxDataEvalEntries] | None]
+    """
+    The eval entries available in this sandbox
+    """
+
+
 class View(TypedDict):
     id: str
     """
@@ -3746,6 +3826,8 @@ FunctionData: TypeAlias = (
     | BatchedFacetData
     | FunctionDataFunctionData4
     | TopicMapData
+    | SandboxData
+    | SandboxTaskData
 )
 
 
