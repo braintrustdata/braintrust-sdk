@@ -218,6 +218,15 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
             }
 
             yield {
+              type: "assistant",
+              message: {
+                role: "assistant",
+                content: "Hello!",
+                usage: { input_tokens: 1, output_tokens: 1 },
+              },
+            };
+
+            yield {
               type: "result",
               usage: { input_tokens: 1, output_tokens: 1 },
             };
@@ -245,6 +254,20 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
       }>;
       expect(Array.isArray(input)).toBe(true);
       expect(input.map((item) => item.message?.content)).toEqual(expected);
+
+      const llmSpan = spans.find(
+        (s) =>
+          (s["span_attributes"] as Record<string, unknown>).name ===
+          "anthropic.messages.create",
+      );
+      expect(llmSpan).toBeDefined();
+
+      const llmInput = (llmSpan as any).input as Array<{
+        role?: string;
+        content?: string;
+      }>;
+      expect(Array.isArray(llmInput)).toBe(true);
+      expect(llmInput.map((item) => item.content)).toEqual(expected);
     },
   );
 
@@ -794,5 +817,24 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
       "Part 1",
       "Part 2",
     ]);
+
+    const llmSpan = spans.find((s) => {
+      if (
+        (s["span_attributes"] as Record<string, unknown>).name !==
+        "anthropic.messages.create"
+      ) {
+        return false;
+      }
+      const input = (s as any).input as Array<{ content?: unknown }>;
+      return Array.isArray(input) && input.some((item) => item.content);
+    });
+    expect(llmSpan).toBeDefined();
+
+    const llmInput = (llmSpan as any).input as Array<{
+      role?: string;
+      content?: unknown;
+    }>;
+    expect(Array.isArray(llmInput)).toBe(true);
+    expect(llmInput.map((item) => item.content)).toEqual(["Part 1", "Part 2"]);
   }, 30000);
 });
