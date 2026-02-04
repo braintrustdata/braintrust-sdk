@@ -14,6 +14,25 @@ import { z } from "zod/v3";
 
 debugger;
 
+const makePromptMessage = (content: string) => ({
+  type: "user",
+  message: { role: "user", content },
+});
+
+class CustomAsyncIterable {
+  private messages: Array<ReturnType<typeof makePromptMessage>>;
+
+  constructor(messages: Array<ReturnType<typeof makePromptMessage>>) {
+    this.messages = messages;
+  }
+
+  async *[Symbol.asyncIterator]() {
+    for (const message of this.messages) {
+      yield message;
+    }
+  }
+}
+
 // Unit tests for property forwarding (no real SDK needed)
 describe("wrapClaudeAgentSDK property forwarding", () => {
   beforeAll(async () => {
@@ -150,6 +169,84 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(messages[0]).toMatchObject({ type: "assistant" });
     expect(messages[2]).toMatchObject({ type: "result" });
   });
+
+  test.each([
+    [
+      "asyncgen_single",
+      () =>
+        (async function* () {
+          yield makePromptMessage("What is 2 + 2?");
+        })(),
+      ["What is 2 + 2?"],
+    ],
+    [
+      "asyncgen_multi",
+      () =>
+        (async function* () {
+          yield makePromptMessage("Part 1");
+          yield makePromptMessage("Part 2");
+        })(),
+      ["Part 1", "Part 2"],
+    ],
+    [
+      "custom_async_iterable",
+      () =>
+        new CustomAsyncIterable([
+          makePromptMessage("Custom 1"),
+          makePromptMessage("Custom 2"),
+        ]),
+      ["Custom 1", "Custom 2"],
+    ],
+  ])(
+    "captures async iterable prompt input (%s)",
+    async (
+      _name: string,
+      inputFactory: () => AsyncIterable<unknown>,
+      expected: string[],
+    ) => {
+      const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const mockSDK = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        query: ({ prompt }: any) => {
+          const generator = (async function* () {
+            if (prompt && typeof prompt[Symbol.asyncIterator] === "function") {
+              for await (const _ of prompt) {
+                // Drain prompt to simulate SDK consumption.
+              }
+            }
+
+            yield {
+              type: "result",
+              usage: { input_tokens: 1, output_tokens: 1 },
+            };
+          })();
+
+          return generator;
+        },
+      };
+
+      const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+      for await (const _msg of wrappedSDK.query({ prompt: inputFactory() })) {
+        // consume
+      }
+
+      const spans = await backgroundLogger.drain();
+      const taskSpan = spans.find(
+        (s) =>
+          (s["span_attributes"] as Record<string, unknown>).name ===
+          "Claude Agent",
+      );
+      expect(taskSpan).toBeDefined();
+
+      const input = (taskSpan as any).input as Array<{
+        message?: { content?: string };
+      }>;
+      expect(Array.isArray(input)).toBe(true);
+      expect(input.map((item) => item.message?.content)).toEqual(expected);
+    },
+  );
 
   test("injects PreToolUse and PostToolUse hooks for tracing", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -652,5 +749,50 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
         expect(span.root_span_id).toBe(rootSpanId);
         expect(span.span_parents).toContain(rootSpanId);
       });
+  }, 30000);
+
+  test("claude_agent_sdk.test.ts - captures async iterable prompt input", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { query } = wrapClaudeAgentSDK(claudeSDK as any);
+
+    const prompt = (async function* () {
+      yield makePromptMessage("Part 1");
+      yield makePromptMessage("Part 2");
+    })();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resultMessage: any;
+    for await (const message of query({
+      prompt,
+      options: {
+        model: TEST_MODEL,
+        permissionMode: "bypassPermissions",
+      },
+    })) {
+      if (message.type === "result") {
+        resultMessage = message;
+      }
+    }
+
+    expect(resultMessage).toBeDefined();
+
+    const spans = await backgroundLogger.drain();
+    const taskSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(taskSpan).toBeDefined();
+
+    const input = (taskSpan as any).input as Array<{
+      message?: { content?: string };
+    }>;
+    expect(Array.isArray(input)).toBe(true);
+    expect(input.map((item) => item.message?.content)).toEqual([
+      "Part 1",
+      "Part 2",
+    ]);
   }, 30000);
 });

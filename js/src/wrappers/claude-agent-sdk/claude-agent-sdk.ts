@@ -388,6 +388,16 @@ function filterSerializableOptions(
   return filtered;
 }
 
+function isAsyncIterable<T = unknown>(
+  value: unknown,
+): value is AsyncIterable<T> {
+  return (
+    value !== null &&
+    value !== undefined &&
+    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+  );
+}
+
 /**
  * Wraps the Claude Agent SDK's query function to add Braintrust tracing.
  * Traces the entire agent interaction including all streaming messages.
@@ -404,6 +414,23 @@ function wrapClaudeAgentQuery<
       };
 
       const { prompt, options = {} } = params;
+      const promptIsAsyncIterable = isAsyncIterable<SDKMessage>(prompt);
+      let capturedPromptMessages: SDKMessage[] | undefined;
+      let promptForQuery = prompt;
+
+      if (promptIsAsyncIterable) {
+        capturedPromptMessages = [];
+        const originalPrompt = prompt as AsyncIterable<SDKMessage>;
+
+        const capturingPrompt = (async function* () {
+          for await (const msg of originalPrompt) {
+            capturedPromptMessages!.push(msg);
+            yield msg;
+          }
+        })();
+
+        promptForQuery = capturingPrompt;
+      }
 
       const span = startSpan({
         name: "Claude Agent",
@@ -414,7 +441,11 @@ function wrapClaudeAgentQuery<
           input:
             typeof prompt === "string"
               ? prompt
-              : { type: "streaming", description: "AsyncIterable<SDKMessage>" },
+              : promptIsAsyncIterable
+                ? undefined
+                : prompt !== undefined
+                  ? String(prompt)
+                  : undefined,
           metadata: filterSerializableOptions(options),
         },
       });
@@ -475,18 +506,37 @@ function wrapClaudeAgentQuery<
       );
 
       // Create modified argArray with injected hooks
-      const modifiedArgArray = [{ ...params, options: optionsWithHooks }];
+      const modifiedArgArray = [
+        {
+          ...params,
+          ...(promptForQuery !== undefined ? { prompt: promptForQuery } : {}),
+          options: optionsWithHooks,
+        },
+      ];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const originalGenerator: any = withCurrent(span, () =>
         Reflect.apply(target, invocationTarget, modifiedArgArray),
       );
 
+      let inputNeedsUpdate = capturedPromptMessages !== undefined;
+
       // Create wrapped async generator that maintains span context
       const wrappedGenerator: AsyncGenerator<SDKMessage, void, unknown> =
         (async function* () {
           try {
             for await (const message of originalGenerator) {
+              if (
+                inputNeedsUpdate &&
+                capturedPromptMessages &&
+                capturedPromptMessages.length > 0
+              ) {
+                span.log({
+                  input: _formatCapturedMessages(capturedPromptMessages),
+                });
+                inputNeedsUpdate = false;
+              }
+
               const currentTime = getCurrentUnixTimestamp();
 
               const messageId = message.message?.id;
@@ -540,6 +590,16 @@ function wrapClaudeAgentQuery<
               }
 
               yield message;
+            }
+
+            if (
+              inputNeedsUpdate &&
+              capturedPromptMessages &&
+              capturedPromptMessages.length > 0
+            ) {
+              span.log({
+                input: _formatCapturedMessages(capturedPromptMessages),
+              });
             }
 
             // Create span for final message group
@@ -611,6 +671,10 @@ function _buildLLMInput(
   ];
 
   return inputParts.length > 0 ? inputParts : undefined;
+}
+
+function _formatCapturedMessages(messages: SDKMessage[]): SDKMessage[] {
+  return messages.length > 0 ? messages : [];
 }
 
 /**
