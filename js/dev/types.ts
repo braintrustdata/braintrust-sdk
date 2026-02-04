@@ -31,7 +31,7 @@ export type EvaluatorManifest = Record<
   EvaluatorDef<unknown, unknown, unknown, BaseMetadata>
 >;
 
-export const evalParametersSerializedSchema = z.record(
+export const staticParametersSchema = z.record(
   z.string(),
   z.union([
     z.object({
@@ -41,19 +41,71 @@ export const evalParametersSerializedSchema = z.record(
     }),
     z.object({
       type: z.literal("data"),
-      schema: z.record(z.unknown()), // JSON Schema
+      schema: z.record(z.unknown()),
       default: z.unknown().optional(),
       description: z.string().optional(),
     }),
   ]),
 );
 
+export type StaticParametersSchema = z.infer<typeof staticParametersSchema>;
+
+const evalParametersSerializedSchema = staticParametersSchema;
 export type EvalParameterSerializedSchema = z.infer<
   typeof evalParametersSerializedSchema
 >;
 
+export const parametersSchema = z.object({
+  type: z.literal("object"),
+  properties: z.record(z.string(), z.record(z.unknown())),
+  required: z.array(z.string()).optional(),
+  additionalProperties: z.boolean().optional(),
+});
+
+export type ParametersSchema = z.infer<typeof parametersSchema>;
+
+export const parametersSourceSchema = z.object({
+  parametersId: z.string().optional(),
+  slug: z.string(),
+  name: z.string(),
+  projectId: z.string().optional(),
+  version: z.string().optional(),
+});
+
+export type ParametersSource = z.infer<typeof parametersSourceSchema>;
+
+export const parametersContainerSchema = z.object({
+  type: z.literal("braintrust.parameters"),
+  schema: parametersSchema,
+  source: parametersSourceSchema,
+});
+
+export type ParametersContainer = z.infer<typeof parametersContainerSchema>;
+
+export const staticParametersContainerSchema = z.object({
+  type: z.literal("braintrust.staticParameters"),
+  schema: staticParametersSchema,
+  source: z.null(),
+});
+
+export type StaticParametersContainer = z.infer<
+  typeof staticParametersContainerSchema
+>;
+
+export const serializedParametersContainerSchema = z.union([
+  parametersContainerSchema,
+  staticParametersContainerSchema,
+  // keeping this type here since old versions of the SDK will still pass the unwrapped schema and we need to handle this in the app
+  staticParametersSchema,
+]);
+
+export type SerializedParametersContainer = z.infer<
+  typeof serializedParametersContainerSchema
+>;
+
 export const evaluatorDefinitionSchema = z.object({
-  parameters: evalParametersSerializedSchema.optional(),
+  parameters: serializedParametersContainerSchema.optional(),
+  scores: z.array(z.object({ name: z.string() })).optional(),
 });
 export type EvaluatorDefinition = z.infer<typeof evaluatorDefinitionSchema>;
 

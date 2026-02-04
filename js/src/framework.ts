@@ -16,7 +16,7 @@ import { queue } from "async";
 
 import iso from "./isomorph";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt } from "./framework2";
+import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
@@ -28,6 +28,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  RemoteEvalParameters,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -226,10 +227,17 @@ export interface Evaluator<
 
   /**
    * A set of parameters that will be passed to the evaluator.
-   * Can contain array values that will be converted to single values in the task.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-
-  parameters?: Parameters;
+  parameters?:
+    | Parameters
+    | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+    | Promise<
+        RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+      >;
 
   /**
    * An optional name for the experiment.
@@ -396,6 +404,7 @@ export type EvaluatorFile = {
     GenericFunction<unknown, unknown>
   >[];
   prompts: CodePrompt[];
+  parameters?: CodeParameters[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -479,6 +488,7 @@ declare global {
 globalThis._evals = {
   functions: [],
   prompts: [],
+  parameters: [],
   evaluators: {},
   reporters: {},
 };
@@ -876,9 +886,9 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    parameters = validateParameters(
+    parameters = await validateParameters(
       parameters ?? {},
-      evaluator.parameters ?? {},
+      evaluator.parameters,
     );
 
     if ("_type" in dataResult) {

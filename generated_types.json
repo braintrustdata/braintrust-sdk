@@ -3211,6 +3211,13 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": {}
+              },
+              "parameters_version": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The version (transaction ID) of the parameters being used"
               }
             },
             "required": [
@@ -3257,6 +3264,60 @@
           },
           {
             "$ref": "#/components/schemas/BatchedFacetData"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "parameters"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "additionalProperties": {},
+                "description": "The parameters data"
+              },
+              "__schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "object"
+                    ]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "description": "JSON Schema format for parameters"
+              }
+            },
+            "required": [
+              "type",
+              "data",
+              "__schema"
+            ],
+            "title": "parameters"
           },
           {
             "allOf": [
@@ -3476,7 +3537,8 @@
           "custom_view",
           "preprocessor",
           "facet",
-          "classifier"
+          "classifier",
+          "parameters"
         ]
       },
       "FunctionOutputType": {
@@ -3500,7 +3562,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "tag"
+          "tag",
+          "parameters"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3519,7 +3582,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "tag"
+          "tag",
+          "parameters"
         ]
       },
       "GitMetadataSettings": {
@@ -7906,6 +7970,7 @@
               "datasets",
               "dataset",
               "prompts",
+              "parameters",
               "tools",
               "scorers",
               "classifiers",
@@ -8351,7 +8416,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "0ccf14923bf595cab7e1ea50eb8565168cb24e18"
+    "x-internal-git-sha": "2822255bed426d5442adc880a8f71b8a378de3d4"
   },
   "paths": {},
   "webhooks": {}
