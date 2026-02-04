@@ -5,6 +5,7 @@ import braintrust
 import openai
 import pytest
 from braintrust import logger, wrap_openai
+from braintrust.oai import ChatCompletionWrapper
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.test_utils import assert_metrics_are_valid, run_in_subprocess, verify_autoinstrument_script
 from openai import AsyncOpenAI
