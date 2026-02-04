@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA d3ffbb680dfe795d083c20e8a04216e31bb34929) -- do not modify
+// Auto-generated file (internal git SHA 0b04b7522464ca9495413174b0034dc457bf6356) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -228,6 +228,7 @@ export const FunctionTypeEnum = z.enum([
   "facet",
   "classifier",
   "tag",
+  "parameters",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -1055,6 +1056,7 @@ export const FunctionTypeEnumNullish = z.union([
     "facet",
     "classifier",
     "tag",
+    "parameters",
   ]),
   z.null(),
 ]);
@@ -1171,6 +1173,7 @@ export const FunctionData = z.union([
     endpoint: z.string(),
     eval_name: z.string(),
     parameters: z.object({}).partial().passthrough(),
+    parameters_version: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
     type: z.literal("global"),
@@ -1182,6 +1185,16 @@ export const FunctionData = z.union([
   }),
   FacetData,
   BatchedFacetData,
+  z.object({
+    type: z.literal("parameters"),
+    data: z.object({}).partial().passthrough(),
+    __schema: z.object({
+      type: z.literal("object"),
+      properties: z.record(z.object({}).partial().passthrough()),
+      required: z.array(z.string()).optional(),
+      additionalProperties: z.boolean().optional(),
+    }),
+  }),
   TopicMapData.and(z.unknown()),
 ]);
 export type FunctionDataType = z.infer<typeof FunctionData>;
@@ -1317,6 +1330,7 @@ export const FunctionObjectType = z.enum([
   "preprocessor",
   "facet",
   "classifier",
+  "parameters",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum([
@@ -2018,6 +2032,7 @@ export const View = z.object({
     "datasets",
     "dataset",
     "prompts",
+    "parameters",
     "tools",
     "scorers",
     "classifiers",
