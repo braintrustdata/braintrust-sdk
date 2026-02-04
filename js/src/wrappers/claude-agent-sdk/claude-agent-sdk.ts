@@ -388,6 +388,16 @@ function filterSerializableOptions(
   return filtered;
 }
 
+function isAsyncIterable<T = unknown>(
+  value: unknown,
+): value is AsyncIterable<T> {
+  return (
+    value !== null &&
+    value !== undefined &&
+    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+  );
+}
+
 /**
  * Wraps the Claude Agent SDK's query function to add Braintrust tracing.
  * Traces the entire agent interaction including all streaming messages.
@@ -404,6 +414,33 @@ function wrapClaudeAgentQuery<
       };
 
       const { prompt, options = {} } = params;
+      const promptIsAsyncIterable = isAsyncIterable<SDKMessage>(prompt);
+      let capturedPromptMessages: SDKMessage[] | undefined;
+      let promptForQuery = prompt;
+      let promptStarted = false;
+      let resolvePromptDone: (() => void) | undefined;
+      const promptDone = new Promise<void>((resolve) => {
+        resolvePromptDone = resolve;
+      });
+
+      if (promptIsAsyncIterable) {
+        capturedPromptMessages = [];
+        const originalPrompt = prompt as AsyncIterable<SDKMessage>;
+
+        const capturingPrompt = (async function* () {
+          promptStarted = true;
+          try {
+            for await (const msg of originalPrompt) {
+              capturedPromptMessages!.push(msg);
+              yield msg;
+            }
+          } finally {
+            resolvePromptDone?.();
+          }
+        })();
+
+        promptForQuery = capturingPrompt;
+      }
 
       const span = startSpan({
         name: "Claude Agent",
@@ -414,7 +451,11 @@ function wrapClaudeAgentQuery<
           input:
             typeof prompt === "string"
               ? prompt
-              : { type: "streaming", description: "AsyncIterable<SDKMessage>" },
+              : promptIsAsyncIterable
+                ? undefined
+                : prompt !== undefined
+                  ? String(prompt)
+                  : undefined,
           metadata: filterSerializableOptions(options),
         },
       });
@@ -438,6 +479,7 @@ function wrapClaudeAgentQuery<
           finalResults,
           options,
           currentMessageStartTime,
+          capturedPromptMessages,
           await span.export(),
         );
 
@@ -475,7 +517,13 @@ function wrapClaudeAgentQuery<
       );
 
       // Create modified argArray with injected hooks
-      const modifiedArgArray = [{ ...params, options: optionsWithHooks }];
+      const modifiedArgArray = [
+        {
+          ...params,
+          ...(promptForQuery !== undefined ? { prompt: promptForQuery } : {}),
+          options: optionsWithHooks,
+        },
+      ];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const originalGenerator: any = withCurrent(span, () =>
@@ -558,6 +606,16 @@ function wrapClaudeAgentQuery<
             });
             throw error;
           } finally {
+            if (capturedPromptMessages) {
+              if (promptStarted) {
+                await promptDone;
+              }
+              if (capturedPromptMessages.length > 0) {
+                span.log({
+                  input: _formatCapturedMessages(capturedPromptMessages),
+                });
+              }
+            }
             span.end();
           }
         })();
@@ -601,16 +659,29 @@ function wrapClaudeAgentQuery<
 function _buildLLMInput(
   prompt: string | AsyncIterable<SDKMessage> | undefined,
   conversationHistory: Array<{ content: unknown; role: string }>,
+  capturedPromptMessages?: SDKMessage[],
 ): Array<{ content: unknown; role: string }> | undefined {
-  const promptMessage =
-    typeof prompt === "string" ? { content: prompt, role: "user" } : undefined;
+  const promptMessages: Array<{ content: unknown; role: string }> = [];
 
-  const inputParts = [
-    ...(promptMessage ? [promptMessage] : []),
-    ...conversationHistory,
-  ];
+  if (typeof prompt === "string") {
+    promptMessages.push({ content: prompt, role: "user" });
+  } else if (capturedPromptMessages && capturedPromptMessages.length > 0) {
+    for (const msg of capturedPromptMessages) {
+      const role = msg.message?.role;
+      const content = msg.message?.content;
+      if (role && content !== undefined) {
+        promptMessages.push({ content, role });
+      }
+    }
+  }
+
+  const inputParts = [...promptMessages, ...conversationHistory];
 
   return inputParts.length > 0 ? inputParts : undefined;
+}
+
+function _formatCapturedMessages(messages: SDKMessage[]): SDKMessage[] {
+  return messages.length > 0 ? messages : [];
 }
 
 /**
@@ -675,6 +746,7 @@ async function _createLLMSpanForMessages(
   conversationHistory: Array<{ content: unknown; role: string }>,
   options: QueryOptions,
   startTime: number,
+  capturedPromptMessages: SDKMessage[] | undefined,
   parentSpan: Awaited<ReturnType<typeof startSpan>>["export"] extends (
     ...args: infer _
   ) => Promise<infer R>
@@ -690,7 +762,11 @@ async function _createLLMSpanForMessages(
 
   const model = lastMessage.message.model || options.model;
   const usage = _extractUsageFromMessage(lastMessage);
-  const input = _buildLLMInput(prompt, conversationHistory);
+  const input = _buildLLMInput(
+    prompt,
+    conversationHistory,
+    capturedPromptMessages,
+  );
   const outputs = messages
     .map((m) =>
       m.message?.content && m.message?.role
