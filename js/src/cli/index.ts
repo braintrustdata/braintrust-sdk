@@ -341,7 +341,6 @@ async function initFile({
         }),
         external: ["fsevents", "chokidar"],
         write: true,
-        plugins: [],
         minify: true,
         sourcemap: true,
       };
