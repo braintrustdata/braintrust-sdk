@@ -1,14 +1,18 @@
 {
-  "name": "temporal-example",
+  "name": "temporal-example-esm",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc",
-    "worker": "pnpm exec ts-node src/worker.ts",
-    "client": "pnpm exec ts-node src/client.ts"
+    "worker": "pnpm exec tsx src/worker.ts",
+    "client": "pnpm exec tsx src/client.ts",
+    "build:integration": "cd ../.. && pnpm build",
+    "dev": "mise run server",
+    "start:proc": "mise run server"
   },
   "dependencies": {
-    "@braintrust/temporal": "^0.1.0",
+    "@braintrust/temporal": "workspace:*",
     "@temporalio/activity": "^1.11.0",
     "@temporalio/client": "^1.11.0",
     "@temporalio/common": "^1.11.0",
@@ -21,6 +25,7 @@
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "tsx": "^3.12.0"
   }
 }

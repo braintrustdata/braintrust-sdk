@@ -1,0 +1,69 @@
+[settings]
+experimental=true
+
+[env]
+_.file = ".env"
+
+[tools]
+node = "22"
+temporal = "latest"
+mise = "latest"
+
+[hooks]
+postinstall = "mise run install"
+
+[tasks.install]
+description = "Install dependencies (workspace-aware)"
+run = "pnpm install"
+
+[tasks.reinstall]
+description = "Prepare pnpm, reinstall deps, build integration and start server+worker for testing"
+run = '''
+corepack enable
+corepack prepare pnpm@10 --activate
+pnpm install
+pnpm run build:integration
+temporal server start-dev & sleep 1
+pnpm run worker
+'''
+
+[tasks.server]
+description = "Build integration, run temporal server and a worker (use multiple terminals to run more workers)"
+run = "pnpm run build:integration && temporal server start-dev & sleep 1; pnpm run worker"
+
+[tasks.workflow]
+description = "Run workflow client"
+run = "pnpm run client"
+
+[tasks.workflow-haiku]
+description = "Run haiku workflow (Pattern 1: Simple tracing)"
+run = "pnpm run workflow:haiku"
+
+[tasks.workflow-haiku-traced]
+description = "Run haiku workflow (Pattern 2: Full LLM tracing)"
+run = "pnpm run workflow:haiku-traced"
+
+[tasks.workflow-tools]
+description = "Run tools workflow"
+run = "pnpm run workflow:tools"
+
+[tasks.workflow-mcp]
+description = "Run MCP workflow"
+run = "pnpm run workflow:mcp"
+
+[tasks.workflow-middleware]
+description = "Run middleware workflow"
+run = "pnpm run workflow:middleware"
+
+[tasks.stop]
+description = "Stop temporal server and workers"
+run = "pkill -f temporal || true; pkill -f src/worker.ts || true"
+
+[tasks.kill]
+description = "Force kill temporal server and workers"
+run = '''
+pkill -f 'examples/temporal.*ts-node' 2>/dev/null || true
+pkill -f 'overmind.*temporal' 2>/dev/null || true
+pkill -f 'temporal' 2>/dev/null || true
+echo 'Server killed'
+'''

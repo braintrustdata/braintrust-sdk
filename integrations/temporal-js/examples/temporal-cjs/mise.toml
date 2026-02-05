@@ -7,7 +7,7 @@ experimental=true
 _.file = ".env"
 
 [tools]
-node = "20"
+node = "22"
 temporal = "latest"
 overmind = "latest"
 
@@ -15,12 +15,12 @@ overmind = "latest"
 postinstall = "mise run install"
 
 [tasks.install]
-description = "Install dependencies"
-run = "pnpm install --ignore-workspace"
+description = "Install dependencies (workspace-aware)"
+run = "pnpm install"
 
 [tasks.server]
-description = "Run temporal server and workers"
-run = "overmind s"
+description = "Build integration, then run temporal server and workers"
+run = "pnpm --filter @braintrust/temporal build && overmind s"
 
 [tasks.workflow]
 description = "Run workflow client"

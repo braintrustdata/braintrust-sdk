@@ -1,10 +1,20 @@
-import type { ClientPlugin, ClientOptions } from "@temporalio/client";
+import type {
+  ClientPlugin,
+  ClientOptions,
+  WorkflowClientInterceptor,
+  WorkflowClientInterceptors,
+  WorkflowClientCallsInterceptorFactory,
+} from "@temporalio/client";
 import type { WorkerPlugin, WorkerOptions } from "@temporalio/worker";
 import {
   createBraintrustClientInterceptor,
   createBraintrustActivityInterceptor,
 } from "./interceptors";
 import { createBraintrustSinks } from "./sinks";
+import util from "util";
+
+// Add the workflow interceptor package specifier so the Temporal bundler can include it
+const WORKFLOW_INTERCEPTORS_SPEC = "@braintrust/temporal/workflow-interceptors";
 
 /**
  * A Braintrust plugin for Temporal that automatically instruments
@@ -53,18 +63,31 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
     const existing = options.interceptors?.workflow;
     const braintrustInterceptor = createBraintrustClientInterceptor();
 
-    // workflow can be an array or an object with named interceptors
-    let workflow: typeof existing;
+    let workflow: WorkflowClientInterceptors | WorkflowClientInterceptor[];
+
     if (Array.isArray(existing)) {
-      workflow = [...existing, braintrustInterceptor];
+      // Array form: append our interceptor
+      workflow = [
+        ...(existing as WorkflowClientInterceptor[]),
+        braintrustInterceptor,
+      ];
     } else if (existing) {
-      // It's a WorkflowClientInterceptors object, merge our interceptor
+      // Object form: preserve existing factories and append ours
+      const obj = existing as WorkflowClientInterceptors;
+
+      const btFactory: WorkflowClientCallsInterceptorFactory = () =>
+        braintrustInterceptor;
+
       workflow = {
-        ...existing,
-        ...braintrustInterceptor,
+        ...obj,
+        calls: [...(obj.calls ?? []), btFactory],
       };
     } else {
-      workflow = [braintrustInterceptor];
+      // No existing: create object form with our factory
+      const btFactory: WorkflowClientCallsInterceptorFactory = () =>
+        braintrustInterceptor;
+
+      workflow = { calls: [btFactory] };
     }
 
     return {
@@ -73,7 +96,7 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
         ...options.interceptors,
         workflow,
       },
-    };
+    } as Omit<ClientOptions, "plugins">;
   }
 
   /**
@@ -88,27 +111,31 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
 
     const braintrustSinks = createBraintrustSinks();
 
-    // Resolve the workflow interceptors module path
-    // This needs to be resolved at runtime to get the actual file path
-    const workflowInterceptorsPath = require.resolve(
-      "@braintrust/temporal/workflow-interceptors",
-    );
+    const workflowModules = [
+      ...new Set([...existingWorkflowModules, WORKFLOW_INTERCEPTORS_SPEC]),
+    ];
 
-    return {
+    const activityFactories = [
+      ...new Set([
+        ...existingActivityInterceptors,
+        createBraintrustActivityInterceptor,
+      ]),
+    ];
+
+    const result: WorkerOptions = {
       ...options,
       interceptors: {
         ...options.interceptors,
-        activity: [
-          ...existingActivityInterceptors,
-          createBraintrustActivityInterceptor,
-        ],
-        workflowModules: [...existingWorkflowModules, workflowInterceptorsPath],
+        activity: activityFactories,
+        workflowModules,
       },
       sinks: {
-        ...existingSinks,
+        ...options.sinks,
         ...braintrustSinks,
       },
     };
+
+    return result;
   }
 }
 

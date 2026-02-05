@@ -8,8 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "../temporal-shared/**/*"]
 }

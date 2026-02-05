@@ -7,7 +7,6 @@ export interface TaskInput {
 export async function addTen(input: TaskInput): Promise<number> {
   console.log(`Adding 10 to ${input.value}`);
 
-  // Test child span within activity
   const result = await braintrust.traced(
     async (span) => {
       span.log({
