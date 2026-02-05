@@ -528,6 +528,104 @@ test("trialIndex with multiple inputs", async () => {
   expect(input2Trials).toEqual([0, 1]);
 });
 
+test("per-input trialCount overrides global trialCount", async () => {
+  const trialData: Array<{ input: number; trialIndex: number }> = [];
+
+  const { results } = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [
+        { input: 1, expected: 2 }, // Uses global trialCount (2)
+        { input: 2, expected: 4, trialCount: 5 }, // Overrides to 5 trials
+        { input: 3, expected: 6, trialCount: 1 }, // Overrides to 1 trial
+      ],
+      task: async (input: number, { trialIndex }) => {
+        trialData.push({ input, trialIndex });
+        return input * 2;
+      },
+      scores: [],
+      trialCount: 2, // Global default
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+    undefined,
+    true,
+  );
+
+  // Should have 8 results total (2 + 5 + 1)
+  expect(results).toHaveLength(8);
+  expect(trialData).toHaveLength(8);
+
+  // Input 1: should use global trialCount (2 trials)
+  const input1Trials = trialData
+    .filter((d) => d.input === 1)
+    .map((d) => d.trialIndex)
+    .sort();
+  expect(input1Trials).toEqual([0, 1]);
+
+  // Input 2: should use per-input trialCount (5 trials)
+  const input2Trials = trialData
+    .filter((d) => d.input === 2)
+    .map((d) => d.trialIndex)
+    .sort();
+  expect(input2Trials).toEqual([0, 1, 2, 3, 4]);
+
+  // Input 3: should use per-input trialCount (1 trial)
+  const input3Trials = trialData
+    .filter((d) => d.input === 3)
+    .map((d) => d.trialIndex)
+    .sort();
+  expect(input3Trials).toEqual([0]);
+});
+
+test("per-input trialCount works without global trialCount", async () => {
+  const trialData: Array<{ input: number; trialIndex: number }> = [];
+
+  const { results } = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [
+        { input: 1, expected: 2 }, // No trialCount, defaults to 1
+        { input: 2, expected: 4, trialCount: 3 }, // Per-input trialCount of 3
+      ],
+      task: async (input: number, { trialIndex }) => {
+        trialData.push({ input, trialIndex });
+        return input * 2;
+      },
+      scores: [],
+      // No global trialCount specified
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+    undefined,
+    true,
+  );
+
+  // Should have 4 results total (1 + 3)
+  expect(results).toHaveLength(4);
+  expect(trialData).toHaveLength(4);
+
+  // Input 1: should default to 1 trial
+  const input1Trials = trialData
+    .filter((d) => d.input === 1)
+    .map((d) => d.trialIndex)
+    .sort();
+  expect(input1Trials).toEqual([0]);
+
+  // Input 2: should use per-input trialCount (3 trials)
+  const input2Trials = trialData
+    .filter((d) => d.input === 2)
+    .map((d) => d.trialIndex)
+    .sort();
+  expect(input2Trials).toEqual([0, 1, 2]);
+});
+
 test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
   const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
