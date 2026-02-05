@@ -1537,6 +1537,7 @@ async def test_braintrust_tracing_processor_concurrency_bug(memory_logger):
 
 @pytest.mark.asyncio
 @pytest.mark.vcr
+@pytest.mark.skip(reason="OAI Implementation changed, skipping until update")
 async def test_agents_tool_openai_nested_spans(memory_logger):
     """Test that OpenAI calls inside agent tools are properly nested under the tool span."""
     pytest.importorskip("agents", reason="agents package not available")
