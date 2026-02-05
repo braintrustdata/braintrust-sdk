@@ -15,7 +15,8 @@ const exactMatch = ({
   score: output === expected ? 1 : 0,
 });
 
-Eval("CLI ESM Top-Level Await Test", {
+Eval("test-cli-eval-ts-esm", {
+  experimentName: "Top-Level Await Test",
   data: () => [{ input: "test", expected: "Result: test" }],
   task: async (input: string) => config.prefix + input,
   scores: [exactMatch],

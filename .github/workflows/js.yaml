@@ -600,11 +600,29 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Start mock API server
+        working-directory: js/test-server
+        shell: bash
+        run: |
+          node mock-braintrust-api.js &
+          echo $! > mock-server.pid
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:8001/version > /dev/null; then
+              echo "Mock server is ready"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Run CLI tests
         working-directory: js/cli-tests
         shell: bash
         env:
           BRAINTRUST_TAR: ${{ github.workspace }}/js/artifacts/braintrust-*.tgz
+          BRAINTRUST_API_KEY: fake-test-key-cli-tests
+          BRAINTRUST_API_URL: http://localhost:8001
+          BRAINTRUST_APP_URL: http://localhost:8001
         run: |
           # Expand tarball path glob
           TARBALL=$(ls $BRAINTRUST_TAR | head -n 1)
@@ -615,3 +633,13 @@ jobs:
           echo "Using tarball: $TARBALL"
           export BRAINTRUST_TAR="$TARBALL"
           make test
+
+      - name: Stop mock API server
+        if: always()
+        working-directory: js/test-server
+        shell: bash
+        run: |
+          if [ -f mock-server.pid ]; then
+            kill $(cat mock-server.pid) || true
+            rm mock-server.pid
+          fi

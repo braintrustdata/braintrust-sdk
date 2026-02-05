@@ -11,7 +11,7 @@ BRAINTRUST_TAR ?= $(shell \
 	echo "$$PWD/artifacts/braintrust-$$VERSION.tgz")
 
 setup:
-	@echo "==> Setting up eval-esm scenario"
+	@echo "==> Setting up eval-ts-cjs scenario"
 	@# Ensure tarball exists
 	@if [ ! -f "$(BRAINTRUST_TAR)" ]; then \
 		echo "Error: Tarball not found at $(BRAINTRUST_TAR)"; \
@@ -23,15 +23,15 @@ setup:
 	@npm install
 
 test: setup
-	@echo "==> Running eval-esm CLI tests"
+	@echo "==> Running eval-ts-cjs CLI tests"
 	@echo ""
 	@FAILED=0; \
-	TESTS=$$(find tests -name '*.eval.mjs' | sort); \
+	TESTS=$$(find tests -name '*.eval.ts' | sort); \
 	TOTAL=$$(echo "$$TESTS" | wc -l | tr -d ' '); \
 	COUNT=0; \
 	for test in $$TESTS; do \
 		COUNT=$$((COUNT + 1)); \
-		TEST_NAME=$$(basename "$$test" .eval.mjs); \
+		TEST_NAME=$$(basename "$$test" .eval.ts); \
 		echo "  [$$COUNT/$$TOTAL] Testing $$TEST_NAME..."; \
 		if npm run braintrust -- eval "$$test" --jsonl 2>&1 | ../../validate-jsonl.sh; then \
 			echo "    ✓ Passed"; \
@@ -42,12 +42,12 @@ test: setup
 		echo ""; \
 	done; \
 	if [ $$FAILED -eq 0 ]; then \
-		echo "✓ All eval-esm tests passed"; \
+		echo "✓ All eval-ts-cjs tests passed"; \
 	else \
-		echo "✗ Some eval-esm tests failed"; \
+		echo "✗ Some eval-ts-cjs tests failed"; \
 	fi; \
 	exit $$FAILED
 
 clean:
-	@echo "==> Cleaning eval-esm scenario"
+	@echo "==> Cleaning eval-ts-cjs scenario"
 	@rm -rf node_modules braintrust-latest.tgz package-lock.json

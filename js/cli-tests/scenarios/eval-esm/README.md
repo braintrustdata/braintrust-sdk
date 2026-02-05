@@ -1,33 +1,33 @@
 # Eval ESM Scenario
 
-Tests that `braintrust eval` works with ESM modules and top-level await.
+Tests the `braintrust eval` CLI with **pure JavaScript ESM** files (no TypeScript).
 
 ## What This Tests
 
-- ESM import/export syntax (`import { Eval } from "braintrust"`)
-- Top-level `await` (ESM async module evaluation)
-- CLI can execute `.eval.ts` files with `"type": "module"`
+Pure ESM patterns that users write:
 
-## Design Decisions
+- **`import` syntax**: ESM imports (`import { Eval } from "braintrust"`)
+- **Top-level `await`**: ESM-only async module evaluation
+- **`import.meta.url`**: ESM-only module metadata
+- **`.mjs` extension**: Explicit ESM file extension
 
-**Why ESM?** Many modern projects use ESM (`"type": "module"`), and customers report
-issues when trying to use ESM with the CLI.
+## Test Files
 
-**Why top-level await?** It's an ESM-only feature that proves async module evaluation
-works correctly. Common use case: loading config before defining evals.
+1. **`basic.eval.mjs`** - ESM `import` syntax with `"type": "module"`
+2. **`top-level-await.eval.mjs`** - Top-level `await` (ESM-only feature)
+3. **`import-meta.eval.mjs`** - `import.meta.url` (ESM-only global)
 
-**Why these specific tests?** Minimal reproducible cases that will fail with the current
-CLI implementation (which uses `new Function()` with CommonJS).
+## Key Differences from TypeScript Scenarios
 
-## Expected Behavior
+- Pure JavaScript - No TypeScript compilation
+- `import` syntax - ESM imports (not `require()`)
+- No tsconfig.json - Not a TypeScript project
+- `.mjs` extension - Explicit ESM files
 
-**Current CLI (esbuild + new Function):**
+## Related Scenarios
 
-- `basic.eval.ts`: ✓ Works (ESM imports compile to CJS)
-- `top-level-await.eval.ts`: Compilation error but exits 0
-
-**After ESM support (tsx or dynamic import):**
-Both tests should pass and execute successfully.
+- **`eval-ts-esm`**: TypeScript files configured for ESM output
+- **`eval-cjs`**: Pure JavaScript CommonJS files
 
 ## Running
 

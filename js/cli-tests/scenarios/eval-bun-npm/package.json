@@ -1,0 +1,14 @@
+{
+  "name": "braintrust-cli-test-eval-bun-npm",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "braintrust": "braintrust"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.0.0"
+  }
+}

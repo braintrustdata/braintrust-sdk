@@ -18,10 +18,7 @@ repos:
       - id: codespell
         exclude: >
           (?x)^(
-              .*\.(json|prisma|svg)
-              |.*pnpm-lock.yaml
-              |.*deno.lock
-              |.*.yaml
+              .*\.(json|lock|prisma|svg|yaml)
               |.*/cassettes/.*
           )$
         args:

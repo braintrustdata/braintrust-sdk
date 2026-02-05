@@ -2,19 +2,33 @@
 
 Test suite for Braintrust CLI commands (`braintrust eval`, `braintrust push`, etc.).
 
+## Distinction from Framework Tests
+
+- **CLI Tests** (this directory): Test the `braintrust eval` CLI command with different module systems and runtimes
+- **Framework Tests** (`sdk/js/framework-tests/`): Test calling `Eval()` API directly in various frameworks (Jest, Vitest, etc.)
+
+## Prerequisites
+
+- Node.js (for running the tests)
+- npm (for installing dependencies)
+- `mise` (for runtime management in Bun scenarios)
+- A built tarball of the Braintrust SDK
+
+Some scenarios (Bun) require `mise` to automatically install the correct runtime versions. See each scenario's `.tool-versions` file for required versions.
+
 ## Quick Reference
 
 ```bash
 # From sdk/js/cli-tests/:
-make test                          # Run all scenarios
-make list                          # List available scenarios
-make clean                         # Clean all scenarios
-cd scenarios/eval-esm && make test # Run specific scenario
+make test                           # Run all scenarios
+make list                           # List available scenarios
+make clean                          # Clean all scenarios
+cd scenarios/eval-esm && make test  # Run specific scenario
 
 # From a specific scenario:
 cd scenarios/eval-esm
-make test                          # Auto-creates tarball if needed
-make clean                         # Remove artifacts
+make test                           # Auto-creates tarball if needed
+make clean                          # Remove artifacts
 ```
 
 ## Purpose
@@ -27,10 +41,17 @@ Tests are organized into scenarios under `scenarios/`:
 
 ```
 scenarios/
-├── eval-esm/          # Test 'braintrust eval' with ESM modules
-├── eval-cjs/          # Future: Test with CommonJS
-├── push-basic/        # Future: Test 'braintrust push'
-└── init-basic/        # Future: Test 'braintrust init'
+# Runtime Scenarios
+├── eval-esm/          # Pure JavaScript ESM (Node.js, .mjs files)
+├── eval-cjs/          # Pure JavaScript CommonJS (Node.js, .js files)
+├── eval-bun/          # Bun runtime with bun CLI
+├── eval-deno/         # Deno runtime with deno run npm:braintrust
+├── eval-bun-npm/      # npm CLI (Node.js) on Bun-style TypeScript
+├── eval-deno-npm/     # npm CLI (Node.js) on Deno-style TypeScript
+
+# TypeScript Bundling Scenarios
+├── eval-ts-esm/       # TypeScript → ESM output
+└── eval-ts-cjs/       # TypeScript → CJS output
 ```
 
 Each scenario is an independent npm package that:
@@ -49,6 +70,7 @@ Each scenario is an independent npm package that:
 - .gitignore (ignore artifacts, track lock files)
 - Test files (e.g., `tests/*.eval.ts` for eval scenarios)
 - POSIX shell syntax (`[ ]` not `[[ ]]`)
+- `.tool-versions` file (if scenario requires non-Node runtimes like Bun/Deno)
 
 ### Example Scenario Structure
 
@@ -56,6 +78,7 @@ Each scenario is an independent npm package that:
 scenarios/my-scenario/
 ├── Makefile           # setup + test targets
 ├── package.json       # Dependencies only
+├── .tool-versions     # Optional: for non-Node runtimes (Bun, Deno)
 ├── tests/
 │   └── test.eval.ts
 ├── .gitignore
@@ -82,11 +105,18 @@ setup:
 		echo "Error: Tarball not found"; exit 1; \
 	fi
 	@cp "$(BRAINTRUST_TAR)" braintrust-latest.tgz
+	# If using non-Node runtime (Bun, Deno), add:
+	# @mise install
 	@npm install
 
 test: setup
 	@echo "==> Running my-scenario tests"
-	@npx braintrust <command> tests/test.eval.ts --no-send-logs
+	# For Node/npm:
+	@npx braintrust <command> tests/test.eval.ts --jsonl 2>&1 | ../../validate-jsonl.sh
+	# For Bun:
+	# @mise exec -- bun run braintrust <command> tests/test.eval.ts --jsonl 2>&1 | ../../validate-jsonl.sh
+	# For Deno:
+	# @mise exec -- deno run --allow-env --allow-read --allow-net tests/test.ts --jsonl 2>&1 | ../../validate-jsonl.sh
 
 clean:
 	@rm -rf node_modules braintrust-latest.tgz package-lock.json
@@ -111,12 +141,28 @@ Any folder in `scenarios/` with a Makefile is automatically included in `make te
 - **Track lock files**: Commit `package-lock.json` to detect dependency changes
 - **Makefiles are source of truth**: No npm scripts, all commands in Makefile
 - **POSIX shell syntax**: Use `[ ]` not `[[ ]]` for portability
-- **Minimal logging**: Clear test output, errors only
+- **JSONL validation**: Tests use `--jsonl` flag and validate output to ensure evaluators actually ran
+- **Visible output**: Full command output shown for debugging (no `/dev/null`)
 - **Run all tests**: Don't exit early, run all tests and report summary
+- **Mock API server**: Tests send logs to a mock server running on localhost:8001
 
 ## Environment Variables
 
 - **`BRAINTRUST_TAR`**: Path to braintrust tarball (auto-created if not set)
+
+### CI Environment Variables
+
+In CI, these are set to use the mock API server:
+
+- **`BRAINTRUST_API_KEY`**: Set to `fake-test-key-cli-tests`
+- **`BRAINTRUST_API_URL`**: Set to `http://localhost:8001`
+- **`BRAINTRUST_APP_URL`**: Set to `http://localhost:8001`
+
+A lightweight mock server runs on port 8001 during CI tests to handle all API calls, ensuring tests behave realistically while preventing production API hits.
+
+### Project Names
+
+Each scenario uses a unique project name as the first argument to `Eval()` (e.g., `test-cli-eval-esm`). This ensures test results are isolated and easily identifiable.
 
 ## CI Integration
 
@@ -128,4 +174,9 @@ CLI tests run in `sdk/.github/workflows/js.yaml` as a separate job that:
 
 ## Reference Scenarios
 
-- **eval-esm**: Tests ESM support in `braintrust eval` command
+- **eval-esm**: Tests pure JavaScript ESM support in `braintrust eval` command
+- **eval-cjs**: Tests CommonJS support in `braintrust eval` command
+- **eval-ts-esm**: Tests TypeScript ESM support in `braintrust eval` command
+- **eval-ts-cjs**: Tests TypeScript CJS support in `braintrust eval` command
+- **eval-bun**: Tests `braintrust eval` with Bun runtime
+- **eval-deno**: Tests `braintrust eval` with Deno-style TypeScript files

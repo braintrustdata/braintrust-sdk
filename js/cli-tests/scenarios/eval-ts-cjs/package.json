@@ -1,0 +1,7 @@
+{
+  "name": "braintrust-cli-test-eval-ts-cjs",
+  "private": true,
+  "scripts": {
+    "braintrust": "braintrust"
+  }
+}

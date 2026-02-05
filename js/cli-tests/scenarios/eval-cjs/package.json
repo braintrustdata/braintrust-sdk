@@ -1,0 +1,10 @@
+{
+  "name": "braintrust-cli-test-eval-cjs",
+  "private": true,
+  "scripts": {
+    "braintrust": "braintrust"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  }
+}
