@@ -42,6 +42,7 @@ const config = {
       "src/wrappers/ai-sdk/**",
       "src/wrappers/claude-agent-sdk/**",
       "smoke/**",
+      "cli-tests/**",
     ],
     // Additional test environment configuration
     watchExclude: [

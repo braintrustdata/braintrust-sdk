@@ -570,3 +570,48 @@ jobs:
           BRAINTRUST_BUILD_DIR: ${{ github.workspace }}/js/smoke/tests/deno/build/braintrust/dist/browser.mjs
         run: |
           ./run-tests.sh deno
+
+  cli-tests:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          path: js/artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run CLI tests
+        working-directory: js/cli-tests
+        shell: bash
+        env:
+          BRAINTRUST_TAR: ${{ github.workspace }}/js/artifacts/braintrust-*.tgz
+        run: |
+          # Expand tarball path glob
+          TARBALL=$(ls $BRAINTRUST_TAR | head -n 1)
+          if [ -z "$TARBALL" ]; then
+            echo "Error: No tarball found matching $BRAINTRUST_TAR"
+            exit 1
+          fi
+          echo "Using tarball: $TARBALL"
+          export BRAINTRUST_TAR="$TARBALL"
+          make test

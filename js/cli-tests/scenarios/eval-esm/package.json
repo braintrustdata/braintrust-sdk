@@ -1,0 +1,11 @@
+{
+  "name": "braintrust-cli-test-eval-esm",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "braintrust": "braintrust"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  }
+}
