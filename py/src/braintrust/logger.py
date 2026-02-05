@@ -1772,8 +1772,8 @@ def init_dataset(
 class SandboxConfig:
     """Configuration for a sandbox runtime."""
 
-    type: Literal["modal"]
-    """The type of sandbox runtime. Currently only "modal" is supported."""
+    provider: Literal["modal"]
+    """The sandbox provider. Currently only "modal" is supported."""
     snapshot_ref: str
     """Reference to the sandbox snapshot."""
 
@@ -1810,7 +1810,7 @@ def register_sandbox(
 
     :param name: Name of the sandbox function.
     :param project: Name of the project to register the sandbox in.
-    :param sandbox: Sandbox configuration (type and snapshot reference).
+    :param sandbox: Sandbox configuration (provider and snapshot reference).
     :param evals: Optional list of eval files available in the sandbox.
     :param slug: URL-friendly identifier. Defaults to slugified name.
     :param description: Optional description.
@@ -1829,7 +1829,7 @@ def register_sandbox(
             name="My Sandbox",
             project="My Project",
             evals=["./my-eval.eval.py"],
-            sandbox=SandboxConfig(type="modal", snapshot_ref="sb-xxx"),
+            sandbox=SandboxConfig(provider="modal", snapshot_ref="sb-xxx"),
         )
         print(result.id)
     """
@@ -1850,7 +1850,7 @@ def register_sandbox(
         "function_type": "sandbox",
         "function_data": {
             "type": "sandbox",
-            "runtimeType": sandbox.type,
+            "provider": sandbox.provider,
             "snapshot_ref": sandbox.snapshot_ref,
             "evalFiles": evals,
         },

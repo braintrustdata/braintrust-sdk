@@ -3745,8 +3745,8 @@ export function initDataset<
  * Configuration for a sandbox runtime.
  */
 export interface SandboxConfig {
-  /** The type of sandbox runtime. Currently only "modal" is supported. */
-  type: "modal";
+  /** The sandbox provider. Currently only "modal" is supported. */
+  provider: "modal";
   /** Reference to the sandbox snapshot. */
   snapshotRef: string;
 }
@@ -3759,7 +3759,7 @@ export interface RegisterSandboxOptions {
   name: string;
   /** Name of the project to register the sandbox in. */
   project: string;
-  /** Sandbox configuration (type and snapshot reference). */
+  /** Sandbox configuration (provider and snapshot reference). */
   sandbox: SandboxConfig;
   /** Optional list of eval files available in the sandbox. */
   evals?: string[];
@@ -3806,7 +3806,7 @@ export interface RegisterSandboxResult {
  *   project: "My Project",
  *   evals: ["./my-eval.eval.ts"],
  *   sandbox: {
- *     type: "modal",
+ *     provider: "modal",
  *     snapshotRef: "sb-xxx",
  *   },
  * });
@@ -3843,7 +3843,7 @@ export async function registerSandbox(
     function_type: "sandbox",
     function_data: {
       type: "sandbox",
-      runtimeType: options.sandbox.type,
+      provider: options.sandbox.provider,
       snapshot_ref: options.sandbox.snapshotRef,
       evalFiles: options.evals,
     },
