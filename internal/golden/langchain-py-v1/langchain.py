@@ -11,12 +11,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
-init_logger(project="golden-py-langchain")
+init_logger(project="golden-py-langchain-v1")
 
 handler = BraintrustCallbackHandler()
 set_global_handler(handler)
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 def test_basic_completion():
