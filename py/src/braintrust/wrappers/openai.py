@@ -37,6 +37,8 @@ def _span_name(span: tracing.Span[Any]) -> str:
     elif isinstance(span.span_data, tracing.HandoffSpanData):
         return "Handoff"
     elif isinstance(span.span_data, tracing.MCPListToolsSpanData):
+        if span.span_data.server:
+            return f"List Tools ({span.span_data.server})"
         return "MCP List Tools"
     elif isinstance(span.span_data, tracing.TranscriptionSpanData):
         return "Transcription"

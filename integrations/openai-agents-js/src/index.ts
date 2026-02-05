@@ -76,6 +76,9 @@ function spanNameFromAgents(span: AgentsSpan): string {
     case SpanType.HANDOFF:
       return "Handoff";
     case SpanType.MCP_TOOLS:
+      if (isMCPListToolsSpanData(spanData) && spanData.server) {
+        return `List Tools (${spanData.server})`;
+      }
       return "MCP List Tools";
     case SpanType.TRANSCRIPTION:
       return "Transcription";
