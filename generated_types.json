@@ -7687,8 +7687,7 @@
         "required": [
           "type",
           "source_facet",
-          "embedding_model",
-          "bundle_key"
+          "embedding_model"
         ]
       },
       "TopicMapReport": {
@@ -8550,7 +8549,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "ec20534a23b40aa4c24eecabbf20363e3c59c1ea"
+    "x-internal-git-sha": "2c2f2c4a0672715898256f3fdadb18d51e7c1ae2"
   },
   "paths": {},
   "webhooks": {}

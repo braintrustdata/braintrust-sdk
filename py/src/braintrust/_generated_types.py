@@ -3190,7 +3190,7 @@ class TopicMapData(TypedDict):
     """
     The embedding model to use for embedding facet values
     """
-    bundle_key: str
+    bundle_key: NotRequired[str | None]
     """
     Key of the topic map bundle in code_bundles bucket
     """

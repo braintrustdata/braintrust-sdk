@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA ec20534a23b40aa4c24eecabbf20363e3c59c1ea) -- do not modify
+// Auto-generated file (internal git SHA 2c2f2c4a0672715898256f3fdadb18d51e7c1ae2) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -310,7 +310,7 @@ export const TopicMapData = z.object({
   type: z.literal("topic_map"),
   source_facet: z.string(),
   embedding_model: z.string(),
-  bundle_key: z.string(),
+  bundle_key: z.string().optional(),
   distance_threshold: z.number().optional(),
   report: TopicMapReport.optional(),
 });
