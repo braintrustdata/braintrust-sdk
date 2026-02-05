@@ -61,6 +61,7 @@ LITELLM_VERSIONS = (LATEST, "1.74.0")
 # CLI bundling started in 0.1.10 - older versions require external Claude Code installation
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.10")
 AGNO_VERSIONS = (LATEST, "2.1.0")
+OPENAI_AGENTS_VERSIONS = (LATEST, "0.8.0", "0.7.0")
 # pydantic_ai 1.x requires Python >= 3.10
 # Two test suites with different version requirements:
 # 1. wrap_openai approach: works with older versions (0.1.9+)
@@ -152,6 +153,16 @@ def test_openai(session, version):
     _install(session, "openai", version)
     # openai-agents requires Python >= 3.10
     _install(session, "openai-agents")
+    _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", OPENAI_AGENTS_VERSIONS, ids=OPENAI_AGENTS_VERSIONS)
+def test_openai_agents(session, version):
+    _install_test_deps(session)
+    _install(session, "openai")
+    _install(session, "openai-agents", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
     _run_core_tests(session)
 
