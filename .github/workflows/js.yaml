@@ -574,22 +574,30 @@ jobs:
   #       run: |
   #         ./run-tests.sh deno
 
+  discover-cli-scenarios:
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.discover.outputs.scenarios }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Discover test scenarios
+        id: discover
+        working-directory: js/cli-tests/scenarios
+        run: |
+          scenarios=$(for dir in */; do [ -f "$dir/Makefile" ] && basename "$dir"; done | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "scenarios=$scenarios" >> $GITHUB_OUTPUT
+          echo "Discovered scenarios: $scenarios"
+
   cli-tests:
-    needs: build
+    needs: [build, discover-cli-scenarios]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        scenario:
-          - eval-esm
-          - eval-cjs
-          - eval-ts-esm
-          - eval-ts-cjs
-          - eval-bun
-          - eval-bun-npm
-          - eval-deno
-          - eval-deno-npm
+        scenario: ${{ fromJson(needs.discover-cli-scenarios.outputs.scenarios) }}
 
     steps:
       - name: Checkout repository
@@ -603,7 +611,6 @@ jobs:
       - uses: pnpm/action-setup@v4
 
       - name: Setup mise
-        if: contains(fromJSON('["eval-bun", "eval-deno"]'), matrix.scenario)
         uses: jdx/mise-action@v2
 
       - name: Download build artifact
