@@ -43,6 +43,7 @@ const config = {
       "src/wrappers/claude-agent-sdk/**",
       "smoke/**",
       "cli-tests/**",
+      "framework-tests/**",
     ],
     // Additional test environment configuration
     watchExclude: [

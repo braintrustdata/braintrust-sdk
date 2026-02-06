@@ -1,0 +1,14 @@
+{
+  "name": "braintrust-cli-test-eval-vitest",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}
