@@ -19,8 +19,9 @@ ${VENV_INITIALIZED}:
 VENV_PYTHON_PACKAGES := venv/.python_packages
 
 ${VENV_PYTHON_PACKAGES}: ${VENV_INITIALIZED}
-	bash -c 'source venv/bin/activate && python -m pip install --upgrade pip setuptools'
-	bash -c 'source venv/bin/activate && python -m pip install -e py[all]'
+	bash -c 'source venv/bin/activate && python -m pip install uv==0.7.8'
+	bash -c 'source venv/bin/activate && python -m uv pip install --upgrade pip setuptools'
+	bash -c 'source venv/bin/activate && python -m uv pip install -e py[all]'
 	@touch $@
 
 ${VENV_PRE_COMMIT}: ${VENV_PYTHON_PACKAGES}
@@ -47,7 +48,7 @@ fixup:
 test: test-py-core test-py-sdk test-js
 
 test-py-core:
-	source env.sh && python -m unittest discover ./core/py/src
+	source env.sh && python -m unittest discover ./py/src
 
 test-py-sdk: nox
 	source env.sh && cd py && pytest
