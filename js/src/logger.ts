@@ -3743,8 +3743,9 @@ export function initDataset<
 
 /**
  * Configuration for a sandbox runtime.
+ * @internal
  */
-export interface SandboxConfig {
+export interface ExperimentalSandboxConfig {
   /** The sandbox provider. Currently only "modal" is supported. */
   provider: "modal";
   /** Reference to the sandbox snapshot. */
@@ -3753,14 +3754,15 @@ export interface SandboxConfig {
 
 /**
  * Options for registering a sandbox function.
+ * @internal
  */
-export interface RegisterSandboxOptions {
+export interface ExperimentalRegisterSandboxOptions {
   /** Name of the sandbox function. */
   name: string;
   /** Name of the project to register the sandbox in. */
   project: string;
   /** Sandbox configuration (provider and snapshot reference). */
-  sandbox: SandboxConfig;
+  sandbox: ExperimentalSandboxConfig;
   /** Optional list of eval files available in the sandbox. */
   evals?: string[];
   /** URL-friendly identifier. Defaults to slugified name. */
@@ -3781,8 +3783,9 @@ export interface RegisterSandboxOptions {
 
 /**
  * Result of registering a sandbox.
+ * @internal
  */
-export interface RegisterSandboxResult {
+export interface ExperimentalRegisterSandboxResult {
   /** Unique identifier for the sandbox function. */
   id: string;
   /** Name of the sandbox function. */
@@ -3798,10 +3801,11 @@ export interface RegisterSandboxResult {
  *
  * @param options Configuration for the sandbox to register.
  * @returns The registered sandbox function details.
+ * @internal
  *
  * @example
  * ```typescript
- * const result = await registerSandbox({
+ * const result = await experimental_registerSandbox({
  *   name: "My Sandbox",
  *   project: "My Project",
  *   evals: ["./my-eval.eval.ts"],
@@ -3813,9 +3817,9 @@ export interface RegisterSandboxResult {
  * console.log(result.id);
  * ```
  */
-export async function registerSandbox(
-  options: RegisterSandboxOptions,
-): Promise<RegisterSandboxResult> {
+export async function experimental_registerSandbox(
+  options: ExperimentalRegisterSandboxOptions,
+): Promise<ExperimentalRegisterSandboxResult> {
   const state = _internalGetGlobalState();
   await login({
     apiKey: options.apiKey,

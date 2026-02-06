@@ -114,7 +114,7 @@ export {
   withParent,
   wrapTraced,
   registerOtelFlush,
-  registerSandbox,
+  experimental_registerSandbox,
 } from "./logger";
 
 export {
