@@ -6986,6 +6986,18 @@ function expandAttachmentArrayPreTemplate(
 export function renderMessage<T extends Message>(
   render: (template: string) => string,
   message: T,
+): T;
+
+export function renderMessage<T extends Message>(
+  render: (template: string) => string,
+  message: T,
+): T {
+  return renderMessageImpl(render, message, {});
+}
+
+export function renderMessageImpl<T extends Message>(
+  render: (template: string) => string,
+  message: T,
   variables?: Record<string, unknown>,
 ): T {
   return {
@@ -7462,7 +7474,7 @@ export class Prompt<
         });
 
       const baseMessages = (prompt.messages || []).map((m) =>
-        renderMessage(render, m, variables),
+        renderMessageImpl(render, m, variables),
       );
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 

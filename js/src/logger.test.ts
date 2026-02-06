@@ -17,6 +17,7 @@ import {
   Attachment,
   deepCopyEvent,
   renderMessage,
+  renderMessageImpl,
 } from "./logger";
 import {
   parseTemplateFormat,
@@ -69,7 +70,7 @@ test("renderMessage with file content parts", () => {
     filename: "report.pdf",
   };
 
-  const rendered = renderMessage(
+  const rendered = renderMessageImpl(
     (template) =>
       template
         .replace("{{item}}", "document")
@@ -118,7 +119,7 @@ test("renderMessage expands attachment array in image_url parts", () => {
     images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
   };
 
-  const rendered = renderMessage(
+  const rendered = renderMessageImpl(
     (template) => template, // Template rendering shouldn't happen for attachment arrays
     message,
     variables,
@@ -166,7 +167,11 @@ test("renderMessage expands inline attachment array in image_url parts", () => {
     ],
   };
 
-  const rendered = renderMessage((template) => template, message, variables);
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
 
   expect(rendered.content).toEqual([
     {
@@ -202,7 +207,7 @@ test("renderMessage does NOT expand mixed content (text + variable)", () => {
     images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
   };
 
-  const rendered = renderMessage(
+  const rendered = renderMessageImpl(
     (template) => template.replace("{{images}}", "[array]"),
     message,
     variables,
@@ -229,7 +234,7 @@ test("renderMessage expands nested attachment arrays in image_url parts", () => 
     },
   };
 
-  const rendered = renderMessage(
+  const rendered = renderMessageImpl(
     (template) => template, // Template rendering shouldn't happen
     message,
     variables,
@@ -281,7 +286,11 @@ test("renderMessage expands deeply nested attachment arrays in image_url parts",
     },
   };
 
-  const rendered = renderMessage((template) => template, message, variables);
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
 
   expect(rendered.content).toEqual([
     {
@@ -324,7 +333,7 @@ test("renderMessage handles single image_url (no array)", () => {
     image: "https://example.com/single.jpg",
   };
 
-  const rendered = renderMessage(
+  const rendered = renderMessageImpl(
     (template) =>
       template.replace("{{image}}", "https://example.com/single.jpg"),
     message,
@@ -359,7 +368,11 @@ test("renderMessage expands attachment arrays in structured content", () => {
     ],
   };
 
-  const rendered = renderMessage((template) => template, message, variables);
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
 
   // Should expand {{attachments}} into multiple image_url parts
   expect(rendered.content).toEqual([
