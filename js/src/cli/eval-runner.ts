@@ -459,6 +459,7 @@ function mergeProgress(
   }
   const noopName = (_name: string) => {};
   const noopStart = (_name: string, _total: number) => {};
+  const noopStop = () => {};
   return {
     start:
       mergeHandlers(base.start, override.start) ??
@@ -469,7 +470,7 @@ function mergeProgress(
       mergeHandlers(base.stop, override.stop) ??
       base.stop ??
       override.stop ??
-      noopName,
+      noopStop,
     increment:
       mergeHandlers(base.increment, override.increment) ??
       base.increment ??
