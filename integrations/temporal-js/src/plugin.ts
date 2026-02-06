@@ -63,31 +63,25 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
     const existing = options.interceptors?.workflow;
     const braintrustInterceptor = createBraintrustClientInterceptor();
 
-    let workflow: WorkflowClientInterceptors | WorkflowClientInterceptor[];
+    let workflow:
+      | WorkflowClientInterceptors
+      | WorkflowClientInterceptor[]
+      | undefined;
 
     if (Array.isArray(existing)) {
-      // Array form: append our interceptor
       workflow = [
         ...(existing as WorkflowClientInterceptor[]),
         braintrustInterceptor,
       ];
     } else if (existing) {
-      // Object form: preserve existing factories and append ours
-      const obj = existing as WorkflowClientInterceptors;
-
-      const btFactory: WorkflowClientCallsInterceptorFactory = () =>
-        braintrustInterceptor;
-
+      // existing is an object, use the old calls format
       workflow = {
-        ...obj,
-        calls: [...(obj.calls ?? []), btFactory],
+        ...existing,
+        calls: [...(existing.calls ?? []), () => braintrustInterceptor],
       };
     } else {
-      // No existing: create object form with our factory
-      const btFactory: WorkflowClientCallsInterceptorFactory = () =>
-        braintrustInterceptor;
-
-      workflow = { calls: [btFactory] };
+      // keep in new array form
+      workflow = [braintrustInterceptor];
     }
 
     return {
