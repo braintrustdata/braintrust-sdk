@@ -31,6 +31,7 @@ export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
   dev_host: string;
   dev_port: number;
   dev_org_name?: string;
+  runner?: string;
 }
 
 export interface BundleArgs extends CommonArgs, AuthArgs, CompileArgs {

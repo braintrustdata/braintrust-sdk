@@ -9,7 +9,7 @@ import type { ReporterDef } from "../../reporters/types";
 import { EvaluatorDef, EvalResultWithSummary } from "../../framework";
 import { isEmpty } from "../../util";
 
-function formatExperimentSummaryFancy(summary: ExperimentSummary) {
+export function formatExperimentSummaryFancy(summary: ExperimentSummary) {
   let comparisonLine = "";
   if (summary.comparisonExperimentName) {
     comparisonLine = `${summary.comparisonExperimentName} ${chalk.gray("(baseline)")} ← ${summary.experimentName} ${chalk.gray("(comparison)")}\n\n`;

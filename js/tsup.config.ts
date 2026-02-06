@@ -39,6 +39,15 @@ export default defineConfig([
     clean: false,
   },
   {
+    entry: { "eval-runner": "src/cli/eval-runner.ts" },
+    format: ["cjs"],
+    outDir: "dist",
+    external: ["zod"],
+    // Eval runner doesn't need DTS
+    dts: false,
+    clean: false,
+  },
+  {
     entry: ["dev/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dev/dist",

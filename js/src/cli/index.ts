@@ -11,6 +11,7 @@ import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
+import { spawn, type ChildProcess } from "child_process";
 import {
   login,
   init as _initExperiment,
@@ -56,6 +57,15 @@ import { bundleCommand } from "./util/bundle";
 import { RunArgs } from "./util/types";
 import { pullCommand } from "./util/pull";
 import { runDevServer } from "../../dev/server";
+import {
+  buildSseSocketPath,
+  createSseServer,
+  resolveRuntime,
+  type SseEvent,
+  type EvalProgressData,
+  type ExperimentSummaryEvent,
+} from "./util/sse";
+import { formatExperimentSummaryFancy } from "./reporters/eval";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -860,6 +870,347 @@ export async function initializeHandles({
   return handles;
 }
 
+// ---------------------------------------------------------------------------
+// Two-process eval runner (new architecture)
+// ---------------------------------------------------------------------------
+
+function getEvalRunnerPath(): string {
+  // The eval-runner is bundled alongside the CLI at dist/eval-runner.js
+  return path.resolve(__dirname, "eval-runner.js");
+}
+
+function buildRunnerEnv(args: RunArgs): Record<string, string> {
+  const env: Record<string, string> = {};
+  if (args.api_key) {
+    env.BRAINTRUST_API_KEY = args.api_key;
+  }
+  if (args.app_url) {
+    env.BRAINTRUST_API_URL = args.app_url;
+  }
+  if (args.org_name) {
+    env.BRAINTRUST_ORG_NAME = args.org_name;
+  }
+  if (args.no_send_logs) {
+    env.BT_EVAL_NO_SEND_LOGS = "1";
+    env.BT_EVAL_LOCAL = "1";
+  }
+  if (args.filter && args.filter.length > 0) {
+    env.BT_EVAL_FILTERS = JSON.stringify(args.filter);
+  }
+  if (args.list) {
+    env.BT_EVAL_LIST = "1";
+  }
+  if (args.dev) {
+    env.BT_EVAL_DEV = "1";
+    env.BT_EVAL_DEV_HOST = args.dev_host || "localhost";
+    env.BT_EVAL_DEV_PORT = String(args.dev_port || 8300);
+    if (args.dev_org_name) {
+      env.BT_EVAL_DEV_ORG_NAME = args.dev_org_name;
+    }
+  }
+  return env;
+}
+
+function resolveEvalFiles(inputFiles: string[]): string[] {
+  const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
+  const resolved: string[] = [];
+
+  for (const inputPath of inputPaths) {
+    const absPath = path.resolve(inputPath);
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(absPath);
+    } catch {
+      console.warn(warning(`Cannot read ${inputPath}, skipping...`));
+      continue;
+    }
+
+    if (!stat.isDirectory()) {
+      resolved.push(absPath);
+    } else {
+      // Walk the directory for *.eval.{ts,tsx,js,jsx} files
+      const walked = fsWalk.walkSync(absPath, {
+        deepFilter: (entry) => checkMatch(entry.path, null, EXCLUDE),
+        entryFilter: (entry) =>
+          entry.dirent.isFile() &&
+          checkMatch(entry.path, INCLUDE_EVAL, EXCLUDE),
+      });
+      for (const entry of walked) {
+        resolved.push(entry.path);
+      }
+    }
+  }
+
+  return resolved;
+}
+
+function spawnEvalRunner(
+  args: RunArgs,
+  socketPath: string,
+  evalFiles: string[],
+): ChildProcess {
+  const evalRunnerPath = getEvalRunnerPath();
+  const { command, prefixArgs } = resolveRuntime(args.runner);
+
+  const childArgs = [...prefixArgs, evalRunnerPath, ...evalFiles];
+
+  const childEnv = {
+    ...process.env,
+    ...buildRunnerEnv(args),
+    BT_EVAL_SSE_SOCK: socketPath,
+  };
+
+  const child = spawn(command, childArgs, {
+    env: childEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(),
+  });
+
+  return child;
+}
+
+async function runWithRunner(args: RunArgs): Promise<boolean> {
+  const evalFiles = resolveEvalFiles(args.files);
+  if (evalFiles.length === 0) {
+    console.warn(
+      warning("No eval files were found in any of the provided paths."),
+    );
+    return true;
+  }
+
+  const socketPath = buildSseSocketPath();
+
+  // Clean up any leftover socket
+  try {
+    fs.unlinkSync(socketPath);
+  } catch {
+    // Ignore
+  }
+
+  const progressReporter: ProgressReporter = args.no_progress_bars
+    ? new SimpleProgressReporter()
+    : new BarProgressReporter();
+
+  let success = true;
+  let receivedDone = false;
+
+  return new Promise<boolean>((resolve) => {
+    const sseServer = createSseServer(socketPath, (event: SseEvent) => {
+      switch (event.type) {
+        case "start": {
+          const summary = event.data;
+          const linkText = summary.experimentUrl
+            ? terminalLink(summary.experimentUrl, summary.experimentUrl, {
+                fallback: (_text: string, url: string) => url,
+              })
+            : "locally";
+          console.error(
+            chalk.cyan("▶") +
+              ` Experiment ${chalk.bold(summary.experimentName)} is running at ${linkText}`,
+          );
+          break;
+        }
+        case "progress": {
+          handleProgress(event.data, progressReporter);
+          break;
+        }
+        case "summary": {
+          const summary = event.data;
+          if (args.jsonl) {
+            process.stdout.write(JSON.stringify(summary));
+            process.stdout.write("\n");
+          } else {
+            const formatted = formatExperimentSummaryFancy(
+              summary as Parameters<typeof formatExperimentSummaryFancy>[0],
+            );
+            process.stdout.write(formatted);
+            process.stdout.write("\n");
+          }
+          break;
+        }
+        case "console": {
+          if (event.data.stream === "stderr") {
+            console.error(event.data.message);
+          } else {
+            console.log(event.data.message);
+          }
+          break;
+        }
+        case "error": {
+          success = false;
+          console.error(chalk.red(event.data.message));
+          if (args.verbose && event.data.stack) {
+            for (const line of event.data.stack.split("\n")) {
+              console.error(chalk.gray(line));
+            }
+          }
+          if (event.data.message.includes("Please specify an api key")) {
+            console.error(
+              chalk.gray(
+                "Hint: pass --api-key or set BRAINTRUST_API_KEY, or use --no-send-logs for local evals.",
+              ),
+            );
+          }
+          break;
+        }
+        case "list": {
+          console.log(event.data.name);
+          break;
+        }
+        case "dev-ready": {
+          console.error(
+            chalk.cyan("▶") +
+              ` Dev server is running at http://${event.data.host}:${event.data.port}`,
+          );
+          break;
+        }
+        case "done": {
+          receivedDone = true;
+          progressReporter.stop();
+          break;
+        }
+      }
+    });
+
+    const child = spawnEvalRunner(args, socketPath, evalFiles);
+
+    // Forward child stdout/stderr (for console.log/error from user code not going through SSE)
+    child.stdout?.on("data", (data: Buffer) => {
+      process.stderr.write(data);
+    });
+    child.stderr?.on("data", (data: Buffer) => {
+      process.stderr.write(data);
+    });
+
+    child.on("close", (code) => {
+      // Give a small delay for any final SSE events to arrive
+      setTimeout(() => {
+        progressReporter.stop();
+        sseServer.close();
+        if (code !== 0 && code !== null) {
+          success = false;
+        }
+        resolve(success);
+      }, 100);
+    });
+
+    child.on("error", (err) => {
+      console.error(chalk.red(`Failed to start eval runner: ${err.message}`));
+      progressReporter.stop();
+      sseServer.close();
+      resolve(false);
+    });
+  });
+}
+
+function handleProgress(
+  data: { id: string; name: string; data: string },
+  progressReporter: ProgressReporter,
+) {
+  let payload: EvalProgressData;
+  try {
+    payload = JSON.parse(data.data);
+  } catch {
+    return;
+  }
+  if (payload.type !== "eval_progress") {
+    return;
+  }
+  switch (payload.kind) {
+    case "start":
+      progressReporter.start(data.name, payload.total ?? 0);
+      break;
+    case "increment":
+      progressReporter.increment(data.name);
+      break;
+    case "set_total":
+      if (progressReporter.setTotal && payload.total !== undefined) {
+        progressReporter.setTotal(data.name, payload.total);
+      }
+      break;
+    case "stop":
+      // The global stop is called when "done" event arrives
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Watch mode (file watcher + runner re-spawn)
+// ---------------------------------------------------------------------------
+
+async function runWithWatch(args: RunArgs): Promise<never> {
+  const evalFiles = resolveEvalFiles(args.files);
+  if (evalFiles.length === 0) {
+    console.warn(
+      warning("No eval files were found in any of the provided paths."),
+    );
+    process.exit(0);
+  }
+
+  // Determine directories to watch
+  const watchDirs = new Set<string>();
+  for (const file of evalFiles) {
+    watchDirs.add(path.dirname(file));
+  }
+
+  console.error(`Watching ${pluralize("file", evalFiles.length, true)}...`);
+
+  // Run once first
+  await runWithRunner(args);
+
+  // Set up watchers
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const watchers: fs.FSWatcher[] = [];
+
+  for (const dir of watchDirs) {
+    try {
+      const watcher = fs.watch(
+        dir,
+        { recursive: false },
+        (_eventType, filename) => {
+          if (!filename) return;
+          const fullPath = path.join(dir, filename);
+          if (!evalFiles.includes(fullPath)) return;
+
+          // Debounce: re-run after 300ms of no changes
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(async () => {
+            console.error(
+              chalk.dim(`\nFile changed: ${filename}. Re-running...`),
+            );
+            await runWithRunner(args);
+          }, 300);
+        },
+      );
+      watchers.push(watcher);
+    } catch {
+      // Ignore watch errors for individual dirs
+    }
+  }
+
+  // Clean up on exit
+  const cleanup = () => {
+    console.error("Stopped watching.");
+    for (const w of watchers) {
+      w.close();
+    }
+    process.exit(0);
+  };
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+
+  // Wait forever
+  await new Promise(() => {});
+  // TypeScript: this line is unreachable but satisfies the return type
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// run() — main entry point for `braintrust eval`
+// ---------------------------------------------------------------------------
+
 async function run(args: RunArgs) {
   // Load the environment variables from the .env files using the same rules as Next.js
   loadEnvConfig(process.cwd(), true);
@@ -873,6 +1224,33 @@ async function run(args: RunArgs) {
     }
   }
 
+  // If --bundle or --push is specified, we still need the esbuild-based path
+  // because bundling requires esbuild to produce minified output for upload.
+  if (args.bundle || args.push) {
+    return runWithEsbuild(args);
+  }
+
+  if (args.list && args.watch) {
+    console.error(error("Cannot specify both --list and --watch."));
+    process.exit(1);
+  }
+
+  if (args.watch) {
+    await runWithWatch(args);
+    return;
+  }
+
+  const success = await runWithRunner(args);
+  if (!success) {
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy esbuild-based eval (only used for --bundle/--push)
+// ---------------------------------------------------------------------------
+
+async function runWithEsbuild(args: RunArgs) {
   const evaluatorOpts: EvaluatorOpts = {
     verbose: args.verbose,
     apiKey: args.api_key,
@@ -882,48 +1260,22 @@ async function run(args: RunArgs) {
     bundle: !!args.bundle || !!args.push,
     setCurrent: !!args.push,
     terminateOnFailure: !!args.terminate_on_failure,
-    watch: !!args.watch,
+    watch: false,
     jsonl: args.jsonl,
     progressReporter: args.no_progress_bars
       ? new SimpleProgressReporter()
       : new BarProgressReporter(),
     filters: args.filter ? parseFilters(args.filter) : [],
-    list: !!args.list,
+    list: false,
   };
-
-  if (args.list && args.watch) {
-    console.error(error("Cannot specify both --list and --watch."));
-    process.exit(1);
-  }
-
-  const plugins = evaluatorOpts.watch
-    ? [
-        (fileName: string) =>
-          buildWatchPluginForEvaluator(fileName, evaluatorOpts),
-      ]
-    : [];
 
   const handles = await initializeHandles({
     files: args.files,
     mode: "eval",
     tsconfig: args.tsconfig,
-    plugins,
+    plugins: [],
     externalPackages: args.external_packages,
   });
-
-  if (args.dev) {
-    // XXX We should watch these files (or support a --watch flag).
-    const { evaluators } = await buildEvaluators(handles, evaluatorOpts);
-    const allEvaluators = Object.values(evaluators.evaluators).map(
-      (e) => e.evaluator,
-    );
-    runDevServer(allEvaluators, {
-      host: args.dev_host,
-      port: args.dev_port,
-      orgName: args.dev_org_name,
-    });
-    return;
-  }
 
   let success = true;
   try {
@@ -934,19 +1286,8 @@ async function run(args: RunArgs) {
         appUrl: args.app_url,
       });
     }
-
-    if (args.watch) {
-      await runAndWatch({
-        handles,
-        onExit: () => {
-          evaluatorOpts.progressReporter.stop();
-        },
-      });
-    } else {
-      success = await runOnce(handles, evaluatorOpts);
-    }
+    success = await runOnce(handles, evaluatorOpts);
   } finally {
-    // ESBuild can freeze up if you do not clean up the handles properly
     for (const handle of Object.values(handles)) {
       await handle.destroy();
     }
@@ -1061,6 +1402,10 @@ async function main() {
   });
   parser_run.add_argument("--dev-org-name", {
     help: "Only allow users that belong this to this org name to run remote evals.",
+    type: String,
+  });
+  parser_run.add_argument("--runner", {
+    help: "JS eval runner binary (e.g. tsx, bun, ts-node). Defaults to tsx if available.",
     type: String,
   });
   parser_run.set_defaults({ func: run });
