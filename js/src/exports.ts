@@ -38,9 +38,9 @@ export type {
   Span,
   StartSpanArgs,
   WithTransactionId,
-  SandboxConfig,
-  RegisterSandboxOptions,
-  RegisterSandboxResult,
+  ExperimentalSandboxConfig,
+  ExperimentalRegisterSandboxOptions,
+  ExperimentalRegisterSandboxResult,
 } from "./logger";
 
 export {
