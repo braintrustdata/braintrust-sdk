@@ -41,6 +41,7 @@ Auto-generated file -- do not modify.
             "--use-field-description",
             "--strict-nullable",
             "--parent-scoped-naming",
+            "--no-use-closed-typed-dict",
         ],
         stdout=sys.stderr,
         check=True,

@@ -312,16 +312,25 @@ class ChatCompletionWrapper:
 
                 # pylint: disable=unsubscriptable-object
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
+                    function_arg = tool_delta.get("function", {})
                     tool_calls = (tool_calls or []) + [
                         {
-                            "id": delta["tool_calls"][0]["id"],
-                            "type": delta["tool_calls"][0]["type"],
-                            "function": delta["tool_calls"][0]["function"],
+                            "id": tool_delta.get("id"),
+                            "type": tool_delta.get("type"),
+                            "function": {
+                                "name": function_arg.get("name"),
+                                "arguments": function_arg.get("arguments") or "",
+                            },
                         }
                     ]
                 else:
                     # pylint: disable=unsubscriptable-object
-                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+                    # append to existing tool call
+                    function_arg = tool_delta.get("function", {})
+                    args = function_arg.get("arguments") or ""
+                    if isinstance(args, str):
+                        # pylint: disable=unsubscriptable-object
+                        tool_calls[-1]["function"]["arguments"] += args
 
         return {
             "metrics": metrics,
@@ -786,7 +795,7 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
     def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return ResponseWrapper(self.__responses.parse, None, "openai.responses.parse").create(*args, **kwargs)
+        return ResponseWrapper(self.__responses.with_raw_response.parse, None, "openai.responses.parse").create(*args, **kwargs)
 
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
@@ -799,7 +808,7 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         return AsyncResponseWrapper(response)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        response = await ResponseWrapper(None, self.__responses.parse, "openai.responses.parse").acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.with_raw_response.parse, "openai.responses.parse").acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

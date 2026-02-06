@@ -23,7 +23,7 @@ from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel, Ope
 
 setup_pydantic_ai(project_name="golden-py-pydantic_ai")
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 # Test 1: Basic completion
@@ -306,9 +306,7 @@ async def test_streaming():
         async def _stream_single() -> AsyncIterator[LLMStreamResponse]:
             """Async generator that yields streaming chunks and final response."""
             model_stream = OpenAIChatModel("gpt-4o-mini")
-            messages_stream: list[ModelMessage] = [
-                ModelRequest(parts=[UserPromptPart(content=IDENTICAL_PROMPT)])
-            ]
+            messages_stream: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content=IDENTICAL_PROMPT)])]
 
             async with model_request_stream(
                 model=model_stream, messages=messages_stream, model_settings=IDENTICAL_SETTINGS

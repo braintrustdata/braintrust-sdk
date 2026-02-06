@@ -12,6 +12,7 @@
   },
   "imports": {
     "@vercel/functions": "npm:@vercel/functions@^3.3.0",
+    "ajv": "npm:ajv@^8.17.1",
     "eventsource-parser": "npm:eventsource-parser@^3.0.6",
     "mustache": "npm:mustache@^4.2.0",
     "uuid": "npm:uuid@^13.0.0",

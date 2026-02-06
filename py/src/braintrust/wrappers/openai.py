@@ -11,11 +11,11 @@ from braintrust.logger import NOOP_SPAN
 
 
 def _span_type(span: tracing.Span[Any]) -> braintrust.SpanTypeAttribute:
-    if span.span_data.type in ["agent", "handoff", "custom"]:
+    if span.span_data.type in ["agent", "handoff", "custom", "speech_group"]:
         return braintrust.SpanTypeAttribute.TASK
-    elif span.span_data.type in ["function", "guardrail"]:
+    elif span.span_data.type in ["function", "guardrail", "mcp_tools"]:
         return braintrust.SpanTypeAttribute.TOOL
-    elif span.span_data.type in ["generation", "response"]:
+    elif span.span_data.type in ["generation", "response", "transcription", "speech"]:
         return braintrust.SpanTypeAttribute.LLM
     else:
         return braintrust.SpanTypeAttribute.TASK
@@ -36,6 +36,16 @@ def _span_name(span: tracing.Span[Any]) -> str:
         return "Response"
     elif isinstance(span.span_data, tracing.HandoffSpanData):
         return "Handoff"
+    elif isinstance(span.span_data, tracing.MCPListToolsSpanData):
+        if span.span_data.server:
+            return f"List Tools ({span.span_data.server})"
+        return "MCP List Tools"
+    elif isinstance(span.span_data, tracing.TranscriptionSpanData):
+        return "Transcription"
+    elif isinstance(span.span_data, tracing.SpeechSpanData):
+        return "Speech"
+    elif isinstance(span.span_data, tracing.SpeechGroupSpanData):
+        return "Speech Group"
     else:
         return "Unknown"
 
@@ -202,6 +212,39 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     def _custom_log_data(self, span: tracing.Span[tracing.CustomSpanData]) -> dict[str, Any]:
         return span.span_data.data
 
+    def _mcp_list_tools_log_data(self, span: tracing.Span[tracing.MCPListToolsSpanData]) -> dict[str, Any]:
+        return {
+            "output": span.span_data.result,
+            "metadata": {
+                "server": span.span_data.server,
+            }
+        }
+
+    def _transcription_log_data(self, span: tracing.Span[tracing.TranscriptionSpanData]) -> dict[str, Any]:
+        return {
+            "input": span.span_data.input,
+            "output": span.span_data.output,
+            "metadata": {
+                "model": span.span_data.model,
+                "model_config": span.span_data.model_config,
+            }
+        }
+
+    def _speech_log_data(self, span: tracing.Span[tracing.SpeechSpanData]) -> dict[str, Any]:
+        return {
+            "input": span.span_data.input,
+            "output": span.span_data.output,
+            "metadata": {
+                "model": span.span_data.model,
+                "model_config": span.span_data.model_config,
+            }
+        }
+
+    def _speech_group_log_data(self, span: tracing.Span[tracing.SpeechGroupSpanData]) -> dict[str, Any]:
+        return {
+            "input": span.span_data.input,
+        }
+
     def _log_data(self, span: tracing.Span[Any]) -> dict[str, Any]:
         if isinstance(span.span_data, tracing.AgentSpanData):
             return self._agent_log_data(span)
@@ -217,6 +260,14 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             return self._generation_log_data(span)
         elif isinstance(span.span_data, tracing.CustomSpanData):
             return self._custom_log_data(span)
+        elif isinstance(span.span_data, tracing.MCPListToolsSpanData):
+            return self._mcp_list_tools_log_data(span)
+        elif isinstance(span.span_data, tracing.TranscriptionSpanData):
+            return self._transcription_log_data(span)
+        elif isinstance(span.span_data, tracing.SpeechSpanData):
+            return self._speech_log_data(span)
+        elif isinstance(span.span_data, tracing.SpeechGroupSpanData):
+            return self._speech_group_log_data(span)
         else:
             return {}
 
