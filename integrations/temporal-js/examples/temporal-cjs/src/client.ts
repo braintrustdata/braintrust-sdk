@@ -14,14 +14,11 @@ async function main() {
     address: "localhost:7233",
   });
 
-  // Configure client with Braintrust plugin to propagate span context
-  const plugin = new BraintrustTemporalPlugin();
-  const clientOptions = plugin.configureClient({
+  const client = new Client({
     connection,
     namespace: "default",
+    plugins: [new BraintrustTemporalPlugin()],
   });
-
-  const client = new Client(clientOptions);
 
   const inputData: TaskInput = { value: 5 };
   const workflowId = `simple-workflow-${uuid().slice(0, 8)}`;

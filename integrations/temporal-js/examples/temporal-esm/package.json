@@ -12,7 +12,7 @@
     "start:proc": "mise run server"
   },
   "dependencies": {
-    "@braintrust/temporal": "file:../../braintrust-temporal-0.1.0.tgz",
+    "@braintrust/temporal": "0.1.1-rc.0",
     "@temporalio/activity": "^1.11.0",
     "@temporalio/client": "^1.11.0",
     "@temporalio/common": "^1.11.0",

@@ -143,6 +143,7 @@ export {
 
 export {
   wrapAISDK,
+  wrapAISDKProvider,
   wrapAgentClass,
   BraintrustMiddleware,
   wrapAISDKModel,

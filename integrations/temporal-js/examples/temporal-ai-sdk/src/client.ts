@@ -17,7 +17,6 @@ async function run() {
     address: "localhost:7233",
   });
 
-  // Configure the client with Braintrust plugin
   const client = new Client({
     connection,
     namespace: "default",

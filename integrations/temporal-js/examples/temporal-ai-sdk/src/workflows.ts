@@ -10,7 +10,9 @@ const { getWeather } = proxyActivities<typeof activities>({
   startToCloseTimeout: "1 minute",
 });
 
-const { generateTextTraced } = proxyActivities<typeof activities>({
+const { generateTextTraced, generateTextWithToolsTraced } = proxyActivities<
+  typeof activities
+>({
   startToCloseTimeout: "1 minute",
 });
 
@@ -58,11 +60,19 @@ export async function toolsAgent(prompt: string): Promise<string> {
   return text;
 }
 
-// tracing full llm with wrapAISDK in the activity implementation
+// Tracing full llm with wrapAISDK in the activity implementation
 export async function haikuAgentTraced(topic: string): Promise<string> {
   return await generateTextTraced({
     modelId: "gpt-4o-mini",
     system: "You only respond in haikus",
     prompt: `Write a haiku about ${topic}`,
+  });
+}
+
+// Tracing Tools Agent with full LLM + tool tracing via wrapAISDK
+export async function toolsAgentTraced(prompt: string): Promise<string> {
+  return await generateTextWithToolsTraced({
+    modelId: "gpt-4o-mini",
+    prompt,
   });
 }

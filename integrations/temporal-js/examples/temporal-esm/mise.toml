@@ -10,11 +10,11 @@ temporal = "latest"
 mise = "latest"
 
 [hooks]
-postinstall = "mise run install"
+postinstall = "true"
 
 [tasks.install]
-description = "Install dependencies (workspace-aware)"
-run = "pnpm install"
+description = "Install dependencies"
+run = "pnpm install --ignore-workspace"
 
 [tasks.reinstall]
 description = "Prepare pnpm, reinstall deps, build integration and start server+worker for testing"

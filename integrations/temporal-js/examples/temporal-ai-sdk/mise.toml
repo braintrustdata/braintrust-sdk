@@ -10,22 +10,11 @@ temporal = "latest"
 mise = "latest"
 
 [hooks]
-postinstall = "mise run install"
+postinstall = "true"
 
 [tasks.install]
-description = "Install dependencies (workspace-aware)"
-run = "pnpm install"
-
-[tasks.reinstall]
-description = "Prepare pnpm, reinstall deps, build integration and start server+worker for testing"
-run = '''
-corepack enable
-corepack prepare pnpm@10 --activate
-pnpm install
-pnpm run build:integration
-temporal server start-dev & sleep 1
-pnpm run worker
-'''
+description = "Install dependencies"
+run = "pnpm install --ignore-workspace"
 
 [tasks.server]
 description = "Build integration, run temporal server and a worker (use multiple terminals to run more workers)"

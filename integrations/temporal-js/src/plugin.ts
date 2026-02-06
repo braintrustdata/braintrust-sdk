@@ -3,7 +3,6 @@ import type {
   ClientOptions,
   WorkflowClientInterceptor,
   WorkflowClientInterceptors,
-  WorkflowClientCallsInterceptorFactory,
 } from "@temporalio/client";
 import type { WorkerPlugin, WorkerOptions } from "@temporalio/worker";
 import {
@@ -94,40 +93,27 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
 
   /**
    * Configure the Temporal Worker with Braintrust interceptors and sinks.
-   * Adds the activity interceptor for creating spans, the sinks for workflow spans,
-   * and the workflow interceptor modules for bundling.
+   * Prepends interceptors to ensure they run first, making plugin order irrelevant.
    */
   configureWorker(options: WorkerOptions): WorkerOptions {
-    const existingActivityInterceptors = options.interceptors?.activity ?? [];
-    const existingWorkflowModules = options.interceptors?.workflowModules ?? [];
-    const existingSinks = options.sinks ?? {};
-
-    const braintrustSinks = createBraintrustSinks();
-
-    const workflowModules = [
-      ...existingWorkflowModules,
-      WORKFLOW_INTERCEPTORS_SPEC,
-    ];
-
-    const activityFactories = [
-      ...existingActivityInterceptors,
-      createBraintrustActivityInterceptor,
-    ];
-
-    const result: WorkerOptions = {
+    return {
       ...options,
       interceptors: {
         ...options.interceptors,
-        activity: activityFactories,
-        workflowModules,
+        activity: [
+          createBraintrustActivityInterceptor,
+          ...(options.interceptors?.activity ?? []),
+        ],
+        workflowModules: [
+          WORKFLOW_INTERCEPTORS_SPEC,
+          ...(options.interceptors?.workflowModules ?? []),
+        ],
       },
       sinks: {
-        ...existingSinks,
-        ...braintrustSinks,
+        ...createBraintrustSinks(),
+        ...(options.sinks ?? {}),
       },
     };
-
-    return result;
   }
 }
 
