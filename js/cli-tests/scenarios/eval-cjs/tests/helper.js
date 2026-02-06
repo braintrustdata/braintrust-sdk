@@ -1,6 +1,6 @@
 // Helper module for testing dynamic imports in CJS
-// This gets bundled by esbuild and imported dynamically
+// This is imported dynamically via import()
 
-export default {
+module.exports = {
   prefix: "Result: ",
 };

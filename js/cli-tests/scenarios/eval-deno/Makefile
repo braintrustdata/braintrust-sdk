@@ -43,7 +43,7 @@ _run-test: setup
 		COUNT=$$((COUNT + 1)); \
 		TEST_NAME=$$(basename "$$test" .eval.ts); \
 		echo "  [$$COUNT/$$TOTAL] Testing $$TEST_NAME..."; \
-		if mise exec -- deno run --allow-env --allow-read --allow-write --allow-net --allow-run "$$test" 2>&1 | grep -qE "(Experiment summary|View results)"; then \
+		if mise exec -- deno run --allow-all "$$test" 2>&1 | grep -qE "(Experiment summary|View results)"; then \
 			echo "    ✓ Passed"; \
 		else \
 			echo "    ✗ Failed"; \
