@@ -16,6 +16,7 @@
     "**/examples/**",
     "node_modules/**",
     "**/smoke/**",
+    "cli-tests/**",
     "scripts/**",
     "vendor/**",
     "eslint.config.ts",
