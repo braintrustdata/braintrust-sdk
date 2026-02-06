@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 2c2f2c4a0672715898256f3fdadb18d51e7c1ae2) -- do not modify
+// Auto-generated file (internal git SHA 334b101df89335085db5715ef6710c2902f7bee5) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -691,6 +691,15 @@ export const EnvVar = z.object({
     .default("env_var"),
 });
 export type EnvVarType = z.infer<typeof EnvVar>;
+export const EvalParametersJsonSchema = z.object({
+  type: z.literal("object"),
+  properties: z.record(z.object({}).partial().passthrough()),
+  required: z.array(z.string()).optional(),
+  additionalProperties: z.boolean().optional(),
+});
+export type EvalParametersJsonSchemaType = z.infer<
+  typeof EvalParametersJsonSchema
+>;
 export const EvalStatusPageTheme = z.enum(["light", "dark"]);
 export type EvalStatusPageThemeType = z.infer<typeof EvalStatusPageTheme>;
 export const EvalStatusPageConfig = z
@@ -718,6 +727,210 @@ export const EvalStatusPage = z.object({
   config: EvalStatusPageConfig,
 });
 export type EvalStatusPageType = z.infer<typeof EvalStatusPage>;
+export const ParametersSource = z.object({
+  parametersId: z.string().optional(),
+  slug: z.string(),
+  name: z.string(),
+  projectId: z.string().optional(),
+  version: z.string().optional(),
+});
+export type ParametersSourceType = z.infer<typeof ParametersSource>;
+export const ParametersContainer = z.object({
+  type: z.literal("braintrust.parameters"),
+  schema: EvalParametersJsonSchema,
+  source: ParametersSource,
+});
+export type ParametersContainerType = z.infer<typeof ParametersContainer>;
+export const PromptBlockDataNullish = z.union([
+  z.object({
+    type: z.literal("chat"),
+    messages: z.array(ChatCompletionMessageParam),
+    tools: z.string().optional(),
+  }),
+  z.object({ type: z.literal("completion"), content: z.string() }),
+  z.null(),
+]);
+export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
+export const ModelParams = z.union([
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+      temperature: z.number(),
+      top_p: z.number(),
+      max_tokens: z.number(),
+      max_completion_tokens: z.number(),
+      frequency_penalty: z.number(),
+      presence_penalty: z.number(),
+      response_format: ResponseFormatNullish,
+      tool_choice: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.literal("required"),
+        z.object({
+          type: z.literal("function"),
+          function: z.object({ name: z.string() }),
+        }),
+      ]),
+      function_call: z.union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.object({ name: z.string() }),
+      ]),
+      n: z.number(),
+      stop: z.array(z.string()),
+      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
+      verbosity: z.enum(["low", "medium", "high"]),
+    })
+    .partial()
+    .passthrough(),
+  z
+    .object({
+      use_cache: z.boolean().optional(),
+      reasoning_enabled: z.boolean().optional(),
+      reasoning_budget: z.number().optional(),
+      max_tokens: z.number(),
+      temperature: z.number(),
+      top_p: z.number().optional(),
+      top_k: z.number().optional(),
+      stop_sequences: z.array(z.string()).optional(),
+      max_tokens_to_sample: z.number().optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+      temperature: z.number(),
+      maxOutputTokens: z.number(),
+      topP: z.number(),
+      topK: z.number(),
+    })
+    .partial()
+    .passthrough(),
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+      temperature: z.number(),
+      topK: z.number(),
+    })
+    .partial()
+    .passthrough(),
+  z
+    .object({
+      use_cache: z.boolean(),
+      reasoning_enabled: z.boolean(),
+      reasoning_budget: z.number(),
+    })
+    .partial()
+    .passthrough(),
+]);
+export type ModelParamsType = z.infer<typeof ModelParams>;
+export const PromptOptionsNullish = z.union([
+  z
+    .object({ model: z.string(), params: ModelParams, position: z.string() })
+    .partial(),
+  z.null(),
+]);
+export type PromptOptionsNullishType = z.infer<typeof PromptOptionsNullish>;
+export const PromptParserNullish = z.union([
+  z.object({
+    type: z.literal("llm_classifier"),
+    use_cot: z.boolean(),
+    choice_scores: z.record(z.number().gte(0).lte(1)).optional(),
+    choice: z.array(z.string()).optional(),
+    allow_no_match: z.boolean().optional(),
+  }),
+  z.null(),
+]);
+export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
+export const PromptData = z
+  .object({
+    prompt: PromptBlockDataNullish,
+    options: PromptOptionsNullish,
+    parser: PromptParserNullish,
+    tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
+    template_format: z.union([
+      z.enum(["mustache", "nunjucks", "none"]),
+      z.null(),
+    ]),
+    mcp: z.union([
+      z.record(
+        z.union([
+          z.object({
+            type: z.literal("id"),
+            id: z.string().uuid(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+          z.object({
+            type: z.literal("url"),
+            url: z.string(),
+            is_disabled: z.boolean().optional(),
+            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
+          }),
+        ]),
+      ),
+      z.null(),
+    ]),
+    origin: z.union([
+      z
+        .object({
+          prompt_id: z.string(),
+          project_id: z.string(),
+          prompt_version: z.string(),
+        })
+        .partial(),
+      z.null(),
+    ]),
+  })
+  .partial();
+export type PromptDataType = z.infer<typeof PromptData>;
+export const StaticParameters = z.record(
+  z.union([
+    z.object({
+      type: z.literal("prompt"),
+      default: PromptData.optional(),
+      description: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal("data"),
+      schema: z.object({}).partial().passthrough(),
+      default: z.unknown().optional(),
+      description: z.string().optional(),
+    }),
+  ]),
+);
+export type StaticParametersType = z.infer<typeof StaticParameters>;
+export const StaticParametersContainer = z.object({
+  type: z.literal("braintrust.staticParameters"),
+  schema: StaticParameters,
+  source: z.null(),
+});
+export type StaticParametersContainerType = z.infer<
+  typeof StaticParametersContainer
+>;
+export const SerializedParametersContainer = z.union([
+  ParametersContainer,
+  StaticParametersContainer,
+  StaticParameters,
+]);
+export type SerializedParametersContainerType = z.infer<
+  typeof SerializedParametersContainer
+>;
+export const EvaluatorDefinition = z
+  .object({
+    parameters: SerializedParametersContainer,
+    scores: z.array(z.object({ name: z.string() })),
+  })
+  .partial();
+export type EvaluatorDefinitionType = z.infer<typeof EvaluatorDefinition>;
+export const EvaluatorDefinitions = z.record(EvaluatorDefinition);
+export type EvaluatorDefinitionsType = z.infer<typeof EvaluatorDefinitions>;
 export const RepoInfo = z.union([
   z
     .object({
@@ -890,113 +1103,6 @@ export const FacetData = z.object({
   no_match_pattern: z.string().optional(),
 });
 export type FacetDataType = z.infer<typeof FacetData>;
-export const PromptBlockDataNullish = z.union([
-  z.object({
-    type: z.literal("chat"),
-    messages: z.array(ChatCompletionMessageParam),
-    tools: z.string().optional(),
-  }),
-  z.object({ type: z.literal("completion"), content: z.string() }),
-  z.null(),
-]);
-export type PromptBlockDataNullishType = z.infer<typeof PromptBlockDataNullish>;
-export const ModelParams = z.union([
-  z
-    .object({
-      use_cache: z.boolean(),
-      reasoning_enabled: z.boolean(),
-      reasoning_budget: z.number(),
-      temperature: z.number(),
-      top_p: z.number(),
-      max_tokens: z.number(),
-      max_completion_tokens: z.number(),
-      frequency_penalty: z.number(),
-      presence_penalty: z.number(),
-      response_format: ResponseFormatNullish,
-      tool_choice: z.union([
-        z.literal("auto"),
-        z.literal("none"),
-        z.literal("required"),
-        z.object({
-          type: z.literal("function"),
-          function: z.object({ name: z.string() }),
-        }),
-      ]),
-      function_call: z.union([
-        z.literal("auto"),
-        z.literal("none"),
-        z.object({ name: z.string() }),
-      ]),
-      n: z.number(),
-      stop: z.array(z.string()),
-      reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
-      verbosity: z.enum(["low", "medium", "high"]),
-    })
-    .partial()
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean().optional(),
-      reasoning_enabled: z.boolean().optional(),
-      reasoning_budget: z.number().optional(),
-      max_tokens: z.number(),
-      temperature: z.number(),
-      top_p: z.number().optional(),
-      top_k: z.number().optional(),
-      stop_sequences: z.array(z.string()).optional(),
-      max_tokens_to_sample: z.number().optional(),
-    })
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean(),
-      reasoning_enabled: z.boolean(),
-      reasoning_budget: z.number(),
-      temperature: z.number(),
-      maxOutputTokens: z.number(),
-      topP: z.number(),
-      topK: z.number(),
-    })
-    .partial()
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean(),
-      reasoning_enabled: z.boolean(),
-      reasoning_budget: z.number(),
-      temperature: z.number(),
-      topK: z.number(),
-    })
-    .partial()
-    .passthrough(),
-  z
-    .object({
-      use_cache: z.boolean(),
-      reasoning_enabled: z.boolean(),
-      reasoning_budget: z.number(),
-    })
-    .partial()
-    .passthrough(),
-]);
-export type ModelParamsType = z.infer<typeof ModelParams>;
-export const PromptOptionsNullish = z.union([
-  z
-    .object({ model: z.string(), params: ModelParams, position: z.string() })
-    .partial(),
-  z.null(),
-]);
-export type PromptOptionsNullishType = z.infer<typeof PromptOptionsNullish>;
-export const PromptParserNullish = z.union([
-  z.object({
-    type: z.literal("llm_classifier"),
-    use_cot: z.boolean(),
-    choice_scores: z.record(z.number().gte(0).lte(1)).optional(),
-    choice: z.array(z.string()).optional(),
-    allow_no_match: z.boolean().optional(),
-  }),
-  z.null(),
-]);
-export type PromptParserNullishType = z.infer<typeof PromptParserNullish>;
 export const PromptDataNullish = z.union([
   z
     .object({
@@ -1152,76 +1258,12 @@ export const GraphData = z.object({
   edges: z.record(GraphEdge),
 });
 export type GraphDataType = z.infer<typeof GraphData>;
-export const PromptData = z
-  .object({
-    prompt: PromptBlockDataNullish,
-    options: PromptOptionsNullish,
-    parser: PromptParserNullish,
-    tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
-    template_format: z.union([
-      z.enum(["mustache", "nunjucks", "none"]),
-      z.null(),
-    ]),
-    mcp: z.union([
-      z.record(
-        z.union([
-          z.object({
-            type: z.literal("id"),
-            id: z.string().uuid(),
-            is_disabled: z.boolean().optional(),
-            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
-          }),
-          z.object({
-            type: z.literal("url"),
-            url: z.string(),
-            is_disabled: z.boolean().optional(),
-            enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
-          }),
-        ]),
-      ),
-      z.null(),
-    ]),
-    origin: z.union([
-      z
-        .object({
-          prompt_id: z.string(),
-          project_id: z.string(),
-          prompt_version: z.string(),
-        })
-        .partial(),
-      z.null(),
-    ]),
-  })
-  .partial();
-export type PromptDataType = z.infer<typeof PromptData>;
 export const SandboxData = z.object({
   type: z.literal("sandbox"),
   provider: z.literal("modal"),
   snapshot_ref: z.string(),
   evalFiles: z.array(z.string()).optional(),
-  evalEntries: z
-    .record(
-      z
-        .object({
-          parameters: z.record(
-            z.union([
-              z.object({
-                type: z.literal("prompt"),
-                default: PromptData.optional(),
-                description: z.string().optional(),
-              }),
-              z.object({
-                type: z.literal("data"),
-                schema: z.object({}).partial().passthrough(),
-                default: z.unknown().optional(),
-                description: z.string().optional(),
-              }),
-            ]),
-          ),
-        })
-        .partial(),
-    )
-    .optional(),
+  evalEntries: EvaluatorDefinitions.optional(),
 });
 export type SandboxDataType = z.infer<typeof SandboxData>;
 export const SandboxTaskData = z.object({

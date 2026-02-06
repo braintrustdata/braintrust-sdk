@@ -549,6 +549,13 @@ class EnvVar(TypedDict):
     """
 
 
+class EvalParametersJsonSchema(TypedDict):
+    type: Literal['object']
+    properties: Mapping[str, Mapping[str, Any]]
+    required: NotRequired[Sequence[str] | None]
+    additionalProperties: NotRequired[bool | None]
+
+
 class EvalStatusPageConfig(TypedDict):
     score_columns: NotRequired[Sequence[str] | None]
     """
@@ -584,6 +591,10 @@ EvalStatusPageTheme: TypeAlias = Literal['light', 'dark']
 """
 The theme for the page
 """
+
+
+class EvaluatorDefinitionScore(TypedDict):
+    name: str
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -1472,6 +1483,14 @@ class Organization(TypedDict):
     image_rendering_mode: NotRequired[ImageRenderingMode | None]
 
 
+class ParametersSource(TypedDict):
+    parametersId: NotRequired[str | None]
+    slug: str
+    name: str
+    projectId: NotRequired[str | None]
+    version: NotRequired[str | None]
+
+
 Permission: TypeAlias = Literal[
     'create', 'read', 'update', 'delete', 'create_acls', 'read_acls', 'update_acls', 'delete_acls'
 ]
@@ -2155,13 +2174,6 @@ class RunEvalMcpAuth(TypedDict):
     """
 
 
-class SandboxDataEvalEntriesParameters1(TypedDict):
-    type: Literal['data']
-    schema: Mapping[str, Any]
-    default: NotRequired[Any | None]
-    description: NotRequired[str | None]
-
-
 class SandboxTaskData(TypedDict):
     type: Literal['sandbox_task']
     function_id: str
@@ -2296,6 +2308,13 @@ class SSEProgressEventData(TypedDict):
     name: str
     event: Literal['reasoning_delta', 'text_delta', 'json_delta', 'error', 'console', 'start', 'done', 'progress']
     data: str
+
+
+class StaticParametersStaticParameters1(TypedDict):
+    type: Literal['data']
+    schema: Mapping[str, Any]
+    default: NotRequired[Any | None]
+    description: NotRequired[str | None]
 
 
 StreamingMode: TypeAlias = Literal['auto', 'parallel', 'json', 'text']
@@ -3046,6 +3065,12 @@ class OnlineScoreConfig(TypedDict):
     """
 
 
+class ParametersContainer(TypedDict):
+    type: Literal['braintrust.parameters']
+    schema: EvalParametersJsonSchema
+    source: ParametersSource
+
+
 class Project(TypedDict):
     id: str
     """
@@ -3536,31 +3561,19 @@ class TaskTask14(TaskTask6, TaskTask7):
 Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
 
 
-class SandboxDataEvalEntriesParameters(TypedDict):
+class StaticParametersStaticParameters(TypedDict):
     type: Literal['prompt']
     default: NotRequired[PromptData | None]
     description: NotRequired[str | None]
 
 
-class SandboxDataEvalEntries(TypedDict):
-    parameters: NotRequired[Mapping[str, SandboxDataEvalEntriesParameters | SandboxDataEvalEntriesParameters1] | None]
+StaticParameters: TypeAlias = Mapping[str, StaticParametersStaticParameters | StaticParametersStaticParameters1]
 
 
-class SandboxData(TypedDict):
-    type: Literal['sandbox']
-    provider: Literal['modal']
-    snapshot_ref: str
-    """
-    sandbox snapshot ref
-    """
-    evalFiles: NotRequired[Sequence[str] | None]
-    """
-    Which eval files should be run in this sandbox
-    """
-    evalEntries: NotRequired[Mapping[str, SandboxDataEvalEntries] | None]
-    """
-    The eval entries available in this sandbox
-    """
+class StaticParametersContainer(TypedDict):
+    type: Literal['braintrust.staticParameters']
+    schema: StaticParameters
+    source: None
 
 
 class View(TypedDict):
@@ -3814,6 +3827,31 @@ class RunEval(TypedDict):
     Optional tags that will be added to the experiment.
     """
     mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
+
+
+SerializedParametersContainer: TypeAlias = ParametersContainer | StaticParametersContainer | StaticParameters
+
+
+class EvaluatorDefinition(TypedDict):
+    parameters: NotRequired[SerializedParametersContainer | None]
+    scores: NotRequired[Sequence[EvaluatorDefinitionScore] | None]
+
+
+EvaluatorDefinitions: TypeAlias = Mapping[str, EvaluatorDefinition]
+
+
+class SandboxData(TypedDict):
+    type: Literal['sandbox']
+    provider: Literal['modal']
+    snapshot_ref: str
+    """
+    sandbox snapshot ref
+    """
+    evalFiles: NotRequired[Sequence[str] | None]
+    """
+    Which eval files should be run in this sandbox
+    """
+    evalEntries: NotRequired[EvaluatorDefinitions | None]
 
 
 FunctionData: TypeAlias = (
