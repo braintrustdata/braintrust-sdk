@@ -17,6 +17,7 @@ setup:
 		exit 1; \
 	fi
 	@cp "$(BRAINTRUST_TAR)" braintrust-latest.tgz
+	@rm -f package-lock.json
 	@echo "==> Installing dependencies"
 	@npm install
 

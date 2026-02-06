@@ -3,5 +3,8 @@
   "private": true,
   "scripts": {
     "braintrust": "braintrust"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
   }
 }
