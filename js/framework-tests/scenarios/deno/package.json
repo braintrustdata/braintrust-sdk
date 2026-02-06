@@ -1,0 +1,8 @@
+{
+  "name": "braintrust-cli-test-eval-deno",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  }
+}

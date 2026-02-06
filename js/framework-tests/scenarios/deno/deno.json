@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "braintrust": "npm:braintrust"
+  },
+  "nodeModulesDir": "auto",
+  "workspace": {
+    "members": []
+  }
+}

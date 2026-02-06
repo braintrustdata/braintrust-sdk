@@ -1,0 +1,14 @@
+{
+  "name": "braintrust-framework-test-tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "tsx": "tsx"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
