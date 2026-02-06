@@ -8,7 +8,7 @@ import * as activities from "./activities.js";
 const TASK_QUEUE = "ai-sdk";
 
 async function main() {
-  braintrust.initLogger({ projectName: "temporal-ai-sdk-example" });
+  braintrust.initLogger({ projectName: "temporal-example" });
 
   const connection = await NativeConnection.connect({
     address: "localhost:7233",

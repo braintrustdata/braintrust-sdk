@@ -9,7 +9,7 @@ async function run() {
   const workflow = args[2] ?? "haiku";
 
   braintrust.initLogger({
-    projectName: "temporal-ai-sdk-example",
+    projectName: "temporal-example",
     apiKey: process.env.BRAINTRUST_API_KEY,
   });
 

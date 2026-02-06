@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "worker": "pnpm exec tsx src/worker.ts",
-    "client": "pnpm exec tsx src/client.ts",
+    "worker": "tsx src/worker.ts",
+    "client": "tsx src/client.ts",
     "build:integration": "cd ../.. && pnpm build",
     "dev": "mise run server",
     "start:proc": "mise run server"
   },
   "dependencies": {
-    "@braintrust/temporal": "workspace:*",
+    "@braintrust/temporal": "file:../../braintrust-temporal-0.1.0.tgz",
     "@temporalio/activity": "^1.11.0",
     "@temporalio/client": "^1.11.0",
     "@temporalio/common": "^1.11.0",
@@ -25,7 +25,8 @@
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "tsx": "^3.12.0"
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^3.12.0",
+    "typescript": "^5.0.0"
   }
 }

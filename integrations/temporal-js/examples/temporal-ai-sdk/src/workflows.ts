@@ -1,10 +1,9 @@
 // Load polyfills required for AI SDK v6 in Temporal workflows
 import "@temporalio/ai-sdk/lib/load-polyfills";
 
-import { generateText, tool } from "ai";
+import { generateText, jsonSchema } from "ai";
 import { temporalProvider } from "@temporalio/ai-sdk";
 import { proxyActivities } from "@temporalio/workflow";
-import { z } from "zod";
 import type * as activities from "./activities";
 
 const { getWeather } = proxyActivities<typeof activities>({
@@ -35,19 +34,25 @@ export async function toolsAgent(prompt: string): Promise<string> {
   const { text } = await generateText({
     model: temporalProvider.languageModel("gpt-4o-mini"),
     tools: {
-      getWeather: tool({
+      getWeather: {
         description: "Get the weather for a location",
-        parameters: z.object({
-          location: z.string().describe("The location to get weather for"),
+        inputSchema: jsonSchema({
+          type: "object",
+          properties: {
+            location: {
+              type: "string",
+              description: "The location to get weather for",
+            },
+          },
+          required: ["location"],
         }),
         // Tools must use Temporal activities for non-deterministic operations
-        execute: async ({ location }) => {
+        execute: async ({ location }: { location: string }) => {
           return await getWeather({ location });
         },
-      }),
+      },
     },
     prompt,
-    maxToolRoundtrips: 5,
   });
 
   return text;

@@ -12,5 +12,5 @@
     "outDir": "dist",
     "declaration": true
   },
-  "include": ["src/**/*", "../temporal-shared/**/*"]
+  "include": ["src/**/*"]
 }

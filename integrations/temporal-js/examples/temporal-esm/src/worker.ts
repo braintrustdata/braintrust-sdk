@@ -8,9 +8,20 @@ const TASK_QUEUE = "braintrust-example-task-queue";
 async function main() {
   braintrust.initLogger({ projectName: "temporal-example" });
 
-  const connection = await NativeConnection.connect({
-    address: "localhost:7233",
-  });
+  // Retry connection in case server is still starting
+  let connection;
+  for (let i = 0; i < 10; i++) {
+    try {
+      connection = await NativeConnection.connect({
+        address: "localhost:7233",
+      });
+      break;
+    } catch (err) {
+      if (i === 9) throw err;
+      console.log(`Waiting for Temporal server... (${i + 1}/10)`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
 
   const worker = await Worker.create({
     connection,
