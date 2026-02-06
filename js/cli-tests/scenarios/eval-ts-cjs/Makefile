@@ -1,7 +1,7 @@
+include ../../common.mk
+
 .PHONY: setup test clean
 
-# Auto-create tarball if not provided
-# Use version from package.json for tarball name
 BRAINTRUST_TAR ?= $(shell \
 	cd ../../.. && \
 	pnpm exec turbo build --filter=braintrust >/dev/null 2>&1 && \
@@ -12,17 +12,23 @@ BRAINTRUST_TAR ?= $(shell \
 
 setup:
 	@echo "==> Setting up eval-ts-cjs scenario"
-	@# Ensure tarball exists
 	@if [ ! -f "$(BRAINTRUST_TAR)" ]; then \
 		echo "Error: Tarball not found at $(BRAINTRUST_TAR)"; \
 		exit 1; \
 	fi
-	@# Copy to well-known path
 	@cp "$(BRAINTRUST_TAR)" braintrust-latest.tgz
 	@echo "==> Installing dependencies"
 	@npm install
 
-test: setup
+ifdef _NEED_SERVER
+test: _start-server
+	@$(_SERVER_TRAP) \
+	$(_MOCK_ENV) $(MAKE) _run-test
+else
+test: _run-test
+endif
+
+_run-test: setup
 	@echo "==> Running eval-ts-cjs CLI tests"
 	@echo ""
 	@FAILED=0; \

@@ -1,3 +1,5 @@
+include ../../common.mk
+
 .PHONY: setup test clean list install-deps
 
 BRAINTRUST_TAR ?= ../../braintrust-latest.tgz
@@ -22,7 +24,15 @@ list:
 	@echo "Available tests:"
 	@find tests -name '*.eval.ts' | sort
 
-test: setup
+ifdef _NEED_SERVER
+test: _start-server
+	@$(_SERVER_TRAP) \
+	$(_MOCK_ENV) $(MAKE) _run-test
+else
+test: _run-test
+endif
+
+_run-test: setup
 	@echo "==> Running eval-deno tests (Deno runtime with npm: imports)"
 	@echo ""
 	@FAILED=0; \

@@ -9,33 +9,50 @@ const url = require("url");
 
 const PORT = process.env.PORT || 8001;
 const HOST = process.env.HOST || "0.0.0.0";
+const BASE_URL = `http://localhost:${PORT}`;
 
 // Mock responses for various endpoints
 const mockResponses = {
   "/api/apikey/login": {
-    token: "mock-token",
-    org_id: "mock-org",
-    org_name: "mock-org",
+    org_info: [
+      {
+        id: "mock-org-id",
+        name: "mock-org",
+        api_url: BASE_URL,
+        proxy_url: BASE_URL,
+        is_universal_api: true,
+        git_metadata: {},
+      },
+    ],
   },
-  "/api/project/register": { id: "mock-project-id", name: "test-project" },
+  "/api/project/register": {
+    project: { id: "mock-project-id", name: "test-project" },
+  },
   "/api/experiment/register": {
-    id: "mock-experiment-id",
-    name: "test-experiment",
+    project: { id: "mock-project-id", name: "test-project" },
+    experiment: {
+      id: "mock-experiment-id",
+      name: "test-experiment",
+      created: new Date().toISOString(),
+    },
   },
-  "/api/dataset/register": { id: "mock-dataset-id", name: "test-dataset" },
+  "/api/dataset/register": {
+    project: { id: "mock-project-id", name: "test-project" },
+    dataset: { id: "mock-dataset-id", name: "test-dataset" },
+  },
   "/api/base_experiment/get_id": { id: "mock-base-experiment-id" },
   "/api/experiment/get": { id: "mock-experiment-id", name: "test-experiment" },
   "/version": { version: "1.0.0", logs3_payload_max_bytes: 6291456 },
   "/logs3": { success: true },
   "/logs3/overflow": {
     method: "PUT",
-    signedUrl: "http://localhost:8001/mock-upload",
+    signedUrl: `${BASE_URL}/mock-upload`,
     key: "mock-overflow-key",
     headers: {},
   },
   "/attachment": {
     id: "mock-attachment-id",
-    url: "http://localhost:8001/mock-attachment",
+    url: `${BASE_URL}/mock-attachment`,
   },
   "/mock-upload": { success: true },
   "/mock-attachment": { content: "mock attachment data" },

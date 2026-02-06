@@ -1,3 +1,5 @@
+include ../../common.mk
+
 .PHONY: setup test clean
 
 BRAINTRUST_TAR ?= $(shell \
@@ -18,7 +20,15 @@ setup:
 	@echo "==> Installing dependencies"
 	@npm install
 
-test: setup
+ifdef _NEED_SERVER
+test: _start-server
+	@$(_SERVER_TRAP) \
+	$(_MOCK_ENV) $(MAKE) _run-test
+else
+test: _run-test
+endif
+
+_run-test: setup
 	@echo "==> Running eval-deno-npm CLI tests"
 	@echo ""
 	@FAILED=0; \

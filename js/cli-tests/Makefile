@@ -1,9 +1,20 @@
 # Auto-discover scenarios with Makefiles
 SCENARIOS := $(shell find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print 2>/dev/null | sed 's|scenarios/||')
 
+include common.mk
+
 .PHONY: test list clean $(SCENARIOS)
 
-test: $(SCENARIOS)
+ifdef _NEED_SERVER
+test: _start-server
+	@$(_SERVER_TRAP) \
+	$(_MOCK_ENV) _BT_SERVER_RUNNING=1 \
+	$(MAKE) _run-scenarios
+else
+test: _run-scenarios
+endif
+
+_run-scenarios: $(SCENARIOS)
 
 list:
 	@echo "Available CLI test scenarios:"
@@ -13,7 +24,7 @@ list:
 		echo "$(SCENARIOS)" | tr ' ' '\n' | sed 's/^/  - /'; \
 	fi
 
-clean:
+clean: _stop-server
 	@for scenario in $(SCENARIOS); do \
 		echo "Cleaning $$scenario..."; \
 		$(MAKE) -C scenarios/$$scenario clean 2>/dev/null || true; \
