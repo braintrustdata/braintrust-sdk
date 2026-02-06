@@ -14,7 +14,28 @@ else
 test: _run-scenarios
 endif
 
-_run-scenarios: $(SCENARIOS)
+_run-scenarios:
+	@FAILED=""; \
+	for scenario in $(SCENARIOS); do \
+		echo ""; \
+		echo "==> Running CLI test scenario: $$scenario"; \
+		echo ""; \
+		if ! $(MAKE) -C scenarios/$$scenario test; then \
+			FAILED="$$FAILED $$scenario"; \
+		fi; \
+	done; \
+	echo ""; \
+	if [ -n "$$FAILED" ]; then \
+		echo "✗ Failed scenarios:$$FAILED"; \
+		exit 1; \
+	fi; \
+	echo "✓ All scenarios passed"
+
+$(SCENARIOS):
+	@echo ""
+	@echo "==> Running CLI test scenario: $@"
+	@echo ""
+	@$(MAKE) -C scenarios/$@ test
 
 list:
 	@echo "Available CLI test scenarios:"
@@ -29,9 +50,3 @@ clean: _stop-server
 		echo "Cleaning $$scenario..."; \
 		$(MAKE) -C scenarios/$$scenario clean 2>/dev/null || true; \
 	done
-
-$(SCENARIOS):
-	@echo ""
-	@echo "==> Running CLI test scenario: $@"
-	@echo ""
-	@$(MAKE) -C scenarios/$@ test

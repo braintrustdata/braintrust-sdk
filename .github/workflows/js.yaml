@@ -576,16 +576,20 @@ jobs:
 
   cli-tests:
     needs: build
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        # TEMP
-        # os: [ubuntu-latest, windows-latest]
-        # node-version: [20, 22]
-        os: [ubuntu-latest]
-        node-version: [22]
+        scenario:
+          - eval-esm
+          - eval-cjs
+          - eval-ts-esm
+          - eval-ts-cjs
+          - eval-bun
+          - eval-bun-npm
+          - eval-deno
+          - eval-deno-npm
 
     steps:
       - name: Checkout repository
@@ -594,19 +598,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
 
       - uses: pnpm/action-setup@v4
+
+      - name: Setup mise
+        if: contains(fromJSON('["eval-bun", "eval-deno"]'), matrix.scenario)
+        uses: jdx/mise-action@v2
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-dist
+          name: ${{ needs.build.outputs.artifact-name }}-22-dist
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run CLI tests
+      - name: Run ${{ matrix.scenario }}
         working-directory: js/cli-tests
         shell: bash
         env:
@@ -619,4 +627,4 @@ jobs:
           fi
           echo "Using tarball: $TARBALL"
           export BRAINTRUST_TAR="$TARBALL"
-          CI=1 make test
+          CI=1 make ${{ matrix.scenario }}
