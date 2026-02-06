@@ -11,7 +11,6 @@ import {
   createBraintrustActivityInterceptor,
 } from "./interceptors";
 import { createBraintrustSinks } from "./sinks";
-import util from "util";
 
 // Add the workflow interceptor package specifier so the Temporal bundler can include it
 const WORKFLOW_INTERCEPTORS_SPEC = "@braintrust/temporal/workflow-interceptors";
@@ -74,7 +73,7 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
         braintrustInterceptor,
       ];
     } else if (existing) {
-      // existing is an object, use the old calls format
+      // It's a WorkflowClientInterceptors object, merge our interceptor into the calls array
       workflow = {
         ...existing,
         calls: [...(existing.calls ?? []), () => braintrustInterceptor],
@@ -106,14 +105,13 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
     const braintrustSinks = createBraintrustSinks();
 
     const workflowModules = [
-      ...new Set([...existingWorkflowModules, WORKFLOW_INTERCEPTORS_SPEC]),
+      ...existingWorkflowModules,
+      WORKFLOW_INTERCEPTORS_SPEC,
     ];
 
     const activityFactories = [
-      ...new Set([
-        ...existingActivityInterceptors,
-        createBraintrustActivityInterceptor,
-      ]),
+      ...existingActivityInterceptors,
+      createBraintrustActivityInterceptor,
     ];
 
     const result: WorkerOptions = {
@@ -124,7 +122,7 @@ export class BraintrustTemporalPlugin implements ClientPlugin, WorkerPlugin {
         workflowModules,
       },
       sinks: {
-        ...options.sinks,
+        ...existingSinks,
         ...braintrustSinks,
       },
     };
