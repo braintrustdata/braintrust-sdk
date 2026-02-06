@@ -1,19 +1,13 @@
 import { describe, test, expect } from "vitest";
 import { lintTemplate } from "./nunjucks-utils";
-import { nunjucks } from "./nunjucks";
+import { getNunjucksEnv } from "./nunjucks-env";
 
 function getEnv() {
-  return new nunjucks.Environment(null, {
-    autoescape: true,
-    throwOnUndefined: false,
-  });
+  return getNunjucksEnv({ strict: false });
 }
 
 function getStrictEnv() {
-  return new nunjucks.Environment(null, {
-    autoescape: true,
-    throwOnUndefined: true,
-  });
+  return getNunjucksEnv({ strict: true });
 }
 
 describe("nunjucks rendering", () => {
