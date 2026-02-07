@@ -22,11 +22,6 @@ jobs:
         os: [ubuntu-latest]
         node-version: [22]
 
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
-
     outputs:
       artifact-name: ${{ steps.artifact.outputs.name }}
 
@@ -39,10 +34,13 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
 
-      - name: "verify ci"
+      - name: "Build SDK"
         shell: bash
+        working-directory: js
         run: |
-          make js-verify-ci
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm run docs
 
       - name: Determine artifact name
         id: artifact
@@ -107,6 +105,52 @@ jobs:
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
             js/artifacts/${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}
           retention-days: 1
+
+      - name: Upload built dist files for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-built
+          path: js/**/dist/
+          retention-days: 1
+
+  test:
+    needs: build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node-version: [22]
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+
+      - name: Download built dist files
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}-${{ matrix.node-version }}-built
+          path: js/
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies and run tests
+        shell: bash
+        working-directory: js
+        run: |
+          pnpm install --frozen-lockfile
+          make test
 
   # api-compatibility:
   #   runs-on: ubuntu-latest
