@@ -11,15 +11,14 @@ BRAINTRUST_TAR ?= $(shell \
 	mkdir -p artifacts && \
 	VERSION=$$(node -p "require('./package.json').version") && \
 	pnpm pack --pack-destination artifacts >/dev/null 2>&1 && \
-	echo "$$PWD/artifacts/braintrust-$$VERSION.tgz")
+	cp "$$PWD/artifacts/braintrust-$$VERSION.tgz" "$$PWD/artifacts/braintrust-latest.tgz" && \
+	echo "$$PWD/artifacts/braintrust-latest.tgz")
 
 setup:
 	@echo "==> Setting up deno-node scenario"
 	mise install
-	@# Deno uses workspace links - need SDK dist/ folder to exist
-	echo "==> Extracting SDK tarball for workspace link"; \
 	echo "==> Resolved tarball path: $(BRAINTRUST_TAR)"; \
-	cd ../../..; tar -xzf $(BRAINTRUST_TAR) package/dist
+	npm install $(BRAINTRUST_TAR) --no-package-lock
 
 list:
 	@echo "Available tests:"

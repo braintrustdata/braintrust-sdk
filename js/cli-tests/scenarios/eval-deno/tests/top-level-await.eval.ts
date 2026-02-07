@@ -1,4 +1,4 @@
-import { Eval } from "npm:braintrust";
+import { Eval } from "braintrust";
 
 // Top-level await - native Deno feature
 const config = await Promise.resolve({ prefix: "Result: " });

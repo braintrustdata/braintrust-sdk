@@ -1,4 +1,4 @@
-import { Eval } from "npm:braintrust";
+import { Eval } from "braintrust";
 
 // Test Deno-specific APIs
 // These only work in Deno runtime, not Node.js

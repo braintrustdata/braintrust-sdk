@@ -1,4 +1,4 @@
-import { Eval } from "npm:braintrust";
+import { Eval } from "braintrust";
 
 // Deno using npm: imports (from extracted tarball in node_modules/)
 // Tests: deno run --allow-all basic.eval.ts

@@ -2,8 +2,5 @@
     "imports": {
         "braintrust": "npm:braintrust"
     },
-    "nodeModulesDir": "auto",
-    "links": [
-        "../../.."
-    ]
+    "nodeModulesDir": "manual"
 }
