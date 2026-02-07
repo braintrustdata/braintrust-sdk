@@ -2,23 +2,24 @@ include ../../common.mk
 
 .PHONY: setup test clean list install-deps
 
-BRAINTRUST_TAR ?= ../../braintrust-latest.tgz
+.PHONY: setup test
 
-setup: install-deps
-	@echo "==> Setting up eval-deno scenario"
-	@if [ ! -f "$(BRAINTRUST_TAR)" ]; then \
-		echo "Error: Tarball not found at $(BRAINTRUST_TAR)"; \
-		echo "Run 'make build-tarball' from sdk/js/ first"; \
-		exit 1; \
-	fi
-	@echo "==> Installing Deno via mise"
-	@mise install
-	@echo "==> Extracting SDK tarball for npm: imports"
-	@mkdir -p node_modules
-	@tar -xzf "$(BRAINTRUST_TAR)" -C node_modules
-	@mv node_modules/package node_modules/braintrust
 
-install-deps:
+BRAINTRUST_TAR ?= $(shell \
+	cd ../../.. && \
+	pnpm exec turbo build --filter=braintrust >/dev/null 2>&1 && \
+	mkdir -p artifacts && \
+	VERSION=$$(node -p "require('./package.json').version") && \
+	pnpm pack --pack-destination artifacts >/dev/null 2>&1 && \
+	echo "$$PWD/artifacts/braintrust-$$VERSION.tgz")
+
+setup:
+	@echo "==> Setting up deno-node scenario"
+	mise install
+	@# Deno uses workspace links - need SDK dist/ folder to exist
+	echo "==> Extracting SDK tarball for workspace link"; \
+	echo "==> Resolved tarball path: $(BRAINTRUST_TAR)"; \
+	cd ../../..; tar -xzf $(BRAINTRUST_TAR) package/dist
 
 list:
 	@echo "Available tests:"
@@ -34,15 +35,6 @@ endif
 
 _run-test: setup
 	@echo "==> Running eval-deno tests (Deno runtime with npm: imports)"
-	@echo ""
-	@echo "DEBUG: mise exec path: $$(which mise || echo 'mise not found')"
-	@echo "DEBUG: deno version: $$(mise exec -- deno --version 2>&1 | head -1 || echo 'deno failed')"
-	@echo "DEBUG: node_modules/braintrust exists: $$([ -d node_modules/braintrust ] && echo 'yes' || echo 'no')"
-	@echo "DEBUG: BRAINTRUST_API_KEY=$$([ -n "$${BRAINTRUST_API_KEY}" ] && echo '<redacted>' || echo '<not set>')"
-	@echo "DEBUG: BRAINTRUST_API_URL=$${BRAINTRUST_API_URL:-<not set>}"
-	@echo "DEBUG: BRAINTRUST_APP_URL=$${BRAINTRUST_APP_URL:-<not set>}"
-	@echo "DEBUG: Testing mock server connection: $$(curl -s $${BRAINTRUST_API_URL:-http://localhost:19891}/version 2>&1 | head -1 || echo 'server not reachable')"
-	@echo ""
 	@FAILED=0; \
 	TESTS=$$(find tests -name '*.eval.ts' | sort); \
 	TOTAL=$$(echo "$$TESTS" | wc -l | tr -d ' '); \
@@ -51,15 +43,9 @@ _run-test: setup
 		COUNT=$$((COUNT + 1)); \
 		TEST_NAME=$$(basename "$$test" .eval.ts); \
 		echo "  [$$COUNT/$$TOTAL] Testing $$TEST_NAME..."; \
-		echo "    DEBUG: Running: mise exec -- deno run --allow-all $$test"; \
-		echo "    DEBUG: Test env - API_KEY=$$([ -n "$${BRAINTRUST_API_KEY}" ] && echo '<redacted>' || echo '<unset>') API_URL=$${BRAINTRUST_API_URL:-<unset>}"; \
-		OUTPUT=$$(BRAINTRUST_API_KEY=$${BRAINTRUST_API_KEY} BRAINTRUST_API_URL=$${BRAINTRUST_API_URL} BRAINTRUST_APP_URL=$${BRAINTRUST_APP_URL} mise exec -- deno run --allow-all "$$test" 2>&1); \
+		OUTPUT=$$(BRAINTRUST_API_KEY=$${BRAINTRUST_API_KEY} BRAINTRUST_API_URL=$${BRAINTRUST_API_URL} BRAINTRUST_APP_URL=$${BRAINTRUST_APP_URL} mise exec -- deno run --allow-all npm:braintrust eval "$$test" 2>&1); \
 		EXIT_CODE=$$?; \
-		echo "    DEBUG: Exit code: $$EXIT_CODE"; \
-		echo "    DEBUG: Output length: $$(echo "$$OUTPUT" | wc -l) lines"; \
-		echo "    DEBUG: First 5 lines of output:"; \
 		echo "$$OUTPUT" | head -5 | sed 's/^/      /'; \
-		echo "    DEBUG: Grep check: $$(echo "$$OUTPUT" | grep -E "(Experiment summary|View results)" | head -1 || echo 'no match')"; \
 		if [ $$EXIT_CODE -eq 0 ] && echo "$$OUTPUT" | grep -qE "(Experiment summary|View results)"; then \
 			echo "    ✓ Passed"; \
 		else \
