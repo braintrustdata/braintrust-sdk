@@ -35,6 +35,14 @@ endif
 _run-test: setup
 	@echo "==> Running eval-deno tests (Deno runtime with npm: imports)"
 	@echo ""
+	@echo "DEBUG: mise exec path: $$(which mise || echo 'mise not found')"
+	@echo "DEBUG: deno version: $$(mise exec -- deno --version 2>&1 | head -1 || echo 'deno failed')"
+	@echo "DEBUG: node_modules/braintrust exists: $$([ -d node_modules/braintrust ] && echo 'yes' || echo 'no')"
+	@echo "DEBUG: BRAINTRUST_API_KEY=$$([ -n "$${BRAINTRUST_API_KEY}" ] && echo '<redacted>' || echo '<not set>')"
+	@echo "DEBUG: BRAINTRUST_API_URL=$${BRAINTRUST_API_URL:-<not set>}"
+	@echo "DEBUG: BRAINTRUST_APP_URL=$${BRAINTRUST_APP_URL:-<not set>}"
+	@echo "DEBUG: Testing mock server connection: $$(curl -s $${BRAINTRUST_API_URL:-http://localhost:19891}/version 2>&1 | head -1 || echo 'server not reachable')"
+	@echo ""
 	@FAILED=0; \
 	TESTS=$$(find tests -name '*.eval.ts' | sort); \
 	TOTAL=$$(echo "$$TESTS" | wc -l | tr -d ' '); \
@@ -43,10 +51,21 @@ _run-test: setup
 		COUNT=$$((COUNT + 1)); \
 		TEST_NAME=$$(basename "$$test" .eval.ts); \
 		echo "  [$$COUNT/$$TOTAL] Testing $$TEST_NAME..."; \
-		if mise exec -- deno run --allow-all "$$test" 2>&1 | grep -qE "(Experiment summary|View results)"; then \
+		echo "    DEBUG: Running: mise exec -- deno run --allow-all $$test"; \
+		echo "    DEBUG: Test env - API_KEY=$$([ -n "$${BRAINTRUST_API_KEY}" ] && echo '<redacted>' || echo '<unset>') API_URL=$${BRAINTRUST_API_URL:-<unset>}"; \
+		OUTPUT=$$(BRAINTRUST_API_KEY=$${BRAINTRUST_API_KEY} BRAINTRUST_API_URL=$${BRAINTRUST_API_URL} BRAINTRUST_APP_URL=$${BRAINTRUST_APP_URL} mise exec -- deno run --allow-all "$$test" 2>&1); \
+		EXIT_CODE=$$?; \
+		echo "    DEBUG: Exit code: $$EXIT_CODE"; \
+		echo "    DEBUG: Output length: $$(echo "$$OUTPUT" | wc -l) lines"; \
+		echo "    DEBUG: First 5 lines of output:"; \
+		echo "$$OUTPUT" | head -5 | sed 's/^/      /'; \
+		echo "    DEBUG: Grep check: $$(echo "$$OUTPUT" | grep -E "(Experiment summary|View results)" | head -1 || echo 'no match')"; \
+		if [ $$EXIT_CODE -eq 0 ] && echo "$$OUTPUT" | grep -qE "(Experiment summary|View results)"; then \
 			echo "    ✓ Passed"; \
 		else \
-			echo "    ✗ Failed"; \
+			echo "    ✗ Failed (exit code: $$EXIT_CODE)"; \
+			echo "    Full output:"; \
+			echo "$$OUTPUT" | sed 's/^/      /'; \
 			FAILED=1; \
 		fi; \
 		echo ""; \
