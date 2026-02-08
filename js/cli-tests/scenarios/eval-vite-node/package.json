@@ -1,0 +1,11 @@
+{
+  "name": "braintrust-cli-test-eval-vite-node",
+  "private": true,
+  "scripts": {
+    "braintrust": "braintrust"
+  },
+  "dependencies": {
+    "braintrust": "file:./braintrust-latest.tgz",
+    "vite-node": "^5.3.0"
+  }
+}
