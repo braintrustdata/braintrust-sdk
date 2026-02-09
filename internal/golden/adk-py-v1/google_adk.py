@@ -15,7 +15,7 @@ from google.genai import types
 
 setup_adk(project_name="golden-py-adk")
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 # Session configuration
 APP_NAME = "golden_test_app"

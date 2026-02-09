@@ -7389,7 +7389,8 @@
           "automation",
           "facet",
           "preprocessor",
-          "classifier"
+          "classifier",
+          "review"
         ],
         "description": "Type of the span, for display purposes only"
       },
@@ -8415,7 +8416,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "2822255bed426d5442adc880a8f71b8a378de3d4"
+    "x-internal-git-sha": "0b04b7522464ca9495413174b0034dc457bf6356"
   },
   "paths": {},
   "webhooks": {}

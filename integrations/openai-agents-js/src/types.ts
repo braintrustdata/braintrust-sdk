@@ -8,6 +8,10 @@ import type {
   HandoffSpanData,
   CustomSpanData,
   GuardrailSpanData,
+  MCPListToolsSpanData,
+  TranscriptionSpanData,
+  SpeechSpanData,
+  SpeechGroupSpanData,
   Trace,
   Span,
 } from "./openai-agents-types";
@@ -20,6 +24,10 @@ export enum SpanType {
   GUARDRAIL = "guardrail",
   GENERATION = "generation",
   CUSTOM = "custom",
+  MCP_TOOLS = "mcp_tools",
+  TRANSCRIPTION = "transcription",
+  SPEECH = "speech",
+  SPEECH_GROUP = "speech_group",
 }
 
 export type AgentsTrace = Trace;
@@ -85,4 +93,28 @@ export function isCustomSpanData(
   spanData: SpanData,
 ): spanData is CustomSpanData {
   return spanData.type === SpanType.CUSTOM;
+}
+
+export function isMCPListToolsSpanData(
+  spanData: SpanData,
+): spanData is MCPListToolsSpanData {
+  return spanData.type === SpanType.MCP_TOOLS;
+}
+
+export function isTranscriptionSpanData(
+  spanData: SpanData,
+): spanData is TranscriptionSpanData {
+  return spanData.type === SpanType.TRANSCRIPTION;
+}
+
+export function isSpeechSpanData(
+  spanData: SpanData,
+): spanData is SpeechSpanData {
+  return spanData.type === SpanType.SPEECH;
+}
+
+export function isSpeechGroupSpanData(
+  spanData: SpanData,
+): spanData is SpeechGroupSpanData {
+  return spanData.type === SpanType.SPEECH_GROUP;
 }

@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 2822255bed426d5442adc880a8f71b8a378de3d4) -- do not modify
+// Auto-generated file (internal git SHA 0b04b7522464ca9495413174b0034dc457bf6356) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -766,6 +766,7 @@ export const SpanType = z.union([
     "facet",
     "preprocessor",
     "classifier",
+    "review",
   ]),
   z.null(),
 ]);
