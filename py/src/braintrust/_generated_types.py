@@ -3663,6 +3663,14 @@ class RunEval(TypedDict):
     """
     The dataset to use
     """
+    name: NotRequired[str | None]
+    """
+    The name of the eval to run when multiple evals available
+    """
+    parameters: NotRequired[Mapping[str, Any] | None]
+    """
+    Values for any parameters used in the eval
+    """
     task: Task
     scores: Sequence[Score]
     """

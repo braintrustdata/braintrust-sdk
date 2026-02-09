@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA f229a8e4b5016659a35a46bf01d77050b9123459) -- do not modify
+// Auto-generated file (internal git SHA 25fbeba36aeff2824aeadd4ba97865f76f98f1d7) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -1857,6 +1857,8 @@ export const RunEval = z.object({
     }),
     z.object({ data: z.array(z.unknown()) }),
   ]),
+  name: z.string().optional(),
+  parameters: z.object({}).partial().passthrough().optional(),
   task: FunctionId.and(z.unknown()),
   scores: z.array(FunctionId.and(z.unknown())),
   experiment_name: z.string().optional(),

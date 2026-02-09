@@ -7028,6 +7028,15 @@
             ],
             "description": "The dataset to use"
           },
+          "name": {
+            "type": "string",
+            "description": "The name of the eval to run when multiple evals available"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Values for any parameters used in the eval"
+          },
           "task": {
             "allOf": [
               {
@@ -8519,7 +8528,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "f229a8e4b5016659a35a46bf01d77050b9123459"
+    "x-internal-git-sha": "25fbeba36aeff2824aeadd4ba97865f76f98f1d7"
   },
   "paths": {},
   "webhooks": {}
