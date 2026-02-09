@@ -230,6 +230,7 @@ function createToolTracingHooks(
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
   mcpServers: McpServersConfig | undefined,
   subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
 ): {
   preToolUse: HookCallback;
   postToolUse: HookCallback;
@@ -303,9 +304,7 @@ function createToolTracingHooks(
         });
       } finally {
         subAgentSpan.end();
-        // Don't delete from subAgentSpans yet -- the span reference is still
-        // needed for parent resolution when createLLMSpan flushes the sub-agent's
-        // message batch (which may happen after this hook fires).
+        endedSubAgentSpans.add(toolUseID);
       }
       return {};
     }
@@ -336,6 +335,7 @@ function createToolTracingHooks(
         subAgentSpan.log({ error: input.error });
       } finally {
         subAgentSpan.end();
+        endedSubAgentSpans.add(toolUseID);
       }
       return {};
     }
@@ -375,6 +375,7 @@ function injectTracingHooks(
   resolveParentSpan: ParentSpanResolver,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
   subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
 ): QueryOptions {
   const mcpServers = options.mcpServers as McpServersConfig | undefined;
   const { preToolUse, postToolUse, postToolUseFailure } =
@@ -383,6 +384,7 @@ function injectTracingHooks(
       activeToolSpans,
       mcpServers,
       subAgentSpans,
+      endedSubAgentSpans,
     );
 
   const existingHooks = options.hooks ?? {};
@@ -575,8 +577,11 @@ function wrapClaudeAgentQuery<
       // Track active tool spans for hook-based tracing
       const activeToolSpans = new Map<string, ReturnType<typeof startSpan>>();
 
-      // Track sub-agent spans keyed by the Task tool_use_id that spawned them
+      // Track sub-agent spans keyed by the Task tool_use_id that spawned them.
+      // Spans stay in this map even after being ended (for parent resolution by createLLMSpan).
       const subAgentSpans = new Map<string, ReturnType<typeof startSpan>>();
+      // Tracks which sub-agent spans have already been ended by hooks (to avoid double-end in finally).
+      const endedSubAgentSpans = new Set<string>();
 
       // Maps a tool_use_id to the parent_tool_use_id it was seen under in the message stream.
       // This lets hooks resolve the correct parent span for tool calls within sub-agents.
@@ -606,6 +611,7 @@ function wrapClaudeAgentQuery<
         resolveParentSpan,
         activeToolSpans,
         subAgentSpans,
+        endedSubAgentSpans,
       );
 
       // Create modified argArray with injected hooks
@@ -749,11 +755,13 @@ function wrapClaudeAgentQuery<
             });
             throw error;
           } finally {
-            // End any sub-agent spans that weren't closed by PostToolUse hooks
+            // End any sub-agent spans that weren't closed by hooks
             for (const [id, subSpan] of subAgentSpans) {
-              subSpan.end();
-              subAgentSpans.delete(id);
+              if (!endedSubAgentSpans.has(id)) {
+                subSpan.end();
+              }
             }
+            subAgentSpans.clear();
             if (capturedPromptMessages) {
               if (promptStarted) {
                 await promptDone;

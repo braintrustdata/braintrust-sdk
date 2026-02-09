@@ -939,12 +939,9 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
         (s["span_attributes"] as Record<string, unknown>).type === "tool" &&
         (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
     );
-    // The sub-agent should use the calculator -- but LLM behavior is non-deterministic
-    if (subAgentToolSpans.length > 0) {
-      subAgentToolSpans.forEach((toolSpan) => {
-        // Tool span should NOT be directly under root
-        expect(toolSpan.span_parents).not.toContain(rootSpan!.span_id);
-      });
-    }
+    expect(subAgentToolSpans.length).toBeGreaterThanOrEqual(1);
+    subAgentToolSpans.forEach((toolSpan) => {
+      expect(toolSpan.span_parents).not.toContain(rootSpan!.span_id);
+    });
   }, 60000);
 });
