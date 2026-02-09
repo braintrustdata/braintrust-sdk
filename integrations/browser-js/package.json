@@ -23,7 +23,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "als-browser": "^1.0.1"
+    "als-browser": "^1.0.1",
+    "braintrust": ">=3.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
@@ -33,13 +34,9 @@
     "vitest": "^2.1.9"
   },
   "peerDependencies": {
-    "braintrust": ">=3.0.0",
     "zod": "^3.25.34 || ^4.0"
   },
   "peerDependenciesMeta": {
-    "braintrust": {
-      "optional": false
-    },
     "zod": {
       "optional": false
     }
