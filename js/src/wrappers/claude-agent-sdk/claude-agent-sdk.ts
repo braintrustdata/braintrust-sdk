@@ -303,7 +303,9 @@ function createToolTracingHooks(
         });
       } finally {
         subAgentSpan.end();
-        subAgentSpans.delete(toolUseID);
+        // Don't delete from subAgentSpans yet -- the span reference is still
+        // needed for parent resolution when createLLMSpan flushes the sub-agent's
+        // message batch (which may happen after this hook fires).
       }
       return {};
     }
@@ -334,7 +336,6 @@ function createToolTracingHooks(
         subAgentSpan.log({ error: input.error });
       } finally {
         subAgentSpan.end();
-        subAgentSpans.delete(toolUseID);
       }
       return {};
     }
