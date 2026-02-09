@@ -585,8 +585,675 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(toolSpan?.error).toBe("Tool execution failed: connection timeout");
   });
 
-  // FIXME: Add subagent hook tests when SDK supports SubagentStart/SubagentStop properly.
-  // See: https://github.com/anthropics/claude-code/issues/14859
+  test("creates nested sub-agent TASK span when messages have parent_tool_use_id", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const TASK_TOOL_USE_ID = "toolu_task_001";
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          // Main agent assistant message with Task tool call
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_1",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [
+                { type: "text", text: "Let me spawn a sub-agent." },
+                {
+                  type: "tool_use",
+                  id: TASK_TOOL_USE_ID,
+                  name: "Task",
+                  input: {
+                    prompt: "Calculate 15+27",
+                    subagent_type: "math-expert",
+                  },
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 50 },
+            },
+          };
+
+          // Sub-agent assistant message (parent_tool_use_id points to Task)
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_TOOL_USE_ID,
+            message: {
+              id: "msg_sub_1",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [{ type: "text", text: "The answer is 42." }],
+              usage: { input_tokens: 50, output_tokens: 20 },
+            },
+          };
+
+          // Back to main agent: tool_result for Task
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_TOOL_USE_ID,
+                  content: "The answer is 42.",
+                },
+              ],
+            },
+          };
+
+          // Main agent final response
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_2",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [{ type: "text", text: "The result is 42." }],
+              usage: { input_tokens: 200, output_tokens: 30 },
+            },
+          };
+
+          yield {
+            type: "result",
+            usage: { input_tokens: 350, output_tokens: 100 },
+          };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    for await (const _msg of wrappedSDK.query({ prompt: "test" })) {
+      // consume
+    }
+
+    const spans = await backgroundLogger.drain();
+
+    // Should have: root TASK span, LLM spans for main agent, sub-agent TASK span, LLM span for sub-agent
+    const taskSpans = spans.filter(
+      (s) => (s["span_attributes"] as Record<string, unknown>).type === "task",
+    );
+    // Root agent + sub-agent = 2 task spans
+    expect(taskSpans.length).toBe(2);
+
+    const rootSpan = taskSpans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(rootSpan).toBeDefined();
+
+    const subAgentSpan = taskSpans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: math-expert",
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Sub-agent span should be a child of the root span
+    expect(subAgentSpan!.root_span_id).toBe(rootSpan!.span_id);
+    expect(subAgentSpan!.span_parents).toContain(rootSpan!.span_id);
+  });
+
+  test("sub-agent LLM spans are parented under the sub-agent TASK span", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const TASK_TOOL_USE_ID = "toolu_task_002";
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          // Main agent: call Task tool
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_1",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [
+                {
+                  type: "tool_use",
+                  id: TASK_TOOL_USE_ID,
+                  name: "Task",
+                  input: {
+                    prompt: "Do math",
+                    subagent_type: "math-expert",
+                  },
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 50 },
+            },
+          };
+
+          // Sub-agent LLM response
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_TOOL_USE_ID,
+            message: {
+              id: "msg_sub_1",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [{ type: "text", text: "42" }],
+              usage: { input_tokens: 50, output_tokens: 10 },
+            },
+          };
+
+          // Back to main agent
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_TOOL_USE_ID,
+                  content: "42",
+                },
+              ],
+            },
+          };
+
+          yield {
+            type: "result",
+            usage: { input_tokens: 150, output_tokens: 60 },
+          };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    for await (const _msg of wrappedSDK.query({ prompt: "test" })) {
+      // consume
+    }
+
+    const spans = await backgroundLogger.drain();
+
+    const subAgentSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: math-expert",
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Find LLM spans
+    const llmSpans = spans.filter(
+      (s) => (s["span_attributes"] as Record<string, unknown>).type === "llm",
+    );
+
+    // Should have at least 1 LLM span for sub-agent
+    const subAgentLlmSpan = llmSpans.find((s) =>
+      (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
+    );
+    expect(subAgentLlmSpan).toBeDefined();
+
+    // The sub-agent LLM span should NOT be directly under the root
+    const rootSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(subAgentLlmSpan!.span_parents).not.toContain(rootSpan!.span_id);
+  });
+
+  test("tool spans within sub-agent are parented under sub-agent span via hooks", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const TASK_TOOL_USE_ID = "toolu_task_003";
+    const CALC_TOOL_USE_ID = "toolu_calc_003";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+    // Use a promise to pause the generator so hooks can fire during iteration
+    let resolveAfterHooks: () => void;
+    const waitForHooks = new Promise<void>((r) => {
+      resolveAfterHooks = r;
+    });
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          // Main agent: call Task
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_1",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [
+                {
+                  type: "tool_use",
+                  id: TASK_TOOL_USE_ID,
+                  name: "Task",
+                  input: { prompt: "Add 15+27", subagent_type: "math-expert" },
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 50 },
+            },
+          };
+
+          // Sub-agent: call calculator tool
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_TOOL_USE_ID,
+            message: {
+              id: "msg_sub_1",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [
+                {
+                  type: "tool_use",
+                  id: CALC_TOOL_USE_ID,
+                  name: "mcp__math__calculator",
+                  input: { operation: "add", a: 15, b: 27 },
+                },
+              ],
+              usage: { input_tokens: 50, output_tokens: 20 },
+            },
+          };
+
+          // Wait for hooks to fire before continuing
+          await waitForHooks;
+
+          // Sub-agent: tool result
+          yield {
+            type: "user",
+            parent_tool_use_id: TASK_TOOL_USE_ID,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: CALC_TOOL_USE_ID,
+                  content: "add(15, 27) = 42",
+                },
+              ],
+            },
+          };
+
+          // Back to main agent
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_TOOL_USE_ID,
+                  content: "42",
+                },
+              ],
+            },
+          };
+
+          yield {
+            type: "result",
+            usage: { input_tokens: 200, output_tokens: 70 },
+          };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    // Start consuming the generator in the background
+    const consumePromise = (async () => {
+      for await (const _msg of wrappedSDK.query({ prompt: "test" })) {
+        // consume
+      }
+    })();
+
+    // Wait briefly to let the generator yield messages up to the waitForHooks point
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Now hooks can fire (they have the toolUseToParent mapping from the yielded messages)
+    const preToolUseHook = capturedOptions.hooks.PreToolUse[0].hooks[0];
+    const postToolUseHook = capturedOptions.hooks.PostToolUse[0].hooks[0];
+
+    await preToolUseHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "mcp__math__calculator",
+        tool_input: { operation: "add", a: 15, b: 27 },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      CALC_TOOL_USE_ID,
+      { signal: new AbortController().signal },
+    );
+
+    await postToolUseHook(
+      {
+        hook_event_name: "PostToolUse",
+        tool_name: "mcp__math__calculator",
+        tool_input: { operation: "add", a: 15, b: 27 },
+        tool_response: [{ type: "text", text: "add(15, 27) = 42" }],
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      CALC_TOOL_USE_ID,
+      { signal: new AbortController().signal },
+    );
+
+    // Let the generator finish
+    resolveAfterHooks!();
+    await consumePromise;
+
+    const spans = await backgroundLogger.drain();
+
+    const subAgentSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: math-expert",
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Find the tool span for calculator
+    const toolSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "tool" &&
+        (s["span_attributes"] as Record<string, unknown>).name ===
+          "tool: math/calculator",
+    );
+    expect(toolSpan).toBeDefined();
+
+    // Tool span should be parented under the sub-agent span, not the root
+    expect(toolSpan!.span_parents).toContain(subAgentSpan!.span_id);
+
+    const rootSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(toolSpan!.span_parents).not.toContain(rootSpan!.span_id);
+  });
+
+  test("concurrent sub-agents get separate spans", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const TASK_A_ID = "toolu_task_a";
+    const TASK_B_ID = "toolu_task_b";
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        const generator = (async function* () {
+          // Main agent: two parallel Task calls
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_1",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [
+                {
+                  type: "tool_use",
+                  id: TASK_A_ID,
+                  name: "Task",
+                  input: { prompt: "Task A", subagent_type: "agent-alpha" },
+                },
+                {
+                  type: "tool_use",
+                  id: TASK_B_ID,
+                  name: "Task",
+                  input: { prompt: "Task B", subagent_type: "agent-beta" },
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 80 },
+            },
+          };
+
+          // Interleaved sub-agent messages
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_A_ID,
+            message: {
+              id: "msg_sub_a",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [{ type: "text", text: "Result A" }],
+              usage: { input_tokens: 30, output_tokens: 10 },
+            },
+          };
+
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_B_ID,
+            message: {
+              id: "msg_sub_b",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [{ type: "text", text: "Result B" }],
+              usage: { input_tokens: 30, output_tokens: 10 },
+            },
+          };
+
+          // Main agent results
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_A_ID,
+                  content: "Result A",
+                },
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_B_ID,
+                  content: "Result B",
+                },
+              ],
+            },
+          };
+
+          yield {
+            type: "result",
+            usage: { input_tokens: 200, output_tokens: 100 },
+          };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+    for await (const _msg of wrappedSDK.query({ prompt: "test" })) {
+      // consume
+    }
+
+    const spans = await backgroundLogger.drain();
+
+    const taskSpans = spans.filter(
+      (s) => (s["span_attributes"] as Record<string, unknown>).type === "task",
+    );
+
+    // Root + 2 sub-agents = 3 task spans
+    expect(taskSpans.length).toBe(3);
+
+    const alphaSpan = taskSpans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: agent-alpha",
+    );
+    const betaSpan = taskSpans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: agent-beta",
+    );
+
+    expect(alphaSpan).toBeDefined();
+    expect(betaSpan).toBeDefined();
+
+    // Both should be children of root, not of each other
+    const rootSpan = taskSpans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(alphaSpan!.span_parents).toContain(rootSpan!.span_id);
+    expect(betaSpan!.span_parents).toContain(rootSpan!.span_id);
+
+    // They should have different span IDs
+    expect(alphaSpan!.span_id).not.toBe(betaSpan!.span_id);
+  });
+
+  test("PostToolUse hook for Task ends sub-agent span with metadata", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    const TASK_TOOL_USE_ID = "toolu_task_004";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+    let resolveAfterHooks: () => void;
+    const waitForHooks = new Promise<void>((r) => {
+      resolveAfterHooks = r;
+    });
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          // Main agent: call Task
+          yield {
+            type: "assistant",
+            parent_tool_use_id: null,
+            message: {
+              id: "msg_main_1",
+              role: "assistant",
+              model: "claude-sonnet-4-20250514",
+              content: [
+                {
+                  type: "tool_use",
+                  id: TASK_TOOL_USE_ID,
+                  name: "Task",
+                  input: { prompt: "Calculate", subagent_type: "math-expert" },
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 50 },
+            },
+          };
+
+          // Sub-agent response
+          yield {
+            type: "assistant",
+            parent_tool_use_id: TASK_TOOL_USE_ID,
+            message: {
+              id: "msg_sub_1",
+              role: "assistant",
+              model: "claude-haiku-4-5-20251001",
+              content: [{ type: "text", text: "42" }],
+              usage: { input_tokens: 50, output_tokens: 10 },
+            },
+          };
+
+          // Wait for PostToolUse hook to fire
+          await waitForHooks;
+
+          // Main agent receives task result
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: TASK_TOOL_USE_ID,
+                  content: "42",
+                },
+              ],
+            },
+          };
+
+          yield {
+            type: "result",
+            usage: { input_tokens: 200, output_tokens: 60 },
+          };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    const consumePromise = (async () => {
+      for await (const _msg of wrappedSDK.query({ prompt: "test" })) {
+        // consume
+      }
+    })();
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Simulate PostToolUse for the Task tool with rich metadata
+    const postToolUseHook = capturedOptions.hooks.PostToolUse[0].hooks[0];
+    await postToolUseHook(
+      {
+        hook_event_name: "PostToolUse",
+        tool_name: "Task",
+        tool_input: { prompt: "Calculate", subagent_type: "math-expert" },
+        tool_response: {
+          status: "completed",
+          content: [{ type: "text", text: "42" }],
+          totalDurationMs: 1500,
+          totalTokens: 100,
+          totalToolUseCount: 1,
+        },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      TASK_TOOL_USE_ID,
+      { signal: new AbortController().signal },
+    );
+
+    resolveAfterHooks!();
+    await consumePromise;
+
+    const spans = await backgroundLogger.drain();
+
+    const subAgentSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Agent: math-expert",
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Sub-agent span should have output and metadata from PostToolUse
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((subAgentSpan as any).output).toEqual([
+      { type: "text", text: "42" },
+    ]);
+    const metadata = subAgentSpan!.metadata as Record<string, unknown>;
+    expect(metadata["claude_agent_sdk.status"]).toBe("completed");
+    expect(metadata["claude_agent_sdk.duration_ms"]).toBe(1500);
+    expect(metadata["claude_agent_sdk.tool_use_count"]).toBe(1);
+  });
 });
 
 // Try to import the Claude Agent SDK - skip tests if not available
