@@ -1,10 +1,10 @@
 import { _internalIso as iso, _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
-
-let browserConfigured = false;
+import { BROWSER_CONFIGURED_KEY } from "./symbols";
 
 export function configureBrowser() {
-  if (browserConfigured) {
+  // @ts-expect-error - TS limitation with symbol indexing across modules
+  if (globalThis[BROWSER_CONFIGURED_KEY]) {
     return;
   }
 
@@ -44,5 +44,6 @@ export function configureBrowser() {
   };
 
   _internalSetInitialState();
-  browserConfigured = true;
+  // @ts-expect-error - TS limitation with symbol indexing across modules
+  globalThis[BROWSER_CONFIGURED_KEY] = true;
 }
