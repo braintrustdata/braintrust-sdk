@@ -3,8 +3,7 @@ import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 import { BROWSER_CONFIGURED_KEY } from "./symbols";
 
 export function configureBrowser() {
-  // @ts-expect-error - TS limitation with symbol indexing across modules
-  if (globalThis[BROWSER_CONFIGURED_KEY]) {
+  if ((globalThis as any)[BROWSER_CONFIGURED_KEY]) {
     return;
   }
 
@@ -44,6 +43,5 @@ export function configureBrowser() {
   };
 
   _internalSetInitialState();
-  // @ts-expect-error - TS limitation with symbol indexing across modules
-  globalThis[BROWSER_CONFIGURED_KEY] = true;
+  (globalThis as any)[BROWSER_CONFIGURED_KEY] = true;
 }
