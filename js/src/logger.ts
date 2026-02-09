@@ -54,6 +54,7 @@ import {
   type ModelParamsType as ModelParams,
   ResponseFormatJsonSchema as responseFormatJsonSchemaSchema,
   AttachmentStatus as attachmentStatusSchema,
+  SandboxDataType,
   type AttachmentStatusType as AttachmentStatus,
   GitMetadataSettings as gitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
@@ -3839,18 +3840,21 @@ export async function experimental_registerSandbox(
   // Build function definition
   const resolvedSlug =
     options.slug ?? slugify(options.name, { lower: true, strict: true });
+  const function_data: SandboxDataType = {
+    type: "sandbox",
+    sandbox_spec: {
+      provider: options.sandbox.provider,
+      snapshot_ref: options.sandbox.snapshotRef,
+    },
+    eval_files: options.evals,
+  };
   const functionDef: Record<string, unknown> = {
     project_id: projectId,
     org_name: state.orgName,
     name: options.name,
     slug: resolvedSlug,
     function_type: "sandbox",
-    function_data: {
-      type: "sandbox",
-      provider: options.sandbox.provider,
-      snapshot_ref: options.sandbox.snapshotRef,
-      evalFiles: options.evals,
-    },
+    function_data,
     if_exists: options.ifExists ?? "replace",
   };
   if (options.description !== undefined) {

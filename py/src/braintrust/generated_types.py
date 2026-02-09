@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 334b101df89335085db5715ef6710c2902f7bee5) -- do not modify"""
+"""Auto-generated file (internal git SHA e620a8642b922bd3b3d28c0bc1b5faee50ec0888) -- do not modify"""
 
 from ._generated_types import (
     Acl,

@@ -1769,7 +1769,7 @@ def init_dataset(
 
 
 @dataclasses.dataclass
-class _ExperimentalSandboxConfig:
+class ExperimentalSandboxConfig:
     """Configuration for a sandbox runtime."""
 
     provider: Literal["modal"]
@@ -1779,7 +1779,7 @@ class _ExperimentalSandboxConfig:
 
 
 @dataclasses.dataclass
-class _ExperimentalRegisterSandboxResult:
+class ExperimentalRegisterSandboxResult:
     """Result of registering a sandbox."""
 
     id: str
@@ -1792,10 +1792,10 @@ class _ExperimentalRegisterSandboxResult:
     """Project ID the sandbox is registered in."""
 
 
-def _experimental_register_sandbox(
+def experimental_register_sandbox(
     name: str,
     project: str,
-    sandbox: _ExperimentalSandboxConfig,
+    sandbox: ExperimentalSandboxConfig,
     *,
     evals: list[str] | None = None,
     slug: str | None = None,
@@ -1805,7 +1805,7 @@ def _experimental_register_sandbox(
     api_key: str | None = None,
     app_url: str | None = None,
     org_name: str | None = None,
-) -> _ExperimentalRegisterSandboxResult:
+) -> ExperimentalRegisterSandboxResult:
     """Register a sandbox function with Braintrust.
 
     :param name: Name of the sandbox function.
@@ -1819,17 +1819,17 @@ def _experimental_register_sandbox(
     :param api_key: Braintrust API key. Uses BRAINTRUST_API_KEY env var if not provided.
     :param app_url: Braintrust app URL. Uses default if not provided.
     :param org_name: Organization name.
-    :returns: _ExperimentalRegisterSandboxResult with id, name, slug, and project_id.
+    :returns: ExperimentalRegisterSandboxResult with id, name, slug, and project_id.
 
     Example::
 
-        from braintrust import _experimental_register_sandbox, _ExperimentalSandboxConfig
+        from braintrust import experimental_register_sandbox, ExperimentalSandboxConfig
 
-        result = _experimental_register_sandbox(
+        result = experimental_register_sandbox(
             name="My Sandbox",
             project="My Project",
             evals=["./my-eval.eval.py"],
-            sandbox=_ExperimentalSandboxConfig(provider="modal", snapshot_ref="sb-xxx"),
+            sandbox=ExperimentalSandboxConfig(provider="modal", snapshot_ref="sb-xxx"),
         )
         print(result.id)
     """
@@ -1850,9 +1850,11 @@ def _experimental_register_sandbox(
         "function_type": "sandbox",
         "function_data": {
             "type": "sandbox",
-            "provider": sandbox.provider,
-            "snapshot_ref": sandbox.snapshot_ref,
-            "evalFiles": evals,
+            "sandbox_spec": {
+                "provider": sandbox.provider,
+                "snapshot_ref": sandbox.snapshot_ref,
+            },
+            "eval_files": evals or [],
         },
         "if_exists": if_exists or "replace",
     }
@@ -1864,7 +1866,7 @@ def _experimental_register_sandbox(
     # Insert function via API - use v1/function endpoint which returns the created function
     response = state.api_conn().post_json("v1/function", function_def)
 
-    return _ExperimentalRegisterSandboxResult(
+    return ExperimentalRegisterSandboxResult(
         id=response["id"],
         name=response["name"],
         slug=response["slug"],

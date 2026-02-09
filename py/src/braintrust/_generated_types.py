@@ -2125,6 +2125,96 @@ class TaskTask12(TaskTask4, TaskTask7):
     pass
 
 
+class ScoreScore(TypedDict):
+    function_id: str
+    """
+    The ID of the function
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore1(TypedDict):
+    project_name: str
+    """
+    The name of the project containing the function
+    """
+    slug: str
+    """
+    The slug of the function
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[FunctionTypeEnum | None]
+
+
+class ScoreScore3(TypedDict):
+    prompt_session_id: str
+    """
+    The ID of the prompt session
+    """
+    prompt_session_function_id: str
+    """
+    The ID of the function in the prompt session
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore4InlineContext(TypedDict):
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
+    version: str
+
+
+class ScoreScore4(TypedDict):
+    inline_context: ScoreScore4InlineContext
+    code: str
+    """
+    The inline code to execute
+    """
+    name: NotRequired[str | None]
+    """
+    The name of the inline code function
+    """
+
+
+class ScoreScore7(TypedDict):
+    pass
+
+
+class ScoreScore8(ScoreScore, ScoreScore7):
+    pass
+
+
+class ScoreScore9(ScoreScore1, ScoreScore7):
+    pass
+
+
+class ScoreScore10(ScoreScore2, ScoreScore7):
+    pass
+
+
+class ScoreScore11(ScoreScore3, ScoreScore7):
+    pass
+
+
+class ScoreScore12(ScoreScore4, ScoreScore7):
+    pass
+
+
 class ParentParentRowIds(TypedDict):
     id: str
     """
@@ -2174,19 +2264,24 @@ class RunEvalMcpAuth(TypedDict):
     """
 
 
-class SandboxTaskData(TypedDict):
-    type: Literal['sandbox_task']
-    function_id: str
+class SandboxDataSandboxSpec(TypedDict):
+    provider: Literal['modal']
+    snapshot_ref: str
     """
-    The sandbox function ID
+    sandbox snapshot ref
     """
-    eval_name: str
+
+
+class SandboxData(TypedDict):
+    type: Literal['sandbox']
+    sandbox_spec: SandboxDataSandboxSpec
+    eval_files: NotRequired[Sequence[str] | None]
     """
-    Which eval to run from the sandbox
+    Which eval files to execute in the sandbox
     """
-    parameters: NotRequired[Mapping[str, Any] | None]
+    evaluator_definitions: NotRequired[Any | None]
     """
-    Sandbox parameter values
+    The evaluator definitions returned from the sandbox list command
     """
 
 
@@ -3561,6 +3656,108 @@ class TaskTask14(TaskTask6, TaskTask7):
 Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
 
 
+class ScoreScore5(TypedDict):
+    inline_prompt: NotRequired[PromptData | None]
+    inline_function: Mapping[str, Any]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
+    """
+    The name of the inline function
+    """
+
+
+class ScoreScore6(TypedDict):
+    inline_prompt: PromptData
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
+    """
+    The name of the inline prompt
+    """
+
+
+class ScoreScore13(ScoreScore5, ScoreScore7):
+    pass
+
+
+class ScoreScore14(ScoreScore6, ScoreScore7):
+    pass
+
+
+Score: TypeAlias = ScoreScore8 | ScoreScore9 | ScoreScore10 | ScoreScore11 | ScoreScore12 | ScoreScore13 | ScoreScore14
+
+
+class RunEval(TypedDict):
+    project_id: str
+    """
+    Unique identifier for the project to run the eval in
+    """
+    data: RunEvalData | RunEvalData1 | RunEvalData2
+    """
+    The dataset to use
+    """
+    task: Task
+    scores: Sequence[Score]
+    """
+    The functions to score the eval on
+    """
+    experiment_name: NotRequired[str | None]
+    """
+    An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
+    """
+    metadata: NotRequired[Mapping[str, Any] | None]
+    """
+    Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
+    """
+    parent: NotRequired[Parent | None]
+    stream: NotRequired[bool | None]
+    """
+    Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
+    """
+    trial_count: NotRequired[float | None]
+    """
+    The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    """
+    is_public: NotRequired[bool | None]
+    """
+    Whether the experiment should be public. Defaults to false.
+    """
+    timeout: NotRequired[float | None]
+    """
+    The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
+    """
+    max_concurrency: NotRequired[float | None]
+    """
+    The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.
+    """
+    base_experiment_name: NotRequired[str | None]
+    """
+    An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
+    """
+    base_experiment_id: NotRequired[str | None]
+    """
+    An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
+    """
+    git_metadata_settings: NotRequired[GitMetadataSettings | None]
+    repo_info: NotRequired[RepoInfo | None]
+    strict: NotRequired[bool | None]
+    """
+    If true, throw an error if one of the variables in the prompt is not present in the input
+    """
+    stop_token: NotRequired[str | None]
+    """
+    The token to stop the run
+    """
+    extra_messages: NotRequired[str | None]
+    """
+    A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.
+    """
+    tags: NotRequired[Sequence[str] | None]
+    """
+    Optional tags that will be added to the experiment.
+    """
+    mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
+
+
 class StaticParametersStaticParameters(TypedDict):
     type: Literal['prompt']
     default: NotRequired[PromptData | None]
@@ -3657,7 +3854,7 @@ FunctionId: TypeAlias = (
     | FunctionIdFunctionId6
 )
 """
-Options for identifying a function
+The sandbox function ID
 """
 
 
@@ -3757,76 +3954,17 @@ class Prompt(TypedDict):
     function_type: NotRequired[FunctionTypeEnumNullish | None]
 
 
-class RunEval(TypedDict):
-    project_id: str
+class SandboxTaskData(TypedDict):
+    type: Literal['sandbox_task']
+    function_id: FunctionId
+    eval_name: str
     """
-    Unique identifier for the project to run the eval in
+    Which eval to run from the sandbox
     """
-    data: RunEvalData | RunEvalData1 | RunEvalData2
+    parameters: NotRequired[Mapping[str, Any] | None]
     """
-    The dataset to use
+    Eval parameter values
     """
-    task: Task
-    scores: Sequence[FunctionId]
-    """
-    The functions to score the eval on
-    """
-    experiment_name: NotRequired[str | None]
-    """
-    An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
-    """
-    metadata: NotRequired[Mapping[str, Any] | None]
-    """
-    Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
-    """
-    parent: NotRequired[Parent | None]
-    stream: NotRequired[bool | None]
-    """
-    Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
-    """
-    trial_count: NotRequired[float | None]
-    """
-    The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
-    """
-    is_public: NotRequired[bool | None]
-    """
-    Whether the experiment should be public. Defaults to false.
-    """
-    timeout: NotRequired[float | None]
-    """
-    The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
-    """
-    max_concurrency: NotRequired[float | None]
-    """
-    The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.
-    """
-    base_experiment_name: NotRequired[str | None]
-    """
-    An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
-    """
-    base_experiment_id: NotRequired[str | None]
-    """
-    An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
-    """
-    git_metadata_settings: NotRequired[GitMetadataSettings | None]
-    repo_info: NotRequired[RepoInfo | None]
-    strict: NotRequired[bool | None]
-    """
-    If true, throw an error if one of the variables in the prompt is not present in the input
-    """
-    stop_token: NotRequired[str | None]
-    """
-    The token to stop the run
-    """
-    extra_messages: NotRequired[str | None]
-    """
-    A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.
-    """
-    tags: NotRequired[Sequence[str] | None]
-    """
-    Optional tags that will be added to the experiment.
-    """
-    mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
 SerializedParametersContainer: TypeAlias = ParametersContainer | StaticParametersContainer | StaticParameters
@@ -3838,20 +3976,6 @@ class EvaluatorDefinition(TypedDict):
 
 
 EvaluatorDefinitions: TypeAlias = Mapping[str, EvaluatorDefinition]
-
-
-class SandboxData(TypedDict):
-    type: Literal['sandbox']
-    provider: Literal['modal']
-    snapshot_ref: str
-    """
-    sandbox snapshot ref
-    """
-    evalFiles: NotRequired[Sequence[str] | None]
-    """
-    Which eval files should be run in this sandbox
-    """
-    evalEntries: NotRequired[EvaluatorDefinitions | None]
 
 
 FunctionData: TypeAlias = (

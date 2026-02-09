@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 334b101df89335085db5715ef6710c2902f7bee5) -- do not modify
+// Auto-generated file (internal git SHA e620a8642b922bd3b3d28c0bc1b5faee50ec0888) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -1260,15 +1260,54 @@ export const GraphData = z.object({
 export type GraphDataType = z.infer<typeof GraphData>;
 export const SandboxData = z.object({
   type: z.literal("sandbox"),
-  provider: z.literal("modal"),
-  snapshot_ref: z.string(),
-  evalFiles: z.array(z.string()).optional(),
-  evalEntries: EvaluatorDefinitions.optional(),
+  sandbox_spec: z.object({
+    provider: z.literal("modal"),
+    snapshot_ref: z.string(),
+  }),
+  eval_files: z.array(z.string()).optional(),
+  evaluator_definitions: z.unknown().optional(),
 });
 export type SandboxDataType = z.infer<typeof SandboxData>;
+export const FunctionId = z.union([
+  z.object({ function_id: z.string(), version: z.string().optional() }),
+  z.object({
+    project_name: z.string(),
+    slug: z.string(),
+    version: z.string().optional(),
+  }),
+  z.object({
+    global_function: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+  }),
+  z.object({
+    prompt_session_id: z.string(),
+    prompt_session_function_id: z.string(),
+    version: z.string().optional(),
+  }),
+  z.object({
+    inline_context: z.object({
+      runtime: z.enum(["node", "python", "browser", "quickjs"]),
+      version: z.string(),
+    }),
+    code: z.string(),
+    name: z.union([z.string(), z.null()]).optional(),
+  }),
+  z.object({
+    inline_prompt: PromptData.optional(),
+    inline_function: z.object({}).partial().passthrough(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+    name: z.union([z.string(), z.null()]).optional(),
+  }),
+  z.object({
+    inline_prompt: PromptData,
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+    name: z.union([z.string(), z.null()]).optional(),
+  }),
+]);
+export type FunctionIdType = z.infer<typeof FunctionId>;
 export const SandboxTaskData = z.object({
   type: z.literal("sandbox_task"),
-  function_id: z.string(),
+  function_id: FunctionId,
   eval_name: z.string(),
   parameters: z.object({}).partial().passthrough().optional(),
 });
@@ -1366,43 +1405,6 @@ export const FunctionFormat = z.enum([
   "topic_map",
 ]);
 export type FunctionFormatType = z.infer<typeof FunctionFormat>;
-export const FunctionId = z.union([
-  z.object({ function_id: z.string(), version: z.string().optional() }),
-  z.object({
-    project_name: z.string(),
-    slug: z.string(),
-    version: z.string().optional(),
-  }),
-  z.object({
-    global_function: z.string(),
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-  }),
-  z.object({
-    prompt_session_id: z.string(),
-    prompt_session_function_id: z.string(),
-    version: z.string().optional(),
-  }),
-  z.object({
-    inline_context: z.object({
-      runtime: z.enum(["node", "python", "browser", "quickjs"]),
-      version: z.string(),
-    }),
-    code: z.string(),
-    name: z.union([z.string(), z.null()]).optional(),
-  }),
-  z.object({
-    inline_prompt: PromptData.optional(),
-    inline_function: z.object({}).partial().passthrough(),
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-    name: z.union([z.string(), z.null()]).optional(),
-  }),
-  z.object({
-    inline_prompt: PromptData,
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-    name: z.union([z.string(), z.null()]).optional(),
-  }),
-]);
-export type FunctionIdType = z.infer<typeof FunctionId>;
 export const FunctionObjectType = z.enum([
   "prompt",
   "tool",
@@ -1495,7 +1497,7 @@ export const StreamingMode = z.union([
   z.null(),
 ]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
-export const InvokeFunction = FunctionId.and(
+export const InvokeFunction = FunctionId.and(z.unknown()).and(
   z
     .object({
       input: z.unknown(),
@@ -1920,7 +1922,7 @@ export const RunEval = z.object({
     z.object({ data: z.array(z.unknown()) }),
   ]),
   task: FunctionId.and(z.unknown()),
-  scores: z.array(FunctionId),
+  scores: z.array(FunctionId.and(z.unknown())),
   experiment_name: z.string().optional(),
   metadata: z.object({}).partial().passthrough().optional(),
   parent: InvokeParent.and(z.unknown()).optional(),

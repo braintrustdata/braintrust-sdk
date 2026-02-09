@@ -2410,8 +2410,7 @@
         "type": "object",
         "additionalProperties": {
           "$ref": "#/components/schemas/EvaluatorDefinition"
-        },
-        "description": "The eval entries available in this sandbox"
+        }
       },
       "Experiment": {
         "type": "object",
@@ -3585,7 +3584,7 @@
             "title": "inline_prompt"
           }
         ],
-        "description": "Options for identifying a function"
+        "description": "The sandbox function ID"
       },
       "FunctionIdRef": {
         "type": "object",
@@ -4263,7 +4262,14 @@
       "InvokeFunction": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/FunctionId"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FunctionId"
+              },
+              {
+                "description": "Options for identifying a function"
+              }
+            ]
           },
           {
             "type": "object",
@@ -7140,7 +7146,14 @@
           "scores": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/FunctionId"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/FunctionId"
+                },
+                {
+                  "description": "Options for identifying a function"
+                }
+              ]
             },
             "description": "The functions to score the eval on"
           },
@@ -7288,32 +7301,45 @@
               "sandbox"
             ]
           },
-          "provider": {
-            "type": "string",
-            "enum": [
-              "modal"
+          "sandbox_spec": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "modal"
+                    ]
+                  },
+                  "snapshot_ref": {
+                    "type": "string",
+                    "description": "sandbox snapshot ref"
+                  }
+                },
+                "required": [
+                  "provider",
+                  "snapshot_ref"
+                ]
+              }
             ]
           },
-          "snapshot_ref": {
-            "type": "string",
-            "description": "sandbox snapshot ref"
-          },
-          "evalFiles": {
+          "eval_files": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Which eval files should be run in this sandbox"
+            "description": "Which eval files to execute in the sandbox"
           },
-          "evalEntries": {
-            "$ref": "#/components/schemas/EvaluatorDefinitions"
+          "evaluator_definitions": {
+            "description": "The evaluator definitions returned from the sandbox list command"
           }
         },
         "required": [
           "type",
-          "provider",
-          "snapshot_ref"
+          "sandbox_spec"
         ],
+        "description": "A sandboxed eval environment.",
         "title": "sandbox"
       },
       "SandboxTaskData": {
@@ -7326,8 +7352,7 @@
             ]
           },
           "function_id": {
-            "type": "string",
-            "description": "The sandbox function ID"
+            "$ref": "#/components/schemas/FunctionId"
           },
           "eval_name": {
             "type": "string",
@@ -7336,7 +7361,7 @@
           "parameters": {
             "type": "object",
             "additionalProperties": {},
-            "description": "Sandbox parameter values"
+            "description": "Eval parameter values"
           }
         },
         "required": [
@@ -7344,7 +7369,7 @@
           "function_id",
           "eval_name"
         ],
-        "description": "A task that runs an eval from a sandbox function",
+        "description": "A task that runs an eval from a sandbox",
         "title": "sandbox_task"
       },
       "SavedFunctionId": {
@@ -8684,7 +8709,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "334b101df89335085db5715ef6710c2902f7bee5"
+    "x-internal-git-sha": "e620a8642b922bd3b3d28c0bc1b5faee50ec0888"
   },
   "paths": {},
   "webhooks": {}
