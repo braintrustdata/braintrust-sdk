@@ -549,13 +549,6 @@ class EnvVar(TypedDict):
     """
 
 
-class EvalParametersJsonSchema(TypedDict):
-    type: Literal['object']
-    properties: Mapping[str, Mapping[str, Any]]
-    required: NotRequired[Sequence[str] | None]
-    additionalProperties: NotRequired[bool | None]
-
-
 class EvalStatusPageConfig(TypedDict):
     score_columns: NotRequired[Sequence[str] | None]
     """
@@ -591,10 +584,6 @@ EvalStatusPageTheme: TypeAlias = Literal['light', 'dark']
 """
 The theme for the page
 """
-
-
-class EvaluatorDefinitionScore(TypedDict):
-    name: str
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -1481,14 +1470,6 @@ class Organization(TypedDict):
     Date of organization creation
     """
     image_rendering_mode: NotRequired[ImageRenderingMode | None]
-
-
-class ParametersSource(TypedDict):
-    parametersId: NotRequired[str | None]
-    slug: str
-    name: str
-    projectId: NotRequired[str | None]
-    version: NotRequired[str | None]
 
 
 Permission: TypeAlias = Literal[
@@ -2405,13 +2386,6 @@ class SSEProgressEventData(TypedDict):
     data: str
 
 
-class StaticParametersStaticParameters1(TypedDict):
-    type: Literal['data']
-    schema: Mapping[str, Any]
-    default: NotRequired[Any | None]
-    description: NotRequired[str | None]
-
-
 StreamingMode: TypeAlias = Literal['auto', 'parallel', 'json', 'text']
 """
 The mode format of the returned value (defaults to 'auto')
@@ -3160,12 +3134,6 @@ class OnlineScoreConfig(TypedDict):
     """
 
 
-class ParametersContainer(TypedDict):
-    type: Literal['braintrust.parameters']
-    schema: EvalParametersJsonSchema
-    source: ParametersSource
-
-
 class Project(TypedDict):
     id: str
     """
@@ -3758,21 +3726,6 @@ class RunEval(TypedDict):
     mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
-class StaticParametersStaticParameters(TypedDict):
-    type: Literal['prompt']
-    default: NotRequired[PromptData | None]
-    description: NotRequired[str | None]
-
-
-StaticParameters: TypeAlias = Mapping[str, StaticParametersStaticParameters | StaticParametersStaticParameters1]
-
-
-class StaticParametersContainer(TypedDict):
-    type: Literal['braintrust.staticParameters']
-    schema: StaticParameters
-    source: None
-
-
 class View(TypedDict):
     id: str
     """
@@ -3965,17 +3918,6 @@ class SandboxTaskData(TypedDict):
     """
     Eval parameter values
     """
-
-
-SerializedParametersContainer: TypeAlias = ParametersContainer | StaticParametersContainer | StaticParameters
-
-
-class EvaluatorDefinition(TypedDict):
-    parameters: NotRequired[SerializedParametersContainer | None]
-    scores: NotRequired[Sequence[EvaluatorDefinitionScore] | None]
-
-
-EvaluatorDefinitions: TypeAlias = Mapping[str, EvaluatorDefinition]
 
 
 FunctionData: TypeAlias = (
