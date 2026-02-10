@@ -5,11 +5,8 @@
  * 1. Wrapping the Claude Agent SDK for automatic tracing
  * 2. SDK MCP server (math) with calculator tool - local in-process
  * 3. Remote MCP server (braintrust) - stdio-based MCP server
- * 4. Subagent spawning via Task tool
+ * 4. Subagent spawning via Task tool (with nested trace spans)
  * 5. All tool calls traced via PreToolUse/PostToolUse hooks
- *
- * Note: Subagent tracing is not yet supported. The SDK has SubagentStart/SubagentStop
- * hooks but they don't fire correctly yet. See: https://github.com/anthropics/claude-code/issues/14859
  *
  * Run: make run
  */
@@ -78,7 +75,7 @@ async function main() {
   );
   console.log("  - Remote MCP: braintrust (stdio server via npx)");
   console.log(
-    "  - Subagents: math-expert (via Task tool, tracing not yet supported)\n",
+    "  - Subagents: math-expert (via Task tool, with nested trace spans)\n",
   );
 
   // SDK MCP server (local, in-process)
@@ -114,7 +111,7 @@ Report all results.`;
           permissionMode: "bypassPermissions",
           // Enable Task tool for subagent spawning
           allowedTools: ["Task"],
-          // Define custom subagents (tracing not yet supported - SDK hooks don't fire correctly)
+          // Define custom subagents (traced as nested TASK spans)
           agents: {
             "math-expert": {
               description: "Math specialist for calculations and explanations",
