@@ -1835,12 +1835,13 @@ function updateSpanImpl({
   if (isEmpty(root_span_id) !== isEmpty(span_id)) {
     throw new Error("both root_span_id and span_id must be set, or neither");
   }
+  const hasExplicitSpanIds =
+    root_span_id !== undefined && span_id !== undefined;
   const updateEvent = deepCopyEvent(
     validateAndSanitizeExperimentLogPartialArgs({
       ...event,
       id,
-      root_span_id,
-      span_id,
+      ...(hasExplicitSpanIds ? { root_span_id, span_id } : {}),
     } as Partial<ExperimentEvent>),
   );
 

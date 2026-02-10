@@ -3276,13 +3276,13 @@ def _update_span_impl(
     if (root_span_id is None) != (span_id is None):
         raise ValueError("both root_span_id and span_id must be set, or neither")
 
+    update_payload = {**event, "id": id}
+    if root_span_id is not None and span_id is not None:
+        update_payload["root_span_id"] = root_span_id
+        update_payload["span_id"] = span_id
+
     update_event = _validate_and_sanitize_experiment_log_partial_args(
-        event={
-            **event,
-            "id": id,
-            "root_span_id": root_span_id,
-            "span_id": span_id,
-        },
+        event=update_payload,
     )
 
     update_event = bt_safe_deep_copy(update_event)
