@@ -3314,11 +3314,18 @@ def update_span(exported: str, **event: Any) -> None:
     components = SpanComponentsV4.from_str(exported)
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
+
+    event_with_exported_ids = dict(event)
+    if components.span_id is not None and "span_id" not in event_with_exported_ids:
+        event_with_exported_ids["span_id"] = components.span_id
+    if components.root_span_id is not None and "root_span_id" not in event_with_exported_ids:
+        event_with_exported_ids["root_span_id"] = components.root_span_id
+
     return _update_span_impl(
         parent_object_type=components.object_type,
         parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
         id=components.row_id,
-        **event,
+        **event_with_exported_ids,
     )
 
 

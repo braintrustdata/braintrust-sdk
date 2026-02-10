@@ -1872,6 +1872,18 @@ export function updateSpan({
     throw new Error("Exported span must have a row id");
   }
 
+  const eventWithExportedIds = {
+    ...event,
+    ...(components.data.span_id != null &&
+    !Object.prototype.hasOwnProperty.call(event, "span_id")
+      ? { span_id: components.data.span_id }
+      : {}),
+    ...(components.data.root_span_id != null &&
+    !Object.prototype.hasOwnProperty.call(event, "root_span_id")
+      ? { root_span_id: components.data.root_span_id }
+      : {}),
+  };
+
   updateSpanImpl({
     state: resolvedState,
     parentObjectType: components.data.object_type,
@@ -1879,7 +1891,7 @@ export function updateSpan({
       spanComponentsToObjectIdLambda(resolvedState, components),
     ),
     id: components.data.row_id,
-    event,
+    event: eventWithExportedIds,
   });
 }
 
