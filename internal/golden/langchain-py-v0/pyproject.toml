@@ -1,0 +1,18 @@
+[project]
+name = "langchain-py-v0"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11.14"
+dependencies = [
+    "braintrust",
+    "braintrust-langchain",
+    "langchain>=0.3.11,<1.0.0",
+    "langchain-anthropic>=0.3.22",
+    "langchain-openai>=0.3.35",
+    "langgraph>=0.3.11,<1.0.0",
+]
+
+[tool.uv.sources]
+braintrust = { path = "../../../py", editable = true }
+braintrust-langchain = { path = "../../../integrations/langchain-py", editable = true }
