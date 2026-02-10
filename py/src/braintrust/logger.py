@@ -3269,10 +3269,20 @@ def _update_span_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
+    root_span_id: str | None,
+    span_id: str | None,
     **event: Any,
 ):
+    if (root_span_id is None) != (span_id is None):
+        raise ValueError("both root_span_id and span_id must be set, or neither")
+
     update_event = _validate_and_sanitize_experiment_log_partial_args(
-        event=event,
+        event={
+            **event,
+            "id": id,
+            "root_span_id": root_span_id,
+            "span_id": span_id,
+        },
     )
 
     update_event = bt_safe_deep_copy(update_event)
@@ -3315,17 +3325,17 @@ def update_span(exported: str, **event: Any) -> None:
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
 
-    event_with_exported_ids = dict(event)
-    if components.span_id is not None and "span_id" not in event_with_exported_ids:
-        event_with_exported_ids["span_id"] = components.span_id
-    if components.root_span_id is not None and "root_span_id" not in event_with_exported_ids:
-        event_with_exported_ids["root_span_id"] = components.root_span_id
+    event_without_span_ids = dict(event)
+    event_without_span_ids.pop("span_id", None)
+    event_without_span_ids.pop("root_span_id", None)
 
     return _update_span_impl(
         parent_object_type=components.object_type,
         parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
         id=components.row_id,
-        **event_with_exported_ids,
+        root_span_id=components.root_span_id,
+        span_id=components.span_id,
+        **event_without_span_ids,
     )
 
 
@@ -3748,10 +3758,14 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         :param id: The id of the span to update.
         :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
         """
+        root_span_id = event.pop("root_span_id", None)
+        span_id = event.pop("span_id", None)
         return _update_span_impl(
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            root_span_id=root_span_id,
+            span_id=span_id,
             **event,
         )
 
@@ -5176,10 +5190,14 @@ class Logger(Exportable):
         :param id: The id of the span to update.
         :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
         """
+        root_span_id = event.pop("root_span_id", None)
+        span_id = event.pop("span_id", None)
         return _update_span_impl(
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            root_span_id=root_span_id,
+            span_id=span_id,
             **event,
         )
 
