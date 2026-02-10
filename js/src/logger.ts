@@ -3764,8 +3764,8 @@ export interface ExperimentalRegisterSandboxOptions {
   project: string;
   /** Sandbox configuration (provider and snapshot reference). */
   sandbox: ExperimentalSandboxConfig;
-  /** Optional list of eval files available in the sandbox. */
-  evals?: string[];
+  /** Optional list of entrypoints available in the sandbox. */
+  entrypoints?: string[];
   /** URL-friendly identifier. Defaults to slugified name. */
   slug?: string;
   /** Optional description. */
@@ -3809,7 +3809,7 @@ export interface ExperimentalRegisterSandboxResult {
  * const result = await experimental_registerSandbox({
  *   name: "My Sandbox",
  *   project: "My Project",
- *   evals: ["./my-eval.eval.ts"],
+ *   entrypoints: ["./my-eval.eval.ts"],
  *   sandbox: {
  *     provider: "modal",
  *     snapshotRef: "sb-xxx",
@@ -3846,7 +3846,7 @@ export async function experimental_registerSandbox(
       provider: options.sandbox.provider,
       snapshot_ref: options.sandbox.snapshotRef,
     },
-    eval_files: options.evals,
+    entrypoints: options.entrypoints,
   };
   const functionDef: Record<string, unknown> = {
     project_id: projectId,

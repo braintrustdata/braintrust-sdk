@@ -521,6 +521,9 @@
                           ]
                         }
                       ]
+                    },
+                    "idempotency_key": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -5974,7 +5977,10 @@
                   "type": "string"
                 },
                 "name": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "description": {
                   "type": [
@@ -5984,8 +5990,7 @@
                 }
               },
               "required": [
-                "url",
-                "name"
+                "url"
               ]
             },
             "description": "The remote eval sources to use for the project"
@@ -7228,12 +7233,12 @@
               }
             ]
           },
-          "eval_files": {
+          "entrypoints": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Which eval files to execute in the sandbox"
+            "description": "Which entrypoints to execute in the sandbox"
           },
           "evaluator_definitions": {
             "description": "The evaluator definitions returned from the sandbox list command"
@@ -7655,12 +7660,20 @@
             "type": "string",
             "description": "Key of the topic map bundle in code_bundles bucket"
           },
+          "report_key": {
+            "type": "string",
+            "description": "Key of the clustering report in code_bundles bucket"
+          },
+          "topic_names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Mapping from topic_id to topic name"
+          },
           "distance_threshold": {
             "type": "number",
             "description": "Maximum distance to nearest centroid. If exceeded, returns no_match."
-          },
-          "report": {
-            "$ref": "#/components/schemas/TopicMapReport"
           }
         },
         "required": [
@@ -7668,228 +7681,6 @@
           "source_facet",
           "embedding_model"
         ]
-      },
-      "TopicMapReport": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "number",
-            "enum": [
-              1
-            ]
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "settings": {
-            "type": "object",
-            "properties": {
-              "algorithm": {
-                "type": "string",
-                "enum": [
-                  "hdbscan",
-                  "kmeans",
-                  "hierarchical"
-                ]
-              },
-              "dimension_reduction": {
-                "type": "string",
-                "enum": [
-                  "umap",
-                  "pca",
-                  "none"
-                ]
-              },
-              "vector_field": {
-                "type": "string"
-              },
-              "embedding_model": {
-                "type": "string"
-              },
-              "n_clusters": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "umap_dimensions": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "min_cluster_size": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "min_samples": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "algorithm",
-              "dimension_reduction",
-              "vector_field",
-              "embedding_model"
-            ]
-          },
-          "query_settings": {
-            "type": "object",
-            "properties": {
-              "hierarchy_threshold": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "auto_naming": {
-                "type": "boolean"
-              },
-              "skip_cache": {
-                "type": "boolean"
-              },
-              "viz_mode": {
-                "type": "string",
-                "enum": [
-                  "bar",
-                  "scatter"
-                ]
-              },
-              "naming_model": {
-                "type": "string"
-              }
-            }
-          },
-          "clusters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "cluster_id": {
-                  "type": "number"
-                },
-                "parent_cluster_id": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "topic_id": {
-                  "type": "string"
-                },
-                "count": {
-                  "type": "number"
-                },
-                "sample_texts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "samples": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "text": {
-                        "type": "string"
-                      },
-                      "root_span_id": {
-                        "type": "string"
-                      },
-                      "span_id": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "text",
-                      "root_span_id",
-                      "span_id"
-                    ]
-                  }
-                },
-                "name": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "keywords": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "centroid": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
-                },
-                "parent_id": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "is_leaf": {
-                  "type": "boolean"
-                },
-                "depth": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "cluster_id",
-                "topic_id",
-                "count",
-                "sample_texts",
-                "samples"
-              ]
-            }
-          },
-          "embedding_points": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "x": {
-                  "type": "number"
-                },
-                "y": {
-                  "type": "number"
-                },
-                "cluster": {
-                  "type": "number"
-                },
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "x",
-                "y",
-                "cluster"
-              ]
-            }
-          }
-        },
-        "required": [
-          "version",
-          "settings",
-          "query_settings",
-          "clusters"
-        ],
-        "description": "Saved clustering report for UI rehydration"
       },
       "TraceScope": {
         "type": "object",
@@ -7923,6 +7714,13 @@
               "null"
             ],
             "description": "The xact_id when this function completed (matches triggered_xact_id if done)"
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Deterministic key of the function definition + input version used to skip unchanged reruns"
           },
           "attempts": {
             "type": "integer",
@@ -8528,7 +8326,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "25fbeba36aeff2824aeadd4ba97865f76f98f1d7"
+    "x-internal-git-sha": "6a76cdea22452681a5a32be11b5767d3bb8a8a1b"
   },
   "paths": {},
   "webhooks": {}

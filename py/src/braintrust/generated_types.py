@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 25fbeba36aeff2824aeadd4ba97865f76f98f1d7) -- do not modify"""
+"""Auto-generated file (internal git SHA 6a76cdea22452681a5a32be11b5767d3bb8a8a1b) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -104,7 +104,6 @@ from ._generated_types import (
     StreamingMode,
     ToolFunctionDefinition,
     TopicMapData,
-    TopicMapReport,
     TraceScope,
     TriggeredFunctionState,
     UploadStatus,
@@ -219,7 +218,6 @@ __all__ = [
     "StreamingMode",
     "ToolFunctionDefinition",
     "TopicMapData",
-    "TopicMapReport",
     "TraceScope",
     "TriggeredFunctionState",
     "UploadStatus",

@@ -131,6 +131,7 @@ class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
         AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
         | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
     )
+    idempotency_key: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
@@ -1719,7 +1720,7 @@ class ProjectSettingsSpanFieldOrderItem(TypedDict):
 
 class ProjectSettingsRemoteEvalSource(TypedDict):
     url: str
-    name: str
+    name: NotRequired[str | None]
     description: NotRequired[str | None]
 
 
@@ -2256,9 +2257,9 @@ class SandboxDataSandboxSpec(TypedDict):
 class SandboxData(TypedDict):
     type: Literal['sandbox']
     sandbox_spec: SandboxDataSandboxSpec
-    eval_files: NotRequired[Sequence[str] | None]
+    entrypoints: NotRequired[Sequence[str] | None]
     """
-    Which eval files to execute in the sandbox
+    Which entrypoints to execute in the sandbox
     """
     evaluator_definitions: NotRequired[Any | None]
     """
@@ -2404,62 +2405,32 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
-class TopicMapReportSettings(TypedDict):
-    algorithm: Literal['hdbscan', 'kmeans', 'hierarchical']
-    dimension_reduction: Literal['umap', 'pca', 'none']
-    vector_field: str
+class TopicMapData(TypedDict):
+    type: Literal['topic_map']
+    source_facet: str
+    """
+    The facet field name to use as input for classification
+    """
     embedding_model: str
-    n_clusters: NotRequired[int | None]
-    umap_dimensions: NotRequired[int | None]
-    min_cluster_size: NotRequired[int | None]
-    min_samples: NotRequired[int | None]
-
-
-class TopicMapReportQuerySettings(TypedDict):
-    hierarchy_threshold: NotRequired[int | None]
-    auto_naming: NotRequired[bool | None]
-    skip_cache: NotRequired[bool | None]
-    viz_mode: NotRequired[Literal['bar', 'scatter'] | None]
-    naming_model: NotRequired[str | None]
-
-
-class TopicMapReportClusterSample(TypedDict):
-    id: str
-    text: str
-    root_span_id: str
-    span_id: str
-
-
-class TopicMapReportCluster(TypedDict):
-    cluster_id: float
-    parent_cluster_id: NotRequired[float | None]
-    topic_id: str
-    count: float
-    sample_texts: Sequence[str]
-    samples: Sequence[TopicMapReportClusterSample]
-    name: NotRequired[str | None]
-    description: NotRequired[str | None]
-    keywords: NotRequired[Sequence[str] | None]
-    centroid: NotRequired[Sequence[float] | None]
-    parent_id: NotRequired[float | None]
-    is_leaf: NotRequired[bool | None]
-    depth: NotRequired[float | None]
-
-
-class TopicMapReportEmbeddingPoint(TypedDict):
-    x: float
-    y: float
-    cluster: float
-    text: NotRequired[str | None]
-
-
-class TopicMapReport(TypedDict):
-    version: Literal[1]
-    created_at: NotRequired[str | None]
-    settings: TopicMapReportSettings
-    query_settings: TopicMapReportQuerySettings
-    clusters: Sequence[TopicMapReportCluster]
-    embedding_points: NotRequired[Sequence[TopicMapReportEmbeddingPoint] | None]
+    """
+    The embedding model to use for embedding facet values
+    """
+    bundle_key: NotRequired[str | None]
+    """
+    Key of the topic map bundle in code_bundles bucket
+    """
+    report_key: NotRequired[str | None]
+    """
+    Key of the clustering report in code_bundles bucket
+    """
+    topic_names: NotRequired[Mapping[str, str] | None]
+    """
+    Mapping from topic_id to topic name
+    """
+    distance_threshold: NotRequired[float | None]
+    """
+    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    """
 
 
 class TraceScope(TypedDict):
@@ -2492,6 +2463,10 @@ class TriggeredFunctionState(TypedDict):
     completed_xact_id: NotRequired[str | None]
     """
     The xact_id when this function completed (matches triggered_xact_id if done)
+    """
+    idempotency_key: NotRequired[str | None]
+    """
+    Deterministic key of the function definition + input version used to skip unchanged reruns
     """
     attempts: NotRequired[int | None]
     """
@@ -2724,6 +2699,28 @@ class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreproces
 
 
 Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+
+
+class BatchedFacetDataTopicMaps(TypedDict):
+    function_name: str
+    """
+    The name of the topic map function
+    """
+    topic_map_id: NotRequired[str | None]
+    """
+    The id of the topic map function
+    """
+    topic_map_data: TopicMapData
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
+    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
+    """
+    Topic maps that depend on facets in this batch, keyed by source facet name
+    """
 
 
 ChatCompletionContentPart: TypeAlias = (
@@ -3268,52 +3265,9 @@ class SpanAttributes(TypedDict):
     type: NotRequired[SpanType | None]
 
 
-class TopicMapData(TypedDict):
-    type: Literal['topic_map']
-    source_facet: str
-    """
-    The facet field name to use as input for classification
-    """
-    embedding_model: str
-    """
-    The embedding model to use for embedding facet values
-    """
-    bundle_key: NotRequired[str | None]
-    """
-    Key of the topic map bundle in code_bundles bucket
-    """
-    distance_threshold: NotRequired[float | None]
-    """
-    Maximum distance to nearest centroid. If exceeded, returns no_match.
-    """
-    report: NotRequired[TopicMapReport | None]
-
-
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
-
-
-class BatchedFacetDataTopicMaps(TypedDict):
-    function_name: str
-    """
-    The name of the topic map function
-    """
-    topic_map_id: NotRequired[str | None]
-    """
-    The id of the topic map function
-    """
-    topic_map_data: TopicMapData
-
-
-class BatchedFacetData(TypedDict):
-    type: Literal['batched_facet']
-    preprocessor: NotRequired[Preprocessor | None]
-    facets: Sequence[BatchedFacetDataFacet]
-    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
-    """
-    Topic maps that depend on facets in this batch, keyed by source facet name
-    """
 
 
 class ExperimentEvent(TypedDict):

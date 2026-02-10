@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 25fbeba36aeff2824aeadd4ba97865f76f98f1d7) -- do not modify
+// Auto-generated file (internal git SHA 6a76cdea22452681a5a32be11b5767d3bb8a8a1b) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -135,6 +135,7 @@ export type ApiKeyType = z.infer<typeof ApiKey>;
 export const TriggeredFunctionState = z.object({
   triggered_xact_id: z.string(),
   completed_xact_id: z.union([z.string(), z.null()]).optional(),
+  idempotency_key: z.union([z.string(), z.null()]).optional(),
   attempts: z.number().int().gte(0).optional().default(0),
   scope: z.union([
     z.object({ type: z.literal("span") }),
@@ -173,6 +174,7 @@ export const AsyncScoringControl = z.union([
             z.object({ type: z.literal("span") }),
             z.object({ type: z.literal("trace") }),
           ]),
+          idempotency_key: z.string().optional(),
         }),
       )
       .min(1),
@@ -248,71 +250,14 @@ export const NullableSavedFunctionId = z.union([
 export type NullableSavedFunctionIdType = z.infer<
   typeof NullableSavedFunctionId
 >;
-export const TopicMapReport = z.object({
-  version: z.literal(1),
-  created_at: z.string().optional(),
-  settings: z.object({
-    algorithm: z.enum(["hdbscan", "kmeans", "hierarchical"]),
-    dimension_reduction: z.enum(["umap", "pca", "none"]),
-    vector_field: z.string(),
-    embedding_model: z.string(),
-    n_clusters: z.union([z.number(), z.null()]).optional(),
-    umap_dimensions: z.union([z.number(), z.null()]).optional(),
-    min_cluster_size: z.union([z.number(), z.null()]).optional(),
-    min_samples: z.union([z.number(), z.null()]).optional(),
-  }),
-  query_settings: z
-    .object({
-      hierarchy_threshold: z.union([z.number(), z.null()]),
-      auto_naming: z.boolean(),
-      skip_cache: z.boolean(),
-      viz_mode: z.enum(["bar", "scatter"]),
-      naming_model: z.string(),
-    })
-    .partial(),
-  clusters: z.array(
-    z.object({
-      cluster_id: z.number(),
-      parent_cluster_id: z.union([z.number(), z.null()]).optional(),
-      topic_id: z.string(),
-      count: z.number(),
-      sample_texts: z.array(z.string()),
-      samples: z.array(
-        z.object({
-          id: z.string(),
-          text: z.string(),
-          root_span_id: z.string(),
-          span_id: z.string(),
-        }),
-      ),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      keywords: z.array(z.string()).optional(),
-      centroid: z.array(z.number()).optional(),
-      parent_id: z.union([z.number(), z.null()]).optional(),
-      is_leaf: z.boolean().optional(),
-      depth: z.number().optional(),
-    }),
-  ),
-  embedding_points: z
-    .array(
-      z.object({
-        x: z.number(),
-        y: z.number(),
-        cluster: z.number(),
-        text: z.string().optional(),
-      }),
-    )
-    .optional(),
-});
-export type TopicMapReportType = z.infer<typeof TopicMapReport>;
 export const TopicMapData = z.object({
   type: z.literal("topic_map"),
   source_facet: z.string(),
   embedding_model: z.string(),
   bundle_key: z.string().optional(),
+  report_key: z.string().optional(),
+  topic_names: z.record(z.string()).optional(),
   distance_threshold: z.number().optional(),
-  report: TopicMapReport.optional(),
 });
 export type TopicMapDataType = z.infer<typeof TopicMapData>;
 export const BatchedFacetData = z.object({
@@ -1158,7 +1103,7 @@ export const SandboxData = z.object({
     provider: z.literal("modal"),
     snapshot_ref: z.string(),
   }),
-  eval_files: z.array(z.string()).optional(),
+  entrypoints: z.array(z.string()).optional(),
   evaluator_definitions: z.unknown().optional(),
 });
 export type SandboxDataType = z.infer<typeof SandboxData>;
@@ -1540,7 +1485,7 @@ export const ProjectSettings = z.union([
         z.array(
           z.object({
             url: z.string(),
-            name: z.string(),
+            name: z.union([z.string(), z.null()]).optional(),
             description: z.union([z.string(), z.null()]).optional(),
           }),
         ),

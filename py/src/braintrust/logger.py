@@ -1797,7 +1797,7 @@ def experimental_register_sandbox(
     project: str,
     sandbox: ExperimentalSandboxConfig,
     *,
-    evals: list[str] | None = None,
+    entrypoints: list[str] | None = None,
     slug: str | None = None,
     description: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -1811,7 +1811,7 @@ def experimental_register_sandbox(
     :param name: Name of the sandbox function.
     :param project: Name of the project to register the sandbox in.
     :param sandbox: Sandbox configuration (provider and snapshot reference).
-    :param evals: Optional list of eval files available in the sandbox.
+    :param entrypoints: Optional list of entrypoints available in the sandbox.
     :param slug: URL-friendly identifier. Defaults to slugified name.
     :param description: Optional description.
     :param metadata: Optional metadata dict.
@@ -1828,7 +1828,7 @@ def experimental_register_sandbox(
         result = experimental_register_sandbox(
             name="My Sandbox",
             project="My Project",
-            evals=["./my-eval.eval.py"],
+            entrypoints=["./my-eval.eval.py"],
             sandbox=ExperimentalSandboxConfig(provider="modal", snapshot_ref="sb-xxx"),
         )
         print(result.id)
@@ -1854,7 +1854,7 @@ def experimental_register_sandbox(
                 "provider": sandbox.provider,
                 "snapshot_ref": sandbox.snapshot_ref,
             },
-            "eval_files": evals or [],
+            "entrypoints": entrypoints,
         },
         "if_exists": if_exists or "replace",
     }
