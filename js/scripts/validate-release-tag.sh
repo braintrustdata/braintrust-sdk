@@ -30,7 +30,7 @@ fi
 VERSION=${TAG#js-sdk-v}
 
 # Get version from package.json
-PACKAGE_VERSION=$(node -p "require('$JS_DIR/package.json').version")
+PACKAGE_VERSION=$(cat "$JS_DIR/VERSION")
 
 # Check if the tag version matches the package version
 if [ "$VERSION" != "$PACKAGE_VERSION" ]; then

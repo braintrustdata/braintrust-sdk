@@ -89,8 +89,8 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           else
-            # Pre-release: compute version from package.json + run number
-            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            # Pre-release: compute version from VERSION file + run number
+            CURRENT_VERSION=$(cat VERSION)
             VERSION="${CURRENT_VERSION}-rc.${{ github.run_number }}"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
@@ -107,8 +107,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         working-directory: js
         run: |
-          # Read current version from package.json and append run number
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          # Read current version from VERSION file and append run number
+          CURRENT_VERSION=$(cat VERSION)
           NEW_VERSION="${CURRENT_VERSION}-rc.${GITHUB_RUN_NUMBER}"
           ./scripts/publish-prerelease.sh "rc" "$NEW_VERSION"
 

@@ -91,7 +91,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat _sync-version
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
@@ -124,7 +124,11 @@ docs:
 build:
 	npm run build
 
-publish-beta-local: build
+_sync-version:
+	@echo "Syncing version from VERSION file..."
+	npm version $$(cat VERSION) --no-git-tag-version --allow-same-version
+
+publish-beta-local: _sync-version build
 	pnpm publish --tag beta
 
 bench:
@@ -135,7 +139,7 @@ bench:
 
 verify-ci: build docs test
 
-publish-sdk-js:
+publish-sdk-js: _sync-version
 	./scripts/validate-release.sh
 	npm install
 	npm run build
