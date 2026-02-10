@@ -62,7 +62,7 @@ def wrap_agent(Agent: Any) -> Any:
 
     def _ensure_model_wrapped(instance: Any):
         """Ensure the agent's model class is wrapped (lazy wrapping)."""
-        if hasattr(instance, "_model"):
+        if hasattr(instance, "_model") and instance._model is not None:
             model_class = type(instance._model)
             _wrap_concrete_model_class(model_class)
 
