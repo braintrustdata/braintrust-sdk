@@ -584,9 +584,6 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(toolSpan).toBeDefined();
     expect(toolSpan?.error).toBe("Tool execution failed: connection timeout");
   });
-
-  // FIXME: Add subagent hook tests when SDK supports SubagentStart/SubagentStop properly.
-  // See: https://github.com/anthropics/claude-code/issues/14859
 });
 
 // Try to import the Claude Agent SDK - skip tests if not available
@@ -837,4 +834,114 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     expect(Array.isArray(llmInput)).toBe(true);
     expect(llmInput.map((item) => item.content)).toEqual(["Part 1", "Part 2"]);
   }, 30000);
+
+  test("sub-agent produces nested TASK span with tool calls parented correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { query, tool, createSdkMcpServer } = wrapClaudeAgentSDK(
+      claudeSDK as any,
+    );
+
+    const calculator = tool(
+      "calculator",
+      "Performs basic arithmetic operations",
+      {
+        operation: z.enum(["add", "subtract", "multiply", "divide"]),
+        a: z.number(),
+        b: z.number(),
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (args: any) => {
+        let result = 0;
+        switch (args.operation) {
+          case "add":
+            result = args.a + args.b;
+            break;
+          case "multiply":
+            result = args.a * args.b;
+            break;
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${args.operation}(${args.a}, ${args.b}) = ${result}`,
+            },
+          ],
+        };
+      },
+    );
+
+    for await (const message of query({
+      prompt:
+        "Spawn a math-expert subagent to add 15 and 27 using the calculator tool. Report the result.",
+      options: {
+        model: TEST_MODEL,
+        permissionMode: "bypassPermissions",
+        allowedTools: ["Task"],
+        agents: {
+          "math-expert": {
+            description:
+              "Math specialist. Use the calculator tool for calculations.",
+            prompt:
+              "You are a math expert. Use the calculator tool to perform the requested calculation. Be concise.",
+            model: "haiku",
+          },
+        },
+        mcpServers: {
+          calculator: createSdkMcpServer({
+            name: "calculator",
+            version: "1.0.0",
+            tools: [calculator],
+          }),
+        },
+      },
+    })) {
+      // consume
+    }
+
+    const spans = await backgroundLogger.drain();
+
+    // Root TASK span
+    const rootSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(rootSpan).toBeDefined();
+
+    // Sub-agent TASK span
+    const subAgentSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "task" &&
+        (
+          (s["span_attributes"] as Record<string, unknown>).name as string
+        )?.startsWith("Agent:"),
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Sub-agent should be a child of root
+    expect(subAgentSpan!.root_span_id).toBe(rootSpan!.span_id);
+    expect(subAgentSpan!.span_parents).toContain(rootSpan!.span_id);
+
+    // There should be LLM spans under the sub-agent
+    const subAgentLlmSpans = spans.filter(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "llm" &&
+        (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
+    );
+    expect(subAgentLlmSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Tool spans within the sub-agent should be parented under the sub-agent, not root
+    const subAgentToolSpans = spans.filter(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "tool" &&
+        (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
+    );
+    expect(subAgentToolSpans.length).toBeGreaterThanOrEqual(1);
+    subAgentToolSpans.forEach((toolSpan) => {
+      expect(toolSpan.span_parents).not.toContain(rootSpan!.span_id);
+    });
+  }, 60000);
 });
