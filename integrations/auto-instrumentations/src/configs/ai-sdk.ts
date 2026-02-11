@@ -68,12 +68,12 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
   },
 
-  // Agent.generate - async method
+  // Agent.generate - async method (v3-v5 only, Agent structure changed in v6)
   {
     channelName: "Agent.generate",
     module: {
       name: "ai",
-      versionRange: ">=3.0.0",
+      versionRange: ">=3.0.0 <6.0.0",
       filePath: "dist/index.mjs",
     },
     functionQuery: {
@@ -83,12 +83,12 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
   },
 
-  // Agent.stream - async method
+  // Agent.stream - async method (v3-v5 only, Agent structure changed in v6)
   {
     channelName: "Agent.stream",
     module: {
       name: "ai",
-      versionRange: ">=3.0.0",
+      versionRange: ">=3.0.0 <6.0.0",
       filePath: "dist/index.mjs",
     },
     functionQuery: {
