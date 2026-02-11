@@ -15,10 +15,12 @@ describe("Google GenAI Instrumentation Configs", () => {
 
     expect(config).toBeDefined();
     expect(config?.module.name).toBe("@google/genai");
-    expect(config?.module.versionRange).toBe(">=0.21.0");
-    expect(config?.module.filePath).toBe("dist/index.mjs");
-    expect((config?.functionQuery as any).className).toBe("GenerativeModel");
-    expect((config?.functionQuery as any).methodName).toBe("generateContent");
+    expect(config?.module.versionRange).toBe(">=1.0.0");
+    expect(config?.module.filePath).toBe("dist/node/index.mjs");
+    expect((config?.functionQuery as any).className).toBe("Models");
+    expect((config?.functionQuery as any).methodName).toBe(
+      "generateContentInternal",
+    );
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
@@ -29,11 +31,11 @@ describe("Google GenAI Instrumentation Configs", () => {
 
     expect(config).toBeDefined();
     expect(config?.module.name).toBe("@google/genai");
-    expect(config?.module.versionRange).toBe(">=0.21.0");
-    expect(config?.module.filePath).toBe("dist/index.mjs");
-    expect((config?.functionQuery as any).className).toBe("GenerativeModel");
+    expect(config?.module.versionRange).toBe(">=1.0.0");
+    expect(config?.module.filePath).toBe("dist/node/index.mjs");
+    expect((config?.functionQuery as any).className).toBe("Models");
     expect((config?.functionQuery as any).methodName).toBe(
-      "generateContentStream",
+      "generateContentStreamInternal",
     );
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
@@ -70,9 +72,9 @@ describe("Google GenAI Instrumentation Configs", () => {
     }
   });
 
-  it("should use GenerativeModel class for all methods", () => {
+  it("should use Models class for all methods", () => {
     for (const config of googleGenAIConfigs) {
-      expect((config.functionQuery as any).className).toBe("GenerativeModel");
+      expect((config.functionQuery as any).className).toBe("Models");
     }
   });
 });
