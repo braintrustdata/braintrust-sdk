@@ -162,7 +162,7 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
 
     @property
     @abstractmethod
-    def name(self) -> str | None:
+    def name(self) -> str:
         """Name of the span, for display purposes only."""
 
     @abstractmethod
@@ -4067,7 +4067,7 @@ class SpanImpl(Span):
         return self._id
 
     @property
-    def name(self) -> str | None:
+    def name(self) -> str:
         return self._name
 
     def set_attributes(

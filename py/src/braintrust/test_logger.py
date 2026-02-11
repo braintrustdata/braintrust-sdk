@@ -3233,7 +3233,7 @@ def test_span_name_consistent_with_logged_data(with_memory_logger):
 def test_noop_span_name_returns_none():
     """Test that the noop span's name property returns None."""
     span = braintrust.NOOP_SPAN
-    assert span.name is None
+    assert span.name == ""
 
 
 def test_current_span_name_accessible(with_memory_logger):
