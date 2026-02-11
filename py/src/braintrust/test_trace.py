@@ -336,7 +336,7 @@ class TestLocalTraceGetThread:
             state=_DummyState(),
         )
 
-        await trace.get_thread(preprocessor="custom_preprocessor")
+        await trace.get_thread(options={"preprocessor": "custom_preprocessor"})
         assert calls[0]["global_function"] == "custom_preprocessor"
         assert calls[0]["function_type"] == "preprocessor"
 
@@ -363,7 +363,7 @@ class TestLocalTraceGetThread:
 
         result1 = await trace.get_thread()
         result2 = await trace.get_thread()
-        result3 = await trace.get_thread(preprocessor="custom")
+        result3 = await trace.get_thread(options={"preprocessor": "custom"})
         result4 = await trace.get_thread()
 
         assert result1 == [{"role": "user", "content": "Default"}]
