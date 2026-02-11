@@ -15,8 +15,8 @@ describe("Claude Agent SDK Instrumentation Configs", () => {
     expect(config?.module.name).toBe("@anthropic-ai/claude-agent-sdk");
     expect(config?.module.versionRange).toBe(">=0.1.0");
     expect(config?.module.filePath).toBe("sdk.mjs");
-    expect((config?.functionQuery as any).className).toBe("Agent");
-    expect((config?.functionQuery as any).methodName).toBe("query");
+    // query is a top-level exported function, not a class method
+    expect((config?.functionQuery as any).functionName).toBe("query");
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 

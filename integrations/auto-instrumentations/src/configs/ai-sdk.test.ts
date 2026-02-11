@@ -82,7 +82,10 @@ describe("AI SDK Instrumentation Configs", () => {
 
   it("should have valid version ranges", () => {
     for (const config of aiSDKConfigs) {
-      expect(config.module.versionRange).toMatch(/^>=\d+\.\d+\.\d+$/);
+      // Allow version ranges with optional upper bounds (e.g., ">=3.0.0" or ">=3.0.0 <6.0.0")
+      expect(config.module.versionRange).toMatch(
+        /^>=\d+\.\d+\.\d+( <\d+\.\d+\.\d+)?$/,
+      );
     }
   });
 
@@ -99,9 +102,21 @@ describe("AI SDK Instrumentation Configs", () => {
     }
   });
 
-  it("should support version range >=3.0.0", () => {
-    for (const config of aiSDKConfigs) {
+  it("should support appropriate version ranges", () => {
+    // Non-Agent methods support all versions >=3.0.0
+    const nonAgentConfigs = aiSDKConfigs.filter(
+      (c) => !c.channelName.startsWith("Agent."),
+    );
+    for (const config of nonAgentConfigs) {
       expect(config.module.versionRange).toBe(">=3.0.0");
+    }
+
+    // Agent methods only support v3-v5 (Agent structure changed in v6)
+    const agentConfigs = aiSDKConfigs.filter((c) =>
+      c.channelName.startsWith("Agent."),
+    );
+    for (const config of agentConfigs) {
+      expect(config.module.versionRange).toBe(">=3.0.0 <6.0.0");
     }
   });
 });
