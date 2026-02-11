@@ -574,7 +574,7 @@ def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
 
 def _is_numeric(v: Any) -> bool:
     """Check if a value is numeric."""
-    return isinstance(v, (int, float, complex))
+    return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
 
 
 def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
