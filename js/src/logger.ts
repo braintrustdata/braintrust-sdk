@@ -3,6 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
+import { BRAINTRUST_STATE_KEY } from "./symbols";
 import { IDGenerator, getIdGenerator } from "./id-gen";
 import {
   _urljoin,
@@ -542,6 +543,9 @@ export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 // mechanism to propagate the initial state from some toplevel creator.
 declare global {
   var __inherited_braintrust_state: BraintrustState;
+  interface Global {
+    [key: symbol]: any;
+  }
 }
 
 const loginSchema = z.strictObject({
@@ -968,6 +972,7 @@ export function _internalSetInitialState() {
     return;
   }
   _globalState =
+    (globalThis as any)[BRAINTRUST_STATE_KEY] ||
     globalThis.__inherited_braintrust_state ||
     new BraintrustState({
       /*empty login options*/
@@ -4395,7 +4400,7 @@ export async function login(
   }
 
   await _globalState.login(options);
-  globalThis.__inherited_braintrust_state = _globalState;
+  (globalThis as any)[BRAINTRUST_STATE_KEY] = _globalState;
   return _globalState;
 }
 
