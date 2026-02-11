@@ -50,3 +50,61 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+### Auto-Instrumentation
+
+Braintrust provides automatic instrumentation for popular AI SDKs, eliminating the need for manual wrapping. This feature automatically logs all AI SDK calls (OpenAI, Anthropic, Vercel AI SDK, etc.) to Braintrust without any code changes.
+
+#### Node.js Applications
+
+For Node.js applications, use the `--import` flag to load the instrumentation hook:
+
+```bash
+node --import braintrust/hook.mjs app.js
+```
+
+This works with both ESM and CommonJS modules automatically.
+
+#### Browser/Bundled Applications
+
+For browser applications or bundled Node.js applications, use the appropriate bundler plugin:
+
+**Vite:**
+```typescript
+// vite.config.ts
+import { vitePlugin } from "braintrust/vite";
+
+export default {
+  plugins: [vitePlugin()],
+};
+```
+
+**Webpack:**
+```javascript
+// webpack.config.js
+const { webpackPlugin } = require("braintrust/webpack");
+
+module.exports = {
+  plugins: [webpackPlugin()],
+};
+```
+
+**esbuild:**
+```typescript
+import { esbuildPlugin } from "braintrust/esbuild";
+
+await esbuild.build({
+  plugins: [esbuildPlugin()],
+});
+```
+
+**Rollup:**
+```typescript
+import { rollupPlugin } from "braintrust/rollup";
+
+export default {
+  plugins: [rollupPlugin()],
+};
+```
+
+For more information on auto-instrumentation, see the [internal architecture docs](src/auto-instrumentations/README.md).
