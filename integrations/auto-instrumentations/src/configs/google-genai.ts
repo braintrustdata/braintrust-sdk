@@ -12,32 +12,34 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * "orchestrion:google-genai:models.generateContent"
  */
 export const googleGenAIConfigs: InstrumentationConfig[] = [
-  // GenerativeModel.generateContent
+  // Models.generateContentInternal - The actual class method (Node.js entry point)
+  // Note: generateContent is an arrow function property that calls this internal method
   {
     channelName: "models.generateContent",
     module: {
       name: "@google/genai",
-      versionRange: ">=0.21.0",
-      filePath: "dist/index.mjs",
+      versionRange: ">=1.0.0",
+      filePath: "dist/node/index.mjs",
     },
     functionQuery: {
-      className: "GenerativeModel",
-      methodName: "generateContent",
+      className: "Models",
+      methodName: "generateContentInternal",
       kind: "Async",
     },
   },
 
-  // GenerativeModel.generateContentStream
+  // Models.generateContentStreamInternal - The actual class method (Node.js entry point)
+  // Note: generateContentStream is an arrow function property that calls this internal method
   {
     channelName: "models.generateContentStream",
     module: {
       name: "@google/genai",
-      versionRange: ">=0.21.0",
-      filePath: "dist/index.mjs",
+      versionRange: ">=1.0.0",
+      filePath: "dist/node/index.mjs",
     },
     functionQuery: {
-      className: "GenerativeModel",
-      methodName: "generateContentStream",
+      className: "Models",
+      methodName: "generateContentStreamInternal",
       kind: "Async",
     },
   },

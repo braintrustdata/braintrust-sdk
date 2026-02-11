@@ -12,7 +12,7 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * names like: "orchestrion:claude-agent-sdk:query"
  */
 export const claudeAgentSDKConfigs: InstrumentationConfig[] = [
-  // Agent.query - Main entry point for agent interactions
+  // query - Main entry point for agent interactions (top-level exported async generator function)
   {
     channelName: "query",
     module: {
@@ -21,8 +21,7 @@ export const claudeAgentSDKConfigs: InstrumentationConfig[] = [
       filePath: "sdk.mjs",
     },
     functionQuery: {
-      className: "Agent",
-      methodName: "query",
+      functionName: "query",
       kind: "Async",
     },
   },
