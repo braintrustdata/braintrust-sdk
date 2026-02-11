@@ -1,5 +1,6 @@
 import type { Span } from "../../logger";
-import type { Score, ScorerFunction } from "./types";
+import type { Score } from "../../../util/score";
+import type { ScorerFunction } from "./types";
 
 export async function runScorers(args: {
   scorers: ScorerFunction[];

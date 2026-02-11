@@ -259,12 +259,14 @@ bt.test(
 Fetch test cases from an existing Braintrust dataset.
 
 ```typescript
-// Load dataset to ens test registration time
-const testData = await bt.loadDataset({
+import { initDataset } from "braintrust";
+
+// Load dataset at test registration time
+const testData = await initDataset({
   project: "my-project",
   dataset: "translations-v1",
   version: "latest", // optional: specify version
-});
+}).fetchedData();
 
 bt.describe("Translation Suite", () => {
   // Use loaded data with the data field
@@ -289,12 +291,14 @@ bt.describe("Translation Suite", () => {
 **Dataset Options:**
 
 ```typescript
-bt.loadDataset({
-  project: "my-project",    // Project name or ID
-  dataset: "my-dataset",    // Dataset name or ID
-  version?: "v1.2",         // Optional: specific version
-  description?: "...",      // Optional: description
-});
+import { initDataset } from "braintrust";
+
+initDataset({
+  project: "my-project", // Project name or ID
+  dataset: "my-dataset", // Dataset name or ID
+  version: "v1.2", // Optional: specific version
+  description: "...", // Optional: description
+}).fetchedData();
 ```
 
 ### Combining Datasets with Scorers
@@ -302,11 +306,13 @@ bt.loadDataset({
 The most powerful pattern combines datasets with automatic scoring:
 
 ```typescript
+import { initDataset } from "braintrust";
+
 bt.describe("LLM Evaluation Suite", () => {
-  const evalData = bt.loadDataset({
+  const evalData = initDataset({
     project: "llm-evals",
     dataset: "qa-benchmark",
-  });
+  }).fetchedData();
 
   bt.test.each(await evalData)(
     "Q&A evaluation",
@@ -383,7 +389,6 @@ wrapVitest(
   afterEach?: Function;
 
   // Utility functions
-  loadDataset: (options: DatasetOptions) => Promise<DatasetRecord[]>;
   logOutputs: (outputs: Record<string, unknown>) => void;
   logFeedback: (feedback: { name: string; score: number; metadata?: object }) => void;
   getCurrentSpan: () => Span | null;
@@ -427,35 +432,6 @@ bt.test(
     return result;  // Return value used by scorers
   }
 );
-```
-
-### loadDataset(options)
-
-Load a dataset from Braintrust for use with `test.each()`.
-
-**Parameters:**
-
-```typescript
-bt.loadDataset({
-  project: string;       // Project name or ID
-  dataset: string;       // Dataset name or ID
-  version?: string;      // Optional: specific version
-  description?: string;  // Optional: description
-})
-```
-
-**Returns:** `Promise<DatasetRecord[]>`
-
-**DatasetRecord:**
-
-```typescript
-{
-  id: string;
-  input: unknown;
-  expected?: unknown;
-  metadata?: Record<string, unknown>;
-  tags?: string[];
-}
 ```
 
 ### Logging Functions
@@ -596,10 +572,10 @@ const bt = wrapVitest(
 );
 
 bt.describe("LLM Q&A Evaluation", () => {
-  const qaData = bt.loadDataset({
+  const qaData = initDataset({
     project: "qa-benchmarks",
     dataset: "science-questions",
-  });
+  }).fetchedData();
 
   bt.test.each(await qaData)(
     "answer quality",

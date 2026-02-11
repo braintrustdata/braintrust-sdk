@@ -407,11 +407,6 @@ describe("Scorer and Dataset Support", () => {
     expect(testConfig.data).toHaveLength(2);
   });
 
-  test("loadDataset helper is exported", () => {
-    expect(bt.loadDataset).toBeDefined();
-    expect(typeof bt.loadDataset).toBe("function");
-  });
-
   test("test config supports scorers and data fields", () => {
     // Type check - this validates the TypeScript types compile correctly
     const config: import("./types").TestConfig = {

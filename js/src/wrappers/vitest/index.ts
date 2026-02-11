@@ -6,10 +6,9 @@ import {
   formatExperimentSummary,
 } from "./wrapper";
 import type { VitestMethods, BraintrustVitest, WrapperConfig } from "./types";
-import { loadDataset } from "./dataset-helpers";
 
-export type { TestConfig, TestContext, Score, ScorerFunction } from "./types";
-export { loadDataset } from "./dataset-helpers";
+export type { Score } from "../../../util/score";
+export type { TestConfig, TestContext, ScorerFunction } from "./types";
 export type { DatasetOptions, DatasetRecord } from "./dataset-helpers";
 
 /**
@@ -99,7 +98,6 @@ export function wrapVitest<VitestContext = unknown, ExpectType = unknown>(
     afterAll: vitestMethods.afterAll || (() => {}),
     beforeEach: vitestMethods.beforeEach,
     afterEach: vitestMethods.afterEach,
-    loadDataset,
     logOutputs: (outputs: Record<string, unknown>) => {
       const span = currentSpan();
       if (!span) {

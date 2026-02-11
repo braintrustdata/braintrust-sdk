@@ -606,10 +606,10 @@ const translationDataset = await (async () => {
 
   // Load and return the dataset records
   console.log("📥 Loading dataset from Braintrust...");
-  const loaded = await bt.loadDataset({
+  const loaded = await initDataset({
     project: "example-vitest",
     dataset: datasetName,
-  });
+  }).fetchedData();
   console.log(`✅ Loaded ${loaded.length} test cases from dataset`);
 
   return loaded;

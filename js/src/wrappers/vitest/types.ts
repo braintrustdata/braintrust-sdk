@@ -1,11 +1,5 @@
 import type { Span } from "../../logger";
-
-// Score result type
-export interface Score {
-  name: string;
-  score: number | null;
-  metadata?: Record<string, unknown>;
-}
+import type { Score } from "../../../util/score";
 
 // Scorer function type - matches braintrust eval scorer pattern
 export type ScorerFunction<Output = unknown> = (args: {
@@ -37,35 +31,40 @@ export interface TestConfig extends BraintrustTestConfig {
   [key: string]: unknown;
 }
 
-export interface TestContext {
-  input?: unknown;
-  expected?: unknown;
-  metadata?: Record<string, unknown>;
-}
+// Helper type for adding test modifiers (skip, only, concurrent, todo)
+type WithModifiers<T> = T & {
+  skip: T;
+  only: T;
+  concurrent: T;
+  todo: (name: string) => void;
+};
 
-export type TestFunction<VitestContext = unknown> = {
+export type TestContext = Pick<
+  BraintrustTestConfig,
+  "input" | "expected" | "metadata"
+>;
+
+type BaseTestFunction<VitestContext = unknown> = {
   (name: string, fn: (context: VitestContext) => void | Promise<void>): void;
-  skip?: TestFunction<VitestContext>;
-  only?: TestFunction<VitestContext>;
-  concurrent?: TestFunction<VitestContext>;
-  todo?: (name: string) => void;
   each?: <T>(
     cases: readonly T[],
   ) => (name: string, fn: (context: T) => void | Promise<void>) => void;
 };
 
-export type DescribeFunction = {
+export type TestFunction<VitestContext = unknown> = WithModifiers<
+  BaseTestFunction<VitestContext>
+>;
+
+type BaseDescribeFunction = {
   (name: string, factory: () => void): void;
-  skip?: DescribeFunction;
-  only?: DescribeFunction;
-  concurrent?: DescribeFunction;
-  todo?: (name: string) => void;
   each?: <T>(
     cases: readonly T[],
   ) => (name: string, factory: () => void) => void;
 };
 
-export interface WrappedTest<VitestContext = unknown> {
+export type DescribeFunction = WithModifiers<BaseDescribeFunction>;
+
+interface BaseWrappedTest<VitestContext = unknown> {
   (
     name: string,
     fn: (context: VitestContext) => unknown | Promise<unknown>,
@@ -75,10 +74,6 @@ export interface WrappedTest<VitestContext = unknown> {
     config: TestConfig,
     fn: (context: TestContext & VitestContext) => unknown | Promise<unknown>,
   ): void;
-  skip: WrappedTest<VitestContext>;
-  only: WrappedTest<VitestContext>;
-  concurrent: WrappedTest<VitestContext>;
-  todo: (name: string) => void;
   each: <T>(
     cases: readonly T[],
   ) => (
@@ -89,14 +84,16 @@ export interface WrappedTest<VitestContext = unknown> {
   ) => void;
 }
 
-export interface WrappedDescribe {
+export type WrappedTest<VitestContext = unknown> = WithModifiers<
+  BaseWrappedTest<VitestContext>
+>;
+
+interface BaseWrappedDescribe {
   (name: string, factory: () => void): void;
-  skip: WrappedDescribe;
-  only: WrappedDescribe;
-  concurrent: WrappedDescribe;
-  todo: (name: string) => void;
   each: <T>(cases: readonly T[]) => (name: string, factory: () => void) => void;
 }
+
+export type WrappedDescribe = WithModifiers<BaseWrappedDescribe>;
 
 export interface VitestMethods<VitestContext = unknown, ExpectType = unknown> {
   test: TestFunction<VitestContext>;
@@ -136,24 +133,6 @@ export interface BraintrustVitest<
   afterAll: (fn: () => void | Promise<void>) => void;
   beforeEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
   afterEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
-  /**
-   * Load a dataset from Braintrust for use with test.each().
-   *
-   * @param options - Dataset initialization options
-   * @returns Promise that resolves to array of dataset records
-   *
-   * @example
-   * ```typescript
-   * const testData = bt.loadDataset({ project: "my-project", dataset: "test-data" });
-   * bt.test.each(await testData)("test name", { scorers: [...] }, async (record) => {
-   *   const { input, expected } = record;
-   *   // test logic
-   * });
-   * ```
-   */
-  loadDataset: (
-    options: DatasetOptions | import("../../logger").Dataset,
-  ) => Promise<DatasetRecord[]>;
   logOutputs: (outputs: Record<string, unknown>) => void;
   logFeedback: (feedback: {
     name: string;
