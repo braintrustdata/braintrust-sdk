@@ -35,6 +35,10 @@ BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"
 
 # Taken from
 # https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
+def is_numeric(v):
+    return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
+
+
 def eprint(*args, **kwargs) -> None:
     print(*args, file=sys.stderr, **kwargs)
 
