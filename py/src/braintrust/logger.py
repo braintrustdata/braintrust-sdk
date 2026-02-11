@@ -302,7 +302,7 @@ class _NoopSpan(Span):
 
     @property
     def name(self):
-        return None
+        return ""
 
     @property
     def propagated_event(self):
