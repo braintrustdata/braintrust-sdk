@@ -86,4 +86,46 @@ export default defineConfig([
     splitting: false,
     clean: true,
   },
+  {
+    entry: [
+      "src/auto-instrumentations/index.ts",
+      "src/auto-instrumentations/loader/cjs-patch.ts",
+      "src/auto-instrumentations/loader/get-package-version.ts",
+      "src/auto-instrumentations/bundler/vite.ts",
+      "src/auto-instrumentations/bundler/webpack.ts",
+      "src/auto-instrumentations/bundler/esbuild.ts",
+      "src/auto-instrumentations/bundler/rollup.ts",
+    ],
+    format: ["cjs", "esm"],
+    outDir: "dist/auto-instrumentations",
+    dts: true,
+    external: [
+      "@apm-js-collab/code-transformer",
+      "zod",
+    ],
+    outExtension({ format }) {
+      if (format === "esm") {
+        return { js: ".mjs" };
+      }
+      return { js: ".cjs" };
+    },
+    clean: true,
+  },
+  {
+    entry: [
+      "src/auto-instrumentations/hook.mts",
+      "src/auto-instrumentations/loader/esm-hook.mts",
+    ],
+    format: ["esm"],
+    outDir: "dist/auto-instrumentations",
+    dts: false,
+    external: [
+      "@apm-js-collab/code-transformer",
+      "zod",
+    ],
+    outExtension({ format }) {
+      return { js: ".mjs" };
+    },
+    clean: false,
+  },
 ]);

@@ -3,9 +3,9 @@
  *
  * Usage:
  * ```javascript
- * const { webpackPlugin } = require('@braintrust/auto-instrumentations/bundler/webpack');
+ * import { webpackPlugin } from 'braintrust/auto-instrumentations/bundler/webpack';
  *
- * module.exports = {
+ * export default {
  *   plugins: [webpackPlugin()],
  * };
  * ```
