@@ -103,7 +103,7 @@ def init_test_logger(project_name: str):
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
 
     # Replace the global _compute_logger_metadata function with a resolved LazyValue
-    def fake_compute_logger_metadata(project_name=None, project_id=None):
+    def fake_compute_logger_metadata(state, project_name=None, project_id=None):
         if project_id:
             project_metadata = ObjectMetadata(id=project_id, name=project_name, full_info=dict())
         else:

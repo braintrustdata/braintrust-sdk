@@ -1429,6 +1429,22 @@ def _internal_get_global_state() -> BraintrustState:
     return _state
 
 
+def _resolve_state(
+    state: "BraintrustState | None", api_key: str | None, app_url: str | None
+) -> "BraintrustState":
+    """Resolve the state to use for a logger/experiment/dataset.
+
+    If an explicit state is provided, use it. Otherwise, if api_key or app_url
+    is specified, create a new isolated BraintrustState to avoid conflicts with
+    the global state. If neither is specified, use the global state.
+    """
+    if state is not None:
+        return state
+    if api_key is not None or app_url is not None:
+        return BraintrustState()
+    return _state
+
+
 _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
@@ -1576,7 +1592,7 @@ def init(
     :returns: The experiment object.
     """
 
-    state: BraintrustState = state or _state
+    state = _resolve_state(state, api_key, app_url)
 
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
@@ -1739,7 +1755,7 @@ def init_dataset(
     :returns: The dataset object.
     """
 
-    state = state or _state
+    state = _resolve_state(state, api_key, app_url)
 
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -1766,11 +1782,12 @@ def init_dataset(
     )
 
 
-def _compute_logger_metadata(project_name: str | None = None, project_id: str | None = None):
-    login()
-    org_id = _state.org_id
+def _compute_logger_metadata(
+    state: "BraintrustState", project_name: str | None = None, project_id: str | None = None
+):
+    org_id = state.org_id
     if project_id is None:
-        response = _state.app_conn().post_json(
+        response = state.app_conn().post_json(
             "api/project/register",
             {
                 "project_name": project_name or GLOBAL_PROJECT,
@@ -1783,7 +1800,7 @@ def _compute_logger_metadata(project_name: str | None = None, project_id: str | 
             project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
         )
     elif project_name is None:
-        response = _state.app_conn().get_json("api/project", {"id": project_id})
+        response = state.app_conn().get_json("api/project", {"id": project_id})
         return OrgProjectMetadata(
             org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
         )
@@ -1819,7 +1836,7 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
-    state = state or _state
+    state = _resolve_state(state, api_key, app_url)
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
     link_args = {
@@ -1831,7 +1848,7 @@ def init_logger(
 
     def compute_metadata():
         state.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
-        return _compute_logger_metadata(**compute_metadata_args)
+        return _compute_logger_metadata(state, **compute_metadata_args)
 
     # For loggers, enable queue size limit enforcement (bounded queue)
     state.enforce_queue_size_limit(True)
@@ -3417,7 +3434,12 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV4) -> Callab
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
     elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
         captured_compute_object_metadata_args = components.compute_object_metadata_args
-        return lambda: _compute_logger_metadata(**captured_compute_object_metadata_args).project.id
+
+        def compute_project_id():
+            login()
+            return _compute_logger_metadata(_state, **captured_compute_object_metadata_args).project.id
+
+        return compute_project_id
     else:
         raise Exception(f"Unknown object type: {components.object_type}")
 
