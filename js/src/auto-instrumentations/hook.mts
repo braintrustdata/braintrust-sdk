@@ -31,9 +31,10 @@ const allConfigs = [
 ];
 
 // 1. Register ESM loader for ESM modules
-register("./loader/esm-hook.mjs", import.meta.url, {
+register("./loader/esm-hook.mjs", {
+  parentURL: import.meta.url,
   data: { instrumentations: allConfigs },
-});
+} as any);
 
 // 2. Also load CJS register for CJS modules (many apps use mixed ESM/CJS)
 try {
