@@ -103,7 +103,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -170,7 +172,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -234,7 +238,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -313,7 +319,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -400,7 +408,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       // Add custom instrumentation config
       const customConfig = {
@@ -485,7 +495,9 @@ describe("Multiple Instrumentations", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],

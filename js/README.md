@@ -89,6 +89,7 @@ This works with both ESM and CommonJS modules automatically.
 For browser applications or bundled Node.js applications, use the appropriate bundler plugin:
 
 **Vite:**
+
 ```typescript
 // vite.config.ts
 import { vitePlugin } from "braintrust/vite";
@@ -99,6 +100,7 @@ export default {
 ```
 
 **Webpack:**
+
 ```javascript
 // webpack.config.js
 const { webpackPlugin } = require("braintrust/webpack");
@@ -109,6 +111,7 @@ module.exports = {
 ```
 
 **esbuild:**
+
 ```typescript
 import { esbuildPlugin } from "braintrust/esbuild";
 
@@ -118,6 +121,7 @@ await esbuild.build({
 ```
 
 **Rollup:**
+
 ```typescript
 import { rollupPlugin } from "braintrust/rollup";
 

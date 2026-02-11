@@ -99,10 +99,7 @@ export default defineConfig([
     format: ["cjs", "esm"],
     outDir: "dist/auto-instrumentations",
     dts: true,
-    external: [
-      "@apm-js-collab/code-transformer",
-      "zod",
-    ],
+    external: ["@apm-js-collab/code-transformer", "zod"],
     outExtension({ format }) {
       if (format === "esm") {
         return { js: ".mjs" };
@@ -119,10 +116,7 @@ export default defineConfig([
     format: ["esm"],
     outDir: "dist/auto-instrumentations",
     dts: false,
-    external: [
-      "@apm-js-collab/code-transformer",
-      "zod",
-    ],
+    external: ["@apm-js-collab/code-transformer", "zod"],
     outExtension({ format }) {
       return { js: ".mjs" };
     },

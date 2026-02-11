@@ -66,7 +66,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -133,7 +135,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -179,7 +183,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -230,7 +236,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -283,7 +291,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -336,7 +346,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -389,7 +401,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -433,7 +447,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
@@ -483,7 +499,9 @@ describe("Function Behavior Preservation", () => {
 
       fs.writeFileSync(entryPoint, testCode);
 
-      const { esbuildPlugin } = await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import(
+        "../../src/auto-instrumentations/bundler/esbuild.js"
+      );
 
       await esbuild.build({
         entryPoints: [entryPoint],
