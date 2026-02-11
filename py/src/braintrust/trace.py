@@ -6,8 +6,9 @@ spans from the current evaluation task without making server round-trips.
 """
 
 import asyncio
-from typing import Any, Awaitable, Callable, Optional, Protocol
+from typing import Any, Awaitable, Callable, Optional, Protocol, TypedDict
 
+from braintrust.functions.invoke import invoke
 from braintrust.logger import BraintrustState, ObjectFetcher
 
 
@@ -120,6 +121,10 @@ class SpanFetcher(ObjectFetcher[dict[str, Any]]):
 
 
 SpanFetchFn = Callable[[Optional[list[str]]], Awaitable[list[SpanData]]]
+
+
+class GetThreadOptions(TypedDict, total=False):
+    preprocessor: str
 
 
 class CachedSpanFetcher:
@@ -269,6 +274,18 @@ class Trace(Protocol):
         """
         ...
 
+    async def get_thread(self, options: GetThreadOptions | None = None) -> list[Any]:
+        """
+        Get the thread (preprocessed messages) for this trace.
+
+        Args:
+            options: Optional options object. Supports "preprocessor".
+
+        Returns:
+            The preprocessed thread as an array of messages.
+        """
+        ...
+
 
 class LocalTrace(dict):
     """
@@ -305,6 +322,7 @@ class LocalTrace(dict):
         self._state = state
         self._spans_flushed = False
         self._spans_flush_promise: Optional[asyncio.Task[None]] = None
+        self._thread_cache: dict[str, asyncio.Task[list[Any]]] = {}
 
         async def get_state() -> BraintrustState:
             await self._ensure_spans_ready()
@@ -364,6 +382,41 @@ class LocalTrace(dict):
 
         # Fall back to CachedSpanFetcher for BTQL fetching with caching
         return await self._cached_fetcher.get_spans(span_type)
+
+    async def get_thread(self, options: GetThreadOptions | None = None) -> list[Any]:
+        """
+        Get the thread (preprocessed messages) for this trace.
+        Uses the project default preprocessor, falling back to global "thread".
+        """
+        preprocessor = options.get("preprocessor") if options and options.get("preprocessor") else None
+        cache_key = preprocessor or "project_default"
+        if cache_key not in self._thread_cache:
+            self._thread_cache[cache_key] = asyncio.create_task(self._fetch_thread(options))
+        return await self._thread_cache[cache_key]
+
+    async def _fetch_thread(self, options: GetThreadOptions | None = None) -> list[Any]:
+        """Fetch thread messages via preprocessor invocation."""
+        await self._ensure_spans_ready()
+        await asyncio.get_event_loop().run_in_executor(None, lambda: self._state.login())
+        preprocessor = options.get("preprocessor") if options and options.get("preprocessor") else None
+
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: invoke(
+                global_function=preprocessor or "project_default",
+                function_type="preprocessor",
+                mode="json",
+                input={
+                    "trace_ref": {
+                        "object_type": self._object_type,
+                        "object_id": self._object_id,
+                        "root_span_id": self._root_span_id,
+                    }
+                },
+            ),
+        )
+
+        return result if isinstance(result, list) else []
 
     async def _ensure_spans_ready(self) -> None:
         """Ensure spans are flushed before fetching."""
