@@ -1,12 +1,7 @@
 import { _internalIso as iso, _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
-import { BROWSER_CONFIGURED_KEY } from "./symbols";
 
 export function configureBrowser() {
-  if ((globalThis as any)[BROWSER_CONFIGURED_KEY]) {
-    return;
-  }
-
   // Set build type indicator
   iso.buildType = "browser";
 
@@ -43,5 +38,4 @@ export function configureBrowser() {
   };
 
   _internalSetInitialState();
-  (globalThis as any)[BROWSER_CONFIGURED_KEY] = true;
 }
