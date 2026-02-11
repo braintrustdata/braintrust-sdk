@@ -4372,7 +4372,7 @@ export async function login(
 ): Promise<BraintrustState> {
   const { forceLogin = false } = options || {};
 
-  if (_globalState.loggedIn && !forceLogin) {
+  if (_globalState && _globalState.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -4397,6 +4397,10 @@ export async function login(
     );
     checkUpdatedParam("orgName", options.orgName, _globalState.orgName);
     return _globalState;
+  }
+
+  if (!_globalState) {
+    _internalSetInitialState();
   }
 
   await _globalState.login(options);
