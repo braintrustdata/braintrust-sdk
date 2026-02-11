@@ -19,6 +19,7 @@ import {
   type VitestExperimentContext,
 } from "./context-manager";
 import { flushExperimentWithSync } from "./flush-manager";
+import { runScorers } from "./scorers";
 
 // format experiment summary for console output
 export function formatExperimentSummary(summary: ExperimentSummary): string {
@@ -72,14 +73,48 @@ export function wrapTest<VitestContext = unknown>(
     name: string,
     configOrFn: TestConfig | ((context: VitestContext) => void | Promise<void>),
     maybeFn?: (context: TestContext & VitestContext) => void | Promise<void>,
-  ) {
+  ): void {
     const isEnhanced = typeof configOrFn !== "function";
     const testConfig = isEnhanced ? configOrFn : undefined;
+
+    // Auto-expand if inline data provided
+    if (isEnhanced && testConfig?.data && Array.isArray(testConfig.data)) {
+      const dataRecords = testConfig.data;
+      const testFn = maybeFn;
+
+      if (!testFn) {
+        throw new Error(
+          "Braintrust: test function required when using data array",
+        );
+      }
+
+      // Register a test for each data record
+      dataRecords.forEach((record, index) => {
+        // Merge record data with config, keeping scorers
+        const mergedConfig: TestConfig = {
+          ...testConfig,
+          input: record.input,
+          expected: record.expected,
+          metadata: { ...testConfig.metadata, ...record.metadata },
+          tags: [
+            ...(testConfig.tags || []),
+            ...(record.tags || []),
+          ] as string[],
+          data: undefined, // Remove data to avoid recursion
+        };
+
+        // Register individual test with merged config
+        wrappedTest(`${name} [${index}]`, mergedConfig, testFn);
+      });
+
+      return;
+    }
 
     // Extract Vitest-specific options by filtering out Braintrust-specific properties
     let vitestOptions: Record<string, unknown> | undefined;
     if (testConfig) {
-      const { input, expected, metadata, tags, ...rest } = testConfig;
+      const { input, expected, metadata, tags, scorers, data, ...rest } =
+        testConfig;
       vitestOptions = rest;
     }
 
@@ -144,6 +179,7 @@ export function wrapTest<VitestContext = unknown>(
         // span is set as current for the entire test
         const result = await withCurrent(span, async () => {
           let testResult: unknown;
+
           try {
             if (testConfig && maybeFn) {
               const params: TestContext = {
@@ -160,6 +196,18 @@ export function wrapTest<VitestContext = unknown>(
               testResult = await configOrFn(vitestContext);
             }
 
+            // Run scorers if configured (on success)
+            if (testConfig?.scorers && testConfig.scorers.length > 0) {
+              await runScorers({
+                scorers: testConfig.scorers,
+                output: testResult,
+                expected: testConfig.expected,
+                input: testConfig.input,
+                metadata: testConfig.metadata,
+                span,
+              });
+            }
+
             // log pass feedback on success
             span.log({
               scores: {
@@ -174,6 +222,18 @@ export function wrapTest<VitestContext = unknown>(
               });
             }
           } catch (error) {
+            // Run scorers if configured (even on failure)
+            if (testConfig?.scorers && testConfig.scorers.length > 0) {
+              await runScorers({
+                scorers: testConfig.scorers,
+                output: testResult,
+                expected: testConfig.expected,
+                input: testConfig.input,
+                metadata: testConfig.metadata,
+                span,
+              });
+            }
+
             // log fail feedback on error
             span.log({
               scores: {

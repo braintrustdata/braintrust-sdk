@@ -1,11 +1,33 @@
 import type { Span } from "../../logger";
 
+// Score result type
+export interface Score {
+  name: string;
+  score: number | null;
+  metadata?: Record<string, unknown>;
+}
+
+// Scorer function type - matches braintrust eval scorer pattern
+export type ScorerFunction<Output = unknown> = (args: {
+  output: Output;
+  expected?: unknown;
+  input?: unknown;
+  metadata?: Record<string, unknown>;
+}) => Score | Promise<Score> | number | null | Array<Score>;
+
 // Braintrust-specific test config properties
 export interface BraintrustTestConfig {
   input?: unknown;
   expected?: unknown;
   metadata?: Record<string, unknown>;
   tags?: string[];
+  scorers?: ScorerFunction[];
+  data?: Array<{
+    input?: unknown;
+    expected?: unknown;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+  }>;
 }
 
 // Combined config that supports Braintrust options plus any other properties (for Vitest options)
@@ -44,11 +66,14 @@ export type DescribeFunction = {
 };
 
 export interface WrappedTest<VitestContext = unknown> {
-  (name: string, fn: (context: VitestContext) => void | Promise<void>): void;
+  (
+    name: string,
+    fn: (context: VitestContext) => unknown | Promise<unknown>,
+  ): void;
   (
     name: string,
     config: TestConfig,
-    fn: (context: TestContext & VitestContext) => void | Promise<void>,
+    fn: (context: TestContext & VitestContext) => unknown | Promise<unknown>,
   ): void;
   skip: WrappedTest<VitestContext>;
   only: WrappedTest<VitestContext>;
@@ -58,7 +83,9 @@ export interface WrappedTest<VitestContext = unknown> {
     cases: readonly T[],
   ) => (
     name: string,
-    fn: (context: T & TestContext & VitestContext) => void | Promise<void>,
+    fn: (
+      context: T & TestContext & VitestContext,
+    ) => unknown | Promise<unknown>,
   ) => void;
 }
 
@@ -82,6 +109,21 @@ export interface VitestMethods<VitestContext = unknown, ExpectType = unknown> {
   afterEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
 }
 
+export interface DatasetOptions {
+  project: string;
+  dataset: string;
+  version?: string;
+  description?: string;
+}
+
+export interface DatasetRecord {
+  id: string;
+  input: unknown;
+  expected?: unknown;
+  metadata?: Record<string, unknown>;
+  tags?: string[];
+}
+
 export interface BraintrustVitest<
   VitestContext = unknown,
   ExpectType = unknown,
@@ -94,6 +136,24 @@ export interface BraintrustVitest<
   afterAll: (fn: () => void | Promise<void>) => void;
   beforeEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
   afterEach?: (fn: (context: VitestContext) => void | Promise<void>) => void;
+  /**
+   * Load a dataset from Braintrust for use with test.each().
+   *
+   * @param options - Dataset initialization options
+   * @returns Promise that resolves to array of dataset records
+   *
+   * @example
+   * ```typescript
+   * const testData = bt.loadDataset({ project: "my-project", dataset: "test-data" });
+   * bt.test.each(await testData)("test name", { scorers: [...] }, async (record) => {
+   *   const { input, expected } = record;
+   *   // test logic
+   * });
+   * ```
+   */
+  loadDataset: (
+    options: DatasetOptions | import("../../logger").Dataset,
+  ) => Promise<DatasetRecord[]>;
   logOutputs: (outputs: Record<string, unknown>) => void;
   logFeedback: (feedback: {
     name: string;

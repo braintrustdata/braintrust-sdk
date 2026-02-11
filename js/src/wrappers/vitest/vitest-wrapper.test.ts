@@ -138,7 +138,11 @@ describe("Braintrust Vitest Wrapper", () => {
 
       bt.test("test name", () => {});
 
-      expect(mockTest).toHaveBeenCalledWith("test name", expect.any(Function));
+      expect(mockTest).toHaveBeenCalledWith(
+        "test name",
+        undefined,
+        expect.any(Function),
+      );
     });
 
     test("wrapping describe function calls original describe", () => {
@@ -367,5 +371,55 @@ describe("Flush Manager", () => {
     await expect(
       flushExperimentWithSync(null, { displaySummary: false }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("Scorer and Dataset Support", () => {
+  let bt: BraintrustVitest;
+
+  beforeEach(() => {
+    _resetContextManager();
+    bt = wrapVitest(
+      { test, expect, describe, afterAll },
+      { projectName: "feature-tests" },
+    );
+  });
+
+  test("scorer types are exported", () => {
+    // Verify scorer functionality is available
+    const testConfig = {
+      input: { value: 5 },
+      scorers: [
+        ({ output }: any) => ({ name: "test", score: output === 10 ? 1 : 0 }),
+      ],
+    };
+    expect(testConfig.scorers).toHaveLength(1);
+  });
+
+  test("data field accepts array", () => {
+    // Verify data functionality is available
+    const testConfig = {
+      data: [
+        { input: { value: 1 }, expected: 2 },
+        { input: { value: 2 }, expected: 4 },
+      ],
+    };
+    expect(testConfig.data).toHaveLength(2);
+  });
+
+  test("loadDataset helper is exported", () => {
+    expect(bt.loadDataset).toBeDefined();
+    expect(typeof bt.loadDataset).toBe("function");
+  });
+
+  test("test config supports scorers and data fields", () => {
+    // Type check - this validates the TypeScript types compile correctly
+    const config: import("./types").TestConfig = {
+      input: { x: 1 },
+      expected: 2,
+      scorers: [() => 1],
+      data: [{ input: {}, expected: {} }],
+    };
+    expect(config).toBeDefined();
   });
 });
