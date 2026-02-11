@@ -9,7 +9,10 @@ const fixturesDir = path.join(__dirname, "fixtures");
 const nodeModulesDir = path.join(fixturesDir, "node_modules");
 
 // Path to unified loader hook (built dist file)
-const hookPath = path.join(__dirname, "../../dist/auto-instrumentations/hook.mjs");
+const hookPath = path.join(
+  __dirname,
+  "../../dist/auto-instrumentations/hook.mjs",
+);
 
 // Paths to fixtures
 const listenerPath = path.join(fixturesDir, "listener-esm.mjs");

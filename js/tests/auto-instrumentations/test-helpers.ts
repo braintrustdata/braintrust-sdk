@@ -2,7 +2,12 @@
  * Test helpers for functional testing of instrumented code.
  */
 
-import { tracingChannel } from "diagnostics_channel";
+import * as diagnostics_channel from "diagnostics_channel";
+
+// Use type assertion for tracingChannel which may not be in older @types/node
+const tracingChannel = (diagnostics_channel as any).tracingChannel as (
+  name: string,
+) => any;
 
 export interface CapturedEvent {
   arguments?: any[];
@@ -43,31 +48,31 @@ export function createEventCollector(): EventCollector {
     subscribe(channelName: string) {
       const channel = tracingChannel(channelName);
       channel.subscribe({
-        start: (ctx) => {
+        start: (ctx: any) => {
           this.start.push({
             arguments: ctx.arguments ? Array.from(ctx.arguments) : undefined,
             self: ctx.self,
             timestamp: Date.now(),
           });
         },
-        end: (ctx) => {
+        end: (ctx: any) => {
           this.end.push({
             result: ctx.result,
             timestamp: Date.now(),
           });
         },
-        asyncStart: (ctx) => {
+        asyncStart: (ctx: any) => {
           this.asyncStart.push({
             timestamp: Date.now(),
           });
         },
-        asyncEnd: (ctx) => {
+        asyncEnd: (ctx: any) => {
           this.asyncEnd.push({
             result: ctx.result,
             timestamp: Date.now(),
           });
         },
-        error: (ctx) => {
+        error: (ctx: any) => {
           this.error.push({
             error: ctx.error,
             timestamp: Date.now(),
