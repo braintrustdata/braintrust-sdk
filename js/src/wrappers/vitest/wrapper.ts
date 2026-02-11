@@ -1,9 +1,8 @@
 import {
-  initDataset,
   initExperiment,
-  type Dataset,
   type Experiment,
   type ExperimentSummary,
+  withCurrent,
 } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import type {
@@ -15,8 +14,13 @@ import type {
   WrappedDescribe,
   WrapperConfig,
 } from "./types";
+import {
+  getVitestContextManager,
+  type VitestExperimentContext,
+} from "./context-manager";
+import { flushExperimentWithSync } from "./flush-manager";
 
-// Simple function to format experiment summary for console output
+// format experiment summary for console output
 export function formatExperimentSummary(summary: ExperimentSummary): string {
   const lines: string[] = [];
   lines.push("\n┌─ Braintrust Experiment Summary ─────────────────┐");
@@ -55,22 +59,9 @@ export function formatExperimentSummary(summary: ExperimentSummary): string {
   return lines.join("\n");
 }
 
-// Context for experiment mode - stored per describe block
-interface ExperimentContext {
-  dataset: Dataset<false>;
-  experiment: Experiment;
-  datasetExamples: Map<string, string>; // test name -> example id
-}
-
-// Global context holder (one per describe block)
-let currentExperimentContext: ExperimentContext | null = null;
-
-export function setExperimentContext(context: ExperimentContext | null) {
-  currentExperimentContext = context;
-}
-
-export function getExperimentContext(): ExperimentContext | null {
-  return currentExperimentContext;
+// Get the current experiment context
+export function getExperimentContext(): VitestExperimentContext | null {
+  return getVitestContextManager().getCurrentContext() ?? null;
 }
 
 export function wrapTest<VitestContext = unknown>(
@@ -89,43 +80,57 @@ export function wrapTest<VitestContext = unknown>(
       const experimentContext = getExperimentContext();
       const experiment = experimentContext?.experiment;
 
-      // If no experiment context, just run the test normally
-      if (!experiment) {
-        if (testConfig && maybeFn) {
-          const params: TestContext = {
-            input: testConfig.input,
-            expected: testConfig.expected,
-            metadata: testConfig.metadata,
-          };
-          const context = {
-            ...vitestContext,
-            ...params,
-          } satisfies TestContext & VitestContext;
-          return await maybeFn(context);
-        } else if (typeof configOrFn === "function") {
-          return await configOrFn(vitestContext);
-        }
-        return;
+      // Emit test start event
+      if (config.onProgress) {
+        config.onProgress({ type: "test_start", testName: name });
       }
 
-      // Add test data to dataset at execution time (not registration time)
-      if (experimentContext && testConfig) {
-        const { input, expected, metadata, tags } = testConfig;
-        if (input !== undefined || expected !== undefined) {
-          // Add to dataset (will not duplicate if already exists)
-          const exampleId = experimentContext.dataset.insert({
-            input,
-            expected,
-            metadata,
-            tags,
-          });
-          experimentContext.datasetExamples.set(name, exampleId);
-        }
-      }
+      const startTime = performance.now();
+      let passed = false;
 
-      // Use experiment.traced()
-      return await experiment.traced(
-        async (span) => {
+      try {
+        // If no experiment context, just run the test normally
+        if (!experiment) {
+          if (testConfig && maybeFn) {
+            const params: TestContext = {
+              input: testConfig.input,
+              expected: testConfig.expected,
+              metadata: testConfig.metadata,
+            };
+            const context = {
+              ...vitestContext,
+              ...params,
+            } satisfies TestContext & VitestContext;
+            const result = await maybeFn(context);
+            passed = true;
+            return result;
+          } else if (typeof configOrFn === "function") {
+            const result = await configOrFn(vitestContext);
+            passed = true;
+            return result;
+          }
+          passed = true;
+          return;
+        }
+
+        // Create span using startSpan
+        const span = experiment.startSpan({
+          name,
+          spanAttributes: {
+            type: SpanTypeAttribute.TASK,
+          },
+          event: testConfig
+            ? {
+                input: testConfig.input,
+                expected: testConfig.expected,
+                metadata: testConfig.metadata,
+                tags: testConfig.tags,
+              }
+            : undefined,
+        });
+
+        // span is set as current for the entire test
+        const result = await withCurrent(span, async () => {
           let testResult: unknown;
           try {
             if (testConfig && maybeFn) {
@@ -143,7 +148,7 @@ export function wrapTest<VitestContext = unknown>(
               testResult = await configOrFn(vitestContext);
             }
 
-            // Automatically log pass feedback on success
+            // log pass feedback on success
             span.log({
               scores: {
                 pass: 1,
@@ -157,7 +162,7 @@ export function wrapTest<VitestContext = unknown>(
               });
             }
           } catch (error) {
-            // Automatically log fail feedback on error
+            // log fail feedback on error
             span.log({
               scores: {
                 pass: 0,
@@ -174,23 +179,37 @@ export function wrapTest<VitestContext = unknown>(
               },
             });
             throw error;
+          } finally {
+            // Always end the span
+            span.end();
           }
-        },
-        {
-          name,
-          spanAttributes: {
-            type: SpanTypeAttribute.TASK,
-          },
-          event: testConfig
-            ? {
-                input: testConfig.input,
-                expected: testConfig.expected,
-                metadata: testConfig.metadata,
-                tags: testConfig.tags,
-              }
-            : undefined,
-        },
-      );
+          return testResult;
+        });
+        passed = true;
+        return result;
+      } catch (error) {
+        passed = false;
+        throw error;
+      } finally {
+        // Emit test complete event
+        const duration = performance.now() - startTime;
+        // Update suite counters if we have an experiment context
+        if (experimentContext) {
+          if (passed) {
+            experimentContext.passed = (experimentContext.passed ?? 0) + 1;
+          } else {
+            experimentContext.failed = (experimentContext.failed ?? 0) + 1;
+          }
+        }
+        if (config.onProgress) {
+          config.onProgress({
+            type: "test_complete",
+            testName: name,
+            passed,
+            duration,
+          });
+        }
+      }
     });
   };
 
@@ -213,32 +232,23 @@ export function wrapDescribe(
 ): WrappedDescribe {
   const wrappedDescribe = function (suiteName: string, factory: () => void) {
     return originalDescribe(suiteName, () => {
-      // Lazily initialize experiment context on first access
-      let context: ExperimentContext | null = null;
-      const getOrCreateContext = (): ExperimentContext => {
+      const contextManager = getVitestContextManager();
+      let context: VitestExperimentContext | null = null;
+
+      const getOrCreateContext = (): VitestExperimentContext => {
         if (!context) {
           const projectName = config.projectName || suiteName;
-          const dataset = initDataset({
-            project: projectName,
-            dataset: suiteName,
-          });
 
           const experiment = initExperiment(projectName, {
             experiment: `${suiteName}-${new Date().toISOString()}`,
-            dataset,
           });
 
-          context = {
-            dataset,
-            experiment,
-            datasetExamples: new Map(),
-          };
+          context = contextManager.createChildContext(undefined, experiment);
         }
         return context;
       };
 
-      // Set a lazy getter that creates context on first access
-      // Type assertion needed for lazy initialization pattern
+      // Lazy context getter
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const lazyContext = {
         get dataset() {
@@ -250,44 +260,50 @@ export function wrapDescribe(
         get datasetExamples() {
           return getOrCreateContext().datasetExamples;
         },
-      } as ExperimentContext;
+        get parent() {
+          return getOrCreateContext().parent;
+        },
+        get flushPromise() {
+          return getOrCreateContext().flushPromise;
+        },
+        set flushPromise(value: Promise<void> | undefined) {
+          if (context) context.flushPromise = value;
+        },
+        get flushResolved() {
+          return getOrCreateContext().flushResolved;
+        },
+        set flushResolved(value: boolean) {
+          if (context) context.flushResolved = value;
+        },
+      } as VitestExperimentContext;
 
-      setExperimentContext(lazyContext);
+      // Emit suite start event
+      if (config.onProgress) {
+        config.onProgress({ type: "suite_start", suiteName });
+      }
 
-      // Run the test suite
+      // Set the context for this the describe block
+      contextManager.setContext(lazyContext);
+
+      // Register the tests in the suite
       factory();
 
-      // Automatically flush experiment after all tests complete
-      // Skip if displaySummary is false (typically in test mode)
+      // flush experiment after all tests complete
       if (afterAll && (config.displaySummary ?? true)) {
         afterAll(async () => {
-          // Only flush if context was actually created (i.e., tests ran)
-          if (!context) return;
+          await flushExperimentWithSync(context, config);
 
-          let summary;
-          try {
-            summary = await context.experiment.summarize();
-          } catch (error) {
-            console.warn(
-              "Braintrust: Failed to generate experiment summary:",
-              error,
-            );
-          }
-
-          try {
-            await context.experiment.flush();
-          } catch (error) {
-            console.warn("Braintrust: Failed to flush experiment:", error);
-          }
-
-          if (summary) {
-            console.log(formatExperimentSummary(summary));
+          // Emit suite complete event
+          if (config.onProgress) {
+            config.onProgress({
+              type: "suite_complete",
+              suiteName,
+              passed: context?.passed ?? 0,
+              failed: context?.failed ?? 0,
+            });
           }
         });
       }
-
-      // Note: We don't clear the context here because afterAll hooks run after this
-      // The context will be cleared when a new describe block starts or the process exits
     });
   };
 

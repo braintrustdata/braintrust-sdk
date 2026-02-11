@@ -103,6 +103,23 @@ export interface BraintrustVitest<
   flushExperiment: (options?: { displaySummary?: boolean }) => Promise<void>;
 }
 
+// Progress event types for real-time test reporting
+export type ProgressEvent =
+  | { type: "suite_start"; suiteName: string }
+  | { type: "test_start"; testName: string }
+  | {
+      type: "test_complete";
+      testName: string;
+      passed: boolean;
+      duration: number;
+    }
+  | {
+      type: "suite_complete";
+      suiteName: string;
+      passed: number;
+      failed: number;
+    };
+
 export interface WrapperConfig {
   projectName?: string;
   /**
@@ -110,4 +127,10 @@ export interface WrapperConfig {
    * Defaults to true. Set to false to suppress the summary output.
    */
   displaySummary?: boolean;
+  /**
+   * Callback for real-time progress events.
+   * Called when tests start, complete, or progress updates occur.
+   * Progress reporting is always enabled when this callback is provided.
+   */
+  onProgress?: (event: ProgressEvent) => void;
 }

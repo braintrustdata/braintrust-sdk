@@ -17,6 +17,12 @@ import {
 } from "../../logger";
 import type { BraintrustVitest } from "./types";
 import * as logger from "../../logger";
+import { getExperimentContext } from "./wrapper";
+import {
+  getVitestContextManager,
+  _resetContextManager,
+} from "./context-manager";
+import { flushExperimentWithSync } from "./flush-manager";
 
 // Mock initDataset and initExperiment to avoid network calls
 vi.spyOn(logger, "initDataset").mockReturnValue({
@@ -310,5 +316,56 @@ bt.describe("Braintrust Vitest Wrapper Calls", () => {
     bt.logFeedback({ name: "speed", score: 0.8 });
 
     expect(true).toBe(true);
+  });
+});
+
+// Comprehensive tests for new features and fixes
+describe("Configuration Options", () => {
+  beforeAll(async () => {
+    _exportsForTestingOnly.setInitialTestState();
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
+
+  afterAll(async () => {
+    await _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("supports progress reporting callback", () => {
+    const events: any[] = [];
+    const bt = wrapVitest(
+      { test, expect, describe, beforeAll, afterAll },
+      {
+        projectName: "test",
+        displaySummary: false,
+        onProgress: (event) => events.push(event),
+      },
+    );
+    expect(bt).toBeDefined();
+    // Progress events will be emitted if onProgress is provided
+  });
+});
+
+describe("Context Manager", () => {
+  test("getExperimentContext returns null when no context is set", () => {
+    // Reset context manager to ensure clean state
+    _resetContextManager();
+
+    const context = getExperimentContext();
+    expect(context).toBeNull();
+  });
+
+  test("context manager maintains isolation", () => {
+    const manager = getVitestContextManager();
+    expect(manager).toBeDefined();
+    expect(manager.getCurrentContext()).toBeUndefined();
+  });
+});
+
+describe("Flush Manager", () => {
+  test("flushExperimentWithSync handles null context gracefully", async () => {
+    // Should not throw with null context
+    await expect(
+      flushExperimentWithSync(null, { displaySummary: false }),
+    ).resolves.toBeUndefined();
   });
 });

@@ -43,6 +43,8 @@ const config = {
       "src/wrappers/claude-agent-sdk/**",
       "src/wrappers/vitest/**",
       "smoke/**",
+      // Exclude example tests (require API keys and make real API calls)
+      "examples/vitest/**",
     ],
     // Additional test environment configuration
     watchExclude: [
