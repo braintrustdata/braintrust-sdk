@@ -3276,7 +3276,7 @@ def _update_span_impl(
     if (root_span_id is None) != (span_id is None):
         raise ValueError("both root_span_id and span_id must be set, or neither")
 
-    update_payload = {**event, "id": id}
+    update_payload = {**event}
     if root_span_id is not None and span_id is not None:
         update_payload["root_span_id"] = root_span_id
         update_payload["span_id"] = span_id
@@ -3325,7 +3325,7 @@ def update_span(exported: str, **event: Any) -> None:
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
 
-    event_without_span_ids = dict(event)
+    event_without_span_ids = {**event}
     event_without_span_ids.pop("span_id", None)
     event_without_span_ids.pop("root_span_id", None)
 
