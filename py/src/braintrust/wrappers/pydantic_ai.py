@@ -1136,7 +1136,15 @@ def _extract_response_metrics(
 
 
 def _is_patched(obj: Any) -> bool:
-    """Check if object is already patched."""
+    """Check if object is already patched.
+
+    For classes we check __dict__ directly because getattr walks the MRO.
+    Without this, wrapping WrapperModel first causes InstrumentedModel to
+    appear already-patched (it inherits the flag), so its request() method
+    is never wrapped and the inner "chat" span is lost.
+    """
+    if isinstance(obj, type):
+        return obj.__dict__.get("_braintrust_patched", False)
     return getattr(obj, "_braintrust_patched", False)
 
 
