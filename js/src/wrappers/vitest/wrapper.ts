@@ -76,7 +76,19 @@ export function wrapTest<VitestContext = unknown>(
     const isEnhanced = typeof configOrFn !== "function";
     const testConfig = isEnhanced ? configOrFn : undefined;
 
-    return originalTest(name, async (vitestContext: VitestContext) => {
+    // Extract Vitest-specific options by filtering out Braintrust-specific properties
+    let vitestOptions: Record<string, unknown> | undefined;
+    if (testConfig) {
+      const { input, expected, metadata, tags, ...rest } = testConfig;
+      vitestOptions = rest;
+    }
+
+    // Check if we have any Vitest options to pass
+    const hasVitestOptions =
+      vitestOptions && Object.keys(vitestOptions).length > 0;
+
+    // Define the test implementation
+    const testImplementation = async (vitestContext: VitestContext) => {
       const experimentContext = getExperimentContext();
       const experiment = experimentContext?.experiment;
 
@@ -210,7 +222,16 @@ export function wrapTest<VitestContext = unknown>(
           });
         }
       }
-    });
+    };
+
+    // Call originalTest, passing vitestOptions if present
+    // We use 'as any' because TypeScript's TestFunction type doesn't include the options overload,
+    // but Vitest runtime supports test(name, options, fn). Pass undefined when no options.
+    return (originalTest as any)(
+      name,
+      hasVitestOptions ? vitestOptions : undefined,
+      testImplementation,
+    );
   };
 
   // Copy over Vitest modifiers

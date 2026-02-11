@@ -1,10 +1,18 @@
 import type { Span } from "../../logger";
 
-export interface TestConfig {
+// Braintrust-specific test config properties
+export interface BraintrustTestConfig {
   input?: unknown;
   expected?: unknown;
   metadata?: Record<string, unknown>;
   tags?: string[];
+}
+
+// Combined config that supports Braintrust options plus any other properties (for Vitest options)
+// This allows any Vitest test options to be passed through without explicitly defining them
+export interface TestConfig extends BraintrustTestConfig {
+  // Allow any additional properties that Vitest might accept (timeout, retry, fails, etc.)
+  [key: string]: unknown;
 }
 
 export interface TestContext {

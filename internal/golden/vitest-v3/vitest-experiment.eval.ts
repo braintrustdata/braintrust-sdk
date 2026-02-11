@@ -1,4 +1,4 @@
-import { test, expect, describe, afterAll } from "vitest";
+import * as vitest from "vitest";
 import { wrapVitest, wrapAISDK } from "braintrust";
 import { openai } from "@ai-sdk/openai";
 import * as ai from "ai";
@@ -6,12 +6,11 @@ import * as ai from "ai";
 const { generateText } = wrapAISDK(ai);
 
 // Automatically creates datasets and experiments
-const bt = wrapVitest(
-  { test, expect, describe, afterAll },
-  { projectName: "golden-ts-vitest-experiment-v3" },
-);
+const { describe, test, expect, logOutputs, logFeedback } = wrapVitest(vitest, {
+  projectName: "golden-ts-vitest-experiment-v3",
+});
 
-bt.describe("Vitest Experiment Mode Tests", () => {
+describe("Vitest Experiment Mode Tests", () => {
   // Test with input/expected - automatically added to dataset
   bt.test(
     "simple math evaluation",
@@ -23,7 +22,7 @@ bt.describe("Vitest Experiment Mode Tests", () => {
     },
     async ({ input, expected }) => {
       const result = 4;
-      bt.logOutputs({ answer: result });
+      logOutputs({ answer: result });
       expect(result).toBe(expected);
     },
   );
@@ -43,11 +42,10 @@ bt.describe("Vitest Experiment Mode Tests", () => {
         prompt: (input as any).task,
         maxOutputTokens: 20,
       });
-
-      bt.logOutputs({ translation: result.text });
+      logOutputs({ translation: result.text });
 
       const isCorrect = result.text.toLowerCase().includes(expected as string);
-      bt.logFeedback({
+      logFeedback({
         name: "correctness",
         score: isCorrect ? 1.0 : 0.0,
       });
@@ -57,14 +55,14 @@ bt.describe("Vitest Experiment Mode Tests", () => {
   );
 
   // Test without input/expected - runs but not added to dataset
-  bt.test("basic functionality test", async () => {
+  test("basic functionality test", async () => {
     const result = { value: 42 };
-    bt.logOutputs({ result });
+    logOutputs({ result });
     expect(result.value).toBe(42);
   });
 
   // Test with failure - fail feedback automatically logged
-  bt.test(
+  test(
     "test with failure",
     {
       input: { value: 42 },
@@ -73,7 +71,7 @@ bt.describe("Vitest Experiment Mode Tests", () => {
     },
     async ({ input, expected }) => {
       const result = (input as any).value;
-      bt.logOutputs({ result });
+      logOutputs({ result });
       expect(result).toBe(expected);
     },
   );

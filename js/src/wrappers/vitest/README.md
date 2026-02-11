@@ -7,13 +7,11 @@ The Braintrust Vitest wrapper provides automatic experiment tracking and dataset
 Wrap your Vitest methods to automatically create datasets and experiments from your tests. Experiments are automatically flushed and summarized after all tests complete - no manual setup required!
 
 ```typescript
-import { test, expect, describe, afterAll } from "vitest";
+import * as vitest from "vitest";
 import { wrapVitest } from "braintrust";
 
-const bt = wrapVitest(
-  { test, expect, describe, afterAll },
-  { projectName: "my-project" },
-);
+const { describe, test, expect, afterAll, beforeAll, logOutputs, logFeedback } =
+  wrapVitest(vitest, { projectName: "my-project" });
 
 bt.describe("Translation Tests", () => {
   // Tests with input/expected are automatically added to the dataset
@@ -91,13 +89,10 @@ Wraps Vitest methods with Braintrust experiment tracking.
 By default, a formatted experiment summary is displayed after all tests complete. You can suppress this by setting `displaySummary: false`:
 
 ```typescript
-const bt = wrapVitest(
-  { test, expect, describe, afterAll },
-  {
-    projectName: "my-project",
-    displaySummary: false, // Suppress the summary output
-  },
-);
+const { test, expect, describe, afterAll } = wrapVitest(vitest, {
+  projectName: "my-project",
+  displaySummary: false, // Suppress the summary output
+});
 ```
 
 ### Manual Flushing (Advanced)
@@ -105,13 +100,13 @@ const bt = wrapVitest(
 In rare cases where you need manual control over flushing (e.g., custom cleanup logic), you can use `bt.flushExperiment()`:
 
 ```typescript
-bt.describe("Tests", () => {
-  bt.afterAll(async () => {
+describe("Tests", () => {
+  afterAll(async () => {
     // Custom cleanup logic
     await cleanup();
 
     // Manual flush if needed
-    await bt.flushExperiment({ displaySummary: false });
+    await flushExperiment({ displaySummary: false });
   });
 });
 ```
@@ -123,7 +118,7 @@ Note: Experiments will still auto-flush after all tests, so manual flushing is t
 When using the enhanced test signature:
 
 ```typescript
-bt.test(
+test(
   'test name',
   {
     input: any,           // Test input data

@@ -1,4 +1,4 @@
-import { test, describe, expect, afterAll, beforeAll } from "vitest";
+import * as vitest from "vitest";
 import { configureNode } from "../../src/node";
 import { wrapVitest } from "../../src/wrappers/vitest/index";
 import { _exportsForTestingOnly, login } from "../../src/logger";
@@ -7,21 +7,13 @@ import OpenAI from "openai";
 
 configureNode();
 
-beforeAll(async () => {
-  _exportsForTestingOnly.setInitialTestState();
-  await login({
-    apiKey: process.env.BRAINTRUST_API_KEY,
-  });
-});
-
 // Track test progress
 let totalTests = 0;
 let completedTests = 0;
 
 // Create wrapped vitest with enhanced progress reporting
-const bt = wrapVitest(
-  { test, describe, expect, afterAll },
-  {
+const { describe, expect, test, afterAll, beforeAll, logOutputs, logFeedback } =
+  wrapVitest(vitest, {
     projectName: "example-vitest",
     displaySummary: true, // Show experiment summary at the end
     onProgress: (event) => {
@@ -48,10 +40,16 @@ const bt = wrapVitest(
           break;
       }
     },
-  },
-);
+  });
 
-bt.describe("Concurrent Execution: Mixed Workloads", () => {
+beforeAll(async () => {
+  _exportsForTestingOnly.setInitialTestState();
+  await login({
+    apiKey: process.env.BRAINTRUST_API_KEY,
+  });
+});
+
+describe("Concurrent Execution: Mixed Workloads", () => {
   const openai = process.env.OPENAI_API_KEY
     ? wrapOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
     : null;
@@ -63,22 +61,22 @@ bt.describe("Concurrent Execution: Mixed Workloads", () => {
   }
 
   // compute tasks
-  bt.test.concurrent("compute: math operations", async () => {
+  test.concurrent("compute: math operations", async () => {
     const result = Math.pow(2, 10);
-    bt.logOutputs({ result, operation: "power" });
-    bt.logFeedback({ name: "correctness", score: 1.0 });
+    logOutputs({ result, operation: "power" });
+    logFeedback({ name: "correctness", score: 1.0 });
     expect(result).toBe(1024);
   });
 
-  bt.test.concurrent("compute: string processing", async () => {
+  test.concurrent("compute: string processing", async () => {
     const result = "hello world".toUpperCase();
-    bt.logOutputs({ result, operation: "uppercase" });
-    bt.logFeedback({ name: "correctness", score: 1.0 });
+    logOutputs({ result, operation: "uppercase" });
+    logFeedback({ name: "correctness", score: 1.0 });
     expect(result).toBe("HELLO WORLD");
   });
 
   // LLM tasks running concurrently
-  bt.test.concurrent(
+  test.concurrent(
     "llm: sentiment analysis",
     {
       input: { text: "This is amazing!" },
@@ -98,13 +96,13 @@ bt.describe("Concurrent Execution: Mixed Workloads", () => {
         temperature: 0,
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
-      bt.logOutputs({ output, tokens: response.usage });
-      bt.logFeedback({ name: "correctness", score: 1.0 });
+      logOutputs({ output, tokens: response.usage });
+      logFeedback({ name: "correctness", score: 1.0 });
       expect(output.length).toBeGreaterThan(0);
     },
   );
 
-  bt.test.concurrent(
+  test.concurrent(
     "llm: text generation",
     {
       input: { prompt: "Count to 5" },
@@ -119,26 +117,25 @@ bt.describe("Concurrent Execution: Mixed Workloads", () => {
         temperature: 0,
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
-      bt.logOutputs({ output, tokens: response.usage });
-      bt.logFeedback({ name: "correctness", score: 1.0 });
+      logOutputs({ output, tokens: response.usage });
+      logFeedback({ name: "correctness", score: 1.0 });
       expect(output.length).toBeGreaterThan(0);
     },
   );
 
   // compute + LLM running concurrently
-  bt.test.concurrent("mixed: compute task", async () => {
+  test.concurrent("mixed: compute task", async () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
-    bt.logOutputs({ type: "compute", duration: 100 });
+    logOutputs({ type: "compute", duration: 100 });
     expect(true).toBe(true);
   });
-
-  bt.test.concurrent("mixed: llm task", async () => {
+  test.concurrent("mixed: llm task", async () => {
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: "Say hi" }],
       temperature: 0,
     });
-    bt.logOutputs({
+    logOutputs({
       type: "llm",
       output: response.choices[0]?.message?.content,
     });
@@ -146,13 +143,13 @@ bt.describe("Concurrent Execution: Mixed Workloads", () => {
   });
 });
 
-bt.describe("Nested LLM Workflow", () => {
+describe("Nested LLM Workflow", () => {
   const openai = process.env.OPENAI_API_KEY
     ? wrapOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
     : null;
 
   if (!openai) {
-    bt.test("OPENAI_API_KEY required", () => {
+    test("OPENAI_API_KEY required", () => {
       throw new Error(
         "OPENAI_API_KEY environment variable must be set to run LLM workflow tests",
       );
@@ -160,7 +157,7 @@ bt.describe("Nested LLM Workflow", () => {
     return;
   }
 
-  bt.test("level 1: extract key points", async () => {
+  test("level 1: extract key points", async () => {
     const text =
       "The quick brown fox jumps over the lazy dog. This sentence contains every letter.";
     const response = await openai.chat.completions.create({
@@ -174,22 +171,21 @@ bt.describe("Nested LLM Workflow", () => {
       temperature: 0,
     });
     const output = response.choices[0]?.message?.content?.trim() || "";
-
-    bt.logOutputs({
+    logOutputs({
       level: 1,
       task: "extraction",
       input: text,
       output,
       tokens: response.usage,
     });
-    bt.logFeedback({ name: "completeness", score: 1.0 });
+    logFeedback({ name: "completeness", score: 1.0 });
 
     expect(output.length).toBeGreaterThan(0);
   });
 
   // Level 2: Nested workflow - Translation
-  bt.describe("Level 2: Translation Tasks", () => {
-    bt.test("level 2: translate to Spanish", async () => {
+  describe("Level 2: Translation Tasks", () => {
+    test("level 2: translate to Spanish", async () => {
       const text = "Hello, how are you?";
       const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -203,19 +199,19 @@ bt.describe("Nested LLM Workflow", () => {
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
 
-      bt.logOutputs({
+      logOutputs({
         level: 2,
         task: "translation",
         source: text,
         target: "Spanish",
         output,
       });
-      bt.logFeedback({ name: "translation_quality", score: 0.95 });
+      logFeedback({ name: "translation_quality", score: 0.95 });
 
       expect(output.length).toBeGreaterThan(0);
     });
 
-    bt.test("level 2: translate to French", async () => {
+    test("level 2: translate to French", async () => {
       const text = "Hello, how are you?";
       const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -229,21 +225,21 @@ bt.describe("Nested LLM Workflow", () => {
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
 
-      bt.logOutputs({
+      logOutputs({
         level: 2,
         task: "translation",
         source: text,
         target: "French",
         output,
       });
-      bt.logFeedback({ name: "translation_quality", score: 0.93 });
+      logFeedback({ name: "translation_quality", score: 0.93 });
 
       expect(output.length).toBeGreaterThan(0);
     });
 
     // Level 3: Quality validation
-    bt.describe("Level 3: Translation Quality Checks", () => {
-      bt.test("level 3: check grammar accuracy", async () => {
+    describe("Level 3: Translation Quality Checks", () => {
+      test("level 3: check grammar accuracy", async () => {
         const translatedText = "Hola, ¿cómo estás?";
         const response = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
@@ -257,19 +253,19 @@ bt.describe("Nested LLM Workflow", () => {
         });
         const output = response.choices[0]?.message?.content?.trim() || "";
 
-        bt.logOutputs({
+        logOutputs({
           level: 3,
           task: "validation",
           check: "grammar",
           text: translatedText,
           assessment: output,
         });
-        bt.logFeedback({ name: "grammar_score", score: 0.98 });
+        logFeedback({ name: "grammar_score", score: 0.98 });
 
         expect(output.length).toBeGreaterThan(0);
       });
 
-      bt.test("level 3: check naturalness", async () => {
+      test("level 3: check naturalness", async () => {
         const translatedText = "Hola, ¿cómo estás?";
         const response = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
@@ -283,34 +279,34 @@ bt.describe("Nested LLM Workflow", () => {
         });
         const output = response.choices[0]?.message?.content?.trim() || "";
 
-        bt.logOutputs({
+        logOutputs({
           level: 3,
           task: "validation",
           check: "naturalness",
           text: translatedText,
           assessment: output,
         });
-        bt.logFeedback({ name: "naturalness_score", score: 0.95 });
+        logFeedback({ name: "naturalness_score", score: 0.95 });
 
         expect(output.length).toBeGreaterThan(0);
       });
     });
 
     // Back to Level 2: Post-validation
-    bt.test("level 2: finalize translations", async () => {
-      bt.logOutputs({
+    test("level 2: finalize translations", async () => {
+      logOutputs({
         level: 2,
         task: "finalization",
         status: "All translations validated and approved",
       });
-      bt.logFeedback({ name: "workflow_completion", score: 1.0 });
+      logFeedback({ name: "workflow_completion", score: 1.0 });
       expect(true).toBe(true);
     });
   });
 
   // Sibling Level 2: Summarization workflow
-  bt.describe("Level 2: Summarization Tasks", () => {
-    bt.test("level 2: create brief summary", async () => {
+  describe("Level 2: Summarization Tasks", () => {
+    test("level 2: create brief summary", async () => {
       const longText =
         "Artificial intelligence and machine learning are transforming industries worldwide. Companies are using AI to improve customer service, automate processes, and gain insights from data. The technology is advancing rapidly with new breakthroughs happening regularly.";
       const response = await openai.chat.completions.create({
@@ -325,20 +321,20 @@ bt.describe("Nested LLM Workflow", () => {
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
 
-      bt.logOutputs({
+      logOutputs({
         level: 2,
         task: "summarization",
         type: "brief",
         output,
         reduction: `${longText.length} → ${output.length} chars`,
       });
-      bt.logFeedback({ name: "conciseness", score: 0.9 });
+      logFeedback({ name: "conciseness", score: 0.9 });
 
       expect(output.length).toBeGreaterThan(0);
       expect(output.length).toBeLessThan(longText.length);
     });
 
-    bt.test("level 2: extract key insights", async () => {
+    test("level 2: extract key insights", async () => {
       const longText =
         "Recent studies show that remote work increases productivity by 13% on average. Employees report better work-life balance and reduced commute stress. However, companies face challenges with communication and team cohesion in remote settings.";
       const response = await openai.chat.completions.create({
@@ -353,20 +349,20 @@ bt.describe("Nested LLM Workflow", () => {
       });
       const output = response.choices[0]?.message?.content?.trim() || "";
 
-      bt.logOutputs({
+      logOutputs({
         level: 2,
         task: "summarization",
         type: "insights",
         output,
       });
-      bt.logFeedback({ name: "relevance", score: 0.88 });
+      logFeedback({ name: "relevance", score: 0.88 });
 
       expect(output.length).toBeGreaterThan(0);
     });
   });
 
   // Back to Level 1: Final report
-  bt.test("level 1: generate workflow report", async () => {
+  test("level 1: generate workflow report", async () => {
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
@@ -379,14 +375,13 @@ bt.describe("Nested LLM Workflow", () => {
       temperature: 0,
     });
     const output = response.choices[0]?.message?.content?.trim() || "";
-
-    bt.logOutputs({
+    logOutputs({
       level: 1,
       task: "reporting",
       workflow: "complete",
       report: output,
     });
-    bt.logFeedback({ name: "workflow_success", score: 1.0 });
+    logFeedback({ name: "workflow_success", score: 1.0 });
 
     expect(output.length).toBeGreaterThan(0);
   });
