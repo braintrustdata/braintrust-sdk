@@ -2561,6 +2561,25 @@ def test_span_start_span_with_exported_span_parent(with_memory_logger):
     )
 
 
+def test_update_span_includes_span_id_and_root_span_id_from_export(with_memory_logger):
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    with experiment.start_span(name="span") as span:
+        span.log(input="input")
+        exported = span.export()
+        span_id = span.span_id
+        root_span_id = span.root_span_id
+
+    with_memory_logger.pop()
+
+    braintrust.update_span(exported=exported, output="updated output")
+
+    logs = with_memory_logger.pop()
+    updated_log = next(log for log in logs if log.get("output") == "updated output")
+    assert updated_log["span_id"] == span_id
+    assert updated_log["root_span_id"] == root_span_id
+
+
 def test_get_exporter_returns_v3_by_default():
     """Test that _get_exporter() returns SpanComponentsV3 when OTEL_COMPAT is not set."""
     with preserve_env_vars("BRAINTRUST_OTEL_COMPAT"):
