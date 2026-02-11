@@ -1,6 +1,8 @@
 import time
 from typing import Any
 
+from braintrust.util import is_numeric
+
 
 def omit(obj: dict[str, Any], keys: list[str]):
     return {k: v for k, v in obj.items() if k not in keys}
@@ -21,10 +23,6 @@ def clean(obj: dict[str, Any]) -> dict[str, Any]:
 def get_args_kwargs(args: list[str], kwargs: dict[str, Any], keys: list[str]):
     return {k: args[i] if args else kwargs.get(k) for i, k in enumerate(keys)}, omit(kwargs, keys)
 
-
-def _is_numeric(v):
-    """Check if value is numeric like OpenAI wrapper."""
-    return isinstance(v, (int, float, complex))
 
 
 def _try_to_dict(obj: Any) -> Any:
@@ -114,7 +112,7 @@ def parse_metrics_from_agno(usage: Any) -> dict[str, Any]:
 
     # Simple loop through Agno fields and map to Braintrust names
     for agno_name, value in usage_dict.items():
-        if agno_name in AGNO_METRICS_MAP and _is_numeric(value) and value != 0:
+        if agno_name in AGNO_METRICS_MAP and is_numeric(value) and value != 0:
             braintrust_name = AGNO_METRICS_MAP[agno_name]
             metrics[braintrust_name] = value
 
@@ -190,7 +188,7 @@ def extract_streaming_metrics(aggregated: dict[str, Any], start_time: float) -> 
 def _aggregate_metrics(target: dict[str, Any], source: dict[str, Any]) -> None:
     """Aggregate metrics from source into target dict."""
     for key, value in source.items():
-        if _is_numeric(value):
+        if is_numeric(value):
             if key in target:
                 # For timing metrics, we keep the latest
                 if "time" in key.lower() or "duration" in key.lower():

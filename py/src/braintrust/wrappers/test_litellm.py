@@ -712,12 +712,12 @@ def test_litellm_is_numeric_excludes_booleans():
     must explicitly exclude booleans so they don't end up in metrics, which
     causes a 400 from the API (expected number, received boolean).
     """
-    from braintrust.wrappers.litellm import _is_numeric
+    from braintrust.util import is_numeric
 
-    assert _is_numeric(1)
-    assert _is_numeric(1.0)
-    assert not _is_numeric(True), "bool should not be considered numeric"
-    assert not _is_numeric(False), "bool should not be considered numeric"
+    assert is_numeric(1)
+    assert is_numeric(1.0)
+    assert not is_numeric(True)
+    assert not is_numeric(False)
 
 
 def test_litellm_parse_metrics_excludes_booleans():
@@ -739,9 +739,9 @@ def test_litellm_parse_metrics_excludes_booleans():
     assert "prompt_tokens" in metrics
     assert "completion_tokens" in metrics
     assert "tokens" in metrics
-    assert "is_byok" not in metrics, "boolean field is_byok should be excluded from metrics"
+    assert "is_byok" not in metrics
     for key, value in metrics.items():
-        assert not isinstance(value, bool), f"Metric {key} should not be a boolean"
+        assert not isinstance(value, bool)
 
 
 @pytest.mark.vcr
@@ -776,7 +776,7 @@ def test_litellm_openrouter_no_booleans_in_metrics(memory_logger):
 
     # No boolean values should be in metrics
     for key, value in metrics.items():
-        assert not isinstance(value, bool), f"Metric '{key}' is boolean ({value}), would cause API 400"
+        assert not isinstance(value, bool)
     assert "is_byok" not in metrics
 
 

@@ -22,6 +22,8 @@ with autoinstrument_test_context("test_patch_litellm_responses") as memory_logge
     assert len(spans) == 1, f"Expected 1 span, got {len(spans)}"
     span = spans[0]
     assert span["metrics"]
+    for key, value in span["metrics"].items():
+        assert isinstance(value, (int, float)) and not isinstance(value, bool)
     assert span["metadata"]["model"] == "gpt-4o-mini"
     assert span["metadata"]["provider"] == "litellm"
     assert "What's 12 + 12?" in str(span["input"])
