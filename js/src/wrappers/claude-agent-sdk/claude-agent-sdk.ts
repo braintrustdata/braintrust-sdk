@@ -41,6 +41,375 @@ type SdkMcpToolDefinition<T> = {
 };
 
 /**
+ * Hook types from @anthropic-ai/claude-agent-sdk
+ */
+type HookEvent =
+  | "PreToolUse"
+  | "PostToolUse"
+  | "PostToolUseFailure"
+  | "SubagentStart"
+  | "SubagentStop";
+
+type BaseHookInput = {
+  session_id: string;
+  transcript_path: string;
+  cwd: string;
+  permission_mode?: string;
+};
+
+type PreToolUseHookInput = BaseHookInput & {
+  hook_event_name: "PreToolUse";
+  tool_name: string;
+  tool_input: unknown;
+};
+
+type PostToolUseHookInput = BaseHookInput & {
+  hook_event_name: "PostToolUse";
+  tool_name: string;
+  tool_input: unknown;
+  tool_response: unknown;
+};
+
+type PostToolUseFailureHookInput = BaseHookInput & {
+  hook_event_name: "PostToolUseFailure";
+  tool_name: string;
+  tool_input: unknown;
+  error: string;
+  is_interrupt?: boolean;
+};
+
+type SubagentStartHookInput = BaseHookInput & {
+  hook_event_name: "SubagentStart";
+  agent_id: string;
+  agent_type: string;
+};
+
+type SubagentStopHookInput = BaseHookInput & {
+  hook_event_name: "SubagentStop";
+  agent_id: string;
+  agent_transcript_path?: string;
+  stop_hook_active?: boolean;
+};
+
+type HookInput =
+  | PreToolUseHookInput
+  | PostToolUseHookInput
+  | PostToolUseFailureHookInput
+  | SubagentStartHookInput
+  | SubagentStopHookInput;
+
+type HookJSONOutput = {
+  continue?: boolean;
+  decision?: "approve" | "block";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+};
+
+type HookCallback = (
+  input: HookInput,
+  toolUseID: string | undefined,
+  options: { signal: AbortSignal },
+) => Promise<HookJSONOutput>;
+
+type HookCallbackMatcher = {
+  matcher?: string;
+  hooks: HookCallback[];
+};
+
+/**
+ * Parsed MCP tool name components.
+ */
+type ParsedToolName = {
+  /** Display name for spans (e.g., "tool: math/calculator" or "tool: rawName") */
+  displayName: string;
+  /** The actual tool name without MCP prefix */
+  toolName: string;
+  /** MCP server name, if this is an MCP tool */
+  mcpServer?: string;
+  /** The raw tool name as provided by the SDK */
+  rawToolName: string;
+};
+
+/**
+ * MCP server configuration from query options.
+ */
+type McpServerConfig = {
+  type?: "stdio" | "sse" | "http" | "sdk";
+  url?: string;
+  command?: string;
+  args?: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+};
+
+type McpServersConfig = Record<string, McpServerConfig>;
+
+/**
+ * Extracts MCP server metadata for span logging.
+ */
+function getMcpServerMetadata(
+  serverName: string | undefined,
+  mcpServers: McpServersConfig | undefined,
+): Record<string, unknown> {
+  if (!serverName || !mcpServers) {
+    return {};
+  }
+
+  const serverConfig = mcpServers[serverName];
+  if (!serverConfig) {
+    return {};
+  }
+
+  const metadata: Record<string, unknown> = {};
+
+  // Determine server type
+  if (serverConfig.type) {
+    metadata["mcp.type"] = serverConfig.type;
+  } else if (typeof serverConfig === "object" && "transport" in serverConfig) {
+    // SDK MCP servers have a transport property
+    metadata["mcp.type"] = "sdk";
+  }
+
+  // Add URL for sse/http types
+  if (serverConfig.url) {
+    metadata["mcp.url"] = serverConfig.url;
+  }
+
+  // Add command for stdio type
+  if (serverConfig.command) {
+    metadata["mcp.command"] = serverConfig.command;
+    if (serverConfig.args) {
+      metadata["mcp.args"] = serverConfig.args.join(" ");
+    }
+  }
+
+  return metadata;
+}
+
+/**
+ * Parses MCP tool names in the format "mcp__<server>__<tool>" into components.
+ * Falls back to using the raw name if parsing fails.
+ */
+function parseToolName(rawToolName: string): ParsedToolName {
+  // MCP tools follow the pattern: mcp__<server>__<tool>
+  const mcpMatch = rawToolName.match(/^mcp__([^_]+)__(.+)$/);
+
+  if (mcpMatch) {
+    const [, mcpServer, toolName] = mcpMatch;
+    return {
+      displayName: `tool: ${mcpServer}/${toolName}`,
+      toolName,
+      mcpServer,
+      rawToolName,
+    };
+  }
+
+  // Not an MCP tool, use raw name with "tool:" prefix
+  return {
+    displayName: `tool: ${rawToolName}`,
+    toolName: rawToolName,
+    rawToolName,
+  };
+}
+
+/**
+ * Resolves the parent span for a tool call based on which agent context it belongs to.
+ * Uses the toolUseToParent map (populated from message stream) to find the correct parent.
+ */
+type ParentSpanResolver = (
+  toolUseID: string,
+) => Promise<Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>>;
+
+/**
+ * Creates PreToolUse, PostToolUse, and PostToolUseFailure hooks for tracing all tool calls (including remote MCPs).
+ * The hooks use toolUseID to correlate pre/post events and manage span lifecycle.
+ * Uses a dynamic parent resolver to support sub-agent nesting.
+ */
+function createToolTracingHooks(
+  resolveParentSpan: ParentSpanResolver,
+  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+  mcpServers: McpServersConfig | undefined,
+  subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
+): {
+  preToolUse: HookCallback;
+  postToolUse: HookCallback;
+  postToolUseFailure: HookCallback;
+} {
+  const preToolUse: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PreToolUse" || !toolUseID) {
+      return {};
+    }
+
+    // Skip Task tool calls in PreToolUse -- sub-agent spans are created
+    // in the message loop when we see messages with a new parent_tool_use_id.
+    if (input.tool_name === "Task") {
+      return {};
+    }
+
+    const parsed = parseToolName(input.tool_name);
+    const mcpMetadata = getMcpServerMetadata(parsed.mcpServer, mcpServers);
+    const parentExport = await resolveParentSpan(toolUseID);
+    const toolSpan = startSpan({
+      name: parsed.displayName,
+      spanAttributes: { type: SpanTypeAttribute.TOOL },
+      event: {
+        input: input.tool_input,
+        metadata: {
+          // GenAI semantic conventions
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          // MCP-specific metadata
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
+          ...mcpMetadata,
+          // Claude SDK metadata
+          "claude_agent_sdk.raw_tool_name": parsed.rawToolName,
+          "claude_agent_sdk.session_id": input.session_id,
+          "claude_agent_sdk.cwd": input.cwd,
+        },
+      },
+      parent: parentExport,
+    });
+
+    activeToolSpans.set(toolUseID, toolSpan);
+    return {};
+  };
+
+  const postToolUse: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PostToolUse" || !toolUseID) {
+      return {};
+    }
+
+    // For Task tool calls, end the sub-agent span with the response metadata
+    const subAgentSpan = subAgentSpans.get(toolUseID);
+    if (subAgentSpan) {
+      try {
+        const response = input.tool_response as
+          | Record<string, unknown>
+          | undefined;
+        const metadata: Record<string, unknown> = {};
+        if (response?.status) {
+          metadata["claude_agent_sdk.status"] = response.status;
+        }
+        if (response?.totalDurationMs) {
+          metadata["claude_agent_sdk.duration_ms"] = response.totalDurationMs;
+        }
+        if (response?.totalToolUseCount !== undefined) {
+          metadata["claude_agent_sdk.tool_use_count"] =
+            response.totalToolUseCount;
+        }
+        subAgentSpan.log({
+          output: response?.content,
+          metadata,
+        });
+      } finally {
+        subAgentSpan.end();
+        endedSubAgentSpans.add(toolUseID);
+      }
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    try {
+      toolSpan.log({ output: input.tool_response });
+    } finally {
+      toolSpan.end();
+      activeToolSpans.delete(toolUseID);
+    }
+    return {};
+  };
+
+  const postToolUseFailure: HookCallback = async (input, toolUseID) => {
+    if (input.hook_event_name !== "PostToolUseFailure" || !toolUseID) {
+      return {};
+    }
+
+    // Handle failure for sub-agent Task calls
+    const subAgentSpan = subAgentSpans.get(toolUseID);
+    if (subAgentSpan) {
+      try {
+        subAgentSpan.log({ error: input.error });
+      } finally {
+        subAgentSpan.end();
+        endedSubAgentSpans.add(toolUseID);
+      }
+      return {};
+    }
+
+    const toolSpan = activeToolSpans.get(toolUseID);
+    if (!toolSpan) {
+      return {};
+    }
+
+    const parsed = parseToolName(input.tool_name);
+    try {
+      toolSpan.log({
+        error: input.error,
+        metadata: {
+          "gen_ai.tool.name": parsed.toolName,
+          "gen_ai.tool.call.id": toolUseID,
+          ...(parsed.mcpServer && { "mcp.server": parsed.mcpServer }),
+          "claude_agent_sdk.is_interrupt": input.is_interrupt,
+          "claude_agent_sdk.session_id": input.session_id,
+        },
+      });
+    } finally {
+      toolSpan.end();
+      activeToolSpans.delete(toolUseID);
+    }
+    return {};
+  };
+
+  return { preToolUse, postToolUse, postToolUseFailure };
+}
+
+/**
+ * Injects tracing hooks into query options, preserving any user-provided hooks.
+ */
+function injectTracingHooks(
+  options: QueryOptions,
+  resolveParentSpan: ParentSpanResolver,
+  activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+  subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
+): QueryOptions {
+  const mcpServers = options.mcpServers as McpServersConfig | undefined;
+  const { preToolUse, postToolUse, postToolUseFailure } =
+    createToolTracingHooks(
+      resolveParentSpan,
+      activeToolSpans,
+      mcpServers,
+      subAgentSpans,
+      endedSubAgentSpans,
+    );
+
+  const existingHooks = options.hooks ?? {};
+
+  return {
+    ...options,
+    hooks: {
+      ...existingHooks,
+      PreToolUse: [
+        ...(existingHooks.PreToolUse ?? []),
+        { hooks: [preToolUse] } as HookCallbackMatcher,
+      ],
+      PostToolUse: [
+        ...(existingHooks.PostToolUse ?? []),
+        { hooks: [postToolUse] } as HookCallbackMatcher,
+      ],
+      PostToolUseFailure: [
+        ...(existingHooks.PostToolUseFailure ?? []),
+        { hooks: [postToolUseFailure] } as HookCallbackMatcher,
+      ],
+    },
+  };
+}
+
+/**
  * Filters options to include only specific serializable fields for logging.
  */
 function filterSerializableOptions(
@@ -73,6 +442,16 @@ function filterSerializableOptions(
   return filtered;
 }
 
+function isAsyncIterable<T = unknown>(
+  value: unknown,
+): value is AsyncIterable<T> {
+  return (
+    value !== null &&
+    value !== undefined &&
+    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+  );
+}
+
 /**
  * Wraps the Claude Agent SDK's query function to add Braintrust tracing.
  * Traces the entire agent interaction including all streaming messages.
@@ -89,6 +468,33 @@ function wrapClaudeAgentQuery<
       };
 
       const { prompt, options = {} } = params;
+      const promptIsAsyncIterable = isAsyncIterable<SDKMessage>(prompt);
+      let capturedPromptMessages: SDKMessage[] | undefined;
+      let promptForQuery = prompt;
+      let promptStarted = false;
+      let resolvePromptDone: (() => void) | undefined;
+      const promptDone = new Promise<void>((resolve) => {
+        resolvePromptDone = resolve;
+      });
+
+      if (promptIsAsyncIterable) {
+        capturedPromptMessages = [];
+        const originalPrompt = prompt as AsyncIterable<SDKMessage>;
+
+        const capturingPrompt = (async function* () {
+          promptStarted = true;
+          try {
+            for await (const msg of originalPrompt) {
+              capturedPromptMessages!.push(msg);
+              yield msg;
+            }
+          } finally {
+            resolvePromptDone?.();
+          }
+        })();
+
+        promptForQuery = capturingPrompt;
+      }
 
       const span = startSpan({
         name: "Claude Agent",
@@ -99,7 +505,11 @@ function wrapClaudeAgentQuery<
           input:
             typeof prompt === "string"
               ? prompt
-              : { type: "streaming", description: "AsyncIterable<SDKMessage>" },
+              : promptIsAsyncIterable
+                ? undefined
+                : prompt !== undefined
+                  ? String(prompt)
+                  : undefined,
           metadata: filterSerializableOptions(options),
         },
       });
@@ -117,13 +527,28 @@ function wrapClaudeAgentQuery<
       // LLM spans can contain multiple streaming message updates. We create the span
       // when we proceed to a new message ID or when the query completes.
       const createLLMSpan = async () => {
+        // Resolve the parent span based on the messages' parent_tool_use_id
+        const parentToolUseId = currentMessages[0]?.parent_tool_use_id ?? null;
+        let parentSpanExport: Awaited<
+          ReturnType<ReturnType<typeof startSpan>["export"]>
+        >;
+        if (parentToolUseId) {
+          const subAgentSpan = subAgentSpans.get(parentToolUseId);
+          parentSpanExport = subAgentSpan
+            ? await subAgentSpan.export()
+            : await span.export();
+        } else {
+          parentSpanExport = await span.export();
+        }
+
         const finalMessageContent = await _createLLMSpanForMessages(
           currentMessages,
           prompt,
           finalResults,
           options,
           currentMessageStartTime,
-          await span.export(),
+          capturedPromptMessages,
+          parentSpanExport,
         );
 
         if (finalMessageContent) {
@@ -149,9 +574,58 @@ function wrapClaudeAgentQuery<
           ? defaultThis ?? thisArg
           : thisArg;
 
+      // Track active tool spans for hook-based tracing
+      const activeToolSpans = new Map<string, ReturnType<typeof startSpan>>();
+
+      // Track sub-agent spans keyed by the Task tool_use_id that spawned them.
+      // Spans stay in this map even after being ended (for parent resolution by createLLMSpan).
+      const subAgentSpans = new Map<string, ReturnType<typeof startSpan>>();
+      // Tracks which sub-agent spans have already been ended by hooks (to avoid double-end in finally).
+      const endedSubAgentSpans = new Set<string>();
+
+      // Maps a tool_use_id to the parent_tool_use_id it was seen under in the message stream.
+      // This lets hooks resolve the correct parent span for tool calls within sub-agents.
+      const toolUseToParent = new Map<string, string | null>();
+
+      // Maps a Task tool_use_id to the agent name extracted from the tool input.
+      // Populated when we see a Task tool_use block; consumed when the sub-agent span is created.
+      const pendingSubAgentNames = new Map<string, string>();
+
+      // Dynamic parent resolver: looks up which agent context a tool belongs to
+      const resolveParentSpan: ParentSpanResolver = async (
+        toolUseID: string,
+      ) => {
+        const parentToolUseId = toolUseToParent.get(toolUseID);
+        if (parentToolUseId) {
+          const subAgentSpan = subAgentSpans.get(parentToolUseId);
+          if (subAgentSpan) {
+            return subAgentSpan.export();
+          }
+        }
+        return span.export();
+      };
+
+      // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs)
+      const optionsWithHooks = injectTracingHooks(
+        options,
+        resolveParentSpan,
+        activeToolSpans,
+        subAgentSpans,
+        endedSubAgentSpans,
+      );
+
+      // Create modified argArray with injected hooks
+      const modifiedArgArray = [
+        {
+          ...params,
+          ...(promptForQuery !== undefined ? { prompt: promptForQuery } : {}),
+          options: optionsWithHooks,
+        },
+      ];
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const originalGenerator: any = withCurrent(span, () =>
-        Reflect.apply(target, invocationTarget, argArray),
+        Reflect.apply(target, invocationTarget, modifiedArgArray),
       );
 
       // Create wrapped async generator that maintains span context
@@ -160,6 +634,57 @@ function wrapClaudeAgentQuery<
           try {
             for await (const message of originalGenerator) {
               const currentTime = getCurrentUnixTimestamp();
+
+              // Track tool_use_ids from assistant messages to map them to their agent context.
+              // This must happen before hooks fire (which it does, since assistant messages
+              // arrive in the stream before the corresponding PreToolUse hook).
+              if (
+                message.type === "assistant" &&
+                Array.isArray(message.message?.content)
+              ) {
+                const parentToolUseId = message.parent_tool_use_id ?? null;
+                for (const block of message.message.content) {
+                  if (block.type === "tool_use" && block.id) {
+                    toolUseToParent.set(block.id, parentToolUseId);
+                    // Extract agent name from Task tool_use blocks for span naming
+                    if (block.name === "Task" && block.input?.subagent_type) {
+                      pendingSubAgentNames.set(
+                        block.id,
+                        block.input.subagent_type,
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Detect sub-agent boundaries: when a message has a non-null parent_tool_use_id
+              // that we haven't seen before, create a nested TASK span for the sub-agent.
+              if ("parent_tool_use_id" in message) {
+                const parentToolUseId = message.parent_tool_use_id as
+                  | string
+                  | null;
+                if (parentToolUseId && !subAgentSpans.has(parentToolUseId)) {
+                  const agentName = pendingSubAgentNames.get(parentToolUseId);
+                  const spanName = agentName
+                    ? `Agent: ${agentName}`
+                    : "Agent: sub-agent";
+
+                  const parentExport = await span.export();
+                  const subAgentSpan = startSpan({
+                    name: spanName,
+                    spanAttributes: { type: SpanTypeAttribute.TASK },
+                    event: {
+                      metadata: {
+                        ...(agentName && {
+                          "claude_agent_sdk.agent_type": agentName,
+                        }),
+                      },
+                    },
+                    parent: parentExport,
+                  });
+                  subAgentSpans.set(parentToolUseId, subAgentSpan);
+                }
+              }
 
               const messageId = message.message?.id;
               if (messageId && messageId !== currentMessageId) {
@@ -230,6 +755,23 @@ function wrapClaudeAgentQuery<
             });
             throw error;
           } finally {
+            // End any sub-agent spans that weren't closed by hooks
+            for (const [id, subSpan] of subAgentSpans) {
+              if (!endedSubAgentSpans.has(id)) {
+                subSpan.end();
+              }
+            }
+            subAgentSpans.clear();
+            if (capturedPromptMessages) {
+              if (promptStarted) {
+                await promptDone;
+              }
+              if (capturedPromptMessages.length > 0) {
+                span.log({
+                  input: _formatCapturedMessages(capturedPromptMessages),
+                });
+              }
+            }
             span.end();
           }
         })();
@@ -268,63 +810,34 @@ function wrapClaudeAgentQuery<
 }
 
 /**
- * Wraps a Claude Agent SDK tool definition to add Braintrust tracing for tool executions.
- * Internal use only - use wrapClaudeAgentSDK instead.
- */
-function wrapClaudeAgentTool<T>(
-  toolDef: SdkMcpToolDefinition<T>,
-): SdkMcpToolDefinition<T> {
-  const originalHandler = toolDef.handler;
-
-  const wrappedHandler: ToolHandler<T> = (args, extra) =>
-    traced(
-      async (span) => {
-        span.log({
-          input: args,
-          metadata: {
-            tool_name: toolDef.name,
-            tool_description: toolDef.description,
-          },
-        });
-
-        const result = await originalHandler(args, extra);
-
-        span.log({
-          output: result,
-        });
-
-        return result;
-      },
-      {
-        name: `${toolDef.name}`,
-        spanAttributes: {
-          type: SpanTypeAttribute.TOOL,
-        },
-      },
-    );
-
-  return {
-    ...toolDef,
-    handler: wrappedHandler,
-  };
-}
-
-/**
  * Builds the input array for an LLM span from the initial prompt and conversation history.
  */
 function _buildLLMInput(
   prompt: string | AsyncIterable<SDKMessage> | undefined,
   conversationHistory: Array<{ content: unknown; role: string }>,
+  capturedPromptMessages?: SDKMessage[],
 ): Array<{ content: unknown; role: string }> | undefined {
-  const promptMessage =
-    typeof prompt === "string" ? { content: prompt, role: "user" } : undefined;
+  const promptMessages: Array<{ content: unknown; role: string }> = [];
 
-  const inputParts = [
-    ...(promptMessage ? [promptMessage] : []),
-    ...conversationHistory,
-  ];
+  if (typeof prompt === "string") {
+    promptMessages.push({ content: prompt, role: "user" });
+  } else if (capturedPromptMessages && capturedPromptMessages.length > 0) {
+    for (const msg of capturedPromptMessages) {
+      const role = msg.message?.role;
+      const content = msg.message?.content;
+      if (role && content !== undefined) {
+        promptMessages.push({ content, role });
+      }
+    }
+  }
+
+  const inputParts = [...promptMessages, ...conversationHistory];
 
   return inputParts.length > 0 ? inputParts : undefined;
+}
+
+function _formatCapturedMessages(messages: SDKMessage[]): SDKMessage[] {
+  return messages.length > 0 ? messages : [];
 }
 
 /**
@@ -389,6 +902,7 @@ async function _createLLMSpanForMessages(
   conversationHistory: Array<{ content: unknown; role: string }>,
   options: QueryOptions,
   startTime: number,
+  capturedPromptMessages: SDKMessage[] | undefined,
   parentSpan: Awaited<ReturnType<typeof startSpan>>["export"] extends (
     ...args: infer _
   ) => Promise<infer R>
@@ -404,7 +918,11 @@ async function _createLLMSpanForMessages(
 
   const model = lastMessage.message.model || options.model;
   const usage = _extractUsageFromMessage(lastMessage);
-  const input = _buildLLMInput(prompt, conversationHistory);
+  const input = _buildLLMInput(
+    prompt,
+    conversationHistory,
+    capturedPromptMessages,
+  );
   const outputs = messages
     .map((m) =>
       m.message?.content && m.message?.role
@@ -486,34 +1004,12 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
         return wrappedQuery;
       }
 
+      // Tool tracing is now handled via PreToolUse/PostToolUse hooks injected in wrapClaudeAgentQuery.
+      // We just pass through the original tool function - no need to wrap it.
       if (prop === "tool" && typeof value === "function") {
-        const toolFn = value as typeof value;
-
-        const wrappedToolFactory = new Proxy(toolFn, {
-          apply(toolTarget, thisArg, argArray) {
-            const invocationTarget =
-              thisArg === receiver || thisArg === undefined ? target : thisArg;
-
-            const toolDef = Reflect.apply(
-              toolTarget,
-              invocationTarget,
-              argArray,
-            );
-            if (
-              toolDef &&
-              typeof toolDef === "object" &&
-              "handler" in toolDef
-            ) {
-              return wrapClaudeAgentTool(
-                toolDef as SdkMcpToolDefinition<unknown>,
-              );
-            }
-            return toolDef;
-          },
-        });
-
-        cache.set(prop, wrappedToolFactory);
-        return wrappedToolFactory;
+        const bound = (value as Function).bind(target);
+        cache.set(prop, bound);
+        return bound;
       }
 
       if (typeof value === "function") {

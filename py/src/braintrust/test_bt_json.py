@@ -5,6 +5,7 @@ import json
 from typing import Any
 from unittest import TestCase
 
+import pytest
 from braintrust.bt_json import bt_dumps, bt_safe_deep_copy
 from braintrust.logger import Attachment, ExternalAttachment
 
@@ -281,30 +282,28 @@ class TestBTJson(TestCase):
         self.assertTrue("(1, 2)" in result or "1, 2" in result)
         self.assertIn("None", result)
 
-    def test_to_bt_safe_special_objects(self):
-        """Test _to_bt_safe handling of Span, Experiment, Dataset, Logger objects."""
-        from braintrust import init, init_dataset, init_logger
+@pytest.mark.vcr
+def test_to_bt_safe_special_objects():
+    """Test _to_bt_safe handling of Span, Experiment, Dataset, Logger objects."""
+    from braintrust import init, init_dataset, init_logger
 
-        # Create actual objects
-        exp = init(project="test", experiment="test")
-        dataset = init_dataset(project="test", name="test")
-        logger = init_logger(project="test")
-        span = exp.start_span()
+    # Create actual objects
+    exp = init(project="test", experiment="test")
+    dataset = init_dataset(project="test", name="test")
+    logger = init_logger(project="test")
+    span = exp.start_span()
 
-        # Import _to_bt_safe
-        from braintrust.bt_json import _to_bt_safe
+    # Import _to_bt_safe
+    from braintrust.bt_json import _to_bt_safe
 
-        # Test each special object
-        self.assertEqual(_to_bt_safe(span), "<span>")
-        self.assertEqual(_to_bt_safe(exp), "<experiment>")
-        self.assertEqual(_to_bt_safe(dataset), "<dataset>")
-        self.assertEqual(_to_bt_safe(logger), "<logger>")
+    # Test each special object
+    assert _to_bt_safe(span) == "<span>"
+    assert _to_bt_safe(exp) == "<experiment>"
+    assert _to_bt_safe(dataset) == "<dataset>"
+    assert _to_bt_safe(logger) == "<logger>"
 
-        # Clean up
-        exp.flush()
-        dataset.flush()
-        logger.flush()
 
+class TestBTJsonAttachments(TestCase):
     def test_to_bt_safe_attachments(self):
         """Test _to_bt_safe preserves BaseAttachment and converts ReadonlyAttachment to reference."""
         from braintrust.bt_json import _to_bt_safe

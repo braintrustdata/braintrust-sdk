@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.google_genai import setup_genai
+from braintrust.wrappers.test_utils import verify_autoinstrument_script
 from google.genai import types
 from google.genai.client import Client
 
@@ -15,12 +17,16 @@ FIXTURES_DIR = Path(__file__).parent.parent.parent.parent.parent / "internal/gol
 
 @pytest.fixture(scope="module")
 def vcr_config():
+    """Google-specific VCR config - needs to uppercase HTTP methods."""
+    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+
     def before_record_request(request):
-        # Normalize HTTP method to uppercase for consistency
+        # Normalize HTTP method to uppercase for consistency (Google API quirk)
         request.method = request.method.upper()
         return request
 
     return {
+        "record_mode": record_mode,
         "filter_headers": [
             "authorization",
             "x-api-key",
@@ -632,3 +638,11 @@ def test_attachment_with_pydantic_model(memory_logger):
 
     # Attachment should be preserved
     assert copied["context_file"] is attachment
+
+
+class TestAutoInstrumentGoogleGenAI:
+    """Tests for auto_instrument() with Google GenAI."""
+
+    def test_auto_instrument_google_genai(self):
+        """Test auto_instrument patches Google GenAI and creates spans."""
+        verify_autoinstrument_script("test_auto_google_genai.py")

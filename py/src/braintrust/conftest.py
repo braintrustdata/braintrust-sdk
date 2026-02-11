@@ -46,3 +46,46 @@ def reset_braintrust_state():
     from braintrust import logger
 
     logger._state = logger.BraintrustState()
+
+
+@pytest.fixture(autouse=True)
+def skip_vcr_tests_in_wheel_mode(request):
+    """Skip VCR tests when running from an installed wheel.
+
+    Wheel mode (BRAINTRUST_TESTING_WHEEL=1) is a pre-release sanity check
+    that verifies the built package installs and runs correctly. It's not
+    intended to be a full test suite - VCR cassettes are not included in
+    the wheel, so we skip those tests here. The full test suite with VCR
+    tests runs against source code during normal CI.
+    """
+    if os.environ.get("BRAINTRUST_TESTING_WHEEL") == "1":
+        if request.node.get_closest_marker("vcr"):
+            pytest.skip("VCR tests skipped in wheel mode (pre-release sanity check only)")
+
+
+def get_vcr_config():
+    """
+    Get VCR configuration for recording/playing back HTTP interactions.
+
+    In CI, use "none" to fail if cassette is missing.
+    Locally, use "once" to record new cassettes if they don't exist.
+    """
+    record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
+    return {
+        "record_mode": record_mode,
+        "filter_headers": [
+            "authorization",
+            "openai-organization",
+            "x-api-key",
+            "api-key",
+            "openai-api-key",
+            "x-goog-api-key",
+            "x-bt-auth-token",
+        ],
+    }
+
+
+@pytest.fixture(scope="session")
+def vcr_config():
+    """Pytest fixture wrapper for get_vcr_config()."""
+    return get_vcr_config()

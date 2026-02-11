@@ -6,23 +6,13 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.litellm import wrap_litellm
-from braintrust.wrappers.test_utils import assert_metrics_are_valid
+from braintrust.wrappers.test_utils import assert_metrics_are_valid, verify_autoinstrument_script
 
 TEST_ORG_ID = "test-org-litellm-py-tracing"
 PROJECT_NAME = "test-project-litellm-py-tracing"
 TEST_MODEL = "gpt-4o-mini"  # cheapest model for tests
 TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
-
-
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "openai-organization",
-        ]
-    }
 
 
 @pytest.fixture
@@ -704,74 +694,95 @@ async def test_litellm_async_streaming_with_break(memory_logger):
     assert metrics["time_to_first_token"] >= 0
 
 
+def test_patch_litellm_responses():
+    """Test that patch_litellm() patches responses (subprocess to avoid global state pollution)."""
+    verify_autoinstrument_script("test_patch_litellm_responses.py")
+
+
+def test_patch_litellm_aresponses():
+    """Test that patch_litellm() patches aresponses (subprocess to avoid global state pollution)."""
+    verify_autoinstrument_script("test_patch_litellm_aresponses.py")
+
+
+def test_litellm_is_numeric_excludes_booleans():
+    """Reproduce issue #1357: _is_numeric should exclude booleans.
+
+    OpenRouter returns `is_byok: true` in usage data. Since Python's bool is
+    a subclass of int, isinstance(True, int) is True. The _is_numeric function
+    must explicitly exclude booleans so they don't end up in metrics, which
+    causes a 400 from the API (expected number, received boolean).
+    """
+    from braintrust.util import is_numeric
+
+    assert is_numeric(1)
+    assert is_numeric(1.0)
+    assert not is_numeric(True)
+    assert not is_numeric(False)
+
+
+def test_litellm_parse_metrics_excludes_booleans():
+    """Reproduce issue #1357: _parse_metrics_from_usage should not include boolean fields.
+
+    When OpenRouter returns usage data with `is_byok: true`, the metrics parser
+    should filter it out rather than passing it through to the API.
+    """
+    from braintrust.wrappers.litellm import _parse_metrics_from_usage
+
+    usage = {
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30,
+        "is_byok": True,
+    }
+    metrics = _parse_metrics_from_usage(usage)
+
+    assert "prompt_tokens" in metrics
+    assert "completion_tokens" in metrics
+    assert "tokens" in metrics
+    assert "is_byok" not in metrics
+    for key, value in metrics.items():
+        assert not isinstance(value, bool)
+
+
 @pytest.mark.vcr
-def test_patch_litellm_responses(memory_logger):
-    """Test that patch_litellm() patches responses."""
-    from braintrust.wrappers.litellm import patch_litellm, unpatch_litellm
+def test_litellm_openrouter_no_booleans_in_metrics(memory_logger):
+    """Reproduce issue #1357: OpenRouter returns is_byok boolean in usage.
+
+    Makes a real litellm.completion call via OpenRouter. The response includes
+    `is_byok: true` in usage, which must be filtered out of metrics to avoid
+    a 400 from the Braintrust API.
+    """
+    import os
 
     assert not memory_logger.pop()
 
-    patch_litellm()
-    try:
-        start = time.time()
-        # Call litellm.responses directly (not wrapped_litellm.responses)
-        response = litellm.responses(
-            model=TEST_MODEL,
-            input=TEST_PROMPT,
-            instructions="Just the number please",
-        )
-        end = time.time()
+    wrapped_litellm = wrap_litellm(litellm)
 
-        assert response
-        assert response.output
-        assert len(response.output) > 0
-        content = response.output[0].content[0].text
-        assert "24" in content or "twenty-four" in content.lower()
+    start = time.time()
+    response = wrapped_litellm.completion(
+        model="openrouter/openai/gpt-4o-mini",
+        messages=[{"role": "user", "content": "What is 2+2? Reply with just the number."}],
+        max_tokens=10,
+        api_key=os.environ.get("OPENROUTER_API_KEY", "fake-key"),
+    )
+    end = time.time()
 
-        # Verify span was created
-        spans = memory_logger.pop()
-        assert len(spans) == 1
-        span = spans[0]
-        assert_metrics_are_valid(span["metrics"], start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
-        assert span["metadata"]["provider"] == "litellm"
-        assert TEST_PROMPT in str(span["input"])
-    finally:
-        unpatch_litellm()
+    assert response
+    assert response.choices[0].message.content
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    metrics = spans[0]["metrics"]
+
+    # No boolean values should be in metrics
+    for key, value in metrics.items():
+        assert not isinstance(value, bool)
+    assert "is_byok" not in metrics
 
 
-@pytest.mark.vcr
-@pytest.mark.asyncio
-async def test_patch_litellm_aresponses(memory_logger):
-    """Test that patch_litellm() patches aresponses."""
-    from braintrust.wrappers.litellm import patch_litellm, unpatch_litellm
+class TestAutoInstrumentLiteLLM:
+    """Tests for auto_instrument() with LiteLLM."""
 
-    assert not memory_logger.pop()
-
-    patch_litellm()
-    try:
-        start = time.time()
-        # Call litellm.aresponses directly (not wrapped_litellm.aresponses)
-        response = await litellm.aresponses(
-            model=TEST_MODEL,
-            input=TEST_PROMPT,
-            instructions="Just the number please",
-        )
-        end = time.time()
-
-        assert response
-        assert response.output
-        assert len(response.output) > 0
-        content = response.output[0].content[0].text
-        assert "24" in content or "twenty-four" in content.lower()
-
-        # Verify span was created
-        spans = memory_logger.pop()
-        assert len(spans) == 1
-        span = spans[0]
-        assert_metrics_are_valid(span["metrics"], start, end)
-        assert span["metadata"]["model"] == TEST_MODEL
-        assert span["metadata"]["provider"] == "litellm"
-        assert TEST_PROMPT in str(span["input"])
-    finally:
-        unpatch_litellm()
+    def test_auto_instrument_litellm(self):
+        """Test auto_instrument patches LiteLLM, creates spans, and uninstrument works."""
+        verify_autoinstrument_script("test_auto_litellm.py")

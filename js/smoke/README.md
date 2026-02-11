@@ -177,6 +177,7 @@ Each smoke test runs in its own job:
 - `smoke-tests-jest` - Tests `span-jest`
 - `smoke-tests-nextjs` - Tests `nextjs-instrumentation`
 - `smoke-tests-cloudflare` - Tests `cloudflare-worker`
+- `smoke-tests-browser` - Tests `browser` (Playwright / browser bundle)
 - `smoke-tests-deno` - Tests `deno`
 
 **Each job:**

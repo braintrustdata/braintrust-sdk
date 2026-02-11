@@ -7,7 +7,7 @@ from typing import Any
 
 from braintrust.logger import Span, start_span
 from braintrust.span_types import SpanTypeAttribute
-from braintrust.util import merge_dicts
+from braintrust.util import is_numeric, merge_dicts
 
 X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
@@ -563,18 +563,14 @@ def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
             raw_prefix = oai_name[: -len("_tokens_details")]
             prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
             for k, v in value.items():
-                if _is_numeric(v):
+                if is_numeric(v):
                     metrics[f"{prefix}_{k}"] = v
-        elif _is_numeric(value):
+        elif is_numeric(value):
             name = TOKEN_NAME_MAP.get(oai_name, oai_name)
             metrics[name] = value
 
     return metrics
 
-
-def _is_numeric(v: Any) -> bool:
-    """Check if a value is numeric."""
-    return isinstance(v, (int, float, complex))
 
 
 def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
@@ -631,12 +627,15 @@ def serialize_response_format(response_format: Any) -> Any:
         return response_format
 
 
-def patch_litellm():
+def patch_litellm() -> bool:
     """
     Patch LiteLLM to add Braintrust tracing.
 
     This wraps litellm.completion and litellm.acompletion to automatically
     create Braintrust spans with detailed token metrics, timing, and costs.
+
+    Returns:
+        True if LiteLLM was patched (or already patched), False if LiteLLM is not installed.
 
     Example:
         ```python
@@ -657,52 +656,12 @@ def patch_litellm():
         import litellm
 
         if not hasattr(litellm, "_braintrust_wrapped"):
-            # Store originals for unpatch_litellm()
-            litellm._braintrust_original_completion = litellm.completion
-            litellm._braintrust_original_acompletion = litellm.acompletion
-            litellm._braintrust_original_responses = litellm.responses
-            litellm._braintrust_original_aresponses = litellm.aresponses
-
             wrapped = wrap_litellm(litellm)
             litellm.completion = wrapped.completion
             litellm.acompletion = wrapped.acompletion
             litellm.responses = wrapped.responses
             litellm.aresponses = wrapped.aresponses
             litellm._braintrust_wrapped = True
+        return True
     except ImportError:
-        pass  # litellm not available
-
-
-def unpatch_litellm():
-    """
-    Restore LiteLLM to its original state, removing Braintrust tracing.
-
-    This undoes the patching done by patch_litellm(), restoring the original
-    completion, acompletion, responses, and aresponses functions.
-
-    Example:
-        ```python
-        import braintrust
-        braintrust.patch_litellm()
-
-        # ... use litellm with tracing ...
-
-        braintrust.unpatch_litellm()  # restore original behavior
-        ```
-    """
-    try:
-        import litellm
-
-        if hasattr(litellm, "_braintrust_wrapped"):
-            litellm.completion = litellm._braintrust_original_completion
-            litellm.acompletion = litellm._braintrust_original_acompletion
-            litellm.responses = litellm._braintrust_original_responses
-            litellm.aresponses = litellm._braintrust_original_aresponses
-
-            delattr(litellm, "_braintrust_wrapped")
-            delattr(litellm, "_braintrust_original_completion")
-            delattr(litellm, "_braintrust_original_acompletion")
-            delattr(litellm, "_braintrust_original_responses")
-            delattr(litellm, "_braintrust_original_aresponses")
-    except ImportError:
-        pass  # litellm not available
+        return False

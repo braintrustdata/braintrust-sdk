@@ -5,9 +5,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from wrapt import wrap_function_wrapper
+
 from .logger import Attachment, Span, start_span
 from .span_types import SpanTypeAttribute
-from .util import merge_dicts
+from .util import is_numeric, merge_dicts
 
 X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
@@ -310,16 +312,25 @@ class ChatCompletionWrapper:
 
                 # pylint: disable=unsubscriptable-object
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
+                    function_arg = tool_delta.get("function", {})
                     tool_calls = (tool_calls or []) + [
                         {
-                            "id": delta["tool_calls"][0]["id"],
-                            "type": delta["tool_calls"][0]["type"],
-                            "function": delta["tool_calls"][0]["function"],
+                            "id": tool_delta.get("id"),
+                            "type": tool_delta.get("type"),
+                            "function": {
+                                "name": function_arg.get("name"),
+                                "arguments": function_arg.get("arguments") or "",
+                            },
                         }
                     ]
                 else:
                     # pylint: disable=unsubscriptable-object
-                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+                    # append to existing tool call
+                    function_arg = tool_delta.get("function", {})
+                    args = function_arg.get("arguments") or ""
+                    if isinstance(args, str):
+                        # pylint: disable=unsubscriptable-object
+                        tool_calls[-1]["function"]["arguments"] += args
 
         return {
             "metrics": metrics,
@@ -784,7 +795,7 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
     def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return ResponseWrapper(self.__responses.parse, None, "openai.responses.parse").create(*args, **kwargs)
+        return ResponseWrapper(self.__responses.with_raw_response.parse, None, "openai.responses.parse").create(*args, **kwargs)
 
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
@@ -797,7 +808,7 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         return AsyncResponseWrapper(response)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        response = await ResponseWrapper(None, self.__responses.parse, "openai.responses.parse").acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.with_raw_response.parse, "openai.responses.parse").acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 
@@ -918,17 +929,14 @@ def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
             raw_prefix = oai_name[: -len("_tokens_details")]
             prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
             for k, v in value.items():
-                if _is_numeric(v):
+                if is_numeric(v):
                     metrics[f"{prefix}_{k}"] = v
-        elif _is_numeric(value):
+        elif is_numeric(value):
             name = TOKEN_NAME_MAP.get(oai_name, oai_name)
             metrics[name] = value
 
     return metrics
 
-
-def _is_numeric(v):
-    return isinstance(v, (int, float, complex)) and not isinstance(v, bool)
 
 
 def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
@@ -986,3 +994,52 @@ def _is_not_given(value: Any) -> bool:
         return type_name == "NotGiven"
     except Exception:
         return False
+
+
+def _openai_init_wrapper(wrapped, instance, args, kwargs):
+    """Wrapper for OpenAI.__init__ that applies tracing after initialization."""
+    wrapped(*args, **kwargs)
+    _apply_openai_wrapper(instance)
+
+
+def patch_openai() -> bool:
+    """
+    Patch OpenAI to add Braintrust tracing globally.
+
+    After calling this, all new OpenAI() and AsyncOpenAI() clients
+    will automatically have tracing enabled.
+
+    Returns:
+        True if OpenAI was patched (or already patched), False if OpenAI is not installed.
+
+    Example:
+        ```python
+        import braintrust
+        braintrust.patch_openai()
+
+        import openai
+        client = openai.OpenAI()
+        # All calls are now traced!
+        ```
+    """
+    try:
+        import openai
+
+        if getattr(openai, "__braintrust_wrapped__", False):
+            return True  # Already patched
+
+        wrap_function_wrapper("openai", "OpenAI.__init__", _openai_init_wrapper)
+        wrap_function_wrapper("openai", "AsyncOpenAI.__init__", _openai_init_wrapper)
+        openai.__braintrust_wrapped__ = True
+        return True
+
+    except ImportError:
+        return False
+
+
+def _apply_openai_wrapper(client):
+    """Apply tracing wrapper to an OpenAI client instance in-place."""
+    wrapped = wrap_openai(client)
+    for attr in ("chat", "responses", "embeddings", "moderations", "beta"):
+        if hasattr(wrapped, attr):
+            setattr(client, attr, getattr(wrapped, attr))

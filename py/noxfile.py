@@ -122,6 +122,7 @@ def test_claude_agent_sdk(session, version):
 def test_agno(session, version):
     _install_test_deps(session)
     _install(session, "agno", version)
+    _install(session, "openai")  # Required for agno.models.openai
     _run_tests(session, f"{WRAPPER_DIR}/test_agno.py")
     _run_core_tests(session)
 
@@ -172,11 +173,9 @@ def test_litellm(session, version):
     _install_test_deps(session)
     # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
     # https://github.com/BerriAI/litellm/issues/13711
-    session.install("openai<=1.99.9", "--force-reinstall")
-    _install(session, "litellm", version)
     # Install fastapi and orjson as they're required by litellm for proxy/responses operations
-    session.install("fastapi")
-    session.install("orjson")
+    session.install("openai<=1.99.9", "--force-reinstall", "fastapi", "orjson")
+    _install(session, "litellm", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
 
@@ -264,6 +263,8 @@ def pylint(session):
     # but pylint needs it with minimum version constraint for proper API checking
     session.install("pydantic_ai>=1.10.0")
     session.install("opentelemetry.instrumentation.openai")
+    # langsmith is needed for the wrapper module but not in VENDOR_PACKAGES
+    session.install("langsmith")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
     files = result.strip().splitlines()

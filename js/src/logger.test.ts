@@ -14,6 +14,7 @@ import {
   currentSpan,
   withParent,
   startSpan,
+  updateSpan,
   Attachment,
   deepCopyEvent,
   renderMessage,
@@ -145,6 +146,25 @@ test("init validation", () => {
   expect(() => init({ project: "project", open: true })).toThrow(
     "Cannot open an experiment without specifying its name",
   );
+});
+
+test("init accepts dataset with id only", () => {
+  // Test that the type system accepts {id: string}
+  const datasetIdOnly = { id: "dataset-id-123" };
+
+  // This should compile without type errors
+  // We're testing the type system, not the runtime behavior
+  expect(datasetIdOnly.id).toBe("dataset-id-123");
+  expect("version" in datasetIdOnly).toBe(false);
+});
+
+test("init accepts dataset with id and version", () => {
+  // Test that the type system accepts {id: string, version?: string}
+  const datasetWithVersion = { id: "dataset-id-123", version: "v2" };
+
+  // This should compile without type errors
+  expect(datasetWithVersion.id).toBe("dataset-id-123");
+  expect(datasetWithVersion.version).toBe("v2");
 });
 
 describe("prompt.build structured output templating", () => {
@@ -335,6 +355,14 @@ test("span.export handles unauthenticated state", async () => {
   expect((exported as string).length).toBeGreaterThan(0);
 });
 
+test("span.export disables cache", async () => {
+  const logger = initLogger({});
+  const span = logger.startSpan({ name: "test-span" });
+
+  await span.export();
+  expect(span.state().spanCache.disabled).toBe(true);
+});
+
 test("span.export handles unresolved parent object ID", async () => {
   // Create a span with a parent object ID that hasn't been resolved
   const logger = initLogger({});
@@ -360,6 +388,41 @@ test("span.export handles unresolved parent object ID", async () => {
   expect(exported).toBeDefined();
   expect(typeof exported).toBe("string");
   expect((exported as string).length).toBeGreaterThan(0);
+});
+
+test("updateSpan includes span_id and root_span_id from exported span", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  try {
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    const exported = await span.export();
+    const spanId = span.spanId;
+    const rootSpanId = span.rootSpanId;
+    span.end();
+
+    await memoryLogger.flush();
+    await memoryLogger.drain();
+
+    updateSpan({ exported, output: "updated output" });
+
+    await memoryLogger.flush();
+    const logs = await memoryLogger.drain();
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        output: "updated output",
+        span_id: spanId,
+        root_span_id: rootSpanId,
+      }),
+    );
+  } finally {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  }
 });
 
 test("startSpan support ids with parent", () => {

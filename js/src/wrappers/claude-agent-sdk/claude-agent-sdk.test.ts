@@ -14,6 +14,25 @@ import { z } from "zod/v3";
 
 debugger;
 
+const makePromptMessage = (content: string) => ({
+  type: "user",
+  message: { role: "user", content },
+});
+
+class CustomAsyncIterable {
+  private messages: Array<ReturnType<typeof makePromptMessage>>;
+
+  constructor(messages: Array<ReturnType<typeof makePromptMessage>>) {
+    this.messages = messages;
+  }
+
+  async *[Symbol.asyncIterator]() {
+    for (const message of this.messages) {
+      yield message;
+    }
+  }
+}
+
 // Unit tests for property forwarding (no real SDK needed)
 describe("wrapClaudeAgentSDK property forwarding", () => {
   beforeAll(async () => {
@@ -149,6 +168,421 @@ describe("wrapClaudeAgentSDK property forwarding", () => {
     expect(messages).toHaveLength(3);
     expect(messages[0]).toMatchObject({ type: "assistant" });
     expect(messages[2]).toMatchObject({ type: "result" });
+  });
+
+  test.each([
+    [
+      "asyncgen_single",
+      () =>
+        (async function* () {
+          yield makePromptMessage("What is 2 + 2?");
+        })(),
+      ["What is 2 + 2?"],
+    ],
+    [
+      "asyncgen_multi",
+      () =>
+        (async function* () {
+          yield makePromptMessage("Part 1");
+          yield makePromptMessage("Part 2");
+        })(),
+      ["Part 1", "Part 2"],
+    ],
+    [
+      "custom_async_iterable",
+      () =>
+        new CustomAsyncIterable([
+          makePromptMessage("Custom 1"),
+          makePromptMessage("Custom 2"),
+        ]),
+      ["Custom 1", "Custom 2"],
+    ],
+  ])(
+    "captures async iterable prompt input (%s)",
+    async (
+      _name: string,
+      inputFactory: () => AsyncIterable<unknown>,
+      expected: string[],
+    ) => {
+      const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+      expect(await backgroundLogger.drain()).toHaveLength(0);
+
+      const mockSDK = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        query: ({ prompt }: any) => {
+          const generator = (async function* () {
+            if (prompt && typeof prompt[Symbol.asyncIterator] === "function") {
+              for await (const _ of prompt) {
+                // Drain prompt to simulate SDK consumption.
+              }
+            }
+
+            yield {
+              type: "assistant",
+              message: {
+                role: "assistant",
+                content: "Hello!",
+                usage: { input_tokens: 1, output_tokens: 1 },
+              },
+            };
+
+            yield {
+              type: "result",
+              usage: { input_tokens: 1, output_tokens: 1 },
+            };
+          })();
+
+          return generator;
+        },
+      };
+
+      const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+      for await (const _msg of wrappedSDK.query({ prompt: inputFactory() })) {
+        // consume
+      }
+
+      const spans = await backgroundLogger.drain();
+      const taskSpan = spans.find(
+        (s) =>
+          (s["span_attributes"] as Record<string, unknown>).name ===
+          "Claude Agent",
+      );
+      expect(taskSpan).toBeDefined();
+
+      const input = (taskSpan as any).input as Array<{
+        message?: { content?: string };
+      }>;
+      expect(Array.isArray(input)).toBe(true);
+      expect(input.map((item) => item.message?.content)).toEqual(expected);
+
+      const llmSpan = spans.find(
+        (s) =>
+          (s["span_attributes"] as Record<string, unknown>).name ===
+          "anthropic.messages.create",
+      );
+      expect(llmSpan).toBeDefined();
+
+      const llmInput = (llmSpan as any).input as Array<{
+        role?: string;
+        content?: string;
+      }>;
+      expect(Array.isArray(llmInput)).toBe(true);
+      expect(llmInput.map((item) => item.content)).toEqual(expected);
+    },
+  );
+
+  test("injects PreToolUse and PostToolUse hooks for tracing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    // Consume the generator to trigger the query
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Verify hooks were injected
+    expect(capturedOptions).toBeDefined();
+    expect(capturedOptions.hooks).toBeDefined();
+    expect(capturedOptions.hooks.PreToolUse).toBeDefined();
+    expect(capturedOptions.hooks.PreToolUse.length).toBeGreaterThan(0);
+    expect(capturedOptions.hooks.PostToolUse).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUse.length).toBeGreaterThan(0);
+  });
+
+  test("preserves user-provided hooks when injecting tracing hooks", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+    const userPreHook = vi.fn().mockResolvedValue({});
+    const userPostHook = vi.fn().mockResolvedValue({});
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    // Consume the generator with user-provided hooks
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: {
+        model: "test-model",
+        hooks: {
+          PreToolUse: [{ hooks: [userPreHook] }],
+          PostToolUse: [{ hooks: [userPostHook] }],
+        },
+      },
+    })) {
+      // consume
+    }
+
+    // Verify user hooks are preserved AND our hooks are added
+    expect(capturedOptions.hooks.PreToolUse.length).toBeGreaterThanOrEqual(2);
+    expect(capturedOptions.hooks.PostToolUse.length).toBeGreaterThanOrEqual(2);
+
+    // User hooks should be first (they were provided first)
+    expect(capturedOptions.hooks.PreToolUse[0].hooks[0]).toBe(userPreHook);
+    expect(capturedOptions.hooks.PostToolUse[0].hooks[0]).toBe(userPostHook);
+  });
+
+  test("injects PostToolUseFailure hook for error tracing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Verify PostToolUseFailure hook was injected
+    expect(capturedOptions.hooks).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUseFailure).toBeDefined();
+    expect(capturedOptions.hooks.PostToolUseFailure.length).toBeGreaterThan(0);
+  });
+
+  test("PreToolUse hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PreToolUse hook with undefined toolUseID
+    const preToolUseHook = capturedOptions.hooks.PreToolUse[0].hooks[0];
+    const result = await preToolUseHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUse hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PostToolUse hook with undefined toolUseID
+    const postToolUseHook = capturedOptions.hooks.PostToolUse[0].hooks[0];
+    const result = await postToolUseHook(
+      {
+        hook_event_name: "PostToolUse",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        tool_response: { result: "success" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUseFailure hook handles undefined toolUseID gracefully", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    // Call the PostToolUseFailure hook with undefined toolUseID
+    const postToolUseFailureHook =
+      capturedOptions.hooks.PostToolUseFailure[0].hooks[0];
+    const result = await postToolUseFailureHook(
+      {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "test_tool",
+        tool_input: { arg: "value" },
+        error: "Tool execution failed",
+        is_interrupt: false,
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      undefined, // toolUseID is undefined
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object without throwing
+    expect(result).toEqual({});
+  });
+
+  test("PostToolUseFailure hook logs error to span", async () => {
+    const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOptions: any;
+
+    const mockSDK = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query: (params: any) => {
+        capturedOptions = params.options;
+        const generator = (async function* () {
+          yield { type: "result", result: "done" };
+        })();
+        return generator;
+      },
+    };
+
+    const wrappedSDK = wrapClaudeAgentSDK(mockSDK);
+
+    for await (const _msg of wrappedSDK.query({
+      prompt: "test",
+      options: { model: "test-model" },
+    })) {
+      // consume
+    }
+
+    const preToolUseHook = capturedOptions.hooks.PreToolUse[0].hooks[0];
+    const postToolUseFailureHook =
+      capturedOptions.hooks.PostToolUseFailure[0].hooks[0];
+    const toolUseID = "test-tool-use-id";
+
+    // First, call PreToolUse to create the span
+    await preToolUseHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "mcp__server__tool",
+        tool_input: { arg: "value" },
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      toolUseID,
+      { signal: new AbortController().signal },
+    );
+
+    // Then call PostToolUseFailure to log the error and end the span
+    const result = await postToolUseFailureHook(
+      {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "mcp__server__tool",
+        tool_input: { arg: "value" },
+        error: "Tool execution failed: connection timeout",
+        is_interrupt: false,
+        session_id: "test-session",
+        transcript_path: "/tmp/transcript",
+        cwd: "/tmp",
+      },
+      toolUseID,
+      { signal: new AbortController().signal },
+    );
+
+    // Should return empty object (hook completed successfully)
+    expect(result).toEqual({});
+
+    // Verify span was created and ended (check via background logger)
+    const spans = await backgroundLogger.drain();
+    const toolSpan = spans?.find(
+      (s) => (s["span_attributes"] as Record<string, unknown>).type === "tool",
+    );
+
+    // Tool span should exist and have error logged
+    expect(toolSpan).toBeDefined();
+    expect(toolSpan?.error).toBe("Tool execution failed: connection timeout");
   });
 });
 
@@ -303,6 +737,7 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     });
 
     // Verify tool spans (calculator should be called at least twice: multiply, subtract)
+    // Note: Tool names from hooks include the MCP server prefix: mcp__<server>__<tool>
     const toolSpans = spans.filter(
       (s) => (s["span_attributes"] as Record<string, unknown>).type === "tool",
     );
@@ -313,11 +748,16 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
     }
     expect(toolSpans.length).toBeGreaterThanOrEqual(1);
     toolSpans.forEach((span) => {
+      // Span name is parsed MCP format: tool: server/tool
       expect((span["span_attributes"] as Record<string, unknown>).name).toBe(
-        "calculator",
+        "tool: calculator/calculator",
       );
-      expect((span.metadata as Record<string, string>).tool_name).toBe(
-        "calculator",
+      // Metadata uses GenAI semantic conventions
+      const metadata = span.metadata as Record<string, string>;
+      expect(metadata["gen_ai.tool.name"]).toBe("calculator");
+      expect(metadata["mcp.server"]).toBe("calculator");
+      expect(metadata["claude_agent_sdk.raw_tool_name"]).toBe(
+        "mcp__calculator__calculator",
       );
     });
 
@@ -330,4 +770,178 @@ describe.skipIf(!claudeSDK)("claude-agent-sdk integration tests", () => {
         expect(span.span_parents).toContain(rootSpanId);
       });
   }, 30000);
+
+  test("claude_agent_sdk.test.ts - captures async iterable prompt input", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { query } = wrapClaudeAgentSDK(claudeSDK as any);
+
+    const prompt = (async function* () {
+      yield makePromptMessage("Part 1");
+      yield makePromptMessage("Part 2");
+    })();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resultMessage: any;
+    for await (const message of query({
+      prompt,
+      options: {
+        model: TEST_MODEL,
+        permissionMode: "bypassPermissions",
+      },
+    })) {
+      if (message.type === "result") {
+        resultMessage = message;
+      }
+    }
+
+    expect(resultMessage).toBeDefined();
+
+    const spans = await backgroundLogger.drain();
+    const taskSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(taskSpan).toBeDefined();
+
+    const input = (taskSpan as any).input as Array<{
+      message?: { content?: string };
+    }>;
+    expect(Array.isArray(input)).toBe(true);
+    expect(input.map((item) => item.message?.content)).toEqual([
+      "Part 1",
+      "Part 2",
+    ]);
+
+    const llmSpan = spans.find((s) => {
+      if (
+        (s["span_attributes"] as Record<string, unknown>).name !==
+        "anthropic.messages.create"
+      ) {
+        return false;
+      }
+      const input = (s as any).input as Array<{ content?: unknown }>;
+      return Array.isArray(input) && input.some((item) => item.content);
+    });
+    expect(llmSpan).toBeDefined();
+
+    const llmInput = (llmSpan as any).input as Array<{
+      role?: string;
+      content?: unknown;
+    }>;
+    expect(Array.isArray(llmInput)).toBe(true);
+    expect(llmInput.map((item) => item.content)).toEqual(["Part 1", "Part 2"]);
+  }, 30000);
+
+  test("sub-agent produces nested TASK span with tool calls parented correctly", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { query, tool, createSdkMcpServer } = wrapClaudeAgentSDK(
+      claudeSDK as any,
+    );
+
+    const calculator = tool(
+      "calculator",
+      "Performs basic arithmetic operations",
+      {
+        operation: z.enum(["add", "subtract", "multiply", "divide"]),
+        a: z.number(),
+        b: z.number(),
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (args: any) => {
+        let result = 0;
+        switch (args.operation) {
+          case "add":
+            result = args.a + args.b;
+            break;
+          case "multiply":
+            result = args.a * args.b;
+            break;
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${args.operation}(${args.a}, ${args.b}) = ${result}`,
+            },
+          ],
+        };
+      },
+    );
+
+    for await (const message of query({
+      prompt:
+        "Spawn a math-expert subagent to add 15 and 27 using the calculator tool. Report the result.",
+      options: {
+        model: TEST_MODEL,
+        permissionMode: "bypassPermissions",
+        allowedTools: ["Task"],
+        agents: {
+          "math-expert": {
+            description:
+              "Math specialist. Use the calculator tool for calculations.",
+            prompt:
+              "You are a math expert. Use the calculator tool to perform the requested calculation. Be concise.",
+            model: "haiku",
+          },
+        },
+        mcpServers: {
+          calculator: createSdkMcpServer({
+            name: "calculator",
+            version: "1.0.0",
+            tools: [calculator],
+          }),
+        },
+      },
+    })) {
+      // consume
+    }
+
+    const spans = await backgroundLogger.drain();
+
+    // Root TASK span
+    const rootSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).name ===
+        "Claude Agent",
+    );
+    expect(rootSpan).toBeDefined();
+
+    // Sub-agent TASK span
+    const subAgentSpan = spans.find(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "task" &&
+        (
+          (s["span_attributes"] as Record<string, unknown>).name as string
+        )?.startsWith("Agent:"),
+    );
+    expect(subAgentSpan).toBeDefined();
+
+    // Sub-agent should be a child of root
+    expect(subAgentSpan!.root_span_id).toBe(rootSpan!.span_id);
+    expect(subAgentSpan!.span_parents).toContain(rootSpan!.span_id);
+
+    // There should be LLM spans under the sub-agent
+    const subAgentLlmSpans = spans.filter(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "llm" &&
+        (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
+    );
+    expect(subAgentLlmSpans.length).toBeGreaterThanOrEqual(1);
+
+    // Tool spans within the sub-agent should be parented under the sub-agent, not root
+    const subAgentToolSpans = spans.filter(
+      (s) =>
+        (s["span_attributes"] as Record<string, unknown>).type === "tool" &&
+        (s.span_parents as string[])?.includes(subAgentSpan!.span_id as string),
+    );
+    expect(subAgentToolSpans.length).toBeGreaterThanOrEqual(1);
+    subAgentToolSpans.forEach((toolSpan) => {
+      expect(toolSpan.span_parents).not.toContain(rootSpan!.span_id);
+    });
+  }, 60000);
 });

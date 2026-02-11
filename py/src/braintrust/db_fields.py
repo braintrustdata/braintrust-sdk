@@ -15,3 +15,13 @@ PARENT_ID_FIELD = "_parent_id"
 
 ASYNC_SCORING_CONTROL_FIELD = "_async_scoring_control"
 SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring"
+
+# Keys that identify which object (experiment, dataset, project logs, etc.) a row belongs to.
+OBJECT_ID_KEYS = (
+    "experiment_id",
+    "dataset_id",
+    "prompt_session_id",
+    "project_id",
+    "log_id",
+    "function_data",
+)

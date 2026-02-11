@@ -8,21 +8,10 @@ import pytest
 from braintrust import logger
 from braintrust.test_helpers import init_test_logger
 from braintrust.wrappers.agno import setup_agno
+from braintrust.wrappers.test_utils import verify_autoinstrument_script
 
 TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-agno-app"
-
-
-@pytest.fixture(scope="module")
-def vcr_config():
-    return {
-        "filter_headers": [
-            "authorization",
-            "x-api-key",
-            "api-key",
-            "openai-api-key",
-        ]
-    }
 
 
 @pytest.fixture
@@ -106,3 +95,11 @@ def test_agno_simple_agent_execution(memory_logger):
     assert llm_span["metrics"]["prompt_tokens"] == 38
     assert llm_span["metrics"]["completion_tokens"] == 4
     assert llm_span["metrics"]["tokens"] == 42
+
+
+class TestAutoInstrumentAgno:
+    """Tests for auto_instrument() with Agno."""
+
+    def test_auto_instrument_agno(self):
+        """Test auto_instrument patches Agno and creates spans."""
+        verify_autoinstrument_script("test_auto_agno.py")

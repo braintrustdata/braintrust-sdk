@@ -1,9 +1,66 @@
+import os
 import unittest
 from typing import List
 
 import pytest
 
-from .util import LazyValue, mask_api_key, merge_dicts_with_paths
+from .util import LazyValue, mask_api_key, merge_dicts_with_paths, parse_env_var_float
+
+
+class TestParseEnvVarFloat:
+    """Tests for parse_env_var_float helper."""
+
+    def test_returns_default_when_env_not_set(self):
+        assert parse_env_var_float("NONEXISTENT_VAR_12345", 42.0) == 42.0
+
+    def test_parses_valid_float(self):
+        os.environ["TEST_FLOAT"] = "123.45"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 0.0) == 123.45
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_nan(self):
+        os.environ["TEST_FLOAT"] = "nan"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_inf(self):
+        os.environ["TEST_FLOAT"] = "inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_negative_inf(self):
+        os.environ["TEST_FLOAT"] = "-inf"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_empty_string(self):
+        os.environ["TEST_FLOAT"] = ""
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_returns_default_for_invalid_string(self):
+        os.environ["TEST_FLOAT"] = "not_a_number"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 99.0) == 99.0
+        finally:
+            del os.environ["TEST_FLOAT"]
+
+    def test_allows_negative_values(self):
+        os.environ["TEST_FLOAT"] = "-5.5"
+        try:
+            assert parse_env_var_float("TEST_FLOAT", 0.0) == -5.5
+        finally:
+            del os.environ["TEST_FLOAT"]
 
 
 class TestLazyValue(unittest.TestCase):

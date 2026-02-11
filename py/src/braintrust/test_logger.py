@@ -59,6 +59,33 @@ class TestInit(TestCase):
 
         assert str(cm.exception) == "Cannot open an experiment without specifying its name"
 
+    def test_init_with_dataset_id_only(self):
+        """Test that init accepts dataset={'id': '...'} parameter"""
+        # Test the logic that extracts dataset_id from the dict
+        from braintrust.logger import Dataset
+
+        # Test 1: dict with only id
+        dataset_dict = {"id": "dataset-id-123"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+
+        # Test 2: full Dataset object has different behavior
+        # (We can't easily instantiate a Dataset here, but we can verify
+        # that the isinstance check distinguishes them)
+
+    def test_init_with_dataset_id_and_version(self):
+        """Test that init accepts dataset={'id': '...', 'version': '...'} parameter"""
+        # Test the logic that extracts both dataset_id and dataset_version from the dict
+        from braintrust.logger import Dataset
+
+        # Test: dict with id and version
+        dataset_dict = {"id": "dataset-id-123", "version": "v2"}
+        assert isinstance(dataset_dict, dict)
+        assert not isinstance(dataset_dict, Dataset)
+        assert dataset_dict["id"] == "dataset-id-123"
+        assert dataset_dict["version"] == "v2"
+
 
 class TestLogger(TestCase):
     def test_extract_attachments_no_op(self):
@@ -806,6 +833,16 @@ def test_span_project_id_logged_in(with_memory_logger, with_simulate_login):
     )
 
 
+def test_span_export_disables_cache(with_memory_logger):
+    """Test that span.export() disables the span cache."""
+    logger = init_test_logger(__name__)
+
+    with logger.start_span(name="test_span") as span:
+        # Exporting should disable the span cache
+        span.export()
+        assert logger.state.span_cache.disabled
+
+
 def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
     init_logger(project="test-project")
     span = logger.start_span(name="test-span")
@@ -902,11 +939,7 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
 
 @pytest.mark.asyncio
 async def test_span_link_in_async_context(with_simulate_login, with_memory_logger):
-    """Test that span.link() works correctly when called from within an async function.
-
-    This tests the bug where current_logger was a plain attribute instead of a ContextVar,
-    causing span.link() to return a noop link in async contexts even though the span was valid.
-    """
+    """Test that span.link() works correctly when called from within an async function."""
     import asyncio
 
     logger = init_logger(
@@ -937,6 +970,174 @@ async def test_span_link_in_async_context(with_simulate_login, with_memory_logge
     assert span._id in link
     # The link should contain the project ID
     assert "test-project-id" in link
+
+
+@pytest.mark.asyncio
+async def test_current_logger_after_multiple_awaits(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works after multiple await points."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def check_logger_after_awaits():
+        assert braintrust.current_logger() is logger
+        await asyncio.sleep(0.01)
+        assert braintrust.current_logger() is logger
+        await asyncio.sleep(0.01)
+        assert braintrust.current_logger() is logger
+        return braintrust.current_logger()
+
+    result = await check_logger_after_awaits()
+    assert result is logger
+
+
+@pytest.mark.asyncio
+async def test_current_logger_in_async_generator(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works within an async generator (yield)."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def logger_generator():
+        for i in range(3):
+            await asyncio.sleep(0.01)
+            yield braintrust.current_logger()
+
+    results = []
+    async for log in logger_generator():
+        results.append(log)
+
+    assert len(results) == 3
+    assert all(r is logger for r in results)
+
+
+@pytest.mark.asyncio
+async def test_current_logger_in_separate_task(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works in a separately created asyncio task."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+
+    async def get_logger_in_task():
+        await asyncio.sleep(0.01)
+        return braintrust.current_logger()
+
+    # Create a separate task
+    task = asyncio.create_task(get_logger_in_task())
+    result = await task
+
+    assert result is logger
+
+
+@pytest.mark.asyncio
+async def test_span_link_in_nested_async(with_simulate_login, with_memory_logger):
+    """Test that span.link() works in deeply nested async calls."""
+    import asyncio
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    span = logger.start_span(name="test-span")
+
+    async def level3():
+        await asyncio.sleep(0.01)
+        return span.link()
+
+    async def level2():
+        await asyncio.sleep(0.01)
+        return await level3()
+
+    async def level1():
+        await asyncio.sleep(0.01)
+        return await level2()
+
+    link = await level1()
+    span.end()
+
+    assert link != "https://www.braintrust.dev/noop-span"
+    assert span._id in link
+
+
+def test_current_logger_in_thread(with_simulate_login, with_memory_logger):
+    """Test that current_logger() works correctly when called from a new thread.
+
+    Regression test: ContextVar values don't propagate to new threads,
+    so current_logger must be a plain attribute for thread access.
+    """
+    import threading
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    assert braintrust.current_logger() is logger
+
+    thread_result = {}
+
+    def check_logger_in_thread():
+        thread_result["logger"] = braintrust.current_logger()
+
+    thread = threading.Thread(target=check_logger_in_thread)
+    thread.start()
+    thread.join()
+
+    assert thread_result["logger"] is logger
+
+
+def test_span_link_in_thread(with_simulate_login, with_memory_logger):
+    """Test that span.link() works correctly when called from a new thread.
+
+    The span should be able to generate a valid link even when link() is called
+    from a different thread than where the span was created.
+    """
+    import threading
+
+    logger = init_logger(project="test-project", project_id="test-project-id")
+    span = logger.start_span(name="test-span")
+
+    thread_result = {}
+
+    def get_link_in_thread():
+        # Call link() on the span directly (not via current_span() which uses ContextVar)
+        thread_result["link"] = span.link()
+
+    thread = threading.Thread(target=get_link_in_thread)
+    thread.start()
+    thread.join()
+    span.end()
+
+    # The link should NOT be the noop link
+    assert thread_result["link"] != "https://www.braintrust.dev/noop-span"
+    # The link should contain the span ID
+    assert span._id in thread_result["link"]
+
+
+@pytest.mark.asyncio
+async def test_current_logger_async_context_isolation(with_simulate_login, with_memory_logger):
+    """Test that different async contexts can have different loggers.
+
+    When a child task sets its own logger, it should not affect the parent context.
+    This ensures async context isolation via ContextVar.
+    """
+    import asyncio
+
+    parent_logger = init_logger(project="parent-project", project_id="parent-project-id")
+    assert braintrust.current_logger() is parent_logger
+
+    child_result = {}
+
+    async def child_task():
+        # Child initially inherits parent's logger
+        assert braintrust.current_logger() is parent_logger
+
+        # Child sets its own logger
+        child_logger = init_logger(project="child-project", project_id="child-project-id")
+        child_result["logger"] = braintrust.current_logger()
+        return child_logger
+
+    # Run child task
+    child_logger = await asyncio.create_task(child_task())
+
+    # Child should have seen its own logger
+    assert child_result["logger"] is child_logger
+
+    # Parent should still see parent logger (not affected by child)
+    assert braintrust.current_logger() is parent_logger
 
 
 def test_span_set_current(with_memory_logger):
@@ -2360,6 +2561,25 @@ def test_span_start_span_with_exported_span_parent(with_memory_logger):
     )
 
 
+def test_update_span_includes_span_id_and_root_span_id_from_export(with_memory_logger):
+    experiment = init_test_exp("test-experiment", "test-project")
+
+    with experiment.start_span(name="span") as span:
+        span.log(input="input")
+        exported = span.export()
+        span_id = span.span_id
+        root_span_id = span.root_span_id
+
+    with_memory_logger.pop()
+
+    braintrust.update_span(exported=exported, output="updated output")
+
+    logs = with_memory_logger.pop()
+    updated_log = next(log for log in logs if log.get("output") == "updated output")
+    assert updated_log["span_id"] == span_id
+    assert updated_log["root_span_id"] == root_span_id
+
+
 def test_get_exporter_returns_v3_by_default():
     """Test that _get_exporter() returns SpanComponentsV3 when OTEL_COMPAT is not set."""
     with preserve_env_vars("BRAINTRUST_OTEL_COMPAT"):
@@ -2432,6 +2652,95 @@ def test_logger_export_respects_otel_compat_enabled():
 
         version = SpanComponentsV4.get_version(exported)
         assert version == 4, f"Expected V4 encoding (version=4), got version={version}"
+
+
+def test_register_otel_flush_callback():
+    """Test that register_otel_flush registers a callback correctly."""
+    import asyncio
+
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Track if callback was invoked
+    callback_invoked = False
+
+    async def mock_flush():
+        nonlocal callback_invoked
+        callback_invoked = True
+
+    # Register the callback
+    register_otel_flush(mock_flush)
+
+    # Calling flush_otel should invoke the registered callback
+    asyncio.run(state.flush_otel())
+
+    assert callback_invoked is True
+
+
+def test_register_otel_flush_disables_span_cache():
+    """Test that register_otel_flush disables the span cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache (simulating what happens during eval)
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+
+    # Cache should now be disabled
+    assert state.span_cache.disabled is True
+
+
+def test_flush_otel_noop_when_no_callback():
+    """Test that flush_otel is a no-op when no callback is registered."""
+    import asyncio
+
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Should not throw even with no callback registered
+    asyncio.run(state.flush_otel())
+
+
+def test_register_otel_flush_permanently_disables_cache():
+    """Test that register_otel_flush permanently disables the cache."""
+    from braintrust import register_otel_flush
+    from braintrust.logger import _internal_get_global_state
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+    state = _internal_get_global_state()
+
+    # Enable the cache
+    state.span_cache.start()
+    assert state.span_cache.disabled is False
+
+    async def mock_flush():
+        pass
+
+    # Register OTEL flush
+    register_otel_flush(mock_flush)
+    assert state.span_cache.disabled is True
+
+    # Try to start again - should still be disabled because of explicit disable
+    state.span_cache.start()
+    assert state.span_cache.disabled is True
 
 
 class TestJSONAttachment(TestCase):

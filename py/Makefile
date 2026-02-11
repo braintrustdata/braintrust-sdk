@@ -44,10 +44,7 @@ verify-build: _check-git-clean build test-wheel
 verify: lint test
 
 install-build-deps:
-	# Ensure pip is at a known version first for reproducible builds
 	python -m pip install uv==0.7.8
-	# Use 'python -m pip' to ensure we're using python's pip
-	# https://pip.pypa.io/en/latest/user_guide/
 	python -m uv pip install -e .
 	python -m uv pip install -r requirements-build.txt
 
@@ -55,7 +52,7 @@ install-dev: install-build-deps
 	python -m uv pip install -r requirements-dev.txt
 
 install-optional:
-	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai dspy
+	python -m uv pip install anthropic openai pydantic_ai litellm agno google-genai dspy langsmith
 	python -m uv pip install -e .[temporal,otel]
 
 .DEFAULT_GOAL := help

@@ -42,7 +42,9 @@ export enum SpanObjectTypeV3 {
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
 
-export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
+export function spanObjectTypeV3ToTypedString(
+  objectType: SpanObjectTypeV3,
+): "experiment" | "project_logs" | "playground_logs" {
   switch (objectType) {
     case SpanObjectTypeV3.EXPERIMENT:
       return "experiment";
@@ -54,6 +56,10 @@ export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
       const x: never = objectType;
       throw new Error(`Unknown SpanObjectTypeV3: ${x}`);
   }
+}
+
+export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
+  return spanObjectTypeV3ToTypedString(objectType);
 }
 
 enum InternalSpanComponentUUIDFields {

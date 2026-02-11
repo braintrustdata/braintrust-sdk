@@ -1,8 +1,11 @@
 {
   "permissions": {
     "allow": [
+      "Bash(sleep:*)",
       "Bash(make:*)",
       "Bash(make)",
+      "Bash(mise:*)",
+      "Bash(mise)",
       "Bash(nox:*)",
       "Bash(nox)",
       "Bash(pytest:*)",
@@ -32,6 +35,7 @@
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
+      "Bash(npx:*)",
       "Bash(tree:*)",
       "Bash(pwd:*)",
       "Bash(pwd)",
@@ -40,6 +44,8 @@
       "Bash(jq:*)",
       "Bash(source:*)",
       "Bash(cd:*)",
+      "Bash(set:*)",
+      "Bash(sort:*)",
       "Bash(.nox/*/bin/pytest:*)",
       "Bash(.nox/*/bin/python:*)",
       "Bash(.nox/*/bin/pip:*)",

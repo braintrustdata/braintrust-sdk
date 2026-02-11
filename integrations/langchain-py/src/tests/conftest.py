@@ -2,7 +2,6 @@
 import os
 
 import pytest
-from braintrust import Tuple
 from braintrust.logger import (
     TEST_API_KEY,
     Logger,
@@ -58,4 +57,4 @@ def logger_memory_logger():
         yield (logger, bgl)
 
 
-LoggerMemoryLogger = Tuple[Logger, _MemoryBackgroundLogger]
+LoggerMemoryLogger = tuple[Logger, _MemoryBackgroundLogger]

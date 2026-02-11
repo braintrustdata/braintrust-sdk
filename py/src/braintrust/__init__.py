@@ -49,7 +49,21 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 ### API Reference
 """
 
+# Check env var at import time for auto-instrumentation
+import os
+
+if os.getenv("BRAINTRUST_INSTRUMENT_THREADS", "").lower() in ("true", "1", "yes"):
+    try:
+        from .wrappers.threads import setup_threads
+
+        setup_threads()
+    except Exception:
+        pass  # Never break on import
+
 from .audit import *
+from .auto import (
+    auto_instrument,  # noqa: F401 # type: ignore[reportUnusedImport]
+)
 from .framework import *
 from .framework2 import *
 from .functions.invoke import *

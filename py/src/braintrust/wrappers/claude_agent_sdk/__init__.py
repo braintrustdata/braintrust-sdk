@@ -105,7 +105,6 @@ def setup_claude_agent_sdk(
                         setattr(module, "tool", wrapped_tool_fn)
 
         return True
-    except ImportError as e:
-        logger.error(f"Failed to import Claude Agent SDK: {e}")
-        logger.error("claude-agent-sdk is not installed. Please install it with: pip install claude-agent-sdk")
+    except ImportError:
+        # Not installed - this is expected when using auto_instrument()
         return False

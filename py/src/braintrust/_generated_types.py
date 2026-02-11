@@ -106,7 +106,7 @@ class ApiKey(TypedDict):
 
 class AsyncScoringControlAsyncScoringControl(TypedDict):
     kind: Literal['score_update']
-    token: str
+    token: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl2(TypedDict):
@@ -117,11 +117,44 @@ class AsyncScoringControlAsyncScoringControl3(TypedDict):
     kind: Literal['state_enabled_force_rescore']
 
 
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope(TypedDict):
+    type: Literal['span']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1(TypedDict):
+    type: Literal['trace']
+
+
+class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
+    function_id: NotRequired[Any | None]
+    scope: (
+        AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
+        | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
+    )
+
+
+class AsyncScoringControlAsyncScoringControl4(TypedDict):
+    kind: Literal['trigger_functions']
+    triggered_functions: Sequence[AsyncScoringControlAsyncScoringControl4TriggeredFunction]
+
+
+class AsyncScoringControlAsyncScoringControl5(TypedDict):
+    kind: Literal['complete_triggered_functions']
+    function_ids: Sequence[Any]
+    triggered_xact_id: str
+
+
+class AsyncScoringControlAsyncScoringControl6(TypedDict):
+    kind: Literal['mark_attempt_failed']
+    function_ids: Sequence[Any]
+
+
 class AsyncScoringStateAsyncScoringState(TypedDict):
     status: Literal['enabled']
     token: str
     function_ids: Sequence[Any]
     skip_logging: NotRequired[bool | None]
+    triggered_functions: NotRequired[Mapping[str, Any] | None]
 
 
 class AsyncScoringStateAsyncScoringState1(TypedDict):
@@ -129,6 +162,46 @@ class AsyncScoringStateAsyncScoringState1(TypedDict):
 
 
 AsyncScoringState: TypeAlias = AsyncScoringStateAsyncScoringState | AsyncScoringStateAsyncScoringState1 | None
+
+
+class PreprocessorPreprocessor(TypedDict):
+    type: Literal['function']
+    id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class PreprocessorPreprocessor2(TypedDict):
+    pass
+
+
+class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
+    pass
+
+
+class BatchedFacetDataFacet(TypedDict):
+    name: str
+    """
+    The name of the facet
+    """
+    prompt: str
+    """
+    The prompt to use for LLM extraction. The preprocessed text will be provided as context.
+    """
+    model: NotRequired[str | None]
+    """
+    The model to use for facet extraction
+    """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
+    """
+    no_match_pattern: NotRequired[str | None]
+    """
+    Regex pattern to identify outputs that do not match the facet. If the output matches, the facet will be saved as 'no_match'
+    """
 
 
 class BraintrustAttachmentReference(TypedDict):
@@ -424,6 +497,10 @@ class Dataset(TypedDict):
     """
     User-controlled metadata about the dataset
     """
+    url_slug: str
+    """
+    URL slug for the dataset. used to construct dataset URLs
+    """
 
 
 class DatasetEventMetadata(TypedDict):
@@ -470,6 +547,43 @@ class EnvVar(TypedDict):
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
+
+
+class EvalStatusPageConfig(TypedDict):
+    score_columns: NotRequired[Sequence[str] | None]
+    """
+    The score columns to display on the page
+    """
+    metric_columns: NotRequired[Sequence[str] | None]
+    """
+    The metric columns to display on the page
+    """
+    grouping_field: NotRequired[str | None]
+    """
+    The metadata field to use for grouping experiments (model)
+    """
+    filter: NotRequired[str | None]
+    """
+    BTQL filter to apply to experiment data
+    """
+    sort_by: NotRequired[str | None]
+    """
+    Field to sort results by (format: 'score:<name>' or 'metric:<name>')
+    """
+    sort_order: NotRequired[Literal['asc', 'desc'] | None]
+    """
+    Sort order (ascending or descending)
+    """
+    api_key: NotRequired[str | None]
+    """
+    The API key used for fetching experiment data
+    """
+
+
+EvalStatusPageTheme: TypeAlias = Literal['light', 'dark']
+"""
+The theme for the page
+"""
 
 
 class ExperimentEventMetadata(TypedDict):
@@ -532,6 +646,10 @@ class ExperimentEventContext(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class ExtendedSavedFunctionIdExtendedSavedFunctionId2(TypedDict):
@@ -559,16 +677,20 @@ class ExternalAttachmentReference(TypedDict):
     """
 
 
-class PreprocessorPreprocessor(TypedDict):
+class Preprocessor1Preprocessor1(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
-class PreprocessorPreprocessor2(TypedDict):
+class Preprocessor1Preprocessor12(TypedDict):
     pass
 
 
-class PreprocessorPreprocessor3(PreprocessorPreprocessor, PreprocessorPreprocessor2):
+class Preprocessor1Preprocessor13(Preprocessor1Preprocessor1, Preprocessor1Preprocessor12):
     pass
 
 
@@ -622,9 +744,32 @@ class FunctionDataFunctionData2(TypedDict):
     endpoint: str
     eval_name: str
     parameters: Mapping[str, Any]
+    parameters_version: NotRequired[str | None]
+    """
+    The version (transaction ID) of the parameters being used
+    """
 
 
-FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph']
+class FunctionDataFunctionData4Schema(TypedDict):
+    type: Literal['object']
+    properties: Mapping[str, Mapping[str, Any]]
+    required: NotRequired[Sequence[str] | None]
+    additionalProperties: NotRequired[bool | None]
+
+
+class FunctionDataFunctionData4(TypedDict):
+    type: Literal['parameters']
+    data: Mapping[str, Any]
+    """
+    The parameters data
+    """
+    __schema: FunctionDataFunctionData4Schema
+    """
+    JSON Schema format for parameters
+    """
+
+
+FunctionFormat: TypeAlias = Literal['llm', 'code', 'global', 'graph', 'topic_map']
 
 
 class FunctionIdFunctionId(TypedDict):
@@ -689,17 +834,24 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'custom_view', 'preprocessor', 'facet'
+    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier', 'parameters'
 ]
 
 
-FunctionOutputType: TypeAlias = Literal['completion', 'score', 'any']
+FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classification', 'any']
 
 
-FunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnum: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+]
+"""
+The type of global function. Defaults to 'scorer'.
+"""
 
 
-FunctionTypeEnumNullish: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
+FunctionTypeEnumNullish: TypeAlias = Literal[
+    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+]
 
 
 class GitMetadataSettings(TypedDict):
@@ -980,7 +1132,25 @@ class Group(TypedDict):
     """
 
 
+class GroupScope(TypedDict):
+    type: Literal['group']
+    group_by: str
+    """
+    Field path to group by, e.g. metadata.session_id
+    """
+    idle_seconds: NotRequired[float | None]
+    """
+    Optional: trigger after this many seconds of inactivity
+    """
+
+
 IfExists: TypeAlias = Literal['error', 'ignore', 'replace']
+
+
+ImageRenderingMode: TypeAlias = Literal['auto', 'click_to_load', 'blocked']
+"""
+Controls how images are rendered in the UI: 'auto' loads images automatically, 'click_to_load' shows a placeholder until clicked, 'blocked' prevents image loading entirely
+"""
 
 
 class InvokeFunctionInvokeFunction(TypedDict):
@@ -1007,6 +1177,14 @@ class InvokeFunctionInvokeFunction1(TypedDict):
     """
     The version of the function
     """
+
+
+class InvokeFunctionInvokeFunction2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class InvokeFunctionInvokeFunction3(TypedDict):
@@ -1175,21 +1353,19 @@ class ModelParamsModelParams4(TypedDict):
     reasoning_budget: NotRequired[float | None]
 
 
-NullableFunctionTypeEnum: TypeAlias = Literal['llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet']
-"""
-The type of global function. If unspecified, defaults to 'scorer' for backward compatibility.
-"""
-
-
 class NullableSavedFunctionIdNullableSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class NullableSavedFunctionIdNullableSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 NullableSavedFunctionId: TypeAlias = (
@@ -1263,6 +1439,7 @@ class Organization(TypedDict):
     """
     Date of organization creation
     """
+    image_rendering_mode: NotRequired[ImageRenderingMode | None]
 
 
 Permission: TypeAlias = Literal[
@@ -1597,7 +1774,18 @@ class PromptDataNullishOrigin(TypedDict):
 class PromptParserNullish(TypedDict):
     type: Literal['llm_classifier']
     use_cot: bool
-    choice_scores: Mapping[str, float]
+    choice_scores: NotRequired[Mapping[str, float] | None]
+    """
+    Map of choices to scores (0-1). Used by scorers.
+    """
+    choice: NotRequired[Sequence[str] | None]
+    """
+    List of valid choices without score mapping. Used by classifiers that deposit output to tags.
+    """
+    allow_no_match: NotRequired[bool | None]
+    """
+    If true, adds a 'No match' option. When selected, no tag is deposited.
+    """
 
 
 class PromptSessionEvent(TypedDict):
@@ -1829,7 +2017,7 @@ class TaskTask2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 class TaskTask3(TypedDict):
@@ -1940,12 +2128,16 @@ class RunEvalMcpAuth(TypedDict):
 class SavedFunctionIdSavedFunctionId(TypedDict):
     type: Literal['function']
     id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
 class SavedFunctionIdSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 SavedFunctionId: TypeAlias = SavedFunctionIdSavedFunctionId | SavedFunctionIdSavedFunctionId1
@@ -2024,17 +2216,11 @@ class SpanIFrame(TypedDict):
 
 class SpanScope(TypedDict):
     type: Literal['span']
-    root_span_id: str
-    """
-    The root span id is a unique identifier for the trace.
-    """
-    id: str
-    """
-    A unique identifier for the span.
-    """
 
 
-SpanType: TypeAlias = Literal['llm', 'score', 'function', 'eval', 'task', 'tool']
+SpanType: TypeAlias = Literal[
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
+]
 """
 Type of the span, for display purposes only
 """
@@ -2077,11 +2263,102 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
+class TopicMapReportSettings(TypedDict):
+    algorithm: Literal['hdbscan', 'kmeans', 'hierarchical']
+    dimension_reduction: Literal['umap', 'pca', 'none']
+    vector_field: str
+    embedding_model: str
+    n_clusters: NotRequired[int | None]
+    umap_dimensions: NotRequired[int | None]
+    min_cluster_size: NotRequired[int | None]
+    min_samples: NotRequired[int | None]
+
+
+class TopicMapReportQuerySettings(TypedDict):
+    hierarchy_threshold: NotRequired[int | None]
+    auto_naming: NotRequired[bool | None]
+    skip_cache: NotRequired[bool | None]
+    viz_mode: NotRequired[Literal['bar', 'scatter'] | None]
+    naming_model: NotRequired[str | None]
+
+
+class TopicMapReportClusterSample(TypedDict):
+    id: str
+    text: str
+    root_span_id: str
+    span_id: str
+
+
+class TopicMapReportCluster(TypedDict):
+    cluster_id: float
+    parent_cluster_id: NotRequired[float | None]
+    topic_id: str
+    count: float
+    sample_texts: Sequence[str]
+    samples: Sequence[TopicMapReportClusterSample]
+    name: NotRequired[str | None]
+    description: NotRequired[str | None]
+    keywords: NotRequired[Sequence[str] | None]
+    centroid: NotRequired[Sequence[float] | None]
+    parent_id: NotRequired[float | None]
+    is_leaf: NotRequired[bool | None]
+    depth: NotRequired[float | None]
+
+
+class TopicMapReportEmbeddingPoint(TypedDict):
+    x: float
+    y: float
+    cluster: float
+    text: NotRequired[str | None]
+
+
+class TopicMapReport(TypedDict):
+    version: Literal[1]
+    created_at: NotRequired[str | None]
+    settings: TopicMapReportSettings
+    query_settings: TopicMapReportQuerySettings
+    clusters: Sequence[TopicMapReportCluster]
+    embedding_points: NotRequired[Sequence[TopicMapReportEmbeddingPoint] | None]
+
+
 class TraceScope(TypedDict):
     type: Literal['trace']
-    root_span_id: str
+    idle_seconds: NotRequired[float | None]
     """
-    The root span id is a unique identifier for the trace.
+    Consider trace complete after this many seconds of inactivity (default: 30)
+    """
+
+
+class TriggeredFunctionStateScope(TypedDict):
+    type: Literal['span']
+
+
+class TriggeredFunctionStateScope1(TypedDict):
+    type: Literal['trace']
+
+
+class TriggeredFunctionStateScope2(TypedDict):
+    type: Literal['group']
+    key: str
+    value: str
+
+
+class TriggeredFunctionState(TypedDict):
+    triggered_xact_id: str
+    """
+    The xact_id when this function was triggered
+    """
+    completed_xact_id: NotRequired[str | None]
+    """
+    The xact_id when this function completed (matches triggered_xact_id if done)
+    """
+    attempts: NotRequired[int | None]
+    """
+    Number of execution attempts (for retry tracking)
+    """
+    scope: TriggeredFunctionStateScope | TriggeredFunctionStateScope1 | TriggeredFunctionStateScope2
+    """
+    The scope of data this function operates on
     """
 
 
@@ -2278,6 +2555,9 @@ AsyncScoringControl: TypeAlias = (
     | AsyncScoringControlAsyncScoringControl1
     | AsyncScoringControlAsyncScoringControl2
     | AsyncScoringControlAsyncScoringControl3
+    | AsyncScoringControlAsyncScoringControl4
+    | AsyncScoringControlAsyncScoringControl5
+    | AsyncScoringControlAsyncScoringControl6
 )
 
 
@@ -2290,6 +2570,19 @@ class AttachmentStatus(TypedDict):
     """
     Describes the error encountered while uploading.
     """
+
+
+class PreprocessorPreprocessor1(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[FunctionTypeEnum | None]
+
+
+class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+    pass
+
+
+Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
 
 
 ChatCompletionContentPart: TypeAlias = (
@@ -2384,7 +2677,7 @@ class DatasetEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     root_span_id: str
     """
@@ -2403,6 +2696,51 @@ class DatasetEvent(TypedDict):
     """
     Optional list of audit entries attached to this event
     """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
+    """
+
+
+class EvalStatusPage(TypedDict):
+    id: str
+    """
+    Unique identifier for the eval status page
+    """
+    project_id: str
+    """
+    Unique identifier for the project that the eval status page belongs under
+    """
+    user_id: NotRequired[str | None]
+    """
+    Identifies the user who created the eval status page
+    """
+    created: NotRequired[str | None]
+    """
+    Date of eval status page creation
+    """
+    deleted_at: NotRequired[str | None]
+    """
+    Date of eval status page deletion, or null if the eval status page is still active
+    """
+    name: str
+    """
+    Name of the eval status page
+    """
+    description: NotRequired[str | None]
+    """
+    Textual description of the eval status page
+    """
+    logo_url: NotRequired[str | None]
+    """
+    URL of the logo to display on the page
+    """
+    theme: EvalStatusPageTheme
+    config: EvalStatusPageConfig
 
 
 class Experiment(TypedDict):
@@ -2468,7 +2806,7 @@ class Experiment(TypedDict):
 class ExtendedSavedFunctionIdExtendedSavedFunctionId1(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
 ExtendedSavedFunctionId: TypeAlias = (
@@ -2478,22 +2816,22 @@ ExtendedSavedFunctionId: TypeAlias = (
 )
 
 
-class PreprocessorPreprocessor1(TypedDict):
+class Preprocessor1Preprocessor11(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
-class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreprocessor2):
+class Preprocessor1Preprocessor14(Preprocessor1Preprocessor11, Preprocessor1Preprocessor12):
     pass
 
 
-Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+Preprocessor1: TypeAlias = Preprocessor1Preprocessor13 | Preprocessor1Preprocessor14
 
 
 class FacetData(TypedDict):
     type: Literal['facet']
-    preprocessor: NotRequired[Preprocessor | None]
+    preprocessor: NotRequired[Preprocessor1 | None]
     prompt: str
     """
     The prompt to use for LLM extraction. The preprocessed text will be provided as context.
@@ -2501,6 +2839,10 @@ class FacetData(TypedDict):
     model: NotRequired[str | None]
     """
     The model to use for facet extraction
+    """
+    embedding_model: NotRequired[str | None]
+    """
+    The embedding model to use for vectorizing facet results.
     """
     no_match_pattern: NotRequired[str | None]
     """
@@ -2511,7 +2853,7 @@ class FacetData(TypedDict):
 class FunctionDataFunctionData3(TypedDict):
     type: Literal['global']
     name: str
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
     config: NotRequired[Mapping[str, Any] | None]
     """
     Configuration options to pass to the global function (e.g., for preprocessor customization)
@@ -2523,21 +2865,68 @@ class FunctionIdFunctionId2(TypedDict):
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
-class InvokeFunctionInvokeFunction2(TypedDict):
-    global_function: str
+class InvokeFunctionInvokeFunction7(TypedDict):
+    input: NotRequired[Any | None]
     """
-    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    Argument to the function, which can be any JSON serializable value
     """
-    function_type: NotRequired[NullableFunctionTypeEnum | None]
+    expected: NotRequired[Any | None]
+    """
+    The expected output of the function
+    """
+    metadata: NotRequired[Mapping[str, Any] | None]
+    """
+    Any relevant metadata. This will be logged and available as the `metadata` argument.
+    """
+    tags: NotRequired[Sequence[str] | None]
+    """
+    Any relevant tags to log on the span.
+    """
+    messages: NotRequired[Sequence[ChatCompletionMessageParam] | None]
+    """
+    If the function is an LLM, additional messages to pass along to it
+    """
+    parent: NotRequired[InvokeParent | None]
+    stream: NotRequired[bool | None]
+    """
+    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
+    """
+    mode: NotRequired[StreamingMode | None]
+    strict: NotRequired[bool | None]
+    """
+    If true, throw an error if one of the variables in the prompt is not present in the input
+    """
+    mcp_auth: NotRequired[Mapping[str, InvokeFunctionMcpAuth] | None]
+    """
+    Map of MCP server URL to auth credentials
+    """
+    overrides: NotRequired[Mapping[str, Any] | None]
+    """
+    Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
+    """
 
 
-InvokeScope: TypeAlias = SpanScope | TraceScope
-"""
-The scope at which to operate (span or trace)
-"""
+class InvokeFunctionInvokeFunction8(InvokeFunctionInvokeFunction, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction9(InvokeFunctionInvokeFunction1, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction10(InvokeFunctionInvokeFunction2, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction11(InvokeFunctionInvokeFunction3, InvokeFunctionInvokeFunction7):
+    pass
+
+
+class InvokeFunctionInvokeFunction12(InvokeFunctionInvokeFunction4, InvokeFunctionInvokeFunction7):
+    pass
 
 
 class ModelParamsModelParams(TypedDict):
@@ -2580,7 +2969,7 @@ class OnlineScoreConfig(TypedDict):
     """
     scorers: Sequence[SavedFunctionId]
     """
-    The list of scorers to use for online scoring
+    The list of functions to run for online scoring. Can include scorers, facets, or other function types.
     """
     btql_filter: NotRequired[str | None]
     """
@@ -2588,15 +2977,19 @@ class OnlineScoreConfig(TypedDict):
     """
     apply_to_root_span: NotRequired[bool | None]
     """
-    Whether to trigger online scoring on the root span of each trace
+    Whether to trigger online scoring on the root span of each trace. Only applies when scope is 'span' or unset.
     """
     apply_to_span_names: NotRequired[Sequence[str] | None]
     """
-    Trigger online scoring on any spans with a name in this list
+    Trigger online scoring on any spans with a name in this list. Only applies when scope is 'span' or unset.
     """
     skip_logging: NotRequired[bool | None]
     """
     Whether to skip adding scorer spans when computing scores
+    """
+    scope: NotRequired[SpanScope | TraceScope | GroupScope | None]
+    """
+    The scope at which to run the functions. Defaults to span-level execution. Trace/group scope requires all functions to be facets.
     """
 
 
@@ -2734,9 +3127,52 @@ class SpanAttributes(TypedDict):
     type: NotRequired[SpanType | None]
 
 
+class TopicMapData(TypedDict):
+    type: Literal['topic_map']
+    source_facet: str
+    """
+    The facet field name to use as input for classification
+    """
+    embedding_model: str
+    """
+    The embedding model to use for embedding facet values
+    """
+    bundle_key: str
+    """
+    Key of the topic map bundle in code_bundles bucket
+    """
+    distance_threshold: NotRequired[float | None]
+    """
+    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    """
+    report: NotRequired[TopicMapReport | None]
+
+
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
+
+
+class BatchedFacetDataTopicMaps(TypedDict):
+    function_name: str
+    """
+    The name of the topic map function
+    """
+    topic_map_id: NotRequired[str | None]
+    """
+    The id of the topic map function
+    """
+    topic_map_data: TopicMapData
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
+    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
+    """
+    Topic maps that depend on facets in this batch, keyed by source facet name
+    """
 
 
 class ExperimentEvent(TypedDict):
@@ -2802,7 +3238,7 @@ class ExperimentEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
@@ -2825,6 +3261,14 @@ class ExperimentEvent(TypedDict):
     audit_data: NotRequired[Sequence[Any] | None]
     """
     Optional list of audit entries attached to this event
+    """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
     """
 
 
@@ -2851,80 +3295,6 @@ GraphNode: TypeAlias = (
     | GraphNodeGraphNode6
     | GraphNodeGraphNode7
 )
-
-
-class InvokeContext(TypedDict):
-    object_type: Literal['project_logs', 'experiment', 'dataset', 'playground_logs']
-    """
-    The type of object containing the span data
-    """
-    object_id: str
-    """
-    The ID of the object containing the span data
-    """
-    scope: InvokeScope
-
-
-class InvokeFunctionInvokeFunction7(TypedDict):
-    input: NotRequired[Any | None]
-    """
-    Argument to the function, which can be any JSON serializable value
-    """
-    expected: NotRequired[Any | None]
-    """
-    The expected output of the function
-    """
-    metadata: NotRequired[Mapping[str, Any] | None]
-    """
-    Any relevant metadata. This will be logged and available as the `metadata` argument.
-    """
-    tags: NotRequired[Sequence[str] | None]
-    """
-    Any relevant tags to log on the span.
-    """
-    messages: NotRequired[Sequence[ChatCompletionMessageParam] | None]
-    """
-    If the function is an LLM, additional messages to pass along to it
-    """
-    context: NotRequired[InvokeContext | None]
-    parent: NotRequired[InvokeParent | None]
-    stream: NotRequired[bool | None]
-    """
-    Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
-    """
-    mode: NotRequired[StreamingMode | None]
-    strict: NotRequired[bool | None]
-    """
-    If true, throw an error if one of the variables in the prompt is not present in the input
-    """
-    mcp_auth: NotRequired[Mapping[str, InvokeFunctionMcpAuth] | None]
-    """
-    Map of MCP server URL to auth credentials
-    """
-    overrides: NotRequired[Mapping[str, Any] | None]
-    """
-    Partial function definition to merge with the function being invoked. Fields are validated against the function type's schema at runtime. For facets: { preprocessor?, prompt?, model? }. For prompts: { model?, ... }.
-    """
-
-
-class InvokeFunctionInvokeFunction8(InvokeFunctionInvokeFunction, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction9(InvokeFunctionInvokeFunction1, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction10(InvokeFunctionInvokeFunction2, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction11(InvokeFunctionInvokeFunction3, InvokeFunctionInvokeFunction7):
-    pass
-
-
-class InvokeFunctionInvokeFunction12(InvokeFunctionInvokeFunction4, InvokeFunctionInvokeFunction7):
-    pass
 
 
 class ProjectLogsEvent(TypedDict):
@@ -2994,7 +3364,7 @@ class ProjectLogsEvent(TypedDict):
     """
     span_id: str
     """
-    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/instrument) for full details on tracing
     """
     span_parents: NotRequired[Sequence[str] | None]
     """
@@ -3021,6 +3391,14 @@ class ProjectLogsEvent(TypedDict):
     _async_scoring_state: NotRequired[Any | None]
     """
     The async scoring state for this event
+    """
+    facets: NotRequired[Mapping[str, Any] | None]
+    """
+    Facets for categorization (dictionary from facet id to value)
+    """
+    classifications: NotRequired[Mapping[str, Any] | None]
+    """
+    Classifications for this event (dictionary from classification name to items)
     """
 
 
@@ -3124,11 +3502,15 @@ class View(TypedDict):
         'datasets',
         'dataset',
         'prompts',
+        'parameters',
         'tools',
         'scorers',
+        'classifiers',
         'logs',
         'monitor',
-        'for_review',
+        'for_review_project_log',
+        'for_review_experiments',
+        'for_review_datasets',
     ]
     """
     Type of object that the view corresponds to.
@@ -3361,6 +3743,9 @@ FunctionData: TypeAlias = (
     | FunctionDataFunctionData2
     | FunctionDataFunctionData3
     | FacetData
+    | BatchedFacetData
+    | FunctionDataFunctionData4
+    | TopicMapData
 )
 
 

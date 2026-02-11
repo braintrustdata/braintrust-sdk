@@ -320,6 +320,7 @@ async function initFile({
         const evaluator = evaluateBuildResults(inFile, result) || {
           functions: [],
           prompts: [],
+          parameters: [],
           evaluators: {},
           reporters: {},
         };
@@ -338,7 +339,7 @@ async function initFile({
           plugins,
           externalPackages,
         }),
-        external: [],
+        external: ["fsevents", "chokidar"],
         write: true,
         plugins: [],
         minify: true,

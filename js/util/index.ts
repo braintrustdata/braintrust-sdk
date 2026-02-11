@@ -9,6 +9,7 @@ export {
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
   OBJECT_DELETE_FIELD,
+  OBJECT_ID_KEYS,
   PARENT_ID_FIELD,
   SKIP_ASYNC_SCORING_FIELD,
   TRANSACTION_ID_FIELD,
@@ -110,6 +111,7 @@ export {
   spanComponentsV3Schema,
   spanObjectTypeV3EnumSchema,
   spanObjectTypeV3ToString,
+  spanObjectTypeV3ToTypedString,
 } from "./span_identifier_v3";
 
 export type { SpanComponentsV4Data } from "./span_identifier_v4";

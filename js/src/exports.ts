@@ -26,6 +26,8 @@ export type {
   LoadPromptOptions,
   LogOptions,
   LoginOptions,
+  Logs3OverflowInputRow,
+  Logs3OverflowUpload,
   MetricSummary,
   ObjectMetadata,
   PromiseUnless,
@@ -44,12 +46,15 @@ export {
   BraintrustState,
   ContextManager,
   DEFAULT_FETCH_BATCH_SIZE,
+  DEFAULT_MAX_REQUEST_SIZE,
   Dataset,
+  ObjectFetcher,
   ERR_PERMALINK,
   Experiment,
   ExternalAttachment,
   FailedHTTPResponse,
   JSONAttachment,
+  LOGS3_OVERFLOW_REFERENCE_TYPE,
   Logger,
   LoginInvalidOrgError,
   NOOP_SPAN,
@@ -63,6 +68,7 @@ export {
   _exportsForTestingOnly,
   _internalGetGlobalState,
   _internalSetInitialState,
+  constructLogs3OverflowRequest,
   currentExperiment,
   currentLogger,
   currentSpan,
@@ -76,13 +82,18 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  loadParameters,
   loadPrompt,
   log,
   logError,
   login,
   loginToState,
+  logs3OverflowUploadSchema,
   newId,
   permalink,
+  pickLogs3OverflowObjectIds,
+  uploadLogs3OverflowPayload,
+  utf8ByteLength,
   renderMessage,
   renderPromptParams,
   setFetch,
@@ -99,6 +110,7 @@ export {
   withLogger,
   withParent,
   wrapTraced,
+  registerOtelFlush,
 } from "./logger";
 
 export {
@@ -131,6 +143,7 @@ export {
 
 export {
   wrapAISDK,
+  wrapAgentClass,
   BraintrustMiddleware,
   wrapAISDKModel,
 } from "./wrappers/ai-sdk";
@@ -170,9 +183,6 @@ export type {
   CodeOpts,
   CreateProjectOpts,
   FunctionEvent,
-  PromptContents,
-  PromptDefinition,
-  PromptDefinitionWithTools,
   PromptOpts,
   ScorerOpts,
 } from "./framework2";
@@ -186,12 +196,21 @@ export {
   ScorerBuilder,
   ToolBuilder,
   projects,
+  toolFunctionDefinitionSchema,
+} from "./framework2";
+
+export {
   promptContentsSchema,
   promptDefinitionSchema,
   promptDefinitionToPromptData,
   promptDefinitionWithToolsSchema,
-  toolFunctionDefinitionSchema,
-} from "./framework2";
+  PromptContents,
+  PromptDefinition,
+  PromptDefinitionWithTools,
+} from "./prompt-schemas";
+
+export type { Trace, SpanData, GetThreadOptions } from "./trace";
+export { SpanFetcher, CachedSpanFetcher } from "./trace";
 
 export type {
   ParentExperimentIds,
@@ -207,7 +226,7 @@ export type {
   DatasetRecord,
 } from "../util";
 
-export { LazyValue } from "./util";
+export { addAzureBlobHeaders, LazyValue } from "./util";
 
 export { AttachmentReference } from "./generated_types";
 
@@ -216,6 +235,7 @@ export type {
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
+  ParametersSource,
 } from "../dev/types";
 
 export type { EvalParameters } from "./eval-parameters";

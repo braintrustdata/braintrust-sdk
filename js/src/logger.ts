@@ -24,6 +24,8 @@ import {
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
+  OBJECT_DELETE_FIELD,
+  OBJECT_ID_KEYS,
   SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanComponentsV4,
@@ -68,7 +70,29 @@ import {
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+export const LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+// 6 MB for the AWS lambda gateway (from our own testing).
+export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
+
+const parametersRowSchema = z.object({
+  id: z.string().uuid(),
+  _xact_id: z.string(),
+  project_id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  function_type: z.literal("parameters"),
+  function_data: z.object({
+    type: z.literal("parameters"),
+    data: z.record(z.unknown()).optional(),
+    __schema: z.record(z.unknown()),
+  }),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+});
+type ParametersRow = z.infer<typeof parametersRowSchema>;
 
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -89,6 +113,7 @@ import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
+import { ParametersCache } from "./prompt-cache/parameters-cache";
 import {
   addAzureBlobHeaders,
   getCurrentUnixTimestamp,
@@ -101,6 +126,8 @@ import {
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
 import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
+import { SpanCache, CachedSpan } from "./span-cache";
+import type { EvalParameters, InferParameters } from "./eval-parameters";
 
 // Context management interfaces
 export interface ContextParentSpanIds {
@@ -565,8 +592,11 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
+  public parametersCache: ParametersCache;
+  public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
+  private _otelFlushCallback: (() => Promise<void>) | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -603,6 +633,27 @@ export class BraintrustState {
         })
       : undefined;
     this.promptCache = new PromptCache({ memoryCache, diskCache });
+
+    const parametersMemoryCache = new LRUCache<string, RemoteEvalParameters>({
+      max:
+        Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const parametersDiskCache = canUseDiskCache()
+      ? new DiskCache<RemoteEvalParameters>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/parameters_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PARAMETERS_CACHE_DISK_MAX")) ??
+            1 << 20,
+        })
+      : undefined;
+    this.parametersCache = new ParametersCache({
+      memoryCache: parametersMemoryCache,
+      diskCache: parametersDiskCache,
+    });
+
+    this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
   }
 
   public resetLoginInfo() {
@@ -638,6 +689,24 @@ export class BraintrustState {
       this._contextManager = getContextManager();
     }
     return this._contextManager;
+  }
+
+  /**
+   * Register an OTEL flush callback. This is called by @braintrust/otel
+   * when it initializes a BraintrustSpanProcessor/Exporter.
+   */
+  public registerOtelFlush(callback: () => Promise<void>): void {
+    this._otelFlushCallback = callback;
+  }
+
+  /**
+   * Flush OTEL spans if a callback is registered.
+   * Called during ensureSpansFlushed to ensure OTEL spans are visible in BTQL.
+   */
+  public async flushOtel(): Promise<void> {
+    if (this._otelFlushCallback) {
+      await this._otelFlushCallback();
+    }
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -910,6 +979,22 @@ export function _internalSetInitialState() {
  * @internal
  */
 export const _internalGetGlobalState = () => _globalState;
+
+/**
+ * Register a callback to flush OTEL spans. This is called by @braintrust/otel
+ * when it initializes a BraintrustSpanProcessor/Exporter.
+ *
+ * When ensureSpansFlushed is called (e.g., before a BTQL query in scorers),
+ * this callback will be invoked to ensure OTEL spans are flushed to the server.
+ *
+ * Also disables the span cache, since OTEL spans aren't in the local cache
+ * and we need BTQL to see the complete span tree (both native + OTEL spans).
+ */
+export function registerOtelFlush(callback: () => Promise<void>): void {
+  _globalState?.registerOtelFlush(callback);
+  // Disable span cache since OTEL spans aren't in the local cache
+  _globalState?.spanCache?.disable();
+}
 
 export class FailedHTTPResponse extends Error {
   public status: number;
@@ -1299,7 +1384,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await checkResponse(
           await fetch(signedUrl, {
-            method: "PUT",
+            method: "PUT" satisfies RequestInit["method"],
             headers,
             body: data,
           }),
@@ -1735,18 +1820,28 @@ function updateSpanImpl({
   parentObjectType,
   parentObjectId,
   id,
+  root_span_id,
+  span_id,
   event,
 }: {
   state: BraintrustState;
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   id: string;
-  event: Omit<Partial<ExperimentEvent>, "id">;
+  root_span_id: string | undefined;
+  span_id: string | undefined;
+  event: Omit<Partial<ExperimentEvent>, "id" | "root_span_id" | "span_id">;
 }): void {
+  if (isEmpty(root_span_id) !== isEmpty(span_id)) {
+    throw new Error("both root_span_id and span_id must be set, or neither");
+  }
+  const hasExplicitSpanIds =
+    root_span_id !== undefined && span_id !== undefined;
   const updateEvent = deepCopyEvent(
     validateAndSanitizeExperimentLogPartialArgs({
-      id,
       ...event,
+      id,
+      ...(hasExplicitSpanIds ? { root_span_id, span_id } : {}),
     } as Partial<ExperimentEvent>),
   );
 
@@ -1778,7 +1873,10 @@ export function updateSpan({
   exported,
   state,
   ...event
-}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
+}: { exported: string } & Omit<
+  Partial<ExperimentEvent>,
+  "id" | "root_span_id" | "span_id"
+> &
   OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
   const components = getSpanComponentsClass().fromStr(exported);
@@ -1794,6 +1892,8 @@ export function updateSpan({
       spanComponentsToObjectIdLambda(resolvedState, components),
     ),
     id: components.data.row_id,
+    root_span_id: components.data.root_span_id,
+    span_id: components.data.span_id,
     event,
   });
 }
@@ -2229,7 +2329,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     event: Omit<Partial<ExperimentEvent>, "id"> &
       Required<Pick<ExperimentEvent, "id">>,
   ): void {
-    const { id, ...eventRest } = event;
+    const { id, root_span_id, span_id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
@@ -2238,6 +2338,8 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
       parentObjectType: this.parentObjectType(),
       parentObjectId: this.lazyId,
       id,
+      root_span_id,
+      span_id,
       event: eventRest,
     });
   }
@@ -2294,8 +2396,134 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-function constructLogs3Data(items: string[]) {
-  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+export const logs3OverflowUploadSchema = z.object({
+  method: z.enum(["PUT", "POST"]),
+  signedUrl: z.string().url(),
+  headers: z.record(z.string()).optional(),
+  fields: z.record(z.string()).optional(),
+  key: z.string().min(1),
+});
+export type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+
+export type Logs3OverflowInputRow = {
+  object_ids: Record<string, unknown>;
+  is_delete?: boolean;
+  input_row: {
+    byte_size: number;
+  };
+};
+
+type LogItemWithMeta = {
+  str: string;
+  overflowMeta: Logs3OverflowInputRow;
+};
+
+function constructLogs3Data(items: LogItemWithMeta[]) {
+  return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
+}
+
+export function constructLogs3OverflowRequest(key: string) {
+  return {
+    rows: {
+      type: LOGS3_OVERFLOW_REFERENCE_TYPE,
+      key,
+    },
+    api_version: 2,
+  };
+}
+
+export function pickLogs3OverflowObjectIds(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const objectIds: Record<string, unknown> = {};
+  for (const key of OBJECT_ID_KEYS) {
+    if (key in row) {
+      objectIds[key] = row[key];
+    }
+  }
+  return objectIds;
+}
+
+/**
+ * Upload a logs3 overflow payload to the signed URL.
+ * This is a standalone function that can be used by both SDK and app code.
+ *
+ * @param upload - The overflow upload metadata from the API
+ * @param payload - The JSON payload string to upload
+ * @param fetchFn - Optional custom fetch function (defaults to global fetch)
+ */
+export async function uploadLogs3OverflowPayload(
+  upload: Logs3OverflowUpload,
+  payload: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  if (upload.method === "POST") {
+    if (!upload.fields) {
+      throw new Error("Missing logs3 overflow upload fields");
+    }
+    if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+      throw new Error("FormData is not available for logs3 overflow upload");
+    }
+    const form = new FormData();
+    for (const [key, value] of Object.entries(upload.fields)) {
+      form.append(key, value);
+    }
+    const contentType = upload.fields["Content-Type"] ?? "application/json";
+    form.append("file", new Blob([payload], { type: contentType }));
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(upload.headers ?? {})) {
+      if (key.toLowerCase() !== "content-type") {
+        headers[key] = value;
+      }
+    }
+    const response = await fetchFn(upload.signedUrl, {
+      method: "POST" satisfies RequestInit["method"],
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(
+        `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+      );
+    }
+    return;
+  }
+  const headers: Record<string, string> = { ...(upload.headers ?? {}) };
+  addAzureBlobHeaders(headers, upload.signedUrl);
+  const response = await fetchFn(upload.signedUrl, {
+    method: "PUT" satisfies RequestInit["method"],
+    headers,
+    body: payload,
+  });
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to upload logs3 overflow payload: ${response.status} ${responseText}`,
+    );
+  }
+}
+
+function stringifyWithOverflowMeta(item: object): LogItemWithMeta {
+  const str = JSON.stringify(item);
+  const record = item as Record<string, unknown>;
+  return {
+    str,
+    overflowMeta: {
+      object_ids: pickLogs3OverflowObjectIds(record),
+      is_delete: record[OBJECT_DELETE_FIELD] === true,
+      input_row: {
+        byte_size: utf8ByteLength(str),
+      },
+    },
+  };
+}
+
+export function utf8ByteLength(value: string) {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
 }
 
 function now() {
@@ -2345,12 +2573,11 @@ export class TestBackgroundLogger implements BackgroundLogger {
       }
     }
 
-    const batch = mergeRowBatch(events);
-    let flatBatch = batch.flat();
+    let batch = mergeRowBatch(events);
 
     // Apply masking after merge, similar to HTTPBackgroundLogger
     if (this.maskingFunction) {
-      flatBatch = flatBatch.map((item) => {
+      batch = batch.map((item) => {
         const maskedItem = { ...item };
 
         // Only mask specific fields if they exist
@@ -2387,7 +2614,7 @@ export class TestBackgroundLogger implements BackgroundLogger {
       });
     }
 
-    return flatBatch;
+    return batch;
   }
 }
 
@@ -2407,8 +2634,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
-  // 6 MB for the AWS lambda gateway (from our own testing).
-  public maxRequestSize: number = 6 * 1024 * 1024;
+  private maxRequestSizeOverride: number | null = null;
+  private _maxRequestSizePromise: Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> | null = null;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
@@ -2442,7 +2672,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
     const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
     if (!isNaN(maxRequestSizeEnv)) {
-      this.maxRequestSize = maxRequestSizeEnv;
+      this.maxRequestSizeOverride = maxRequestSizeEnv;
     }
 
     const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -2524,6 +2754,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
   }
 
+  private getMaxRequestSize(): Promise<{
+    maxRequestSize: number;
+    canUseOverflow: boolean;
+  }> {
+    if (!this._maxRequestSizePromise) {
+      this._maxRequestSizePromise = (async () => {
+        let serverLimit: number | null = null;
+        try {
+          const conn = await this.apiConn.get();
+          const versionInfo = await conn.get_json("version");
+          serverLimit =
+            z
+              .object({ logs3_payload_max_bytes: z.number().nullish() })
+              .parse(versionInfo).logs3_payload_max_bytes ?? null;
+        } catch (e) {
+          console.warn("Failed to fetch version info for payload limit:", e);
+        }
+        const validServerLimit =
+          serverLimit !== null && serverLimit > 0 ? serverLimit : null;
+        const canUseOverflow = validServerLimit !== null;
+        let maxRequestSize = DEFAULT_MAX_REQUEST_SIZE;
+        if (this.maxRequestSizeOverride !== null) {
+          maxRequestSize =
+            validServerLimit !== null
+              ? Math.min(this.maxRequestSizeOverride, validServerLimit)
+              : this.maxRequestSizeOverride;
+        } else if (validServerLimit !== null) {
+          maxRequestSize = validServerLimit;
+        }
+        return { maxRequestSize, canUseOverflow };
+      })();
+    }
+    return this._maxRequestSizePromise;
+  }
+
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -2584,37 +2849,37 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    // Construct batches of records to flush in parallel and in sequence.
-    const allItemsStr = allItems.map((bucket) =>
-      bucket.map((item) => JSON.stringify(item)),
+    // Construct batches of records to flush in parallel.
+    const allItemsWithMeta = allItems.map((item) =>
+      stringifyWithOverflowMeta(item),
     );
-    const batchSets = batchItems({
-      items: allItemsStr,
+    const maxRequestSizeResult = await this.getMaxRequestSize();
+    const batches = batchItems({
+      items: allItemsWithMeta,
       batchMaxNumItems: batchSize,
-      batchMaxNumBytes: this.maxRequestSize / 2,
+      batchMaxNumBytes: maxRequestSizeResult.maxRequestSize / 2,
+      getByteSize: (item) => item.str.length,
     });
 
-    for (const batchSet of batchSets) {
-      const postPromises = batchSet.map((batch) =>
-        (async () => {
-          try {
-            await this.submitLogsRequest(batch);
-            return { type: "success" } as const;
-          } catch (e) {
-            return { type: "error", value: e } as const;
-          }
-        })(),
+    const postPromises = batches.map((batch) =>
+      (async () => {
+        try {
+          await this.submitLogsRequest(batch, maxRequestSizeResult);
+          return { type: "success" } as const;
+        } catch (e) {
+          return { type: "error", value: e } as const;
+        }
+      })(),
+    );
+    const results = await Promise.all(postPromises);
+    const failingResultErrors = results
+      .map((r) => (r.type === "success" ? undefined : r.value))
+      .filter((r) => r !== undefined);
+    if (failingResultErrors.length) {
+      throw new AggregateError(
+        failingResultErrors,
+        `Encountered the following errors while logging:`,
       );
-      const results = await Promise.all(postPromises);
-      const failingResultErrors = results
-        .map((r) => (r.type === "success" ? undefined : r.value))
-        .filter((r) => r !== undefined);
-      if (failingResultErrors.length) {
-        throw new AggregateError(
-          failingResultErrors,
-          `Encountered the following errors while logging:`,
-        );
-      }
     }
 
     const attachmentErrors: unknown[] = [];
@@ -2641,7 +2906,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
+  ): Promise<[BackgroundLogEvent[], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
         const items = await Promise.all(wrappedItems.map((x) => x.get()));
@@ -2658,43 +2923,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
         // Apply masking after merge but before sending to backend
         if (this.maskingFunction) {
-          mergedItems = mergedItems.map((batch) =>
-            batch.map((item) => {
-              const maskedItem = { ...item };
+          mergedItems = mergedItems.map((item) => {
+            const maskedItem = { ...item };
 
-              // Only mask specific fields if they exist
-              for (const field of REDACTION_FIELDS) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                if ((item as any)[field] !== undefined) {
-                  const maskedValue = applyMaskingToField(
-                    this.maskingFunction!,
+            // Only mask specific fields if they exist
+            for (const field of REDACTION_FIELDS) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((item as any)[field] !== undefined) {
+                const maskedValue = applyMaskingToField(
+                  this.maskingFunction!,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (item as any)[field],
+                  field,
+                );
+                if (maskedValue instanceof MaskingError) {
+                  // Drop the field and add error message
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  delete (maskedItem as any)[field];
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  if ((maskedItem as any).error) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (item as any)[field],
-                    field,
-                  );
-                  if (maskedValue instanceof MaskingError) {
-                    // Drop the field and add error message
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    delete (maskedItem as any)[field];
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    if ((maskedItem as any).error) {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error =
-                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
-                    } else {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (maskedItem as any).error = maskedValue.errorMsg;
-                    }
+                    (maskedItem as any).error =
+                      `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
                   } else {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (maskedItem as any)[field] = maskedValue;
+                    (maskedItem as any).error = maskedValue.errorMsg;
                   }
+                } else {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (maskedItem as any)[field] = maskedValue;
                 }
               }
+            }
 
-              return maskedItem as BackgroundLogEvent;
-            }),
-          );
+            return maskedItem as BackgroundLogEvent;
+          });
         }
 
         return [mergedItems, attachments];
@@ -2724,9 +2987,55 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     throw new Error("Impossible");
   }
 
-  private async submitLogsRequest(items: string[]): Promise<void> {
+  private async requestLogs3OverflowUpload(
+    conn: HTTPConnection,
+    args: { rows: Logs3OverflowInputRow[]; sizeBytes: number },
+  ): Promise<Logs3OverflowUpload> {
+    let response: unknown;
+    try {
+      response = await conn.post_json("logs3/overflow", {
+        content_type: "application/json",
+        size_bytes: args.sizeBytes,
+        rows: args.rows,
+      });
+    } catch (error) {
+      const errorStr = JSON.stringify(error);
+      throw new Error(
+        `Failed to request logs3 overflow upload URL: ${errorStr}`,
+      );
+    }
+
+    try {
+      return logs3OverflowUploadSchema.parse(response);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const errorStr = JSON.stringify(error.flatten());
+        throw new Error(`Invalid response from API server: ${errorStr}`);
+      }
+      throw error;
+    }
+  }
+
+  private async _uploadLogs3OverflowPayload(
+    conn: HTTPConnection,
+    upload: Logs3OverflowUpload,
+    payload: string,
+  ): Promise<void> {
+    // Delegate to the public function, using the connection's fetch
+    await uploadLogs3OverflowPayload(upload, payload, conn.fetch.bind(conn));
+  }
+
+  private async submitLogsRequest(
+    items: LogItemWithMeta[],
+    {
+      maxRequestSize,
+      canUseOverflow,
+    }: { maxRequestSize: number; canUseOverflow: boolean },
+  ): Promise<void> {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
+    const payloadBytes = utf8ByteLength(dataStr);
+    const useOverflow = canUseOverflow && payloadBytes > maxRequestSize;
     if (this.allPublishPayloadsDir) {
       await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
@@ -2734,11 +3043,35 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
 
+    let overflowUpload: Logs3OverflowUpload | null = null;
+    const overflowRows = useOverflow
+      ? items.map((item) => item.overflowMeta)
+      : null;
+
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
-        await conn.post_json("logs3", dataStr);
+        if (overflowRows) {
+          if (!overflowUpload) {
+            const currentUpload = await this.requestLogs3OverflowUpload(conn, {
+              rows: overflowRows,
+              sizeBytes: payloadBytes,
+            });
+            await this._uploadLogs3OverflowPayload(
+              conn,
+              currentUpload,
+              dataStr,
+            );
+            overflowUpload = currentUpload;
+          }
+          await conn.post_json(
+            "logs3",
+            constructLogs3OverflowRequest(overflowUpload.key),
+          );
+        } else {
+          await conn.post_json("logs3", dataStr);
+        }
       } catch (e) {
         error = e;
       }
@@ -2758,7 +3091,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const errMsg = `log request failed. Elapsed time: ${
         (now() - startTime) / 1000
       } seconds. Payload size: ${
-        dataStr.length
+        payloadBytes
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
@@ -2823,7 +3156,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await this.unwrapLazyValues(wrappedItems);
 
       const dataStr = constructLogs3Data(
-        allItems.map((x) => JSON.stringify(x)),
+        allItems.map((x) => stringifyWithOverflowMeta(x)),
       );
       const attachmentStr = JSON.stringify(
         allAttachments.map((a) => a.debugInfo()),
@@ -2915,10 +3248,18 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
+/**
+ * Reference to a dataset by ID and optional version.
+ */
+export interface DatasetRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
-  dataset?: AnyDataset;
+  dataset?: AnyDataset | DatasetRef;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3129,8 +3470,21 @@ export function init<IsOpen extends boolean = false>(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = await dataset.id;
-        args["dataset_version"] = await dataset.version();
+        if (
+          "id" in dataset &&
+          typeof dataset.id === "string" &&
+          !("__braintrust_dataset_marker" in dataset)
+        ) {
+          // Simple {id: ..., version?: ...} object
+          args["dataset_id"] = dataset.id;
+          if ("version" in dataset && dataset.version !== undefined) {
+            args["dataset_version"] = dataset.version;
+          }
+        } else {
+          // Full Dataset object
+          args["dataset_id"] = await (dataset as AnyDataset).id;
+          args["dataset_version"] = await (dataset as AnyDataset).version();
+        }
       }
 
       if (isPublic !== undefined) {
@@ -3179,7 +3533,13 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const ret = new Experiment(state, lazyMetadata, dataset);
+  const ret = new Experiment(
+    state,
+    lazyMetadata,
+    dataset !== undefined && "version" in dataset
+      ? (dataset as AnyDataset)
+      : undefined,
+  );
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
@@ -3561,6 +3921,63 @@ export type LoadPromptOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
+type LoadParametersBaseOptions = FullLoginOptions & {
+  state?: BraintrustState;
+};
+
+export type LoadParametersByIdOptions = LoadParametersBaseOptions & {
+  id: string;
+  version?: string;
+};
+
+export type LoadParametersByIdWithEnvOptions = LoadParametersBaseOptions & {
+  id: string;
+  environment: string;
+};
+
+export type LoadParametersByProjectNameOptions = LoadParametersBaseOptions & {
+  projectName: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectNameWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectName: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersByProjectIdOptions = LoadParametersBaseOptions & {
+  projectId: string;
+  slug: string;
+  version?: string;
+};
+
+export type LoadParametersByProjectIdWithEnvOptions =
+  LoadParametersBaseOptions & {
+    projectId: string;
+    slug: string;
+    environment: string;
+  };
+
+export type LoadParametersOptions =
+  | LoadParametersByIdOptions
+  | LoadParametersByIdWithEnvOptions
+  | LoadParametersByProjectNameOptions
+  | LoadParametersByProjectNameWithEnvOptions
+  | LoadParametersByProjectIdOptions
+  | LoadParametersByProjectIdWithEnvOptions;
+
+type LoadParametersImplementationOptions = LoadParametersBaseOptions & {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  id?: string;
+  environment?: string;
+};
+
 /**
  * Load a prompt from the specified project.
  *
@@ -3570,7 +3987,7 @@ export type LoadPromptOptions = FullLoginOptions & {
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
  * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
- * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -3720,6 +4137,184 @@ export async function loadPrompt({
 }
 
 /**
+ * Load parameters from the specified project.
+ *
+ * @param options Options for configuring loadParameters().
+ * @param options.projectName The name of the project to load the parameters from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the parameters to load.
+ * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project and slug).
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns The parameters object.
+ * @throws If the parameters are not found.
+ * @throws If multiple parameters are found with the same slug in the same project (this should never happen).
+ *
+ * @example
+ * ```typescript
+ * const params = await loadParameters({
+ *  projectName: "My Project",
+ *  slug: "my-parameters",
+ * });
+ * ```
+ */
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectNameWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByProjectIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export function loadParameters<S extends EvalParameters = EvalParameters>(
+  options: LoadParametersByIdWithEnvOptions,
+): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
+export async function loadParameters<
+  S extends EvalParameters = EvalParameters,
+>({
+  projectName,
+  projectId,
+  slug,
+  version,
+  environment,
+  id,
+  appUrl,
+  apiKey,
+  orgName,
+  fetch,
+  forceLogin,
+  state: stateArg,
+}: LoadParametersImplementationOptions): Promise<
+  RemoteEvalParameters<true, true, InferParameters<S>>
+> {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
+    throw new Error("Must specify either projectName or projectId");
+  } else if (isEmpty(slug)) {
+    throw new Error("Must specify slug");
+  }
+
+  const state = stateArg ?? _globalState;
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    if (id) {
+      response = await state.apiConn().get_json(`v1/function/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/function", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+        function_type: "parameters",
+        ...(environment && { environment }),
+      });
+    }
+  } catch (e) {
+    if (environment || version) {
+      throw new Error(`Parameters not found with specified parameters: ${e}`);
+    }
+
+    console.warn(
+      "Failed to load parameters, attempting to fall back to cache:",
+      e,
+    );
+    let parameters;
+    if (id) {
+      parameters = await state.parametersCache.get({ id });
+      if (!parameters) {
+        throw new Error(
+          `Parameters with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      parameters = await state.parametersCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!parameters) {
+        throw new Error(
+          `Parameters ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
+  }
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    if (id) {
+      throw new Error(`Parameters with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Parameters ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
+  } else if (response.objects.length > 1) {
+    if (id) {
+      throw new Error(
+        `Multiple parameters found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple parameters found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
+  }
+
+  const metadata = parametersRowSchema.parse(response["objects"][0]);
+  const parameters = new RemoteEvalParameters(metadata);
+  try {
+    if (id) {
+      await state.parametersCache.set({ id }, parameters);
+    } else if (slug) {
+      await state.parametersCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        parameters,
+      );
+    }
+  } catch (e) {
+    console.warn("Failed to set parameters in cache:", e);
+  }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
+}
+
+/**
  * Options for logging in to Braintrust.
  */
 export interface LoginOptions {
@@ -3750,6 +4345,12 @@ export interface LoginOptions {
    * Calls this function if there's an error in the background flusher.
    */
   onFlushError?: (error: unknown) => void;
+  /**
+   * If true, disables the local span cache used to optimize scorer access
+   * to trace data. When disabled, scorers will always fetch spans from the
+   * server. Defaults to false.
+   */
+  disableSpanCache?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4843,15 +5444,19 @@ export type WithTransactionId<R> = R & {
 };
 
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
-const MAX_BTQL_ITERATIONS = 10000;
+export const MAX_BTQL_ITERATIONS = 10000;
 
-class ObjectFetcher<RecordType>
+export class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
-    private objectType: "dataset" | "experiment",
+    private objectType:
+      | "dataset"
+      | "experiment"
+      | "project_logs"
+      | "playground_logs",
     private pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
@@ -4915,7 +5520,6 @@ class ObjectFetcher<RecordType>
       const respJson = await resp.json();
       const mutate = this.mutateRecord;
       for (const record of respJson.data ?? []) {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         yield mutate
           ? mutate(record)
           : (record as WithTransactionId<RecordType>);
@@ -5300,7 +5904,7 @@ export class Experiment
     event: Omit<Partial<ExperimentEvent>, "id"> &
       Required<Pick<ExperimentEvent, "id">>,
   ): void {
-    const { id, ...eventRest } = event;
+    const { id, root_span_id, span_id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
@@ -5309,6 +5913,8 @@ export class Experiment
       parentObjectType: this.parentObjectType(),
       parentObjectId: this.lazyId,
       id,
+      root_span_id,
+      span_id,
       event: eventRest,
     });
   }
@@ -5660,6 +6266,25 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
+    // Write to local span cache for scorer access
+    // Only cache experiment spans - regular logs don't need caching
+    if (this.parentObjectType === SpanObjectTypeV3.EXPERIMENT) {
+      const cachedSpan: CachedSpan = {
+        input: partialRecord.input,
+        output: partialRecord.output,
+        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        span_id: this._spanId,
+        span_parents: this._spanParents,
+        span_attributes:
+          partialRecord.span_attributes as CachedSpan["span_attributes"],
+      };
+      this._state.spanCache.queueWrite(
+        this._rootSpanId,
+        this._spanId,
+        cachedSpan,
+      );
+    }
+
     const computeRecord = async () => ({
       ...partialRecord,
       ...Object.fromEntries(
@@ -5765,8 +6390,12 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
+    // Disable span cache since remote function spans won't be in the local cache
+    this._state.spanCache.disable();
+
     return new (getSpanComponentsClass())({
       object_type: this.parentObjectType,
+
       ...(this.parentComputeObjectMetadataArgs &&
       !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
@@ -6828,6 +7457,90 @@ export class Prompt<
       },
       {},
       false,
+    );
+  }
+}
+
+export class RemoteEvalParameters<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+  T extends Record<string, unknown> = Record<string, unknown>,
+> {
+  private readonly __braintrust_parameters_marker = true;
+
+  constructor(private metadata: ParametersRow) {}
+
+  public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata.id as HasId extends true ? string : string | undefined;
+  }
+
+  public get projectId(): string | undefined {
+    return this.metadata.project_id;
+  }
+
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  public get version(): HasVersion extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata[TRANSACTION_ID_FIELD] as HasVersion extends true
+      ? TransactionId
+      : TransactionId | undefined;
+  }
+
+  public get schema(): Record<string, unknown> {
+    return this.metadata.function_data.__schema;
+  }
+
+  public get data(): T {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return (this.metadata.function_data.data ?? {}) as T;
+  }
+
+  public validate(data: unknown): boolean {
+    if (typeof data !== "object" || data === null) {
+      return false;
+    }
+    const schemaProps = this.schema.properties;
+    if (typeof schemaProps !== "object" || schemaProps === null) {
+      return true;
+    }
+    for (const key of Object.keys(schemaProps)) {
+      if (!(key in data)) {
+        const required = Array.isArray(this.schema.required)
+          ? this.schema.required
+          : [];
+        if (required.includes(key)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  public static isParameters(
+    x: unknown,
+  ): x is RemoteEvalParameters<boolean, boolean, Record<string, unknown>> {
+    return (
+      typeof x === "object" &&
+      x !== null &&
+      "__braintrust_parameters_marker" in x &&
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      (
+        x as unknown as RemoteEvalParameters<
+          boolean,
+          boolean,
+          Record<string, unknown>
+        >
+      ).__braintrust_parameters_marker === true
     );
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "2.0.1",
+  "version": "2.2.1",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -96,7 +96,7 @@
     "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^8.49.0",
     "@typescript-eslint/parser": "^8.49.0",
-    "ai": "^4.3.16",
+    "ai": "^6.0.0",
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
     "cross-env": "^7.0.3",
@@ -120,6 +120,7 @@
     "@next/env": "^14.2.3",
     "@types/nunjucks": "^3.2.6",
     "@vercel/functions": "^1.0.2",
+    "ajv": "^8.17.1",
     "argparse": "^2.0.1",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
