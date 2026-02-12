@@ -3,7 +3,7 @@ import logging
 import sys
 import time
 from contextlib import AbstractAsyncContextManager
-from typing import Any
+from typing import Any, Tuple
 
 from braintrust.bt_json import bt_safe_deep_copy
 from braintrust.logger import NOOP_SPAN, Attachment, current_span, init_logger, start_span
@@ -902,7 +902,7 @@ def _serialize_model_response(response: Any) -> Any:
     return response_dict
 
 
-def _extract_model_info_from_model_instance(model: Any) -> tuple[str | None, str | None]:
+def _extract_model_info_from_model_instance(model: Any) -> Tuple[str | None, str | None]:
     """Extract model name and provider from a model instance.
 
     Args:
@@ -942,7 +942,7 @@ def _extract_model_info_from_model_instance(model: Any) -> tuple[str | None, str
     return None, None
 
 
-def _extract_model_info(agent: Any) -> tuple[str | None, str | None]:
+def _extract_model_info(agent: Any) -> Tuple[str | None, str | None]:
     """Extract model name and provider from agent.
 
     Args:
@@ -978,7 +978,7 @@ def _build_model_metadata(model_name: str | None, provider: str | None, model_se
     return metadata
 
 
-def _parse_model_string(model: Any) -> tuple[str | None, str | None]:
+def _parse_model_string(model: Any) -> Tuple[str | None, str | None]:
     """Parse model string to extract provider and model name.
 
     Pydantic AI uses format: "provider:model-name" (e.g., "openai:gpt-4o")
@@ -1194,7 +1194,7 @@ def _serialize_type(obj: Any) -> Any:
     return bt_safe_deep_copy(obj)
 
 
-def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> Tuple[dict[str, Any], dict[str, Any]]:
     """Build input data and metadata for agent wrappers.
 
     Returns:
@@ -1299,7 +1299,7 @@ def _build_agent_input_and_metadata(args: Any, kwargs: Any, instance: Any) -> tu
     return input_data, metadata
 
 
-def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+def _build_direct_model_input_and_metadata(args: Any, kwargs: Any) -> Tuple[dict[str, Any], dict[str, Any]]:
     """Build input data and metadata for direct model request wrappers.
 
     Returns:
