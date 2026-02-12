@@ -286,6 +286,7 @@ def test_latest_wrappers_novcr(session):
     session.notify("test_pydantic_ai_wrap_openai(latest)", posargs=args)
     session.notify("test_pydantic_ai_integration(latest)", posargs=args)
     session.notify("test_claude_agent_sdk(latest)", posargs=args)
+    session.notify("test_agno(latest)", posargs=args)
 
 
 def _install_npm_in_session(session):
