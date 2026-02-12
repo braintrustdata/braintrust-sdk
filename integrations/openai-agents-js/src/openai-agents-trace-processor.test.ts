@@ -219,7 +219,11 @@ describe("OpenAIAgentsTraceProcessor span race handling", () => {
     const childSpan = requireChildSpan(traceData, span.spanId);
 
     await processor.onTraceEnd(trace);
-    assert.equal(childSpan.endCalls, 1, "Child span should be ended by trace end");
+    assert.equal(
+      childSpan.endCalls,
+      1,
+      "Child span should be ended by trace end",
+    );
 
     await processor.onSpanEnd(span);
 
@@ -249,7 +253,11 @@ describe("OpenAIAgentsTraceProcessor span race handling", () => {
 
     // End one span through the normal path to verify trace end only closes remaining spans.
     await processor.onSpanEnd(spanA);
-    assert.equal(childSpanA.endCalls, 1, "Span A should be ended once normally");
+    assert.equal(
+      childSpanA.endCalls,
+      1,
+      "Span A should be ended once normally",
+    );
 
     await processor.onTraceEnd(trace);
 
