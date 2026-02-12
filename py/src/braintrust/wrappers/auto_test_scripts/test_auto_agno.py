@@ -110,8 +110,8 @@ with autoinstrument_test_context("test_auto_agno") as memory_logger:
     agent_span_id = agent_span.get("span_id")
     assert agent_span_id in llm_parents, f"LLM span should be child of agent span. Agent ID: {agent_span_id}, LLM parents: {llm_parents}"
 
-    print(f"✓ Agent span created (type: task)")
-    print(f"✓ Model span created (type: llm)")
-    print(f"✓ Span hierarchy verified (model is child of agent)")
+    print("Agent span created (type: task)")
+    print("Model span created (type: llm)")
+    print("Span hierarchy verified (model is child of agent)")
 
 print("SUCCESS")
