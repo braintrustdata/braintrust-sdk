@@ -20,19 +20,16 @@ def wrap_agent(Agent: Any) -> Any:
     if is_patched(Agent):
         return Agent
 
-    def run_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    def _create_run_span(wrapped: Any, instance: Any, args: Any, kwargs: Any, input_data: dict):
+        """Shared logic to create span and execute run method."""
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.run"
-
-        # Handle both private _run(run_response, run_messages) and public run(input) signatures
-        run_response = args[0] if len(args) > 0 else kwargs.get("run_response") or kwargs.get("input")
-        run_messages = args[1] if len(args) > 1 else kwargs.get("run_messages")
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": run_response, "run_messages": run_messages} if run_messages else {"input": run_response},
-            metadata={**omit(kwargs, ["run_response", "run_messages", "input"]), **extract_metadata(instance, "agent")},
+            input=input_data,
+            metadata={**omit(kwargs, list(input_data.keys())), **extract_metadata(instance, "agent")},
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
@@ -41,25 +38,35 @@ def wrap_agent(Agent: Any) -> Any:
             )
             return result
 
+    def _run_wrapper_private(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Entry point for private _run(run_response, run_messages)."""
+        run_response = args[0] if len(args) > 0 else kwargs.get("run_response")
+        run_messages = args[1] if len(args) > 1 else kwargs.get("run_messages")
+        input_data = {"run_response": run_response, "run_messages": run_messages}
+        return _create_run_span(wrapped, instance, args, kwargs, input_data)
+
+    def _run_wrapper_public(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Entry point for public run(input)."""
+        input_arg = args[0] if len(args) > 0 else kwargs.get("input")
+        input_data = {"input": input_arg}
+        return _create_run_span(wrapped, instance, args, kwargs, input_data)
+
     # Wrap private method if it exists, otherwise wrap public method
     if hasattr(Agent, "_run"):
-        wrap_function_wrapper(Agent, "_run", run_wrapper)
+        wrap_function_wrapper(Agent, "_run", _run_wrapper_private)
     elif hasattr(Agent, "run"):
-        wrap_function_wrapper(Agent, "run", run_wrapper)
+        wrap_function_wrapper(Agent, "run", _run_wrapper_public)
 
-    async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+    async def _create_arun_span(wrapped: Any, instance: Any, args: Any, kwargs: Any, input_data: dict):
+        """Shared logic to create span and execute arun method."""
         agent_name = getattr(instance, "name", None) or "Agent"
         span_name = f"{agent_name}.arun"
-
-        # Handle both private _arun(run_response, input) and public arun(input) signatures
-        first_arg = args[0] if len(args) > 0 else kwargs.get("run_response") or kwargs.get("input")
-        second_arg = args[1] if len(args) > 1 else kwargs.get("input")
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": first_arg, "input": second_arg} if len(args) > 1 else {"input": first_arg},
-            metadata={**omit(kwargs, ["run_response", "input"]), **extract_metadata(instance, "agent")},
+            input=input_data,
+            metadata={**omit(kwargs, list(input_data.keys())), **extract_metadata(instance, "agent")},
         ) as span:
             result = await wrapped(*args, **kwargs)
             span.log(
@@ -68,11 +75,24 @@ def wrap_agent(Agent: Any) -> Any:
             )
             return result
 
+    async def _arun_wrapper_private(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Entry point for private _arun(run_response, input)."""
+        run_response = args[0] if len(args) > 0 else kwargs.get("run_response")
+        input_arg = args[1] if len(args) > 1 else kwargs.get("input")
+        input_data = {"run_response": run_response, "input": input_arg}
+        return await _create_arun_span(wrapped, instance, args, kwargs, input_data)
+
+    async def _arun_wrapper_public(wrapped: Any, instance: Any, args: Any, kwargs: Any):
+        """Entry point for public arun(input)."""
+        input_arg = args[0] if len(args) > 0 else kwargs.get("input")
+        input_data = {"input": input_arg}
+        return await _create_arun_span(wrapped, instance, args, kwargs, input_data)
+
     # Wrap private method if it exists, otherwise wrap public method
     if hasattr(Agent, "_arun"):
-        wrap_function_wrapper(Agent, "_arun", arun_wrapper)
+        wrap_function_wrapper(Agent, "_arun", _arun_wrapper_private)
     elif hasattr(Agent, "arun"):
-        wrap_function_wrapper(Agent, "arun", arun_wrapper)
+        wrap_function_wrapper(Agent, "arun", _arun_wrapper_public)
 
     def run_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Agent"
