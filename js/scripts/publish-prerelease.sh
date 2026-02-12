@@ -60,7 +60,7 @@ echo ""
 
 # Save current version for reference
 cd "$JS_DIR"
-CURRENT_VERSION=$(node -p "require('./package.json').version")
+CURRENT_VERSION=$(cat VERSION)
 echo "Current version: $CURRENT_VERSION"
 
 # Set the explicit version (updates package.json temporarily)

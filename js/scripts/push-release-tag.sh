@@ -29,7 +29,7 @@ TAG_PREFIX="js-sdk-v"
 COMMIT=$(git rev-parse --short HEAD)
 
 # Extract version from package.json
-VERSION=$(node -p "require('$JS_DIR/package.json').version")
+VERSION=$(cat "$JS_DIR/VERSION")
 TAG="${TAG_PREFIX}${VERSION}"
 
 # Validation before pushing
