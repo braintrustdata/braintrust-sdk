@@ -617,6 +617,7 @@ export class CodeParameters {
   async toFunctionDefinition(
     projectNameToId: ProjectNameIdMap,
   ): Promise<FunctionEvent> {
+    const schema = serializeEvalParameterstoParametersSchema(this.schema);
     return {
       project_id: await projectNameToId.resolve(this.project),
       name: this.name,
@@ -625,8 +626,8 @@ export class CodeParameters {
       function_type: "parameters",
       function_data: {
         type: "parameters",
-        data: {},
-        __schema: serializeEvalParameterstoParametersSchema(this.schema),
+        data: getDefaultDataFromParametersSchema(schema),
+        __schema: schema,
       },
       if_exists: this.ifExists,
       metadata: this.metadata,
@@ -736,6 +737,20 @@ export function serializeEvalParameterstoParametersSchema(
     ...(required.length > 0 ? { required } : {}),
     additionalProperties: true,
   };
+}
+
+function getDefaultDataFromParametersSchema(
+  schema: ParametersSchema,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(schema.properties).flatMap(([name, value]) => {
+      if (!("default" in value)) {
+        return [];
+      }
+
+      return [[name, value.default]];
+    }),
+  );
 }
 
 export function serializeRemoteEvalParametersContainer(
