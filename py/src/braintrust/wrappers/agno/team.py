@@ -24,14 +24,15 @@ def wrap_team(Team: Any) -> Any:
         agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.run"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        run_messages = args[1] if args else kwargs.get("run_messages")
+        # Handle both private _run(run_response, run_messages) and public run(input) signatures
+        run_response = args[0] if len(args) > 0 else kwargs.get("run_response") or kwargs.get("input")
+        run_messages = args[1] if len(args) > 1 else kwargs.get("run_messages")
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": run_response, "run_messages": run_messages},
-            metadata={**omit(kwargs, ["run_response", "run_messages"]), **extract_metadata(instance, "team")},
+            input={"run_response": run_response, "run_messages": run_messages} if run_messages else {"input": run_response},
+            metadata={**omit(kwargs, ["run_response", "run_messages", "input"]), **extract_metadata(instance, "team")},
         ) as span:
             result = wrapped(*args, **kwargs)
             span.log(
@@ -40,20 +41,24 @@ def wrap_team(Team: Any) -> Any:
             )
             return result
 
+    # Wrap private method if it exists, otherwise wrap public method
     if hasattr(Team, "_run"):
         wrap_function_wrapper(Team, "_run", run_wrapper)
+    elif hasattr(Team, "run"):
+        wrap_function_wrapper(Team, "run", run_wrapper)
 
     async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Team"
         span_name = f"{agent_name}.arun"
 
-        run_response = args[0] if args else kwargs.get("run_response")
-        input = args[1] if args else kwargs.get("input")
+        # Handle both private _arun(run_response, input) and public arun(input) signatures
+        first_arg = args[0] if len(args) > 0 else kwargs.get("run_response") or kwargs.get("input")
+        second_arg = args[1] if len(args) > 1 else kwargs.get("input")
 
         with start_span(
             name=span_name,
             type=SpanTypeAttribute.TASK,
-            input={"run_response": run_response, "input": input},
+            input={"run_response": first_arg, "input": second_arg} if len(args) > 1 else {"input": first_arg},
             metadata={**omit(kwargs, ["run_response", "input"]), **extract_metadata(instance, "team")},
         ) as span:
             result = await wrapped(*args, **kwargs)
@@ -63,8 +68,11 @@ def wrap_team(Team: Any) -> Any:
             )
             return result
 
+    # Wrap private method if it exists, otherwise wrap public method
     if hasattr(Team, "_arun"):
         wrap_function_wrapper(Team, "_arun", arun_wrapper)
+    elif hasattr(Team, "arun"):
+        wrap_function_wrapper(Team, "arun", arun_wrapper)
 
     def run_stream_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Team"
