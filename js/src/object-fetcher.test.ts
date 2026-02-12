@@ -15,7 +15,9 @@ type MockBtqlResponse = {
   cursor?: string | null;
 };
 
-function createPostMock(response: MockBtqlResponse = { data: [], cursor: null }) {
+function createPostMock(
+  response: MockBtqlResponse = { data: [], cursor: null },
+) {
   return vi.fn().mockResolvedValue({
     json: vi.fn().mockResolvedValue(response),
   });
