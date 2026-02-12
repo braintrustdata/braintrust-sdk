@@ -596,9 +596,15 @@ describe("Dataset _internal_btql", () => {
   test("DEFAULT_FETCH_BATCH_SIZE used when _internal_btql has no limit", async () => {
     const { mockState, mockPost } = createMockStateWithApiConn();
 
-    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined, {
-      where: { op: "eq", left: "foo", right: "bar" },
-    });
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+      {
+        where: { op: "eq", left: "foo", right: "bar" },
+      },
+    );
 
     const records: unknown[] = [];
     for await (const record of dataset.fetch()) {
@@ -606,7 +612,9 @@ describe("Dataset _internal_btql", () => {
     }
 
     expect(mockPost).toHaveBeenCalledTimes(1);
-    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    const body = mockPost.mock.calls[0][1] as {
+      query: Record<string, unknown>;
+    };
     expect(body.query.limit).toBe(DEFAULT_FETCH_BATCH_SIZE);
   });
 
@@ -614,7 +622,12 @@ describe("Dataset _internal_btql", () => {
     const { mockState, mockPost } = createMockStateWithApiConn();
     const customBatchSize = 200;
 
-    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined);
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+    );
 
     const records: unknown[] = [];
     for await (const record of dataset.fetch({ batchSize: customBatchSize })) {
@@ -622,7 +635,9 @@ describe("Dataset _internal_btql", () => {
     }
 
     expect(mockPost).toHaveBeenCalledTimes(1);
-    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    const body = mockPost.mock.calls[0][1] as {
+      query: Record<string, unknown>;
+    };
     expect(body.query.limit).toBe(customBatchSize);
   });
 
@@ -630,9 +645,15 @@ describe("Dataset _internal_btql", () => {
     const btqlLimit = 1;
     const { mockState, mockPost } = createMockStateWithApiConn();
 
-    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined, {
-      limit: btqlLimit,
-    });
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+      {
+        limit: btqlLimit,
+      },
+    );
 
     const records: unknown[] = [];
     for await (const record of dataset.fetch({ batchSize: 500 })) {
@@ -640,14 +661,21 @@ describe("Dataset _internal_btql", () => {
     }
 
     expect(mockPost).toHaveBeenCalledTimes(1);
-    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    const body = mockPost.mock.calls[0][1] as {
+      query: Record<string, unknown>;
+    };
     expect(body.query.limit).toBe(btqlLimit);
   });
 
   test("undefined _internal_btql does not break query", async () => {
     const { mockState, mockPost } = createMockStateWithApiConn();
 
-    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined);
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+    );
 
     const records: unknown[] = [];
     for await (const record of dataset.fetch()) {
@@ -655,7 +683,61 @@ describe("Dataset _internal_btql", () => {
     }
 
     expect(mockPost).toHaveBeenCalledTimes(1);
-    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    const body = mockPost.mock.calls[0][1] as {
+      query: Record<string, unknown>;
+    };
     expect(body.query.limit).toBe(DEFAULT_FETCH_BATCH_SIZE);
+  });
+
+  test("_internal_btql cursor is excluded so pagination cursor is not overwritten", async () => {
+    const mockPost = vi.fn();
+    mockPost
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [{ id: "1", input: "a", expected: "a" }],
+            cursor: "page2-cursor",
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [{ id: "2", input: "b", expected: "b" }],
+            cursor: null,
+          }),
+      });
+    const mockState = {
+      apiConn: () => ({ post: mockPost }),
+    } as unknown as BraintrustState;
+
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+      {
+        cursor: "stale-cursor-from-user",
+        limit: 1,
+      },
+    );
+
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch()) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    const firstCallQuery = (
+      mockPost.mock.calls[0][1] as { query: Record<string, unknown> }
+    ).query;
+    const secondCallQuery = (
+      mockPost.mock.calls[1][1] as { query: Record<string, unknown> }
+    ).query;
+
+    expect(firstCallQuery.cursor).toBeUndefined();
+    expect(secondCallQuery.cursor).toBe("page2-cursor");
+    expect(records).toHaveLength(2);
   });
 });

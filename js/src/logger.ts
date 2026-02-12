@@ -5480,6 +5480,8 @@ export class ObjectFetcher<RecordType>
     let cursor = undefined;
     let iterations = 0;
     while (true) {
+      const { cursor: _btqlCursor, ...internalBtqlRest } =
+        this._internal_btql ?? {};
       const resp = await state.apiConn().post(
         `btql`,
         {
@@ -5504,7 +5506,7 @@ export class ObjectFetcher<RecordType>
             },
             cursor,
             limit,
-            ...(this._internal_btql ?? {}),
+            ...internalBtqlRest,
           },
           use_columnstore: false,
           brainstore_realtime: true,
