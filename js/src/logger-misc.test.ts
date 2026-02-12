@@ -10,6 +10,8 @@ import {
   BaseAttachment,
   Attachment,
   ExternalAttachment,
+  DEFAULT_FETCH_BATCH_SIZE,
+  Dataset,
   initDataset,
   initExperiment,
   initLogger,
@@ -531,4 +533,129 @@ test("disable logging", async () => {
   await bgLogger.flush();
   expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
   expect(submittedItems.length).toEqual(0);
+});
+
+describe("Dataset _internal_btql", () => {
+  /** Create a mock state with controllable apiConn.post for testing BTQL queries. */
+  function createMockStateWithApiConn() {
+    const mockPost = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: [
+            { id: "1", input: "test1", expected: "output1" },
+            { id: "2", input: "test2", expected: "output2" },
+          ],
+          cursor: null,
+        }),
+    });
+    const mockState = {
+      apiConn: () => ({ post: mockPost }),
+    } as unknown as BraintrustState;
+    return { mockState, mockPost };
+  }
+
+  /** Create metadata for Dataset constructor (no API calls). */
+  function createLazyMetadata() {
+    return new LazyValue(async () => ({
+      project: { id: "test-project", name: "test-project", fullInfo: {} },
+      dataset: { id: "test-dataset", name: "test-dataset", fullInfo: {} },
+    }));
+  }
+
+  test("_internal_btql limit is not overwritten by DEFAULT_FETCH_BATCH_SIZE", async () => {
+    const customLimit = 50;
+    const { mockState, mockPost } = createMockStateWithApiConn();
+
+    const dataset = new Dataset(
+      mockState,
+      createLazyMetadata(),
+      undefined,
+      undefined,
+      {
+        limit: customLimit,
+        where: { op: "eq", left: "foo", right: "bar" },
+      },
+    );
+
+    // Consume the async iterator to trigger the BTQL request
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch()) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const callArgs = mockPost.mock.calls[0];
+    const body = callArgs[1] as { query: Record<string, unknown> };
+    const query = body.query;
+
+    expect(query.limit).toBe(customLimit);
+    expect(query.where).toEqual({ op: "eq", left: "foo", right: "bar" });
+  });
+
+  test("DEFAULT_FETCH_BATCH_SIZE used when _internal_btql has no limit", async () => {
+    const { mockState, mockPost } = createMockStateWithApiConn();
+
+    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined, {
+      where: { op: "eq", left: "foo", right: "bar" },
+    });
+
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch()) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    expect(body.query.limit).toBe(DEFAULT_FETCH_BATCH_SIZE);
+  });
+
+  test("custom batchSize in fetch() overrides when _internal_btql has no limit", async () => {
+    const { mockState, mockPost } = createMockStateWithApiConn();
+    const customBatchSize = 200;
+
+    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined);
+
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch({ batchSize: customBatchSize })) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    expect(body.query.limit).toBe(customBatchSize);
+  });
+
+  test("_internal_btql limit wins over fetch batchSize", async () => {
+    const btqlLimit = 1;
+    const { mockState, mockPost } = createMockStateWithApiConn();
+
+    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined, {
+      limit: btqlLimit,
+    });
+
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch({ batchSize: 500 })) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    expect(body.query.limit).toBe(btqlLimit);
+  });
+
+  test("undefined _internal_btql does not break query", async () => {
+    const { mockState, mockPost } = createMockStateWithApiConn();
+
+    const dataset = new Dataset(mockState, createLazyMetadata(), undefined, undefined);
+
+    const records: unknown[] = [];
+    for await (const record of dataset.fetch()) {
+      records.push(record);
+    }
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const body = mockPost.mock.calls[0][1] as { query: Record<string, unknown> };
+    expect(body.query.limit).toBe(DEFAULT_FETCH_BATCH_SIZE);
+  });
 });
