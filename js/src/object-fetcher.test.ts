@@ -15,12 +15,16 @@ type MockBtqlResponse = {
   cursor?: string | null;
 };
 
+function createPostResponse(response: MockBtqlResponse) {
+  return {
+    json: vi.fn().mockResolvedValue(response),
+  };
+}
+
 function createPostMock(
   response: MockBtqlResponse = { data: [], cursor: null },
 ) {
-  return vi.fn().mockResolvedValue({
-    json: vi.fn().mockResolvedValue(response),
-  });
+  return vi.fn().mockResolvedValue(createPostResponse(response));
 }
 
 class TestObjectFetcher extends ObjectFetcher<TestRecord> {
@@ -51,8 +55,11 @@ async function triggerFetch(
   await fetcher.fetchedData(options);
 }
 
-function getBtqlQuery(postMock: ReturnType<typeof createPostMock>) {
-  const call = postMock.mock.calls[0];
+function getBtqlQuery(
+  postMock: ReturnType<typeof createPostMock>,
+  callIndex = 0,
+) {
+  const call = postMock.mock.calls[callIndex];
   expect(call).toBeDefined();
   const requestBody = call[1] as { query: Record<string, unknown> };
   return requestBody.query;
@@ -92,5 +99,34 @@ describe("ObjectFetcher internal BTQL limit handling", () => {
 
     const query = getBtqlQuery(postMock);
     expect(query.limit).toBe(17);
+  });
+
+  test("does not allow _internal_btql cursor to override pagination cursor", async () => {
+    const postMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createPostResponse({
+          data: [{ id: "record-1" }],
+          cursor: "next-page-cursor",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createPostResponse({
+          data: [{ id: "record-2" }],
+          cursor: null,
+        }),
+      );
+    const fetcher = new TestObjectFetcher(postMock, {
+      cursor: "stale-cursor",
+      limit: 1,
+    });
+
+    await triggerFetch(fetcher);
+
+    expect(postMock).toHaveBeenCalledTimes(2);
+    const firstQuery = getBtqlQuery(postMock, 0);
+    const secondQuery = getBtqlQuery(postMock, 1);
+    expect(firstQuery.cursor).toBeUndefined();
+    expect(secondQuery.cursor).toBe("next-page-cursor");
   });
 });
