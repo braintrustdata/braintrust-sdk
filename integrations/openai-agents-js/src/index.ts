@@ -322,6 +322,13 @@ export class OpenAIAgentsTraceProcessor {
     const traceData = this.traceSpans.get(trace.traceId);
 
     if (traceData) {
+      // End any child spans that are still open. This protects against a race
+      // where the OpenAI SDK emits onTraceEnd before our onSpanEnd handler runs.
+      for (const [, braintrustSpan] of traceData.childSpans) {
+        braintrustSpan.end();
+      }
+      traceData.childSpans.clear();
+
       traceData.rootSpan.log({
         input: traceData.metadata.firstInput,
         output: traceData.metadata.lastOutput,
