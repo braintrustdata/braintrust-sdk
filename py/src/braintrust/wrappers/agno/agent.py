@@ -40,7 +40,8 @@ def wrap_agent(Agent: Any) -> Any:
             )
             return result
 
-    wrap_function_wrapper(Agent, "_run", run_wrapper)
+    if hasattr(Agent, "_run"):
+        wrap_function_wrapper(Agent, "_run", run_wrapper)
 
     async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Agent"

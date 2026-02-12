@@ -40,7 +40,8 @@ def wrap_team(Team: Any) -> Any:
             )
             return result
 
-    wrap_function_wrapper(Team, "_run", run_wrapper)
+    if hasattr(Team, "_run"):
+        wrap_function_wrapper(Team, "_run", run_wrapper)
 
     async def arun_wrapper(wrapped: Any, instance: Any, args: Any, kwargs: Any):
         agent_name = getattr(instance, "name", None) or "Team"
