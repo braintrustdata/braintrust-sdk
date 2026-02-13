@@ -1,6 +1,7 @@
 import nodeModulesPaths from "../jest/nodeModulesPaths";
 import path, { dirname } from "path";
 import { _internalGetGlobalState } from "../../logger";
+import { BRAINTRUST_STATE_SYMBOL_NAME } from "../../symbol-name";
 import { EvaluatorFile } from "../../framework";
 
 function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
@@ -29,7 +30,8 @@ export function loadModule({
       reporters: {},
     };
     globalThis._lazy_load = true;
-    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
+    const state = _internalGetGlobalState();
+    (globalThis as any)[Symbol.for(BRAINTRUST_STATE_SYMBOL_NAME)] = state;
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "module", "__filename", "__dirname", moduleText)(

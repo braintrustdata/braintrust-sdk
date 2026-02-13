@@ -17,4 +17,7 @@ export default defineConfig({
           alias: createOtelAliases(cwd),
         }
       : {},
+  test: {
+    include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
+  },
 });

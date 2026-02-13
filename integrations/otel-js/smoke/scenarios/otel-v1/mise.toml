@@ -1,0 +1,6 @@
+[tools]
+node = "22"
+pnpm = "10.26.2"
+
+[env]
+_.file = ".env.local"

@@ -1,0 +1,46 @@
+name: templates-nunjucks-js
+
+on:
+  pull_request:
+    paths:
+      - "integrations/templates-nunjucks/**"
+      - "js/**"
+      - ".github/workflows/templates-nunjucks-build-test.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/templates-nunjucks/**"
+      - "js/**"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build braintrust
+        working-directory: js
+        run: pnpm run build
+
+      - name: Build @braintrust/templates-nunjucks-js
+        working-directory: integrations/templates-nunjucks
+        run: pnpm run build
+
+      - name: Run @braintrust/templates-nunjucks-js tests
+        working-directory: integrations/templates-nunjucks
+        run: pnpm run test
