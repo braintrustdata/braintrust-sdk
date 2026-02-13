@@ -131,6 +131,7 @@ class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
         AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
         | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
     )
+    idempotency_key: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
@@ -543,7 +544,7 @@ class EnvVar(TypedDict):
     """
     Optional classification for the secret (for example, the AI provider name)
     """
-    secret_category: NotRequired[Literal['env_var', 'ai_provider'] | None]
+    secret_category: NotRequired[Literal['env_var', 'ai_provider', 'sandbox_provider'] | None]
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
@@ -834,7 +835,17 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier', 'parameters'
+    'prompt',
+    'tool',
+    'scorer',
+    'task',
+    'workflow',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -842,7 +853,17 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classif
 
 
 FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 """
 The type of global function. Defaults to 'scorer'.
@@ -850,7 +871,17 @@ The type of global function. Defaults to 'scorer'.
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -1689,7 +1720,7 @@ class ProjectSettingsSpanFieldOrderItem(TypedDict):
 
 class ProjectSettingsRemoteEvalSource(TypedDict):
     url: str
-    name: str
+    name: NotRequired[str | None]
     description: NotRequired[str | None]
 
 
@@ -2076,6 +2107,96 @@ class TaskTask12(TaskTask4, TaskTask7):
     pass
 
 
+class ScoreScore(TypedDict):
+    function_id: str
+    """
+    The ID of the function
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore1(TypedDict):
+    project_name: str
+    """
+    The name of the project containing the function
+    """
+    slug: str
+    """
+    The slug of the function
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore2(TypedDict):
+    global_function: str
+    """
+    The name of the global function. Currently, the global namespace includes the functions in autoevals
+    """
+    function_type: NotRequired[FunctionTypeEnum | None]
+
+
+class ScoreScore3(TypedDict):
+    prompt_session_id: str
+    """
+    The ID of the prompt session
+    """
+    prompt_session_function_id: str
+    """
+    The ID of the function in the prompt session
+    """
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
+
+
+class ScoreScore4InlineContext(TypedDict):
+    runtime: Literal['node', 'python', 'browser', 'quickjs']
+    version: str
+
+
+class ScoreScore4(TypedDict):
+    inline_context: ScoreScore4InlineContext
+    code: str
+    """
+    The inline code to execute
+    """
+    name: NotRequired[str | None]
+    """
+    The name of the inline code function
+    """
+
+
+class ScoreScore7(TypedDict):
+    pass
+
+
+class ScoreScore8(ScoreScore, ScoreScore7):
+    pass
+
+
+class ScoreScore9(ScoreScore1, ScoreScore7):
+    pass
+
+
+class ScoreScore10(ScoreScore2, ScoreScore7):
+    pass
+
+
+class ScoreScore11(ScoreScore3, ScoreScore7):
+    pass
+
+
+class ScoreScore12(ScoreScore4, ScoreScore7):
+    pass
+
+
 class ParentParentRowIds(TypedDict):
     id: str
     """
@@ -2122,6 +2243,27 @@ class RunEvalMcpAuth(TypedDict):
     oauth_token: NotRequired[str | None]
     """
     The OAuth token to use
+    """
+
+
+class SandboxDataSandboxSpec(TypedDict):
+    provider: Literal['modal']
+    snapshot_ref: str
+    """
+    sandbox snapshot ref
+    """
+
+
+class SandboxData(TypedDict):
+    type: Literal['sandbox']
+    sandbox_spec: SandboxDataSandboxSpec
+    entrypoints: NotRequired[Sequence[str] | None]
+    """
+    Which entrypoints to execute in the sandbox
+    """
+    evaluator_definitions: NotRequired[Any | None]
+    """
+    The evaluator definitions returned from the sandbox list command
     """
 
 
@@ -2219,7 +2361,7 @@ class SpanScope(TypedDict):
 
 
 SpanType: TypeAlias = Literal[
-    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier', 'review'
 ]
 """
 Type of the span, for display purposes only
@@ -2263,62 +2405,32 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
-class TopicMapReportSettings(TypedDict):
-    algorithm: Literal['hdbscan', 'kmeans', 'hierarchical']
-    dimension_reduction: Literal['umap', 'pca', 'none']
-    vector_field: str
+class TopicMapData(TypedDict):
+    type: Literal['topic_map']
+    source_facet: str
+    """
+    The facet field name to use as input for classification
+    """
     embedding_model: str
-    n_clusters: NotRequired[int | None]
-    umap_dimensions: NotRequired[int | None]
-    min_cluster_size: NotRequired[int | None]
-    min_samples: NotRequired[int | None]
-
-
-class TopicMapReportQuerySettings(TypedDict):
-    hierarchy_threshold: NotRequired[int | None]
-    auto_naming: NotRequired[bool | None]
-    skip_cache: NotRequired[bool | None]
-    viz_mode: NotRequired[Literal['bar', 'scatter'] | None]
-    naming_model: NotRequired[str | None]
-
-
-class TopicMapReportClusterSample(TypedDict):
-    id: str
-    text: str
-    root_span_id: str
-    span_id: str
-
-
-class TopicMapReportCluster(TypedDict):
-    cluster_id: float
-    parent_cluster_id: NotRequired[float | None]
-    topic_id: str
-    count: float
-    sample_texts: Sequence[str]
-    samples: Sequence[TopicMapReportClusterSample]
-    name: NotRequired[str | None]
-    description: NotRequired[str | None]
-    keywords: NotRequired[Sequence[str] | None]
-    centroid: NotRequired[Sequence[float] | None]
-    parent_id: NotRequired[float | None]
-    is_leaf: NotRequired[bool | None]
-    depth: NotRequired[float | None]
-
-
-class TopicMapReportEmbeddingPoint(TypedDict):
-    x: float
-    y: float
-    cluster: float
-    text: NotRequired[str | None]
-
-
-class TopicMapReport(TypedDict):
-    version: Literal[1]
-    created_at: NotRequired[str | None]
-    settings: TopicMapReportSettings
-    query_settings: TopicMapReportQuerySettings
-    clusters: Sequence[TopicMapReportCluster]
-    embedding_points: NotRequired[Sequence[TopicMapReportEmbeddingPoint] | None]
+    """
+    The embedding model to use for embedding facet values
+    """
+    bundle_key: NotRequired[str | None]
+    """
+    Key of the topic map bundle in code_bundles bucket
+    """
+    report_key: NotRequired[str | None]
+    """
+    Key of the clustering report in code_bundles bucket
+    """
+    topic_names: NotRequired[Mapping[str, str] | None]
+    """
+    Mapping from topic_id to topic name
+    """
+    distance_threshold: NotRequired[float | None]
+    """
+    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    """
 
 
 class TraceScope(TypedDict):
@@ -2351,6 +2463,10 @@ class TriggeredFunctionState(TypedDict):
     completed_xact_id: NotRequired[str | None]
     """
     The xact_id when this function completed (matches triggered_xact_id if done)
+    """
+    idempotency_key: NotRequired[str | None]
+    """
+    Deterministic key of the function definition + input version used to skip unchanged reruns
     """
     attempts: NotRequired[int | None]
     """
@@ -2583,6 +2699,28 @@ class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreproces
 
 
 Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+
+
+class BatchedFacetDataTopicMaps(TypedDict):
+    function_name: str
+    """
+    The name of the topic map function
+    """
+    topic_map_id: NotRequired[str | None]
+    """
+    The id of the topic map function
+    """
+    topic_map_data: TopicMapData
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
+    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
+    """
+    Topic maps that depend on facets in this batch, keyed by source facet name
+    """
 
 
 ChatCompletionContentPart: TypeAlias = (
@@ -3127,52 +3265,9 @@ class SpanAttributes(TypedDict):
     type: NotRequired[SpanType | None]
 
 
-class TopicMapData(TypedDict):
-    type: Literal['topic_map']
-    source_facet: str
-    """
-    The facet field name to use as input for classification
-    """
-    embedding_model: str
-    """
-    The embedding model to use for embedding facet values
-    """
-    bundle_key: str
-    """
-    Key of the topic map bundle in code_bundles bucket
-    """
-    distance_threshold: NotRequired[float | None]
-    """
-    Maximum distance to nearest centroid. If exceeded, returns no_match.
-    """
-    report: NotRequired[TopicMapReport | None]
-
-
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
-
-
-class BatchedFacetDataTopicMaps(TypedDict):
-    function_name: str
-    """
-    The name of the topic map function
-    """
-    topic_map_id: NotRequired[str | None]
-    """
-    The id of the topic map function
-    """
-    topic_map_data: TopicMapData
-
-
-class BatchedFacetData(TypedDict):
-    type: Literal['batched_facet']
-    preprocessor: NotRequired[Preprocessor | None]
-    facets: Sequence[BatchedFacetDataFacet]
-    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
-    """
-    Topic maps that depend on facets in this batch, keyed by source facet name
-    """
 
 
 class ExperimentEvent(TypedDict):
@@ -3483,6 +3578,116 @@ class TaskTask14(TaskTask6, TaskTask7):
 Task: TypeAlias = TaskTask8 | TaskTask9 | TaskTask10 | TaskTask11 | TaskTask12 | TaskTask13 | TaskTask14
 
 
+class ScoreScore5(TypedDict):
+    inline_prompt: NotRequired[PromptData | None]
+    inline_function: Mapping[str, Any]
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
+    """
+    The name of the inline function
+    """
+
+
+class ScoreScore6(TypedDict):
+    inline_prompt: PromptData
+    function_type: NotRequired[FunctionTypeEnum | None]
+    name: NotRequired[str | None]
+    """
+    The name of the inline prompt
+    """
+
+
+class ScoreScore13(ScoreScore5, ScoreScore7):
+    pass
+
+
+class ScoreScore14(ScoreScore6, ScoreScore7):
+    pass
+
+
+Score: TypeAlias = ScoreScore8 | ScoreScore9 | ScoreScore10 | ScoreScore11 | ScoreScore12 | ScoreScore13 | ScoreScore14
+
+
+class RunEval(TypedDict):
+    project_id: str
+    """
+    Unique identifier for the project to run the eval in
+    """
+    data: RunEvalData | RunEvalData1 | RunEvalData2
+    """
+    The dataset to use
+    """
+    name: NotRequired[str | None]
+    """
+    The name of the eval to run when multiple evals available
+    """
+    parameters: NotRequired[Mapping[str, Any] | None]
+    """
+    Values for any parameters used in the eval
+    """
+    task: Task
+    scores: Sequence[Score]
+    """
+    The functions to score the eval on
+    """
+    experiment_name: NotRequired[str | None]
+    """
+    An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
+    """
+    metadata: NotRequired[Mapping[str, Any] | None]
+    """
+    Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
+    """
+    parent: NotRequired[Parent | None]
+    stream: NotRequired[bool | None]
+    """
+    Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
+    """
+    trial_count: NotRequired[float | None]
+    """
+    The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    """
+    is_public: NotRequired[bool | None]
+    """
+    Whether the experiment should be public. Defaults to false.
+    """
+    timeout: NotRequired[float | None]
+    """
+    The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
+    """
+    max_concurrency: NotRequired[float | None]
+    """
+    The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.
+    """
+    base_experiment_name: NotRequired[str | None]
+    """
+    An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
+    """
+    base_experiment_id: NotRequired[str | None]
+    """
+    An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
+    """
+    git_metadata_settings: NotRequired[GitMetadataSettings | None]
+    repo_info: NotRequired[RepoInfo | None]
+    strict: NotRequired[bool | None]
+    """
+    If true, throw an error if one of the variables in the prompt is not present in the input
+    """
+    stop_token: NotRequired[str | None]
+    """
+    The token to stop the run
+    """
+    extra_messages: NotRequired[str | None]
+    """
+    A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.
+    """
+    tags: NotRequired[Sequence[str] | None]
+    """
+    Optional tags that will be added to the experiment.
+    """
+    mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
+
+
 class View(TypedDict):
     id: str
     """
@@ -3564,7 +3769,7 @@ FunctionId: TypeAlias = (
     | FunctionIdFunctionId6
 )
 """
-Options for identifying a function
+The sandbox function ID
 """
 
 
@@ -3664,76 +3869,17 @@ class Prompt(TypedDict):
     function_type: NotRequired[FunctionTypeEnumNullish | None]
 
 
-class RunEval(TypedDict):
-    project_id: str
+class SandboxTaskData(TypedDict):
+    type: Literal['sandbox_task']
+    function_id: FunctionId
+    eval_name: str
     """
-    Unique identifier for the project to run the eval in
+    Which eval to run from the sandbox
     """
-    data: RunEvalData | RunEvalData1 | RunEvalData2
+    parameters: NotRequired[Mapping[str, Any] | None]
     """
-    The dataset to use
+    Eval parameter values
     """
-    task: Task
-    scores: Sequence[FunctionId]
-    """
-    The functions to score the eval on
-    """
-    experiment_name: NotRequired[str | None]
-    """
-    An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
-    """
-    metadata: NotRequired[Mapping[str, Any] | None]
-    """
-    Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
-    """
-    parent: NotRequired[Parent | None]
-    stream: NotRequired[bool | None]
-    """
-    Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
-    """
-    trial_count: NotRequired[float | None]
-    """
-    The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
-    """
-    is_public: NotRequired[bool | None]
-    """
-    Whether the experiment should be public. Defaults to false.
-    """
-    timeout: NotRequired[float | None]
-    """
-    The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
-    """
-    max_concurrency: NotRequired[float | None]
-    """
-    The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.
-    """
-    base_experiment_name: NotRequired[str | None]
-    """
-    An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
-    """
-    base_experiment_id: NotRequired[str | None]
-    """
-    An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
-    """
-    git_metadata_settings: NotRequired[GitMetadataSettings | None]
-    repo_info: NotRequired[RepoInfo | None]
-    strict: NotRequired[bool | None]
-    """
-    If true, throw an error if one of the variables in the prompt is not present in the input
-    """
-    stop_token: NotRequired[str | None]
-    """
-    The token to stop the run
-    """
-    extra_messages: NotRequired[str | None]
-    """
-    A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.
-    """
-    tags: NotRequired[Sequence[str] | None]
-    """
-    Optional tags that will be added to the experiment.
-    """
-    mcp_auth: NotRequired[Mapping[str, RunEvalMcpAuth] | None]
 
 
 FunctionData: TypeAlias = (
@@ -3746,6 +3892,8 @@ FunctionData: TypeAlias = (
     | BatchedFacetData
     | FunctionDataFunctionData4
     | TopicMapData
+    | SandboxData
+    | SandboxTaskData
 )
 
 

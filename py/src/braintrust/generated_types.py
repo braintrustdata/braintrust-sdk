@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 2822255bed426d5442adc880a8f71b8a378de3d4) -- do not modify"""
+"""Auto-generated file (internal git SHA 6a76cdea22452681a5a32be11b5767d3bb8a8a1b) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -91,6 +91,8 @@ from ._generated_types import (
     RetentionObjectType,
     Role,
     RunEval,
+    SandboxData,
+    SandboxTaskData,
     SavedFunctionId,
     ServiceToken,
     SpanAttributes,
@@ -102,7 +104,6 @@ from ._generated_types import (
     StreamingMode,
     ToolFunctionDefinition,
     TopicMapData,
-    TopicMapReport,
     TraceScope,
     TriggeredFunctionState,
     UploadStatus,
@@ -206,6 +207,8 @@ __all__ = [
     "RunEval",
     "SSEConsoleEventData",
     "SSEProgressEventData",
+    "SandboxData",
+    "SandboxTaskData",
     "SavedFunctionId",
     "ServiceToken",
     "SpanAttributes",
@@ -215,7 +218,6 @@ __all__ = [
     "StreamingMode",
     "ToolFunctionDefinition",
     "TopicMapData",
-    "TopicMapReport",
     "TraceScope",
     "TriggeredFunctionState",
     "UploadStatus",

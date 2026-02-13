@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 0b04b7522464ca9495413174b0034dc457bf6356) -- do not modify
+// Auto-generated file (internal git SHA 6a76cdea22452681a5a32be11b5767d3bb8a8a1b) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -135,6 +135,7 @@ export type ApiKeyType = z.infer<typeof ApiKey>;
 export const TriggeredFunctionState = z.object({
   triggered_xact_id: z.string(),
   completed_xact_id: z.union([z.string(), z.null()]).optional(),
+  idempotency_key: z.union([z.string(), z.null()]).optional(),
   attempts: z.number().int().gte(0).optional().default(0),
   scope: z.union([
     z.object({ type: z.literal("span") }),
@@ -173,6 +174,7 @@ export const AsyncScoringControl = z.union([
             z.object({ type: z.literal("span") }),
             z.object({ type: z.literal("trace") }),
           ]),
+          idempotency_key: z.string().optional(),
         }),
       )
       .min(1),
@@ -229,6 +231,7 @@ export const FunctionTypeEnum = z.enum([
   "classifier",
   "tag",
   "parameters",
+  "sandbox",
 ]);
 export type FunctionTypeEnumType = z.infer<typeof FunctionTypeEnum>;
 export const NullableSavedFunctionId = z.union([
@@ -247,71 +250,14 @@ export const NullableSavedFunctionId = z.union([
 export type NullableSavedFunctionIdType = z.infer<
   typeof NullableSavedFunctionId
 >;
-export const TopicMapReport = z.object({
-  version: z.literal(1),
-  created_at: z.string().optional(),
-  settings: z.object({
-    algorithm: z.enum(["hdbscan", "kmeans", "hierarchical"]),
-    dimension_reduction: z.enum(["umap", "pca", "none"]),
-    vector_field: z.string(),
-    embedding_model: z.string(),
-    n_clusters: z.union([z.number(), z.null()]).optional(),
-    umap_dimensions: z.union([z.number(), z.null()]).optional(),
-    min_cluster_size: z.union([z.number(), z.null()]).optional(),
-    min_samples: z.union([z.number(), z.null()]).optional(),
-  }),
-  query_settings: z
-    .object({
-      hierarchy_threshold: z.union([z.number(), z.null()]),
-      auto_naming: z.boolean(),
-      skip_cache: z.boolean(),
-      viz_mode: z.enum(["bar", "scatter"]),
-      naming_model: z.string(),
-    })
-    .partial(),
-  clusters: z.array(
-    z.object({
-      cluster_id: z.number(),
-      parent_cluster_id: z.union([z.number(), z.null()]).optional(),
-      topic_id: z.string(),
-      count: z.number(),
-      sample_texts: z.array(z.string()),
-      samples: z.array(
-        z.object({
-          id: z.string(),
-          text: z.string(),
-          root_span_id: z.string(),
-          span_id: z.string(),
-        }),
-      ),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      keywords: z.array(z.string()).optional(),
-      centroid: z.array(z.number()).optional(),
-      parent_id: z.union([z.number(), z.null()]).optional(),
-      is_leaf: z.boolean().optional(),
-      depth: z.number().optional(),
-    }),
-  ),
-  embedding_points: z
-    .array(
-      z.object({
-        x: z.number(),
-        y: z.number(),
-        cluster: z.number(),
-        text: z.string().optional(),
-      }),
-    )
-    .optional(),
-});
-export type TopicMapReportType = z.infer<typeof TopicMapReport>;
 export const TopicMapData = z.object({
   type: z.literal("topic_map"),
   source_facet: z.string(),
   embedding_model: z.string(),
-  bundle_key: z.string(),
+  bundle_key: z.string().optional(),
+  report_key: z.string().optional(),
+  topic_names: z.record(z.string()).optional(),
   distance_threshold: z.number().optional(),
-  report: TopicMapReport.optional(),
 });
 export type TopicMapDataType = z.infer<typeof TopicMapData>;
 export const BatchedFacetData = z.object({
@@ -685,7 +631,7 @@ export const EnvVar = z.object({
     .optional(),
   secret_type: z.union([z.string(), z.null()]).optional(),
   secret_category: z
-    .enum(["env_var", "ai_provider"])
+    .enum(["env_var", "ai_provider", "sandbox_provider"])
     .optional()
     .default("env_var"),
 });
@@ -1057,6 +1003,7 @@ export const FunctionTypeEnumNullish = z.union([
     "classifier",
     "tag",
     "parameters",
+    "sandbox",
   ]),
   z.null(),
 ]);
@@ -1150,97 +1097,16 @@ export const GraphData = z.object({
   edges: z.record(GraphEdge),
 });
 export type GraphDataType = z.infer<typeof GraphData>;
-export const FunctionData = z.union([
-  z.object({ type: z.literal("prompt") }),
-  z.object({
-    type: z.literal("code"),
-    data: z.union([
-      z.object({ type: z.literal("bundle") }).and(CodeBundle),
-      z.object({
-        type: z.literal("inline"),
-        runtime_context: z.object({
-          runtime: z.enum(["node", "python", "browser", "quickjs"]),
-          version: z.string(),
-        }),
-        code: z.string(),
-        code_hash: z.string().optional(),
-      }),
-    ]),
+export const SandboxData = z.object({
+  type: z.literal("sandbox"),
+  sandbox_spec: z.object({
+    provider: z.literal("modal"),
+    snapshot_ref: z.string(),
   }),
-  GraphData,
-  z.object({
-    type: z.literal("remote_eval"),
-    endpoint: z.string(),
-    eval_name: z.string(),
-    parameters: z.object({}).partial().passthrough(),
-    parameters_version: z.union([z.string(), z.null()]).optional(),
-  }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-    function_type: FunctionTypeEnum.optional().default("scorer"),
-    config: z
-      .union([z.object({}).partial().passthrough(), z.null()])
-      .optional(),
-  }),
-  FacetData,
-  BatchedFacetData,
-  z.object({
-    type: z.literal("parameters"),
-    data: z.object({}).partial().passthrough(),
-    __schema: z.object({
-      type: z.literal("object"),
-      properties: z.record(z.object({}).partial().passthrough()),
-      required: z.array(z.string()).optional(),
-      additionalProperties: z.boolean().optional(),
-    }),
-  }),
-  TopicMapData.and(z.unknown()),
-]);
-export type FunctionDataType = z.infer<typeof FunctionData>;
-export const Function = z.object({
-  id: z.string().uuid(),
-  _xact_id: z.string(),
-  project_id: z.string().uuid(),
-  log_id: z.literal("p"),
-  org_id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.union([z.string(), z.null()]).optional(),
-  created: z.union([z.string(), z.null()]).optional(),
-  prompt_data: PromptDataNullish.optional(),
-  tags: z.union([z.array(z.string()), z.null()]).optional(),
-  metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
-    .optional(),
-  function_type: FunctionTypeEnumNullish.optional(),
-  function_data: FunctionData,
-  origin: z
-    .union([
-      z.object({
-        object_type: AclObjectType.and(z.string()),
-        object_id: z.string().uuid(),
-        internal: z.union([z.boolean(), z.null()]).optional(),
-      }),
-      z.null(),
-    ])
-    .optional(),
-  function_schema: z
-    .union([
-      z.object({ parameters: z.unknown(), returns: z.unknown() }).partial(),
-      z.null(),
-    ])
-    .optional(),
+  entrypoints: z.array(z.string()).optional(),
+  evaluator_definitions: z.unknown().optional(),
 });
-export type FunctionType = z.infer<typeof Function>;
-export const FunctionFormat = z.enum([
-  "llm",
-  "code",
-  "global",
-  "graph",
-  "topic_map",
-]);
-export type FunctionFormatType = z.infer<typeof FunctionFormat>;
+export type SandboxDataType = z.infer<typeof SandboxData>;
 export const PromptData = z
   .object({
     prompt: PromptBlockDataNullish,
@@ -1320,6 +1186,106 @@ export const FunctionId = z.union([
   }),
 ]);
 export type FunctionIdType = z.infer<typeof FunctionId>;
+export const SandboxTaskData = z.object({
+  type: z.literal("sandbox_task"),
+  function_id: FunctionId,
+  eval_name: z.string(),
+  parameters: z.object({}).partial().passthrough().optional(),
+});
+export type SandboxTaskDataType = z.infer<typeof SandboxTaskData>;
+export const FunctionData = z.union([
+  z.object({ type: z.literal("prompt") }),
+  z.object({
+    type: z.literal("code"),
+    data: z.union([
+      z.object({ type: z.literal("bundle") }).and(CodeBundle),
+      z.object({
+        type: z.literal("inline"),
+        runtime_context: z.object({
+          runtime: z.enum(["node", "python", "browser", "quickjs"]),
+          version: z.string(),
+        }),
+        code: z.string(),
+        code_hash: z.string().optional(),
+      }),
+    ]),
+  }),
+  GraphData,
+  z.object({
+    type: z.literal("remote_eval"),
+    endpoint: z.string(),
+    eval_name: z.string(),
+    parameters: z.object({}).partial().passthrough(),
+    parameters_version: z.union([z.string(), z.null()]).optional(),
+  }),
+  z.object({
+    type: z.literal("global"),
+    name: z.string(),
+    function_type: FunctionTypeEnum.optional().default("scorer"),
+    config: z
+      .union([z.object({}).partial().passthrough(), z.null()])
+      .optional(),
+  }),
+  FacetData,
+  BatchedFacetData,
+  z.object({
+    type: z.literal("parameters"),
+    data: z.object({}).partial().passthrough(),
+    __schema: z.object({
+      type: z.literal("object"),
+      properties: z.record(z.object({}).partial().passthrough()),
+      required: z.array(z.string()).optional(),
+      additionalProperties: z.boolean().optional(),
+    }),
+  }),
+  TopicMapData.and(z.unknown()),
+  SandboxData,
+  SandboxTaskData,
+]);
+export type FunctionDataType = z.infer<typeof FunctionData>;
+export const Function = z.object({
+  id: z.string().uuid(),
+  _xact_id: z.string(),
+  project_id: z.string().uuid(),
+  log_id: z.literal("p"),
+  org_id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  created: z.union([z.string(), z.null()]).optional(),
+  prompt_data: PromptDataNullish.optional(),
+  tags: z.union([z.array(z.string()), z.null()]).optional(),
+  metadata: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
+  function_type: FunctionTypeEnumNullish.optional(),
+  function_data: FunctionData,
+  origin: z
+    .union([
+      z.object({
+        object_type: AclObjectType.and(z.string()),
+        object_id: z.string().uuid(),
+        internal: z.union([z.boolean(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  function_schema: z
+    .union([
+      z.object({ parameters: z.unknown(), returns: z.unknown() }).partial(),
+      z.null(),
+    ])
+    .optional(),
+});
+export type FunctionType = z.infer<typeof Function>;
+export const FunctionFormat = z.enum([
+  "llm",
+  "code",
+  "global",
+  "graph",
+  "topic_map",
+]);
+export type FunctionFormatType = z.infer<typeof FunctionFormat>;
 export const FunctionObjectType = z.enum([
   "prompt",
   "tool",
@@ -1331,6 +1297,7 @@ export const FunctionObjectType = z.enum([
   "facet",
   "classifier",
   "parameters",
+  "sandbox",
 ]);
 export type FunctionObjectTypeType = z.infer<typeof FunctionObjectType>;
 export const FunctionOutputType = z.enum([
@@ -1411,7 +1378,7 @@ export const StreamingMode = z.union([
   z.null(),
 ]);
 export type StreamingModeType = z.infer<typeof StreamingMode>;
-export const InvokeFunction = FunctionId.and(
+export const InvokeFunction = FunctionId.and(z.unknown()).and(
   z
     .object({
       input: z.unknown(),
@@ -1518,7 +1485,7 @@ export const ProjectSettings = z.union([
         z.array(
           z.object({
             url: z.string(),
-            name: z.string(),
+            name: z.union([z.string(), z.null()]).optional(),
             description: z.union([z.string(), z.null()]).optional(),
           }),
         ),
@@ -1835,8 +1802,10 @@ export const RunEval = z.object({
     }),
     z.object({ data: z.array(z.unknown()) }),
   ]),
+  name: z.string().optional(),
+  parameters: z.object({}).partial().passthrough().optional(),
   task: FunctionId.and(z.unknown()),
-  scores: z.array(FunctionId),
+  scores: z.array(FunctionId.and(z.unknown())),
   experiment_name: z.string().optional(),
   metadata: z.object({}).partial().passthrough().optional(),
   parent: InvokeParent.and(z.unknown()).optional(),
