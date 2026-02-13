@@ -8,6 +8,7 @@ from typing import Any
 import braintrust
 from agents import tracing
 from braintrust.logger import NOOP_SPAN
+from braintrust.wrappers.threads import setup_threads
 
 
 def _span_type(span: tracing.Span[Any]) -> braintrust.SpanTypeAttribute:
@@ -72,6 +73,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     """
 
     def __init__(self, logger: braintrust.Span | braintrust.Experiment | braintrust.Logger | None = None):
+        setup_threads()  # Propagate ContextVars across worker threads (agents SDK >= 0.8)
         self._logger = logger
         self._spans: dict[str, braintrust.Span] = {}
         self._first_input: dict[str, Any] = {}
