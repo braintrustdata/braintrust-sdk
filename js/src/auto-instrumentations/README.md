@@ -66,15 +66,22 @@ The `BraintrustPlugin` (in the main `braintrust` package at `js/src/instrumentat
 
 ```typescript
 channel.subscribe({
-  asyncStart: (event) => {
+  start: (event) => {
+    // Create span and store it on the event for access in other handlers
     const span = startSpan({ name: 'Chat Completion', type: 'llm' });
     span.log({ input: event.arguments[0].messages });
+    event.span = span;
   },
-  asyncEnd: (event) => {
+  asyncStart: (event) => {
+    // Called when the async callback/promise is reached
+    // Retrieve span from event and log the result
+    const span = event.span;
     span.log({ output: event.result.choices, metrics: { tokens: ... } });
     span.end();
   },
   error: (event) => {
+    // Retrieve span from event and log the error
+    const span = event.span;
     span.log({ error: event.error });
     span.end();
   }

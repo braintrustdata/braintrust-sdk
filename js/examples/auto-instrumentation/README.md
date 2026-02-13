@@ -43,7 +43,7 @@ The examples demonstrate auto-instrumentation with:
 - **OpenAI SDK** - Chat completions, embeddings, streaming
 - **Anthropic SDK** - Messages API, streaming
 - **Vercel AI SDK** - Generate text and objects
-- **Google GenAI SDK** - Gemini models (⚠️ uses manual wrapping - auto-instrumentation not supported due to SDK structure)
+- **Google GenAI SDK** - Gemini models
 - **Claude Agent SDK** - Agent queries with tools (uses Anthropic API)
 
 ## Running Examples
