@@ -8,7 +8,6 @@
  * Or: node --import @braintrust/auto-instrumentations/hook.mjs openai-example.js
  */
 
-import "dotenv/config";
 import { initLogger } from "braintrust";
 import OpenAI from "openai";
 
