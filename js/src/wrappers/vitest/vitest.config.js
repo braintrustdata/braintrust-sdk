@@ -4,27 +4,24 @@ import path from "path";
 const config = {
   plugins: [
     tsconfigPaths({
-      // Explicitly specify the root tsconfig to prevent scanning vendor folders
-      root: ".",
-      projects: ["./tsconfig.json"],
+      root: __dirname,
+      projects: [path.resolve(__dirname, "tsconfig.json")],
+      ignoreConfigErrors: true,
     }),
   ],
-  // Prefer TypeScript over JavaScript for extension-less imports in sdk/js tests
   resolve: {
     extensions: [".ts", ".tsx", ".mts", ".js", ".mjs", ".jsx", ".json"],
     alias: {
-      // Prevent resolution into vendor directories
       vendor: false,
     },
   },
   server: {
     fs: {
-      // Deny access to vendor folder
-      deny: [path.resolve(__dirname, "vendor")],
+      deny: [path.resolve(__dirname, "../../../vendor"), "**/vendor/**"],
     },
   },
   optimizeDeps: {
-    exclude: ["vendor/**"],
+    exclude: ["vendor/**", "**/vendor/**"],
   },
   test: {
     exclude: [
@@ -36,24 +33,14 @@ const config = {
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
       // Exclude vendor folder and all its contents
       "**/vendor/**",
-      "vendor/**",
-      "./vendor/**",
-      // Exclude subdirectories with their own test configs
-      "src/wrappers/ai-sdk/**",
-      "src/wrappers/claude-agent-sdk/**",
-      "src/wrappers/vitest/**",
-      "smoke/**",
-      // Exclude example tests (require API keys and make real API calls)
-      "examples/vitest/**",
+      "../../../vendor/**",
     ],
-    // Additional test environment configuration
     watchExclude: [
       "**/node_modules/**",
       "**/dist/**",
       "**/vendor/**",
       "**/.{idea,git,cache,output,temp}/**",
     ],
-    testTimeout: 15_000,
   },
 };
 export default config;

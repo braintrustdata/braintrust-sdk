@@ -16,12 +16,13 @@ help:
 	@echo "  make test-ai-sdk-v5     - Run AI SDK v5 wrapper tests"
 	@echo "  make test-ai-sdk-v6     - Run AI SDK v6 wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
+	@echo "  make test-vitest       - Run Vitest wrapper tests"
 	@echo "  make test-api-compat    - Run API compatibility tests"
 	@echo "  make test-smoke         - Run smoke tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-vitest test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -68,6 +69,12 @@ test-ai-sdk-v6:
 test-claude-agent-sdk:
 	cd src/wrappers/claude-agent-sdk && pnpm install && pnpm test
 
+# -------------------------------------------------------------------------------------------------
+# Vitest testing
+# -------------------------------------------------------------------------------------------------
+
+test-vitest:
+	cd src/wrappers/vitest && pnpm install && pnpm test
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
@@ -109,10 +116,10 @@ test-api-compat:
 	pnpm test:api-compat
 
 # Test everything
-test: test-core test-openai test-anthropic test-google-genai test-ai-sdk
+test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest
 
 
 prune:
