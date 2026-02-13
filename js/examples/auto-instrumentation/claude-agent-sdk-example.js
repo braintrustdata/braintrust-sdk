@@ -8,7 +8,6 @@
  * Or: node --import @braintrust/auto-instrumentations/hook.mjs claude-agent-sdk-example.js
  */
 
-import "dotenv/config";
 import { initLogger } from "braintrust";
 import { query, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";

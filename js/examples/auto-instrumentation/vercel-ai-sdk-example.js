@@ -8,7 +8,6 @@
  * Or: node --import @braintrust/auto-instrumentations/hook.mjs vercel-ai-sdk-example.js
  */
 
-import "dotenv/config";
 import { initLogger } from "braintrust";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
