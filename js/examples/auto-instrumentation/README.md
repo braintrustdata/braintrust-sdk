@@ -29,6 +29,8 @@ ANTHROPIC_API_KEY=your_anthropic_key_here
 GOOGLE_GENAI_API_KEY=your_google_key_here
 ```
 
+The examples use [mise](https://mise.jdx.dev/) (or [direnv](https://direnv.net/)) to automatically load environment variables from the `.env` file when you `cd` into this directory. The `.envrc` file is configured to do this automatically.
+
 Get your API keys from:
 
 - **Braintrust**: https://www.braintrust.dev

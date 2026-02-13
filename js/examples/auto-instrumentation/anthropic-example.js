@@ -8,7 +8,6 @@
  * Or: node --import @braintrust/auto-instrumentations/hook.mjs anthropic-example.js
  */
 
-import "dotenv/config";
 import { initLogger } from "braintrust";
 import Anthropic from "@anthropic-ai/sdk";
 

@@ -8,7 +8,6 @@
  * Or: node --import @braintrust/auto-instrumentations/hook.mjs google-genai-example.js
  */
 
-import "dotenv/config";
 import { initLogger } from "braintrust";
 import { GoogleGenAI } from "@google/genai";
 
