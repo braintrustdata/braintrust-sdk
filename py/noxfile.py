@@ -108,6 +108,17 @@ def test_pydantic_ai_integration(session, version):
 
 
 @nox.session()
+def test_pydantic_ai_logfire(session):
+    """Test pydantic_ai + logfire coexistence (issue #1324)."""
+    if sys.version_info < (3, 10):
+        session.skip("pydantic_ai + logfire tests require Python >= 3.10")
+    _install_test_deps(session)
+    _install(session, "pydantic_ai")
+    _install(session, "logfire")
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_logfire.py")
+
+
+@nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
@@ -173,11 +184,9 @@ def test_litellm(session, version):
     _install_test_deps(session)
     # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
     # https://github.com/BerriAI/litellm/issues/13711
-    session.install("openai<=1.99.9", "--force-reinstall")
-    _install(session, "litellm", version)
     # Install fastapi and orjson as they're required by litellm for proxy/responses operations
-    session.install("fastapi")
-    session.install("orjson")
+    session.install("openai<=1.99.9", "--force-reinstall", "fastapi", "orjson")
+    _install(session, "litellm", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
 

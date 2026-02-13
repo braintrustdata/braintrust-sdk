@@ -34,6 +34,9 @@ nox -s "test_temporal(latest)"   # Temporal integration
 nox -s test_openai               # All OpenAI versions
 ```
 
+- we use pytest, so you don't need to add extra messages to assert. `assert x
+== 1` is usually enough.
+
 ## VCR Cassettes
 
 Tests use VCR to record HTTP interactions so they run without live API calls.

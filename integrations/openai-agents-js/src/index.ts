@@ -647,17 +647,15 @@ export class OpenAIAgentsTraceProcessor {
     return Promise.resolve();
   }
 
-  shutdown(): Promise<void> {
+  async shutdown(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
-      this.logger.flush();
+      await this.logger.flush();
     }
-    return Promise.resolve();
   }
 
-  forceFlush(): Promise<void> {
+  async forceFlush(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
-      this.logger.flush();
+      await this.logger.flush();
     }
-    return Promise.resolve();
   }
 }

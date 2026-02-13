@@ -1823,18 +1823,28 @@ function updateSpanImpl({
   parentObjectType,
   parentObjectId,
   id,
+  root_span_id,
+  span_id,
   event,
 }: {
   state: BraintrustState;
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   id: string;
-  event: Omit<Partial<ExperimentEvent>, "id">;
+  root_span_id: string | undefined;
+  span_id: string | undefined;
+  event: Omit<Partial<ExperimentEvent>, "id" | "root_span_id" | "span_id">;
 }): void {
+  if (isEmpty(root_span_id) !== isEmpty(span_id)) {
+    throw new Error("both root_span_id and span_id must be set, or neither");
+  }
+  const hasExplicitSpanIds =
+    root_span_id !== undefined && span_id !== undefined;
   const updateEvent = deepCopyEvent(
     validateAndSanitizeExperimentLogPartialArgs({
-      id,
       ...event,
+      id,
+      ...(hasExplicitSpanIds ? { root_span_id, span_id } : {}),
     } as Partial<ExperimentEvent>),
   );
 
@@ -1866,7 +1876,10 @@ export function updateSpan({
   exported,
   state,
   ...event
-}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
+}: { exported: string } & Omit<
+  Partial<ExperimentEvent>,
+  "id" | "root_span_id" | "span_id"
+> &
   OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
   const components = getSpanComponentsClass().fromStr(exported);
@@ -1882,6 +1895,8 @@ export function updateSpan({
       spanComponentsToObjectIdLambda(resolvedState, components),
     ),
     id: components.data.row_id,
+    root_span_id: components.data.root_span_id,
+    span_id: components.data.span_id,
     event,
   });
 }
@@ -2317,7 +2332,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     event: Omit<Partial<ExperimentEvent>, "id"> &
       Required<Pick<ExperimentEvent, "id">>,
   ): void {
-    const { id, ...eventRest } = event;
+    const { id, root_span_id, span_id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
@@ -2326,6 +2341,8 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
       parentObjectType: this.parentObjectType(),
       parentObjectId: this.lazyId,
       id,
+      root_span_id,
+      span_id,
       event: eventRest,
     });
   }
@@ -5894,7 +5911,7 @@ export class Experiment
     event: Omit<Partial<ExperimentEvent>, "id"> &
       Required<Pick<ExperimentEvent, "id">>,
   ): void {
-    const { id, ...eventRest } = event;
+    const { id, root_span_id, span_id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
@@ -5903,6 +5920,8 @@ export class Experiment
       parentObjectType: this.parentObjectType(),
       parentObjectId: this.lazyId,
       id,
+      root_span_id,
+      span_id,
       event: eventRest,
     });
   }

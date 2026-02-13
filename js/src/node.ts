@@ -12,13 +12,7 @@ import { _internalSetInitialState } from "./logger";
 import { promisify } from "node:util";
 import * as zlib from "node:zlib";
 
-let nodeConfigured = false;
-
 export function configureNode() {
-  if (nodeConfigured) {
-    return;
-  }
-
   // Set build type indicator
   iso.buildType = "node";
 
@@ -55,5 +49,4 @@ export function configureNode() {
   iso.hash = (data) => crypto.createHash("sha256").update(data).digest("hex");
 
   _internalSetInitialState();
-  nodeConfigured = true;
 }
