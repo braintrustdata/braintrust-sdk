@@ -40,7 +40,7 @@ const result = await braintrust.traced(
 This package:
 
 - **Includes** `als-browser` polyfill for AsyncLocalStorage (bundled)
-- **Requires** `braintrust` as a peer dependency
+- **Requires** `braintrust`
 
 ## When to Use
 

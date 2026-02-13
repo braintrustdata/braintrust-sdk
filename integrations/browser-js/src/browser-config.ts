@@ -1,4 +1,9 @@
-import { _internalIso as iso, _internalSetInitialState } from "braintrust";
+import {
+  _internalIso as iso,
+  _internalSetInitialState,
+  BraintrustState,
+} from "braintrust";
+import { BRAINTRUST_STATE_SYMBOL_NAME } from "braintrust/symbol-name";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 export function configureBrowser() {

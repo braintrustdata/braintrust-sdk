@@ -3,7 +3,6 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
-import { BRAINTRUST_STATE_KEY } from "./symbols";
 import { IDGenerator, getIdGenerator } from "./id-gen";
 import {
   _urljoin,
@@ -39,7 +38,8 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "../util/index";
+} from "./util";
+import { BRAINTRUST_STATE_SYMBOL_NAME } from "./symbol-name";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -96,7 +96,6 @@ const parametersRowSchema = z.object({
 type ParametersRow = z.infer<typeof parametersRowSchema>;
 
 import { waitUntil } from "@vercel/functions";
-import Mustache from "mustache";
 import {
   parseTemplateFormat,
   renderTemplateContent,
@@ -539,10 +538,8 @@ export const NOOP_SPAN = new NoopSpan();
 export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
-// use the same state as the toplevel module. This global variable serves as a
-// mechanism to propagate the initial state from some toplevel creator.
+// use the same state as the toplevel module. Use a symbol on `globalThis.
 declare global {
-  var __inherited_braintrust_state: BraintrustState;
   interface Global {
     [key: symbol]: any;
   }
@@ -960,23 +957,26 @@ function initTestExperiment(
 }
 
 /**
- * This function should be invoked exactly once after configuring the `iso`
- * object based on the platform. See js/src/node.ts for an example.
+ * Initialize the global Braintrust state lazily, it only creates the BraintrustState instance on the first invocation.
+ *
+ * The state is stored in a global symbol to ensure cross-bundle compatibility.
+ *
+ * This is invoked by platform-specific initialization functions (configureNode/configureBrowser)
+ *
  * @internal
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    console.warn(
-      "global state already set, should only call _internalSetInitialState once",
-    );
     return;
   }
-  _globalState =
-    (globalThis as any)[BRAINTRUST_STATE_KEY] ||
-    globalThis.__inherited_braintrust_state ||
-    new BraintrustState({
-      /*empty login options*/
-    });
+  const sym = Symbol.for(BRAINTRUST_STATE_SYMBOL_NAME);
+  let existing = (globalThis as any)[sym];
+  if (!existing) {
+    const state = new BraintrustState({});
+    (globalThis as any)[sym] = state;
+    existing = state;
+  }
+  _globalState = existing;
 }
 /**
  * @internal
@@ -4353,7 +4353,7 @@ export type FullLoginOptions = LoginOptions & {
 export function setMaskingFunction(
   maskingFunction: ((value: unknown) => unknown) | null,
 ): void {
-  _globalState.setMaskingFunction(maskingFunction);
+  _internalGetGlobalState().setMaskingFunction(maskingFunction);
 }
 
 /**
@@ -4372,7 +4372,8 @@ export async function login(
 ): Promise<BraintrustState> {
   const { forceLogin = false } = options || {};
 
-  if (_globalState && _globalState.loggedIn && !forceLogin) {
+  const state = _internalGetGlobalState();
+  if (state.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -4387,25 +4388,24 @@ export async function login(
         );
       }
     }
-    checkUpdatedParam("appUrl", options.appUrl, _globalState.appUrl);
+    checkUpdatedParam("appUrl", options.appUrl, state.appUrl);
     checkUpdatedParam(
       "apiKey",
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      _globalState.loginToken,
+      state.loginToken,
     );
-    checkUpdatedParam("orgName", options.orgName, _globalState.orgName);
-    return _globalState;
+    checkUpdatedParam("orgName", options.orgName, state.orgName);
+    return state;
   }
 
-  if (!_globalState) {
+  if (!state) {
     _internalSetInitialState();
   }
 
-  await _globalState.login(options);
-  (globalThis as any)[BRAINTRUST_STATE_KEY] = _globalState;
-  return _globalState;
+  await state.login(options);
+  return state;
 }
 
 export async function loginToState(options: LoginOptions = {}) {
@@ -4968,7 +4968,7 @@ export async function flush(options?: OptionalStateArg): Promise<void> {
  * @param fetch The fetch implementation to use.
  */
 export function setFetch(fetch: typeof globalThis.fetch): void {
-  _globalState.setFetch(fetch);
+  _internalGetGlobalState().setFetch(fetch);
 }
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
@@ -7636,9 +7636,10 @@ async function simulateLoginForTests() {
 
 // This is a helper function to simulate a logout for testing.
 function simulateLogoutForTests() {
-  _globalState.resetLoginInfo();
-  _globalState.appUrl = "https://www.braintrust.dev";
-  return _globalState;
+  const state = _internalGetGlobalState();
+  state.resetLoginInfo();
+  state.appUrl = "https://www.braintrust.dev";
+  return state;
 }
 
 /**
