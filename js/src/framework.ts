@@ -1037,7 +1037,7 @@ async function runEvaluatorInternal(
                 objectId:
                   parentComponents?.data.object_id ??
                   (experimentIdPromise
-                    ? (await experimentIdPromise) ?? ""
+                    ? ((await experimentIdPromise) ?? "")
                     : ""),
                 rootSpanId: rootSpan.rootSpanId,
                 ensureSpansFlushed,
@@ -1314,7 +1314,7 @@ async function runEvaluatorInternal(
         if (!filters.every((f) => evaluateFilter(datum, f))) {
           continue;
         }
-        const trialCount = evaluator.trialCount ?? 1;
+        const trialCount = datum.trialCount ?? evaluator.trialCount ?? 1;
         for (let trialIndex = 0; trialIndex < trialCount; trialIndex++) {
           if (cancelled) {
             break;
