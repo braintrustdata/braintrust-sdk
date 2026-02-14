@@ -1,0 +1,63 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "Hello"}], "role": "user"}], "systemInstruction":
+      {"parts": [{"text": "You are a test agent with input schema.\n\nYou are an agent.
+      Your internal name is \"input_schema_agent\"."}], "role": "user"}, "generationConfig":
+      {}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '256'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.56.0 gl-python/3.13.3 google-adk/1.21.0 gl-python/3.13.3
+      x-goog-api-client:
+      - google-genai-sdk/1.56.0 gl-python/3.13.3 google-adk/1.21.0 gl-python/3.13.3
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61RTU/DMAy991eEnNmUfdAyLggxYJWYmEaFEB+aAvW6allcNelgmvbfl7TrlnIm
+        h8jye/azn7ceIfSbyziNuQZFr8i7yRCyLX+LodQgtQHqlElmPNcnbvW2TmwoGn5tER2BEHhGRvhD
+        jAwJyQJERjZYEI0x31x/SOoU7o7x5/lJLkcBttcKYxA1fVcT6DyVqVpMgSuUlvYcPU3oEeXr5BGT
+        LMcvO3GLtRnzBz7rdAdBL7i86DPW73m1dqlKC8UTGIPmxhN+3JyaHqtMR7gEeYtF6Uk3qHQcCxt4
+        hx1wjZqLBtSrS522amhEU+Fa67hu1uci1Ru7Y3T3GlHHIt2cqvbIc6z8O+M/iXVYU8w7nKa61gvk
+        Kq3OksDKHKrVbbPWXHC1KDvSHFSGUkEYW86U3Q/520MYxv5sVownawXL4gapt/P2SVZ1D6oCAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Wed, 17 Dec 2025 23:48:23 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=497
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1
