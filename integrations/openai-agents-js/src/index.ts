@@ -409,6 +409,9 @@ export class OpenAIAgentsTraceProcessor {
       if (usage.input_tokens_details?.cached_tokens != null)
         data.metrics.prompt_cached_tokens =
           usage.input_tokens_details.cached_tokens;
+      if (usage.input_tokens_details?.cache_write_tokens != null)
+        data.metrics.prompt_cache_creation_tokens =
+          usage.input_tokens_details.cache_write_tokens;
     }
 
     return data;
