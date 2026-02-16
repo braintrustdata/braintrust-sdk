@@ -212,9 +212,12 @@ const makeGenerateTextWrapper = (
 
     return traced(
       async (span) => {
+        const wrappedModel = wrapModel(params.model, aiSDK);
+        const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
+
         const result = await generateText({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
         });
 
@@ -228,9 +231,15 @@ const makeGenerateTextWrapper = (
           resolvedMetadata.model = gatewayInfo.model;
         }
 
+        // When the model is wrapped, child doGenerate/doStream spans already
+        // carry per-step token counts and estimated_cost. Logging them again
+        // on the parent span causes the backend to double-count both tokens
+        // and cost, so we omit all token/cost metrics from the parent.
+        const metrics = modelIsWrapped ? {} : extractTokenMetrics(result);
+
         span.log({
           output: await processOutput(result, options.denyOutputPaths),
-          metrics: extractTokenMetrics(result),
+          metrics,
           ...(Object.keys(resolvedMetadata).length > 0
             ? { metadata: resolvedMetadata }
             : {}),
@@ -542,9 +551,12 @@ const wrapGenerateObject = (
 
     return traced(
       async (span) => {
+        const wrappedModel = wrapModel(params.model, aiSDK);
+        const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
+
         const result = await generateObject({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
         });
 
@@ -560,9 +572,13 @@ const wrapGenerateObject = (
           resolvedMetadata.model = gatewayInfo.model;
         }
 
+        // When the model is wrapped, child spans carry all token/cost metrics.
+        // Omit from parent to prevent double-counting.
+        const metrics = modelIsWrapped ? {} : extractTokenMetrics(result);
+
         span.log({
           output,
-          metrics: extractTokenMetrics(result),
+          metrics,
           ...(Object.keys(resolvedMetadata).length > 0
             ? { metadata: resolvedMetadata }
             : {}),
@@ -654,10 +670,13 @@ const makeStreamTextWrapper = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
+      const wrappedModel = wrapModel(params.model, aiSDK);
+      const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
+
       const result = withCurrent(span, () =>
         streamText({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -684,9 +703,13 @@ const makeStreamTextWrapper = (
               resolvedMetadata.model = gatewayInfo.model;
             }
 
+            // When the model is wrapped, child spans carry all token/cost
+            // metrics. Omit from parent to prevent double-counting.
+            const metrics = modelIsWrapped ? {} : extractTokenMetrics(event);
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
-              metrics: extractTokenMetrics(event),
+              metrics,
               ...(Object.keys(resolvedMetadata).length > 0
                 ? { metadata: resolvedMetadata }
                 : {}),
@@ -824,11 +847,13 @@ const wrapStreamObject = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
+      const wrappedModel = wrapModel(params.model, aiSDK);
+      const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
 
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -854,9 +879,13 @@ const wrapStreamObject = (
               resolvedMetadata.model = gatewayInfo.model;
             }
 
+            // When the model is wrapped, child spans carry all token/cost
+            // metrics. Omit from parent to prevent double-counting.
+            const metrics = modelIsWrapped ? {} : extractTokenMetrics(event);
+
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
-              metrics: extractTokenMetrics(event),
+              metrics,
               ...(Object.keys(resolvedMetadata).length > 0
                 ? { metadata: resolvedMetadata }
                 : {}),
