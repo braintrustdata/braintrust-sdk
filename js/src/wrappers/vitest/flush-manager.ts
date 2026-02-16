@@ -11,7 +11,7 @@ class FlushCoordinator {
   ): Promise<void> {
     if (!context) return;
 
-    const experimentId = context.experiment.id;
+    const experimentId = await context.experiment.id;
 
     if (this.activeFlushes.has(experimentId)) {
       return this.activeFlushes.get(experimentId)!;

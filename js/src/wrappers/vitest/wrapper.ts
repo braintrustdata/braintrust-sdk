@@ -252,7 +252,6 @@ export function wrapTest<VitestContext = unknown>(
             });
             throw error;
           } finally {
-            // Always end the span
             span.end();
           }
           return testResult;
@@ -294,10 +293,23 @@ export function wrapTest<VitestContext = unknown>(
     );
   };
 
-  // Copy over Vitest modifiers
-  if (originalTest.skip) wrappedTest.skip = wrappedTest;
-  if (originalTest.only) wrappedTest.only = wrappedTest;
-  if (originalTest.concurrent) wrappedTest.concurrent = wrappedTest;
+  // Copy over Vitest modifiers - recursively wrap them so they maintain Braintrust tracking
+  // Type assertions needed because modifier properties have base types without modifiers
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedTest.skip = wrapTest(
+    originalTest.skip as TestFunction<VitestContext>,
+    config,
+  );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedTest.only = wrapTest(
+    originalTest.only as TestFunction<VitestContext>,
+    config,
+  );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedTest.concurrent = wrapTest(
+    originalTest.concurrent as TestFunction<VitestContext>,
+    config,
+  );
   if (originalTest.todo) wrappedTest.todo = originalTest.todo;
   if (originalTest.each) wrappedTest.each = originalTest.each;
 
@@ -388,10 +400,26 @@ export function wrapDescribe(
     });
   };
 
-  // Copy over Vitest modifiers
-  if (originalDescribe.skip) wrappedDescribe.skip = wrappedDescribe;
-  if (originalDescribe.only) wrappedDescribe.only = wrappedDescribe;
-  if (originalDescribe.concurrent) wrappedDescribe.concurrent = wrappedDescribe;
+  // Copy over Vitest modifiers - recursively wrap them so they maintain Braintrust tracking
+  // Type assertions needed because modifier properties have base types without modifiers
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedDescribe.skip = wrapDescribe(
+    originalDescribe.skip as DescribeFunction,
+    config,
+    afterAll,
+  );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedDescribe.only = wrapDescribe(
+    originalDescribe.only as DescribeFunction,
+    config,
+    afterAll,
+  );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  wrappedDescribe.concurrent = wrapDescribe(
+    originalDescribe.concurrent as DescribeFunction,
+    config,
+    afterAll,
+  );
   if (originalDescribe.todo) wrappedDescribe.todo = originalDescribe.todo;
   if (originalDescribe.each) wrappedDescribe.each = originalDescribe.each;
 
