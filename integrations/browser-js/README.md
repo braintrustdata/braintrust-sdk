@@ -4,6 +4,8 @@ Official browser-only SDK for [Braintrust](https://braintrust.dev).
 
 This is an integration package that provides browser-optimized builds of the Braintrust SDK with AsyncLocalStorage polyfill support for standard browsers.
 
+Note: This package supports limited functionality in the browser; however, using it in a browser environment currently results in CORS errors.
+
 ## Installation
 
 ```bash

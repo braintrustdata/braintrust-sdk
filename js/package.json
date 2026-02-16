@@ -35,6 +35,16 @@
       "require": "./dist/index.js",
       "default": "./dist/index.mjs"
     },
+    "./workerd": {
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.mjs"
+    },
+     "./edge-light": {
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.mjs"
+    },
     "./browser": {
       "import": "./dist/browser.mjs",
       "require": "./dist/browser.js",
