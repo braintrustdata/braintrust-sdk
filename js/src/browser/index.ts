@@ -9,9 +9,9 @@
  *   import * as braintrust from '@braintrust/browser';
  */
 
-import { configureBrowser } from "./browser-config";
+import { configureBrowser } from "./config";
 
 configureBrowser();
 
-export * from "./exports";
-export * as default from "./exports";
+export * from "../exports";
+export * as default from "../exports";

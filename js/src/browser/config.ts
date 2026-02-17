@@ -1,5 +1,5 @@
-import iso from "./isomorph";
-import { _internalSetInitialState } from "./logger";
+import iso from "../isomorph";
+import { _internalSetInitialState } from "../logger";
 
 import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
 
@@ -7,14 +7,26 @@ declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
 }
 
-let workerdConfigured = false;
+let messageShown = false;
+let browserConfigured = false;
 
 /**
- * Configure the isomorph for Cloudflare Workers (workerd) runtime.
+ * Configure the isomorph for browser environments.
  */
-export function configureWorkerd(): void {
-  if (workerdConfigured) {
+export function configureBrowser(): void {
+  if (browserConfigured) {
     return;
+  }
+
+  if (!messageShown && typeof console !== "undefined") {
+    console.info(
+      "This entrypoint is no longer supported.\n\n" +
+        "You should be using entrypoints:\n\n" +
+        "- `/workerd` (cloudflare envs)\n" +
+        "- `/edge-light` (next-js or other edge envs)\n\n" +
+        "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n",
+    );
+    messageShown = true;
   }
 
   iso.buildType = "browser";
@@ -46,5 +58,5 @@ export function configureWorkerd(): void {
   };
 
   _internalSetInitialState();
-  workerdConfigured = true;
+  browserConfigured = true;
 }

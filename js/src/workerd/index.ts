@@ -5,9 +5,9 @@
  * runtime environments.
  */
 
-import { configureWorkerd } from "./workerd-config";
+import { configureWorkerd } from "./config";
 
 configureWorkerd();
 
-export * from "./exports";
-export * as default from "./exports";
+export * from "../exports";
+export * as default from "../exports";

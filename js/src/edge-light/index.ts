@@ -5,9 +5,9 @@
  * Next.js Edge Runtime, and other edge platforms that support AsyncLocalStorage.
  */
 
-import { configureEdgeLight } from "./edge-light-config";
+import { configureEdgeLight } from "./config";
 
 configureEdgeLight();
 
-export * from "./exports";
-export * as default from "./exports";
+export * from "../exports";
+export * as default from "../exports";

@@ -1,5 +1,5 @@
-import iso from "./isomorph";
-import { _internalSetInitialState } from "./logger";
+import iso from "../isomorph";
+import { _internalSetInitialState } from "../logger";
 
 import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
 
@@ -7,13 +7,13 @@ declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
 }
 
-let edgeLightConfigured = false;
+let workerdConfigured = false;
 
 /**
- * Configure the isomorph for edge-light runtime environments (Vercel Edge, Next.js Edge, etc.).
+ * Configure the isomorph for Cloudflare Workers (workerd) runtime.
  */
-export function configureEdgeLight(): void {
-  if (edgeLightConfigured) {
+export function configureWorkerd(): void {
+  if (workerdConfigured) {
     return;
   }
 
@@ -46,5 +46,5 @@ export function configureEdgeLight(): void {
   };
 
   _internalSetInitialState();
-  edgeLightConfigured = true;
+  workerdConfigured = true;
 }
