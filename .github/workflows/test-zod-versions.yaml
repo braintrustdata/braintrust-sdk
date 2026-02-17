@@ -2,10 +2,18 @@ name: Test sdk with multiple zod versions
 on:
   pull_request:
     paths:
-      - "**"
+      - "js/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/test-zod-versions.yaml"
   push:
     branches:
       - main
+    paths:
+      - "js/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/test-zod-versions.yaml"
   workflow_dispatch:
 
 permissions:
