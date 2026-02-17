@@ -34,6 +34,7 @@ from .logger import (
     Experiment,
     ExperimentSummary,
     Metadata,
+    RemoteEvalParameters,
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
@@ -42,7 +43,7 @@ from .logger import (
     stringify_exception,
 )
 from .logger import init as _init_experiment
-from .parameters import EvalParameters
+from .parameters import EvalParameters, validate_parameters
 from .resource_manager import ResourceManager
 from .score import Score, is_score, is_scorer
 from .serializable_data_class import SerializableDataClass
@@ -433,7 +434,7 @@ class Evaluator(Generic[Input, Output]):
     Whether to summarize the scores of the experiment after it has run.
     """
 
-    parameters: EvalParameters | None = None
+    parameters: EvalParameters | RemoteEvalParameters | None = None
     """
     A set of parameters that will be passed to the evaluator.
     Can be used to define prompts or other configurable values.
@@ -668,7 +669,7 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: ErrorScoreHandler | None = None,
-    parameters: EvalParameters | None = None,
+    parameters: EvalParameters | RemoteEvalParameters | None = None,
     on_start: Callable[[ExperimentSummary], None] | None = None,
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
@@ -794,7 +795,7 @@ async def EvalAsync(
     description: str | None = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
-    parameters: EvalParameters | None = None,
+    parameters: EvalParameters | RemoteEvalParameters | None = None,
     on_start: Callable[[ExperimentSummary], None] | None = None,
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
@@ -918,7 +919,7 @@ def Eval(
     description: str | None = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
-    parameters: EvalParameters | None = None,
+    parameters: EvalParameters | RemoteEvalParameters | None = None,
     on_start: Callable[[ExperimentSummary], None] | None = None,
     stream: Callable[[SSEProgressEvent], None] | None = None,
     parent: str | None = None,
@@ -1376,6 +1377,17 @@ async def _run_evaluator_internal_impl(
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
+    resolved_parameters: dict[str, Any] | None = None
+    if evaluator.parameters is not None:
+        if RemoteEvalParameters.is_parameters(evaluator.parameters):
+            resolved_parameters = validate_parameters({}, evaluator.parameters)
+        elif isinstance(evaluator.parameters, dict):
+            resolved_parameters = validate_parameters({}, evaluator.parameters)
+        else:
+            raise ValueError(
+                "Invalid evaluator.parameters. Expected an EvalParameters schema or RemoteEvalParameters."
+            )
+
     async def run_evaluator_task(datum, trial_index=0):
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
@@ -1435,7 +1447,7 @@ async def _run_evaluator_internal_impl(
                     trial_index=trial_index,
                     tags=tags,
                     report_progress=report_progress,
-                    parameters=evaluator.parameters,
+                    parameters=resolved_parameters,
                 )
 
                 # Check if the task takes a hooks argument

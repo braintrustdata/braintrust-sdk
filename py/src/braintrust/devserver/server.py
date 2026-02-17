@@ -26,7 +26,7 @@ except ModuleNotFoundError as e:
 
 from ..framework import EvalAsync, EvalScorer, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..generated_types import FunctionId
-from ..logger import BraintrustState, bt_iscoroutinefunction
+from ..logger import BraintrustState, RemoteEvalParameters, bt_iscoroutinefunction
 from ..parameters import parameters_to_json_schema, validate_parameters
 from ..span_identifier_v4 import parse_parent
 from .auth import AuthorizationMiddleware
@@ -79,6 +79,40 @@ async def index(request: Request) -> PlainTextResponse:
     return PlainTextResponse("Hello, world!")
 
 
+def _ensure_input_field(row: Any) -> Any:
+    if isinstance(row, dict) and "input" not in row:
+        return {**row, "input": None}
+    return row
+
+
+def _serialize_parameters_container(parameters: Any) -> dict[str, Any]:
+    if parameters is None:
+        return {}
+
+    if RemoteEvalParameters.is_parameters(parameters):
+        return {
+            "type": "braintrust.parameters",
+            "schema": dict(parameters.schema),
+            "source": {
+                "parametersId": parameters.id,
+                "slug": parameters.slug,
+                "name": parameters.name,
+                "projectId": parameters.project_id,
+                "version": parameters.version,
+            },
+        }
+
+    schema = parameters_to_json_schema(parameters)
+    if schema:
+        return {
+            "type": "braintrust.staticParameters",
+            "schema": schema,
+            "source": None,
+        }
+
+    return {}
+
+
 async def list_evaluators(request: Request) -> JSONResponse:
     # Get the authenticated context
     ctx = getattr(request.state, "ctx", None)
@@ -93,7 +127,7 @@ async def list_evaluators(request: Request) -> JSONResponse:
     evaluator_list = {}
     for name, evaluator in _all_evaluators.items():
         evaluator_list[name] = {
-            "parameters": parameters_to_json_schema(evaluator.parameters) if evaluator.parameters else {},
+            "parameters": _serialize_parameters_container(evaluator.parameters),
             "scores": [{"name": getattr(score, "name", f"score_{i}")} for i, score in enumerate(evaluator.scores)],
         }
 
@@ -130,12 +164,20 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     if not evaluator:
         return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
 
-    # Get the dataset if data is provided
-    try:
-        dataset = await get_dataset(state, eval_data["data"])
-    except Exception as e:
-        print(f"Error loading dataset: {e}", file=sys.stderr)
-        return JSONResponse({"error": f"Failed to load dataset: {str(e)}"}, status_code=400)
+    # Get the dataset if data is provided, otherwise fall back to the evaluator's own data
+    dataset = None
+    raw_data = eval_data.get("data")
+    if raw_data is not None:
+        try:
+            dataset = await get_dataset(state, raw_data)
+        except Exception as e:
+            print(f"Error loading dataset from request, falling back to evaluator data: {e}", file=sys.stderr)
+
+    if dataset is None:
+        dataset = evaluator.data
+
+    if isinstance(dataset, list):
+        dataset = [_ensure_input_field(row) for row in dataset]
 
     # Validate parameters if provided
     validated_parameters = None

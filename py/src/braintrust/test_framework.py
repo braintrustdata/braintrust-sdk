@@ -2,7 +2,7 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
-from braintrust.logger import BraintrustState
+from braintrust.logger import BraintrustState, RemoteEvalParameters
 
 from .framework import (
     Eval,
@@ -564,3 +564,181 @@ async def test_eval_enable_cache():
     )
     state.span_cache.start.assert_called()
     state.span_cache.stop.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_eval_with_pydantic_parameters(with_memory_logger):
+    import importlib.util
+
+    if importlib.util.find_spec("pydantic") is None:
+        pytest.skip("pydantic not installed")
+
+    from pydantic import BaseModel
+
+    class ModelParam(BaseModel):
+        value: str = "gpt-5-mini"
+
+    class TempParam(BaseModel):
+        value: float = 0.7
+
+    captured_params = {}
+
+    def task_fn(input_val, hooks):
+        captured_params.update(hooks.parameters or {})
+        return input_val
+
+    result = await Eval(
+        "test-pydantic-params",
+        data=[{"input": "hello", "expected": "hello"}],
+        task=task_fn,
+        scores=[],
+        no_send_logs=True,
+        parameters={"model": ModelParam, "temperature": TempParam},
+    )
+
+    assert result.results[0].output == "hello"
+    assert captured_params == {"model": "gpt-5-mini", "temperature": 0.7}
+
+
+@pytest.mark.asyncio
+async def test_eval_with_remote_parameters(with_memory_logger):
+    from braintrust.logger import RemoteEvalParameters
+    from braintrust.util import LazyValue
+
+    metadata = {
+        "id": "param-id-123",
+        "project_id": "proj-123",
+        "name": "test-params",
+        "slug": "test-params",
+        "_xact_id": "xact-1",
+        "function_type": "parameters",
+        "function_data": {
+            "type": "parameters",
+            "data": {"model": "gpt-5-mini", "temperature": 0.5},
+            "__schema": {
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "default": "gpt-5-mini"},
+                    "temperature": {"type": "number", "default": 0.5},
+                },
+            },
+        },
+    }
+    remote = RemoteEvalParameters(LazyValue(lambda: metadata, use_mutex=False))
+
+    captured_params = {}
+
+    def task_fn(input_val, hooks):
+        captured_params.update(hooks.parameters or {})
+        return input_val
+
+    result = await Eval(
+        "test-remote-params",
+        data=[{"input": "test", "expected": "test"}],
+        task=task_fn,
+        scores=[],
+        no_send_logs=True,
+        parameters=remote,
+    )
+
+    assert result.results[0].output == "test"
+    assert captured_params["model"] == "gpt-5-mini"
+    assert captured_params["temperature"] == 0.5
+
+
+class TestRemoteEvalParameters:
+    def test_basic_properties(self):
+        from braintrust.logger import RemoteEvalParameters
+        from braintrust.util import LazyValue
+
+        metadata = {
+            "id": "abc-123",
+            "project_id": "proj-456",
+            "name": "My Params",
+            "slug": "my-params",
+            "_xact_id": "xact-99",
+            "function_data": {
+                "type": "parameters",
+                "data": {"key": "value"},
+                "__schema": {"type": "object", "properties": {"key": {"type": "string"}}},
+            },
+        }
+        params = RemoteEvalParameters(LazyValue(lambda: metadata, use_mutex=False))
+
+        assert params.id == "abc-123"
+        assert params.project_id == "proj-456"
+        assert params.name == "My Params"
+        assert params.slug == "my-params"
+        assert params.version == "xact-99"
+        assert params.data == {"key": "value"}
+        assert params.schema["type"] == "object"
+
+    def test_is_parameters(self):
+        from braintrust.logger import RemoteEvalParameters
+        from braintrust.util import LazyValue
+
+        metadata = {
+            "id": "x",
+            "name": "x",
+            "slug": "x",
+            "_xact_id": "x",
+            "function_data": {"type": "parameters", "data": {}, "__schema": {}},
+        }
+        params = RemoteEvalParameters(LazyValue(lambda: metadata, use_mutex=False))
+
+        assert RemoteEvalParameters.is_parameters(params) is True
+        assert RemoteEvalParameters.is_parameters({}) is False
+        assert RemoteEvalParameters.is_parameters(None) is False
+        assert RemoteEvalParameters.is_parameters("string") is False
+
+    def test_validate(self):
+        from braintrust.logger import RemoteEvalParameters
+        from braintrust.util import LazyValue
+
+        metadata = {
+            "id": "x",
+            "name": "x",
+            "slug": "x",
+            "_xact_id": "x",
+            "function_data": {
+                "type": "parameters",
+                "data": {},
+                "__schema": {
+                    "type": "object",
+                    "properties": {"a": {"type": "string"}, "b": {"type": "number"}},
+                    "required": ["a"],
+                },
+            },
+        }
+        params = RemoteEvalParameters(LazyValue(lambda: metadata, use_mutex=False))
+
+        assert params.validate({"a": "hello"}) is True
+        assert params.validate({"a": "hello", "b": 5}) is True
+        assert params.validate({}) is False
+        assert params.validate("not a dict") is False
+
+
+class TestLoadParametersValidation:
+    def test_version_and_environment_conflict(self):
+        from braintrust.logger import load_parameters
+
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            load_parameters(project="proj", slug="s", version="v1", environment="prod")
+
+    def test_missing_project(self):
+        from braintrust.logger import load_parameters
+
+        with pytest.raises(ValueError, match="Must specify at least one of project or project_id"):
+            load_parameters(slug="s")
+
+    def test_missing_slug(self):
+        from braintrust.logger import load_parameters
+
+        with pytest.raises(ValueError, match="Must specify slug"):
+            load_parameters(project="proj")
+
+    def test_load_by_id_skips_project_validation(self):
+        from braintrust.logger import load_parameters
+
+        result = load_parameters(id="some-id")
+        assert isinstance(result, RemoteEvalParameters)

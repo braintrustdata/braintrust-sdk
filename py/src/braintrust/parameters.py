@@ -4,7 +4,7 @@ from typing import Any, TypedDict
 
 from typing_extensions import NotRequired
 
-from .logger import Prompt
+from .logger import Prompt, RemoteEvalParameters
 from .prompt import PromptData
 
 
@@ -36,7 +36,7 @@ def _pydantic_to_json_schema(model: Any) -> dict[str, Any]:
 
 def validate_parameters(
     parameters: dict[str, Any],
-    parameter_schema: EvalParameters,
+    parameter_schema: EvalParameters | RemoteEvalParameters | None,
 ) -> dict[str, Any]:
     """
     Validate parameters against the schema.
@@ -51,7 +51,43 @@ def validate_parameters(
     Raises:
         ValueError: If validation fails
     """
-    result = {}
+    if parameter_schema is None:
+        return parameters
+
+    if RemoteEvalParameters.is_parameters(parameter_schema):
+        merged: dict[str, Any] = {**(dict(parameter_schema.data) if parameter_schema.data else {})}
+        if parameters:
+            merged.update(parameters)
+
+        schema = parameter_schema.schema
+        props = schema.get("properties")
+        if isinstance(props, dict):
+            for name, prop_schema in props.items():
+                if name in merged:
+                    continue
+                if isinstance(prop_schema, dict) and "default" in prop_schema:
+                    merged[name] = prop_schema["default"]
+
+            required = schema.get("required")
+            required_keys = set(required) if isinstance(required, list) else set()
+            for name in required_keys:
+                if name not in merged:
+                    raise ValueError(f"Parameter '{name}' is required")
+
+            for name, prop_schema in props.items():
+                if not (isinstance(prop_schema, dict) and prop_schema.get("x-bt-type") == "prompt"):
+                    continue
+                value = merged.get(name)
+                if value is None:
+                    continue
+                if isinstance(value, Prompt):
+                    continue
+                serialized_value = value.as_dict() if hasattr(value, "as_dict") else value
+                merged[name] = Prompt.from_prompt_data(name, PromptData.from_dict_deep(serialized_value))
+
+        return merged
+
+    result: dict[str, Any] = {}
 
     for name, schema in parameter_schema.items():
         value = parameters.get(name)
@@ -67,7 +103,8 @@ def validate_parameters(
                     prompt_data = schema["default"]
                 else:
                     raise ValueError(f"Parameter '{name}' is required")
-                result[name] = Prompt.from_prompt_data(schema.get("name"), PromptData.from_dict_deep(prompt_data))
+                serialized_prompt_data = prompt_data.as_dict() if hasattr(prompt_data, "as_dict") else prompt_data
+                result[name] = Prompt.from_prompt_data(name, PromptData.from_dict_deep(serialized_prompt_data))
             elif schema is None:
                 # No schema defined, pass through the value
                 result[name] = value
@@ -120,7 +157,7 @@ def validate_parameters(
     return result
 
 
-def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
+def parameters_to_json_schema(parameters: EvalParameters | RemoteEvalParameters | dict | None) -> dict[str, Any]:
     """
     Convert EvalParameters to JSON schema format for serialization.
 
@@ -130,6 +167,33 @@ def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
     Returns:
         JSON schema representation
     """
+    if parameters is None:
+        return {}
+
+    if RemoteEvalParameters.is_parameters(parameters):
+        schema = dict(parameters.schema)
+        props = schema.get("properties")
+        if not isinstance(props, dict):
+            return {}
+        result = {}
+        for name, prop in props.items():
+            if not isinstance(prop, dict):
+                continue
+            if prop.get("x-bt-type") == "prompt":
+                result[name] = {
+                    "type": "prompt",
+                    "default": prop.get("default"),
+                    "description": prop.get("description"),
+                }
+            else:
+                result[name] = {
+                    "type": "data",
+                    "schema": prop,
+                    "default": prop.get("default"),
+                    "description": prop.get("description"),
+                }
+        return result
+
     result = {}
 
     for name, schema in parameters.items():
