@@ -318,23 +318,25 @@ export class OpenAIAgentsTraceProcessor {
     return Promise.resolve();
   }
 
-  onTraceEnd(trace: AgentsTrace): Promise<void> {
+  async onTraceEnd(trace: AgentsTrace): Promise<void> {
     const traceData = this.traceSpans.get(trace.traceId);
 
     if (traceData) {
-      traceData.rootSpan.log({
-        input: traceData.metadata.firstInput,
-        output: traceData.metadata.lastOutput,
-      });
-      traceData.rootSpan.end();
-
-      this.traceSpans.delete(trace.traceId);
-      const orderIndex = this.traceOrder.indexOf(trace.traceId);
-      if (orderIndex > -1) {
-        this.traceOrder.splice(orderIndex, 1);
+      try {
+        traceData.rootSpan.log({
+          input: traceData.metadata.firstInput,
+          output: traceData.metadata.lastOutput,
+        });
+        traceData.rootSpan.end();
+        await traceData.rootSpan.flush();
+      } finally {
+        this.traceSpans.delete(trace.traceId);
+        const orderIndex = this.traceOrder.indexOf(trace.traceId);
+        if (orderIndex > -1) {
+          this.traceOrder.splice(orderIndex, 1);
+        }
       }
     }
-    return Promise.resolve();
   }
 
   private extractAgentLogData(span: AgentsSpan): Record<string, unknown> {
