@@ -30,7 +30,6 @@ extras_require = {
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],
     "temporal": ["temporalio>=1.19.0; python_version>='3.10'"],
-    "performance": ["orjson"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
