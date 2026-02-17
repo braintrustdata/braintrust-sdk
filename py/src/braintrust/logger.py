@@ -39,6 +39,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+import slugify
 import urllib3
 from braintrust.functions.stream import BraintrustStream
 from requests.adapters import HTTPAdapter
@@ -60,6 +61,7 @@ from .generated_types import (
     AttachmentStatus,
     DatasetEvent,
     ExperimentEvent,
+    IfExists,
     PromptOptions,
     SpanAttributes,
 )
@@ -1772,6 +1774,167 @@ def init_dataset(
         legacy=use_output,
         _internal_btql=_internal_btql,
         state=state,
+    )
+
+
+@dataclasses.dataclass
+class ExperimentalSandboxConfig:
+    """Configuration for a sandbox runtime."""
+
+    provider: Literal["modal"]
+    """The sandbox provider. Currently only "modal" is supported."""
+    snapshot_ref: str
+    """Reference to the sandbox snapshot."""
+
+
+@dataclasses.dataclass
+class ExperimentalRegisteredSandboxFunction:
+    """Registered eval function discovered from sandbox list endpoint."""
+
+    eval_name: str
+    """Eval name discovered in the sandbox."""
+    id: str
+    """Unique identifier for the function."""
+    name: str
+    """Function name."""
+    slug: str
+    """URL-friendly identifier."""
+
+
+@dataclasses.dataclass
+class ExperimentalRegisterSandboxResult:
+    """Result of registering a sandbox."""
+
+    project_id: str
+    """Project ID the sandbox is registered in."""
+    functions: list[ExperimentalRegisteredSandboxFunction]
+    """Registered eval functions discovered from this sandbox."""
+
+
+SANDBOX_GROUP_NAME_METADATA_KEY = "_bt_sandbox_group_name"
+
+
+def experimental_register_sandbox(
+    name: str,
+    project: str,
+    sandbox: ExperimentalSandboxConfig,
+    *,
+    entrypoints: list[str] | None = None,
+    slug: str | None = None,
+    description: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    if_exists: IfExists | None = None,
+    api_key: str | None = None,
+    app_url: str | None = None,
+    org_name: str | None = None,
+) -> ExperimentalRegisterSandboxResult:
+    """Register a sandbox function with Braintrust.
+
+    :param name: Deprecated. Ignored. Function names are derived from discovered eval names.
+    :param project: Name of the project to register the sandbox in.
+    :param sandbox: Sandbox configuration (provider and snapshot reference).
+    :param entrypoints: Optional list of entrypoints available in the sandbox.
+    :param slug: Deprecated. Ignored. Function slugs are derived from discovered eval names.
+    :param description: Optional description.
+    :param metadata: Optional metadata dict.
+    :param if_exists: What to do if function already exists. Defaults to "replace".
+    :param api_key: Braintrust API key. Uses BRAINTRUST_API_KEY env var if not provided.
+    :param app_url: Braintrust app URL. Uses default if not provided.
+    :param org_name: Organization name.
+    :returns: ExperimentalRegisterSandboxResult with project_id and created eval functions.
+
+    Example::
+
+        from braintrust import experimental_register_sandbox, ExperimentalSandboxConfig
+
+        result = experimental_register_sandbox(
+            name="My Sandbox",
+            project="My Project",
+            entrypoints=["./my-eval.eval.py"],
+            sandbox=ExperimentalSandboxConfig(provider="modal", snapshot_ref="sb-xxx"),
+        )
+        print([f.id for f in result.functions])
+    """
+    state = _state
+    state.login(api_key=api_key, app_url=app_url, org_name=org_name)
+
+    project_response = state.app_conn().post_json(
+        "api/project/register", {"project_name": project, "org_id": state.org_id}
+    )
+    project_id = project_response["project"]["id"]
+
+    if state.org_name is None:
+        raise ValueError("Organization name is required to register sandbox evals")
+
+    runtime_context = {
+        "runtime": "python",
+        "version": f"{sys.version_info.major}.{sys.version_info.minor}",
+    }
+
+    list_response = state.proxy_conn().post(
+        "/v1/sandbox/list",
+        json={
+            "sandbox_spec": {
+                "provider": sandbox.provider,
+                "snapshot_ref": sandbox.snapshot_ref,
+            },
+            "entrypoints": entrypoints,
+            "project_id": project_id,
+        },
+        headers={"x-bt-org-name": state.org_name},
+    )
+    response_raise_for_status(list_response)
+    evaluator_definitions = cast(dict[str, Any], list_response.json())
+
+    functions: list[ExperimentalRegisteredSandboxFunction] = []
+    for eval_name, evaluator_definition in evaluator_definitions.items():
+        function_def: dict[str, Any] = {
+            "project_id": project_id,
+            "org_name": state.org_name,
+            "name": eval_name,
+            "slug": slugify.slugify(eval_name, lowercase=True),
+            "function_type": "sandbox",
+            "function_data": {
+                "type": "code",
+                "data": {
+                    "type": "bundle",
+                    "runtime_context": runtime_context,
+                    "location": {
+                        "type": "sandbox",
+                        "sandbox_spec": {
+                            "provider": sandbox.provider,
+                            "snapshot_ref": sandbox.snapshot_ref,
+                        },
+                        "entrypoints": entrypoints,
+                        "eval_name": eval_name,
+                        "evaluator_definition": evaluator_definition,
+                    },
+                    "bundle_id": None,
+                    "preview": None,
+                },
+            },
+            "metadata": {
+                **(metadata or {}),
+                SANDBOX_GROUP_NAME_METADATA_KEY: name,
+            },
+            "if_exists": if_exists or "replace",
+        }
+        if description is not None:
+            function_def["description"] = description
+
+        response = state.api_conn().post_json("v1/function", function_def)
+        functions.append(
+            ExperimentalRegisteredSandboxFunction(
+                eval_name=eval_name,
+                id=response["id"],
+                name=response["name"],
+                slug=response["slug"],
+            )
+        )
+
+    return ExperimentalRegisterSandboxResult(
+        project_id=project_id,
+        functions=functions,
     )
 
 
@@ -3499,17 +3662,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV4.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
