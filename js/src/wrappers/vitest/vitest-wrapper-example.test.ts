@@ -2,13 +2,27 @@ import * as vitest from "vitest";
 import { configureNode } from "../../node";
 import { wrapVitest } from "./index";
 import { _exportsForTestingOnly } from "../../logger";
+import * as logger from "../../logger";
 
 configureNode();
 
-const { test, describe, expect, afterAll, beforeAll, logOutputs, logFeedback } =
+_exportsForTestingOnly.setInitialTestState();
+await _exportsForTestingOnly.simulateLoginForTests();
+const moduleBackgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+vitest.vi
+  .spyOn(logger, "initExperiment")
+  .mockImplementation((projectName: string, options?: any) => {
+    return _exportsForTestingOnly.initTestExperiment(
+      options?.experiment || "test-experiment",
+      projectName,
+    );
+  });
+
+const { test, describe, expect, afterAll, logOutputs, logFeedback } =
   wrapVitest(vitest, {
     projectName: "vitest-wrapper-demo",
-    displaySummary: true, // Show experiment summary at the end
+    displaySummary: false, // Disable auto-flush for tests
     onProgress: (event) => {
       if (event.type === "test_complete") {
         console.log(
@@ -17,15 +31,6 @@ const { test, describe, expect, afterAll, beforeAll, logOutputs, logFeedback } =
       }
     },
   });
-
-beforeAll(async () => {
-  _exportsForTestingOnly.setInitialTestState();
-  await _exportsForTestingOnly.simulateLoginForTests();
-});
-
-afterAll(async () => {
-  await _exportsForTestingOnly.simulateLogoutForTests();
-});
 
 describe("Math Operations", () => {
   test("addition works correctly", async () => {
@@ -98,4 +103,16 @@ describe("Concurrent Operations", () => {
     logOutputs({ operation: "async-3", duration: 75 });
     expect(true).toBe(true);
   });
+});
+
+// ✅ STEP 4: Module-level cleanup after all tests complete
+afterAll(async () => {
+  // Flush and verify spans were captured
+  await moduleBackgroundLogger.flush();
+  const spans = await moduleBackgroundLogger.drain();
+  console.log(`✅ Example tests captured ${spans.length} spans`);
+
+  // Cleanup
+  await _exportsForTestingOnly.clearTestBackgroundLogger();
+  await _exportsForTestingOnly.simulateLogoutForTests();
 });

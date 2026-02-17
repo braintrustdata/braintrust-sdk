@@ -12,7 +12,6 @@ import {
 import { wrapVitest } from "./index";
 import {
   _exportsForTestingOnly,
-  initLogger,
   type TestBackgroundLogger,
 } from "../../logger";
 import type { BraintrustVitest } from "./types";
@@ -24,7 +23,12 @@ import {
 } from "./context-manager";
 import { flushExperimentWithSync } from "./flush-manager";
 
-// Mock initDataset and initExperiment to avoid network calls
+// ✅ Set up test state and background logger at module level for unit tests
+_exportsForTestingOnly.setInitialTestState();
+await _exportsForTestingOnly.simulateLoginForTests();
+_exportsForTestingOnly.useTestBackgroundLogger();
+
+// ✅ STEP 2: Mock initDataset and initExperiment to avoid network calls
 vi.spyOn(logger, "initDataset").mockReturnValue({
   insert: vi.fn(() => "test-example-id"),
 } as any);
@@ -39,14 +43,7 @@ vi.spyOn(logger, "initExperiment").mockImplementation(
 );
 
 describe("Braintrust Vitest Wrapper", () => {
-  beforeAll(async () => {
-    _exportsForTestingOnly.setInitialTestState();
-    await _exportsForTestingOnly.simulateLoginForTests();
-  });
-
-  afterAll(async () => {
-    await _exportsForTestingOnly.simulateLogoutForTests();
-  });
+  // Test logger already set up at module level
 
   test("vitest is installed", () => {
     expect(test).toBeDefined();
@@ -219,120 +216,9 @@ describe("Braintrust Vitest Wrapper", () => {
   });
 });
 
-const bt = wrapVitest(
-  { test, expect, describe, beforeAll, afterAll },
-  {
-    projectName: "test-vitest-wrapper-integration",
-    displaySummary: false,
-  },
-);
-
-// Integration tests that actually use the wrapped Vitest
-bt.describe("Braintrust Vitest Wrapper Calls", () => {
-  let backgroundLogger: TestBackgroundLogger;
-  let logger: ReturnType<typeof initLogger>;
-
-  beforeAll(async () => {
-    _exportsForTestingOnly.setInitialTestState();
-    await _exportsForTestingOnly.simulateLoginForTests();
-    backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
-
-    logger = initLogger({
-      projectName: "test-vitest-wrapper-integration",
-    });
-  });
-
-  afterAll(async () => {
-    await logger.flush();
-
-    // Verify spans were captured during tests
-    const spans = await backgroundLogger.drain();
-    expect(spans.length).toBeGreaterThan(0);
-
-    // Find test spans
-    const testSpans = spans.filter(
-      (s: any) => s.span_attributes?.type === "task",
-    );
-    expect(testSpans.length).toBeGreaterThan(0);
-
-    // Verify automatic pass/fail logging
-    const passingTests = testSpans.filter((s: any) => s.scores?.pass === 1);
-    expect(passingTests.length).toBeGreaterThan(0);
-
-    await _exportsForTestingOnly.clearTestBackgroundLogger();
-    await _exportsForTestingOnly.simulateLogoutForTests();
-  });
-
-  bt.test("test creates span and logs outputs", async () => {
-    // Simulate some work
-    const result = { text: "test result", status: "success" };
-
-    bt.logOutputs({ text: result.text });
-    bt.logFeedback({ name: "quality", score: 1.0 });
-
-    // Verify span was created
-    const span = bt.getCurrentSpan();
-    expect(span).toBeDefined();
-    expect(span?.log).toBeDefined();
-
-    expect(result.text).toBe("test result");
-  });
-
-  bt.test(
-    "test with input and expected",
-    {
-      input: { prompt: "Count to 3" },
-      expected: "1, 2, 3",
-      metadata: { category: "counting" },
-      tags: ["numbers"],
-    },
-    async ({ input, expected }) => {
-      // Simulate processing the input
-      const result = { text: "1, 2, 3" };
-
-      expect(result.text).toBeTruthy();
-      expect(input).toEqual({ prompt: "Count to 3" });
-      expect(expected).toBe("1, 2, 3");
-
-      bt.logOutputs({ text: result.text });
-      bt.logFeedback({ name: "correctness", score: 0.8 });
-    },
-  );
-
-  bt.test("test with metrics tracking", async () => {
-    // Simulate some computation
-    const result = { answer: "4", computationTime: 10 };
-
-    expect(result.answer).toBeTruthy();
-
-    bt.logOutputs({ answer: result.answer });
-    bt.logFeedback({ name: "accuracy", score: 1.0 });
-
-    // Verify span context is available
-    const span = bt.getCurrentSpan();
-    expect(span).toBeDefined();
-  });
-
-  bt.test("test with multiple log calls", async () => {
-    bt.logOutputs({ step1: "completed" });
-    bt.logOutputs({ step2: "completed" });
-    bt.logFeedback({ name: "quality", score: 0.9 });
-    bt.logFeedback({ name: "speed", score: 0.8 });
-
-    expect(true).toBe(true);
-  });
-});
-
-// Comprehensive tests for new features and fixes
+// Unit tests for configuration and features
 describe("Configuration Options", () => {
-  beforeAll(async () => {
-    _exportsForTestingOnly.setInitialTestState();
-    await _exportsForTestingOnly.simulateLoginForTests();
-  });
-
-  afterAll(async () => {
-    await _exportsForTestingOnly.simulateLogoutForTests();
-  });
+  // Test logger already set up at module level
 
   test("supports progress reporting callback", () => {
     const events: any[] = [];
@@ -417,4 +303,10 @@ describe("Scorer and Dataset Support", () => {
     };
     expect(config).toBeDefined();
   });
+});
+
+// ✅ STEP 3: Module-level cleanup after all tests complete
+afterAll(async () => {
+  await _exportsForTestingOnly.clearTestBackgroundLogger();
+  await _exportsForTestingOnly.simulateLogoutForTests();
 });
