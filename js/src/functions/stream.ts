@@ -284,7 +284,7 @@ function btStreamParser() {
     },
     async transform(chunk, controller) {
       if (chunk instanceof Uint8Array) {
-        parser.feed(decoder.decode(chunk));
+        parser.feed(decoder.decode(chunk, { stream: true }));
       } else if (typeof chunk === "string") {
         parser.feed(chunk);
       } else {
