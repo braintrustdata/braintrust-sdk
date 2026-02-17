@@ -2,50 +2,13 @@
 
 This example demonstrates how to integrate the [Vercel AI SDK](https://sdk.vercel.ai/) with [Temporal](https://temporal.io/) workflows while using [Braintrust](https://braintrust.dev/) to trace both Temporal workflows and LLM calls.
 
-## Integration Patterns
-
-### TemporalProvider + AiSdkPlugin and wrapping the model provider
-
-**Best for:** Workflows where you want clean code like Pattern 1 but need LLM observability.
-
-Wraps the AI SDK provider with Braintrust tracing before passing it to Temporal's `AiSdkPlugin`. Workflows still use `temporalProvider` but get automatic LLM tracing.
-
-**Setup:** [worker.ts](src/worker.ts#L32-L48)
-
-```typescript
-import { wrapAISDKProvider } from "braintrust";
-
-// Wrap the provider to add tracing
-const tracedOpenAI = wrapAISDKProvider(openai);
-
-const worker = await Worker.create({
-  plugins: [
-    new AiSdkPlugin({
-      modelProvider: tracedOpenAI, // Use traced provider
-    }),
-    new BraintrustTemporalPlugin(),
-  ],
-});
-```
-
-**Trace hierarchy:**
-
-```
-temporal.workflow.haikuAgent
-  └── temporal.activity.invokeModel
-      └── doGenerate  ← LLM span with full details
-          ├── input: { prompt: "...", system: "..." }
-          ├── output: { text: "...", finishReason: "stop" }
-          └── metrics: { promptTokens: 15, completionTokens: 20 }
-```
-
----
+## Integration Pattern
 
 ### Custom Activities with wrapAISDK
 
-Creates explicit activities that use Braintrust's `wrapAISDK` for comprehensive instrumentation. Provides the most detailed tracing including tool calls and streaming.
+This example uses custom activities with Braintrust's `wrapAISDK` for comprehensive instrumentation. This provides detailed tracing including LLM calls, tool calls, and streaming.
 
-**Example:** [`haikuAgentTraced`](src/workflows.ts#L64-L69) + [`generateTextTraced`](src/activities.ts#L18-L35)
+**Example:** [`haikuAgent`](src/workflows.ts) + [`generateTextTraced`](src/activities.ts#L18-L35)
 
 **Activity:**
 
@@ -80,9 +43,10 @@ const { generateTextTraced } = proxyActivities<typeof activities>({
   startToCloseTimeout: "1 minute",
 });
 
-export async function haikuAgentTraced(topic: string): Promise<string> {
+export async function haikuAgent(topic: string): Promise<string> {
   return await generateTextTraced({
     modelId: "gpt-4o-mini",
+    system: "You only respond in haikus",
     prompt: `Write a haiku about ${topic}`,
   });
 }
@@ -91,7 +55,7 @@ export async function haikuAgentTraced(topic: string): Promise<string> {
 **Trace hierarchy:**
 
 ```
-temporal.workflow.haikuAgentTraced
+temporal.workflow.haikuAgent
   └── temporal.activity.generateTextTraced
       └── generateText
           └── doGenerate
@@ -155,16 +119,9 @@ This starts both the Temporal server and worker with Braintrust tracing enabled.
 **Terminal 2: Run Workflows**
 
 ```bash
-# PSimple workflows with temporalProvider
-mise run workflow-haiku    # Text generation with LLM tracing
-mise run workflow-tools    # Function calling with LLM tracing
-
-# Full tracing including tool call details with wrapAISDK
-mise run workflow-haiku-traced
-mise run workflow-tools-traced
+mise run workflow-haiku    # Text generation with full LLM tracing
+mise run workflow-tools    # Function calling with full LLM + tool tracing
 ```
-
-**Note:** This example demonstrates **Pattern 2** by default (traced provider is enabled in [worker.ts](src/worker.ts#L34)). For Pattern 1 (no LLM tracing), remove the `wrapAISDKProvider` wrapper.
 
 **Stop Everything:**
 
@@ -196,35 +153,17 @@ The worker will connect to Temporal and initialize Braintrust tracing.
 ```bash
 pnpm run workflow:haiku
 pnpm run workflow:tools
-
-pnpm run workflow:haiku-traced
-pnpm run workflow:tools-traced
 ```
 
-## Important: AI SDK v6 Polyfills
+## Architecture
 
-AI SDK v6 uses the Web Streams API (`TransformStream`, `ReadableStream`, `WritableStream`), which is not available in Temporal's workflow sandbox by default. The `@temporalio/ai-sdk` package provides the necessary polyfills.
+This example uses a simple pattern:
 
-**Critical requirement**: You **must** import the polyfills at the top of your workflow file:
+1. **Workflows** define the business logic and call activities
+2. **Activities** perform the actual LLM calls using `wrapAISDK`
+3. **Braintrust** traces both Temporal spans and LLM calls automatically
 
-```typescript
-// Load polyfills for AI SDK v6
-import "@temporalio/ai-sdk/lib/load-polyfills";
-
-import { generateText } from "ai";
-import { temporalProvider } from "@temporalio/ai-sdk";
-// ... rest of your imports
-```
-
-This import loads polyfills for:
-
-- Web Streams API (`TransformStream`, `ReadableStream`, `WritableStream`)
-- `Headers` API
-- `structuredClone`
-
-**Without this import**, you'll get a `ReferenceError: TransformStream is not defined` error when workflows try to call AI SDK functions.
-
-All workflows in this example ([src/workflows.ts](src/workflows.ts)) include this import.
+Because AI calls happen in activities (not workflows), no special polyfills are needed in the workflow sandbox.
 
 ## Learn More
 
@@ -238,9 +177,7 @@ All workflows in this example ([src/workflows.ts](src/workflows.ts)) include thi
 
 ## Example Workflows
 
-| Workflow           | Pattern | File                                 | Description                 |
-| ------------------ | ------- | ------------------------------------ | --------------------------- |
-| `haikuAgent`       | 1 & 2   | [workflows.ts](src/workflows.ts#L21) | Simple text generation      |
-| `toolsAgent`       | 1 & 2   | [workflows.ts](src/workflows.ts#L35) | Function calling with tools |
-| `haikuAgentTraced` | 3       | [workflows.ts](src/workflows.ts#L64) | Full LLM tracing            |
-| `toolsAgentTraced` | 3       | [workflows.ts](src/workflows.ts#L72) | Full tool call tracing      |
+| Workflow     | File                             | Description                             |
+| ------------ | -------------------------------- | --------------------------------------- |
+| `haikuAgent` | [workflows.ts](src/workflows.ts) | Text generation with full LLM tracing   |
+| `toolsAgent` | [workflows.ts](src/workflows.ts) | Function calling with full tool tracing |

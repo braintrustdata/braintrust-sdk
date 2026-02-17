@@ -25,15 +25,11 @@ description = "Run workflow client"
 run = "pnpm run client"
 
 [tasks.workflow-haiku]
-description = "Run haiku workflow (Pattern 1: Simple tracing)"
+description = "Run haiku workflow with full LLM tracing"
 run = "pnpm run workflow:haiku"
 
-[tasks.workflow-haiku-traced]
-description = "Run haiku workflow (Pattern 2: Full LLM tracing)"
-run = "pnpm run workflow:haiku-traced"
-
 [tasks.workflow-tools]
-description = "Run tools workflow"
+description = "Run tools workflow with full LLM + tool tracing"
 run = "pnpm run workflow:tools"
 
 [tasks.workflow-mcp]
