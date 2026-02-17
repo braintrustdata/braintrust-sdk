@@ -212,7 +212,10 @@ const makeGenerateTextWrapper = (
 
     return traced(
       async (span) => {
-        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(params.model, aiSDK);
+        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+          params.model,
+          aiSDK,
+        );
 
         const result = await generateText({
           ...params,
@@ -566,7 +569,10 @@ const wrapGenerateObject = (
 
     return traced(
       async (span) => {
-        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(params.model, aiSDK);
+        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+          params.model,
+          aiSDK,
+        );
 
         const result = await generateObject({
           ...params,
@@ -680,7 +686,10 @@ const makeStreamTextWrapper = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
-      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(params.model, aiSDK);
+      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+        params.model,
+        aiSDK,
+      );
 
       const result = withCurrent(span, () =>
         streamText({
@@ -852,7 +861,10 @@ const wrapStreamObject = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
-      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(params.model, aiSDK);
+      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+        params.model,
+        aiSDK,
+      );
 
       const result = withCurrent(span, () =>
         streamObject({
