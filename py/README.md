@@ -12,13 +12,7 @@ Install the library with pip.
 pip install braintrust
 ```
 
-**Performance tip**: For 3-5x faster JSON serialization, install with the optional `performance` extra:
-
-```bash
-pip install braintrust[performance]
-```
-
-Or install `orjson` separately:
+**Performance tip**: For 3-5x faster JSON serialization, install `orjson` separately:
 
 ```bash
 pip install orjson
