@@ -84,13 +84,19 @@ describe("OpenAIAgentsTraceProcessor flush behavior", () => {
     await processor.onSpanStart(childOpenAIAgentsSpan);
     await processor.onSpanEnd(childOpenAIAgentsSpan);
 
-    const onTraceEndCompletion = trackAsyncCompletion(processor.onTraceEnd(trace));
+    const onTraceEndCompletion = trackAsyncCompletion(
+      processor.onTraceEnd(trace),
+    );
 
     await Promise.resolve();
 
     assert.equal(endCalls, 1, "onTraceEnd should end the root span");
     assert.equal(flushCalls, 1, "onTraceEnd should flush the root span once");
-    assert.equal(rootSpanInput, "first-input", "onTraceEnd should log first input");
+    assert.equal(
+      rootSpanInput,
+      "first-input",
+      "onTraceEnd should log first input",
+    );
     assert.equal(
       rootSpanOutput,
       "last-output",
@@ -170,13 +176,19 @@ describe("OpenAIAgentsTraceProcessor flush behavior", () => {
     await processor.onSpanStart(childOpenAIAgentsSpan);
     await processor.onSpanEnd(childOpenAIAgentsSpan);
 
-    const onTraceEndCompletion = trackAsyncCompletion(processor.onTraceEnd(trace));
+    const onTraceEndCompletion = trackAsyncCompletion(
+      processor.onTraceEnd(trace),
+    );
 
     await Promise.resolve();
 
     assert.equal(endCalls, 1, "onTraceEnd should end the root span");
     assert.equal(flushCalls, 1, "onTraceEnd should flush the root span once");
-    assert.equal(rootSpanInput, "first-input", "root span log should include first input");
+    assert.equal(
+      rootSpanInput,
+      "first-input",
+      "root span log should include first input",
+    );
     assert.equal(
       rootSpanOutput,
       "last-output",
