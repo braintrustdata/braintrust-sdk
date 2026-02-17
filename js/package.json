@@ -24,8 +24,8 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "edge-light": "./dist/browser.mjs",
-      "workerd": "./dist/browser.mjs",
+      "edge-light": "./dist/edge-light.mjs",
+      "workerd": "./dist/workerd.mjs",
       "node": {
         "import": "./dist/index.mjs",
         "require": "./dist/index.js"
@@ -36,14 +36,14 @@
       "default": "./dist/index.mjs"
     },
     "./workerd": {
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.js",
-      "default": "./dist/browser.mjs"
+      "import": "./dist/workerd.mjs",
+      "require": "./dist/workerd.js",
+      "default": "./dist/workerd.mjs"
     },
      "./edge-light": {
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.js",
-      "default": "./dist/browser.mjs"
+      "import": "./dist/edge-light.mjs",
+      "require": "./dist/edge-light.js",
+      "default": "./dist/edge-light.mjs"
     },
     "./browser": {
       "import": "./dist/browser.mjs",

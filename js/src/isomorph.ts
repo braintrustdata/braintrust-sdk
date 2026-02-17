@@ -30,7 +30,7 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
-  buildType: "browser" | "node" | "unknown";
+  buildType: "browser" | "node" | "edge-light" | "workerd" | "unknown";
 
   getRepoInfo: (
     settings?: GitMetadataSettings,

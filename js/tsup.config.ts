@@ -58,10 +58,12 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
-  // Browser/edge exports - single build used by browser, edge-light, and workerd
+  // Browser/edge exports
   {
     entry: {
       browser: "src/browser.ts",
+      "edge-light": "src/edge-light.ts",
+      workerd: "src/workerd.ts",
     },
     format: ["cjs", "esm"],
     outDir: "dist",
