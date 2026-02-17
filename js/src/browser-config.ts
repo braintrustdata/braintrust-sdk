@@ -2,8 +2,7 @@
 // This file is only used for the /browser, /edge-light, /workerd exports
 
 import iso from "./isomorph";
-import { _internalSetInitialState, BraintrustState } from "./logger";
-import { BRAINTRUST_STATE_SYMBOL_NAME } from "./symbol-name";
+import { _internalSetInitialState } from "./logger";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge
 // environment, even though it's not defined in the browser.

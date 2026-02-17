@@ -39,7 +39,6 @@ import {
   isArray,
   isObject,
 } from "./util";
-import { BRAINTRUST_STATE_SYMBOL_NAME } from "./symbol-name";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -969,7 +968,7 @@ export function _internalSetInitialState() {
   if (_globalState) {
     return;
   }
-  const sym = Symbol.for(BRAINTRUST_STATE_SYMBOL_NAME);
+  const sym = Symbol.for("braintrust-state");
   let existing = (globalThis as any)[sym];
   if (!existing) {
     const state = new BraintrustState({});
