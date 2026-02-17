@@ -188,7 +188,13 @@ describe("OpenAIAgentsTraceProcessor flush behavior", () => {
     );
 
     deferred.reject(failure);
-    await assert.rejects(onTraceEndCompletion.promise, /flush failed/);
+    try {
+      await onTraceEndCompletion.promise;
+      assert.fail("onTraceEnd should reject when root span flush rejects");
+    } catch (error) {
+      assert.instanceOf(error as Error, Error);
+      assert.equal((error as Error).message, "flush failed");
+    }
 
     assert.isFalse(
       processor._traceSpans.has(trace.traceId),
