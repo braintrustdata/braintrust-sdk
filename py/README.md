@@ -24,7 +24,7 @@ Or install `orjson` separately:
 pip install orjson
 ```
 
-The SDK automatically detects and uses orjson if available, with seamless fallback to standard json. See [ORJSON_OPTIMIZATION.md](ORJSON_OPTIMIZATION.md) for details.
+The SDK automatically detects and uses orjson if available, with seamless fallback to standard json.
 
 Then, run a simple experiment with the following code (replace `YOUR_API_KEY` with
 your Braintrust API key):
