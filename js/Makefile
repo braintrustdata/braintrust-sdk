@@ -17,9 +17,15 @@ help:
 	@echo "  make test-ai-sdk-v6     - Run AI SDK v6 wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make test-api-compat    - Run API compatibility tests"
-	@echo "  make test-smoke         - Run smoke tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
+	@echo ""
+	@echo "Smoke tests (mimics CI workflow):"
+	@echo "  make test-smoke         - Run all smoke tests (auto-prepares)"
+	@echo "  make test-smoke deno    - Run deno smoke test only"
+	@echo "  make test-smoke span    - Run span smoke test only"
+	@echo ""
+	@echo "See smoke/README.md for details on smoke test infrastructure"
 
 .PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-latest install-optional-deps publish-beta-local test-smoke
 
@@ -155,39 +161,12 @@ clean:
 # Smoke tests
 # -------------------------------------------------------------------------------------------------
 
-# Marker file to track when smoke tests were last prepared
-SMOKE_PREPARE_MARKER := smoke/.prepare-marker
 SMOKE_DIR := smoke
 
-# Run smoke tests (prepares if source changed)
+# Run smoke tests - delegates to smoke/Makefile which handles auto-discovery and tarball creation
 # Usage: make test-smoke [TEST_NAME...]
 test-smoke:
-	@if [ ! -f "$(SMOKE_PREPARE_MARKER)" ]; then \
-		echo "⚠ Smoke tests not prepared, preparing..."; \
-		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
-	elif [ -n "$$(find src -type f \( -name '*.ts' -o -name '*.tsx' \) -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
-		echo "⚠ SDK source files changed, preparing smoke tests..."; \
-		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
-	elif [ -n "$$(find dist -type f -name '*.js' -newer "$(SMOKE_PREPARE_MARKER)" 2>/dev/null | head -1)" ]; then \
-		echo "⚠ SDK build artifacts changed, preparing smoke tests..."; \
-		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
-	elif [ ! -d "artifacts" ] || [ -z "$$(ls artifacts/*.tgz 2>/dev/null | head -1)" ]; then \
-		echo "⚠ Smoke test artifacts missing, preparing..."; \
-		cd $(SMOKE_DIR) && ./prepare-tests.sh && touch .prepare-marker; \
-	else \
-		echo "✓ Smoke tests are up to date"; \
-	fi
-	@echo "Running smoke tests..."
-	@EXIT_CODE=0; \
-	cd $(SMOKE_DIR) && ./run-tests.sh $(filter-out test-smoke,$(MAKECMDGOALS)) || EXIT_CODE=$$?; \
-	echo ""; \
-	echo "Restoring package files..."; \
-	for dir in tests/*/; do \
-		if [ -f "$$dir/package.json" ] && grep -q '"restore"' "$$dir/package.json" 2>/dev/null; then \
-			(cd "$$dir" && npm run restore >/dev/null 2>&1 && echo "  ✓ Restored $$(basename $$dir)") || true; \
-		fi; \
-	done; \
-	exit $$EXIT_CODE
+	@cd $(SMOKE_DIR) && $(MAKE) test $(filter-out test-smoke,$(MAKECMDGOALS))
 
 # Allow passing test names as make targets (they become no-ops)
 cloudflare-worker deno nextjs-instrumentation otel-v1 span span-jest:

@@ -9,7 +9,7 @@ import {
   currentSpan,
   setMaskingFunction,
 } from "./logger";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 
 configureNode();
 

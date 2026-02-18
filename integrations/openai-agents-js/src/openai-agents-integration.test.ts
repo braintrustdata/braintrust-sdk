@@ -998,6 +998,158 @@ describe(
       );
     });
 
+    test("Response span extracts cache write tokens from usage", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-cache-write-response",
+        name: "cache-write-response-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const responseSpan: any = {
+        spanId: "test-response-span-cache-write",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _response: {
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              total_tokens: 150,
+              input_tokens_details: {
+                cache_write_tokens: 25,
+              },
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      const spans = await backgroundLogger.drain();
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+      const metrics = (responseSpanLog as any).metrics;
+
+      assert.equal(
+        metrics.prompt_cache_creation_tokens,
+        25,
+        "Should extract cache_write_tokens to prompt_cache_creation_tokens",
+      );
+    });
+
+    test("Response span handles zero cache write tokens correctly", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-zero-cache-write",
+        name: "zero-cache-write-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const responseSpan: any = {
+        spanId: "test-response-span-zero-cache-write",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _response: {
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              input_tokens_details: {
+                cache_write_tokens: 0,
+              },
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      const spans = await backgroundLogger.drain();
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+      const metrics = (responseSpanLog as any).metrics;
+
+      // Zero should be logged, not skipped
+      assert.equal(
+        metrics.prompt_cache_creation_tokens,
+        0,
+        "Should log cache_write_tokens even when zero",
+      );
+    });
+
+    test("Response span handles missing cache write tokens gracefully", async () => {
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-no-cache-write",
+        name: "no-cache-write-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+
+      const responseSpan: any = {
+        spanId: "test-response-span-no-cache-write",
+        traceId: trace.traceId,
+        parentId: null,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date(Date.now() + 1000).toISOString(),
+        spanData: {
+          type: "response",
+          _response: {
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              input_tokens_details: {
+                cached_tokens: 40,
+                // No cache_write_tokens
+              },
+            },
+          },
+        },
+        error: null,
+      };
+
+      await processor.onSpanStart(responseSpan);
+      await processor.onSpanEnd(responseSpan);
+
+      const spans = await backgroundLogger.drain();
+      const responseSpanLog = spans.find(
+        (s: any) => s.span_attributes?.type === "llm",
+      );
+      const metrics = (responseSpanLog as any).metrics;
+
+      assert.isUndefined(
+        metrics.prompt_cache_creation_tokens,
+        "Should not add prompt_cache_creation_tokens if not in usage",
+      );
+    });
+
     test("Response span handles missing cached tokens gracefully", async () => {
       const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,

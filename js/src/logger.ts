@@ -38,7 +38,7 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "../util/index";
+} from "./util";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -95,13 +95,11 @@ const parametersRowSchema = z.object({
 type ParametersRow = z.infer<typeof parametersRowSchema>;
 
 import { waitUntil } from "@vercel/functions";
-import Mustache from "mustache";
 import {
   parseTemplateFormat,
   renderTemplateContent,
-  type TemplateFormat,
 } from "./template/renderer";
-import { renderNunjucksString } from "./template/nunjucks-env";
+import type { TemplateFormat } from "./template/registry";
 
 import { z, ZodError } from "zod/v3";
 import {
@@ -124,7 +122,6 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
-import { lintTemplate as lintNunjucksTemplate } from "./template/nunjucks-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 import type { EvalParameters, InferParameters } from "./eval-parameters";
@@ -540,10 +537,11 @@ export const NOOP_SPAN = new NoopSpan();
 export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
-// use the same state as the toplevel module. This global variable serves as a
-// mechanism to propagate the initial state from some toplevel creator.
+// use the same state as the toplevel module. Use a symbol on `globalThis.
 declare global {
-  var __inherited_braintrust_state: BraintrustState;
+  interface Global {
+    [key: symbol]: any;
+  }
 }
 
 const loginSchema = z.strictObject({
@@ -958,22 +956,26 @@ function initTestExperiment(
 }
 
 /**
- * This function should be invoked exactly once after configuring the `iso`
- * object based on the platform. See js/src/node.ts for an example.
+ * Initialize the global Braintrust state lazily, it only creates the BraintrustState instance on the first invocation.
+ *
+ * The state is stored in a global symbol to ensure cross-bundle compatibility.
+ *
+ * This is invoked by platform-specific initialization functions (configureNode/configureBrowser)
+ *
  * @internal
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    console.warn(
-      "global state already set, should only call _internalSetInitialState once",
-    );
     return;
   }
-  _globalState =
-    globalThis.__inherited_braintrust_state ||
-    new BraintrustState({
-      /*empty login options*/
-    });
+  const sym = Symbol.for("braintrust-state");
+  let existing = (globalThis as any)[sym];
+  if (!existing) {
+    const state = new BraintrustState({});
+    (globalThis as any)[sym] = state;
+    existing = state;
+  }
+  _globalState = existing;
 }
 /**
  * @internal
@@ -4367,7 +4369,7 @@ export type FullLoginOptions = LoginOptions & {
 export function setMaskingFunction(
   maskingFunction: ((value: unknown) => unknown) | null,
 ): void {
-  _globalState.setMaskingFunction(maskingFunction);
+  _internalGetGlobalState().setMaskingFunction(maskingFunction);
 }
 
 /**
@@ -4386,7 +4388,8 @@ export async function login(
 ): Promise<BraintrustState> {
   const { forceLogin = false } = options || {};
 
-  if (_globalState.loggedIn && !forceLogin) {
+  const state = _internalGetGlobalState();
+  if (state.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -4401,21 +4404,24 @@ export async function login(
         );
       }
     }
-    checkUpdatedParam("appUrl", options.appUrl, _globalState.appUrl);
+    checkUpdatedParam("appUrl", options.appUrl, state.appUrl);
     checkUpdatedParam(
       "apiKey",
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      _globalState.loginToken,
+      state.loginToken,
     );
-    checkUpdatedParam("orgName", options.orgName, _globalState.orgName);
-    return _globalState;
+    checkUpdatedParam("orgName", options.orgName, state.orgName);
+    return state;
   }
 
-  await _globalState.login(options);
-  globalThis.__inherited_braintrust_state = _globalState;
-  return _globalState;
+  if (!state) {
+    _internalSetInitialState();
+  }
+
+  await state.login(options);
+  return state;
 }
 
 export async function loginToState(options: LoginOptions = {}) {
@@ -4978,7 +4984,7 @@ export async function flush(options?: OptionalStateArg): Promise<void> {
  * @param fetch The fetch implementation to use.
  */
 export function setFetch(fetch: typeof globalThis.fetch): void {
-  _globalState.setFetch(fetch);
+  _internalGetGlobalState().setFetch(fetch);
 }
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
@@ -7034,28 +7040,15 @@ function renderTemplatedObject(
   options: { strict?: boolean; templateFormat: TemplateFormat },
 ): unknown {
   if (typeof obj === "string") {
-    const strict = !!options.strict;
-    if (options.templateFormat === "nunjucks") {
-      if (strict) {
-        lintNunjucksTemplate(obj, args);
-      }
-      return renderNunjucksString(obj, args, strict);
-    }
-    if (options.templateFormat === "mustache") {
-      if (strict) {
-        lintMustacheTemplate(obj, args);
-      }
-      return Mustache.render(obj, args, undefined, {
-        escape: (value) => {
-          if (typeof value === "string") {
-            return value;
-          } else {
-            return JSON.stringify(value);
-          }
-        },
-      });
-    }
-    return obj;
+    return renderTemplateContent(
+      obj,
+      args,
+      (value) => (typeof value === "string" ? value : JSON.stringify(value)),
+      {
+        strict: options.strict,
+        templateFormat: options.templateFormat,
+      },
+    );
   } else if (isArray(obj)) {
     return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
@@ -7661,9 +7654,10 @@ async function simulateLoginForTests() {
 
 // This is a helper function to simulate a logout for testing.
 function simulateLogoutForTests() {
-  _globalState.resetLoginInfo();
-  _globalState.appUrl = "https://www.braintrust.dev";
-  return _globalState;
+  const state = _internalGetGlobalState();
+  state.resetLoginInfo();
+  state.appUrl = "https://www.braintrust.dev";
+  return state;
 }
 
 /**
@@ -7759,4 +7753,5 @@ export const _exportsForTestingOnly = {
   isGeneratorFunction,
   isAsyncGeneratorFunction,
   resetIdGenStateForTests,
+  isomorph: iso, // Expose isomorph for build type detection
 };

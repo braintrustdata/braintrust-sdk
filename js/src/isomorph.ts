@@ -30,6 +30,14 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
+  buildType:
+    | "browser" // deprecated, use /workerd or /edge-light entrypoints for edge environments
+    | "browser-js" // @braintrust/browser package
+    | "node"
+    | "edge-light"
+    | "workerd"
+    | "unknown";
+
   getRepoInfo: (
     settings?: GitMetadataSettings,
   ) => Promise<RepoInfo | undefined>;
@@ -76,6 +84,7 @@ export interface Common {
 }
 
 const iso: Common = {
+  buildType: "unknown", // Will be set by configureBrowser() or configureNode()
   getRepoInfo: async (_settings) => undefined,
   getPastNAncestors: async () => [],
   getEnv: (_name) => undefined,

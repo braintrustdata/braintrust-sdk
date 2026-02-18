@@ -1,10 +1,11 @@
 {
+  "name": "braintrust-sdk-js",
+  "version": "0.0.1",
   "repository": "https://github.com/braintrustdata/braintrust-sdk",
   "license": "MIT",
   "private": true,
   "workspaces": [
-    "js",
-    "core/js"
+    "js"
   ],
   "scripts": {
     "build": "turbo run build",

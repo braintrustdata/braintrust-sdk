@@ -14,7 +14,7 @@ import {
   runEvaluator,
 } from "./framework";
 import { _exportsForTestingOnly, BraintrustState } from "./logger";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
 
@@ -1180,9 +1180,10 @@ describe("framework2 metadata support", () => {
       // Check that template_format is stored at the top level of prompt data
       expect(prompt.templateFormat).toBe("nunjucks");
 
-      // Verify it renders correctly
-      const result = prompt.build({ name: "World" });
-      expect(result.messages[0].content).toBe("Hello World");
+      // Verify it requires the addon to render
+      expect(() => prompt.build({ name: "World" })).toThrow(
+        "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+      );
     });
   });
 });
