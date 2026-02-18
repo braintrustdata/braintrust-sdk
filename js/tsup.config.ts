@@ -1,6 +1,4 @@
 import { defineConfig } from "tsup";
-import fs from "node:fs";
-import { builtinModules } from "node:module";
 
 export default defineConfig([
   // Node.js entrypoint

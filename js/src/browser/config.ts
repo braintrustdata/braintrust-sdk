@@ -8,7 +8,6 @@ declare global {
   var __BRAINTRUST_BROWSER_PKG__: boolean | undefined;
 }
 
-let messageShown = false;
 let browserConfigured = false;
 
 /**
@@ -17,24 +16,6 @@ let browserConfigured = false;
 export function configureBrowser(): void {
   if (browserConfigured) {
     return;
-  }
-
-  const isUsingBrowserPackage =
-    typeof globalThis !== "undefined" && globalThis.__BRAINTRUST_BROWSER_PKG__;
-
-  if (
-    !isUsingBrowserPackage &&
-    !messageShown &&
-    typeof console !== "undefined"
-  ) {
-    console.info(
-      "This entrypoint is no longer supported.\n\n" +
-        "You should be using entrypoints:\n\n" +
-        "- `/workerd` (cloudflare envs)\n" +
-        "- `/edge-light` (next-js or other edge envs)\n\n" +
-        "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n",
-    );
-    messageShown = true;
   }
 
   iso.buildType = "browser";
