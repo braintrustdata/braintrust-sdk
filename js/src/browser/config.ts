@@ -23,9 +23,11 @@ export function configureBrowser(): void {
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    } else {
+      iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
     }
   } catch {
-    iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
+    // Ignore
   }
 
   iso.getEnv = (name: string) => {
