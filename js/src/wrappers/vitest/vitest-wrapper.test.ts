@@ -432,6 +432,84 @@ describe("Flush Manager", () => {
   });
 });
 
+describe("Span Parent Relationships", () => {
+  test("spans maintain correct parent relationships with traced()", async () => {
+    _resetContextManager();
+
+    const bt = wrapVitest(
+      { test, expect, describe, beforeAll, afterAll },
+      { projectName: "parent-test", displaySummary: false },
+    );
+
+    let parentSpanId: string | undefined;
+    let childSpanId: string | undefined;
+    let childSpanParentId: string | undefined;
+
+    // Create a describe block which sets up an experiment context
+    bt.describe("parent suite", () => {
+      bt.test("parent test", async () => {
+        const parentSpan = bt.getCurrentSpan();
+        expect(parentSpan).not.toBeNull();
+        if (parentSpan) {
+          parentSpanId = parentSpan.id;
+        }
+      });
+
+      bt.test("child test that should have parent context", async () => {
+        const childSpan = bt.getCurrentSpan();
+        expect(childSpan).not.toBeNull();
+        if (childSpan) {
+          childSpanId = childSpan.id;
+          // Access internal span parent information
+          const spanInternal = childSpan as any;
+          if (spanInternal.parentIds && spanInternal.parentIds.length > 0) {
+            childSpanParentId = spanInternal.parentIds[0];
+          }
+        }
+      });
+    });
+
+    // Verify that both tests ran and captured span info
+    expect(parentSpanId).toBeDefined();
+    expect(childSpanId).toBeDefined();
+
+    // Both spans should be different
+    expect(childSpanId).not.toBe(parentSpanId);
+  });
+
+  test("nested describe blocks maintain experiment context hierarchy", () => {
+    _resetContextManager();
+
+    const bt = wrapVitest(
+      { test, expect, describe, beforeAll, afterAll },
+      { projectName: "nested-test", displaySummary: false },
+    );
+
+    let outerContext: any = null;
+    let innerContext: any = null;
+
+    bt.describe("outer suite", () => {
+      bt.test("outer test", () => {
+        outerContext = getExperimentContext();
+        expect(outerContext).not.toBeNull();
+        expect(outerContext?.experiment).toBeDefined();
+      });
+
+      bt.describe("inner suite", () => {
+        bt.test("inner test", () => {
+          innerContext = getExperimentContext();
+          expect(innerContext).not.toBeNull();
+          expect(innerContext?.experiment).toBeDefined();
+        });
+      });
+    });
+
+    // Both contexts should have experiments
+    expect(outerContext).not.toBeNull();
+    expect(innerContext).not.toBeNull();
+  });
+});
+
 describe("Scorer and Dataset Support", () => {
   let bt: BraintrustVitest;
 

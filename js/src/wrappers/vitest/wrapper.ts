@@ -3,6 +3,7 @@ import {
   type Experiment,
   type ExperimentSummary,
   withCurrent,
+  traced,
 } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import type {
@@ -71,8 +72,6 @@ export function wrapTest<VitestContext = unknown>(
   originalTest: TestFunction<VitestContext>,
   config: WrapperConfig,
 ): WrappedTest<VitestContext> {
-  // Extract wrapping logic without modifier attachment to avoid recursion
-  // wrapBare can accept either a full TestFunction or a BaseTestFunction (like modifiers)
   const wrapBare = (
     testFn: TestFunction<VitestContext> | BaseTestFunction<VitestContext>,
   ): WrappedTest<VitestContext> => {
@@ -176,111 +175,106 @@ export function wrapTest<VitestContext = unknown>(
             return;
           }
 
-          // Create span using startSpan
-          const span = experiment.startSpan({
-            name,
-            spanAttributes: {
-              type: SpanTypeAttribute.TASK,
-            },
-            event: testConfig
-              ? {
-                  input: testConfig.input,
-                  expected: testConfig.expected,
-                  metadata: testConfig.metadata,
-                  tags: testConfig.tags,
+          const result = await traced(
+            async (span) => {
+              let testResult: unknown;
+
+              try {
+                if (testConfig && maybeFn) {
+                  const params: TestContext = {
+                    input: testConfig.input,
+                    expected: testConfig.expected,
+                    metadata: testConfig.metadata,
+                  };
+                  const context = {
+                    ...vitestContext,
+                    ...params,
+                  } satisfies TestContext & VitestContext;
+                  testResult = await maybeFn(context);
+                } else if (typeof configOrFn === "function") {
+                  testResult = await configOrFn(vitestContext);
                 }
-              : undefined,
-          });
 
-          // span is set as current for the entire test
-          const result = await withCurrent(span, async () => {
-            let testResult: unknown;
+                // Run scorers if configured (on success)
+                if (testConfig?.scorers && testConfig.scorers.length > 0) {
+                  await runScorers({
+                    scorers: testConfig.scorers,
+                    output: testResult,
+                    expected: testConfig.expected,
+                    input: testConfig.input,
+                    metadata: testConfig.metadata,
+                    span,
+                  });
+                }
 
-            try {
-              if (testConfig && maybeFn) {
-                const params: TestContext = {
-                  input: testConfig.input,
-                  expected: testConfig.expected,
-                  metadata: testConfig.metadata,
-                };
-                const context = {
-                  ...vitestContext,
-                  ...params,
-                } satisfies TestContext & VitestContext;
-                testResult = await maybeFn(context);
-              } else if (typeof configOrFn === "function") {
-                testResult = await configOrFn(vitestContext);
-              }
-
-              // Run scorers if configured (on success)
-              if (testConfig?.scorers && testConfig.scorers.length > 0) {
-                await runScorers({
-                  scorers: testConfig.scorers,
-                  output: testResult,
-                  expected: testConfig.expected,
-                  input: testConfig.input,
-                  metadata: testConfig.metadata,
-                  span,
-                });
-              }
-
-              // log pass feedback on success
-              span.log({
-                scores: {
-                  pass: 1,
-                },
-              });
-
-              // If test function returns a value, log it as output
-              if (testResult !== undefined) {
+                // log pass feedback on success
                 span.log({
-                  output: testResult,
+                  scores: {
+                    pass: 1,
+                  },
                 });
-              }
-            } catch (error) {
-              // Run scorers if configured (even on failure)
-              if (testConfig?.scorers && testConfig.scorers.length > 0) {
-                await runScorers({
-                  scorers: testConfig.scorers,
-                  output: testResult,
-                  expected: testConfig.expected,
-                  input: testConfig.input,
-                  metadata: testConfig.metadata,
-                  span,
-                });
-              }
 
-              // log fail feedback on error
-              span.log({
-                scores: {
-                  pass: 0,
-                },
-                metadata: {
-                  error:
-                    error instanceof Error
-                      ? {
-                          message: error.message,
-                          name: error.name,
-                          stack: error.stack,
-                        }
-                      : String(error),
-                },
-              });
-              throw error;
-            } finally {
-              span.end();
-            }
-            return testResult;
-          });
+                // If test function returns a value, log it as output
+                if (testResult !== undefined) {
+                  span.log({
+                    output: testResult,
+                  });
+                }
+              } catch (error) {
+                // Run scorers if configured (even on failure)
+                if (testConfig?.scorers && testConfig.scorers.length > 0) {
+                  await runScorers({
+                    scorers: testConfig.scorers,
+                    output: testResult,
+                    expected: testConfig.expected,
+                    input: testConfig.input,
+                    metadata: testConfig.metadata,
+                    span,
+                  });
+                }
+
+                // log fail feedback on error
+                span.log({
+                  scores: {
+                    pass: 0,
+                  },
+                  metadata: {
+                    error:
+                      error instanceof Error
+                        ? {
+                            message: error.message,
+                            name: error.name,
+                            stack: error.stack,
+                          }
+                        : String(error),
+                  },
+                });
+                throw error;
+              }
+              return testResult;
+            },
+            {
+              name,
+              spanAttributes: {
+                type: SpanTypeAttribute.TASK,
+              },
+              event: testConfig
+                ? {
+                    input: testConfig.input,
+                    expected: testConfig.expected,
+                    metadata: testConfig.metadata,
+                    tags: testConfig.tags,
+                  }
+                : undefined,
+            },
+          );
           passed = true;
           return result;
         } catch (error) {
           passed = false;
           throw error;
         } finally {
-          // Emit test complete event
           const duration = performance.now() - startTime;
-          // Update suite counters if we have an experiment context
           if (experimentContext) {
             if (passed) {
               experimentContext.passed = (experimentContext.passed ?? 0) + 1;
@@ -299,29 +293,19 @@ export function wrapTest<VitestContext = unknown>(
         }
       };
 
-      // Call testFn, passing vitestOptions if present
-      // We use 'as any' because TypeScript's TestFunction type doesn't include the options overload,
-      // but Vitest runtime supports test(name, options, fn). Pass undefined when no options.
       return (testFn as any)(
         name,
         hasVitestOptions ? vitestOptions : undefined,
         testImplementation,
       );
     };
-
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return wrapped as WrappedTest<VitestContext>;
   };
 
   const wrappedTest = wrapBare(originalTest);
 
-  // Wrap modifiers to apply config filtering (same as base test)
-  // This ensures Braintrust-specific properties are filtered out before passing to Vitest
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedTest.skip = wrapBare(originalTest.skip);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedTest.only = wrapBare(originalTest.only);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedTest.concurrent = wrapBare(originalTest.concurrent);
   if (originalTest.todo) wrappedTest.todo = originalTest.todo;
   if (originalTest.each) wrappedTest.each = originalTest.each as any;
@@ -357,8 +341,6 @@ export function wrapDescribe(
           return context;
         };
 
-        // Lazy context getter
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         const lazyContext = {
           get dataset() {
             return getOrCreateContext().dataset;
@@ -386,23 +368,18 @@ export function wrapDescribe(
           },
         } as VitestExperimentContext;
 
-        // Emit suite start event
         if (config.onProgress) {
           config.onProgress({ type: "suite_start", suiteName });
         }
 
-        // Set the context for this the describe block
         contextManager.setContext(lazyContext);
 
-        // Register the tests in the suite
         factory();
 
-        // flush experiment after all tests complete
         if (afterAll && (config.displaySummary ?? true)) {
           afterAll(async () => {
             await flushExperimentWithSync(context, config);
 
-            // Emit suite complete event
             if (config.onProgress) {
               config.onProgress({
                 type: "suite_complete",
