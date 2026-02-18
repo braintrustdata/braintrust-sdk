@@ -1,0 +1,97 @@
+/**
+ * ESM loader hook for auto-instrumentation.
+ * This is used by Node.js --import to transform ES modules at load time.
+ */
+
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { sep } from "node:path";
+import {
+  create,
+  type InstrumentationConfig,
+} from "@apm-js-collab/code-transformer";
+import moduleDetailsFromPath from "module-details-from-path";
+import { getPackageVersion } from "./get-package-version.js";
+
+let transformers: Map<string, any> | null = null;
+let packages: Set<string> | null = null;
+let instrumentator: any | null = null;
+
+export async function initialize(
+  data: { instrumentations?: InstrumentationConfig[] } = {},
+) {
+  const instrumentations = data?.instrumentations || [];
+  instrumentator = create(instrumentations);
+  packages = new Set(instrumentations.map((i) => i.module.name));
+  transformers = new Map();
+}
+
+export async function resolve(
+  specifier: string,
+  context: any,
+  nextResolve: Function,
+) {
+  const url = await nextResolve(specifier, context);
+
+  // Convert file:// URL to path
+  const filePath = url.url.startsWith("file:")
+    ? fileURLToPath(url.url)
+    : url.url;
+
+  // Normalize path to platform-specific separator for module-details-from-path
+  // Some bundlers pass forward slashes even on Windows
+  const normalizedForPlatform = filePath.split("/").join(sep);
+
+  const resolvedModule = moduleDetailsFromPath(normalizedForPlatform);
+
+  if (resolvedModule && packages!.has(resolvedModule.name)) {
+    const version = getPackageVersion(resolvedModule.basedir);
+
+    // Normalize module path for WASM transformer (expects forward slashes)
+    const normalizedModulePath = resolvedModule.path.replace(/\\/g, "/");
+
+    const transformer = instrumentator!.getTransformer(
+      resolvedModule.name,
+      version,
+      normalizedModulePath,
+    );
+
+    if (transformer) {
+      transformers!.set(url.url, transformer);
+    }
+  }
+
+  return url;
+}
+
+export async function load(url: string, context: any, nextLoad: Function) {
+  const result = await nextLoad(url, context);
+
+  if (!transformers!.has(url)) {
+    return result;
+  }
+
+  if (result.format === "commonjs") {
+    const parsedUrl = new URL(result.responseURL ?? url);
+    result.source ??= await readFile(parsedUrl);
+  }
+
+  const code = result.source;
+  if (code) {
+    const transformer = transformers!.get(url);
+    try {
+      const transformedCode = transformer.transform(
+        code.toString("utf8"),
+        "unknown",
+      );
+      result.source = transformedCode?.code;
+      result.shortCircuit = true;
+    } catch (err) {
+      console.warn(`Error transforming module ${url}:`, err);
+    } finally {
+      transformer.free();
+    }
+  }
+
+  return result;
+}
