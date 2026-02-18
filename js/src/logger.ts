@@ -5477,6 +5477,11 @@ export class ObjectFetcher<RecordType>
     const state = await this.getState();
     const objectId = await this.id;
     const limit = batchSize ?? DEFAULT_FETCH_BATCH_SIZE;
+    const internalBtqlWithoutCursor = Object.fromEntries(
+      Object.entries(this._internal_btql ?? {}).filter(
+        ([key]) => key !== "cursor",
+      ),
+    );
     let cursor = undefined;
     let iterations = 0;
     while (true) {
@@ -5484,7 +5489,6 @@ export class ObjectFetcher<RecordType>
         `btql`,
         {
           query: {
-            ...this._internal_btql,
             select: [
               {
                 op: "star",
@@ -5505,6 +5509,7 @@ export class ObjectFetcher<RecordType>
             },
             cursor,
             limit,
+            ...internalBtqlWithoutCursor,
           },
           use_columnstore: false,
           brainstore_realtime: true,
