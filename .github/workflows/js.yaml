@@ -2,8 +2,26 @@ name: js
 
 on:
   pull_request:
+    paths:
+      - "js/**"
+      - "integrations/otel-js/**"
+      - "integrations/temporal-js/**"
+      - ".github/workflows/js.yaml"
+      - ".github/workflows/otel-js-test.yaml"
+      - ".github/workflows/temporal-js-build-test.yaml"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   push:
     branches: [main]
+    paths:
+      - "js/**"
+      - "integrations/otel-js/**"
+      - "integrations/temporal-js/**"
+      - ".github/workflows/js.yaml"
+      - ".github/workflows/otel-js-test.yaml"
+      - ".github/workflows/temporal-js-build-test.yaml"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
 
 permissions:
   contents: read

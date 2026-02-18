@@ -1,0 +1,21 @@
+name: Report npm download stats
+
+on:
+  schedule:
+    - cron: "0 14 * * *" # every day at 2pm UTC
+  workflow_dispatch:
+
+jobs:
+  report-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Report download stats to Datadog
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: npx tsx .github/scripts/npm-download-stats.ts

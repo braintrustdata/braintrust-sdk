@@ -276,6 +276,18 @@ export const singleSpanFilterSchema: z.ZodType<SingleSpanFilter> =
     loc,
   });
 
+export type MatchingSpansFilter = {
+  op: "matchingspansfilter";
+  expr: Expr;
+  loc?: NullableLoc;
+};
+export const matchingSpansFilterSchema: z.ZodType<MatchingSpansFilter> =
+  z.strictObject({
+    op: z.literal("matchingspansfilter"),
+    expr: z.lazy(() => exprSchema),
+    loc,
+  });
+
 export type Expr =
   | Literal
   | Interval
@@ -290,7 +302,8 @@ export type Expr =
   | UnaryExpr
   | ArithmeticExpr
   | BtqlSnippet
-  | SingleSpanFilter;
+  | SingleSpanFilter
+  | MatchingSpansFilter;
 
 export const exprSchema: z.ZodType<Expr> = z.union([
   literalSchema,
@@ -307,6 +320,7 @@ export const exprSchema: z.ZodType<Expr> = z.union([
   arithmeticExprSchema,
   btqlSnippetSchema,
   singleSpanFilterSchema,
+  matchingSpansFilterSchema,
 ]);
 
 export const aliasExpr = z.strictObject({
