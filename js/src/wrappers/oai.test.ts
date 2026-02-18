@@ -8,7 +8,7 @@ import {
   expect,
   vi,
 } from "vitest";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import OpenAI from "openai";
 import {
   _exportsForTestingOnly,

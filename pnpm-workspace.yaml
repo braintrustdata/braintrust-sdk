@@ -1,6 +1,5 @@
 packages:
   - js
-  - core/js
   - integrations/*
   - internal/golden
   - js/src/wrappers/*

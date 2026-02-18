@@ -20,7 +20,7 @@ import {
 import { SpanObjectTypeV3 } from "../util/index";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "../util/index";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 
 configureNode();
 

@@ -96,8 +96,10 @@ function getEntrypointName(entryFile: string, outDir: string): string {
   const basename = path.basename(entryFile, path.extname(entryFile));
 
   // Map common patterns to friendly names
-  if (entryFile.includes("src/index.ts")) return "main";
-  if (entryFile.includes("src/browser.ts")) return "browser";
+  if (entryFile.includes("src/node/index.ts")) return "main";
+  if (entryFile.includes("src/browser/index.ts")) return "browser";
+  if (entryFile.includes("src/edge-light/index.ts")) return "edge-light";
+  if (entryFile.includes("src/workerd/index.ts")) return "workerd";
   if (entryFile.includes("dev/index.ts")) return "dev";
   if (entryFile.includes("util/index.ts")) return "util";
 
@@ -387,8 +389,16 @@ function compareExports(
     kind: string;
   }> = [];
 
+  // Internal testing exports that can change without breaking compatibility
+  const internalExports = new Set(["_exportsForTestingOnly"]);
+
   // Check for removed or modified exports
   for (const [name, publishedSymbol] of publishedExports) {
+    // Skip internal exports - they can change without being breaking changes
+    if (internalExports.has(name)) {
+      continue;
+    }
+
     const currentSymbol = currentExports.get(name);
     if (!currentSymbol) {
       removed.push(publishedSymbol);
@@ -410,6 +420,11 @@ function compareExports(
 
   // Check for added exports
   for (const [name, currentSymbol] of currentExports) {
+    // Skip internal exports - their additions don't count as public API additions
+    if (internalExports.has(name)) {
+      continue;
+    }
+
     if (!publishedExports.has(name)) {
       added.push(currentSymbol);
     }
@@ -743,9 +758,33 @@ function areFunctionSignaturesCompatible(
 }
 
 /**
- * Compares type alias signatures to determine if changes are backwards compatible.
- * Widening union types or adding optional properties to objects is compatible.
+ * Normalizes type references to handle equivalent forms:
+ * - z.infer<typeof Type> -> TypeType
+ * - z.infer<typeof Type$N> -> TypeType (handles TypeScript disambiguation suffixes)
+ * - Type$1, Type$2, etc. -> Type (removes TypeScript disambiguation suffixes)
  */
+function normalizeTypeReference(type: string): string {
+  // First normalize z.infer<typeof TypeName$N> patterns - handle both with and without $N suffix
+  // This handles: z.infer<typeof ObjectReference$1> -> ObjectReferenceType
+  // And: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  // Match the full identifier (which may include $ suffix) and extract just the base name
+  type = type.replace(
+    /z\.infer<typeof\s+([\w$]+)>/g,
+    (match, fullIdentifier) => {
+      // Extract base name by removing $ suffix if present
+      // Simply remove any $ followed by digits from the end
+      const baseName = fullIdentifier.replace(/\$\d+$/, "");
+      return `${baseName}Type`;
+    },
+  );
+
+  // Then remove any remaining TypeScript disambiguation suffixes
+  // This handles cases like: ObjectReferenceType$1 -> ObjectReferenceType
+  type = type.replace(/(\w+)\$\d+/g, "$1");
+
+  return type;
+}
+
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,
@@ -959,8 +998,11 @@ function areTypeAliasSignaturesCompatible(
     return true;
   }
 
-  // For other types, they must match exactly
-  return oldDef === newDef;
+  // For other types, normalize and compare
+  // This handles cases where TypeScript generates different names that are semantically equivalent
+  const oldDefNorm = normalizeTypeReference(oldDef);
+  const newDefNorm = normalizeTypeReference(newDef);
+  return oldDefNorm === newDefNorm;
 }
 
 /**
@@ -1216,8 +1258,9 @@ function areInterfaceSignaturesCompatible(
       return false;
     }
 
-    // Normalize field types for comparison (remove whitespace differences)
-    const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
+    // Normalize field types for comparison (remove whitespace differences and normalize type references)
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
     const oldTypeNorm = normalizeType(oldField.type);
     const newTypeNorm = normalizeType(newField.type);
 
@@ -1948,6 +1991,8 @@ interface BreakingChanges {
 function findNewBreakingChanges(
   baselineChanges: BreakingChanges,
   currentChanges: BreakingChanges,
+  baselineExports?: Map<string, ExportedSymbol>,
+  currentExports?: Map<string, ExportedSymbol>,
 ): BreakingChanges {
   // Find removed exports in current that don't exist in baseline
   const newRemoved = currentChanges.removed.filter(
@@ -1955,9 +2000,52 @@ function findNewBreakingChanges(
   );
 
   // Find modified exports in current that don't exist in baseline
-  const newModified = currentChanges.modified.filter(
-    (exp) => !baselineChanges.modified.some((b) => b.name === exp.name),
-  );
+  // Also exclude exports that normalize to the same signature (not actually breaking)
+  const newModified = currentChanges.modified.filter((exp) => {
+    // Check if this export exists in baseline with same name
+    const baselineMod = baselineChanges.modified.find(
+      (b) => b.name === exp.name,
+    );
+
+    if (baselineMod) {
+      // It exists in baseline modified - check if the "after" signatures normalize to the same thing
+      // If they do, it's the same breaking change that's already in main, not a new one
+      const baselineAfterNorm = normalizeTypeReference(
+        baselineMod.after.replace(/\s+/g, " ").trim(),
+      );
+      const currentAfterNorm = normalizeTypeReference(
+        exp.after.replace(/\s+/g, " ").trim(),
+      );
+
+      // Only consider it "new" if normalized "after" signatures are different
+      return baselineAfterNorm !== currentAfterNorm;
+    }
+
+    // Not in baseline modified list - check if it exists in baseline exports
+    // If it does and normalized signatures match, it's not a new breaking change
+    if (baselineExports && currentExports) {
+      const baselineExp = baselineExports.get(exp.name);
+      const currentExp = currentExports.get(exp.name);
+
+      if (baselineExp && currentExp) {
+        // Both exist - check if normalized signatures match
+        const baselineNorm = normalizeTypeReference(
+          baselineExp.signature.replace(/\s+/g, " ").trim(),
+        );
+        const currentNorm = normalizeTypeReference(
+          currentExp.signature.replace(/\s+/g, " ").trim(),
+        );
+
+        // If they normalize to the same, it's not a new breaking change
+        if (baselineNorm === currentNorm) {
+          return false;
+        }
+      }
+    }
+
+    // Not in baseline at all, or signatures don't match - it's new
+    return true;
+  });
 
   return { removed: newRemoved, modified: newModified };
 }
@@ -2139,9 +2227,12 @@ describe("API Compatibility", () => {
         };
 
         // Find NEW breaking changes (not in baseline)
+        // Also pass exports so we can check normalized signatures even if not in modified list
         const newBreaking = findNewBreakingChanges(
           baselineBreaking,
           currentBreaking,
+          mainExports,
+          currentExports,
         );
 
         // Log baseline info (informational only)
@@ -2175,8 +2266,12 @@ describe("API Compatibility", () => {
               `NEW modified exports (${newBreaking.modified.length}):\n` +
                 newBreaking.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;
@@ -2240,8 +2335,12 @@ describe("API Compatibility", () => {
               `Modified exports (${comparison.modified.length}):\n` +
                 comparison.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;

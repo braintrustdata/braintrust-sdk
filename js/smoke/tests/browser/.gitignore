@@ -1,6 +1,0 @@
-# Playwright test results
-test-results/
-playwright-report/
-
-# Build output (already covered by root .gitignore, but explicit here)
-dist/
