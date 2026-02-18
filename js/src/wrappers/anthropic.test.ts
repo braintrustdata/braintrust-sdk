@@ -11,7 +11,7 @@ import {
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import { _exportsForTestingOnly, Attachment, initLogger } from "../logger";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import { getCurrentUnixTimestamp } from "../util";
 
 // use the cheapest model for tests

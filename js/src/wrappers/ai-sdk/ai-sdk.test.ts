@@ -10,7 +10,7 @@ import {
   expectTypeOf,
   expect,
 } from "vitest";
-import { configureNode } from "../../node";
+import { configureNode } from "../../node/config";
 import * as ai from "ai";
 import { openai } from "@ai-sdk/openai";
 import {

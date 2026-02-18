@@ -24,8 +24,8 @@
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "edge-light": "./dist/browser.mjs",
-      "workerd": "./dist/browser.mjs",
+      "edge-light": "./dist/edge-light.mjs",
+      "workerd": "./dist/workerd.mjs",
       "node": {
         "import": "./dist/index.mjs",
         "require": "./dist/index.js"
@@ -36,14 +36,14 @@
       "default": "./dist/index.mjs"
     },
     "./workerd": {
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.js",
-      "default": "./dist/browser.mjs"
+      "import": "./dist/workerd.mjs",
+      "require": "./dist/workerd.js",
+      "default": "./dist/workerd.mjs"
     },
      "./edge-light": {
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.js",
-      "default": "./dist/browser.mjs"
+      "import": "./dist/edge-light.mjs",
+      "require": "./dist/edge-light.js",
+      "default": "./dist/edge-light.mjs"
     },
     "./browser": {
       "import": "./dist/browser.mjs",
@@ -78,7 +78,7 @@
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
-    "docs": "npx typedoc --options typedoc.json src/index.ts",
+    "docs": "npx typedoc --options typedoc.json src/node/index.ts",
     "test": "vitest run --exclude \"src/wrappers/**/*.test.ts\" --exclude \"src/otel/**/*.test.ts\" --exclude \"smoke/**/*.test.ts\" --exclude \"src/zod/**/*.test.ts\" --exclude \"tests/api-compatibility/**\"",
     "test:api-compat": "vitest run tests/api-compatibility/api-compatibility.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",

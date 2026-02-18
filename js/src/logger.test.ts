@@ -24,7 +24,7 @@ import {
   isTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

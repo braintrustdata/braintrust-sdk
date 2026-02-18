@@ -1,5 +1,5 @@
 import { beforeAll, describe, test, expect, vi } from "vitest";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import { Prompt } from "./logger";
 import { type PromptDataType as PromptData } from "./generated_types";
 
@@ -307,7 +307,7 @@ describe("prompt template_format (unconfigured/browser-like)", () => {
   });
   test("throws unsupported error after configureBrowser()", async () => {
     vi.resetModules();
-    const { configureBrowser } = await import("./browser-config");
+    const { configureBrowser } = await import("./browser/config");
     const { Prompt: BrowserConfiguredPrompt } = await import("./logger");
 
     configureBrowser();

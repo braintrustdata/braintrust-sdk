@@ -469,6 +469,7 @@ function detectBuildType(module: BraintrustModule): {
   const buildType = iso.buildType;
   if (
     buildType === "browser" ||
+    buildType === "browser-js" ||
     buildType === "node" ||
     buildType === "unknown"
   ) {
