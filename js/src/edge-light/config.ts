@@ -17,7 +17,7 @@ export function configureEdgeLight(): void {
     return;
   }
 
-  iso.buildType = "browser";
+  iso.buildType = "edge-light";
 
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
