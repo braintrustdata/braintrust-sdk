@@ -52,7 +52,7 @@ export default {
           testIDGeneratorExports,
           testTestingExports,
           testStateManagementExports,
-          testBuildResolution("browser-js"),
+          testBuildResolution("workerd"),
           testBasicSpanLogging,
           testMultipleSpans,
           testDirectLogging,
