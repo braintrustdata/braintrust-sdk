@@ -1,4 +1,4 @@
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 import {
   runTests,
   expectFailure,

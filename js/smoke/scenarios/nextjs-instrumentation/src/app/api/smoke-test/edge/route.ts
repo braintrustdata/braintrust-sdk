@@ -32,7 +32,7 @@ import {
   testEvalSmoke,
 } from "../../../../../../../shared";
 
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 
 export const runtime = "edge";
 
