@@ -61,7 +61,7 @@ app.get("/api/test", async (c) => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("workerd"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

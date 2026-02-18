@@ -52,7 +52,7 @@ export default {
           testIDGeneratorExports,
           testTestingExports,
           testStateManagementExports,
-          testBuildResolution,
+          testBuildResolution("workerd"),
           testBasicSpanLogging,
           testMultipleSpans,
           testDirectLogging,

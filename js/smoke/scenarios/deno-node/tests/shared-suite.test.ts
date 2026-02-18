@@ -52,7 +52,7 @@ Deno.test("Run shared test suites", async () => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("node"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

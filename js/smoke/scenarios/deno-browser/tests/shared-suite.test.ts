@@ -52,7 +52,7 @@ Deno.test("Run shared test suites (browser build)", async () => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("browser"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

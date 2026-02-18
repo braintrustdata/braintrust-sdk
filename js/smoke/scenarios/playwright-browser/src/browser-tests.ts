@@ -72,7 +72,7 @@ async function runAllTestSuites() {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("browser"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

@@ -47,7 +47,7 @@ test("shared test suites pass in Jest", async () => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("node"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

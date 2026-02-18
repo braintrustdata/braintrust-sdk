@@ -18,7 +18,7 @@
  */
 
 import { assertType, assertDefined } from "../helpers/assertions";
-import { register } from "../helpers/register";
+import { register, type TestFn } from "../helpers/register";
 
 /**
  * Interface for the Braintrust module based on exports.ts
@@ -422,9 +422,15 @@ export const testStateManagementExports = register(
   },
 );
 
-export const testBuildResolution = register(
-  "testBuildResolution",
-  async (module) => {
+export function testBuildResolution(
+  expectedBuildType?:
+    | "browser"
+    | "browser-js"
+    | "edge-light"
+    | "workerd"
+    | "node",
+): TestFn {
+  return register("testBuildResolution", async (module) => {
     const { buildType: detectedBuild, buildDetails } = detectBuildType(module);
     const detectedFormat = detectModuleFormat();
 
@@ -434,15 +440,25 @@ export const testBuildResolution = register(
       );
     }
 
+    if (expectedBuildType && detectedBuild !== expectedBuildType) {
+      throw new Error(
+        `Expected build type "${expectedBuildType}" but detected "${detectedBuild}"`,
+      );
+    }
+
     const parts: string[] = [`Detected ${detectedBuild} build`];
+
+    if (expectedBuildType) {
+      parts.push(`(expected: ${expectedBuildType})`);
+    }
 
     if (detectedFormat !== "unknown") {
       parts.push(`${detectedFormat} format`);
     }
 
     return parts.join(", ");
-  },
-);
+  });
+}
 
 function detectBuildType(module: BraintrustModule): {
   buildType:
