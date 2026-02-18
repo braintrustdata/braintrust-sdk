@@ -445,7 +445,13 @@ export const testBuildResolution = register(
 );
 
 function detectBuildType(module: BraintrustModule): {
-  buildType: "browser" | "node" | "unknown";
+  buildType:
+    | "browser"
+    | "browser-js"
+    | "edge-light"
+    | "workerd"
+    | "node"
+    | "unknown";
   buildDetails: string;
 } {
   if (!module._exportsForTestingOnly) {
@@ -470,6 +476,8 @@ function detectBuildType(module: BraintrustModule): {
   if (
     buildType === "browser" ||
     buildType === "browser-js" ||
+    buildType === "edge-light" ||
+    buildType === "workerd" ||
     buildType === "node" ||
     buildType === "unknown"
   ) {
