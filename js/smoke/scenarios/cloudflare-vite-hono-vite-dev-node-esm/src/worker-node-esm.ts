@@ -28,7 +28,7 @@ import {
   testEvalSmoke,
 } from "../../../shared";
 
-import * as braintrust from "braintrust/node";
+import * as braintrust from "braintrust";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -41,7 +41,7 @@ GET /api/ - Basic API endpoint
 GET /api/test - Run shared test suites
 
 This worker tests the Braintrust SDK (Node.js ESM build) in a Vite + Hono + Cloudflare Workers environment.
-Explicitly imports "braintrust/node" to test Node.js ESM build resolution.`),
+`),
 );
 
 app.get("/api/", (c) =>
@@ -66,7 +66,7 @@ app.get("/api/test", async (c) => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution("node"),
+      testBuildResolution("workerd"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,
