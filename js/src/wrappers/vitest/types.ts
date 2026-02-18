@@ -44,7 +44,7 @@ export type TestContext = Pick<
   "input" | "expected" | "metadata"
 >;
 
-type BaseTestFunction<VitestContext = unknown> = {
+export type BaseTestFunction<VitestContext = unknown> = {
   (name: string, fn: (context: VitestContext) => void | Promise<void>): void;
   each?: <T>(
     cases: readonly T[],
@@ -55,7 +55,7 @@ export type TestFunction<VitestContext = unknown> = WithModifiers<
   BaseTestFunction<VitestContext>
 >;
 
-type BaseDescribeFunction = {
+export type BaseDescribeFunction = {
   (name: string, factory: () => void): void;
   each?: <T>(
     cases: readonly T[],

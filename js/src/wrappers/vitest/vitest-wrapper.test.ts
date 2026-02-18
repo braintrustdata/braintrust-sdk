@@ -214,6 +214,178 @@ describe("Braintrust Vitest Wrapper", () => {
       expect(bt.test.each).toBeDefined();
     });
   });
+
+  describe("modifiers work with Braintrust config", () => {
+    const bt = wrapVitest(
+      { test, expect, describe, beforeAll, afterAll },
+      { projectName: "modifier-config-test", displaySummary: false },
+    );
+
+    // Test that concurrent modifier accepts Braintrust config with Vitest options
+    bt.test.concurrent(
+      "concurrent test with config",
+      { input: "concurrent-input", expected: "concurrent-output" },
+      async (ctx) => {
+        expect(ctx.input).toBe("concurrent-input");
+        expect(ctx.expected).toBe("concurrent-output");
+        return "concurrent-output";
+      },
+    );
+
+    // Test that skip modifier properly wraps (won't execute but should not error)
+    bt.test.skip(
+      "skipped test with config",
+      { input: "test-input", timeout: 5000 },
+      async (ctx) => {
+        // This test should be skipped, but the config should be properly handled
+        expect(ctx.input).toBe("test-input");
+      },
+    );
+
+    // Test concurrent with metadata and tags
+    bt.test.concurrent(
+      "concurrent with metadata and tags",
+      {
+        input: { value: 42 },
+        expected: 84,
+        metadata: { testType: "math" },
+        tags: ["math", "concurrent"],
+      },
+      async (ctx) => {
+        expect(ctx.input).toEqual({ value: 42 });
+        expect(ctx.expected).toBe(84);
+        expect(ctx.metadata).toEqual({ testType: "math" });
+        return (ctx.input as any).value * 2;
+      },
+    );
+
+    // Test concurrent with scorers
+    bt.test.concurrent(
+      "concurrent with scorers",
+      {
+        input: "hello",
+        expected: "HELLO",
+        scorers: [
+          ({ output, expected }) => ({
+            name: "uppercase_match",
+            score: output === expected ? 1 : 0,
+          }),
+        ],
+      },
+      async (ctx) => {
+        expect(ctx.input).toBe("hello");
+        return (ctx.input as string).toUpperCase();
+      },
+    );
+
+    // Test concurrent with mixed Braintrust + Vitest options
+    bt.test.concurrent(
+      "concurrent with mixed options",
+      {
+        input: { x: 10, y: 20 },
+        expected: 30,
+        timeout: 3000,
+        retry: 1,
+      },
+      async (ctx) => {
+        expect(ctx.input).toEqual({ x: 10, y: 20 });
+        expect(ctx.expected).toBe(30);
+        return (ctx.input as any).x + (ctx.input as any).y;
+      },
+    );
+
+    // Test that only modifier works with config (won't run in normal test suite)
+    bt.test.skip(
+      "only modifier with config (would run if .only)",
+      {
+        input: "only-test",
+        expected: "ONLY-TEST",
+        metadata: { modifier: "only" },
+      },
+      async (ctx) => {
+        expect(ctx.input).toBe("only-test");
+        expect(ctx.metadata).toEqual({ modifier: "only" });
+        return (ctx.input as string).toUpperCase();
+      },
+    );
+  });
+
+  describe("config filtering with modifiers", () => {
+    const bt = wrapVitest(
+      { test, expect, describe, beforeAll, afterAll },
+      { projectName: "filter-test", displaySummary: false },
+    );
+
+    // Test that skip modifier properly handles config with mixed Braintrust + Vitest options
+    bt.test.skip(
+      "config filtering test with skip",
+      {
+        input: "braintrust-prop",
+        expected: "result",
+        metadata: { key: "value" },
+        tags: ["tag1", "tag2"],
+        scorers: [() => ({ name: "test", score: 1 })],
+        timeout: 2000,
+        retry: 2,
+      },
+      async (ctx) => {
+        // Braintrust properties should be available in context
+        expect(ctx.input).toBe("braintrust-prop");
+        expect(ctx.expected).toBe("result");
+        expect(ctx.metadata).toEqual({ key: "value" });
+        // Return value for scorers
+        return "result";
+      },
+    );
+
+    // Test that concurrent modifier properly handles complex configs
+    bt.test.concurrent(
+      "concurrent filters Braintrust props correctly",
+      {
+        input: { operation: "multiply", values: [2, 3, 4] },
+        expected: 24,
+        metadata: { testGroup: "arithmetic" },
+        tags: ["math", "multiply"],
+        scorers: [
+          ({ output, expected }) => ({
+            name: "exact_match",
+            score: output === expected ? 1 : 0,
+          }),
+        ],
+        timeout: 5000,
+      },
+      async (ctx) => {
+        expect(ctx.input).toEqual({
+          operation: "multiply",
+          values: [2, 3, 4],
+        });
+        expect(ctx.expected).toBe(24);
+        expect(ctx.metadata).toEqual({ testGroup: "arithmetic" });
+
+        const result = (ctx.input as any).values.reduce(
+          (a: number, b: number) => a * b,
+          1,
+        );
+        return result;
+      },
+    );
+
+    // Test concurrent with only Vitest options (no Braintrust props)
+    bt.test.concurrent(
+      "concurrent with only Vitest options",
+      { timeout: 3000 },
+      async () => {
+        // Simple test with just Vitest timeout option
+        expect(2 + 2).toBe(4);
+      },
+    );
+
+    // Test concurrent with no config
+    bt.test.concurrent("concurrent with no config", async () => {
+      // Test without any config object
+      expect(true).toBe(true);
+    });
+  });
 });
 
 // Unit tests for configuration and features

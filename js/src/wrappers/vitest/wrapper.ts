@@ -9,7 +9,9 @@ import type {
   TestConfig,
   TestContext,
   TestFunction,
+  BaseTestFunction,
   DescribeFunction,
+  BaseDescribeFunction,
   WrappedTest,
   WrappedDescribe,
   WrapperConfig,
@@ -70,8 +72,9 @@ export function wrapTest<VitestContext = unknown>(
   config: WrapperConfig,
 ): WrappedTest<VitestContext> {
   // Extract wrapping logic without modifier attachment to avoid recursion
+  // wrapBare can accept either a full TestFunction or a BaseTestFunction (like modifiers)
   const wrapBare = (
-    testFn: TestFunction<VitestContext>,
+    testFn: TestFunction<VitestContext> | BaseTestFunction<VitestContext>,
   ): WrappedTest<VitestContext> => {
     const wrapped = function (
       name: string,
@@ -119,8 +122,15 @@ export function wrapTest<VitestContext = unknown>(
       // Extract Vitest-specific options by filtering out Braintrust-specific properties
       let vitestOptions: Record<string, unknown> | undefined;
       if (testConfig) {
-        const { input, expected, metadata, tags, scorers, data, ...rest } =
-          testConfig;
+        const {
+          input: _input,
+          expected: _expected,
+          metadata: _metadata,
+          tags: _tags,
+          scorers: _scorers,
+          data: _data,
+          ...rest
+        } = testConfig;
         vitestOptions = rest;
       }
 
@@ -305,15 +315,14 @@ export function wrapTest<VitestContext = unknown>(
 
   const wrappedTest = wrapBare(originalTest);
 
-  // Copy modifiers directly - wrapping them causes issues with Vitest's modifier behavior
-  // Modifiers (skip/only/concurrent) have special semantics in Vitest that don't work well with wrapping
-  // Type assertions needed because modifiers have base types
+  // Wrap modifiers to apply config filtering (same as base test)
+  // This ensures Braintrust-specific properties are filtered out before passing to Vitest
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedTest.skip = originalTest.skip as any;
+  wrappedTest.skip = wrapBare(originalTest.skip);
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedTest.only = originalTest.only as any;
+  wrappedTest.only = wrapBare(originalTest.only);
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedTest.concurrent = originalTest.concurrent as any;
+  wrappedTest.concurrent = wrapBare(originalTest.concurrent);
   if (originalTest.todo) wrappedTest.todo = originalTest.todo;
   if (originalTest.each) wrappedTest.each = originalTest.each as any;
 
@@ -326,7 +335,10 @@ export function wrapDescribe(
   afterAll?: (fn: () => void | Promise<void>) => void,
 ): WrappedDescribe {
   // Extract wrapping logic without modifier attachment to avoid recursion
-  const wrapBare = (describeFn: DescribeFunction): WrappedDescribe => {
+  // wrapBare can accept either a full DescribeFunction or a BaseDescribeFunction (like modifiers)
+  const wrapBare = (
+    describeFn: DescribeFunction | BaseDescribeFunction,
+  ): WrappedDescribe => {
     const wrapped = function (suiteName: string, factory: () => void) {
       return describeFn(suiteName, () => {
         const contextManager = getVitestContextManager();
@@ -411,15 +423,14 @@ export function wrapDescribe(
   // Wrap the base describe function
   const wrappedDescribe = wrapBare(originalDescribe);
 
-  // Copy modifiers directly - wrapping them causes issues with Vitest's modifier behavior
-  // Modifiers (skip/only/concurrent) have special semantics in Vitest that don't work well with wrapping
-  // Type assertions needed because modifiers have base types
+  // Wrap modifiers to apply config filtering (same as base describe)
+  // This ensures consistency with test wrapping behavior
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedDescribe.skip = originalDescribe.skip as any;
+  wrappedDescribe.skip = wrapBare(originalDescribe.skip);
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedDescribe.only = originalDescribe.only as any;
+  wrappedDescribe.only = wrapBare(originalDescribe.only);
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  wrappedDescribe.concurrent = originalDescribe.concurrent as any;
+  wrappedDescribe.concurrent = wrapBare(originalDescribe.concurrent);
   if (originalDescribe.todo) wrappedDescribe.todo = originalDescribe.todo;
   if (originalDescribe.each)
     wrappedDescribe.each = originalDescribe.each as any;
