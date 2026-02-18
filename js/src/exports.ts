@@ -38,6 +38,9 @@ export type {
   Span,
   StartSpanArgs,
   WithTransactionId,
+  ExperimentalSandboxConfig,
+  ExperimentalRegisterSandboxOptions,
+  ExperimentalRegisterSandboxResult,
 } from "./logger";
 
 export {
@@ -111,6 +114,7 @@ export {
   withParent,
   wrapTraced,
   registerOtelFlush,
+  experimental_registerSandbox,
 } from "./logger";
 
 export {
