@@ -96,8 +96,10 @@ function getEntrypointName(entryFile: string, outDir: string): string {
   const basename = path.basename(entryFile, path.extname(entryFile));
 
   // Map common patterns to friendly names
-  if (entryFile.includes("src/index.ts")) return "main";
-  if (entryFile.includes("src/browser.ts")) return "browser";
+  if (entryFile.includes("src/node/index.ts")) return "main";
+  if (entryFile.includes("src/browser/index.ts")) return "browser";
+  if (entryFile.includes("src/edge-light/index.ts")) return "edge-light";
+  if (entryFile.includes("src/workerd/index.ts")) return "workerd";
   if (entryFile.includes("dev/index.ts")) return "dev";
   if (entryFile.includes("util/index.ts")) return "util";
 

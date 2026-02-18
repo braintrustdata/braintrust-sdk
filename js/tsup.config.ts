@@ -1,10 +1,9 @@
 import { defineConfig } from "tsup";
-import fs from "node:fs";
-import { builtinModules } from "node:module";
 
 export default defineConfig([
+  // Node.js entrypoint
   {
-    entry: ["src/index.ts"],
+    entry: ["src/node/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
     external: ["zod"],
@@ -58,10 +57,12 @@ export default defineConfig([
     splitting: true,
     clean: true,
   },
-  // Browser/edge exports - single build used by browser, edge-light, and workerd
+  // Browser/edge entrypoints
   {
     entry: {
-      browser: "src/browser.ts",
+      browser: "src/browser/index.ts",
+      "edge-light": "src/edge-light/index.ts",
+      workerd: "src/workerd/index.ts",
     },
     format: ["cjs", "esm"],
     outDir: "dist",

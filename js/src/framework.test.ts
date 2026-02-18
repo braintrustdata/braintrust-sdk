@@ -14,7 +14,7 @@ import {
   runEvaluator,
 } from "./framework";
 import { _exportsForTestingOnly, BraintrustState } from "./logger";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
 
