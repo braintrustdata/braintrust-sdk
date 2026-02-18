@@ -32,7 +32,7 @@ import {
   testEvalSmoke,
 } from "../../../../../../../shared";
 
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 
 export const runtime = "edge";
 
@@ -56,7 +56,7 @@ export async function GET() {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("edge-light"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

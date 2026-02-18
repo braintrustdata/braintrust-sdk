@@ -1,6 +1,6 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-
+import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
 
 declare global {
@@ -23,6 +23,8 @@ export function configureBrowser(): void {
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    } else {
+      iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
     }
   } catch {
     // Ignore

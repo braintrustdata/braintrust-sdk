@@ -1,4 +1,4 @@
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 import {
   runTests,
   expectFailure,
@@ -72,7 +72,7 @@ async function runAllTestSuites() {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("browser"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

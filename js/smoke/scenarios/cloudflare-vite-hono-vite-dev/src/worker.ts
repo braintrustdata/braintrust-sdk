@@ -28,7 +28,7 @@ import {
   testEvalSmoke,
 } from "../../../shared";
 
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -61,7 +61,7 @@ app.get("/api/test", async (c) => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("workerd"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

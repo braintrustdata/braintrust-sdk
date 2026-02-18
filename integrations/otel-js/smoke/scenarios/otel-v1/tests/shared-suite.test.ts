@@ -51,7 +51,7 @@ async function runSharedTestSuites() {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("node"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

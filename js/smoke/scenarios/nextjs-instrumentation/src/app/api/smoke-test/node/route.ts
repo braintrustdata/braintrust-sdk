@@ -56,7 +56,7 @@ export async function GET() {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution,
+      testBuildResolution("node"),
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,

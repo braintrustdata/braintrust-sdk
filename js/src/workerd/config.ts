@@ -1,11 +1,6 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
-
-declare global {
-  var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
-}
+import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 let workerdConfigured = false;
 
@@ -17,15 +12,9 @@ export function configureWorkerd(): void {
     return;
   }
 
-  iso.buildType = "browser";
+  iso.buildType = "workerd";
 
-  try {
-    if (typeof AsyncLocalStorage !== "undefined") {
-      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-    }
-  } catch {
-    // Ignore
-  }
+  iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
