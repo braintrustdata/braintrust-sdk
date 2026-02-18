@@ -33,9 +33,14 @@ const client = new Client({
   plugins: [plugin],
 });
 
+// ESM-safe resolution (recommended for ESM projects):
+const workflowsUrl = new URL("./workflows", import.meta.url);
+const workflowsPath = workflowsUrl.pathname;
+// CommonJS resolution (existing/example usage):
+// const workflowsPath = require.resolve("./workflows");
 const worker = await Worker.create({
   taskQueue: "my-queue",
-  workflowsPath: require.resolve("./workflows"),
+  workflowsPath: workflowsPath,
   activities,
   plugins: [plugin],
 });

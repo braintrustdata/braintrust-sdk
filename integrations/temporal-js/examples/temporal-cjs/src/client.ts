@@ -41,7 +41,7 @@ async function main() {
       console.log(`\nView trace: ${span.link()}`);
       return result;
     },
-    { name: "temporal.client.simpleWorkflow" },
+    { name: "temporal.client.simpleWorkflow.cjs" },
   );
 
   await braintrust.flush();
