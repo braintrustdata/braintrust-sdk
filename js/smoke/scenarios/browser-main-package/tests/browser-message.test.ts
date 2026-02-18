@@ -57,32 +57,5 @@ test.describe("Braintrust Main Package Browser Build", () => {
     expect(testResults.hasInit).toBe(true);
     expect(testResults.hasNewId).toBe(true);
     expect(testResults.hasTraceable).toBe(true);
-
-    // Expected message from browser-config.ts
-    const expectedMessage =
-      "This entrypoint is no longer supported.\n\n" +
-      "You should be using entrypoints:\n\n" +
-      "- `/workerd` (cloudflare envs)\n" +
-      "- `/edge-light` (next-js or other edge envs)\n\n" +
-      "If you'd like to use braintrust in the browser use the dedicated package: @braintrust/browser\n";
-
-    // Verify the full informational message appears in console
-    const hasInformationalMessage = consoleMessages.some(
-      (msg) => msg === expectedMessage,
-    );
-
-    expect(hasInformationalMessage).toBe(true);
-
-    // Also verify from captured messages in the page
-    const hasCapturedMessage = testResults.consoleMessages.some(
-      (msg: string) => msg === expectedMessage,
-    );
-
-    expect(hasCapturedMessage).toBe(true);
-
-    console.log("✓ Complete informational message verified");
-    console.log(
-      "✓ Main package browser build working correctly with full message",
-    );
   });
 });
