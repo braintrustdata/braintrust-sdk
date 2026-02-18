@@ -1,9 +1,17 @@
+// Set a flag before importing to suppress the deprecation warning
+// since we're using the official @braintrust/browser package
+declare global {
+  var __BRAINTRUST_BROWSER_PKG__: boolean | undefined;
+}
+
+globalThis.__BRAINTRUST_BROWSER_PKG__ = true;
+
 import { _internalIso as iso, _internalSetInitialState } from "braintrust";
 import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 export function configureBrowser() {
   // Set build type indicator
-  iso.buildType = "browser";
+  iso.buildType = "browser-js";
 
   iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
 

@@ -5,6 +5,7 @@ import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
 
 declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
+  var __BRAINTRUST_BROWSER_PKG__: boolean | undefined;
 }
 
 let messageShown = false;
@@ -18,7 +19,14 @@ export function configureBrowser(): void {
     return;
   }
 
-  if (!messageShown && typeof console !== "undefined") {
+  const isUsingBrowserPackage =
+    typeof globalThis !== "undefined" && globalThis.__BRAINTRUST_BROWSER_PKG__;
+
+  if (
+    !isUsingBrowserPackage &&
+    !messageShown &&
+    typeof console !== "undefined"
+  ) {
     console.info(
       "This entrypoint is no longer supported.\n\n" +
         "You should be using entrypoints:\n\n" +
