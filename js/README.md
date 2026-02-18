@@ -130,4 +130,15 @@ export default {
 };
 ```
 
+**Important:** If you're using TypeScript or other transpilation plugins, place the Braintrust plugin **after** them in the plugin array to ensure it instruments the transformed code:
+
+```typescript
+export default {
+  plugins: [
+    typescript(), // or other transpilation plugins
+    vitePlugin(), // Braintrust plugin should come after
+  ],
+};
+```
+
 For more information on auto-instrumentation, see the [internal architecture docs](src/auto-instrumentations/README.md).
