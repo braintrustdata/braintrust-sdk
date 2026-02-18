@@ -57,8 +57,16 @@ Deno.test("Run shared test suites (browser build)", async () => {
       testMultipleSpans,
       testDirectLogging,
       testJSONAttachment,
-      testAsyncLocalStorageTraced,
-      testNestedTraced,
+      expectFailure(
+        testAsyncLocalStorageTraced,
+        (e: { message: string }) => e.message.includes("span_parents"),
+        "No AsyncLocalStorage available",
+      ),
+      expectFailure(
+        testNestedTraced,
+        (e: { message: string }) => e.message.includes("span_parents"),
+        "No AsyncLocalStorage available",
+      ),
       testCurrentSpan,
       testEvalSmoke,
       testMustacheTemplate,
