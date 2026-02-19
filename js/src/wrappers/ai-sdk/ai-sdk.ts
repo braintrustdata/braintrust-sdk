@@ -212,9 +212,14 @@ const makeGenerateTextWrapper = (
 
     return traced(
       async (span) => {
+        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+          params.model,
+          aiSDK,
+        );
+
         const result = await generateText({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
         });
 
@@ -230,7 +235,7 @@ const makeGenerateTextWrapper = (
 
         span.log({
           output: await processOutput(result, options.denyOutputPaths),
-          metrics: extractTokenMetrics(result),
+          metrics: getMetrics(result),
           ...(Object.keys(resolvedMetadata).length > 0
             ? { metadata: resolvedMetadata }
             : {}),
@@ -521,6 +526,28 @@ const wrapGenerateText = (
   return makeGenerateTextWrapper("generateText", options, generateText, aiSDK);
 };
 
+/**
+ * Wraps the model and returns a metrics extractor for the parent span.
+ * When the model is wrapped, child doGenerate/doStream spans already carry
+ * token/cost metrics, so the extractor returns undefined to prevent
+ * double-counting on the parent.
+ */
+const wrapModelAndGetMetrics = (
+  model: any,
+  aiSDK?: any,
+): {
+  wrappedModel: any;
+  getMetrics: (result: any) => Record<string, number> | undefined;
+} => {
+  const wrappedModel = wrapModel(model, aiSDK);
+  const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
+  return {
+    wrappedModel,
+    getMetrics: (result: any) =>
+      modelIsWrapped ? undefined : extractTokenMetrics(result),
+  };
+};
+
 const wrapGenerateObject = (
   generateObject: any,
   options: WrapAISDKOptions = {},
@@ -542,9 +569,14 @@ const wrapGenerateObject = (
 
     return traced(
       async (span) => {
+        const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+          params.model,
+          aiSDK,
+        );
+
         const result = await generateObject({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
         });
 
@@ -562,7 +594,7 @@ const wrapGenerateObject = (
 
         span.log({
           output,
-          metrics: extractTokenMetrics(result),
+          metrics: getMetrics(result),
           ...(Object.keys(resolvedMetadata).length > 0
             ? { metadata: resolvedMetadata }
             : {}),
@@ -654,10 +686,15 @@ const makeStreamTextWrapper = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
+      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+        params.model,
+        aiSDK,
+      );
+
       const result = withCurrent(span, () =>
         streamText({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -686,7 +723,7 @@ const makeStreamTextWrapper = (
 
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
-              metrics: extractTokenMetrics(event),
+              metrics: getMetrics(event),
               ...(Object.keys(resolvedMetadata).length > 0
                 ? { metadata: resolvedMetadata }
                 : {}),
@@ -824,11 +861,15 @@ const wrapStreamObject = (
     try {
       const startTime = Date.now();
       let receivedFirst = false;
+      const { wrappedModel, getMetrics } = wrapModelAndGetMetrics(
+        params.model,
+        aiSDK,
+      );
 
       const result = withCurrent(span, () =>
         streamObject({
           ...params,
-          model: wrapModel(params.model, aiSDK),
+          model: wrappedModel,
           tools: wrapTools(params.tools),
           onChunk: (chunk: any) => {
             if (!receivedFirst) {
@@ -856,7 +897,7 @@ const wrapStreamObject = (
 
             span.log({
               output: await processOutput(event, options.denyOutputPaths),
-              metrics: extractTokenMetrics(event),
+              metrics: getMetrics(event),
               ...(Object.keys(resolvedMetadata).length > 0
                 ? { metadata: resolvedMetadata }
                 : {}),
