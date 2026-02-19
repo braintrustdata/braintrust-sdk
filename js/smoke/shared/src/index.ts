@@ -11,17 +11,25 @@ export type {
   LoggerInstance,
   BackgroundLogger,
   TestingExports,
-  TestAdapters,
   TestResult,
 } from "./helpers/types";
 
-// Export test state helpers
+// Export register helpers (new pattern)
 export {
-  setupTestEnvironment,
-  cleanupTestEnvironment,
-  withTestEnvironment,
-} from "./helpers/test-state";
-export type { SetupTestEnvironmentOptions } from "./helpers/test-state";
+  register,
+  runTests,
+  validateCoverage,
+  expectFailure,
+  getRegisteredTests,
+  clearRegistry,
+} from "./helpers/register";
+export type {
+  TestFn,
+  TestContext,
+  RunTestsOptions,
+  TestRunResults,
+  ErrorPredicate,
+} from "./helpers/register";
 
 // Export assertions
 export {
@@ -37,14 +45,27 @@ export {
   assertHasProperty,
 } from "./helpers/assertions";
 
-// Export test suites
+// Export display utilities
+export type { DisplayTestResultsOptions } from "./helpers/display";
+export {
+  displayTestResults,
+  hasFailures,
+  getFailureCount,
+  getTestStats,
+} from "./helpers/display";
+
+// Export test suites - basic logging
 export {
   testBasicSpanLogging,
   testMultipleSpans,
   testDirectLogging,
-  runBasicLoggingTests,
+  testJSONAttachment,
+  testAsyncLocalStorageTraced,
+  testNestedTraced,
+  testCurrentSpan,
 } from "./suites/basic-logging";
 
+// Export test suites - import verification
 export type { BraintrustModule } from "./suites/import-verification";
 export {
   testCoreLoggingExports,
@@ -60,15 +81,14 @@ export {
   testIDGeneratorExports,
   testTestingExports,
   testStateManagementExports,
-  runImportVerificationTests,
+  testBuildResolution,
 } from "./suites/import-verification";
 
-export type { PromptModule } from "./suites/prompt-templating";
+// Export test suites - prompt templating
 export {
   testMustacheTemplate,
   testNunjucksTemplate,
-  runPromptTemplatingTests,
 } from "./suites/prompt-templating";
 
-// Eval smoke test suite
-export { runEvalSmokeTest } from "./suites/eval-smoke";
+// Export test suites - eval smoke
+export { testEvalSmoke } from "./suites/eval-smoke";

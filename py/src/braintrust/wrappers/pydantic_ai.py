@@ -62,7 +62,7 @@ def wrap_agent(Agent: Any) -> Any:
 
     def _ensure_model_wrapped(instance: Any):
         """Ensure the agent's model class is wrapped (lazy wrapping)."""
-        if hasattr(instance, "_model"):
+        if hasattr(instance, "_model") and instance._model is not None:
             model_class = type(instance._model)
             _wrap_concrete_model_class(model_class)
 
@@ -1136,7 +1136,15 @@ def _extract_response_metrics(
 
 
 def _is_patched(obj: Any) -> bool:
-    """Check if object is already patched."""
+    """Check if object is already patched.
+
+    For classes we check __dict__ directly because getattr walks the MRO.
+    Without this, wrapping WrapperModel first causes InstrumentedModel to
+    appear already-patched (it inherits the flag), so its request() method
+    is never wrapped and the inner "chat" span is lost.
+    """
+    if isinstance(obj, type):
+        return obj.__dict__.get("_braintrust_patched", False)
     return getattr(obj, "_braintrust_patched", False)
 
 

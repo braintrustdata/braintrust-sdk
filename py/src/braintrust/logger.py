@@ -160,6 +160,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
     def id(self) -> str:
         """Row ID of the span."""
 
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the span, for display purposes only."""
+
     @abstractmethod
     def log(self, **event: Any) -> None:
         """Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -293,6 +298,10 @@ class _NoopSpan(Span):
 
     @property
     def id(self):
+        return ""
+
+    @property
+    def name(self):
         return ""
 
     @property
@@ -3269,10 +3278,20 @@ def _update_span_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
+    root_span_id: str | None,
+    span_id: str | None,
     **event: Any,
 ):
+    if (root_span_id is None) != (span_id is None):
+        raise ValueError("both root_span_id and span_id must be set, or neither")
+
+    update_payload = {**event}
+    if root_span_id is not None and span_id is not None:
+        update_payload["root_span_id"] = root_span_id
+        update_payload["span_id"] = span_id
+
     update_event = _validate_and_sanitize_experiment_log_partial_args(
-        event=event,
+        event=update_payload,
     )
 
     update_event = bt_safe_deep_copy(update_event)
@@ -3314,11 +3333,18 @@ def update_span(exported: str, **event: Any) -> None:
     components = SpanComponentsV4.from_str(exported)
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
+
+    event_without_span_ids = {**event}
+    event_without_span_ids.pop("span_id", None)
+    event_without_span_ids.pop("root_span_id", None)
+
     return _update_span_impl(
         parent_object_type=components.object_type,
         parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
         id=components.row_id,
-        **event,
+        root_span_id=components.root_span_id,
+        span_id=components.span_id,
+        **event_without_span_ids,
     )
 
 
@@ -3741,10 +3767,14 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         :param id: The id of the span to update.
         :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
         """
+        root_span_id = event.pop("root_span_id", None)
+        span_id = event.pop("span_id", None)
         return _update_span_impl(
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            root_span_id=root_span_id,
+            span_id=span_id,
             **event,
         )
 
@@ -4007,6 +4037,8 @@ class SpanImpl(Span):
             else:
                 name = "subspan"
 
+        self._name = name
+
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
@@ -4055,12 +4087,18 @@ class SpanImpl(Span):
     def id(self) -> str:
         return self._id
 
+    @property
+    def name(self) -> str:
+        return self._name
+
     def set_attributes(
         self,
         name: str | None = None,
         type: SpanTypeAttribute | None = None,
         span_attributes: Mapping[str, Any] | None = None,
     ) -> None:
+        if name is not None:
+            self._name = name
         self.log_internal(
             internal_data={
                 "span_attributes": _strip_nones(
@@ -5169,10 +5207,14 @@ class Logger(Exportable):
         :param id: The id of the span to update.
         :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
         """
+        root_span_id = event.pop("root_span_id", None)
+        span_id = event.pop("span_id", None)
         return _update_span_impl(
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            root_span_id=root_span_id,
+            span_id=span_id,
             **event,
         )
 

@@ -14,6 +14,7 @@ import {
   currentSpan,
   withParent,
   startSpan,
+  updateSpan,
   Attachment,
   deepCopyEvent,
   renderMessage,
@@ -24,7 +25,7 @@ import {
   isTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -506,30 +507,16 @@ describe("prompt.build structured output templating", () => {
       false,
     );
 
-    const result = prompt.build(
-      {
-        user: { name: "ada" },
-      },
-      { templateFormat: "nunjucks" },
-    );
-
-    expect(result).toMatchObject({
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "schema",
-          schema: {
-            type: "object",
-            properties: {
-              greeting: {
-                type: "string",
-                description: "Hello ADA",
-              },
-            },
-          },
+    expect(() =>
+      prompt.build(
+        {
+          user: { name: "ada" },
         },
-      },
-    });
+        { templateFormat: "nunjucks" },
+      ),
+    ).toThrow(
+      "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+    );
   });
 
   test("prompt.build with structured output templating", () => {
@@ -684,6 +671,41 @@ test("span.export handles unresolved parent object ID", async () => {
   expect(exported).toBeDefined();
   expect(typeof exported).toBe("string");
   expect((exported as string).length).toBeGreaterThan(0);
+});
+
+test("updateSpan includes span_id and root_span_id from exported span", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  try {
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    const exported = await span.export();
+    const spanId = span.spanId;
+    const rootSpanId = span.rootSpanId;
+    span.end();
+
+    await memoryLogger.flush();
+    await memoryLogger.drain();
+
+    updateSpan({ exported, output: "updated output" });
+
+    await memoryLogger.flush();
+    const logs = await memoryLogger.drain();
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        output: "updated output",
+        span_id: spanId,
+        root_span_id: rootSpanId,
+      }),
+    );
+  } finally {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  }
 });
 
 test("startSpan support ids with parent", () => {

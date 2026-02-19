@@ -1,0 +1,4 @@
+name = "smoke-cloudflare-vite-hono-vite-dev-node-esm"
+main = "src/worker-node-esm.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat_v2"]

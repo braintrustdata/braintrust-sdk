@@ -1,0 +1,54 @@
+[settings]
+experimental=true
+
+[env]
+_.file = ".env"
+
+[tools]
+node = "22"
+temporal = "latest"
+mise = "latest"
+
+[hooks]
+postinstall = "true"
+
+[tasks.install]
+description = "Install dependencies"
+run = "pnpm install --ignore-workspace"
+
+[tasks.server]
+description = "Build integration, run temporal server and a worker (use multiple terminals to run more workers)"
+run = "pnpm run build:integration && temporal server start-dev & sleep 1; pnpm run worker"
+
+[tasks.workflow]
+description = "Run workflow client"
+run = "pnpm run client"
+
+[tasks.workflow-haiku]
+description = "Run haiku workflow with full LLM tracing"
+run = "pnpm run workflow:haiku"
+
+[tasks.workflow-tools]
+description = "Run tools workflow with full LLM + tool tracing"
+run = "pnpm run workflow:tools"
+
+[tasks.workflow-mcp]
+description = "Run MCP workflow"
+run = "pnpm run workflow:mcp"
+
+[tasks.workflow-middleware]
+description = "Run middleware workflow"
+run = "pnpm run workflow:middleware"
+
+[tasks.stop]
+description = "Stop temporal server and workers"
+run = "pkill -f temporal || true; pkill -f src/worker.ts || true"
+
+[tasks.kill]
+description = "Force kill temporal server and workers"
+run = '''
+pkill -f 'examples/temporal.*ts-node' 2>/dev/null || true
+pkill -f 'overmind.*temporal' 2>/dev/null || true
+pkill -f 'temporal' 2>/dev/null || true
+echo 'Server killed'
+'''

@@ -213,15 +213,24 @@ function parseToolName(rawToolName: string): ParsedToolName {
 }
 
 /**
+ * Resolves the parent span for a tool call based on which agent context it belongs to.
+ * Uses the toolUseToParent map (populated from message stream) to find the correct parent.
+ */
+type ParentSpanResolver = (
+  toolUseID: string,
+) => Promise<Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>>;
+
+/**
  * Creates PreToolUse, PostToolUse, and PostToolUseFailure hooks for tracing all tool calls (including remote MCPs).
  * The hooks use toolUseID to correlate pre/post events and manage span lifecycle.
+ * Uses a dynamic parent resolver to support sub-agent nesting.
  */
 function createToolTracingHooks(
-  parentSpanExportPromise: Promise<
-    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
-  >,
+  resolveParentSpan: ParentSpanResolver,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
   mcpServers: McpServersConfig | undefined,
+  subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
 ): {
   preToolUse: HookCallback;
   postToolUse: HookCallback;
@@ -232,9 +241,15 @@ function createToolTracingHooks(
       return {};
     }
 
+    // Skip Task tool calls in PreToolUse -- sub-agent spans are created
+    // in the message loop when we see messages with a new parent_tool_use_id.
+    if (input.tool_name === "Task") {
+      return {};
+    }
+
     const parsed = parseToolName(input.tool_name);
     const mcpMetadata = getMcpServerMetadata(parsed.mcpServer, mcpServers);
-    const parentExport = await parentSpanExportPromise;
+    const parentExport = await resolveParentSpan(toolUseID);
     const toolSpan = startSpan({
       name: parsed.displayName,
       spanAttributes: { type: SpanTypeAttribute.TOOL },
@@ -265,6 +280,35 @@ function createToolTracingHooks(
       return {};
     }
 
+    // For Task tool calls, end the sub-agent span with the response metadata
+    const subAgentSpan = subAgentSpans.get(toolUseID);
+    if (subAgentSpan) {
+      try {
+        const response = input.tool_response as
+          | Record<string, unknown>
+          | undefined;
+        const metadata: Record<string, unknown> = {};
+        if (response?.status) {
+          metadata["claude_agent_sdk.status"] = response.status;
+        }
+        if (response?.totalDurationMs) {
+          metadata["claude_agent_sdk.duration_ms"] = response.totalDurationMs;
+        }
+        if (response?.totalToolUseCount !== undefined) {
+          metadata["claude_agent_sdk.tool_use_count"] =
+            response.totalToolUseCount;
+        }
+        subAgentSpan.log({
+          output: response?.content,
+          metadata,
+        });
+      } finally {
+        subAgentSpan.end();
+        endedSubAgentSpans.add(toolUseID);
+      }
+      return {};
+    }
+
     const toolSpan = activeToolSpans.get(toolUseID);
     if (!toolSpan) {
       return {};
@@ -281,6 +325,18 @@ function createToolTracingHooks(
 
   const postToolUseFailure: HookCallback = async (input, toolUseID) => {
     if (input.hook_event_name !== "PostToolUseFailure" || !toolUseID) {
+      return {};
+    }
+
+    // Handle failure for sub-agent Task calls
+    const subAgentSpan = subAgentSpans.get(toolUseID);
+    if (subAgentSpan) {
+      try {
+        subAgentSpan.log({ error: input.error });
+      } finally {
+        subAgentSpan.end();
+        endedSubAgentSpans.add(toolUseID);
+      }
       return {};
     }
 
@@ -311,26 +367,24 @@ function createToolTracingHooks(
   return { preToolUse, postToolUse, postToolUseFailure };
 }
 
-// FIXME: Add subagent tracing when SDK supports it.
-// Currently SubagentStart hook is never called and SubagentStop lacks agent_id.
-// See: https://github.com/anthropics/claude-code/issues/14859
-
 /**
  * Injects tracing hooks into query options, preserving any user-provided hooks.
  */
 function injectTracingHooks(
   options: QueryOptions,
-  parentSpanExportPromise: Promise<
-    Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>
-  >,
+  resolveParentSpan: ParentSpanResolver,
   activeToolSpans: Map<string, ReturnType<typeof startSpan>>,
+  subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
+  endedSubAgentSpans: Set<string>,
 ): QueryOptions {
   const mcpServers = options.mcpServers as McpServersConfig | undefined;
   const { preToolUse, postToolUse, postToolUseFailure } =
     createToolTracingHooks(
-      parentSpanExportPromise,
+      resolveParentSpan,
       activeToolSpans,
       mcpServers,
+      subAgentSpans,
+      endedSubAgentSpans,
     );
 
   const existingHooks = options.hooks ?? {};
@@ -473,6 +527,20 @@ function wrapClaudeAgentQuery<
       // LLM spans can contain multiple streaming message updates. We create the span
       // when we proceed to a new message ID or when the query completes.
       const createLLMSpan = async () => {
+        // Resolve the parent span based on the messages' parent_tool_use_id
+        const parentToolUseId = currentMessages[0]?.parent_tool_use_id ?? null;
+        let parentSpanExport: Awaited<
+          ReturnType<ReturnType<typeof startSpan>["export"]>
+        >;
+        if (parentToolUseId) {
+          const subAgentSpan = subAgentSpans.get(parentToolUseId);
+          parentSpanExport = subAgentSpan
+            ? await subAgentSpan.export()
+            : await span.export();
+        } else {
+          parentSpanExport = await span.export();
+        }
+
         const finalMessageContent = await _createLLMSpanForMessages(
           currentMessages,
           prompt,
@@ -480,7 +548,7 @@ function wrapClaudeAgentQuery<
           options,
           currentMessageStartTime,
           capturedPromptMessages,
-          await span.export(),
+          parentSpanExport,
         );
 
         if (finalMessageContent) {
@@ -509,11 +577,41 @@ function wrapClaudeAgentQuery<
       // Track active tool spans for hook-based tracing
       const activeToolSpans = new Map<string, ReturnType<typeof startSpan>>();
 
+      // Track sub-agent spans keyed by the Task tool_use_id that spawned them.
+      // Spans stay in this map even after being ended (for parent resolution by createLLMSpan).
+      const subAgentSpans = new Map<string, ReturnType<typeof startSpan>>();
+      // Tracks which sub-agent spans have already been ended by hooks (to avoid double-end in finally).
+      const endedSubAgentSpans = new Set<string>();
+
+      // Maps a tool_use_id to the parent_tool_use_id it was seen under in the message stream.
+      // This lets hooks resolve the correct parent span for tool calls within sub-agents.
+      const toolUseToParent = new Map<string, string | null>();
+
+      // Maps a Task tool_use_id to the agent name extracted from the tool input.
+      // Populated when we see a Task tool_use block; consumed when the sub-agent span is created.
+      const pendingSubAgentNames = new Map<string, string>();
+
+      // Dynamic parent resolver: looks up which agent context a tool belongs to
+      const resolveParentSpan: ParentSpanResolver = async (
+        toolUseID: string,
+      ) => {
+        const parentToolUseId = toolUseToParent.get(toolUseID);
+        if (parentToolUseId) {
+          const subAgentSpan = subAgentSpans.get(parentToolUseId);
+          if (subAgentSpan) {
+            return subAgentSpan.export();
+          }
+        }
+        return span.export();
+      };
+
       // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs)
       const optionsWithHooks = injectTracingHooks(
         options,
-        span.export(),
+        resolveParentSpan,
         activeToolSpans,
+        subAgentSpans,
+        endedSubAgentSpans,
       );
 
       // Create modified argArray with injected hooks
@@ -536,6 +634,57 @@ function wrapClaudeAgentQuery<
           try {
             for await (const message of originalGenerator) {
               const currentTime = getCurrentUnixTimestamp();
+
+              // Track tool_use_ids from assistant messages to map them to their agent context.
+              // This must happen before hooks fire (which it does, since assistant messages
+              // arrive in the stream before the corresponding PreToolUse hook).
+              if (
+                message.type === "assistant" &&
+                Array.isArray(message.message?.content)
+              ) {
+                const parentToolUseId = message.parent_tool_use_id ?? null;
+                for (const block of message.message.content) {
+                  if (block.type === "tool_use" && block.id) {
+                    toolUseToParent.set(block.id, parentToolUseId);
+                    // Extract agent name from Task tool_use blocks for span naming
+                    if (block.name === "Task" && block.input?.subagent_type) {
+                      pendingSubAgentNames.set(
+                        block.id,
+                        block.input.subagent_type,
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Detect sub-agent boundaries: when a message has a non-null parent_tool_use_id
+              // that we haven't seen before, create a nested TASK span for the sub-agent.
+              if ("parent_tool_use_id" in message) {
+                const parentToolUseId = message.parent_tool_use_id as
+                  | string
+                  | null;
+                if (parentToolUseId && !subAgentSpans.has(parentToolUseId)) {
+                  const agentName = pendingSubAgentNames.get(parentToolUseId);
+                  const spanName = agentName
+                    ? `Agent: ${agentName}`
+                    : "Agent: sub-agent";
+
+                  const parentExport = await span.export();
+                  const subAgentSpan = startSpan({
+                    name: spanName,
+                    spanAttributes: { type: SpanTypeAttribute.TASK },
+                    event: {
+                      metadata: {
+                        ...(agentName && {
+                          "claude_agent_sdk.agent_type": agentName,
+                        }),
+                      },
+                    },
+                    parent: parentExport,
+                  });
+                  subAgentSpans.set(parentToolUseId, subAgentSpan);
+                }
+              }
 
               const messageId = message.message?.id;
               if (messageId && messageId !== currentMessageId) {
@@ -606,6 +755,13 @@ function wrapClaudeAgentQuery<
             });
             throw error;
           } finally {
+            // End any sub-agent spans that weren't closed by hooks
+            for (const [id, subSpan] of subAgentSpans) {
+              if (!endedSubAgentSpans.has(id)) {
+                subSpan.end();
+              }
+            }
+            subAgentSpans.clear();
             if (capturedPromptMessages) {
               if (promptStarted) {
                 await promptDone;

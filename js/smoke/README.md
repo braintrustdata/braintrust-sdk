@@ -1,404 +1,368 @@
-# Braintrust JS SDK Smoke Tests
+# Braintrust JS SDK Smoke Tests v2
 
-The smoke tests ensure that a freshly packed `braintrust` build installs
-cleanly and can run basic user workflows. These tests run on any PR.
+Smoke test infrastructure verifying SDK installation across different runtimes and integrations.
 
-The tests utilize the newly built braintrust package to run first using the CommonJS (CJS) build file and then using the ECMAScript Module (ESM) build file.
-
-The tests are written without the use of vitest in order to work in both CJS and ESM environments. Vitest is a testing framework that is ESM native and did not support running using CJS.
-
-## Standardized Test Infrastructure
-
-The smoke test suite follows **pure "convention over configuration"**:
-
-- **Auto-discovery** - Any `tests/*/` directory with `package.json` is a test
-- **Universal interface** - All tests run via `npm test`
-- **Zero registration** - Just create a directory, CI picks it up automatically
-- **Master runner** - `run-tests.sh` discovers and runs tests automatically
-
-### Key Files
-
-- `run-tests.sh` - Master test runner with auto-discovery
-- `tests/*/package.json` - Standard `npm test` script
-- `shared/` - Reusable test suites (see below)
-
-### Convention
-
-```
-tests/
-├── my-test/
-│   ├── package.json    # Must have "test" script
-│   └── run-test.js     # Test implementation
-└── another-test/
-    ├── package.json    # "test": "npm test" or "deno task test" etc
-    └── ...
-```
-
-**That's it!** Test name = directory name. All tests run via `npm test`.
-
-## Running Tests
-
-### Build the shared package first
-
-The shared test package must be built before running any tests:
+## Quick Reference
 
 ```bash
-cd shared
-npm install
-npm run build
+# From sdk/js/:
+make test-smoke                    # Run all scenarios
+
+# From sdk/js/smoke/:
+make test                          # Run all scenarios (local + integration)
+make test deno-node                # Run specific local scenario
+make test templates-nunjucks/jest  # Run integration scenario
+make list                          # List all discovered scenarios
+
+# From a specific scenario:
+cd scenarios/deno-node
+make test                          # Auto-creates tarball if needed
 ```
 
-### Run tests in specific environments
-
-All environments now support shared test suites via `test:shared` scripts:
-
-```bash
-# Node.js CJS tests
-cd tests/span
-npm run test:shared
-
-# Jest tests
-cd tests/span-jest
-npm run test:shared
-
-# Deno tests
-cd tests/deno
-deno task test:shared       # Shared test suites
-deno task test              # Original simple test
-
-# Cloudflare Worker tests
-cd tests/cloudflare-worker
-npm test                    # Runs shared suites via HTTP endpoint
-
-# Next.js tests
-cd tests/nextjs-instrumentation
-npm run test:shared         # Runs shared suites in Edge + Node.js runtimes
-npm run build               # Build-time verification (webpack bundling)
-```
-
-## Shared Test Package
-
-To maximize test coverage while maintaining DRY principles, common test logic is now shared across environments via the `shared/` package. This package:
-
-- Provides reusable test suites and helpers
-- Builds to both CJS (`dist/index.js`) and ESM (`dist/index.mjs`) formats
-- Allows the same test logic to run in Node.js, Deno, Cloudflare Workers, etc.
-- Helps catch bundler-specific issues (webpack, esbuild, Deno's bundler handle imports differently)
-
-See `shared/README.md` for detailed documentation on the shared test package.
-
-## Repository Layout
-
-</text>
-
-<old_text line=14>
-
-## Repository Layout
-
-- `shared/` - Shared test package providing reusable test suites
-
-  - Builds to both CJS (`dist/index.js`) and ESM (`dist/index.mjs`)
-  - Contains test suites: `basic-logging`, `import-verification`
-  - See `shared/README.md` for detailed documentation
-
-- `tests/` - Test projects for different runtime environments
-  - `span/` - Node.js CJS tests (uses shared suites)
-  - `span-jest/` - Jest framework tests (uses shared suites)
-  - `deno/` - Deno environment tests (uses shared suites)
-  - `cloudflare-worker/` - Cloudflare Workers tests (uses shared suites)
-  - `nextjs-instrumentation/` - Next.js tests (Edge + Node.js runtimes via API routes)
-  - `otel-v1/` - OpenTelemetry v1 ingestion test (specialized)
-
-## Running Tests
-
-### Build the shared package first
-
-The shared test package must be built before running any tests:
-
-```bash
-cd shared
-npm install
-npm run build
-```
-
-### Run tests in specific environments
-
-All environments now support shared test suites via `test:shared` scripts:
-
-```bash
-# Node.js CJS tests
-cd tests/span
-npm run test:shared
-
-# Jest tests
-cd tests/span-jest
-npm run test:shared
-
-# Deno tests
-cd tests/deno
-deno task test:shared       # Shared test suites
-deno task test              # Original simple test
-
-# Cloudflare Worker tests
-cd tests/cloudflare-worker
-npm test                    # Runs shared suites via HTTP endpoint
-
-# Next.js tests
-cd tests/nextjs-instrumentation
-npm run test:shared         # Runs shared suites in Edge + Node.js runtimes
-npm run build               # Build-time verification (webpack bundling)
-```
-
-## CI Integration
-
-### SDK Submodule CI
-
-The smoke tests run automatically in the **SDK submodule's CI** (`sdk/.github/workflows/js.yaml`) that **builds the SDK from source** and tests against the actual build artifacts.
-
-#### Workflow: `sdk/.github/workflows/js.yaml`
-
-Runs on:
-
-- Pull requests to SDK repository
-- Pushes to `main` branch in SDK repository
-
-**Build stage:**
-
-1. **Builds the SDK** from source (`js/`)
-   - Runs `npm ci && npm run build`
-   - Packs into tarball: `npm pack --pack-destination artifacts`
-2. **Uploads artifacts** for test jobs to download
-
-**Test stages** (parallel jobs):
-
-Each smoke test runs in its own job:
-
-- `smoke-tests-node` - Tests `span` and `otel-v1`
-- `smoke-tests-jest` - Tests `span-jest`
-- `smoke-tests-nextjs` - Tests `nextjs-instrumentation`
-- `smoke-tests-cloudflare` - Tests `cloudflare-worker`
-- `smoke-tests-browser` - Tests `browser` (Playwright / browser bundle)
-- `smoke-tests-deno` - Tests `deno`
-
-**Each job:**
-
-1. Downloads SDK build artifacts
-2. Installs SDK into test directory via `install-build.ts`
-3. Builds shared test package
-4. Runs test via `./run-tests.sh <test-name>`
-
-**Workflow visualization:**
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  SDK CI: sdk/.github/workflows/js.yaml                  │
-└─────────────────────────────────────────────────────────┘
-                        ↓
-        ┌───────────────────────────┐
-        │  Build Job                │
-        │  1. Build SDK from source │
-        │     js/                   │
-        │  2. Pack into tarball     │
-        │  3. Upload artifacts      │
-        └───────────┬───────────────┘
-                    ↓
-            ┌───────┴────────┬─────────────┬──────────────┐
-            ↓                ↓             ↓              ↓
-    ┌───────────────┐ ┌────────────┐ ┌─────────┐ ┌──────────┐
-    │ smoke-tests-  │ │ smoke-     │ │ smoke-  │ │ smoke-   │
-    │ node          │ │ tests-jest │ │ tests-  │ │ tests-   │
-    │ (span,otel-v1)│ │ (span-jest)│ │ nextjs  │ │ deno     │
-    └───────┬───────┘ └─────┬──────┘ └────┬────┘ └────┬─────┘
-            │               │             │           │
-            │   For each test job:        │           │
-            │   1. Download artifacts     │           │
-            │   2. Install SDK            │           │
-            │   3. Build shared package   │           │
-            │   4. ./run-tests.sh <name>  │           │
-            │                             │           │
-            └─────────────┬───────────────┴───────────┘
-                          ↓
-                  ✅ Pass or ❌ Fail
-```
-
-**Key benefit**: Tests run against the **actual build** from the PR, not the npm registry version.
-
-### How Individual Test Jobs Work
-
-Example from `sdk/.github/workflows/js.yaml`:
-
-```yaml
-smoke-tests-cloudflare:
-  needs: build
-  runs-on: ubuntu-latest
-
-  steps:
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ needs.build.outputs.artifact-name }}
-        path: js/artifacts
-
-    - name: Install dependencies and local build
-      working-directory: js/smoke/tests/cloudflare-worker
-      run: |
-        npm ci
-        npx tsx ../../install-build.ts ../../../artifacts braintrust
-
-    - name: Build shared test package
-      working-directory: js/smoke/shared
-      run: |
-        npm ci
-        npm run build
-
-    - name: Run Cloudflare Worker smoke test
-      working-directory: js/smoke
-      run: |
-        ./run-tests.sh cloudflare-worker
-```
-
-**Pattern**: Build SDK → Download artifacts → Install in test → Build shared → Run specific test
-
-### Running Multiple Tests in One Job
-
-```yaml
-- name: Run multiple smoke tests
-  working-directory: js/smoke
-  run: ./run-tests.sh span cloudflare-worker deno
-```
-
-Or run all tests:
-
-```yaml
-- name: Run all smoke tests
-  working-directory: js/smoke
-  run: ./run-tests.sh
-```
-
-### Test Discovery and Build Process
-
-Tests are **automatically discovered** by scanning `tests/*/`. To add a new test:
-
-1. Create `tests/my-test/` directory
-2. Add `package.json` with `"test"` script
-3. Done!
-
-CI will automatically:
-
-- Build the SDK from source
-- Install the build artifact into your test directory
-- Run your test against the actual build
-
-**No registration or configuration needed!**
-
-### What Gets Tested
-
-The smoke tests verify the **actual SDK build** (not the published npm package):
-
-1. **Build**: SDK is built from source in `sdk/js/`
-2. **Package**: Built SDK is packed into tarball (`.tgz`)
-3. **Install**: Tarball is installed into each test's `node_modules/`
-4. **Test**: Tests import and verify the **built** SDK
-
-This ensures that:
-
-- ✅ The build process works correctly
-- ✅ All exports are present and functional
-- ✅ No tree-shaking issues or missing dependencies
-- ✅ SDK works in diverse runtime environments
-
-## Test Coverage
-
-The shared test suites currently include:
-
-### Import Verification Tests (13 tests)
-
-- Core logging exports (initLogger, wrapLogger, etc.)
-- Dataset exports (initDataset, Dataset)
-- Prompt exports (loadPrompt, Prompt)
-- Experiment exports (Experiment, init)
-- Eval exports (Eval, ReporterDef, EvalCase)
-- Tracing exports (traced, wrapTraced, currentSpan, etc.)
-- Client wrappers (wrapOpenAI, wrapAnthropic, etc.)
-- Utility exports (getCurrentUnixTimestamp, JSONAttachment, etc.)
-- Function, Framework, ID generator, Testing, and State management exports
-
-### Functional Tests (3 tests)
-
-- Basic span logging (single span with input/output/expected)
-- Multiple spans (sequential span creation)
-- Direct logging (logger.log() if available)
-
-**Total: 16+ tests running in each environment**
-
-## Environment Status
-
-| Environment             | Shared Tests   | Import Verification | Functional Tests |
-| ----------------------- | -------------- | ------------------- | ---------------- |
-| Node.js CJS             | ✅             | ✅                  | ✅               |
-| Jest                    | ✅             | ✅                  | ✅               |
-| Deno                    | ✅             | ✅                  | ✅               |
-| Cloudflare Workers      | ✅             | ✅                  | ✅               |
-| Next.js Edge Runtime    | ✅             | ✅                  | ✅               |
-| Next.js Node.js Runtime | ✅             | ✅                  | ✅               |
-| OTEL v1                 | ⚪ Specialized | N/A                 | ⚪ Custom        |
-
-## Adding New Tests
-
-Adding a new smoke test is trivial:
-
-1. **Create directory**: `mkdir tests/my-test`
-2. **Add package.json**:
-   ```json
-   {
-     "name": "braintrust-my-test",
-     "scripts": {
-       "test": "node run-test.js"
-     },
-     "dependencies": {
-       "braintrust": "latest"
-     }
-   }
-   ```
-3. **Write test**: Create `run-test.js` (can use shared test suites)
-4. **Run it**: `./run-tests.sh my-test`
-
-Done! CI automatically discovers and runs it.
-
-## Convention Over Configuration
-
-Tests are **auto-discovered** by scanning `tests/*/` for directories with `package.json`.
-
-**Rules:**
-
-- Test name = directory name
-- All tests run via: `npm test`
-- For Deno: `package.json` calls `deno task test`
-- For Bun: `package.json` calls `bun test`
-
-**Example (Deno test):**
-
-```json
-{
-  "scripts": {
-    "test": "deno task test"
-  }
+## Output Standardization (REQUIRED)
+
+**ALL test files MUST use `displayTestResults()` from the shared package:**
+
+```typescript
+import {
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  // ... other test functions
+} from "../../shared/dist/index.mjs";
+
+import * as braintrust from "braintrust";
+
+// Run tests with the new runTests helper
+const { all, passed, failed, xfail } = await runTests({
+  name: "My Scenario Test Results",
+  braintrust,
+  tests: [
+    testBasicSpanLogging,
+    testMultipleSpans,
+    expectFailure(
+      testNunjucksTemplate,
+      (e) => e.message.includes("not supported"),
+      "Nunjucks not supported in browser build",
+    ),
+  ],
+});
+
+// Check for failures
+if (failed.length > 0) {
+  process.exit(1);
 }
 ```
 
-**Benefits:**
+**Key features:**
 
-- Zero registration needed
-- Pure convention
-- Add directory → CI runs it
-- Can't forget to register
+- `runTests()` automatically displays results, validates coverage, and returns structured results
+- `expectFailure()` wraps tests expected to fail with error predicate validation
+- No manual `try/catch` blocks needed around `runTests()`
+- No manual coverage validation needed
 
-## Notes
+## Creating a New Scenario
 
-- There were some caching issues with pnpm, so tests use npm ci and package-lock.json files
-- Tests use `_exportsForTestingOnly` to avoid hitting real Braintrust APIs
-- The shared package allows adding test coverage once and automatically running it in all environments
-- Import verification tests help catch tree-shaking issues across different bundlers
-- Each environment runs the same test logic, ensuring consistent behavior
-- All tests use `npm test` for consistency (universal interface)
-- Tests are auto-discovered from `tests/*/` directories with `package.json`
+### Requirements
+
+- [ ] Makefile with `setup` and `test` targets
+- [ ] Environment spec (mise.toml, deno.json, etc.)
+- [ ] Dependencies declared (package.json, deno.json, etc.)
+- [ ] README.md explaining design decisions (15-25 lines)
+- [ ] .gitignore (ignore artifacts, track lock files)
+- [ ] **Tests use `runTests()` and individual test functions**
+- [ ] **Minimal logging** (errors only)
+- [ ] **POSIX shell syntax** (`[ ]` not `[[ ]]`)
+
+### Patterns
+
+**Node.js + npm:** Use tarball paths in package.json. See `scenarios/otel-v1/`.
+
+**Deno:** Use workspace links via `deno.json`. See `scenarios/deno-node/`.
+
+**Multi-test:** Each test uses `displayTestResults()`. Makefile runs all tests (don't fail early), then exits with failure if any failed. See `scenarios/otel-v1/` for example.
+
+### Example Test File
+
+```typescript
+import {
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  testDirectLogging,
+  testCoreLoggingExports,
+  testBuildResolution,
+  testNunjucksTemplate,
+} from "../../shared";
+
+import * as braintrust from "braintrust";
+
+async function main() {
+  const { all, passed, failed, xfail } = await runTests({
+    name: "My Scenario Test Results",
+    braintrust,
+    tests: [
+      // Import verification tests
+      testCoreLoggingExports,
+      testBuildResolution,
+
+      // Functional tests
+      testBasicSpanLogging,
+      testMultipleSpans,
+      testDirectLogging,
+
+      // Expected failures with error validation
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("not supported"),
+        "Nunjucks not supported in browser build",
+      ),
+    ],
+  });
+
+  if (failed.length > 0) {
+    process.exit(1);
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+```
+
+### Example HTTP Endpoint (Cloudflare Workers, Next.js)
+
+```typescript
+import {
+  runTests,
+  expectFailure /* ... test functions */,
+} from "../../../shared";
+import * as braintrust from "braintrust";
+
+app.get("/api/test", async (c) => {
+  const { all, passed, failed, xfail } = await runTests({
+    name: "My Worker Test Results",
+    braintrust,
+    tests: [
+      testBasicSpanLogging,
+      testMultipleSpans,
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("Disallowed"),
+        "Cloudflare Workers blocks dynamic code generation",
+      ),
+    ],
+  });
+
+  return c.json(
+    {
+      success: failed.length === 0,
+      message:
+        failed.length > 0
+          ? `${failed.length} test(s) failed`
+          : "All tests passed",
+      totalTests: all.length,
+      passedTests: passed.length,
+      failedTests: failed.length,
+      xfailTests: xfail.length,
+      results: all,
+    },
+    failed.length === 0 ? 200 : 500,
+  );
+});
+```
+
+### Example Makefile (Multiple Tests)
+
+**IMPORTANT:** Run all tests even if one fails. Don't exit early.
+
+```makefile
+test: setup
+	@echo "==> Running tests"
+	@FAILED=0; \
+	npx tsx tests/test1.test.ts || FAILED=1; \
+	npx tsx tests/test2.test.ts || FAILED=1; \
+	npx tsx tests/test3.test.ts || FAILED=1; \
+	exit $$FAILED
+```
+
+This ensures all tests run and display their results, but the suite still fails if any test failed.
+
+## Environment Variables & Tarball Creation
+
+### Automatic Tarball Creation
+
+Scenarios automatically create tarballs if they're not provided via environment variables. This happens during the `setup` target:
+
+1. **Check for existing tarball**: If `BRAINTRUST_TAR` env var is set and points to a valid file, use it
+2. **Build from source**: Otherwise, build SDK and create tarball:
+
+   ```bash
+   cd ../../.. && pnpm exec turbo build --filter=braintrust && \
+   mkdir-p artifacts && pnpm pack --pack-destination artifacts
+   ```
+
+3. **Rename to well-known path**: Copy to `braintrust-latest.tgz` for consistent references
+
+### Environment Variables
+
+- **`BRAINTRUST_TAR`**: Path to braintrust tarball (auto-created if not set)
+
+  - Example: `../artifacts/braintrust-latest.tgz`
+
+- **`BRAINTRUST_OTEL_TAR`**: Path to @braintrust/otel tarball (auto-created for scenarios that need it)
+
+  - Example: `../artifacts/braintrust-otel-latest.tgz`
+
+- **`BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR`**: Path to @braintrust/templates-nunjucks-js tarball
+
+  - Example: `../artifacts/braintrust-templates-nunjucks-js-latest.tgz`
+
+- **`SMOKE_V2_SHARED_DIST`**: Path to shared test utilities (auto-built if not set)
+  - Example: `shared/dist`
+
+### Local vs CI Execution
+
+**Locally:**
+
+- Tarballs auto-created on first run
+- Cached for subsequent runs (fast)
+- Run from any level: `sdk/js/`, `sdk/js/smoke/`, or scenario directory
+
+**In CI** (`.github/workflows/js.yaml`):
+
+1. **Build job**: Creates all tarballs (braintrust, otel, templates-nunjucks), uploads as artifacts
+2. **Smoke-discover job**: Auto-discovers all scenarios (local + integration)
+3. **Smoke-test job**: Downloads tarballs, runs all scenarios in parallel with `fail-fast: false`
+
+## Integration Scenarios
+
+Integration scenarios test SDK integrations and are located under `../../integrations/*/scenarios/`:
+
+### Templates-Nunjucks
+
+- **templates-nunjucks/basic-render**: Basic Nunjucks template rendering
+- **templates-nunjucks/deno**: Deno runtime with Nunjucks
+- **templates-nunjucks/jest**: Jest test runner with Nunjucks
+- **templates-nunjucks/nextjs**: Next.js integration with Nunjucks
+
+### OpenTelemetry (OTel)
+
+- **otel-js/otel-v1**: OpenTelemetry smoke test scenario (using shared test suite)
+
+Note: The `otel-js/otel-v1` and `otel-js/otel-v2` directories at the root of `integrations/otel-js/` are integration test environments (not smoke tests) and use a different test runner (vitest).
+
+All integration scenarios are automatically discovered and run alongside local scenarios.
+
+## Design Principles
+
+### Well-Known Tarball Paths
+
+Use version-agnostic paths: `braintrust-latest.tgz` not `braintrust-2.0.2.tgz`. Prevents package.json from changing on version bumps.
+
+### No Workarounds
+
+Never use `--legacy-peer-deps`, `--no-check`, `--ignore-errors`, or mocks. Smoke tests must expose issues users will encounter.
+
+### No Defensive Checks in Tests
+
+Don't conditionally check if functions exist before calling them. Let natural JavaScript errors occur and get caught by the test framework. This provides:
+
+- **Better error messages**: Stack traces show exactly where/what failed
+- **Cleaner test code**: No redundant existence checks
+- **Real-world behavior**: Tests fail the same way user code would fail
+
+```typescript
+// ❌ Bad - defensive checks hide the real error
+if (!braintrust.traced) {
+  return { status: "fail", error: { message: "traced missing" } };
+}
+
+// ✓ Good - let it throw naturally (register() wraps this)
+const traced = braintrust.traced as TracedFn;
+await traced(
+  () => {
+    /* ... */
+  },
+  { name: "test" },
+);
+```
+
+### Build Before Install
+
+Build all artifacts BEFORE installing dependencies that reference them. Prevents "ENOENT" errors.
+
+### Track Lock Files
+
+Commit `package-lock.json` and `deno.lock`. Changes signal new dependencies, version conflicts, or packaging issues.
+
+### Makefiles Are the Source of Truth
+
+No npm scripts in package.json. All commands in Makefile. Single clear path to run tests.
+
+## Troubleshooting
+
+### "ENOENT: no such file or directory" for tarball
+
+Ensure Makefile builds packages BEFORE `npm install`.
+
+### "Unsupported URL Type 'workspace:'"
+
+Use `pnpm pack` (not `npm pack`) for packages with `workspace:*` dependencies.
+
+### package.json gets modified by npm
+
+Use well-known tarball paths: `braintrust-latest.tgz` not version-specific paths.
+
+### Tests can't find braintrust imports
+
+Verify tarball paths in package.json are correct relative to scenario directory.
+
+## Directory Structure
+
+```
+smoke/
+├── shared/          # Cross-scenario test utilities
+├── scenarios/       # Individual test scenarios
+│   ├── otel-v1/
+│   │   ├── tests/         # Test files
+│   │   ├── Makefile       # setup + test targets
+│   │   ├── mise.toml      # Environment definition
+│   │   ├── package.json   # Dependencies only (no scripts)
+│   │   └── README.md
+│   └── deno-node/
+├── Makefile         # Top-level orchestration (auto-discovery)
+└── README.md        # This file
+```
+
+## How Auto-Discovery Works
+
+The top-level Makefile finds scenarios:
+
+```makefile
+SCENARIOS := $(shell find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||')
+```
+
+Any folder in `scenarios/` with a `Makefile` is automatically discovered. No registration needed.
+
+## Shared Test Suites
+
+The `shared/` package provides reusable test suites that run across all scenarios:
+
+- **Import Verification** - Verifies SDK exports exist, prevents tree-shaking issues
+- **Basic Logging** - Core logging functionality including Async Local Storage (ALS) tests
+- **Prompt Templating** - Mustache (all environments) and Nunjucks (Node.js)
+- **Eval Smoke Test** - Basic eval functionality
+
+See `shared/README.md` for complete test suite documentation, individual test functions, and implementation details.
+
+## Reference Scenarios
+
+- **Node.js + OTEL:** `scenarios/otel-v1/`
+- **Deno:** `scenarios/deno-node/`, `scenarios/deno-browser/`
+- **Cloudflare Workers:** `scenarios/cloudflare-worker-*/`
+- **Multi-test:** `scenarios/cloudflare-vite-hono/`
+- **Next.js:** `scenarios/nextjs-instrumentation/`
