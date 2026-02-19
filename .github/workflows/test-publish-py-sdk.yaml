@@ -19,6 +19,7 @@ on:
 jobs:
   build-and-publish-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       id-token: write # Required for PyPI trusted publishing
 
@@ -63,6 +64,7 @@ jobs:
     needs: build-and-publish-test
     if: success()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Slack on success
         uses: slackapi/slack-github-action@v2.1.1
@@ -86,6 +88,7 @@ jobs:
     needs: build-and-publish-test
     if: failure()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Slack on failure
         uses: slackapi/slack-github-action@v2.1.1

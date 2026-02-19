@@ -24,6 +24,7 @@ jobs:
   test-zod-versions:
     name: Test with zod ${{ matrix.zod-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +78,7 @@ jobs:
     name: Test Summary
     needs: test-zod-versions
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     steps:
       - name: Check test results
