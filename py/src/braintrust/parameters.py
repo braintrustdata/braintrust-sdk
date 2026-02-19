@@ -157,6 +157,51 @@ def validate_parameters(
     return result
 
 
+def _extract_pydantic_default_and_description(
+    model: Any, schema_obj: dict[str, Any]
+) -> tuple[Any, str | None]:
+    """Extract default value and description from a pydantic model's JSON schema.
+
+    In the JS SDK, Zod's zodToJsonSchema() puts `default` and `description` at the
+    top level of the generated schema (e.g. z.string().default("x").describe("y")
+    produces {"type": "string", "default": "x", "description": "y"}). This makes
+    it trivial to read them off the schema object (see
+    serializeEvalParametersToStaticParametersSchema in sdk/js/src/framework2.ts).
+
+    Pydantic works differently. For the single-field wrapper pattern we use
+    (class Param(BaseModel): value: T = default), the default and description end up
+    nested inside properties.value rather than at the top level. For multi-field models,
+    pydantic doesn't emit a top-level default at all — we have to instantiate the model
+    to extract it.
+    """
+    fields = getattr(model, "__fields__", None) or getattr(model, "model_fields", {})
+    is_single_value = isinstance(fields, dict) and len(fields) == 1 and "value" in fields
+
+    if is_single_value:
+        value_schema = schema_obj.get("properties", {}).get("value", {})
+        default = value_schema.get("default")
+        description = value_schema.get("description")
+        if default is None:
+            try:
+                instance = model()
+                raw = getattr(instance, "value")
+                default = raw.model_dump() if hasattr(raw, "model_dump") else (raw.dict() if hasattr(raw, "dict") else raw)
+            except Exception:
+                pass
+        return default, description
+
+    default = schema_obj.get("default")
+    description = schema_obj.get("description")
+    if default is None:
+        try:
+            instance = model()
+            default = instance.model_dump() if hasattr(instance, "model_dump") else instance.dict()
+        except Exception:
+            pass
+
+    return default, description
+
+
 def parameters_to_json_schema(parameters: EvalParameters | RemoteEvalParameters | dict | None) -> dict[str, Any]:
     """
     Convert EvalParameters to JSON schema format for serialization.
@@ -198,22 +243,23 @@ def parameters_to_json_schema(parameters: EvalParameters | RemoteEvalParameters 
 
     for name, schema in parameters.items():
         if isinstance(schema, dict) and schema.get("type") == "prompt":
-            # Prompt parameter
             result[name] = {
                 "type": "prompt",
                 "default": schema.get("default"),
                 "description": schema.get("description"),
             }
         else:
-            # Pydantic model
             try:
-                result[name] = {
-                    "type": "data",
-                    "schema": _pydantic_to_json_schema(schema),
-                    # TODO: Extract default and description from pydantic model
-                }
+                schema_obj = _pydantic_to_json_schema(schema)
             except ValueError:
-                # Not a pydantic model, skip
-                pass
+                continue
+
+            default, description = _extract_pydantic_default_and_description(schema, schema_obj)
+            entry: dict[str, Any] = {"type": "data", "schema": schema_obj}
+            if default is not None:
+                entry["default"] = default
+            if description is not None:
+                entry["description"] = description
+            result[name] = entry
 
     return result
