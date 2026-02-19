@@ -103,6 +103,7 @@ async function initExperiment(
     experiment: evaluator.experimentName,
     description: evaluator.description,
     metadata: evaluator.metadata,
+    tags: evaluator.tags,
     isPublic: evaluator.isPublic,
     update: evaluator.update,
     baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
