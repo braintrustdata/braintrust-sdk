@@ -32,7 +32,7 @@ import {
   testNunjucksTemplate,
   testEvalSmoke,
 } from "@braintrust/smoke-test-shared";
-import * as braintrust from "@braintrust/browser";
+import * as braintrust from "braintrust";
 
 Deno.test("Run shared test suites (browser build)", async () => {
   const { failed } = await runTests({
@@ -52,13 +52,21 @@ Deno.test("Run shared test suites (browser build)", async () => {
       testIDGeneratorExports,
       testTestingExports,
       testStateManagementExports,
-      testBuildResolution("browser"),
+      testBuildResolution("node"), // not pulling in browser package
       testBasicSpanLogging,
       testMultipleSpans,
       testDirectLogging,
       testJSONAttachment,
-      testAsyncLocalStorageTraced,
-      testNestedTraced,
+      expectFailure(
+        testAsyncLocalStorageTraced,
+        (e: { message: string }) => e.message.includes("span_parents"),
+        "No AsyncLocalStorage available",
+      ),
+      expectFailure(
+        testNestedTraced,
+        (e: { message: string }) => e.message.includes("span_parents"),
+        "No AsyncLocalStorage available",
+      ),
       testCurrentSpan,
       testEvalSmoke,
       testMustacheTemplate,
