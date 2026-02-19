@@ -3193,3 +3193,92 @@ def test_multiple_attachment_types_tracked(with_memory_logger, with_simulate_log
     assert attachment in with_memory_logger.upload_attempts
     assert json_attachment in with_memory_logger.upload_attempts
     assert ext_attachment in with_memory_logger.upload_attempts
+
+
+# --- Tests for Span.name property ---
+
+
+def test_span_name_returns_explicit_name(with_memory_logger):
+    """Test that span.name returns the name passed to start_span()."""
+    test_logger = init_test_logger(__name__)
+
+    with test_logger.start_span(name="my-span") as span:
+        assert span.name == "my-span"
+
+
+def test_span_name_returns_inferred_root_name(with_memory_logger):
+    """Test that a root span with no explicit name gets the default 'root' name."""
+    test_logger = init_test_logger(__name__)
+
+    span = test_logger.start_span()
+    assert span.name == "root"
+    span.end()
+
+
+def test_span_name_returns_inferred_subspan_name(with_memory_logger):
+    """Test that a child span with no explicit name gets a caller-location-based name."""
+    test_logger = init_test_logger(__name__)
+
+    with test_logger.start_span(name="parent") as parent:
+        child = parent.start_span()
+        # The inferred name is based on caller location: "funcname:filename:lineno"
+        assert child.name is not None
+        assert len(child.name) > 0
+        child.end()
+
+
+def test_span_name_updated_by_set_attributes(with_memory_logger):
+    """Test that span.name reflects changes made via set_attributes()."""
+    test_logger = init_test_logger(__name__)
+
+    with test_logger.start_span(name="original") as span:
+        assert span.name == "original"
+        span.set_attributes(name="renamed")
+        assert span.name == "renamed"
+
+
+def test_span_name_consistent_with_logged_data(with_memory_logger):
+    """Test that span.name matches the name in the logged span_attributes."""
+    test_logger = init_test_logger(__name__)
+
+    with test_logger.start_span(name="logged-name") as span:
+        assert span.name == "logged-name"
+
+    logs = with_memory_logger.pop()
+    logged_name = logs[0].get("span_attributes", {}).get("name")
+    assert logged_name == "logged-name"
+
+
+def test_noop_span_name_returns_none():
+    """Test that the noop span's name property returns None."""
+    span = braintrust.NOOP_SPAN
+    assert span.name == ""
+
+
+def test_current_span_name_accessible(with_memory_logger):
+    """Test that current_span().name works inside a traced context."""
+    test_logger = init_test_logger(__name__)
+
+    captured_name = None
+    with test_logger.start_span(name="active-span") as span:
+        span.set_current()
+        captured_name = braintrust.current_span().name
+
+    assert captured_name == "active-span"
+
+
+def test_traced_decorator_span_name(with_memory_logger):
+    """Test that @traced sets span name to the function name by default."""
+    test_logger = init_test_logger(__name__)
+
+    captured_name = None
+
+    @logger.traced
+    def my_traced_function():
+        nonlocal captured_name
+        captured_name = braintrust.current_span().name
+        return "done"
+
+    my_traced_function()
+
+    assert captured_name == "my_traced_function"

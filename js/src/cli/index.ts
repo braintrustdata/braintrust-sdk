@@ -40,7 +40,7 @@ import {
   runEvaluator,
 } from "../framework";
 import { fancyReporter, warning } from "./reporters/eval";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import { isEmpty } from "../util";
 import { loadEnvConfig } from "@next/env";
 import type {
@@ -103,6 +103,7 @@ async function initExperiment(
     experiment: evaluator.experimentName,
     description: evaluator.description,
     metadata: evaluator.metadata,
+    tags: evaluator.tags,
     isPublic: evaluator.isPublic,
     update: evaluator.update,
     baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,

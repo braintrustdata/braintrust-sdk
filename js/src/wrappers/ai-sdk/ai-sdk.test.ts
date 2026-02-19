@@ -10,7 +10,7 @@ import {
   expectTypeOf,
   expect,
 } from "vitest";
-import { configureNode } from "../../node";
+import { configureNode } from "../../node/config";
 import * as ai from "ai";
 import { openai } from "@ai-sdk/openai";
 import {
@@ -131,9 +131,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
 
-    expect(metrics.tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_tokens).toBeGreaterThan(0);
-    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    // Token/cost metrics live on the child doGenerate span to avoid
+    // double-counting. Parent span should NOT have them.
+    expect(metrics.tokens).toBeUndefined();
+    expect(metrics.prompt_tokens).toBeUndefined();
+    expect(metrics.completion_tokens).toBeUndefined();
+
+    // Verify child doGenerate span carries the metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "doGenerate",
+    ) as any;
+    expect(doGenSpan).toBeDefined();
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
 
     // Check that output is present and not omitted
     expect(span.output).toBeDefined();
@@ -268,9 +279,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
 
-    expect(metrics.tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_tokens).toBeGreaterThan(0);
-    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    // Token/cost metrics live on the child doGenerate span to avoid
+    // double-counting. Parent span should NOT have them.
+    expect(metrics.tokens).toBeUndefined();
+    expect(metrics.prompt_tokens).toBeUndefined();
+    expect(metrics.completion_tokens).toBeUndefined();
+
+    // Verify child doGenerate span carries the metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "doGenerate",
+    ) as any;
+    expect(doGenSpan).toBeDefined();
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
 
     // Verify image content is properly handled as attachment
     const messageContent = span.input.messages[0].content;
@@ -373,9 +395,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
 
-    expect(metrics.tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_tokens).toBeGreaterThan(0);
-    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    // Token/cost metrics live on the child doGenerate span to avoid
+    // double-counting. Parent span should NOT have them.
+    expect(metrics.tokens).toBeUndefined();
+    expect(metrics.prompt_tokens).toBeUndefined();
+    expect(metrics.completion_tokens).toBeUndefined();
+
+    // Verify child doGenerate span carries the metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "doGenerate",
+    ) as any;
+    expect(doGenSpan).toBeDefined();
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
 
     // Verify file content is properly handled as attachment
     const messageContent = span.input.messages[0].content;
@@ -453,9 +486,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       expect(ttft).toBeGreaterThanOrEqual(metrics.time_to_first_token);
     }
 
-    expect(metrics.tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_tokens).toBeGreaterThan(0);
-    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    // Token/cost metrics live on the child doStream span to avoid
+    // double-counting. Parent span should NOT have them.
+    expect(metrics.tokens).toBeUndefined();
+    expect(metrics.prompt_tokens).toBeUndefined();
+    expect(metrics.completion_tokens).toBeUndefined();
+
+    // Verify child doStream span carries the metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStreamSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "doStream",
+    ) as any;
+    expect(doStreamSpan).toBeDefined();
+    expect(doStreamSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doStreamSpan.metrics.completion_tokens).toBeGreaterThan(0);
   });
 
   test("ai sdk multi-turn conversation", async () => {
@@ -506,9 +550,20 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.start).toBeLessThanOrEqual(metrics.end);
     expect(metrics.end).toBeLessThanOrEqual(end);
 
-    expect(metrics.tokens).toBeGreaterThan(0);
-    expect(metrics.prompt_tokens).toBeGreaterThan(0);
-    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    // Token/cost metrics live on the child doGenerate span to avoid
+    // double-counting. Parent span should NOT have them.
+    expect(metrics.tokens).toBeUndefined();
+    expect(metrics.prompt_tokens).toBeUndefined();
+    expect(metrics.completion_tokens).toBeUndefined();
+
+    // Verify child doGenerate span carries the metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doGenSpan = spans.find(
+      (s: any) => s.span_attributes?.name === "doGenerate",
+    ) as any;
+    expect(doGenSpan).toBeDefined();
+    expect(doGenSpan.metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(doGenSpan.metrics.completion_tokens).toBeGreaterThan(0);
   });
 
   test("ai sdk system prompt", async () => {
@@ -2375,8 +2430,16 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
       expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");
       expect(generateTextSpan.metadata.provider).toBe("openai");
 
-      // Verify cost is extracted from gateway marketCost
-      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+      // Cost should NOT be on the parent span (to avoid double-counting with
+      // child doGenerate spans). It should be on the doGenerate child span.
+      expect(generateTextSpan.metrics.estimated_cost).toBeUndefined();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const doGenerateSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "doGenerate",
+      ) as any;
+      expect(doGenerateSpan).toBeDefined();
+      expect(doGenerateSpan.metrics.estimated_cost).toBeGreaterThan(0);
     });
 
     test("multi-step tool use extracts total cost", async () => {
@@ -2407,8 +2470,22 @@ describe.skipIf(!AI_GATEWAY_API_KEY)(
 
       expect(generateTextSpan).toBeDefined();
 
-      // Cost should be sum of all steps
-      expect(generateTextSpan.metrics.estimated_cost).toBeGreaterThan(0);
+      // Cost should NOT be on the parent span (to avoid double-counting).
+      // Individual doGenerate child spans carry per-step costs.
+      expect(generateTextSpan.metrics.estimated_cost).toBeUndefined();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const doGenerateSpans = spans.filter(
+        (s: any) => s.span_attributes?.name === "doGenerate",
+      ) as any[];
+      expect(doGenerateSpans.length).toBeGreaterThan(0);
+
+      // At least one doGenerate span should have cost
+      const totalCost = doGenerateSpans.reduce(
+        (sum: number, s: any) => sum + (s.metrics.estimated_cost ?? 0),
+        0,
+      );
+      expect(totalCost).toBeGreaterThan(0);
 
       // Verify model/provider in metadata
       expect(generateTextSpan.metadata.model).toBe("gpt-4o-mini");

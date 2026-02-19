@@ -160,6 +160,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
     def id(self) -> str:
         """Row ID of the span."""
 
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the span, for display purposes only."""
+
     @abstractmethod
     def log(self, **event: Any) -> None:
         """Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -293,6 +298,10 @@ class _NoopSpan(Span):
 
     @property
     def id(self):
+        return ""
+
+    @property
+    def name(self):
         return ""
 
     @property
@@ -4028,6 +4037,8 @@ class SpanImpl(Span):
             else:
                 name = "subspan"
 
+        self._name = name
+
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
@@ -4076,12 +4087,18 @@ class SpanImpl(Span):
     def id(self) -> str:
         return self._id
 
+    @property
+    def name(self) -> str:
+        return self._name
+
     def set_attributes(
         self,
         name: str | None = None,
         type: SpanTypeAttribute | None = None,
         span_attributes: Mapping[str, Any] | None = None,
     ) -> None:
+        if name is not None:
+            self._name = name
         self.log_internal(
             internal_data={
                 "span_attributes": _strip_nones(

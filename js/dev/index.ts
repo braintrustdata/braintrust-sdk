@@ -1,4 +1,4 @@
-import { configureNode } from "../src/node";
+import { configureNode } from "../src/node/config";
 
 configureNode();
 

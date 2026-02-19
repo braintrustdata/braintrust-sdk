@@ -1,7 +1,7 @@
 """Tests for Trace functionality."""
 
 import pytest
-from braintrust.trace import CachedSpanFetcher, SpanData
+from braintrust.trace import CachedSpanFetcher, LocalTrace, SpanData
 
 
 # Helper to create mock spans
@@ -265,3 +265,127 @@ class TestCachedSpanFetcher:
 
         assert call_args[0] is None or call_args[0] == []
         assert len(result) == 1
+
+
+class _DummySpanCache:
+    def get_by_root_span_id(self, root_span_id: str):
+        return None
+
+
+class _DummyState:
+    def __init__(self):
+        self.span_cache = _DummySpanCache()
+
+    def login(self):
+        return None
+
+
+class TestLocalTraceGetThread:
+    @pytest.mark.asyncio
+    async def test_calls_invoke_with_correct_parameters(self, monkeypatch):
+        mock_thread = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+        calls = []
+
+        def fake_invoke(**kwargs):
+            calls.append(kwargs)
+            return mock_thread
+
+        monkeypatch.setattr("braintrust.trace.invoke", fake_invoke)
+
+        trace = LocalTrace(
+            object_type="experiment",
+            object_id="exp-123",
+            root_span_id="root-456",
+            ensure_spans_flushed=None,
+            state=_DummyState(),
+        )
+
+        result = await trace.get_thread()
+
+        assert len(calls) == 1
+        assert calls[0]["global_function"] == "project_default"
+        assert calls[0]["function_type"] == "preprocessor"
+        assert calls[0]["mode"] == "json"
+        assert calls[0]["input"] == {
+            "trace_ref": {
+                "object_type": "experiment",
+                "object_id": "exp-123",
+                "root_span_id": "root-456",
+            }
+        }
+        assert result == mock_thread
+
+    @pytest.mark.asyncio
+    async def test_uses_custom_preprocessor(self, monkeypatch):
+        calls = []
+
+        def fake_invoke(**kwargs):
+            calls.append(kwargs)
+            return [{"role": "user", "content": "Test"}]
+
+        monkeypatch.setattr("braintrust.trace.invoke", fake_invoke)
+
+        trace = LocalTrace(
+            object_type="project_logs",
+            object_id="proj-789",
+            root_span_id="root-abc",
+            ensure_spans_flushed=None,
+            state=_DummyState(),
+        )
+
+        await trace.get_thread(options={"preprocessor": "custom_preprocessor"})
+        assert calls[0]["global_function"] == "custom_preprocessor"
+        assert calls[0]["function_type"] == "preprocessor"
+
+    @pytest.mark.asyncio
+    async def test_caches_by_preprocessor(self, monkeypatch):
+        call_count = 0
+
+        def fake_invoke(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if kwargs["global_function"] == "project_default":
+                return [{"role": "user", "content": "Default"}]
+            return [{"role": "user", "content": "Custom"}]
+
+        monkeypatch.setattr("braintrust.trace.invoke", fake_invoke)
+
+        trace = LocalTrace(
+            object_type="experiment",
+            object_id="exp-123",
+            root_span_id="root-456",
+            ensure_spans_flushed=None,
+            state=_DummyState(),
+        )
+
+        result1 = await trace.get_thread()
+        result2 = await trace.get_thread()
+        result3 = await trace.get_thread(options={"preprocessor": "custom"})
+        result4 = await trace.get_thread()
+
+        assert result1 == [{"role": "user", "content": "Default"}]
+        assert result2 == [{"role": "user", "content": "Default"}]
+        assert result3 == [{"role": "user", "content": "Custom"}]
+        assert result4 == [{"role": "user", "content": "Default"}]
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_array_for_non_array_invoke_result(self, monkeypatch):
+        def fake_invoke(**kwargs):
+            return "not-an-array"
+
+        monkeypatch.setattr("braintrust.trace.invoke", fake_invoke)
+
+        trace = LocalTrace(
+            object_type="experiment",
+            object_id="exp-123",
+            root_span_id="root-456",
+            ensure_spans_flushed=None,
+            state=_DummyState(),
+        )
+
+        result = await trace.get_thread()
+        assert result == []

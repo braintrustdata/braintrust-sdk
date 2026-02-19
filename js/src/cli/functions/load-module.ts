@@ -29,7 +29,8 @@ export function loadModule({
       reporters: {},
     };
     globalThis._lazy_load = true;
-    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
+    const state = _internalGetGlobalState();
+    (globalThis as any)[Symbol.for("braintrust-state")] = state;
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "module", "__filename", "__dirname", moduleText)(

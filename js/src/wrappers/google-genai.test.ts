@@ -7,7 +7,7 @@ import {
   describe,
   expect,
 } from "vitest";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import * as googleGenAI from "@google/genai";
 import {
   _exportsForTestingOnly,

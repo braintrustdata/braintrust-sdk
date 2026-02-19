@@ -24,7 +24,7 @@ import {
   isTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -210,30 +210,16 @@ describe("prompt.build structured output templating", () => {
       false,
     );
 
-    const result = prompt.build(
-      {
-        user: { name: "ada" },
-      },
-      { templateFormat: "nunjucks" },
-    );
-
-    expect(result).toMatchObject({
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "schema",
-          schema: {
-            type: "object",
-            properties: {
-              greeting: {
-                type: "string",
-                description: "Hello ADA",
-              },
-            },
-          },
+    expect(() =>
+      prompt.build(
+        {
+          user: { name: "ada" },
         },
-      },
-    });
+        { templateFormat: "nunjucks" },
+      ),
+    ).toThrow(
+      "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+    );
   });
 
   test("prompt.build with structured output templating", () => {

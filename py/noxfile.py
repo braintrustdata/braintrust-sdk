@@ -108,6 +108,17 @@ def test_pydantic_ai_integration(session, version):
 
 
 @nox.session()
+def test_pydantic_ai_logfire(session):
+    """Test pydantic_ai + logfire coexistence (issue #1324)."""
+    if sys.version_info < (3, 10):
+        session.skip("pydantic_ai + logfire tests require Python >= 3.10")
+    _install_test_deps(session)
+    _install(session, "pydantic_ai")
+    _install(session, "logfire")
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai_logfire.py")
+
+
+@nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
     # claude_agent_sdk requires Python >= 3.10
