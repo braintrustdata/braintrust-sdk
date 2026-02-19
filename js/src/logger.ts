@@ -7003,14 +7003,14 @@ function expandAttachmentArrayPreTemplate(
 
   if (!Array.isArray(value)) return null;
 
-  // Check if array contains attachments or image URLs (supports mixed arrays)
+  // Check if array contains attachments or image URLs
   const allValid = value.every(
     (v) => isAttachmentObject(v) || (typeof v === "string" && isURL(v)),
   );
 
   if (!allValid) return null;
 
-  // Expand directly to image_url parts, attachments have all been resolved to URLs already
+  // Expand directly to image_url parts
   return value.map((item) => ({
     type: "image_url" as const,
     image_url: { url: item },
@@ -7053,14 +7053,12 @@ export function renderMessageImpl<T extends Message>(
                         );
                       }
 
-                      // Check if the URL is a template variable for an attachment array
                       if (variables) {
                         const expanded = expandAttachmentArrayPreTemplate(
                           c.image_url.url,
                           variables,
                         );
                         if (expanded) {
-                          // Return the expanded array of image_url parts
                           return expanded;
                         }
                       }
