@@ -106,59 +106,34 @@ afterAll(async () => {
   // Flush and drain spans from background logger
   await moduleBackgroundLogger.flush();
   const spans = await moduleBackgroundLogger.drain();
-
-  console.log(`\n📊 Integration Test Results:`);
-  console.log(`   Total spans captured: ${spans.length}`);
-
   expect(spans.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans created: ${spans.length} > 0`);
-
   const taskSpans = spans.filter(
     (s: any) => s.span_attributes?.type === "task",
   );
   expect(taskSpans.length).toBeGreaterThan(0);
-  console.log(`   ✅ Task spans found: ${taskSpans.length}`);
-
   const spansWithPassScore = spans.filter(
     (s: any) => s.scores?.pass !== undefined,
   );
   expect(spansWithPassScore.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with pass scores: ${spansWithPassScore.length}`);
-
   const passingTests = spans.filter((s: any) => s.scores?.pass === 1);
   expect(passingTests.length).toBeGreaterThan(0);
-  console.log(`   ✅ Passing tests: ${passingTests.length}`);
-
   const spansWithOutputs = spans.filter((s: any) => s.output);
   expect(spansWithOutputs.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with outputs: ${spansWithOutputs.length}`);
-
   const spansWithInput = spans.filter((s: any) => s.input !== undefined);
   expect(spansWithInput.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with input: ${spansWithInput.length}`);
-
   const spansWithExpected = spans.filter((s: any) => s.expected !== undefined);
   expect(spansWithExpected.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with expected: ${spansWithExpected.length}`);
-
   const spansWithMetadata = spans.filter(
     (s: any) => s.metadata && Object.keys(s.metadata).length > 0,
   );
   expect(spansWithMetadata.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with metadata: ${spansWithMetadata.length}`);
-
   const spansWithTags = spans.filter((s: any) => s.tags && s.tags.length > 0);
   expect(spansWithTags.length).toBeGreaterThan(0);
-  console.log(`   ✅ Spans with tags: ${spansWithTags.length}`);
-
   const spansWithCustomScores = spans.filter((s: any) => {
     const scores = s.scores || {};
     return Object.keys(scores).some((key) => key !== "pass");
   });
   expect(spansWithCustomScores.length).toBeGreaterThan(0);
-  console.log(
-    `   ✅ Spans with custom scores: ${spansWithCustomScores.length}\n`,
-  );
 
   await _exportsForTestingOnly.clearTestBackgroundLogger();
   await _exportsForTestingOnly.simulateLogoutForTests();
