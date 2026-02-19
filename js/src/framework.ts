@@ -262,6 +262,11 @@ export interface Evaluator<
   metadata?: Record<string, unknown>;
 
   /**
+   * Optional tags for the experiment.
+   */
+  tags?: string[];
+
+  /**
    * Whether the experiment should be public. Defaults to false.
    */
   isPublic?: boolean;
@@ -662,6 +667,7 @@ export async function Eval<
             experiment: evaluator.experimentName,
             description: evaluator.description,
             metadata: evaluator.metadata,
+            tags: evaluator.tags,
             isPublic: evaluator.isPublic,
             update: evaluator.update,
             baseExperiment:
