@@ -1872,7 +1872,7 @@ def experimental_register_sandbox(
     }
 
     list_response = state.proxy_conn().post(
-        "/v1/sandbox/list",
+        "function/sandbox-list",
         json={
             "sandbox_spec": {
                 "provider": sandbox.provider,

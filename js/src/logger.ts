@@ -3869,7 +3869,7 @@ export async function experimental_registerSandbox(
   } as const;
 
   const listResponse = await state.proxyConn().post(
-    "v1/sandbox/list",
+    "function/sandbox-list",
     {
       sandbox_spec: {
         provider: options.sandbox.provider,
