@@ -1,7 +1,7 @@
 import type { Span } from "../../logger";
 import type { Score } from "../../../util/score";
 
-// Scorer function type - matches braintrust eval scorer pattern
+// Scorer function type
 export type ScorerFunction<Output = unknown> = (args: {
   output: Output;
   expected?: unknown;
@@ -24,14 +24,13 @@ export interface BraintrustTestConfig {
   }>;
 }
 
-// Combined config that supports Braintrust options plus any other properties (for Vitest options)
-// This allows any Vitest test options to be passed through without explicitly defining them
+// Combined config that supports Braintrust options plus any other vitest properties
 export interface TestConfig extends BraintrustTestConfig {
-  // Allow any additional properties that Vitest might accept (timeout, retry, fails, etc.)
+  // Allow any additional properties Vitest might accept (timeout, retry, fails, etc.)
   [key: string]: unknown;
 }
 
-// Helper type for adding test modifiers (skip, only, concurrent, todo)
+// Add test modifiers (skip, only, concurrent, todo)
 type WithModifiers<T> = T & {
   skip: T;
   only: T;

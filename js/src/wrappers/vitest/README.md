@@ -36,35 +36,16 @@ bt.describe("Translation Tests", () => {
 
 ## Core Features
 
-### ✅ Automatic Experiment Tracking
-
-- Each `describe()` block creates a Braintrust experiment
+- Experiment Tracking, each `describe()` block creates a Braintrust experiment
 - Test pass/fail rates automatically logged
-- Experiments can be compared in the Braintrust UI
-
-### ✅ Automatic Scoring with Scorers
-
-- Automatically evaluate test outputs with custom or built-in scorers
-- Scores logged to Braintrust for analysis
-- Support for multiple scorers per test
-
-### ✅ Dataset Integration
-
-- Use existing Braintrust datasets for test cases
-- Define inline test data that auto-expands to multiple tests
-- Combine datasets with automatic scoring for comprehensive evaluations
-
-### ✅ Logging & Metadata
-
-- Log custom outputs and feedback within tests
-- Attach metadata and tags for organization
-- Access current span for advanced use cases
+- Automatic scoring with scorers
+- use existing braintrust datasets for tests
 
 ---
 
 ## Using Scorers
 
-Scorers automatically evaluate your test outputs and log scores to Braintrust. Perfect for LLM evaluations, quality checks, and automated grading.
+Scorers automatically evaluate your test outputs and log scores to Braintrust.
 
 ### Basic Scorer Usage
 
@@ -105,13 +86,9 @@ import { Levenshtein, Factuality, EmbeddingSimilarity } from "autoevals";
 bt.test(
   "LLM output quality",
   {
-    input: { prompt: "Explain quantum computing" },
-    expected: "Quantum computing uses quantum mechanics...",
-    scorers: [
-      Factuality, // Check factual accuracy
-      Levenshtein, // Calculate string similarity
-      EmbeddingSimilarity, // Semantic similarity
-    ],
+    input: { prompt: "Explain 1 + 1" },
+    expected: "2",
+    scorers: [Factuality, Levenshtein, EmbeddingSimilarity],
   },
   async ({ input }) => {
     const response = await llm.generate(input.prompt);
@@ -120,28 +97,17 @@ bt.test(
 );
 ```
 
-**Available Built-in Scorers:**
-
-- **Factuality** - Verify factual accuracy against expected output
-- **Levenshtein** - Edit distance similarity
-- **EmbeddingSimilarity** - Semantic similarity using embeddings
-- **ClosedQA** - Question answering correctness
-- **ValidJSON** - JSON structure validation
-- And many more from [`autoevals`](https://www.braintrust.dev/docs/autoevals)
-
 ### Custom Scorers
 
 Create your own scorer functions for domain-specific evaluation:
 
 ```typescript
-// Simple scorer
 const lengthScorer = ({ output }) => ({
   name: "appropriate_length",
   score: output.length >= 50 && output.length <= 200 ? 1 : 0.5,
   metadata: { actual_length: output.length },
 });
 
-// Advanced scorer with async logic
 const customScorer = async ({ output, expected, input }) => {
   const similarity = await calculateSimilarity(output, expected);
   return {
@@ -196,27 +162,6 @@ bt.test(
     return await generatePoem(input.prompt);
   },
 );
-```
-
-### Scorer Return Types
-
-Scorers are flexible and can return different formats:
-
-```typescript
-// Score object (recommended)
-({ output }) => ({ name: "my_score", score: 0.8, metadata: { details: "..." } })
-
-// Number directly (will use "score" as the name)
-({ output }) => 0.75
-
-// Null to skip scoring
-({ output }) => output ? 1 : null
-
-// Array of scores
-({ output }) => [
-  { name: "accuracy", score: 0.9 },
-  { name: "fluency", score: 0.85 },
-]
 ```
 
 ---
@@ -352,7 +297,7 @@ bt.describe("LLM Evaluation Suite", () => {
 
 ### wrapVitest(vitestMethods, config)
 
-Wraps Vitest methods with Braintrust experiment tracking.
+Wraps Vitest will wrap Vitest methods with Braintrust experiment tracking.
 
 **Parameters:**
 
@@ -375,27 +320,6 @@ wrapVitest(
 )
 ```
 
-**Returns:**
-
-```typescript
-{
-  test: WrappedTest;           // Enhanced test function
-  it: WrappedTest;             // Alias for test
-  describe: WrappedDescribe;   // Enhanced describe function
-  expect: any;                 // Pass-through expect
-  beforeAll: Function;         // Lifecycle hooks
-  afterAll: Function;
-  beforeEach?: Function;
-  afterEach?: Function;
-
-  // Utility functions
-  logOutputs: (outputs: Record<string, unknown>) => void;
-  logFeedback: (feedback: { name: string; score: number; metadata?: object }) => void;
-  getCurrentSpan: () => Span | null;
-  flushExperiment: (options?: { displaySummary?: boolean }) => Promise<void>;
-}
-```
-
 ### Test Configuration
 
 Enhanced test signature with full options:
@@ -410,18 +334,18 @@ bt.test(
     metadata?: object,        // Custom metadata
     tags?: string[],          // Organization tags
 
-    // NEW: Scorers
+    // Scorers
     scorers?: ScorerFunction[],  // Array of scorer functions
 
-    // NEW: Inline data
-    data?: Array<{            // Auto-expand to multiple tests
+    // Inline data
+    data?: Array<{
       input?: any;
       expected?: any;
       metadata?: object;
       tags?: string[];
     }>,
 
-    // Vitest options (passed through)
+    // Vitest options that will be passed through
     timeout?: number,
     retry?: number,
     // ... any other vitest options
@@ -429,7 +353,7 @@ bt.test(
   async ({ input, expected, metadata }) => {
     // Test implementation
     const result = await yourFunction(input);
-    return result;  // Return value used by scorers
+    return result;
   }
 );
 ```
@@ -484,44 +408,11 @@ const bt = wrapVitest(
 );
 ```
 
-### Manual Flush Control
-
-For custom cleanup logic or conditional summary display:
-
-```typescript
-bt.describe("Custom Tests", () => {
-  bt.afterAll(async () => {
-    // Custom cleanup
-    await cleanup();
-
-    // Manual flush with options
-    await bt.flushExperiment({
-      displaySummary: process.env.CI !== "true", // Only show summary locally
-    });
-  });
-});
-```
-
-### Accessing Current Span
-
-For advanced use cases, access the current Braintrust span:
-
-```typescript
-bt.test("advanced test", async () => {
-  const span = bt.getCurrentSpan();
-  if (span) {
-    span.log({ custom_data: { ... } });
-  }
-
-  // Test logic
-});
-```
-
 ---
 
-## Complete Examples
+## Examples
 
-### Example 1: Simple Scorer Evaluation
+### Simple Scorer Evaluation
 
 ```typescript
 import { test, expect, describe, afterAll } from "vitest";
@@ -552,14 +443,10 @@ bt.describe("Translation Quality", () => {
       return result;
     },
   );
-
-  bt.afterAll(async () => {
-    await bt.flushExperiment();
-  });
 });
 ```
 
-### Example 2: Dataset with Multiple Scorers
+### Dataset with Multiple Scorers
 
 ```typescript
 import { test, expect, describe, afterAll } from "vitest";
@@ -595,14 +482,10 @@ bt.describe("LLM Q&A Evaluation", () => {
       return answer;
     },
   );
-
-  bt.afterAll(async () => {
-    await bt.flushExperiment();
-  });
 });
 ```
 
-### Example 3: Inline Data with Custom Scorers
+### Inline Data with Custom Scorers
 
 ```typescript
 import { test, expect, describe, afterAll } from "vitest";
@@ -639,10 +522,6 @@ bt.describe("Sentiment Analysis Tests", () => {
       return sentiment;
     },
   );
-
-  bt.afterAll(async () => {
-    await bt.flushExperiment();
-  });
 });
 ```
 
@@ -676,67 +555,8 @@ const myScorer: ScorerFunction = ({ output, expected, input, metadata }) => {
 
 ---
 
-## Best Practices
-
-### Scorers
-
-1. **Keep scorers simple and fast** - They run on every test
-2. **Use multiple scorers** - Evaluate different quality aspects
-3. **Include metadata** - Add debugging context to score results
-4. **Handle edge cases** - Return `null` to skip scoring when appropriate
-5. **Test scorers independently** - Verify scorer logic before using in evals
-
-### Datasets
-
-1. **Version your datasets** - Use semantic versioning for dataset changes
-2. **Start with inline data** - Develop tests locally before moving to datasets
-3. **Organize by domain** - Group related test cases in the same dataset
-4. **Keep datasets focused** - One dataset per specific evaluation task
-5. **Document expected format** - Add metadata describing input/expected structure
-
-### General
-
-1. **One experiment per describe block** - Keeps results organized
-2. **Use meaningful project names** - Easy to find in Braintrust UI
-3. **Tag tests appropriately** - Enables filtering and analysis
-4. **Log intermediate outputs** - Use `logOutputs()` for debugging
-5. **Review results in Braintrust** - Compare runs and identify regressions
-
----
-
-## Troubleshooting
-
-### Scorers not running
-
-- ✅ Ensure test function returns a value
-- ✅ Check that scorers array is not empty
-- ✅ Verify scorer functions don't throw errors (check console for warnings)
-
-### Tests not creating
-
-- ✅ Verify `describe()` block is wrapped (`bt.describe()`)
-- ✅ Check that `afterAll` is passed to `wrapVitest()`
-- ✅ Ensure you're calling `bt.flushExperiment()` in `afterAll`
-
-### Dataset not loading
-
-- ✅ Verify project and dataset names are correct
-- ✅ Check API key is configured (`BRAINTRUST_API_KEY`)
-- ✅ Ensure dataset exists in Braintrust UI
-- ✅ Use `await` when loading dataset
-
-### Scores not appearing
-
-- ✅ Check scorer returns correct format (Score object or number)
-- ✅ Verify test return value is not `undefined`
-- ✅ Look for scorer errors in console output
-- ✅ Ensure experiment is flushed after tests
-
----
-
 ## Additional Resources
 
 - [Braintrust Documentation](https://www.braintrust.dev/docs)
 - [Autoevals Library](https://www.braintrust.dev/docs/autoevals)
-- [Example Vitest Integration](./example.test.ts)
 - [Vitest Documentation](https://vitest.dev/)

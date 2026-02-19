@@ -2,8 +2,6 @@ import {
   initExperiment,
   type Experiment,
   type ExperimentSummary,
-  withCurrent,
-  traced,
 } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import type {
@@ -24,7 +22,6 @@ import {
 import { flushExperimentWithSync } from "./flush-manager";
 import { runScorers } from "./scorers";
 
-// format experiment summary for console output
 export function formatExperimentSummary(summary: ExperimentSummary): string {
   const lines: string[] = [];
   lines.push("\n┌─ Braintrust Experiment Summary ─────────────────┐");
@@ -63,7 +60,7 @@ export function formatExperimentSummary(summary: ExperimentSummary): string {
   return lines.join("\n");
 }
 
-// Get the current experiment context
+// Current experiment context
 export function getExperimentContext(): VitestExperimentContext | null {
   return getVitestContextManager().getCurrentContext() ?? null;
 }
@@ -96,9 +93,8 @@ export function wrapTest<VitestContext = unknown>(
           );
         }
 
-        // Register a test for each data record
+        // Register test for each data record
         dataRecords.forEach((record, index) => {
-          // Merge record data with config, keeping scorers
           const mergedConfig: TestConfig = {
             ...testConfig,
             input: record.input,
@@ -108,17 +104,15 @@ export function wrapTest<VitestContext = unknown>(
               ...(testConfig.tags || []),
               ...(record.tags || []),
             ] as string[],
-            data: undefined, // Remove data to avoid recursion
+            data: undefined,
           };
 
-          // Register individual test with merged config
           wrappedTest(`${name} [${index}]`, mergedConfig, testFn);
         });
 
         return;
       }
 
-      // Extract Vitest-specific options by filtering out Braintrust-specific properties
       let vitestOptions: Record<string, unknown> | undefined;
       if (testConfig) {
         const {
@@ -133,16 +127,21 @@ export function wrapTest<VitestContext = unknown>(
         vitestOptions = rest;
       }
 
-      // Check if we have any Vitest options to pass
+      // separate vitest options
       const hasVitestOptions =
         vitestOptions && Object.keys(vitestOptions).length > 0;
 
-      // Define the test implementation
+      // Capture context at registration time (during wrapDescribe factory execution)
+      // as a fallback. Vitest's async test runner creates new async contexts for
+      // each test, so AsyncLocalStorage.enterWith() set in the describe factory
+      // doesn't propagate to test execution. The captured context is used when
+      // getExperimentContext() returns null at runtime.
+      const registrationContext = getExperimentContext();
+
       const testImplementation = async (vitestContext: VitestContext) => {
-        const experimentContext = getExperimentContext();
+        const experimentContext = getExperimentContext() ?? registrationContext;
         const experiment = experimentContext?.experiment;
 
-        // Emit test start event
         if (config.onProgress) {
           config.onProgress({ type: "test_start", testName: name });
         }
@@ -151,7 +150,6 @@ export function wrapTest<VitestContext = unknown>(
         let passed = false;
 
         try {
-          // If no experiment context, just run the test normally
           if (!experiment) {
             if (testConfig && maybeFn) {
               const params: TestContext = {
@@ -175,7 +173,7 @@ export function wrapTest<VitestContext = unknown>(
             return;
           }
 
-          const result = await traced(
+          const result = await experiment.traced(
             async (span) => {
               let testResult: unknown;
 
@@ -195,7 +193,7 @@ export function wrapTest<VitestContext = unknown>(
                   testResult = await configOrFn(vitestContext);
                 }
 
-                // Run scorers if configured (on success)
+                // Run scorers if configured
                 if (testConfig?.scorers && testConfig.scorers.length > 0) {
                   await runScorers({
                     scorers: testConfig.scorers,
@@ -207,7 +205,6 @@ export function wrapTest<VitestContext = unknown>(
                   });
                 }
 
-                // log pass feedback on success
                 span.log({
                   scores: {
                     pass: 1,
@@ -221,7 +218,7 @@ export function wrapTest<VitestContext = unknown>(
                   });
                 }
               } catch (error) {
-                // Run scorers if configured (even on failure)
+                // Run scorers on failures
                 if (testConfig?.scorers && testConfig.scorers.length > 0) {
                   await runScorers({
                     scorers: testConfig.scorers,
@@ -318,8 +315,6 @@ export function wrapDescribe(
   config: WrapperConfig,
   afterAll?: (fn: () => void | Promise<void>) => void,
 ): WrappedDescribe {
-  // Extract wrapping logic without modifier attachment to avoid recursion
-  // wrapBare can accept either a full DescribeFunction or a BaseDescribeFunction (like modifiers)
   const wrapBare = (
     describeFn: DescribeFunction | BaseDescribeFunction,
   ): WrappedDescribe => {
@@ -397,11 +392,7 @@ export function wrapDescribe(
     return wrapped as WrappedDescribe;
   };
 
-  // Wrap the base describe function
   const wrappedDescribe = wrapBare(originalDescribe);
-
-  // Wrap modifiers to apply config filtering (same as base describe)
-  // This ensures consistency with test wrapping behavior
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedDescribe.skip = wrapBare(originalDescribe.skip);
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions

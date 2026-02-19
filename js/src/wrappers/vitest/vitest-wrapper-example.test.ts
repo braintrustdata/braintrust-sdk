@@ -1,5 +1,5 @@
 import * as vitest from "vitest";
-import { configureNode } from "../../node";
+import { configureNode } from "../../node/config";
 import { wrapVitest } from "./index";
 import { _exportsForTestingOnly } from "../../logger";
 import * as logger from "../../logger";
