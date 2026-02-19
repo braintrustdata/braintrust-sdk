@@ -1,3 +1,4 @@
+import contextvars
 import inspect
 import logging
 import time
@@ -55,6 +56,15 @@ def setup_adk(
         agents.BaseAgent = wrap_agent(agents.BaseAgent)
         runners.Runner = wrap_runner(runners.Runner)
         base_llm_flow.BaseLlmFlow = wrap_flow(base_llm_flow.BaseLlmFlow)
+
+        try:
+            from google.adk.platform import thread as adk_thread
+
+            adk_thread.create_thread = _wrap_create_thread(adk_thread.create_thread)
+            runners.create_thread = _wrap_create_thread(runners.create_thread)
+            logger.debug("ADK thread bridge patching successful")
+        except Exception as e:
+            logger.warning(f"Failed to patch ADK thread bridge: {e}")
 
         # Try to patch McpTool if available (MCP is optional)
         try:
@@ -456,6 +466,26 @@ def _determine_llm_call_type(llm_request: Any, model_response: Any = None) -> st
 
 def _is_patched(obj: Any):
     return getattr(obj, "_braintrust_patched", False)
+
+
+def _wrap_create_thread(create_thread):
+    if _is_patched(create_thread):
+        return create_thread
+
+    def _wrapped_create_thread(target: Any, *args: Any, **kwargs: Any):
+        ctx = contextvars.copy_context()
+
+        def _run_in_context(*target_args: Any, **target_kwargs: Any):
+            try:
+                return ctx.run(target, *target_args, **target_kwargs)
+            except Exception as e:
+                logger.debug(f"Failed to run ADK thread in captured context: {e}")
+                return target(*target_args, **target_kwargs)
+
+        return create_thread(_run_in_context, *args, **kwargs)
+
+    _wrapped_create_thread._braintrust_patched = True
+    return _wrapped_create_thread
 
 
 def _serialize_content(content: Any) -> Any:
