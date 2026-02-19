@@ -12,7 +12,7 @@ const { describe, test, expect, logOutputs, logFeedback } = wrapVitest(vitest, {
 
 describe("Vitest Experiment Mode Tests", () => {
   // Test with input/expected - automatically added to dataset
-  bt.test(
+  test(
     "simple math evaluation",
     {
       input: { query: "What is 2+2?" },
@@ -28,7 +28,7 @@ describe("Vitest Experiment Mode Tests", () => {
   );
 
   // Test with LLM call - added to dataset with input/expected
-  bt.test(
+  test(
     "translation test",
     {
       input: { task: "Translate 'hello' to Spanish" },
