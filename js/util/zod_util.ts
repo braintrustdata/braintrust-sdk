@@ -1,6 +1,15 @@
 import { z } from "zod/v3";
 import { forEachMissingKey } from "./object_util";
 
+type NullishObjectShape<T extends z.ZodRawShape> = {
+  [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>>;
+};
+
+type NullishObject<T extends z.ZodRawShape> = z.ZodObject<
+  NullishObjectShape<T>,
+  z.UnknownKeysParam
+>;
+
 export class ExtraFieldsError extends Error {
   constructor(
     public readonly key: string,
@@ -51,20 +60,20 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
 //
 // Basically the same as `z.partial()`, except instead of marking fields just
 // optional, it marks them nullish.
-export function objectNullish<
-  T extends z.ZodRawShape,
-  UnknownKeys extends z.UnknownKeysParam,
-  Catchall extends z.ZodTypeAny,
->(object: z.ZodObject<T, UnknownKeys, Catchall>) {
-  return new z.ZodObject({
-    ...object._def,
-    shape: () =>
-      Object.fromEntries(
-        Object.entries(object.shape).map(([k, v]) => [k, v.nullish()]),
-      ),
-  }) as z.ZodObject<
-    { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
-    UnknownKeys,
-    Catchall
-  >;
+export function objectNullish<T extends z.ZodRawShape>(
+  object: z.ZodObject<T, z.UnknownKeysParam, z.ZodTypeAny>,
+): NullishObject<T> {
+  const originalShape = object.shape as Record<string, z.ZodTypeAny>;
+  const newShape: Record<string, z.ZodTypeAny> = {};
+  for (const [k, v] of Object.entries(originalShape)) {
+    newShape[k] = v.nullish();
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof (object as any).extend === "function") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (object as any).extend(newShape) as unknown as NullishObject<T>;
+  }
+
+  return z.object(newShape) as unknown as NullishObject<T>;
 }
