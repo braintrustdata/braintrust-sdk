@@ -16,6 +16,7 @@ from .generated_types import (
     SavedFunctionId,
     ToolFunctionDefinition,
 )
+from .parameters import EvalParameters, _pydantic_to_json_schema
 from .util import eprint
 
 
@@ -34,6 +35,7 @@ class _GlobalState:
     def __init__(self):
         self.functions: list[CodeFunction] = []
         self.prompts: list[CodePrompt] = []
+        self.parameters: list[CodeParameters] = []
 
 
 global_ = _GlobalState()
@@ -287,6 +289,161 @@ class PromptBuilder:
         return p
 
 
+def _maybe_serialize_prompt_default(default: Any) -> Any:
+    as_dict = getattr(default, "as_dict", None)
+    if callable(as_dict):
+        return as_dict()
+    return default
+
+
+def _pydantic_instance_to_plain(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
+
+
+def _is_single_field_value_model(model: Any) -> bool:
+    fields = getattr(model, "__fields__", None) or getattr(model, "model_fields", {})
+    return isinstance(fields, dict) and len(fields) == 1 and "value" in fields
+
+
+def _maybe_set_default_from_pydantic_model(model: Any, schema_obj: dict[str, Any]) -> dict[str, Any]:
+    if "default" in schema_obj:
+        return schema_obj
+    try:
+        instance = model()
+    except Exception:
+        return schema_obj
+
+    if _is_single_field_value_model(model) and hasattr(instance, "value"):
+        return {**schema_obj, "default": _pydantic_instance_to_plain(getattr(instance, "value"))}
+
+    return {**schema_obj, "default": _pydantic_instance_to_plain(instance)}
+
+
+def serialize_eval_parameters_to_parameters_schema(parameters: EvalParameters) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+
+    for name, schema in parameters.items():
+        if isinstance(schema, dict) and schema.get("type") == "prompt":
+            prompt_schema: dict[str, Any] = {"type": "object", "x-bt-type": "prompt"}
+
+            description = schema.get("description")
+            if description is not None:
+                prompt_schema["description"] = description
+
+            default_value = schema.get("default")
+            if default_value is not None:
+                prompt_schema["default"] = _maybe_serialize_prompt_default(default_value)
+            else:
+                required.append(name)
+
+            properties[name] = prompt_schema
+            continue
+
+        if schema is None:
+            raise ValueError(f"Parameter '{name}' has no schema")
+
+        if not (hasattr(schema, "model_json_schema") or hasattr(schema, "schema")):
+            raise ValueError(
+                f"Invalid schema for parameter '{name}'. Expected a pydantic model (v1 or v2) or a prompt parameter."
+            )
+
+        schema_obj = _pydantic_to_json_schema(schema)
+        if _is_single_field_value_model(schema):
+            value_schema = schema_obj.get("properties", {}).get("value")
+            if not isinstance(value_schema, dict):
+                raise ValueError(f"Invalid pydantic schema for parameter '{name}': missing properties.value")
+            parameter_schema = _maybe_set_default_from_pydantic_model(schema, value_schema)
+        else:
+            parameter_schema = _maybe_set_default_from_pydantic_model(schema, schema_obj)
+
+        properties[name] = parameter_schema
+        if "default" not in parameter_schema:
+            required.append(name)
+
+    out: dict[str, Any] = {"type": "object", "properties": properties, "additionalProperties": True}
+    if required:
+        out["required"] = required
+    return out
+
+
+def get_default_data_from_parameters_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return {}
+
+    return {k: v["default"] for k, v in properties.items() if isinstance(v, dict) and "default" in v}
+
+
+@dataclasses.dataclass
+class CodeParameters:
+    """Parameters defined in code, with metadata."""
+
+    project: "Project"
+    name: str
+    slug: str
+    description: str | None
+    schema: EvalParameters
+    if_exists: IfExists | None
+    metadata: dict[str, Any] | None = None
+
+    def to_function_definition(self, if_exists: IfExists | None, project_ids: ProjectIdCache) -> dict[str, Any]:
+        schema = serialize_eval_parameters_to_parameters_schema(self.schema)
+        j: dict[str, Any] = {
+            "project_id": project_ids.get(self.project),
+            "name": self.name,
+            "slug": self.slug,
+            "function_type": "parameters",
+            "function_data": {
+                "type": "parameters",
+                "data": get_default_data_from_parameters_schema(schema),
+                "__schema": schema,
+            },
+            "if_exists": self.if_exists if self.if_exists is not None else if_exists,
+        }
+        if self.description is not None:
+            j["description"] = self.description
+        if self.metadata is not None:
+            j["metadata"] = self.metadata
+        return j
+
+
+class ParametersBuilder:
+    """Builder to create parameters in Braintrust."""
+
+    def __init__(self, project: "Project"):
+        self.project = project
+
+    def create(
+        self,
+        *,
+        name: str,
+        slug: str | None = None,
+        description: str | None = None,
+        schema: EvalParameters,
+        if_exists: IfExists | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> EvalParameters:
+        if slug is None or len(slug) == 0:
+            slug = slugify.slugify(name)
+
+        parameters = CodeParameters(
+            project=self.project,
+            name=name,
+            slug=slug,
+            description=description,
+            schema=schema,
+            if_exists=if_exists,
+            metadata=metadata,
+        )
+        self.project.add_parameters(parameters)
+        return schema
+
+
 class ScorerBuilder:
     """Builder to create a scorer in Braintrust."""
 
@@ -461,10 +618,12 @@ class Project:
         self.name = name
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
+        self.parameters = ParametersBuilder(self)
         self.scorers = ScorerBuilder(self)
 
         self._publishable_code_functions: list[CodeFunction] = []
         self._publishable_prompts: list[CodePrompt] = []
+        self._publishable_parameters: list[CodeParameters] = []
 
     def add_code_function(self, fn: CodeFunction):
         self._publishable_code_functions.append(fn)
@@ -475,6 +634,11 @@ class Project:
         self._publishable_prompts.append(prompt)
         if _is_lazy_load():
             global_.prompts.append(prompt)
+
+    def add_parameters(self, parameters: CodeParameters):
+        self._publishable_parameters.append(parameters)
+        if _is_lazy_load():
+            global_.parameters.append(parameters)
 
     def publish(self):
         if _is_lazy_load():

@@ -268,6 +268,13 @@ def _collect_prompt_function_defs(
         functions.append(p.to_function_definition(if_exists, project_ids))
 
 
+def _collect_parameters_function_defs(
+    project_ids: ProjectIdCache, functions: list[dict[str, Any]], if_exists: IfExists
+) -> None:
+    for p in global_.parameters:
+        functions.append(p.to_function_definition(if_exists, project_ids))
+
+
 def run(args):
     """Runs the braintrust push subcommand."""
     login(
@@ -306,6 +313,8 @@ def run(args):
         _collect_function_function_defs(project_ids, functions, bundle_id, args.if_exists)
     if len(global_.prompts) > 0:
         _collect_prompt_function_defs(project_ids, functions, args.if_exists)
+    if len(global_.parameters) > 0:
+        _collect_parameters_function_defs(project_ids, functions, args.if_exists)
 
     if len(functions) > 0:
         api_conn().post_json("insert-functions", {"functions": functions})

@@ -70,6 +70,7 @@ from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
 from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
+from .prompt_cache.parameters_cache import ParametersCache
 from .prompt_cache.prompt_cache import PromptCache
 from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
@@ -434,6 +435,18 @@ class BraintrustState:
                 max_size=int(os.environ.get("BRAINTRUST_PROMPT_CACHE_DISK_MAX_SIZE", str(1 << 20))),
                 serializer=lambda x: x.as_dict(),
                 deserializer=PromptSchema.from_dict_deep,
+            ),
+        )
+
+        self._parameters_cache = ParametersCache(
+            memory_cache=LRUCache(
+                max_size=int(os.environ.get("BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX_SIZE", str(1 << 10)))
+            ),
+            disk_cache=DiskCache(
+                cache_dir=os.environ.get(
+                    "BRAINTRUST_PARAMETERS_CACHE_DIR", f"{os.environ.get('HOME')}/.braintrust/parameters_cache"
+                ),
+                max_size=int(os.environ.get("BRAINTRUST_PARAMETERS_CACHE_DISK_MAX_SIZE", str(1 << 20))),
             ),
         )
 
@@ -1988,6 +2001,189 @@ def load_prompt(
     return Prompt(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
     )
+
+
+class RemoteEvalParameters:
+    def __init__(self, lazy_metadata: LazyValue[Mapping[str, Any]]):
+        self._lazy_metadata = lazy_metadata
+        self.__dict__["__braintrust_parameters_marker"] = True
+
+    @property
+    def id(self) -> str:
+        return self._lazy_metadata.get()["id"]
+
+    @property
+    def project_id(self) -> str | None:
+        return self._lazy_metadata.get().get("project_id")
+
+    @property
+    def name(self) -> str:
+        return self._lazy_metadata.get()["name"]
+
+    @property
+    def slug(self) -> str:
+        return self._lazy_metadata.get()["slug"]
+
+    @property
+    def version(self) -> str:
+        return self._lazy_metadata.get()[TRANSACTION_ID_FIELD]
+
+    @property
+    def schema(self) -> Mapping[str, Any]:
+        return self._lazy_metadata.get()["function_data"]["__schema"]
+
+    @property
+    def data(self) -> Mapping[str, Any]:
+        return self._lazy_metadata.get()["function_data"].get("data") or {}
+
+    def validate(self, data: Any) -> bool:
+        if not isinstance(data, dict):
+            return False
+
+        schema_props = self.schema.get("properties")
+        if not isinstance(schema_props, dict):
+            return True
+
+        required = self.schema.get("required")
+        required_keys = set(required) if isinstance(required, list) else set()
+
+        for key in schema_props.keys():
+            if key in data:
+                continue
+            if key in required_keys:
+                return False
+
+        return True
+
+    @staticmethod
+    def is_parameters(x: Any) -> bool:
+        if isinstance(x, RemoteEvalParameters):
+            return True
+        if not isinstance(x, object):
+            return False
+        return getattr(x, "__braintrust_parameters_marker", False) is True
+
+
+def load_parameters(
+    project: str | None = None,
+    slug: str | None = None,
+    version: str | int | None = None,
+    project_id: str | None = None,
+    id: str | None = None,
+    environment: str | None = None,
+    app_url: str | None = None,
+    api_key: str | None = None,
+    org_name: str | None = None,
+) -> RemoteEvalParameters:
+    """
+    Loads parameters from the specified project.
+
+    :param project: The name of the project to load the parameters from. Must specify at least one of `project` or
+    `project_id`.
+    :param slug: The slug of the parameters to load.
+    :param version: An optional version of the parameters (to read). If not specified, the latest version will be used.
+    :param project_id: The id of the project to load the parameters from. This takes precedence over `project` if
+    specified.
+    :param id: The id of a specific parameters object to load. If specified, this takes precedence over all other
+    parameters (project, slug, version).
+    :param environment: Fetch the version of the parameters assigned to the specified environment (e.g. "production",
+    "staging"). Cannot be specified at the same time as `version`.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+    :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY`
+    environment variable. If no API key is specified, will prompt the user to login.
+    :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to
+    multiple.
+    :returns: The parameters object.
+    """
+    if version is not None and environment is not None:
+        raise ValueError(
+            "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other)."
+        )
+
+    if id:
+        # When loading by ID, we don't need project or slug
+        pass
+    elif not project and not project_id:
+        raise ValueError("Must specify at least one of project or project_id")
+    elif not slug:
+        raise ValueError("Must specify slug")
+
+    def compute_metadata() -> Mapping[str, Any]:
+        try:
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            if id:
+                params_args = {}
+                if version is not None:
+                    params_args["version"] = version
+                if environment is not None:
+                    params_args["environment"] = environment
+                response = _state.api_conn().get_json(f"/v1/function/{id}", params_args)
+                if response is not None:
+                    response = {"objects": [response]}
+            else:
+                args = _populate_args(
+                    {
+                        "project_name": project,
+                        "project_id": project_id,
+                        "slug": slug,
+                        "version": version,
+                        "function_type": "parameters",
+                        "environment": environment,
+                    },
+                )
+                response = _state.api_conn().get_json("/v1/function", args)
+        except Exception as server_error:
+            if environment is not None or version is not None:
+                raise ValueError("Parameters not found with specified parameters") from server_error
+
+            eprint(f"Failed to load parameters, attempting to fall back to cache: {server_error}")
+            try:
+                if id:
+                    return _state._parameters_cache.get(id=id)
+                return _state._parameters_cache.get(
+                    slug=slug,
+                    version=str(version) if version else "latest",
+                    project_id=project_id,
+                    project_name=project,
+                )
+            except Exception as cache_error:
+                if id:
+                    raise ValueError(
+                        f"Parameters with id {id} not found (not found on server or in local cache): {cache_error}"
+                    ) from server_error
+                raise ValueError(
+                    f"Parameters {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
+                ) from server_error
+
+        if response is None or "objects" not in response or len(response["objects"]) == 0:
+            if id:
+                raise ValueError(f"Parameters with id {id} not found.")
+            raise ValueError(f"Parameters {slug} not found in project {project or project_id}.")
+        if len(response["objects"]) > 1:
+            if id:
+                raise ValueError(f"Multiple parameters found with id {id}. This should never happen.")
+            raise ValueError(
+                f"Multiple parameters found with slug {slug} in project {project or project_id}. This should never happen."
+            )
+
+        resp_parameters = response["objects"][0]
+        try:
+            if id:
+                _state._parameters_cache.set(resp_parameters, id=id)
+            elif slug:
+                _state._parameters_cache.set(
+                    resp_parameters,
+                    slug=slug,
+                    version=str(version) if version else "latest",
+                    project_id=project_id,
+                    project_name=project,
+                )
+        except Exception as e:
+            eprint(f"Failed to store parameters in cache: {e}")
+
+        return resp_parameters
+
+    return RemoteEvalParameters(LazyValue(compute_metadata, use_mutex=True))
 
 
 login_lock = threading.RLock()
