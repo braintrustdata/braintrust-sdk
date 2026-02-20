@@ -8,6 +8,7 @@ jobs:
   open-pr:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'run-integration-tests') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
