@@ -3,6 +3,74 @@ import os
 import pytest
 
 
+def _patch_vcr_aiohttp_stubs():
+    """Patch VCR.py's aiohttp stubs to fix bugs with google-genai >= 1.64.0.
+
+    Problems fixed:
+    1. Infinite loop: VCR's MockClientResponse.content is a @property that creates
+       a new MockStream on every access. google-genai reads streaming responses via
+       `while True: await response.content.readline()`, creating a fresh stream each
+       iteration that never reaches EOF. Fix: cache the stream per instance.
+
+    2. Gzip decoding: Cassettes store gzip-compressed response bodies (from
+       Accept-Encoding: gzip). VCR's httpx stubs handle decompression, but the
+       aiohttp stubs return raw gzip bytes, causing UnicodeDecodeError.
+       Fix: decompress gzip in text(), read(), and the content stream.
+
+    3. set_exception: aiohttp's close() sets a ClientConnectionError on the content
+       stream, which then raises on subsequent reads. Fix: no-op set_exception on
+       MockStream.
+
+    See: https://github.com/kevin1024/vcrpy/issues/927
+    """
+    try:
+        from vcr.stubs import aiohttp_stubs
+    except ImportError:
+        return
+
+    if getattr(aiohttp_stubs.MockClientResponse, "_bt_patched", False):
+        return
+
+    import gzip
+
+    def _decompress_body(body):
+        """Decompress gzip body if needed."""
+        if body and body[:2] == b"\x1f\x8b":
+            return gzip.decompress(body)
+        return body
+
+    # No-op set_exception so close() doesn't poison the stream.
+    aiohttp_stubs.MockStream.set_exception = lambda self, exc: None
+
+    # Override text() to decompress gzip before decoding.
+    async def patched_text(self, encoding="utf-8", errors="strict"):
+        return _decompress_body(self._body).decode(encoding, errors=errors)
+
+    aiohttp_stubs.MockClientResponse.text = patched_text
+
+    # Override read() to decompress gzip.
+    async def patched_read(self):
+        return _decompress_body(self._body)
+
+    aiohttp_stubs.MockClientResponse.read = patched_read
+
+    # Cache content stream per instance and feed decompressed data.
+    @property
+    def cached_content(self):
+        if not hasattr(self, "_cached_content"):
+            stream = aiohttp_stubs.MockStream()
+            stream.feed_data(_decompress_body(self._body))
+            stream.feed_eof()
+            self._cached_content = stream
+        return self._cached_content
+
+    aiohttp_stubs.MockClientResponse.content = cached_content
+    aiohttp_stubs.MockClientResponse._bt_patched = True
+
+
+_patch_vcr_aiohttp_stubs()
+
+
 @pytest.fixture(autouse=True)
 def override_app_url_for_tests():
     """
