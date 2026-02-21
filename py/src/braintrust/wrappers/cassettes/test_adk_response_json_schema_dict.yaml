@@ -1,0 +1,68 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "Tell me about Tokyo"}], "role": "user"}],
+      "systemInstruction": {"parts": [{"text": "You are a City Information Agent.
+      Provide city information.\n\nYou are an agent. Your internal name is \"city_agent\"."}],
+      "role": "user"}, "generationConfig": {"responseMimeType": "application/json",
+      "responseJsonSchema": {"type": "object", "properties": {"city": {"type": "string",
+      "description": "Name of the city"}, "population": {"type": "integer", "description":
+      "Population of the city", "minimum": 0}, "country": {"type": "string", "description":
+      "Country where the city is located"}}, "required": ["city", "country"]}}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '647'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.56.0 gl-python/3.13.3 google-adk/1.21.0 gl-python/3.13.3
+      x-goog-api-client:
+      - google-genai-sdk/1.56.0 gl-python/3.13.3 google-adk/1.21.0 gl-python/3.13.3
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/61Ry07DMBC85ysin5sqbegj3BDl0NKKAhFCIhyWxE2jprYVu0CJ8u+s86rDGR8i
+        Z2e8sztTWLZNImBxGoOiklzbb1ix7aL6aowzRZlCoC1hUUCuLtz6FMYdKYp+60ekCJlthyRK1TnE
+        /5AE/HDmIRk0dX5iKm+gFQhgHSS4OGWgUs40OvL8qYsnZCUxlMru/j64zJfzjGrxI49p1tLLlkB2
+        KUvl/omC5EzTnoOHLelQ+EzWPBE5/9ArOu4QVa/86WQ2d72J740n/nw2slrxSpacJCR0QxWgi9B5
+        RbDJUSjcmLJbvSginlsLGab3ca/BFVeQ9aBpCxlt5QJF08wMw8gJ94cMnddLBnevATE8Uv2pWpMs
+        w8u/M/6XmNcXs5ps6rheaC7TOpeEHjEpZzx0nV0Gcl91JDmVgjNJl7HmrA5iAdEiWorxvSNvtl/r
+        n5H7uCFWaf0CGhSW3NwCAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Thu, 18 Dec 2025 00:26:15 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=598
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1
