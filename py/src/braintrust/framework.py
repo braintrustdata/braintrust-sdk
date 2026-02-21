@@ -359,6 +359,11 @@ class Evaluator(Generic[Input, Output]):
     JSON-serializable type, but its keys must be strings.
     """
 
+    tags: list[str] | None = None
+    """
+    Optional list of tags for the experiment
+    """
+
     trial_count: int = 1
     """
     The number of times to run the evaluator per input. This is useful for evaluating applications that
@@ -654,6 +659,7 @@ def _EvalCommon(
     experiment_name: str | None,
     trial_count: int,
     metadata: Metadata | None,
+    tags: list[str] | None,
     is_public: bool,
     update: bool,
     reporter: ReporterDef[Input, Output, EvalReport] | None,
@@ -695,6 +701,7 @@ def _EvalCommon(
         experiment_name=experiment_name,
         trial_count=trial_count,
         metadata=metadata,
+        tags=tags,
         is_public=is_public,
         update=update,
         timeout=timeout,
@@ -743,6 +750,7 @@ def _EvalCommon(
                 experiment_name=evaluator.experiment_name,
                 description=evaluator.description,
                 metadata=evaluator.metadata,
+                tags=evaluator.tags,
                 is_public=evaluator.is_public,
                 update=evaluator.update,
                 base_experiment=base_experiment_name,
@@ -780,6 +788,7 @@ async def EvalAsync(
     experiment_name: str | None = None,
     trial_count: int = 1,
     metadata: Metadata | None = None,
+    tags: list[str] | None = None,
     is_public: bool = False,
     update: bool = False,
     reporter: ReporterDef[Input, Output, EvalReport] | None = None,
@@ -833,6 +842,7 @@ async def EvalAsync(
     anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
     the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
     can be any JSON-serializable type, but its keys must be strings.
+    :param tags: (Optional) A list of tags to associate with the experiment.
     :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
     :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
@@ -869,6 +879,7 @@ async def EvalAsync(
         experiment_name=experiment_name,
         trial_count=trial_count,
         metadata=metadata,
+        tags=tags,
         is_public=is_public,
         update=update,
         reporter=reporter,
@@ -904,6 +915,7 @@ def Eval(
     experiment_name: str | None = None,
     trial_count: int = 1,
     metadata: Metadata | None = None,
+    tags: list[str] | None = None,
     is_public: bool = False,
     update: bool = False,
     reporter: ReporterDef[Input, Output, EvalReport] | None = None,
@@ -957,6 +969,7 @@ def Eval(
     anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
     the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
     can be any JSON-serializable type, but its keys must be strings.
+    :param tags: (Optional) A list of tags to associate with the experiment.
     :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
     :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
@@ -994,6 +1007,7 @@ def Eval(
         experiment_name=experiment_name,
         trial_count=trial_count,
         metadata=metadata,
+        tags=tags,
         is_public=is_public,
         update=update,
         reporter=reporter,

@@ -59,6 +59,14 @@ class TestInit(TestCase):
 
         assert str(cm.exception) == "Cannot open an experiment without specifying its name"
 
+        # duplicate tags
+        tag = "Exp1"
+        with self.assertRaises(ValueError) as cm:
+            braintrust.init(project="project", tags=[tag, tag])
+
+        assert str(cm.exception) == f"duplicate tag: {tag}"
+
+
     def test_init_with_dataset_id_only(self):
         """Test that init accepts dataset={'id': '...'} parameter"""
         # Test the logic that extracts dataset_id from the dict
