@@ -416,10 +416,12 @@ class BraintrustState:
         self._id_generator = None
 
         # For unit-testing, tests may wish to temporarily override the global
-        # logger with a custom one. We allow this but keep the override variable
-        # thread-local to prevent the possibility that tests running on
-        # different threads unintentionally use the same override.
-        self._override_bg_logger = threading.local()
+        # logger with a custom one. We use a ContextVar so that the override
+        # propagates across thread boundaries (e.g. asyncio.to_thread) while
+        # still being isolated per-context (preventing test cross-talk).
+        self._override_bg_logger: contextvars.ContextVar[_BackgroundLogger | None] = contextvars.ContextVar(
+            "_override_bg_logger", default=None
+        )
 
         self.reset_login_info()
 
@@ -596,7 +598,7 @@ class BraintrustState:
         return self._user_info
 
     def global_bg_logger(self) -> "_BackgroundLogger":
-        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
+        return self._override_bg_logger.get() or self._global_bg_logger.get()
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
@@ -1445,21 +1447,21 @@ _logger = logging.getLogger("braintrust")
 @contextlib.contextmanager
 def _internal_with_custom_background_logger():
     custom_logger = _HTTPBackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
-    _state._override_bg_logger.logger = custom_logger
+    token = _state._override_bg_logger.set(custom_logger)
     try:
         yield custom_logger
     finally:
-        _state._override_bg_logger.logger = None
+        _state._override_bg_logger.reset(token)
 
 
 @contextlib.contextmanager
 def _internal_with_memory_background_logger():
     memory_logger = _MemoryBackgroundLogger()
-    _state._override_bg_logger.logger = memory_logger
+    token = _state._override_bg_logger.set(memory_logger)
     try:
         yield memory_logger
     finally:
-        _state._override_bg_logger.logger = None
+        _state._override_bg_logger.reset(token)
 
 
 @dataclasses.dataclass
