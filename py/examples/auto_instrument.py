@@ -13,6 +13,7 @@ Supported integrations:
 - Agno
 - Claude Agent SDK
 - DSPy
+- LangChain
 """
 
 import braintrust
