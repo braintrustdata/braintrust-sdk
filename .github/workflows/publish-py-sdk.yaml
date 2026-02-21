@@ -14,6 +14,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
     steps:
@@ -33,6 +34,7 @@ jobs:
   build-and-publish:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write # Required for PyPI trusted publishing
@@ -96,6 +98,7 @@ jobs:
     needs: [validate, build-and-publish]
     if: always() && needs.build-and-publish.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Extract version from tag
         id: version
@@ -125,6 +128,7 @@ jobs:
     needs: [validate, build-and-publish]
     if: always() && (needs.validate.result == 'failure' || needs.build-and-publish.result == 'failure')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Slack on failure
         uses: slackapi/slack-github-action@v2.1.1

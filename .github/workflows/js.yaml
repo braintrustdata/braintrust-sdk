@@ -30,6 +30,7 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -146,6 +147,7 @@ jobs:
 
   api-compatibility:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run in parallel with build job
     strategy:
       fail-fast: false
@@ -240,6 +242,7 @@ jobs:
   # Smoke v2: Auto-discovery of scenarios
   smoke-discover:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       scenarios: ${{ steps.discover.outputs.scenarios }}
     steps:
@@ -264,6 +267,7 @@ jobs:
   smoke-test:
     needs: [build, smoke-discover]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false

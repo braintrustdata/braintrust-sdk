@@ -27,6 +27,7 @@ jobs:
     # Only run validation for tag-based releases (not prereleases)
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
     steps:
@@ -55,6 +56,7 @@ jobs:
       always() &&
       (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
@@ -151,6 +153,7 @@ jobs:
     needs: [validate, build-and-publish]
     if: always() && needs.build-and-publish.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Slack on success (stable release)
         if: needs.build-and-publish.outputs.is_prerelease == 'false'
@@ -193,6 +196,7 @@ jobs:
     needs: [validate, build-and-publish]
     if: always() && (needs.validate.result == 'failure' || needs.build-and-publish.result == 'failure')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Slack on failure
         uses: slackapi/slack-github-action@v2.1.1

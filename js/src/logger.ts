@@ -3266,6 +3266,7 @@ export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   baseExperiment?: string;
   isPublic?: boolean;
   metadata?: Record<string, unknown>;
+  tags?: string[];
   gitMetadataSettings?: GitMetadataSettings;
   projectId?: string;
   baseExperimentId?: string;
@@ -3302,6 +3303,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @param options.projectId The id of the project to create the experiment in. This takes precedence over `project` if specified.
  * @param options.baseExperimentId An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `baseExperiment` if specified.
  * @param options.repoInfo (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
+ * @param options.tags (Optional) A list of tags to attach to the experiment.
  * @returns The newly created Experiment.
  */
 export function init<IsOpen extends boolean = false>(
@@ -3353,6 +3355,7 @@ export function init<IsOpen extends boolean = false>(
     forceLogin,
     fetch,
     metadata,
+    tags,
     gitMetadataSettings,
     projectId,
     baseExperimentId,
@@ -3495,6 +3498,11 @@ export function init<IsOpen extends boolean = false>(
 
       if (metadata) {
         args["metadata"] = metadata;
+      }
+
+      if (tags) {
+        validateTags(tags);
+        args["tags"] = tags;
       }
 
       let response = null;
@@ -5174,6 +5182,7 @@ function validateTags(tags: readonly string[]) {
     if (seen.has(tag)) {
       throw new Error(`duplicate tag: ${tag}`);
     }
+    seen.add(tag);
   }
 }
 
@@ -7753,5 +7762,6 @@ export const _exportsForTestingOnly = {
   isGeneratorFunction,
   isAsyncGeneratorFunction,
   resetIdGenStateForTests,
+  validateTags,
   isomorph: iso, // Expose isomorph for build type detection
 };
