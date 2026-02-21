@@ -15,6 +15,7 @@ install_requires = [
     "GitPython",
     "requests",
     "chevron",
+    "jinja2>=3.1.6",
     "tqdm",
     "exceptiongroup>=1.2.0",
     "python-dotenv",
