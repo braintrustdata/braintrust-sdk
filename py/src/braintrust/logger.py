@@ -1506,6 +1506,7 @@ def init(
     api_key: str | None = ...,
     org_name: str | None = ...,
     metadata: Metadata | None = ...,
+    tags: list[str] | None = ...,
     git_metadata_settings: GitMetadataSettings | None = ...,
     set_current: bool = ...,
     update: bool | None = ...,
@@ -1529,6 +1530,7 @@ def init(
     api_key: str | None = ...,
     org_name: str | None = ...,
     metadata: Metadata | None = ...,
+    tags: list[str] | None = ...,
     git_metadata_settings: GitMetadataSettings | None = ...,
     set_current: bool = ...,
     update: bool | None = ...,
@@ -1551,6 +1553,7 @@ def init(
     api_key: str | None = None,
     org_name: str | None = None,
     metadata: Metadata | None = None,
+    tags: list[str] | None = None,
     git_metadata_settings: GitMetadataSettings | None = None,
     set_current: bool = True,
     update: bool | None = None,
@@ -1575,6 +1578,7 @@ def init(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param tags: (Optional) a list of strings to tag the experiment with. Tags can be used to filter and organize experiments.
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :param open: If the experiment already exists, open it in read-only mode. Throws an error if the experiment does not already exist.
@@ -1622,6 +1626,9 @@ def init(
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
         return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state)
+
+    if tags is not None:
+        validate_tags(tags)
 
     # pylint: disable=function-redefined
     def compute_metadata():
@@ -1675,6 +1682,9 @@ def init(
 
         if metadata is not None:
             args["metadata"] = metadata
+
+        if tags is not None:
+            args["tags"] = tags
 
         while True:
             try:

@@ -138,6 +138,7 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
             experiment_name=evaluator.experiment_name,
             description=evaluator.description,
             metadata=evaluator.metadata,
+            tags=evaluator.tags,
             is_public=evaluator.is_public,
             update=evaluator.update,
             base_experiment=base_experiment_name,
