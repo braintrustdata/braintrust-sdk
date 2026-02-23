@@ -389,11 +389,11 @@ export function wrapDescribe(
   };
 
   const wrappedDescribe = wrapBare(originalDescribe);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+
   wrappedDescribe.skip = wrapBare(originalDescribe.skip);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+
   wrappedDescribe.only = wrapBare(originalDescribe.only);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+
   wrappedDescribe.concurrent = wrapBare(originalDescribe.concurrent);
   if (originalDescribe.todo) wrappedDescribe.todo = originalDescribe.todo;
   if (originalDescribe.each)
