@@ -39,22 +39,18 @@ def _patch_vcr_aiohttp_stubs():
             return gzip.decompress(body)
         return body
 
-    # No-op set_exception so close() doesn't poison the stream.
     aiohttp_stubs.MockStream.set_exception = lambda self, exc: None
 
-    # Override text() to decompress gzip before decoding.
     async def patched_text(self, encoding="utf-8", errors="strict"):
         return _decompress_body(self._body).decode(encoding, errors=errors)
 
     aiohttp_stubs.MockClientResponse.text = patched_text
 
-    # Override read() to decompress gzip.
     async def patched_read(self):
         return _decompress_body(self._body)
 
     aiohttp_stubs.MockClientResponse.read = patched_read
 
-    # Cache content stream per instance and feed decompressed data.
     @property
     def cached_content(self):
         if not hasattr(self, "_cached_content"):
