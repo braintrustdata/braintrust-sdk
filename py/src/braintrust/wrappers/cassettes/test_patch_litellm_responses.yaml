@@ -21,26 +21,33 @@ interactions:
     uri: https://api.openai.com/v1/responses
   response:
     body:
-      string: !!binary |
-        H4sIAAAAAAAAA3RU0Y6jMAx871dEed6egFLa7SfcL6xOyATTzW2Io8Sptlr130+EQmFv+1Y89sSe
-        sfu1EULqVp6E9Bhcnam8PVbHtmzyXVcemiyrXvctvHbZIa/UMX/dA1R5hsWuaoqyOmApXwYKav6i
-        4omGbMAxrjwCY1vDgOWH6nAoq2xXJCwwcAxDjaLeGWRsx6IG1MfZU7RDXx2YgGNYG6PtWZ7E10YI
-        IaSDK/qhvsULGnLo5UaI2/jwRPnt6V1C0XsaKm00JgW0nQrqFhm0CWs0sI+KNdnU7+8YWPA7Chv7
-        Br1wBmGauIfPmiK7yDXTB9oV0QAykakVmPUTPbVoBu6z421J215bvS2yotxmh21+vKuceOVJvCUB
-        RhlmA/twfu5fvsd9Nvh33KkqL8tctdmxOZZ5Yk4sfHWYeDAEOOMDeGZUAhVZRvtoatnYinYSBT95
-        rk4JYC0xTOK+/VmBhs7OU/MDkohOQhalnMO3+685U3oy6XUIQQcGy2PykJiSpAMPxqBZ+8I+jkvn
-        PF40xVBPe10nsWffnKfeca1AvWP9gdenmMdBJk12meERAtnVUmPXkedF0mBA7HvwE/e84wE65Gut
-        24G407ja6ID+ohXWrKcb6SCaUXoZmDwux2TsHXrgmML5r+weTRLfO+vI9/D4Xlib8kZd7x1f0DcU
-        NF/HhWp17B+3OSr9TlqN1kQmOQMPpyWTqxf+Z3PQLXv00Sq4CytbHaAx0x9JTHs8D6Dt6iqL4uX/
-        +OL85zGTge2jMFuN+v3Yi5/iP9HO5j9jZmIwC+JyVjCGtdk9MrTAMNDfNrd/AAAA//8DALqyxDHW
-        BQAA
+      string: "{\n  \"id\": \"resp_0c1d868d4b13f47b00695da9f0716c8195aa610e236b2467e4\"\
+        ,\n  \"object\": \"response\",\n  \"created_at\": 1767746032,\n  \"status\"\
+        : \"completed\",\n  \"background\": false,\n  \"billing\": {\n    \"payer\"\
+        : \"developer\"\n  },\n  \"completed_at\": 1767746033,\n  \"error\": null,\n\
+        \  \"incomplete_details\": null,\n  \"instructions\": \"Just the number please\"\
+        ,\n  \"max_output_tokens\": null,\n  \"max_tool_calls\": null,\n  \"model\"\
+        : \"gpt-4o-mini-2024-07-18\",\n  \"output\": [\n    {\n      \"id\": \"msg_0c1d868d4b13f47b00695da9f15e50819583c61441cd08b841\"\
+        ,\n      \"type\": \"message\",\n      \"status\": \"completed\",\n      \"\
+        content\": [\n        {\n          \"type\": \"output_text\",\n          \"\
+        annotations\": [],\n          \"logprobs\": [],\n          \"text\": \"24\"\
+        \n        }\n      ],\n      \"role\": \"assistant\"\n    }\n  ],\n  \"parallel_tool_calls\"\
+        : true,\n  \"previous_response_id\": null,\n  \"prompt_cache_key\": null,\n\
+        \  \"prompt_cache_retention\": null,\n  \"reasoning\": {\n    \"effort\":\
+        \ null,\n    \"summary\": null\n  },\n  \"safety_identifier\": null,\n  \"\
+        service_tier\": \"default\",\n  \"store\": true,\n  \"temperature\": 1.0,\n\
+        \  \"text\": {\n    \"format\": {\n      \"type\": \"text\"\n    },\n    \"\
+        verbosity\": \"medium\"\n  },\n  \"tool_choice\": \"auto\",\n  \"tools\":\
+        \ [],\n  \"top_logprobs\": 0,\n  \"top_p\": 1.0,\n  \"truncation\": \"disabled\"\
+        ,\n  \"usage\": {\n    \"input_tokens\": 22,\n    \"input_tokens_details\"\
+        : {\n      \"cached_tokens\": 0\n    },\n    \"output_tokens\": 2,\n    \"\
+        output_tokens_details\": {\n      \"reasoning_tokens\": 0\n    },\n    \"\
+        total_tokens\": 24\n  },\n  \"user\": null,\n  \"metadata\": {}\n}"
     headers:
       CF-RAY:
       - 9b9f5dbabdb9121f-PDX
       Connection:
       - keep-alive
-      Content-Encoding:
-      - gzip
       Content-Type:
       - application/json
       Date:
@@ -55,8 +62,6 @@ interactions:
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Strict-Transport-Security:
       - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
       X-Content-Type-Options:
       - nosniff
       alt-svc:

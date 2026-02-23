@@ -141,6 +141,7 @@ def get_vcr_config():
     record_mode = "none" if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) else "once"
     return {
         "record_mode": record_mode,
+        "decode_compressed_response": True,
         "filter_headers": [
             "authorization",
             "openai-organization",

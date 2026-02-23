@@ -422,7 +422,7 @@ class BraintrustPlugin(SimplePlugin):
 
         params = inspect.signature(SimplePlugin.__init__).parameters
         if "interceptors" in params:
-            super().__init__(
+            super().__init__(  # pylint: disable=unexpected-keyword-arg
                 name="braintrust",
                 interceptors=[interceptor],
                 workflow_runner=_modify_workflow_runner,
