@@ -8,9 +8,6 @@ on:
       - ".github/workflows/temporal-js-test.yaml"
   push:
     branches: [main]
-    paths:
-      - "integrations/temporal-js/**"
-      - "js/**"
 
 jobs:
   build-and-test:

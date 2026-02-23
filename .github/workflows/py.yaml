@@ -11,13 +11,6 @@ on:
       - ".github/workflows/langchain-py-test.yaml"
   push:
     branches: [main]
-    paths:
-      - "py/**"
-      - "integrations/langchain-py/**"
-      - "integrations/adk-py/**"
-      - ".github/workflows/py.yaml"
-      - ".github/workflows/adk-py-test.yaml"
-      - ".github/workflows/langchain-py-test.yaml"
 
 jobs:
   build:

@@ -7,8 +7,6 @@ on:
       - "integrations/val.town/vals/**"
   push:
     branches: [main]
-    paths:
-      - "integrations/val.town/vals/**"
 
 jobs:
   update:

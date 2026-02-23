@@ -9,11 +9,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "js/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/test-zod-versions.yaml"
   workflow_dispatch:
 
 permissions:
