@@ -67,6 +67,37 @@
       "import": "./util/dist/index.mjs",
       "module": "./util/dist/index.mjs",
       "require": "./util/dist/index.js"
+    },
+    "./instrumentation": {
+      "types": "./dist/instrumentation/index.d.ts",
+      "import": "./dist/instrumentation/index.mjs",
+      "module": "./dist/instrumentation/index.mjs",
+      "require": "./dist/instrumentation/index.js"
+    },
+    "./hook.mjs": "./dist/auto-instrumentations/hook.mjs",
+    "./vite": {
+      "types": "./dist/auto-instrumentations/bundler/vite.d.ts",
+      "import": "./dist/auto-instrumentations/bundler/vite.mjs",
+      "module": "./dist/auto-instrumentations/bundler/vite.mjs",
+      "require": "./dist/auto-instrumentations/bundler/vite.js"
+    },
+    "./webpack": {
+      "types": "./dist/auto-instrumentations/bundler/webpack.d.ts",
+      "import": "./dist/auto-instrumentations/bundler/webpack.mjs",
+      "module": "./dist/auto-instrumentations/bundler/webpack.mjs",
+      "require": "./dist/auto-instrumentations/bundler/webpack.js"
+    },
+    "./esbuild": {
+      "types": "./dist/auto-instrumentations/bundler/esbuild.d.ts",
+      "import": "./dist/auto-instrumentations/bundler/esbuild.mjs",
+      "module": "./dist/auto-instrumentations/bundler/esbuild.mjs",
+      "require": "./dist/auto-instrumentations/bundler/esbuild.js"
+    },
+    "./rollup": {
+      "types": "./dist/auto-instrumentations/bundler/rollup.d.ts",
+      "import": "./dist/auto-instrumentations/bundler/rollup.mjs",
+      "module": "./dist/auto-instrumentations/bundler/rollup.mjs",
+      "require": "./dist/auto-instrumentations/bundler/rollup.js"
     }
   },
   "files": [
@@ -127,6 +158,9 @@
     "npm-run-all": "^4.1.5",
     "openapi-zod-client": "^1.18.3",
     "prettier": "^3.5.3",
+    "rollup": "^4.28.1",
+    "vite": "^5.4.14",
+    "webpack": "^5.97.1",
     "tar": "^7.5.2",
     "tinybench": "^4.0.1",
     "ts-jest": "^29.1.4",
@@ -141,6 +175,7 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^1.1.3",
+    "@apm-js-collab/code-transformer": "^0.8.2",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
     "ajv": "^8.17.1",
@@ -150,6 +185,7 @@
     "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
+    "dc-browser": "^1.0.2",
     "dotenv": "^16.4.5",
     "esbuild": "^0.27.0",
     "eventsource-parser": "^1.1.2",
@@ -157,11 +193,13 @@
     "graceful-fs": "^4.2.11",
     "http-errors": "^2.0.0",
     "minimatch": "^9.0.3",
+    "module-details-from-path": "^1.0.4",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
     "source-map": "^0.7.4",
     "termi-link": "^1.0.1",
+    "unplugin": "^2.3.5",
     "uuid": "^9.0.1",
     "zod-to-json-schema": "^3.25.0"
   },

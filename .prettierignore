@@ -1,0 +1,2 @@
+# Patch files use specific whitespace formatting required by unified diff format
+patches/**/*.patch
