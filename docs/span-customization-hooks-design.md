@@ -1241,26 +1241,31 @@ span := braintrust.StartSpan(SpanConfig{
 ## Next Steps
 
 1. **Requirements Validation**
+
    - Validate with users across different languages
    - Confirm use cases are addressed
    - Gather feedback on API ergonomics
 
 2. **Prototype Implementation**
+
    - Build prototypes in JavaScript, Python, and Go
    - Test with real auto-instrumentation scenarios
    - Measure performance impact
 
 3. **API Refinement**
+
    - Finalize hook interface signatures
    - Define error handling behavior
    - Document edge cases
 
 4. **Documentation**
+
    - Write comprehensive guides with examples
    - Create cookbook of common hook patterns
    - Document best practices per language
 
 5. **Implementation Rollout**
+
    - Implement in priority languages first
    - Gather early feedback
    - Iterate and expand to remaining languages
