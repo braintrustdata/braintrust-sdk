@@ -9,7 +9,6 @@
  * at build-time, injecting TracingChannel calls into AI SDK functions.
  *
  * For browser builds, the plugin automatically uses 'dc-browser' for diagnostics_channel polyfill.
- * The als-browser polyfill for AsyncLocalStorage is automatically included as a dependency.
  */
 
 import { createUnplugin } from "unplugin";
@@ -41,8 +40,7 @@ export interface BundlerPluginOptions {
   /**
    * Whether to bundle for browser environments.
    *
-   * When true, uses 'dc-browser' and 'als-browser' for browser-compatible
-   * diagnostics_channel and AsyncLocalStorage polyfills.
+   * When true, uses 'dc-browser' for browser-compatible diagnostics_channel polyfill.
    * When false, uses Node.js built-in 'diagnostics_channel' and 'async_hooks'.
    * Defaults to true (assumes browser build).
    */

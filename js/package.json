@@ -179,7 +179,6 @@
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
     "ajv": "^8.17.1",
-    "als-browser": "^1.0.1",
     "argparse": "^2.0.1",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
