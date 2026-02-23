@@ -423,7 +423,8 @@ describe("Function Behavior Preservation", () => {
 
       // Verify async behavior was preserved
       expect(result.delayed).toBe(true);
-      expect(elapsed).toBeGreaterThanOrEqual(10);
+      // Allow for timer precision variations (9-11ms for a 10ms setTimeout)
+      expect(elapsed).toBeGreaterThanOrEqual(9);
     });
 
     it("should handle promise chains correctly", async () => {
