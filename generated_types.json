@@ -521,6 +521,9 @@
                           ]
                         }
                       ]
+                    },
+                    "idempotency_key": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -729,26 +732,29 @@
           "topic_maps": {
             "type": "object",
             "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "function_name": {
-                  "type": "string",
-                  "description": "The name of the topic map function"
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "function_name": {
+                    "type": "string",
+                    "description": "The name of the topic map function"
+                  },
+                  "topic_map_id": {
+                    "type": "string",
+                    "description": "The id of the topic map function"
+                  },
+                  "topic_map_data": {
+                    "$ref": "#/components/schemas/TopicMapData"
+                  }
                 },
-                "topic_map_id": {
-                  "type": "string",
-                  "description": "The id of the topic map function"
-                },
-                "topic_map_data": {
-                  "$ref": "#/components/schemas/TopicMapData"
-                }
-              },
-              "required": [
-                "function_name",
-                "topic_map_data"
-              ]
+                "required": [
+                  "function_name",
+                  "topic_map_data"
+                ]
+              }
             },
-            "description": "Topic maps that depend on facets in this batch, keyed by source facet name"
+            "description": "Topic maps that depend on facets in this batch, keyed by source facet name. Each source facet can have multiple topic maps."
           }
         },
         "required": [
@@ -1826,11 +1832,85 @@
                   "index"
                 ],
                 "title": "function"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox"
+                    ]
+                  },
+                  "sandbox_spec": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "modal"
+                            ]
+                          },
+                          "snapshot_ref": {
+                            "type": "string",
+                            "description": "sandbox snapshot ref"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "snapshot_ref"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "lambda"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "provider"
+                        ]
+                      }
+                    ]
+                  },
+                  "entrypoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Which entrypoints to execute in the sandbox"
+                  },
+                  "eval_name": {
+                    "type": "string"
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "description": "Parameter values for sandbox eval execution"
+                  },
+                  "evaluator_definition": {
+                    "description": "Definition of current evaluator with parameters"
+                  }
+                },
+                "required": [
+                  "type",
+                  "sandbox_spec",
+                  "eval_name"
+                ]
               }
             ]
           },
           "bundle_id": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "preview": {
             "type": [
@@ -1842,8 +1922,7 @@
         },
         "required": [
           "runtime_context",
-          "location",
-          "bundle_id"
+          "location"
         ]
       },
       "Dataset": {
@@ -2195,7 +2274,8 @@
             "type": "string",
             "enum": [
               "env_var",
-              "ai_provider"
+              "ai_provider",
+              "sandbox_provider"
             ],
             "default": "env_var",
             "description": "The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys"
@@ -3538,7 +3618,8 @@
           "preprocessor",
           "facet",
           "classifier",
-          "parameters"
+          "parameters",
+          "sandbox"
         ]
       },
       "FunctionOutputType": {
@@ -3563,7 +3644,8 @@
           "facet",
           "classifier",
           "tag",
-          "parameters"
+          "parameters",
+          "sandbox"
         ],
         "default": "scorer",
         "description": "The type of global function. Defaults to 'scorer'."
@@ -3583,7 +3665,8 @@
           "facet",
           "classifier",
           "tag",
-          "parameters"
+          "parameters",
+          "sandbox"
         ]
       },
       "GitMetadataSettings": {
@@ -4917,6 +5000,12 @@
               "null"
             ]
           },
+          "is_dataplane_private": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "proxy_url": {
             "type": [
               "string",
@@ -5368,6 +5457,9 @@
                   "event_type",
                   "action"
                 ]
+              },
+              {
+                "$ref": "#/components/schemas/TopicAutomationConfig"
               }
             ],
             "description": "The configuration for the automation rule"
@@ -5957,7 +6049,10 @@
                   "type": "string"
                 },
                 "name": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "description": {
                   "type": [
@@ -5967,8 +6062,7 @@
                 }
               },
               "required": [
-                "url",
-                "name"
+                "url"
               ]
             },
             "description": "The remote eval sources to use for the project"
@@ -7011,6 +7105,15 @@
             ],
             "description": "The dataset to use"
           },
+          "name": {
+            "type": "string",
+            "description": "The name of the eval to run when multiple evals available"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Values for any parameters used in the eval"
+          },
           "task": {
             "allOf": [
               {
@@ -7521,6 +7624,125 @@
           "function"
         ]
       },
+      "TopicAutomationConfig": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "topic"
+            ],
+            "description": "The type of automation."
+          },
+          "sampling_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "The sampling rate for topic automation"
+          },
+          "facet_functions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedFunctionId"
+            },
+            "description": "Facet functions used by the topic automation"
+          },
+          "topic_map_functions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopicMapFunctionAutomation"
+            },
+            "description": "Topic map functions with optional per-topic-map filters"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpanScope"
+              },
+              {
+                "$ref": "#/components/schemas/TraceScope"
+              },
+              {
+                "$ref": "#/components/schemas/GroupScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Execution scope for topic automation. Defaults to span-level execution."
+          },
+          "data_scope": {
+            "$ref": "#/components/schemas/TopicAutomationDataScope"
+          },
+          "btql_filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional BTQL filter applied before topic automation."
+          }
+        },
+        "required": [
+          "event_type",
+          "sampling_rate",
+          "facet_functions",
+          "topic_map_functions"
+        ]
+      },
+      "TopicAutomationDataScope": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "project_logs"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "project_experiments"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "experiment"
+                ]
+              },
+              "experiment_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "experiment_id"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Optional data scope for topic automation."
+      },
       "TopicMapData": {
         "type": "object",
         "properties": {
@@ -7542,242 +7764,52 @@
             "type": "string",
             "description": "Key of the topic map bundle in code_bundles bucket"
           },
+          "report_key": {
+            "type": "string",
+            "description": "Key of the clustering report in code_bundles bucket"
+          },
+          "topic_names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Mapping from topic_id to topic name"
+          },
           "distance_threshold": {
             "type": "number",
             "description": "Maximum distance to nearest centroid. If exceeded, returns no_match."
-          },
-          "report": {
-            "$ref": "#/components/schemas/TopicMapReport"
           }
         },
         "required": [
           "type",
           "source_facet",
-          "embedding_model",
-          "bundle_key"
+          "embedding_model"
         ]
       },
-      "TopicMapReport": {
+      "TopicMapFunctionAutomation": {
         "type": "object",
         "properties": {
-          "version": {
-            "type": "number",
-            "enum": [
-              1
+          "function": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SavedFunctionId"
+              },
+              {
+                "description": "Topic map function"
+              }
             ]
           },
-          "created_at": {
-            "type": "string"
-          },
-          "settings": {
-            "type": "object",
-            "properties": {
-              "algorithm": {
-                "type": "string",
-                "enum": [
-                  "hdbscan",
-                  "kmeans",
-                  "hierarchical"
-                ]
-              },
-              "dimension_reduction": {
-                "type": "string",
-                "enum": [
-                  "umap",
-                  "pca",
-                  "none"
-                ]
-              },
-              "vector_field": {
-                "type": "string"
-              },
-              "embedding_model": {
-                "type": "string"
-              },
-              "n_clusters": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "umap_dimensions": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "min_cluster_size": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "min_samples": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "algorithm",
-              "dimension_reduction",
-              "vector_field",
-              "embedding_model"
-            ]
-          },
-          "query_settings": {
-            "type": "object",
-            "properties": {
-              "hierarchy_threshold": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "auto_naming": {
-                "type": "boolean"
-              },
-              "skip_cache": {
-                "type": "boolean"
-              },
-              "viz_mode": {
-                "type": "string",
-                "enum": [
-                  "bar",
-                  "scatter"
-                ]
-              },
-              "naming_model": {
-                "type": "string"
-              }
-            }
-          },
-          "clusters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "cluster_id": {
-                  "type": "number"
-                },
-                "parent_cluster_id": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "topic_id": {
-                  "type": "string"
-                },
-                "count": {
-                  "type": "number"
-                },
-                "sample_texts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "samples": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "text": {
-                        "type": "string"
-                      },
-                      "root_span_id": {
-                        "type": "string"
-                      },
-                      "span_id": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "text",
-                      "root_span_id",
-                      "span_id"
-                    ]
-                  }
-                },
-                "name": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "keywords": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "centroid": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
-                },
-                "parent_id": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "is_leaf": {
-                  "type": "boolean"
-                },
-                "depth": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "cluster_id",
-                "topic_id",
-                "count",
-                "sample_texts",
-                "samples"
-              ]
-            }
-          },
-          "embedding_points": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "x": {
-                  "type": "number"
-                },
-                "y": {
-                  "type": "number"
-                },
-                "cluster": {
-                  "type": "number"
-                },
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "x",
-                "y",
-                "cluster"
-              ]
-            }
+          "btql_filter": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Per-topic-map BTQL filter. For trace scope, a topic map runs when max(filter) over the trace is truthy. For span scope, it runs when the current span matches."
           }
         },
         "required": [
-          "version",
-          "settings",
-          "query_settings",
-          "clusters"
-        ],
-        "description": "Saved clustering report for UI rehydration"
+          "function"
+        ]
       },
       "TraceScope": {
         "type": "object",
@@ -7811,6 +7843,13 @@
               "null"
             ],
             "description": "The xact_id when this function completed (matches triggered_xact_id if done)"
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Deterministic key of the function definition + input version used to skip unchanged reruns"
           },
           "attempts": {
             "type": "integer",
@@ -8416,7 +8455,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "0b04b7522464ca9495413174b0034dc457bf6356"
+    "x-internal-git-sha": "7cc4507a2a809d3d0bcaea7cb53cb89c1bde1a91"
   },
   "paths": {},
   "webhooks": {}

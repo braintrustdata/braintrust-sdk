@@ -49,8 +49,10 @@ function isNative(fn: Function): boolean {
 function locationToString(location: CodeBundle["location"]): string {
   if (location.type === "experiment") {
     return `eval ${location.eval_name} -> ${location.position.type}`;
-  } else {
+  } else if (location.type === "function") {
     return `task ${location.index}`;
+  } else {
+    throw new Error(`Unsupported location type: ${location.type}`);
   }
 }
 
@@ -79,8 +81,10 @@ export async function findCodeDefinition({
       location.position.type === "task"
         ? evaluator.task
         : evaluator.scores[location.position.index];
-  } else {
+  } else if (location.type === "function") {
     fn = outFileModule.functions[location.index].handler;
+  } else {
+    throw new Error(`Unsupported location type: ${location.type}`);
   }
 
   if (!fn) {

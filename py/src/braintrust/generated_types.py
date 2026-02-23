@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 2822255bed426d5442adc880a8f71b8a378de3d4) -- do not modify"""
+"""Auto-generated file (internal git SHA 7cc4507a2a809d3d0bcaea7cb53cb89c1bde1a91) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -101,8 +101,10 @@ from ._generated_types import (
     SSEProgressEventData,
     StreamingMode,
     ToolFunctionDefinition,
+    TopicAutomationConfig,
+    TopicAutomationDataScope,
     TopicMapData,
-    TopicMapReport,
+    TopicMapFunctionAutomation,
     TraceScope,
     TriggeredFunctionState,
     UploadStatus,
@@ -214,8 +216,10 @@ __all__ = [
     "SpanType",
     "StreamingMode",
     "ToolFunctionDefinition",
+    "TopicAutomationConfig",
+    "TopicAutomationDataScope",
     "TopicMapData",
-    "TopicMapReport",
+    "TopicMapFunctionAutomation",
     "TraceScope",
     "TriggeredFunctionState",
     "UploadStatus",

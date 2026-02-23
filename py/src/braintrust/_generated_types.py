@@ -131,6 +131,7 @@ class AsyncScoringControlAsyncScoringControl4TriggeredFunction(TypedDict):
         AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope
         | AsyncScoringControlAsyncScoringControl4TriggeredFunctionScope1
     )
+    idempotency_key: NotRequired[str | None]
 
 
 class AsyncScoringControlAsyncScoringControl4(TypedDict):
@@ -454,10 +455,40 @@ class CodeBundleLocation1(TypedDict):
     index: int
 
 
+class CodeBundleLocation2SandboxSpec(TypedDict):
+    provider: Literal['modal']
+    snapshot_ref: str
+    """
+    sandbox snapshot ref
+    """
+
+
+class CodeBundleLocation2SandboxSpec1(TypedDict):
+    provider: Literal['lambda']
+
+
+class CodeBundleLocation2(TypedDict):
+    type: Literal['sandbox']
+    sandbox_spec: CodeBundleLocation2SandboxSpec | CodeBundleLocation2SandboxSpec1
+    entrypoints: NotRequired[Sequence[str] | None]
+    """
+    Which entrypoints to execute in the sandbox
+    """
+    eval_name: str
+    parameters: NotRequired[Mapping[str, Any] | None]
+    """
+    Parameter values for sandbox eval execution
+    """
+    evaluator_definition: NotRequired[Any | None]
+    """
+    Definition of current evaluator with parameters
+    """
+
+
 class CodeBundle(TypedDict):
     runtime_context: CodeBundleRuntimeContext
-    location: CodeBundleLocation | CodeBundleLocation1
-    bundle_id: str
+    location: CodeBundleLocation | CodeBundleLocation1 | CodeBundleLocation2
+    bundle_id: NotRequired[str | None]
     preview: NotRequired[str | None]
     """
     A preview of the code
@@ -543,7 +574,7 @@ class EnvVar(TypedDict):
     """
     Optional classification for the secret (for example, the AI provider name)
     """
-    secret_category: NotRequired[Literal['env_var', 'ai_provider'] | None]
+    secret_category: NotRequired[Literal['env_var', 'ai_provider', 'sandbox_provider'] | None]
     """
     The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
     """
@@ -834,7 +865,17 @@ FunctionIdRef: TypeAlias = Mapping[str, Any]
 
 
 FunctionObjectType: TypeAlias = Literal[
-    'prompt', 'tool', 'scorer', 'task', 'workflow', 'custom_view', 'preprocessor', 'facet', 'classifier', 'parameters'
+    'prompt',
+    'tool',
+    'scorer',
+    'task',
+    'workflow',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -842,7 +883,17 @@ FunctionOutputType: TypeAlias = Literal['completion', 'score', 'facet', 'classif
 
 
 FunctionTypeEnum: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 """
 The type of global function. Defaults to 'scorer'.
@@ -850,7 +901,17 @@ The type of global function. Defaults to 'scorer'.
 
 
 FunctionTypeEnumNullish: TypeAlias = Literal[
-    'llm', 'scorer', 'task', 'tool', 'custom_view', 'preprocessor', 'facet', 'classifier', 'tag', 'parameters'
+    'llm',
+    'scorer',
+    'task',
+    'tool',
+    'custom_view',
+    'preprocessor',
+    'facet',
+    'classifier',
+    'tag',
+    'parameters',
+    'sandbox',
 ]
 
 
@@ -1433,6 +1494,7 @@ class Organization(TypedDict):
     """
     api_url: NotRequired[str | None]
     is_universal_api: NotRequired[bool | None]
+    is_dataplane_private: NotRequired[bool | None]
     proxy_url: NotRequired[str | None]
     realtime_url: NotRequired[str | None]
     created: NotRequired[str | None]
@@ -1689,7 +1751,7 @@ class ProjectSettingsSpanFieldOrderItem(TypedDict):
 
 class ProjectSettingsRemoteEvalSource(TypedDict):
     url: str
-    name: str
+    name: NotRequired[str | None]
     description: NotRequired[str | None]
 
 
@@ -2219,7 +2281,7 @@ class SpanScope(TypedDict):
 
 
 SpanType: TypeAlias = Literal[
-    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier'
+    'llm', 'score', 'function', 'eval', 'task', 'tool', 'automation', 'facet', 'preprocessor', 'classifier', 'review'
 ]
 """
 Type of the span, for display purposes only
@@ -2263,62 +2325,94 @@ class ToolFunctionDefinition(TypedDict):
     function: ToolFunctionDefinitionFunction
 
 
-class TopicMapReportSettings(TypedDict):
-    algorithm: Literal['hdbscan', 'kmeans', 'hierarchical']
-    dimension_reduction: Literal['umap', 'pca', 'none']
-    vector_field: str
+class TopicAutomationDataScopeTopicAutomationDataScope(TypedDict):
+    type: Literal['project_logs']
+
+
+class TopicAutomationDataScopeTopicAutomationDataScope1(TypedDict):
+    type: Literal['project_experiments']
+
+
+class TopicAutomationDataScopeTopicAutomationDataScope2(TypedDict):
+    type: Literal['experiment']
+    experiment_id: str
+
+
+TopicAutomationDataScope: TypeAlias = (
+    TopicAutomationDataScopeTopicAutomationDataScope
+    | TopicAutomationDataScopeTopicAutomationDataScope1
+    | TopicAutomationDataScopeTopicAutomationDataScope2
+    | None
+)
+"""
+Optional data scope for topic automation.
+"""
+
+
+class TopicMapData(TypedDict):
+    type: Literal['topic_map']
+    source_facet: str
+    """
+    The facet field name to use as input for classification
+    """
     embedding_model: str
-    n_clusters: NotRequired[int | None]
-    umap_dimensions: NotRequired[int | None]
-    min_cluster_size: NotRequired[int | None]
-    min_samples: NotRequired[int | None]
+    """
+    The embedding model to use for embedding facet values
+    """
+    bundle_key: NotRequired[str | None]
+    """
+    Key of the topic map bundle in code_bundles bucket
+    """
+    report_key: NotRequired[str | None]
+    """
+    Key of the clustering report in code_bundles bucket
+    """
+    topic_names: NotRequired[Mapping[str, str] | None]
+    """
+    Mapping from topic_id to topic name
+    """
+    distance_threshold: NotRequired[float | None]
+    """
+    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    """
 
 
-class TopicMapReportQuerySettings(TypedDict):
-    hierarchy_threshold: NotRequired[int | None]
-    auto_naming: NotRequired[bool | None]
-    skip_cache: NotRequired[bool | None]
-    viz_mode: NotRequired[Literal['bar', 'scatter'] | None]
-    naming_model: NotRequired[str | None]
-
-
-class TopicMapReportClusterSample(TypedDict):
+class Function1Function1(TypedDict):
+    type: Literal['function']
     id: str
-    text: str
-    root_span_id: str
-    span_id: str
+    version: NotRequired[str | None]
+    """
+    The version of the function
+    """
 
 
-class TopicMapReportCluster(TypedDict):
-    cluster_id: float
-    parent_cluster_id: NotRequired[float | None]
-    topic_id: str
-    count: float
-    sample_texts: Sequence[str]
-    samples: Sequence[TopicMapReportClusterSample]
-    name: NotRequired[str | None]
-    description: NotRequired[str | None]
-    keywords: NotRequired[Sequence[str] | None]
-    centroid: NotRequired[Sequence[float] | None]
-    parent_id: NotRequired[float | None]
-    is_leaf: NotRequired[bool | None]
-    depth: NotRequired[float | None]
+class Function1Function11(TypedDict):
+    type: Literal['global']
+    name: str
+    function_type: NotRequired[FunctionTypeEnum | None]
 
 
-class TopicMapReportEmbeddingPoint(TypedDict):
-    x: float
-    y: float
-    cluster: float
-    text: NotRequired[str | None]
+class Function1Function12(TypedDict):
+    pass
 
 
-class TopicMapReport(TypedDict):
-    version: Literal[1]
-    created_at: NotRequired[str | None]
-    settings: TopicMapReportSettings
-    query_settings: TopicMapReportQuerySettings
-    clusters: Sequence[TopicMapReportCluster]
-    embedding_points: NotRequired[Sequence[TopicMapReportEmbeddingPoint] | None]
+class Function1Function13(Function1Function1, Function1Function12):
+    pass
+
+
+class Function1Function14(Function1Function11, Function1Function12):
+    pass
+
+
+Function1: TypeAlias = Function1Function13 | Function1Function14
+
+
+class TopicMapFunctionAutomation(TypedDict):
+    function: Function1
+    btql_filter: NotRequired[str | None]
+    """
+    Per-topic-map BTQL filter. For trace scope, a topic map runs when max(filter) over the trace is truthy. For span scope, it runs when the current span matches.
+    """
 
 
 class TraceScope(TypedDict):
@@ -2351,6 +2445,10 @@ class TriggeredFunctionState(TypedDict):
     completed_xact_id: NotRequired[str | None]
     """
     The xact_id when this function completed (matches triggered_xact_id if done)
+    """
+    idempotency_key: NotRequired[str | None]
+    """
+    Deterministic key of the function definition + input version used to skip unchanged reruns
     """
     attempts: NotRequired[int | None]
     """
@@ -2583,6 +2681,28 @@ class PreprocessorPreprocessor4(PreprocessorPreprocessor1, PreprocessorPreproces
 
 
 Preprocessor: TypeAlias = PreprocessorPreprocessor3 | PreprocessorPreprocessor4
+
+
+class BatchedFacetDataTopicMap(TypedDict):
+    function_name: str
+    """
+    The name of the topic map function
+    """
+    topic_map_id: NotRequired[str | None]
+    """
+    The id of the topic map function
+    """
+    topic_map_data: TopicMapData
+
+
+class BatchedFacetData(TypedDict):
+    type: Literal['batched_facet']
+    preprocessor: NotRequired[Preprocessor | None]
+    facets: Sequence[BatchedFacetDataFacet]
+    topic_maps: NotRequired[Mapping[str, Sequence[BatchedFacetDataTopicMap]] | None]
+    """
+    Topic maps that depend on facets in this batch, keyed by source facet name. Each source facet can have multiple topic maps.
+    """
 
 
 ChatCompletionContentPart: TypeAlias = (
@@ -3037,37 +3157,6 @@ class ProjectAutomationConfig2(TypedDict):
     """
 
 
-class ProjectAutomation(TypedDict):
-    id: str
-    """
-    Unique identifier for the project automation
-    """
-    project_id: str
-    """
-    Unique identifier for the project that the project automation belongs under
-    """
-    user_id: NotRequired[str | None]
-    """
-    Identifies the user who created the project automation
-    """
-    created: NotRequired[str | None]
-    """
-    Date of project automation creation
-    """
-    name: str
-    """
-    Name of the project automation
-    """
-    description: NotRequired[str | None]
-    """
-    Textual description of the project automation
-    """
-    config: ProjectAutomationConfig | ProjectAutomationConfig1 | ProjectAutomationConfig2 | ProjectAutomationConfig3
-    """
-    The configuration for the automation rule
-    """
-
-
 ProjectScoreCategories: TypeAlias = Sequence[ProjectScoreCategory] | Mapping[str, float] | Sequence[str] | None
 
 
@@ -3127,52 +3216,37 @@ class SpanAttributes(TypedDict):
     type: NotRequired[SpanType | None]
 
 
-class TopicMapData(TypedDict):
-    type: Literal['topic_map']
-    source_facet: str
+class TopicAutomationConfig(TypedDict):
+    event_type: Literal['topic']
     """
-    The facet field name to use as input for classification
+    The type of automation.
     """
-    embedding_model: str
+    sampling_rate: float
     """
-    The embedding model to use for embedding facet values
+    The sampling rate for topic automation
     """
-    bundle_key: str
+    facet_functions: Sequence[SavedFunctionId]
     """
-    Key of the topic map bundle in code_bundles bucket
+    Facet functions used by the topic automation
     """
-    distance_threshold: NotRequired[float | None]
+    topic_map_functions: Sequence[TopicMapFunctionAutomation]
     """
-    Maximum distance to nearest centroid. If exceeded, returns no_match.
+    Topic map functions with optional per-topic-map filters
     """
-    report: NotRequired[TopicMapReport | None]
+    scope: NotRequired[SpanScope | TraceScope | GroupScope | None]
+    """
+    Execution scope for topic automation. Defaults to span-level execution.
+    """
+    data_scope: NotRequired[TopicAutomationDataScope | None]
+    btql_filter: NotRequired[str | None]
+    """
+    Optional BTQL filter applied before topic automation.
+    """
 
 
 class ViewData(TypedDict):
     search: NotRequired[ViewDataSearch | None]
     custom_charts: NotRequired[Any | None]
-
-
-class BatchedFacetDataTopicMaps(TypedDict):
-    function_name: str
-    """
-    The name of the topic map function
-    """
-    topic_map_id: NotRequired[str | None]
-    """
-    The id of the topic map function
-    """
-    topic_map_data: TopicMapData
-
-
-class BatchedFacetData(TypedDict):
-    type: Literal['batched_facet']
-    preprocessor: NotRequired[Preprocessor | None]
-    facets: Sequence[BatchedFacetDataFacet]
-    topic_maps: NotRequired[Mapping[str, BatchedFacetDataTopicMaps] | None]
-    """
-    Topic maps that depend on facets in this batch, keyed by source facet name
-    """
 
 
 class ExperimentEvent(TypedDict):
@@ -3295,6 +3369,43 @@ GraphNode: TypeAlias = (
     | GraphNodeGraphNode6
     | GraphNodeGraphNode7
 )
+
+
+class ProjectAutomation(TypedDict):
+    id: str
+    """
+    Unique identifier for the project automation
+    """
+    project_id: str
+    """
+    Unique identifier for the project that the project automation belongs under
+    """
+    user_id: NotRequired[str | None]
+    """
+    Identifies the user who created the project automation
+    """
+    created: NotRequired[str | None]
+    """
+    Date of project automation creation
+    """
+    name: str
+    """
+    Name of the project automation
+    """
+    description: NotRequired[str | None]
+    """
+    Textual description of the project automation
+    """
+    config: (
+        ProjectAutomationConfig
+        | ProjectAutomationConfig1
+        | ProjectAutomationConfig2
+        | ProjectAutomationConfig3
+        | TopicAutomationConfig
+    )
+    """
+    The configuration for the automation rule
+    """
 
 
 class ProjectLogsEvent(TypedDict):
@@ -3672,6 +3783,14 @@ class RunEval(TypedDict):
     data: RunEvalData | RunEvalData1 | RunEvalData2
     """
     The dataset to use
+    """
+    name: NotRequired[str | None]
+    """
+    The name of the eval to run when multiple evals available
+    """
+    parameters: NotRequired[Mapping[str, Any] | None]
+    """
+    Values for any parameters used in the eval
     """
     task: Task
     scores: Sequence[FunctionId]
