@@ -416,12 +416,25 @@ class BraintrustPlugin(SimplePlugin):
             logger: Optional background logger for testing.
         """
         interceptor = BraintrustInterceptor(logger=logger)
-        super().__init__(
-            name="braintrust",
-            client_interceptors=[interceptor],
-            worker_interceptors=[interceptor],
-            workflow_runner=_modify_workflow_runner,
-        )
+        import inspect
+
+        params = inspect.signature(SimplePlugin.__init__).parameters
+
+        # temporalio >= 1.23.0 merged client_interceptors/worker_interceptors
+        # into a single `interceptors` parameter.
+        if "interceptors" in params:
+            super().__init__(  # pylint: disable=unexpected-keyword-arg
+                name="braintrust",
+                interceptors=[interceptor],
+                workflow_runner=_modify_workflow_runner,
+            )
+        else:
+            super().__init__(
+                name="braintrust",
+                client_interceptors=[interceptor],
+                worker_interceptors=[interceptor],
+                workflow_runner=_modify_workflow_runner,
+            )
 
 
 __all__ = ["BraintrustInterceptor", "BraintrustPlugin"]
