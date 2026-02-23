@@ -8,9 +8,6 @@ on:
       - ".github/workflows/templates-nunjucks-build-test.yaml"
   push:
     branches: [main]
-    paths:
-      - "integrations/templates-nunjucks/**"
-      - "js/**"
 
 jobs:
   build-and-test:
