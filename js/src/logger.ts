@@ -805,6 +805,14 @@ export class BraintrustState {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
+  public setFilteringFunction(
+    filteringFunction:
+      | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+      | null,
+  ): void {
+    this.bgLogger().setFilteringFunction(filteringFunction);
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
@@ -2543,11 +2551,19 @@ interface BackgroundLogger {
   setMaskingFunction(
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void;
+  setFilteringFunction(
+    filteringFunction:
+      | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+      | null,
+  ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
   private maskingFunction: ((value: unknown) => unknown) | null = null;
+  private filteringFunction:
+    | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+    | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
@@ -2559,6 +2575,14 @@ export class TestBackgroundLogger implements BackgroundLogger {
     this.maskingFunction = maskingFunction;
   }
 
+  setFilteringFunction(
+    filteringFunction:
+      | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+      | null,
+  ): void {
+    this.filteringFunction = filteringFunction;
+  }
+
   async flush(): Promise<void> {
     return Promise.resolve();
   }
@@ -2567,11 +2591,29 @@ export class TestBackgroundLogger implements BackgroundLogger {
     const items = this.items;
     this.items = [];
 
-    // get all the values
+    // get all the values and apply filtering
     const events: BackgroundLogEvent[] = [];
     for (const item of items) {
       for (const event of item) {
-        events.push(await event.get());
+        const eventData = await event.get();
+
+        // Apply filtering function
+        if (this.filteringFunction) {
+          try {
+            const filtered = this.filteringFunction(eventData);
+            if (filtered === null) {
+              // Event was filtered out, skip it
+              continue;
+            }
+            events.push(filtered);
+          } catch (e) {
+            // If filtering fails, log the original event
+            events.push(eventData);
+          }
+        } else if (eventData !== null) {
+          // Skip null events (filtered out by HTTPBackgroundLogger)
+          events.push(eventData);
+        }
       }
     }
 
@@ -2634,6 +2676,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
   private maskingFunction: ((value: unknown) => unknown) | null = null;
+  private filteringFunction:
+    | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+    | null = null;
 
   public syncFlush: boolean = false;
   private maxRequestSizeOverride: number | null = null;
@@ -2737,12 +2782,41 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     this.maskingFunction = maskingFunction;
   }
 
+  setFilteringFunction(
+    filteringFunction:
+      | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+      | null,
+  ): void {
+    this.filteringFunction = filteringFunction;
+  }
+
   log(items: LazyValue<BackgroundLogEvent>[]) {
     if (this._disabled) {
       return;
     }
 
-    const droppedItems = this.queue.push(...items);
+    // Wrap items with filtering if a filtering function is set
+    let filteredItems = items;
+    if (this.filteringFunction) {
+      filteredItems = items.map((item) => {
+        return new LazyValue(async () => {
+          try {
+            const eventData = await item.get();
+            const filtered = this.filteringFunction!(eventData);
+            if (filtered === null) {
+              // Event was filtered out - return a marker that will be removed later
+              return null as any;
+            }
+            return filtered;
+          } catch (e) {
+            // If filtering fails, return the original event
+            return await item.get();
+          }
+        });
+      });
+    }
+
+    const droppedItems = this.queue.push(...filteredItems);
 
     if (!this.syncFlush) {
       this.triggerActiveFlush();
@@ -2911,7 +2985,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   ): Promise<[BackgroundLogEvent[], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
-        const items = await Promise.all(wrappedItems.map((x) => x.get()));
+        const allItems = await Promise.all(wrappedItems.map((x) => x.get()));
+
+        // Filter out null events (filtered out by filtering function)
+        const items = allItems.filter((item) => item !== null);
 
         // TODO(kevin): `extractAttachments` should ideally come after
         // `mergeRowBatch`, since merge-overwriting could result in some
@@ -4378,6 +4455,51 @@ export function setMaskingFunction(
   maskingFunction: ((value: unknown) => unknown) | null,
 ): void {
   _internalGetGlobalState().setMaskingFunction(maskingFunction);
+}
+
+/**
+ * Set a global filtering function to control which events are logged to Braintrust.
+ *
+ * The function receives a log event object and should return null to skip logging that event.
+ * You can also return a modified event, but for redacting sensitive data, prefer using
+ * setMaskingFunction() instead.
+ *
+ * This is useful for:
+ * - Filtering out events by tags (e.g., LangGraph's 'langsmith:hidden' tag)
+ * - Skipping zero-duration spans or other overhead
+ * - Filtering events by span name, score thresholds, or other criteria
+ *
+ * Example:
+ * ```typescript
+ * function myFilter(event) {
+ *   // Skip events with 'langsmith:hidden' tag
+ *   const rootTags = event.tags || [];
+ *   const metadataTags = event.metadata?.tags || [];
+ *   if ([...rootTags, ...metadataTags].includes('langsmith:hidden')) {
+ *     return null;
+ *   }
+ *
+ *   // Skip zero-duration spans
+ *   const metrics = event.metrics || {};
+ *   if (metrics.start === metrics.end) {
+ *     return null;
+ *   }
+ *
+ *   return event;
+ * }
+ *
+ * setFilteringFunction(myFilter);
+ * ```
+ *
+ * @param filteringFunction A function that takes a log event and returns null to skip
+ *                         logging, or the event to log it. Set to null to disable filtering.
+ */
+export function setFilteringFunction(
+  filteringFunction:
+    | ((event: BackgroundLogEvent) => BackgroundLogEvent | null)
+    | null,
+): void {
+  _globalState.setFilteringFunction(filteringFunction);
 }
 
 /**
