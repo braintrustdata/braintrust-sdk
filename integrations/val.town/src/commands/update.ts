@@ -1,7 +1,7 @@
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { expandGlob } from "@std/fs";
-import { z } from "zod/v3";
+import { z } from "zod";
 import { join } from "@std/path";
 
 const configSchema = z.object({
