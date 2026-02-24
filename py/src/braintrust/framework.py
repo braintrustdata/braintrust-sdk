@@ -83,6 +83,9 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     _xact_id: str | None = None
     created: str | None = None
 
+    # The number of times to run the evaluator for this specific input. 
+    trial_count: int | None = None
+
 
 class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
     """
@@ -98,6 +101,7 @@ class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
 
     id: NotRequired[str | None]
     _xact_id: NotRequired[str | None]
+    trial_count: NotRequired[int | None]
 
 
 class _EvalCaseDict(Generic[Input, Output], _EvalCaseDictNoOutput[Input]):
@@ -1654,7 +1658,12 @@ async def _run_evaluator_internal_impl(
         disable=position is None,
     ) as pbar:
         async for datum in pbar:
-            for trial_index in range(evaluator.trial_count):
+            if isinstance(datum, dict):
+                datum_trial_count = datum.get("trial_count")
+            else:
+                datum_trial_count = getattr(datum, "trial_count", None)
+            trial_count = datum_trial_count if datum_trial_count is not None else evaluator.trial_count
+            for trial_index in range(trial_count):
                 tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum, trial_index))))
 
     results = []
