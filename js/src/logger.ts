@@ -3287,7 +3287,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  *
  * @param options Options for configuring init().
  * @param options.project The name of the project to create the experiment in. Must specify at least one of `project` or `projectId`.
- * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically.
+ * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically. If you use an existing experiment name, by default it will create a new experiment with that name as a prefix. If you want to update an existing experiment, you can set `options.update: true`. If you want to open an existing experiment in read-only mode, you can set `options.open: true`.
  * @param options.description An optional description of the experiment.
  * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a dataset object (from any project).
  * @param options.update If the experiment already exists, continue logging to it. If it does not exist, creates the experiment with the specified arguments.
