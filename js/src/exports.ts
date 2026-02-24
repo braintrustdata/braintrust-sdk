@@ -40,6 +40,12 @@ export type {
   WithTransactionId,
 } from "./logger";
 
+export type {
+  SandboxConfig,
+  RegisterSandboxOptions,
+  RegisterSandboxResult,
+} from "./sandbox";
+
 export {
   Attachment,
   BaseAttachment,
@@ -112,6 +118,8 @@ export {
   wrapTraced,
   registerOtelFlush,
 } from "./logger";
+
+export { registerSandbox } from "./sandbox";
 
 // Internal isomorph layer for platform-specific implementations
 import _internalIso from "./isomorph";
