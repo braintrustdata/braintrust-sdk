@@ -38,7 +38,8 @@ import {
   VALID_SOURCES,
   isArray,
   isObject,
-} from "./util";
+} from "../util/index";
+import { slugify } from "../util/string_util";
 import {
   type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
@@ -65,6 +66,7 @@ import {
   type PromptSessionEventType as PromptSessionEvent,
   type RepoInfoType as RepoInfo,
   type PromptBlockDataType as PromptBlockData,
+  type IfExistsType,
 } from "./generated_types";
 
 const BRAINTRUST_ATTACHMENT =

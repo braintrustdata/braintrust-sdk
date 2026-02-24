@@ -78,6 +78,7 @@ from .logger import (
 from .oai import (
     wrap_openai,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
+from .sandbox import *
 from .util import (
     BT_IS_ASYNC_ATTRIBUTE,  # noqa: F401 # type: ignore[reportUnusedImport]
     MarkAsyncWrapper,  # noqa: F401 # type: ignore[reportUnusedImport]
