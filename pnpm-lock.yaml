@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      pyright:
-        specifier: ^1.1.404
-        version: 1.1.404
       turbo:
         specifier: ^2.5.6
         version: 2.5.6
@@ -4894,11 +4891,6 @@ packages:
 
   pure-rand@6.1.0:
     resolution: {integrity: sha512-bVWawvoZoBYpp6yIoQtQXHZjmz35RSVHnUOTefl8Vcjr8snTPY1wnpSPMWekcFwbxI6gtmT7rSYPFvz71ldiOA==}
-
-  pyright@1.1.404:
-    resolution: {integrity: sha512-Gr48RLeyis8uMjx04vXGIdj3OFe/WGGBMg53XIh9GH30KRyuyKYNAjfUZqj3r51Xrv5BFKyDyguJu/BV3hi7QA==}
-    engines: {node: '>=14.0.0'}
-    hasBin: true
 
   qs@6.13.0:
     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
@@ -11421,10 +11413,6 @@ snapshots:
   punycode@2.3.1: {}
 
   pure-rand@6.1.0: {}
-
-  pyright@1.1.404:
-    optionalDependencies:
-      fsevents: 2.3.3
 
   qs@6.13.0:
     dependencies:
