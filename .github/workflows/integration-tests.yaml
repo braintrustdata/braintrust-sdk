@@ -34,7 +34,7 @@ jobs:
           git submodule init
           git submodule update --init --recursive
           cd sdk
-          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
+          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk-javascript.git
           git fetch origin
           git checkout ${{ github.event.pull_request.head.sha }}
 

@@ -12,7 +12,7 @@ The Braintrust SDK enables you to:
 - Run comprehensive evaluations using the `Eval` framework
 - Track and improve your model's performance over time
 
-This template helps you get started with the Braintrust SDK. It's based on our [official GitHub repository](https://github.com/braintrustdata/braintrust-sdk).
+This template helps you get started with the Braintrust SDK. It's based on our [official GitHub repository](https://github.com/braintrustdata/braintrust-sdk-javascript).
 
 ## Getting started
 

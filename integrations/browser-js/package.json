@@ -43,7 +43,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/braintrustdata/braintrust-sdk.git",
+    "url": "git+https://github.com/braintrustdata/braintrust-sdk-javascript.git",
     "directory": "sdk/integrations/browser-js"
   },
   "homepage": "https://www.braintrust.dev/docs",
