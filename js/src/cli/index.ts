@@ -2,10 +2,10 @@
 
 import * as esbuild from "esbuild";
 import * as dotenv from "dotenv";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import util from "util";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import util from "node:util";
 import * as fsWalk from "@nodelib/fs.walk";
 import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";

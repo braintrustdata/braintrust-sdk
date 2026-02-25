@@ -1,6 +1,6 @@
 {
-    "name": "@braintrust/smoke-test-shared",
-    "exports": {
-        ".": "./src/index.ts"
-    }
+  "name": "@braintrust/smoke-test-shared",
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

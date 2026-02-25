@@ -1,2 +1,9 @@
 # Patch files use specific whitespace formatting required by unified diff format
 patches/**/*.patch
+
+# Lock files
+pnpm-lock.yaml
+deno.lock
+
+# Template files with special formatting
+js/scripts/openapi_zod_client_output_template.hbs

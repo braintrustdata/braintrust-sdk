@@ -4,7 +4,7 @@ import { registry } from "../instrumentation/registry";
 
 // This is copied from next.js. It seems they define AsyncLocalStorage in the edge
 // environment, even though it's not defined in the browser.
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
+import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
 
 declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;

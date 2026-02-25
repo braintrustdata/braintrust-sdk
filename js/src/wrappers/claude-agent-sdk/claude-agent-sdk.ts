@@ -571,7 +571,7 @@ function wrapClaudeAgentQuery<
       // interrupt() right after query() without consuming any messages first.
       const invocationTarget: unknown =
         thisArg === proxy || thisArg === undefined
-          ? defaultThis ?? thisArg
+          ? (defaultThis ?? thisArg)
           : thisArg;
 
       // Track active tool spans for hook-based tracing

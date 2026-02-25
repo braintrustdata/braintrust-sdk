@@ -40,7 +40,7 @@
       "require": "./dist/workerd.js",
       "default": "./dist/workerd.mjs"
     },
-     "./edge-light": {
+    "./edge-light": {
       "import": "./dist/edge-light.mjs",
       "require": "./dist/edge-light.js",
       "default": "./dist/edge-light.mjs"
@@ -124,7 +124,9 @@
     "test:zod-v4": "vitest run src/zod/zod-v4-serialization.test.ts",
     "test:mastra": "vitest run src/wrappers/mastra.test.ts",
     "test:claude-agent-sdk": "vitest run src/wrappers/claude-agent-sdk.test.ts",
-    "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress"
+    "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
+    "lint": "eslint .",
+    "fix:eslint": "eslint --fix ."
   },
   "author": "",
   "license": "MIT",
@@ -157,7 +159,6 @@
     "jiti": "^2.6.1",
     "npm-run-all": "^4.1.5",
     "openapi-zod-client": "^1.18.3",
-    "prettier": "^3.5.3",
     "rollup": "^4.28.1",
     "vite": "^5.4.14",
     "webpack": "^5.97.1",

@@ -7,7 +7,7 @@
  * Adapted from: https://github.com/substack/node-resolve
  */
 
-import * as path from "path";
+import * as path from "node:path";
 
 // BRAINTRUST: This was changed to be a relative import
 import tryRealpath from "./tryRealpath";

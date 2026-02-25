@@ -31,7 +31,6 @@ export function wrapAnthropic<T extends object>(anthropic: T): T {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function anthropicProxy(anthropic: any): any {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
@@ -47,7 +46,6 @@ function anthropicProxy(anthropic: any): any {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function betaProxy(beta: any) {
   return new Proxy(beta, {
     get(target, prop, receiver) {
@@ -59,7 +57,6 @@ function betaProxy(beta: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function messagesProxy(messages: any) {
   return new Proxy(messages, {
     get(target, prop, receiver) {
@@ -77,7 +74,6 @@ function messagesProxy(messages: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createProxy(create: (params: any) => Promise<any>) {
   return new Proxy(create, {
     apply(target, thisArg, argArray) {
@@ -108,7 +104,6 @@ function createProxy(create: (params: any) => Promise<any>) {
       // Actually do the call.
       const apiPromise = Reflect.apply(target, thisArg, argArray);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onThen: ThenFn<any> = function (msgOrStream: any) {
         // handle the sync interface create(stream=False)
         if (!args["stream"]) {
@@ -139,7 +134,6 @@ function createProxy(create: (params: any) => Promise<any>) {
 type ThenFn<T> = Promise<T>["then"];
 
 function apiPromiseProxy<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   apiPromise: any,
   span: StartedSpan,
   onThen: ThenFn<T>,
@@ -149,11 +143,11 @@ function apiPromiseProxy<T>(
       if (prop === "then") {
         // This path is used with messages.create(stream=True) calls.
         const thenFunc = Reflect.get(target, prop, receiver);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         return function (onFulfilled: any, onRejected: any) {
           return thenFunc.call(
             target,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
             async (result: any) => {
               try {
                 const processed = onThen(result);
@@ -169,7 +163,6 @@ function apiPromiseProxy<T>(
         // This path is used with messages.stream(...) calls.
         const withResponseFunc = Reflect.get(target, prop, receiver);
         return () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return withResponseFunc.call(target).then((withResponse: any) => {
             if (withResponse["data"]) {
               const { data: stream } = withResponse;
@@ -246,18 +239,16 @@ function streamProxy<T>(
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
   // this is where we actually do the business of iterating the message stream
   let ttft = -1;
   let metadata = {};
   let totals: Metrics = {};
   const span = sspan.span;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const contentBlocks: any[] = [];
   const contentBlockDeltas: Record<number, string[]> = {};
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
     const result = await stream.next(...args);
 
@@ -360,7 +351,7 @@ type Metrics = Record<string, number>;
 type MetricsOrUndefined = Metrics | undefined;
 
 // Parse the event from given anthropic Message.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function parseEventFromMessage(message: any) {
   // FIXME[matt] the whole content or just the text?
   const output = message
@@ -383,7 +374,7 @@ function parseEventFromMessage(message: any) {
 }
 
 // Parse the metrics from the usage object.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   if (!usage) {
     return undefined;
@@ -476,7 +467,6 @@ function processAttachmentsInInput(input: any): any {
   return input;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function coalesceInput(messages: any[], system: string | undefined) {
   // convert anthropic args to the single "input" field Braintrust expects.
 

@@ -1,9 +1,9 @@
 import { SourceMapConsumer } from "source-map";
-import * as fs from "fs/promises";
+import * as fs from "node:fs/promises";
 import { EvaluatorFile, warning } from "../../framework";
 import { loadModule } from "./load-module";
 import { type CodeBundleType as CodeBundle } from "../../generated_types";
-import path from "path";
+import path from "node:path";
 import type { Node } from "typescript";
 
 interface SourceMapContext {
