@@ -14,6 +14,9 @@
     "lint": {
       "outputs": []
     },
+    "fix:eslint": {
+      "outputs": []
+    },
     "dev": {
       "cache": false
     },

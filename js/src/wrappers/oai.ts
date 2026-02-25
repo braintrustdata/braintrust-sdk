@@ -34,7 +34,6 @@ interface OpenAILike {
 }
 
 declare global {
-  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 

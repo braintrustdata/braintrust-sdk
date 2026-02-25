@@ -14,12 +14,11 @@ test: js-test
 
 .PHONY: lint
 lint:
-	pnpm exec prettier --check .
-	cd js && pnpm exec eslint .
+	pnpm run lint
 
 .PHONY: fixup
 fixup:
-	pnpm exec prettier --write .
+	pnpm run fix
 
 #
 # js stuff

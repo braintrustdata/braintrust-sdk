@@ -7535,7 +7535,6 @@ export class RemoteEvalParameters<
       typeof x === "object" &&
       x !== null &&
       "__braintrust_parameters_marker" in x &&
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       (
         x as unknown as RemoteEvalParameters<
           boolean,

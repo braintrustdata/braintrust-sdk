@@ -1,6 +1,6 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
+import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
 
 declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
