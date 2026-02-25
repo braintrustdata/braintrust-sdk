@@ -12,6 +12,15 @@ install-deps:
 .PHONY: test
 test: js-test
 
+.PHONY: lint
+lint:
+	pnpm exec prettier --check .
+	cd js && pnpm exec eslint .
+
+.PHONY: fixup
+fixup:
+	pnpm exec prettier --write .
+
 #
 # js stuff
 #

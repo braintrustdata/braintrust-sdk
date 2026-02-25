@@ -20,6 +20,9 @@ const entryFiles = tsupConfig
 
 export default [
   {
+    ignores: ["dist/**", "dev/dist/**", "node_modules/**"],
+  },
+  {
     files: ["src/**/*.ts", "src/**/*.tsx"],
     languageOptions: {
       parser: tsparser,

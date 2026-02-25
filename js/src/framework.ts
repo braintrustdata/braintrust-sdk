@@ -1043,7 +1043,7 @@ async function runEvaluatorInternal(
                 objectId:
                   parentComponents?.data.object_id ??
                   (experimentIdPromise
-                    ? (await experimentIdPromise) ?? ""
+                    ? ((await experimentIdPromise) ?? "")
                     : ""),
                 rootSpanId: rootSpan.rootSpanId,
                 ensureSpansFlushed,

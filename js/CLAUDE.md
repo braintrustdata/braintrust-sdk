@@ -45,7 +45,7 @@ pnpm prettier --write .      # Format all files
 
 ## Test Framework
 
-Uses Vitest. Config in `vitest.config.js`. Tests make real API calls (no VCR/cassettes).
+Uses Vitest. Config in `vitest.config.js`. Tests make real API calls.
 
 ```bash
 # Required env vars for wrapper tests

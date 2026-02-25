@@ -14,14 +14,21 @@
     "start": "turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "test": "turbo run test --filter=\"!@braintrust/otel\""
+    "test": "turbo run test --filter=\"!@braintrust/otel\"",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.5.3",
     "turbo": "^2.5.6"
   },
   "overrides": {
     "zod": "3.25.34",
     "tsup": "8.4.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,css,md,mdx,html,yaml,yml}": "prettier --write"
   },
   "packageManager": "pnpm@10.26.2"
 }
