@@ -121,7 +121,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
+import { lintTemplate as _lintMustacheTemplate } from "./template/mustache-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 import type { EvalParameters, InferParameters } from "./eval-parameters";
@@ -1046,7 +1046,7 @@ class HTTPConnection {
     try {
       const resp = await this.get("ping");
       return resp.status === 200;
-    } catch (e) {
+    } catch {
       return false;
     }
   }

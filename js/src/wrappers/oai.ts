@@ -367,7 +367,7 @@ function wrapChatCompletion<
               const { data: ret, response } =
                 await completionResponse.withResponse();
               logHeaders(response, span);
-              const { messages, ...rest } = params;
+              const { messages: _messages, ...rest } = params;
               span.log({
                 metadata: {
                   ...rest,

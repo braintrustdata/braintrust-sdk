@@ -63,7 +63,7 @@ export function convertDataToBlob(data: any, mediaType: string): Blob | null {
     } else if (typeof Buffer !== "undefined" && data instanceof Buffer) {
       return new Blob([data as any], { type: mediaType });
     }
-  } catch (error) {
+  } catch {
     // If conversion fails, return null
     return null;
   }

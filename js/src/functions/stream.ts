@@ -1,5 +1,4 @@
 import {
-  CallEvent as CallEventSchemaImport,
   type CallEventType as CallEventSchema,
   CallEvent as callEventSchema,
   SSEConsoleEventData as sseConsoleEventDataSchema,

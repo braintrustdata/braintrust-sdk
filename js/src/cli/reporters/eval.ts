@@ -152,7 +152,7 @@ function formatExperimentSummaryFancy(summary: ExperimentSummary) {
         borderStyle: "round",
       })
     );
-  } catch (error) {
+  } catch {
     return "\n" + chalk.gray("Experiment summary") + "\n" + boxContent + "\n";
   }
 }

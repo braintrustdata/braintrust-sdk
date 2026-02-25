@@ -1,9 +1,6 @@
 import {
-  CodeBundle as CodeBundleSchema,
   type CodeBundleType as CodeBundle,
-  Function as FunctionObjectSchema,
   type FunctionType as FunctionObject,
-  IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
 } from "../../generated_types";
 import type { BuildSuccess, EvaluatorState, FileHandle } from "../types";

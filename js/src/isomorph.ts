@@ -1,7 +1,5 @@
 import {
-  GitMetadataSettings as GitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
-  RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
 } from "./generated_types";
 

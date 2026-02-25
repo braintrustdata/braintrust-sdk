@@ -186,7 +186,7 @@ export class OpenAIPlugin extends BasePlugin {
 
           // Extract metadata - preserve response fields except usage and output
           if (response) {
-            const { usage, output, ...metadata } = response;
+            const { usage: _usage, output: _output, ...metadata } = response;
             if (Object.keys(metadata).length > 0) {
               data.metadata = metadata;
             }
