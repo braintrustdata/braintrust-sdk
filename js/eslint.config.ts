@@ -68,8 +68,7 @@ export default [
           varsIgnorePattern: "^_",
         },
       ],
-      // TODO: Fix violations and re-enable as "error"
-      "prefer-const": "warn",
+      "prefer-const": "error",
       "@typescript-eslint/ban-types": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/no-require-imports": "off",

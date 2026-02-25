@@ -1770,9 +1770,9 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
-  updateEvent = Object.fromEntries(
-    Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
+  const { metadata, ...rawUpdateEvent } = deepCopyEvent(validatedEvent);
+  const updateEvent = Object.fromEntries(
+    Object.entries(rawUpdateEvent).filter(([_, v]) => !isEmpty(v)),
   );
 
   const parentIds = async () =>
@@ -5193,7 +5193,8 @@ function validateAndSanitizeExperimentLogPartialArgs(
     if (Array.isArray(event.scores)) {
       throw new Error("scores must be an object, not an array");
     }
-    for (let [name, score] of Object.entries(event.scores)) {
+    for (const [name, rawScore] of Object.entries(event.scores)) {
+      let score = rawScore;
       if (typeof name !== "string") {
         throw new Error("score names must be strings");
       }
@@ -5836,8 +5837,11 @@ export class Experiment
       readonly comparisonExperimentId?: string;
     } = {},
   ): Promise<ExperimentSummary> {
-    let { summarizeScores = true, comparisonExperimentId = undefined } =
-      options || {};
+    const {
+      summarizeScores = true,
+      comparisonExperimentId: comparisonExperimentIdOpt,
+    } = options || {};
+    let comparisonExperimentId = comparisonExperimentIdOpt;
 
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
