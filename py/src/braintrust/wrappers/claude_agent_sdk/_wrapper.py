@@ -293,6 +293,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                     span.log(output=final_results[-1] if final_results else None)
                 except Exception as e:
                     log.warning("Error in tracing code", exc_info=e)
+                    raise
                 finally:
                     llm_tracker.cleanup()
                     if hasattr(_thread_local, "parent_span_export"):
