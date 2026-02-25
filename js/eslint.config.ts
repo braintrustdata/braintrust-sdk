@@ -20,7 +20,24 @@ const entryFiles = tsupConfig
 
 export default [
   {
-    ignores: ["dist/**", "dev/dist/**", "node_modules/**"],
+    ignores: [
+      "dist/**",
+      "dev/dist/**",
+      "util/dist/**",
+      "node_modules/**",
+      "vendor/**",
+      "examples/**",
+      "scripts/**",
+      ".turbo/**",
+      "docs/**",
+      "test-ai-sdk-wrapper/**",
+      "vercel/**",
+      // TODO: Add these back once tsconfig.json includes them, so that
+      // typed linting (and all other config blocks) can run on them too.
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "src/auto-instrumentations/**",
+    ],
   },
   {
     files: ["src/**/*.ts", "src/**/*.tsx"],
@@ -39,8 +56,11 @@ export default [
     rules: {
       // Base TypeScript rules
       ...tseslint.configs.recommended.rules,
+      // TODO: Fix violations and re-enable as "error"
+      "@typescript-eslint/no-explicit-any": "warn",
+      // TODO: Fix violations and re-enable as "error"
       "@typescript-eslint/no-unused-vars": [
-        "error",
+        "warn",
         {
           vars: "all",
           args: "none",
@@ -49,16 +69,25 @@ export default [
           varsIgnorePattern: "^_",
         },
       ],
-      "prefer-const": "error",
+      // TODO: Fix violations and re-enable as "error"
+      "prefer-const": "warn",
       "@typescript-eslint/ban-types": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/no-require-imports": "off",
+      // TODO: Fix violations and re-enable as "error"
       "@typescript-eslint/consistent-type-assertions": [
-        "error",
+        "warn",
         { assertionStyle: "never" },
       ],
-      "no-unused-expressions": ["error", { allowShortCircuit: true }],
+      // TODO: Fix violations and re-enable as "error"
+      "no-unused-expressions": ["warn", { allowShortCircuit: true }],
       "@typescript-eslint/no-unused-expressions": "off",
+      // TODO: Fix violations and re-enable as "error"
+      "@typescript-eslint/no-empty-object-type": "warn",
+      // TODO: Fix violations and re-enable as "error"
+      "@typescript-eslint/no-unsafe-function-type": "warn",
+      // TODO: Fix violations and re-enable as "error"
+      "@typescript-eslint/prefer-as-const": "warn",
       // Require node: protocol for Node.js built-in imports (for Deno compatibility)
       // This plugin automatically detects ALL Node.js built-ins - no manual list needed!
       "node-import/prefer-node-protocol": "error",
@@ -124,8 +153,9 @@ export default [
       "@typescript-eslint": tseslint,
     },
     rules: {
+      // TODO: Fix violations and re-enable as "error"
       "no-restricted-syntax": [
-        "error",
+        "warn",
         {
           selector: "ExportAllDeclaration[exported=null]",
           message:

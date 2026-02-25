@@ -14,12 +14,12 @@ sdk/
 
 ## Quick Reference
 
-| Task          | Command         |
-| ------------- | --------------- |
-| Run all tests | `make test`     |
-| Build JS      | `make js-build` |
-| Lint check    | `make lint`     |
-| Auto-format   | `make fixup`    |
+| Task          | Command          |
+| ------------- | ---------------- |
+| Run all tests | `pnpm run test`  |
+| Build         | `pnpm run build` |
+| Lint check    | `pnpm run lint`  |
+| Auto-fix      | `pnpm run fix`   |
 
 ## Setup
 
