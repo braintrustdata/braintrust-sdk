@@ -3,9 +3,8 @@ import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
-import { SpanTypeAttribute, isObject } from "../../../util/index";
+import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
-import { processInputAttachments } from "../../wrappers/attachment-utils";
 import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
@@ -325,15 +324,6 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
           return;
         }
 
-        const {
-          span,
-          startTime,
-          conversationHistory,
-          currentMessages,
-          currentMessageStartTime,
-          accumulatedOutputTokens,
-        } = spanData;
-
         // Check if result is a stream
         if (isAsyncIterable(event.result)) {
           // Patch the stream to collect chunks and trace them
@@ -357,7 +347,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                     spanData.conversationHistory,
                     options,
                     spanData.currentMessageStartTime,
-                    await span.export(),
+                    await spanData.span.export(),
                   );
 
                   if (finalMessage) {
@@ -425,7 +415,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                   result_metadata.session_id = message.session_id;
                 }
                 if (Object.keys(result_metadata).length > 0) {
-                  span.log({
+                  spanData.span.log({
                     metadata: result_metadata,
                   });
                 }
@@ -447,7 +437,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                     spanData.conversationHistory,
                     options,
                     spanData.currentMessageStartTime,
-                    await span.export(),
+                    await spanData.span.export(),
                   );
 
                   if (finalMessage) {
@@ -456,7 +446,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                 }
 
                 // Log final output to top-level span - just the last message content
-                span.log({
+                spanData.span.log({
                   output:
                     spanData.conversationHistory.length > 0
                       ? spanData.conversationHistory[
@@ -470,15 +460,15 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                   error,
                 );
               } finally {
-                span.end();
+                spanData.span.end();
                 spans.delete(event);
               }
             },
             onError: (error: Error) => {
-              span.log({
+              spanData.span.log({
                 error: error.message,
               });
-              span.end();
+              spanData.span.end();
               spans.delete(event);
             },
           });
@@ -487,7 +477,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
         } else {
           // Non-streaming response (shouldn't happen for query, but handle gracefully)
           try {
-            span.log({
+            spanData.span.log({
               output: event.result,
             });
           } catch (error) {
@@ -496,7 +486,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
               error,
             );
           } finally {
-            span.end();
+            spanData.span.end();
             spans.delete(event);
           }
         }

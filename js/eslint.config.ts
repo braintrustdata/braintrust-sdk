@@ -58,9 +58,8 @@ export default [
       ...tseslint.configs.recommended.rules,
       // TODO: Fix violations and re-enable as "error"
       "@typescript-eslint/no-explicit-any": "warn",
-      // TODO: Fix violations and re-enable as "error"
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         {
           vars: "all",
           args: "none",

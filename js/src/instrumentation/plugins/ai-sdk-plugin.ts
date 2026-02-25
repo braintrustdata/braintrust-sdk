@@ -1,9 +1,9 @@
 import { tracingChannel } from "dc-browser";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
-import type { StartEvent, EndEvent, ErrorEvent } from "../core";
-import { startSpan, Attachment } from "../../logger";
+import type { StartEvent } from "../core";
+import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
-import { SpanTypeAttribute, isObject } from "../../../util/index";
+import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
 

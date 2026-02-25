@@ -3,7 +3,7 @@ import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan, Attachment } from "../../logger";
 import type { Span } from "../../logger";
-import { SpanTypeAttribute, isObject } from "../../../util/index";
+import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 
 /**

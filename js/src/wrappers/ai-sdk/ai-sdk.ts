@@ -1139,10 +1139,6 @@ const serializeError = (error: unknown) => {
   return String(error);
 };
 
-const serializeModel = (model: any) => {
-  return typeof model === "string" ? model : model?.modelId;
-};
-
 /**
  * Parses a gateway model string like "openai/gpt-5-mini" into provider and model.
  * Returns { provider, model } if parseable, otherwise { model } only.
