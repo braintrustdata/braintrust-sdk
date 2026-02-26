@@ -1,8 +1,4 @@
-import {
-  initExperiment,
-  type Experiment,
-  type ExperimentSummary,
-} from "../../logger";
+import { initExperiment, type ExperimentSummary } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import type {
   TestConfig,

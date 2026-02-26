@@ -2,12 +2,12 @@ import { currentSpan } from "../../logger";
 import type { Span } from "../../logger";
 
 function proxyAssertion(
-  assertion: unknown,
+  assertion: object,
   value: unknown,
   key: string,
   span: Span,
 ): unknown {
-  return new Proxy(assertion as object, {
+  return new Proxy(assertion, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
 
@@ -24,9 +24,10 @@ function proxyAssertion(
           if (
             result !== null &&
             typeof result === "object" &&
-            typeof (result as Promise<unknown>).then === "function"
+            "then" in result &&
+            typeof Reflect.get(result, "then") === "function"
           ) {
-            return (result as Promise<unknown>).then(
+            return Promise.resolve(result).then(
               (v) => {
                 span.log({ output: { [key]: value }, scores: { [key]: 1 } });
                 return v;
@@ -52,27 +53,25 @@ function proxyAssertion(
   });
 }
 
-export function wrapExpect<ExpectType>(originalExpect: ExpectType): ExpectType {
+export function wrapExpect<ExpectType extends (...args: unknown[]) => unknown>(
+  originalExpect: ExpectType,
+): ExpectType {
   const wrapped = function (value: unknown, message?: string) {
     // pass through unnamed expect
     if (message === undefined) {
-      return (originalExpect as (v: unknown) => unknown)(value);
+      return originalExpect(value);
     }
 
-    const assertion = (originalExpect as (v: unknown, m: string) => unknown)(
-      value,
-      message,
-    );
+    const assertion = originalExpect(value, message);
 
     const span = currentSpan();
     if (!span) {
       return assertion;
     }
 
+    if (assertion === null || typeof assertion !== "object") return assertion;
     return proxyAssertion(assertion, value, message, span);
   };
 
-  Object.assign(wrapped, originalExpect);
-
-  return wrapped as ExpectType;
+  return Object.assign(wrapped, originalExpect);
 }

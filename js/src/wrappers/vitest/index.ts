@@ -25,18 +25,17 @@ export type { DatasetOptions, DatasetRecord } from "./dataset-helpers";
  *
  * @example Basic Usage
  * ```typescript
- * import { test, expect, describe, afterAll } from 'vitest';
+ * import * as vitest from "vitest";
  * import { wrapVitest } from 'braintrust';
  *
- * const bt = wrapVitest(
- *   { test, expect, describe, afterAll },
+ * const {test, expect, describe } = wrapVitest(
  *   { projectName: 'my-project' }
  * );
  *
- * bt.describe('Translation Tests', () => {
+ * describe('Translation Tests', () => {
  *
  *   // Tests with input/expected are automatically added to the dataset
- *   bt.test(
+ *   test(
  *     'translates hello',
  *     {
  *       input: { text: 'hello' },
@@ -51,7 +50,7 @@ export type { DatasetOptions, DatasetRecord } from "./dataset-helpers";
  *   );
  *
  *   // Tests without input/expected still run and track pass/fail
- *   bt.test('basic functionality', async () => {
+ *   test('basic functionality', async () => {
  *     const result = await someFunction();
  *     expect(result).toBeTruthy();
  *   });
@@ -60,7 +59,12 @@ export type { DatasetOptions, DatasetRecord } from "./dataset-helpers";
  *
  * @see README.md for full documentation and examples
  */
-export function wrapVitest<VitestContext = unknown, ExpectType = unknown>(
+export function wrapVitest<
+  VitestContext = unknown,
+  ExpectType extends (...args: unknown[]) => unknown = (
+    ...args: unknown[]
+  ) => unknown,
+>(
   vitestMethods: VitestMethods<VitestContext, ExpectType>,
   config: WrapperConfig = {},
 ): BraintrustVitest<VitestContext, ExpectType> {

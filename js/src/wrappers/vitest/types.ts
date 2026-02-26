@@ -94,7 +94,12 @@ interface BaseWrappedDescribe {
 
 export type WrappedDescribe = WithModifiers<BaseWrappedDescribe>;
 
-export interface VitestMethods<VitestContext = unknown, ExpectType = unknown> {
+export interface VitestMethods<
+  VitestContext = unknown,
+  ExpectType extends (...args: unknown[]) => unknown = (
+    ...args: unknown[]
+  ) => unknown,
+> {
   test: TestFunction<VitestContext>;
   it?: TestFunction<VitestContext>;
   expect: ExpectType;
@@ -122,7 +127,9 @@ export interface DatasetRecord {
 
 export interface BraintrustVitest<
   VitestContext = unknown,
-  ExpectType = unknown,
+  ExpectType extends (...args: unknown[]) => unknown = (
+    ...args: unknown[]
+  ) => unknown,
 > {
   test: WrappedTest<VitestContext>;
   it: WrappedTest<VitestContext>;

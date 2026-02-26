@@ -51,6 +51,10 @@ export async function runScorers(args: {
   }
 }
 
+function isScore(val: object): val is Score {
+  return "name" in val && "score" in val;
+}
+
 function normalizeScores(result: unknown): Score[] {
   if (result === null || result === undefined) {
     return [];
@@ -64,8 +68,8 @@ function normalizeScores(result: unknown): Score[] {
     return result.filter((s) => s !== null && s !== undefined);
   }
 
-  if (typeof result === "object" && "name" in result && "score" in result) {
-    return [result as Score];
+  if (typeof result === "object" && result !== null && isScore(result)) {
+    return [result];
   }
 
   return [];
