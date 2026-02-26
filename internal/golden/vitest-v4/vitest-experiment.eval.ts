@@ -5,8 +5,27 @@ import * as ai from "ai";
 
 const { generateText } = wrapAISDK(ai);
 
+// A reusable scorer defined as a named function — can be shared across tests
+function containsExpected({
+  output,
+  expected,
+}: {
+  output: unknown;
+  expected?: unknown;
+}) {
+  return {
+    name: "contains_expected",
+    score:
+      typeof output === "string" &&
+      typeof expected === "string" &&
+      output.includes(expected)
+        ? 1.0
+        : 0.0,
+  };
+}
+
 // Automatically creates datasets and experiments
-const { describe, test, expect, logOutputs, logFeedback } = wrapVitest(vitest, {
+const { describe, test, expect } = wrapVitest(vitest, {
   projectName: "golden-ts-vitest-experiment-v4",
 });
 
@@ -22,12 +41,32 @@ describe("Vitest Experiment Mode Tests", () => {
     },
     async ({ input, expected }) => {
       const result = 4;
-      logOutputs({ answer: result });
-      expect(result).toBe(expected);
+      expect(result, "answer").toBe(expected);
     },
   );
 
-  // Test with LLM call - added to dataset with input/expected
+  // Test with a scorer - automatically evaluates output against expected after the test runs
+  test(
+    "math with scorer",
+    {
+      input: { a: 10, b: 3 },
+      expected: 7,
+      metadata: { category: "math" },
+      scorers: [
+        ({ output, expected }) => ({
+          name: "exact_match",
+          score: output === expected ? 1.0 : 0.0,
+        }),
+      ],
+    },
+    async ({ input, expected }) => {
+      const result = (input as any).a - (input as any).b;
+      expect(result, "result").toBe(expected);
+      return result;
+    },
+  );
+
+  // Test with LLM call - uses a named scorer loaded from outside the test
   test(
     "translation test",
     {
@@ -35,6 +74,7 @@ describe("Vitest Experiment Mode Tests", () => {
       expected: "hola",
       metadata: { category: "translation" },
       tags: ["language", "spanish"],
+      scorers: [containsExpected],
     },
     async ({ input, expected }) => {
       const result = await generateText({
@@ -42,23 +82,18 @@ describe("Vitest Experiment Mode Tests", () => {
         prompt: (input as any).task,
         maxOutputTokens: 20,
       });
-      logOutputs({ translation: result.text });
 
-      const isCorrect = result.text.toLowerCase().includes(expected as string);
-      logFeedback({
-        name: "correctness",
-        score: isCorrect ? 1.0 : 0.0,
-      });
-
-      expect(result.text.toLowerCase()).toContain(expected as string);
+      expect(result.text.toLowerCase(), "translation").toContain(
+        expected as string,
+      );
+      return result.text.toLowerCase();
     },
   );
 
   // Test without input/expected - runs but not added to dataset
   test("basic functionality test", async () => {
     const result = { value: 42 };
-    logOutputs({ result });
-    expect(result.value).toBe(42);
+    expect(result.value, "value").toBe(42);
   });
 
   // Test with failure - fail feedback automatically logged
@@ -71,8 +106,7 @@ describe("Vitest Experiment Mode Tests", () => {
     },
     async ({ input, expected }) => {
       const result = (input as any).value;
-      logOutputs({ result });
-      expect(result).toBe(expected);
+      expect(result, "result").toBe(expected);
     },
   );
 });

@@ -10,6 +10,7 @@ import {
   expectTypeOf,
 } from "vitest";
 import { wrapVitest } from "./index";
+import { wrapExpect } from "./expect-wrapper";
 import {
   _exportsForTestingOnly,
   type TestBackgroundLogger,
@@ -72,7 +73,8 @@ describe("Braintrust Vitest Wrapper", () => {
       expect(bt.test).toBeDefined();
       expect(bt.it).toBeDefined();
       expect(bt.describe).toBeDefined();
-      expect(bt.expect).toBe(expect);
+      expect(bt.expect).toBeDefined();
+      expect(typeof bt.expect).toBe("function");
       expect(bt.beforeAll).toBeDefined();
       expect(bt.afterAll).toBeDefined();
       expect(bt.logOutputs).toBeDefined();
@@ -537,6 +539,116 @@ describe("Scorer and Dataset Support", () => {
       data: [{ input: {}, expected: {} }],
     };
     expect(config).toBeDefined();
+  });
+});
+
+describe("wrapExpect", () => {
+  let mockSpan: { log: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    mockSpan = { log: vi.fn() };
+    vi.spyOn(logger, "currentSpan").mockReturnValue(mockSpan as any);
+  });
+
+  describe("unnamed expects pass through unchanged", () => {
+    test("unnamed passing assertion does not log to span", () => {
+      const wrapped = wrapExpect(expect);
+      wrapped(42).toBe(42);
+      expect(mockSpan.log).not.toHaveBeenCalled();
+    });
+
+    test("unnamed failing assertion does not log to span", () => {
+      const wrapped = wrapExpect(expect);
+      expect(() => wrapped(1).toBe(2)).toThrow();
+      expect(mockSpan.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("named expects log output and scores", () => {
+    test("passing assertion logs output and score 1", () => {
+      const wrapped = wrapExpect(expect);
+      wrapped("hello", "greeting").toBe("hello");
+
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { greeting: "hello" },
+        scores: { greeting: 1 },
+      });
+    });
+
+    test("failing assertion logs output and score 0 then re-throws", () => {
+      const wrapped = wrapExpect(expect);
+      expect(() => wrapped("hello", "greeting").toBe("world")).toThrow();
+
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { greeting: "hello" },
+        scores: { greeting: 0 },
+      });
+    });
+
+    test("multiple named expects log independently", () => {
+      const wrapped = wrapExpect(expect);
+      wrapped(1, "a").toBe(1);
+      wrapped("foo", "b").toBe("foo");
+
+      expect(mockSpan.log).toHaveBeenCalledTimes(2);
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { a: 1 },
+        scores: { a: 1 },
+      });
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { b: "foo" },
+        scores: { b: 1 },
+      });
+    });
+  });
+
+  describe("chained modifiers", () => {
+    test(".not passing logs score 1", () => {
+      const wrapped = wrapExpect(expect);
+      wrapped(1, "value").not.toBe(2);
+
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { value: 1 },
+        scores: { value: 1 },
+      });
+    });
+
+    test(".not failing re-throws and logs score 0", () => {
+      const wrapped = wrapExpect(expect);
+      expect(() => wrapped(1, "value").not.toBe(1)).toThrow();
+
+      expect(mockSpan.log).toHaveBeenCalledWith({
+        output: { value: 1 },
+        scores: { value: 0 },
+      });
+    });
+  });
+
+  describe("no active span", () => {
+    test("behaves like original expect when no span is available", () => {
+      vi.spyOn(logger, "currentSpan").mockReturnValue(null as any);
+      const wrapped = wrapExpect(expect);
+      wrapped("x", "key").toBe("x");
+      expect(mockSpan.log).not.toHaveBeenCalled();
+    });
+
+    test("still throws on failing assertion when no span", () => {
+      vi.spyOn(logger, "currentSpan").mockReturnValue(null as any);
+      const wrapped = wrapExpect(expect);
+      expect(() => wrapped("x", "key").toBe("y")).toThrow();
+    });
+  });
+
+  describe("static methods are preserved", () => {
+    test("expect.extend is still accessible", () => {
+      const wrapped = wrapExpect(expect);
+      expect((wrapped as any).extend).toBe((expect as any).extend);
+    });
+
+    test("expect.any is still accessible", () => {
+      const wrapped = wrapExpect(expect);
+      expect((wrapped as any).any).toBe((expect as any).any);
+    });
   });
 });
 

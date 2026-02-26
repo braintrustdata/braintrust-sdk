@@ -5,6 +5,7 @@ import {
   getExperimentContext,
   formatExperimentSummary,
 } from "./wrapper";
+import { wrapExpect } from "./expect-wrapper";
 import type { VitestMethods, BraintrustVitest, WrapperConfig } from "./types";
 
 export type { Score } from "../../../util/score";
@@ -33,9 +34,6 @@ export type { DatasetOptions, DatasetRecord } from "./dataset-helpers";
  * );
  *
  * bt.describe('Translation Tests', () => {
- *   bt.afterAll(async () => {
- *     await bt.flushExperiment(); // Flushes and displays experiment summary
- *   });
  *
  *   // Tests with input/expected are automatically added to the dataset
  *   bt.test(
@@ -92,7 +90,7 @@ export function wrapVitest<VitestContext = unknown, ExpectType = unknown>(
   return {
     test: wrappedTest,
     it: wrappedTest,
-    expect: vitestMethods.expect,
+    expect: wrapExpect(vitestMethods.expect),
     describe: wrappedDescribe,
     beforeAll: vitestMethods.beforeAll || (() => {}),
     afterAll: vitestMethods.afterAll || (() => {}),
