@@ -103,7 +103,7 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   // These cause Proxy invariant violations because we return wrapped functions instead
   // of the original values. Using prototype chain preserves all properties (enumerable
   // and non-enumerable) while avoiding invariants since the target has no own properties.
-  // See: https://github.com/braintrustdata/braintrust-sdk/pull/1259
+  // See: https://github.com/braintrustdata/braintrust-sdk-javascript/pull/1259
   const target = isModuleNamespace(aiSDK)
     ? Object.setPrototypeOf({}, aiSDK)
     : aiSDK;
