@@ -1153,7 +1153,10 @@ it("should extract prompt caching tokens from Anthropic response", async () => {
     }),
   );
 
-  const model = new ChatAnthropic({ model: "claude-sonnet-4-5-20250929" });
+  const model = new ChatAnthropic({
+    model: "claude-sonnet-4-5-20250929",
+    anthropicApiKey: "test-key",
+  });
 
   // Use a long system message to simulate cache-eligible content
   const longText = `

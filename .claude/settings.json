@@ -6,11 +6,6 @@
       "Bash(make)",
       "Bash(mise:*)",
       "Bash(mise)",
-      "Bash(nox:*)",
-      "Bash(nox)",
-      "Bash(pytest:*)",
-      "Bash(python:*)",
-      "Bash(python3:*)",
       "Bash(pnpm:*)",
       "Bash(pip:*)",
       "Bash(git status:*)",
@@ -45,13 +40,7 @@
       "Bash(source:*)",
       "Bash(cd:*)",
       "Bash(set:*)",
-      "Bash(sort:*)",
-      "Bash(.nox/*/bin/pytest:*)",
-      "Bash(.nox/*/bin/python:*)",
-      "Bash(.nox/*/bin/pip:*)",
-      "Bash(py/.nox/*/bin/pytest:*)",
-      "Bash(py/.nox/*/bin/python:*)",
-      "Bash(py/.nox/*/bin/pip:*)"
+      "Bash(sort:*)"
     ],
     "deny": []
   }

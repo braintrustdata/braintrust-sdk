@@ -1,4 +1,3 @@
-# Source: https://github.com/marketplace/actions/pre-commit
 name: lint
 
 on:
@@ -9,11 +8,14 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0 # Fetch full history for proper diff
-      - uses: actions/setup-python@v3
-      - uses: pre-commit/action@v3.0.0
-        with:
-          extra_args: --from-ref origin/${{ github.base_ref || 'main' }} --to-ref HEAD
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm run lint

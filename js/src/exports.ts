@@ -258,3 +258,7 @@ export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
 } from "../dev/types";
+
+// Auto-instrumentation configuration
+export { configureInstrumentation } from "./instrumentation";
+export type { InstrumentationConfig } from "./instrumentation";

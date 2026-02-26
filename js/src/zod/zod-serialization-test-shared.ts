@@ -1,4 +1,3 @@
-import { expect } from "vitest";
 /**
  * Shared test expectations for zod serialization tests
  *

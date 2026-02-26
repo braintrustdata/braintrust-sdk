@@ -8,6 +8,7 @@ jobs:
   open-pr:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'run-integration-tests') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
@@ -33,7 +34,7 @@ jobs:
           git submodule init
           git submodule update --init --recursive
           cd sdk
-          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
+          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk-javascript.git
           git fetch origin
           git checkout ${{ github.event.pull_request.head.sha }}
 
