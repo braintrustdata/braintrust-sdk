@@ -188,7 +188,7 @@
     "cors": "^2.8.5",
     "dc-browser": "^1.0.2",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.27.0",
+    "esbuild": "^0.27.3",
     "eventsource-parser": "^1.1.2",
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",
