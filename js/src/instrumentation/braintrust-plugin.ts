@@ -4,6 +4,7 @@ import { AnthropicPlugin } from "./plugins/anthropic-plugin";
 import { AISDKPlugin } from "./plugins/ai-sdk-plugin";
 import { ClaudeAgentSDKPlugin } from "./plugins/claude-agent-sdk-plugin";
 import { GoogleGenAIPlugin } from "./plugins/google-genai-plugin";
+import { GoogleADKPlugin } from "./plugins/google-adk-plugin";
 
 export interface BraintrustPluginConfig {
   integrations?: {
@@ -13,6 +14,7 @@ export interface BraintrustPluginConfig {
     aisdk?: boolean;
     google?: boolean;
     googleGenAI?: boolean;
+    googleADK?: boolean;
     claudeAgentSDK?: boolean;
   };
 }
@@ -26,6 +28,7 @@ export interface BraintrustPluginConfig {
  * - Claude Agent SDK (agent interactions)
  * - Vercel AI SDK (generateText, streamText, etc.)
  * - Google GenAI SDK
+ * - Google ADK (Agent Development Kit)
  *
  * The plugin is automatically enabled when the Braintrust library is loaded.
  * Individual integrations can be disabled via configuration.
@@ -37,6 +40,7 @@ export class BraintrustPlugin extends BasePlugin {
   private aiSDKPlugin: AISDKPlugin | null = null;
   private claudeAgentSDKPlugin: ClaudeAgentSDKPlugin | null = null;
   private googleGenAIPlugin: GoogleGenAIPlugin | null = null;
+  private googleADKPlugin: GoogleADKPlugin | null = null;
 
   constructor(config: BraintrustPluginConfig = {}) {
     super();
@@ -77,6 +81,12 @@ export class BraintrustPlugin extends BasePlugin {
       this.googleGenAIPlugin = new GoogleGenAIPlugin();
       this.googleGenAIPlugin.enable();
     }
+
+    // Enable Google ADK integration (default: true)
+    if (integrations.googleADK !== false) {
+      this.googleADKPlugin = new GoogleADKPlugin();
+      this.googleADKPlugin.enable();
+    }
   }
 
   protected onDisable(): void {
@@ -103,6 +113,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.googleGenAIPlugin) {
       this.googleGenAIPlugin.disable();
       this.googleGenAIPlugin = null;
+    }
+
+    if (this.googleADKPlugin) {
+      this.googleADKPlugin.disable();
+      this.googleADKPlugin = null;
     }
   }
 }

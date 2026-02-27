@@ -19,6 +19,7 @@ import { anthropicConfigs } from "./configs/anthropic.js";
 import { aiSDKConfigs } from "./configs/ai-sdk.js";
 import { claudeAgentSDKConfigs } from "./configs/claude-agent-sdk.js";
 import { googleGenAIConfigs } from "./configs/google-genai.js";
+import { googleADKConfigs } from "./configs/google-adk.js";
 import { ModulePatch } from "./loader/cjs-patch.js";
 
 // Combine all instrumentation configs
@@ -28,6 +29,7 @@ const allConfigs = [
   ...aiSDKConfigs,
   ...claudeAgentSDKConfigs,
   ...googleGenAIConfigs,
+  ...googleADKConfigs,
 ];
 
 // 1. Register ESM loader for ESM modules
