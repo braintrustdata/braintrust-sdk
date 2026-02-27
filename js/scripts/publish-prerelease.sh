@@ -74,8 +74,8 @@ echo ""
 
 # Build the SDK
 echo "Building SDK..."
-pnpm install
-pnpm run build
+npm install
+npm run build
 echo "Build complete."
 echo ""
 
@@ -87,13 +87,13 @@ echo ""
 # In CI, just publish. Locally, ask for confirmation
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
   # Running in CI - publish without confirmation
-  pnpm publish --tag "$DIST_TAG" --no-git-checks --provenance
+  npm publish --tag "$DIST_TAG"
 else
   # Running locally - ask for confirmation
   read -p "Ready to publish version $NEW_VERSION to npm with tag @$DIST_TAG? (y/N) " -n 1 -r
   echo
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    pnpm publish --tag "$DIST_TAG" --no-git-checks
+    npm publish --tag "$DIST_TAG"
   else
     echo "Publish cancelled."
     echo ""
