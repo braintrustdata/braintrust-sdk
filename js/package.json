@@ -155,7 +155,7 @@
     "ai": "^6.0.0",
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "eslint-plugin-node-import": "^1.0.5",
     "jiti": "^2.6.1",
     "openapi-zod-client": "^1.18.3",
