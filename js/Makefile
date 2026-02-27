@@ -152,7 +152,7 @@ publish-sdk-js:
 	./scripts/validate-release.sh
 	pnpm install
 	pnpm run build
-	pnpm publish --no-git-checks
+	pnpm publish --no-git-checks --provenance
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.

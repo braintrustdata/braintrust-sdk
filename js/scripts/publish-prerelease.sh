@@ -87,7 +87,7 @@ echo ""
 # In CI, just publish. Locally, ask for confirmation
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
   # Running in CI - publish without confirmation
-  pnpm publish --tag "$DIST_TAG" --no-git-checks
+  pnpm publish --tag "$DIST_TAG" --no-git-checks --provenance
 else
   # Running locally - ask for confirmation
   read -p "Ready to publish version $NEW_VERSION to npm with tag @$DIST_TAG? (y/N) " -n 1 -r
