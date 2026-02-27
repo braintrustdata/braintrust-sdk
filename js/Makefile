@@ -150,9 +150,9 @@ verify-ci: build docs test
 
 publish-sdk-js:
 	./scripts/validate-release.sh
-	npm install
-	npm run build
-	npm publish
+	pnpm install
+	pnpm run build
+	pnpm publish --no-git-checks
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.
