@@ -38,7 +38,7 @@ jobs:
       artifact-name: ${{ steps.artifact.outputs.name }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -146,7 +146,7 @@ jobs:
         node-version: [20]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Fetch full history to access main branch for baseline
 
@@ -237,7 +237,7 @@ jobs:
     outputs:
       scenarios: ${{ steps.discover.outputs.scenarios }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Discover scenarios
         id: discover
         working-directory: js/smoke
@@ -266,7 +266,7 @@ jobs:
         scenario: ${{ fromJson(needs.smoke-discover.outputs.scenarios) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup mise
         uses: jdx/mise-action@v2

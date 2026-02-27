@@ -31,7 +31,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Fetch all history for checking branch
       - name: Set up Node.js
@@ -69,7 +69,7 @@ jobs:
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Fetch all history for changelog generation
       - name: Set up Node.js
