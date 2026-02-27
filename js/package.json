@@ -154,7 +154,7 @@
     "@typescript-eslint/parser": "^8.49.0",
     "ai": "^6.0.0",
     "async": "^3.2.5",
-    "autoevals": "^0.0.131",
+    "autoevals": "^0.0.132",
     "cross-env": "^7.0.3",
     "eslint-plugin-node-import": "^1.0.5",
     "jiti": "^2.6.1",
