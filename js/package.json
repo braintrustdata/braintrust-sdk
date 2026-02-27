@@ -137,7 +137,7 @@
     "@google/genai": "^1.25.0",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
-    "@openai/agents": "^0.0.14",
+    "@openai/agents": "^0.5.2",
     "@types/argparse": "^2.0.14",
     "@types/async": "^3.2.24",
     "@types/cli-progress": "^3.11.5",

@@ -23,7 +23,7 @@
   "author": "Braintrust Data Inc.",
   "license": "MIT",
   "devDependencies": {
-    "@openai/agents": "^0.0.15",
+    "@openai/agents": "^0.5.2",
     "@types/node": "^20.10.5",
     "braintrust": "workspace:^",
     "tsup": "^8.3.5",
