@@ -150,7 +150,7 @@
     "@types/pluralize": "^0.0.30",
     "@types/tar": "^6.1.13",
     "@types/uuid": "^9.0.7",
-    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.49.0",
     "ai": "^6.0.0",
     "async": "^3.2.5",
