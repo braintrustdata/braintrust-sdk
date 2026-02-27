@@ -116,7 +116,7 @@ jobs:
 
       # Upload artifacts for both paths
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: javascript-sdk-${{ github.event_name == 'workflow_dispatch' && 'prerelease' || 'release' }}-dist
           path: js/dist/
