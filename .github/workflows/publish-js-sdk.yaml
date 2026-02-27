@@ -134,7 +134,7 @@ jobs:
 
       - name: Create GitHub Release
         if: github.event_name == 'push'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
         with:
