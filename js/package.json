@@ -156,7 +156,7 @@
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
     "cross-env": "^7.0.3",
-    "eslint-plugin-node-import": "^1.0.5",
+    "eslint-plugin-node-import": "^1.2.0",
     "jiti": "^2.6.1",
     "openapi-zod-client": "^1.18.3",
     "rollup": "^4.28.1",
