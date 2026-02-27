@@ -165,7 +165,7 @@ jobs:
           echo "Published version: $PUBLISHED_VERSION"
 
       - name: Cache API compatibility test tarball
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm/_cacache
           key: braintrust-tarball-${{ steps.published-version.outputs.version }}-${{ runner.os }}
