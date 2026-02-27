@@ -14,7 +14,7 @@
     "start": "turbo run start",
     "clean": "turbo run clean",
     "test": "turbo run test --filter=\"!@braintrust/otel\"",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "lint:prettier": "prettier --check .",
     "lint:eslint": "turbo run lint",
     "fix:prettier": "prettier --write .",
