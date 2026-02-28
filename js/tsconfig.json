@@ -19,6 +19,12 @@
     "scripts/**",
     "vendor/**",
     "eslint.config.ts",
-    "tsup.config.ts"
+    "tsup.config.ts",
+    "src/auto-instrumentations/**/*.mts",
+    "src/auto-instrumentations/bundler/**",
+    "src/auto-instrumentations/configs/**",
+    "src/auto-instrumentations/loader/**",
+    "src/auto-instrumentations/index.ts",
+    "tests/auto-instrumentations/**"
   ]
 }

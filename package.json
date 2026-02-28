@@ -1,7 +1,7 @@
 {
   "name": "braintrust-sdk-js",
   "version": "0.0.1",
-  "repository": "https://github.com/braintrustdata/braintrust-sdk",
+  "repository": "https://github.com/braintrustdata/braintrust-sdk-javascript",
   "license": "MIT",
   "private": true,
   "workspaces": [
@@ -12,17 +12,29 @@
     "dev": "turbo run dev",
     "watch": "turbo run watch",
     "start": "turbo run start",
-    "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "test": "turbo run test --filter=\"!@braintrust/otel\""
+    "test": "turbo run test --filter=\"!@braintrust/otel\"",
+    "prepare": "husky || true",
+    "lint:prettier": "prettier --check .",
+    "lint:eslint": "turbo run lint",
+    "fix:prettier": "prettier --write .",
+    "fix:eslint": "turbo run fix:eslint",
+    "lint": "pnpm run lint:prettier && pnpm run lint:eslint",
+    "fix": "pnpm run fix:prettier && pnpm run fix:eslint"
   },
   "devDependencies": {
-    "pyright": "^1.1.404",
+    "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.5.3",
     "turbo": "^2.5.6"
   },
   "overrides": {
     "zod": "3.25.34",
     "tsup": "8.4.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,css,md,mdx,html,yaml,yml}": "prettier --write"
   },
   "packageManager": "pnpm@10.26.2"
 }

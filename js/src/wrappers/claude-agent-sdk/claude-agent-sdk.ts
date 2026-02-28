@@ -20,35 +20,9 @@ type QueryOptions = {
   [key: string]: any;
 };
 
-type CallToolResult = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  content: Array<any>;
-  isError?: boolean;
-};
-
-type ToolHandler<T> = (
-  args: T,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extra: any,
-) => Promise<CallToolResult>;
-
-type SdkMcpToolDefinition<T> = {
-  name: string;
-  description: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  inputSchema: any;
-  handler: ToolHandler<T>;
-};
-
 /**
  * Hook types from @anthropic-ai/claude-agent-sdk
  */
-type HookEvent =
-  | "PreToolUse"
-  | "PostToolUse"
-  | "PostToolUseFailure"
-  | "SubagentStart"
-  | "SubagentStop";
 
 type BaseHookInput = {
   session_id: string;
@@ -571,7 +545,7 @@ function wrapClaudeAgentQuery<
       // interrupt() right after query() without consuming any messages first.
       const invocationTarget: unknown =
         thisArg === proxy || thisArg === undefined
-          ? defaultThis ?? thisArg
+          ? (defaultThis ?? thisArg)
           : thisArg;
 
       // Track active tool spans for hook-based tracing

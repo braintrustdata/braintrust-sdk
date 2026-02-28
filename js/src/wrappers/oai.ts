@@ -34,7 +34,6 @@ interface OpenAILike {
 }
 
 declare global {
-  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 
@@ -368,7 +367,7 @@ function wrapChatCompletion<
               const { data: ret, response } =
                 await completionResponse.withResponse();
               logHeaders(response, span);
-              const { messages, ...rest } = params;
+              const { messages: _messages, ...rest } = params;
               span.log({
                 metadata: {
                   ...rest,

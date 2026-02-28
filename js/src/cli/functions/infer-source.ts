@@ -1,9 +1,9 @@
 import { SourceMapConsumer } from "source-map";
-import * as fs from "fs/promises";
+import * as fs from "node:fs/promises";
 import { EvaluatorFile, warning } from "../../framework";
 import { loadModule } from "./load-module";
 import { type CodeBundleType as CodeBundle } from "../../generated_types";
-import path from "path";
+import path from "node:path";
 import type { Node } from "typescript";
 
 interface SourceMapContext {
@@ -49,8 +49,10 @@ function isNative(fn: Function): boolean {
 function locationToString(location: CodeBundle["location"]): string {
   if (location.type === "experiment") {
     return `eval ${location.eval_name} -> ${location.position.type}`;
-  } else {
+  } else if (location.type === "function") {
     return `task ${location.index}`;
+  } else {
+    throw new Error(`Unsupported location type: ${location.type}`);
   }
 }
 
@@ -79,8 +81,10 @@ export async function findCodeDefinition({
       location.position.type === "task"
         ? evaluator.task
         : evaluator.scores[location.position.index];
-  } else {
+  } else if (location.type === "function") {
     fn = outFileModule.functions[location.index].handler;
+  } else {
+    throw new Error(`Unsupported location type: ${location.type}`);
   }
 
   if (!fn) {

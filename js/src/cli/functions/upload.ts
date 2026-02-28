@@ -1,9 +1,6 @@
 import {
-  CodeBundle as CodeBundleSchema,
   type CodeBundleType as CodeBundle,
-  Function as FunctionObjectSchema,
   type FunctionType as FunctionObject,
-  IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
 } from "../../generated_types";
 import type { BuildSuccess, EvaluatorState, FileHandle } from "../types";
@@ -14,9 +11,9 @@ import {
   FailedHTTPResponse,
 } from "../../logger";
 import * as esbuild from "esbuild";
-import fs from "fs";
-import path from "path";
-import { createGzip } from "zlib";
+import fs from "node:fs";
+import path from "node:path";
+import { createGzip } from "node:zlib";
 import { addAzureBlobHeaders, isEmpty } from "../../util";
 import { z } from "zod/v3";
 import { capitalize } from "../../../util/index";
