@@ -255,6 +255,9 @@ const makeGenerateTextWrapper = (
             ...spanInfoMetadata,
             model,
             ...(provider ? { provider } : {}),
+            ...(params.tools
+              ? { tools: transformToolsForMetadata(params.tools) }
+              : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -354,6 +357,9 @@ const wrapModel = (model: any, ai?: any): any => {
           metadata: {
             model: modelId,
             ...(provider ? { provider } : {}),
+            ...(options.tools
+              ? { tools: transformToolsForMetadata(options.tools) }
+              : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -381,6 +387,9 @@ const wrapModel = (model: any, ai?: any): any => {
         metadata: {
           model: modelId,
           ...(provider ? { provider } : {}),
+          ...(options.tools
+            ? { tools: transformToolsForMetadata(options.tools) }
+            : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -614,6 +623,9 @@ const wrapGenerateObject = (
             ...spanInfoMetadata,
             model,
             ...(provider ? { provider } : {}),
+            ...(params.tools
+              ? { tools: transformToolsForMetadata(params.tools) }
+              : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -664,6 +676,9 @@ const makeStreamTextWrapper = (
           ...spanInfoMetadata,
           model,
           ...(provider ? { provider } : {}),
+          ...(params.tools
+            ? { tools: transformToolsForMetadata(params.tools) }
+            : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -839,6 +854,9 @@ const wrapStreamObject = (
           ...spanInfoMetadata,
           model,
           ...(provider ? { provider } : {}),
+          ...(params.tools
+            ? { tools: transformToolsForMetadata(params.tools) }
+            : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -1290,6 +1308,67 @@ const processTool = (tool: any): any => {
   }
 
   return processed;
+};
+
+/**
+ * Transforms tools into ToolFunctionDefinition format for metadata.tools
+ * Output format: Array<{ type: "function", function: { name, description?, parameters?, strict? } }>
+ */
+const transformToolsForMetadata = (
+  tools: any,
+): Array<{
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+    strict?: boolean | null;
+  };
+}> => {
+  if (!tools || typeof tools !== "object") return [];
+
+  const result: Array<{
+    type: "function";
+    function: {
+      name: string;
+      description?: string;
+      parameters?: Record<string, unknown>;
+      strict?: boolean | null;
+    };
+  }> = [];
+
+  // Handle both object format { toolName: toolDef } and array format [toolDef]
+  const entries = Array.isArray(tools)
+    ? tools.map((tool, i) => [tool?.name || `tool_${i}`, tool])
+    : Object.entries(tools);
+
+  for (const [name, tool] of entries) {
+    if (!tool || typeof tool !== "object") continue;
+
+    // Get parameters from inputSchema or parameters field
+    let parameters: Record<string, unknown> | undefined;
+    if (isZodSchema(tool.inputSchema)) {
+      parameters = serializeZodSchema(tool.inputSchema);
+    } else if (tool.inputSchema && typeof tool.inputSchema === "object") {
+      parameters = tool.inputSchema;
+    } else if (isZodSchema(tool.parameters)) {
+      parameters = serializeZodSchema(tool.parameters);
+    } else if (tool.parameters && typeof tool.parameters === "object") {
+      parameters = tool.parameters;
+    }
+
+    result.push({
+      type: "function",
+      function: {
+        name: String(name),
+        ...(tool.description ? { description: String(tool.description) } : {}),
+        ...(parameters ? { parameters } : {}),
+        ...(tool.strict !== undefined ? { strict: tool.strict } : {}),
+      },
+    });
+  }
+
+  return result;
 };
 
 /**
