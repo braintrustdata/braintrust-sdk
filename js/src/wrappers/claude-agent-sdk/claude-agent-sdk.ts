@@ -351,7 +351,7 @@ function injectTracingHooks(
   subAgentSpans: Map<string, ReturnType<typeof startSpan>>,
   endedSubAgentSpans: Set<string>,
 ): QueryOptions {
-  const mcpServers = options.mcpServers as McpServersConfig | undefined;
+  const mcpServers: McpServersConfig | undefined = options.mcpServers;
   const { preToolUse, postToolUse, postToolUseFailure } =
     createToolTracingHooks(
       resolveParentSpan,
@@ -369,15 +369,15 @@ function injectTracingHooks(
       ...existingHooks,
       PreToolUse: [
         ...(existingHooks.PreToolUse ?? []),
-        { hooks: [preToolUse] } as HookCallbackMatcher,
+        { hooks: [preToolUse] },
       ],
       PostToolUse: [
         ...(existingHooks.PostToolUse ?? []),
-        { hooks: [postToolUse] } as HookCallbackMatcher,
+        { hooks: [postToolUse] },
       ],
       PostToolUseFailure: [
         ...(existingHooks.PostToolUseFailure ?? []),
-        { hooks: [postToolUseFailure] } as HookCallbackMatcher,
+        { hooks: [postToolUseFailure] },
       ],
     },
   };
@@ -421,8 +421,9 @@ function isAsyncIterable<T = unknown>(
 ): value is AsyncIterable<T> {
   return (
     value !== null &&
-    value !== undefined &&
-    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+    typeof value === "object" &&
+    Symbol.asyncIterator in value &&
+    typeof value[Symbol.asyncIterator] === "function"
   );
 }
 
@@ -436,10 +437,10 @@ function wrapClaudeAgentQuery<
 >(queryFn: T, defaultThis?: unknown): T {
   const proxy: T = new Proxy(queryFn, {
     apply(target, thisArg, argArray) {
-      const params = (argArray[0] ?? {}) as {
+      const params: {
         prompt?: string | AsyncIterable<SDKMessage>;
         options?: QueryOptions;
-      };
+      } = argArray[0] ?? {};
 
       const { prompt, options = {} } = params;
       const promptIsAsyncIterable = isAsyncIterable<SDKMessage>(prompt);
@@ -453,12 +454,11 @@ function wrapClaudeAgentQuery<
 
       if (promptIsAsyncIterable) {
         capturedPromptMessages = [];
-        const originalPrompt = prompt as AsyncIterable<SDKMessage>;
 
         const capturingPrompt = (async function* () {
           promptStarted = true;
           try {
-            for await (const msg of originalPrompt) {
+            for await (const msg of prompt) {
               capturedPromptMessages!.push(msg);
               yield msg;
             }
@@ -634,9 +634,8 @@ function wrapClaudeAgentQuery<
               // Detect sub-agent boundaries: when a message has a non-null parent_tool_use_id
               // that we haven't seen before, create a nested TASK span for the sub-agent.
               if ("parent_tool_use_id" in message) {
-                const parentToolUseId = message.parent_tool_use_id as
-                  | string
-                  | null;
+                const parentToolUseId: string | null =
+                  message.parent_tool_use_id;
                 if (parentToolUseId && !subAgentSpans.has(parentToolUseId)) {
                   const agentName = pendingSubAgentNames.get(parentToolUseId);
                   const spanName = agentName
@@ -981,20 +980,20 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
       // Tool tracing is now handled via PreToolUse/PostToolUse hooks injected in wrapClaudeAgentQuery.
       // We just pass through the original tool function - no need to wrap it.
       if (prop === "tool" && typeof value === "function") {
-        const bound = (value as Function).bind(target);
+        const bound = value.bind(target);
         cache.set(prop, bound);
         return bound;
       }
 
       if (typeof value === "function") {
-        const bound = (value as Function).bind(target);
+        const bound = value.bind(target);
         cache.set(prop, bound);
         return bound;
       }
 
       return value;
     },
-  }) as T;
+  });
 }
 
 function getNumberProperty(obj: unknown, key: string): number | undefined {

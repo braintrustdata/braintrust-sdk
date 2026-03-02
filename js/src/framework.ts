@@ -470,7 +470,8 @@ function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
   return (
     typeof value === "object" &&
     value !== null &&
-    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+    Symbol.asyncIterator in value &&
+    typeof value[Symbol.asyncIterator] === "function"
   );
 }
 
@@ -478,7 +479,8 @@ function isIterable<T>(value: unknown): value is Iterable<T> {
   return (
     typeof value === "object" &&
     value !== null &&
-    typeof (value as Iterable<T>)[Symbol.iterator] === "function"
+    Symbol.iterator in value &&
+    typeof value[Symbol.iterator] === "function"
   );
 }
 
@@ -1391,7 +1393,7 @@ async function runEvaluatorInternal(
       if (e instanceof InternalAbortError) {
         // Log cancellation for debugging
         if (iso.getEnv("BRAINTRUST_VERBOSE")) {
-          console.warn("Evaluator cancelled:", (e as Error).message);
+          console.warn("Evaluator cancelled:", e.message);
         }
       }
 
