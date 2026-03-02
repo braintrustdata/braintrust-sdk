@@ -55,10 +55,6 @@ import {
   validateParameters,
 } from "./eval-parameters";
 
-// Maximum bytes of serialized log data to accumulate before triggering a
-// backpressure flush during evaluation.
-const FLUSH_BACKPRESSURE_BYTES = 15 * 1024 * 1024; // 15 MB
-
 export type BaseExperiment<
   Input,
   Expected,
@@ -1308,10 +1304,10 @@ async function runEvaluatorInternal(
           // when maxConcurrency is set. Only flush when pending data exceeds the
           // byte threshold, avoiding excessive sequential round-trips for small
           // payloads while still bounding memory usage for large ones.
+          const bgLogger = experiment.loggingState.bgLogger();
           if (
             evaluator.maxConcurrency !== undefined &&
-            experiment.loggingState.bgLogger().pendingFlushBytes() >=
-              FLUSH_BACKPRESSURE_BYTES
+            bgLogger.pendingFlushBytes() >= bgLogger.flushBackpressureBytes()
           ) {
             await experiment.flush();
           }

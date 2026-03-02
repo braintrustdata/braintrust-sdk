@@ -2537,10 +2537,13 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 15 * 1024 * 1024; // 15 MB
+
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
   pendingFlushBytes(): number;
+  flushBackpressureBytes(): number;
   setMaskingFunction(
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void;
@@ -2566,6 +2569,10 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
   pendingFlushBytes(): number {
     return 0;
+  }
+
+  flushBackpressureBytes(): number {
+    return DEFAULT_FLUSH_BACKPRESSURE_BYTES;
   }
 
   async drain(): Promise<BackgroundLogEvent[]> {
@@ -2652,6 +2659,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+  private _flushBackpressureBytes: number = DEFAULT_FLUSH_BACKPRESSURE_BYTES;
 
   private _pendingBytes: number = 0;
 
@@ -2713,6 +2721,13 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       );
     }
 
+    const flushBackpressureBytesEnv = Number(
+      iso.getEnv("BRAINTRUST_FLUSH_BACKPRESSURE_BYTES"),
+    );
+    if (!isNaN(flushBackpressureBytesEnv) && flushBackpressureBytesEnv > 0) {
+      this._flushBackpressureBytes = flushBackpressureBytesEnv;
+    }
+
     const failedPublishPayloadsDirEnv = iso.getEnv(
       "BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR",
     );
@@ -2746,6 +2761,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   pendingFlushBytes(): number {
     return this._pendingBytes;
+  }
+
+  flushBackpressureBytes(): number {
+    return this._flushBackpressureBytes;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2853,13 +2872,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // Construct batches of records to flush in parallel.
-    const allItemsWithMeta = allItems.map((item) =>
-      stringifyWithOverflowMeta(item),
-    );
-    const chunkBytes = allItemsWithMeta.reduce(
-      (sum, item) => sum + item.str.length,
-      0,
-    );
+    let chunkBytes = 0;
+    const allItemsWithMeta = allItems.map((item) => {
+      const withMeta = stringifyWithOverflowMeta(item);
+      chunkBytes += withMeta.str.length;
+      return withMeta;
+    });
     this._pendingBytes += chunkBytes;
 
     const maxRequestSizeResult = await this.getMaxRequestSize();
