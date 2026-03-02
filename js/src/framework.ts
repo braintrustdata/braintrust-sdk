@@ -1300,10 +1300,15 @@ async function runEvaluatorInternal(
           });
         } else {
           const result = await experiment.traced(callback, baseEvent);
-          // Flush logs after each task to provide backpressure and prevent memory accumulation
-          // when maxConcurrency is set. This ensures logs are sent before the next task starts,
-          // preventing unbounded memory growth with large log payloads.
-          if (evaluator.maxConcurrency !== undefined) {
+          // Flush logs to provide backpressure and prevent memory accumulation
+          // when maxConcurrency is set. Only flush when pending data exceeds the
+          // byte threshold, avoiding excessive sequential round-trips for small
+          // payloads while still bounding memory usage for large ones.
+          const bgLogger = experiment.loggingState.bgLogger();
+          if (
+            evaluator.maxConcurrency !== undefined &&
+            bgLogger.pendingFlushBytes() >= bgLogger.flushBackpressureBytes()
+          ) {
             await experiment.flush();
           }
           return result;

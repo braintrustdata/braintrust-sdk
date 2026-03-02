@@ -2537,9 +2537,13 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  pendingFlushBytes(): number;
+  flushBackpressureBytes(): number;
   setMaskingFunction(
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void;
@@ -2561,6 +2565,14 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
   async flush(): Promise<void> {
     return Promise.resolve();
+  }
+
+  pendingFlushBytes(): number {
+    return 0;
+  }
+
+  flushBackpressureBytes(): number {
+    return DEFAULT_FLUSH_BACKPRESSURE_BYTES;
   }
 
   async drain(): Promise<BackgroundLogEvent[]> {
@@ -2647,7 +2659,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
-  public flushChunkSize: number = 25;
+  private _flushBackpressureBytes: number = DEFAULT_FLUSH_BACKPRESSURE_BYTES;
+
+  private _pendingBytes: number = 0;
 
   private _disabled = false;
 
@@ -2699,11 +2713,19 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
     }
 
-    const flushChunkSizeEnv = Number(
-      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
+    if (iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE")) {
+      console.warn(
+        "BRAINTRUST_LOG_FLUSH_CHUNK_SIZE is deprecated and no longer has any effect. " +
+          "Log flushing now sends all items at once and batches them automatically. " +
+          "This environment variable will be removed in a future major release.",
+      );
+    }
+
+    const flushBackpressureBytesEnv = Number(
+      iso.getEnv("BRAINTRUST_FLUSH_BACKPRESSURE_BYTES"),
     );
-    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
-      this.flushChunkSize = flushChunkSizeEnv;
+    if (!isNaN(flushBackpressureBytesEnv) && flushBackpressureBytesEnv > 0) {
+      this._flushBackpressureBytes = flushBackpressureBytesEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2735,6 +2757,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void {
     this.maskingFunction = maskingFunction;
+  }
+
+  pendingFlushBytes(): number {
+    return this._pendingBytes;
+  }
+
+  flushBackpressureBytes(): number {
+    return this._flushBackpressureBytes;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2820,17 +2850,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
-
-    let index = 0;
-    while (index < wrappedItems.length) {
-      const chunk = wrappedItems.slice(index, index + chunkSize);
-      await this.flushWrappedItemsChunk(chunk, batchSize);
-      index += chunk.length;
-    }
-    // Clear the array once at the end to allow garbage collection
-    // More efficient than filling with undefined after each chunk
-    wrappedItems.length = 0;
+    await this.flushWrappedItemsChunk(wrappedItems, batchSize);
 
     // If more items were added while we were flushing, flush again
     if (this.queue.length() > 0) {
@@ -2852,9 +2872,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // Construct batches of records to flush in parallel.
-    const allItemsWithMeta = allItems.map((item) =>
-      stringifyWithOverflowMeta(item),
-    );
+    let chunkBytes = 0;
+    const allItemsWithMeta = allItems.map((item) => {
+      const withMeta = stringifyWithOverflowMeta(item);
+      chunkBytes += withMeta.str.length;
+      return withMeta;
+    });
+    this._pendingBytes += chunkBytes;
+
     const maxRequestSizeResult = await this.getMaxRequestSize();
     const batches = batchItems({
       items: allItemsWithMeta,
@@ -2874,6 +2899,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       })(),
     );
     const results = await Promise.all(postPromises);
+    this._pendingBytes = Math.max(0, this._pendingBytes - chunkBytes);
     const failingResultErrors = results
       .map((r) => (r.type === "success" ? undefined : r.value))
       .filter((r) => r !== undefined);
