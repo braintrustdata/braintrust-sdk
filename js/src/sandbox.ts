@@ -19,7 +19,7 @@ export interface SandboxConfig {
  * @internal
  */
 export interface RegisterSandboxOptions {
-  /** Deprecated. Ignored. Function names are derived from discovered eval names. */
+  /** Group name for the sandbox functions. */
   name: string;
   /** Name of the project to register the sandbox in. */
   project: string;
@@ -27,8 +27,6 @@ export interface RegisterSandboxOptions {
   sandbox: SandboxConfig;
   /** Optional list of entrypoints available in the sandbox. */
   entrypoints?: string[];
-  /** Deprecated. Ignored. Function slugs are derived from discovered eval names. */
-  slug?: string;
   /** Optional description. */
   description?: string;
   /** Optional metadata. */
