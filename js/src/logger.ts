@@ -2652,11 +2652,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
-  public flushChunkSize: number = 25;
 
-  // Tracks the estimated byte size of items that have been logged but not yet
-  // flushed to the server. Updated when items are serialized in
-  // flushWrappedItemsChunk and reset after upload.
   private _pendingBytes: number = 0;
 
   private _disabled = false;
@@ -2709,11 +2705,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
     }
 
-    const flushChunkSizeEnv = Number(
-      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
-    );
-    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
-      this.flushChunkSize = flushChunkSizeEnv;
+    if (iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE")) {
+      console.warn(
+        "BRAINTRUST_LOG_FLUSH_CHUNK_SIZE is deprecated and no longer has any effect. " +
+          "Log flushing now sends all items at once and batches them automatically. " +
+          "This environment variable will be removed in a future major release.",
+      );
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2834,9 +2831,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    // Send all drained items at once, matching the v0.4.10 behavior.
-    // flushWrappedItemsChunk handles batching by item count and byte size
-    // internally, and sends the resulting batches in parallel via Promise.all.
     await this.flushWrappedItemsChunk(wrappedItems, batchSize);
 
     // If more items were added while we were flushing, flush again

@@ -56,10 +56,7 @@ import {
 } from "./eval-parameters";
 
 // Maximum bytes of serialized log data to accumulate before triggering a
-// backpressure flush during evaluation. This allows items to accumulate into
-// larger batches that can be uploaded in parallel, rather than flushing after
-// every task. 15MB is chosen to stay well under typical server limits while
-// preventing unbounded memory growth.
+// backpressure flush during evaluation.
 const FLUSH_BACKPRESSURE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export type BaseExperiment<
