@@ -2537,7 +2537,7 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
-const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 15 * 1024 * 1024; // 15 MB
+const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
