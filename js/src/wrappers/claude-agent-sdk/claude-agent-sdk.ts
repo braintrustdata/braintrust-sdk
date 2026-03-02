@@ -369,15 +369,15 @@ function injectTracingHooks(
       ...existingHooks,
       PreToolUse: [
         ...(existingHooks.PreToolUse ?? []),
-        { hooks: [preToolUse] },
+        { hooks: [preToolUse] } satisfies HookCallbackMatcher,
       ],
       PostToolUse: [
         ...(existingHooks.PostToolUse ?? []),
-        { hooks: [postToolUse] },
+        { hooks: [postToolUse] } satisfies HookCallbackMatcher,
       ],
       PostToolUseFailure: [
         ...(existingHooks.PostToolUseFailure ?? []),
-        { hooks: [postToolUseFailure] },
+        { hooks: [postToolUseFailure] } satisfies HookCallbackMatcher,
       ],
     },
   };
