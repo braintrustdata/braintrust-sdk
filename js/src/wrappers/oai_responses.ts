@@ -198,7 +198,7 @@ function traceResponseCreateStream(
   };
 }
 
-function parseLogFromItem(item: any): {} {
+function parseLogFromItem(item: any): Record<string, unknown> {
   if (!item || !item?.type || !item?.response) {
     return {};
   }
@@ -323,7 +323,7 @@ export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
 }
 
 type ParamsToSpanFunc = (params: any) => TimedSpan;
-type ResultToEventFunc = (result: any) => {};
+type ResultToEventFunc = (result: any) => Record<string, unknown>;
 type TraceStreamFunc = (stream: AsyncIterator<any>, span: TimedSpan) => void;
 
 type CreateProxyHooks = {

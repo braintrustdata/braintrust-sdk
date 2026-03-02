@@ -77,13 +77,10 @@ export default [
         "warn",
         { assertionStyle: "never" },
       ],
-      // TODO: Fix violations and re-enable as "error"
-      "no-unused-expressions": ["warn", { allowShortCircuit: true }],
+      "no-unused-expressions": ["error", { allowShortCircuit: true }],
       "@typescript-eslint/no-unused-expressions": "off",
-      // TODO: Fix violations and re-enable as "error"
-      "@typescript-eslint/no-empty-object-type": "warn",
-      // TODO: Fix violations and re-enable as "error"
-      "@typescript-eslint/no-unsafe-function-type": "warn",
+      "@typescript-eslint/no-empty-object-type": "error",
+      "@typescript-eslint/no-unsafe-function-type": "error",
       "@typescript-eslint/prefer-as-const": "error",
       // Require node: protocol for Node.js built-in imports (for Deno compatibility)
       // This plugin automatically detects ALL Node.js built-ins - no manual list needed!
@@ -150,9 +147,8 @@ export default [
       "@typescript-eslint": tseslint,
     },
     rules: {
-      // TODO: Fix violations and re-enable as "error"
       "no-restricted-syntax": [
-        "warn",
+        "error",
         {
           selector: "ExportAllDeclaration[exported=null]",
           message:

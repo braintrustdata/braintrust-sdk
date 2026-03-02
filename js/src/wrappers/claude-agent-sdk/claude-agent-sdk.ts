@@ -981,13 +981,13 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
       // Tool tracing is now handled via PreToolUse/PostToolUse hooks injected in wrapClaudeAgentQuery.
       // We just pass through the original tool function - no need to wrap it.
       if (prop === "tool" && typeof value === "function") {
-        const bound = (value as Function).bind(target);
+        const bound = value.bind(target);
         cache.set(prop, bound);
         return bound;
       }
 
       if (typeof value === "function") {
-        const bound = (value as Function).bind(target);
+        const bound = value.bind(target);
         cache.set(prop, bound);
         return bound;
       }
