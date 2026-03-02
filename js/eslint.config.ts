@@ -84,8 +84,7 @@ export default [
       "@typescript-eslint/no-empty-object-type": "warn",
       // TODO: Fix violations and re-enable as "error"
       "@typescript-eslint/no-unsafe-function-type": "warn",
-      // TODO: Fix violations and re-enable as "error"
-      "@typescript-eslint/prefer-as-const": "warn",
+      "@typescript-eslint/prefer-as-const": "error",
       // Require node: protocol for Node.js built-in imports (for Deno compatibility)
       // This plugin automatically detects ALL Node.js built-ins - no manual list needed!
       "node-import/prefer-node-protocol": "error",
