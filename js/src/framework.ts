@@ -55,6 +55,13 @@ import {
   validateParameters,
 } from "./eval-parameters";
 
+// Maximum bytes of serialized log data to accumulate before triggering a
+// backpressure flush during evaluation. This allows items to accumulate into
+// larger batches that can be uploaded in parallel, rather than flushing after
+// every task. 15MB is chosen to stay well under typical server limits while
+// preventing unbounded memory growth.
+const FLUSH_BACKPRESSURE_BYTES = 15 * 1024 * 1024; // 15 MB
+
 export type BaseExperiment<
   Input,
   Expected,
@@ -1300,10 +1307,15 @@ async function runEvaluatorInternal(
           });
         } else {
           const result = await experiment.traced(callback, baseEvent);
-          // Flush logs after each task to provide backpressure and prevent memory accumulation
-          // when maxConcurrency is set. This ensures logs are sent before the next task starts,
-          // preventing unbounded memory growth with large log payloads.
-          if (evaluator.maxConcurrency !== undefined) {
+          // Flush logs to provide backpressure and prevent memory accumulation
+          // when maxConcurrency is set. Only flush when pending data exceeds the
+          // byte threshold, avoiding excessive sequential round-trips for small
+          // payloads while still bounding memory usage for large ones.
+          if (
+            evaluator.maxConcurrency !== undefined &&
+            experiment.loggingState.bgLogger().pendingFlushBytes() >=
+              FLUSH_BACKPRESSURE_BYTES
+          ) {
             await experiment.flush();
           }
           return result;

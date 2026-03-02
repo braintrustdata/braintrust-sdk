@@ -2540,6 +2540,7 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  pendingFlushBytes(): number;
   setMaskingFunction(
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void;
@@ -2561,6 +2562,10 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
   async flush(): Promise<void> {
     return Promise.resolve();
+  }
+
+  pendingFlushBytes(): number {
+    return 0;
   }
 
   async drain(): Promise<BackgroundLogEvent[]> {
@@ -2648,6 +2653,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
   public flushChunkSize: number = 25;
+
+  // Tracks the estimated byte size of items that have been logged but not yet
+  // flushed to the server. Updated when items are serialized in
+  // flushWrappedItemsChunk and reset after upload.
+  private _pendingBytes: number = 0;
 
   private _disabled = false;
 
@@ -2737,6 +2747,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     this.maskingFunction = maskingFunction;
   }
 
+  pendingFlushBytes(): number {
+    return this._pendingBytes;
+  }
+
   log(items: LazyValue<BackgroundLogEvent>[]) {
     if (this._disabled) {
       return;
@@ -2820,17 +2834,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
-
-    let index = 0;
-    while (index < wrappedItems.length) {
-      const chunk = wrappedItems.slice(index, index + chunkSize);
-      await this.flushWrappedItemsChunk(chunk, batchSize);
-      index += chunk.length;
-    }
-    // Clear the array once at the end to allow garbage collection
-    // More efficient than filling with undefined after each chunk
-    wrappedItems.length = 0;
+    // Send all drained items at once, matching the v0.4.10 behavior.
+    // flushWrappedItemsChunk handles batching by item count and byte size
+    // internally, and sends the resulting batches in parallel via Promise.all.
+    await this.flushWrappedItemsChunk(wrappedItems, batchSize);
 
     // If more items were added while we were flushing, flush again
     if (this.queue.length() > 0) {
@@ -2855,6 +2862,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const allItemsWithMeta = allItems.map((item) =>
       stringifyWithOverflowMeta(item),
     );
+    const chunkBytes = allItemsWithMeta.reduce(
+      (sum, item) => sum + item.str.length,
+      0,
+    );
+    this._pendingBytes += chunkBytes;
+
     const maxRequestSizeResult = await this.getMaxRequestSize();
     const batches = batchItems({
       items: allItemsWithMeta,
@@ -2874,6 +2887,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       })(),
     );
     const results = await Promise.all(postPromises);
+    this._pendingBytes = Math.max(0, this._pendingBytes - chunkBytes);
     const failingResultErrors = results
       .map((r) => (r.type === "success" ? undefined : r.value))
       .filter((r) => r !== undefined);
