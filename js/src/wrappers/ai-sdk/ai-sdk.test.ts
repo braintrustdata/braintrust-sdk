@@ -856,6 +856,48 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(streamObjectSpan.metadata.prompt.project_id).toBe("proj-sobj-222");
   });
 
+  test("streamText preserves span_info when spreading a compiled prompt", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Simulate the object shape returned by prompt.build({ ... }, { flavor: "chat" })
+    const compiledPrompt = {
+      messages: [{ role: "user" as const, content: "stream text" }],
+      temperature: 0.7,
+      span_info: {
+        name: "Stream Text Prompt",
+        metadata: {
+          prompt: {
+            id: "prompt-compiled-abc",
+            project_id: "proj-compiled-xyz",
+            version: "5",
+            variables: { foo: "bar" },
+          },
+        },
+      },
+    };
+
+    const stream = wrappedAI.streamText({
+      ...compiledPrompt,
+      model: openai(TEST_MODEL),
+    });
+
+    for await (const _ of stream.textStream) {
+      // consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Stream Text Prompt",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.metadata.prompt).toBeTruthy();
+    expect(streamTextSpan.metadata.prompt.id).toBe("prompt-compiled-abc");
+    expect(streamTextSpan.metadata.prompt.project_id).toBe("proj-compiled-xyz");
+    expect(streamTextSpan.metadata.prompt.version).toBe("5");
+    expect(streamTextSpan.metadata.prompt.variables).toEqual({ foo: "bar" });
+  });
+
   test("streamObject toTextStreamResponse", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
