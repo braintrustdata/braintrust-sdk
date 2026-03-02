@@ -2155,7 +2155,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private calledStartSpan: boolean;
 
   // For type identification.
-  public kind: "logger" = "logger";
+  public kind = "logger" as const;
 
   constructor(
     state: BraintrustState,
@@ -6134,7 +6134,7 @@ export class SpanImpl implements Span {
   private _rootSpanId: string;
   private _spanParents: string[] | undefined;
 
-  public kind: "span" = "span";
+  public kind = "span" as const;
 
   constructor(
     args: {
