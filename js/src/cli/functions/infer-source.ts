@@ -51,8 +51,10 @@ function locationToString(location: CodeBundle["location"]): string {
     return `eval ${location.eval_name} -> ${location.position.type}`;
   } else if (location.type === "function") {
     return `task ${location.index}`;
+  } else if (location.type === "sandbox") {
+    return `sandbox eval ${location.eval_name}`;
   } else {
-    throw new Error(`Unsupported location type: ${location.type}`);
+    throw new Error(`Unknown location type`);
   }
 }
 
@@ -66,7 +68,7 @@ export async function findCodeDefinition({
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   let fn: Function | undefined = undefined;
 
-  if (location.type === "experiment") {
+  if (location.type === "experiment" || location.type === "sandbox") {
     const evaluator = outFileModule.evaluators[location.eval_name]?.evaluator;
     if (!evaluator) {
       console.warn(
@@ -77,14 +79,18 @@ export async function findCodeDefinition({
       return undefined;
     }
 
-    fn =
-      location.position.type === "task"
-        ? evaluator.task
-        : evaluator.scores[location.position.index];
+    if (location.type === "sandbox") {
+      fn = evaluator.task;
+    } else {
+      fn =
+        location.position.type === "task"
+          ? evaluator.task
+          : evaluator.scores[location.position.index];
+    }
   } else if (location.type === "function") {
     fn = outFileModule.functions[location.index].handler;
   } else {
-    throw new Error(`Unsupported location type: ${location.type}`);
+    throw new Error(`Unknown location type`);
   }
 
   if (!fn) {
