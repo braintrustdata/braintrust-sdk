@@ -1,6 +1,6 @@
 import type { VitestExperimentContext } from "./context-manager";
 import type { WrapperConfig } from "./types";
-import { formatExperimentSummary } from "./wrapper";
+import { summarizeAndFlush } from "../shared/flush";
 
 class FlushCoordinator {
   private activeFlushes = new Map<string, Promise<void>>();
@@ -17,36 +17,15 @@ class FlushCoordinator {
       return this.activeFlushes.get(experimentId)!;
     }
 
-    const flushPromise = this.doFlush(context, config);
+    const flushPromise = summarizeAndFlush(context.experiment, {
+      displaySummary: config.displaySummary,
+    });
     this.activeFlushes.set(experimentId, flushPromise);
 
     try {
       await flushPromise;
     } finally {
       this.activeFlushes.delete(experimentId);
-    }
-  }
-
-  private async doFlush(
-    context: VitestExperimentContext,
-    config: WrapperConfig,
-  ): Promise<void> {
-    let summary;
-    try {
-      summary = await context.experiment.summarize();
-    } catch (error) {
-      console.warn("Failed to generate experiment summary:", error);
-    }
-
-    try {
-      await context.experiment.flush();
-    } catch (error) {
-      console.warn("Failed to flush experiment:", error);
-      throw error;
-    }
-
-    if (summary && (config.displaySummary ?? true)) {
-      console.log(formatExperimentSummary(summary));
     }
   }
 }

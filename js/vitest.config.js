@@ -45,6 +45,7 @@ const config = {
       "smoke/**",
       // Exclude example tests (require API keys and make real API calls)
       "examples/vitest/**",
+      "examples/node-test/**",
     ],
     // Additional test environment configuration
     watchExclude: [
