@@ -4939,7 +4939,7 @@ export function wrapTraced<
     return wrapTracedAsyncGenerator(fn, spanArgs, !!noTraceIO);
   }
 
-  if (args?.asyncFlush) {
+  if (args?.asyncFlush === undefined || args.asyncFlush) {
     return ((...fnArgs: Parameters<F>) =>
       traced((span) => {
         if (!hasExplicitInput) {

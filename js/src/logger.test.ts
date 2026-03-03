@@ -1024,6 +1024,61 @@ describe("parent precedence", () => {
   });
 });
 
+describe("wrapTraced return type preservation", () => {
+  beforeEach(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    _exportsForTestingOnly.useTestBackgroundLogger();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("wrapping a sync function with default asyncFlush returns its value directly, not a Promise", () => {
+    initLogger({ projectName: "test", projectId: "pid" });
+
+    const wrapped = wrapTraced(function syncFn() {
+      return 42;
+    });
+
+    const result = wrapped();
+    expect(result).not.toBeInstanceOf(Promise);
+    expect(result).toBe(42);
+  });
+
+  test("wrapping an async function with default asyncFlush returns a Promise", async () => {
+    initLogger({ projectName: "test", projectId: "pid" });
+
+    const wrapped = wrapTraced(async function fetchData() {
+      return 42;
+    });
+
+    const result = wrapped();
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBe(42);
+  });
+
+  test("wrapping a sync function with asyncFlush: false returns a Promise", async () => {
+    initLogger({
+      projectName: "test",
+      projectId: "pid",
+      asyncFlush: false,
+    });
+
+    const wrapped = wrapTraced(
+      function syncFn() {
+        return { value: 1 };
+      },
+      { name: "syncFn", asyncFlush: false },
+    );
+
+    const result = wrapped();
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toEqual({ value: 1 });
+  });
+});
+
 test("attachment with unreadable path logs warning", () => {
   const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
