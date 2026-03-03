@@ -304,7 +304,7 @@ export class SpanCache {
 
         for (const line of lines) {
           try {
-            const record = JSON.parse(line) as DiskSpanRecord;
+            const record: DiskSpanRecord = JSON.parse(line);
             if (record.rootSpanId !== rootSpanId) {
               continue;
             }

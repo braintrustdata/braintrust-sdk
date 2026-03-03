@@ -330,10 +330,10 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
           patchStreamIfNeeded(event.result, {
             onChunk: async (message: SDKMessage) => {
               const currentTime = getCurrentUnixTimestamp();
-              const params = event.arguments[0] as {
+              const params: {
                 prompt?: string | AsyncIterable<SDKMessage>;
                 options?: QueryOptions;
-              };
+              } = event.arguments[0];
               const { prompt, options = {} } = params;
 
               const messageId = message.message?.id;
@@ -423,10 +423,10 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
             },
             onComplete: async () => {
               try {
-                const params = event.arguments[0] as {
+                const params: {
                   prompt?: string | AsyncIterable<SDKMessage>;
                   options?: QueryOptions;
-                };
+                } = event.arguments[0];
                 const { prompt, options = {} } = params;
 
                 // Create span for final message group
