@@ -17,6 +17,7 @@ help:
 	@echo "  make test-ai-sdk-v6     - Run AI SDK v6 wrapper tests"
 	@echo "  make test-claude-agent-sdk - Run Claude Agent SDK wrapper tests"
 	@echo "  make test-vitest       - Run Vitest wrapper tests"
+	@echo "  make test-bun-test     - Run Bun test runner wrapper tests"
 	@echo "  make test-api-compat    - Run API compatibility tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
@@ -28,7 +29,7 @@ help:
 	@echo ""
 	@echo "See smoke/README.md for details on smoke test infrastructure"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-vitest test-latest install-optional-deps publish-beta-local test-smoke
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-vitest test-bun-test test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -83,6 +84,13 @@ test-vitest:
 	cd src/wrappers/vitest && pnpm install && pnpm test
 
 # -------------------------------------------------------------------------------------------------
+# Bun test runner testing
+# -------------------------------------------------------------------------------------------------
+
+test-bun-test:
+	bun test src/wrappers/bun-test/
+
+# -------------------------------------------------------------------------------------------------
 # OpenAI testing
 # -------------------------------------------------------------------------------------------------
 
@@ -122,10 +130,10 @@ test-api-compat:
 	pnpm test:api-compat
 
 # Test everything
-test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
+test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk test-bun-test
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk test-bun-test
 
 
 prune:

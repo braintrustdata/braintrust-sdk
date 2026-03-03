@@ -1,0 +1,43 @@
+name: bun-test
+
+on:
+  pull_request:
+    paths:
+      - "js/**"
+      - ".github/workflows/bun-test.yaml"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+
+jobs:
+  bun-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      # Unit tests (bun test)
+      - name: Run unit tests
+        run: cd js && bun test src/wrappers/bun-test/
+
+      # Integration tests (bun test) - need bun runtime + API keys
+      - name: Run bun integration tests
+        env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: cd js/examples/bun-test && bun test

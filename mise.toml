@@ -9,6 +9,7 @@ _.file = ".env"
 
 [tools]
 pnpm = "10.26.2"
+bun = "latest"
 
 [hooks]
 postinstall = "pnpm install"
