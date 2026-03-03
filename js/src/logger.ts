@@ -6528,6 +6528,7 @@ export class SpanImpl implements Span {
       default: {
         // trigger a compile-time error if we add a new object type
         const _exhaustive: never = this.parentObjectType;
+        // eslint-disable-next-line no-unused-expressions
         _exhaustive;
         return NOOP_SPAN_PERMALINK;
       }
@@ -6969,7 +6970,8 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
       ? ChatPrompt
       : Flavor extends "completion"
         ? CompletionPrompt
-        : {});
+        : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+          {});
 
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
