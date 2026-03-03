@@ -8,6 +8,7 @@
       "env": []
     },
     "test": {
+      "env": ["ANTHROPIC_API_KEY", "BRAINTRUST_API_KEY", "OPENAI_API_KEY"],
       "dependsOn": ["^build"],
       "outputs": []
     },
