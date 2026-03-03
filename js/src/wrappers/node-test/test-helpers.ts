@@ -31,9 +31,9 @@ export async function setupNodeTestEnv(): Promise<TestBackgroundLogger> {
   return bgLogger;
 }
 
-export async function teardownNodeTestEnv(): Promise<void> {
-  await _exportsForTestingOnly.clearTestBackgroundLogger();
-  await _exportsForTestingOnly.simulateLogoutForTests();
+export function teardownNodeTestEnv(): void {
+  _exportsForTestingOnly.clearTestBackgroundLogger();
+  _exportsForTestingOnly.simulateLogoutForTests();
 }
 
 export function mockTestContext(name: string): MinimalTestContext {
