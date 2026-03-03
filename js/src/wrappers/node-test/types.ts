@@ -1,6 +1,16 @@
-import type { ScorerFunction, ProgressEvent } from "../shared/types";
+import type { ScorerFunction } from "../shared/types";
 
-export type { ScorerFunction, ProgressEvent } from "../shared/types";
+export type { ScorerFunction } from "../shared/types";
+
+/** Progress events emitted by the node-test integration. */
+export type NodeTestProgressEvent =
+  | { type: "test_start"; testName: string }
+  | {
+      type: "test_complete";
+      testName: string;
+      passed: boolean;
+      duration: number;
+    };
 
 /**
  * Minimal test context interface compatible with node:test's TestContext.
@@ -31,8 +41,9 @@ export interface NodeTestSuiteConfig {
   after?: (fn: () => void | Promise<void>) => void;
   /**
    * Callback for real-time progress events.
+   * Emits `test_start` and `test_complete` events.
    */
-  onProgress?: (event: ProgressEvent) => void;
+  onProgress?: (event: NodeTestProgressEvent) => void;
 }
 
 /**
