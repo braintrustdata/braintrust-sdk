@@ -210,15 +210,12 @@ Scenarios automatically create tarballs if they're not provided via environment 
 ### Environment Variables
 
 - **`BRAINTRUST_TAR`**: Path to braintrust tarball (auto-created if not set)
-
   - Example: `../artifacts/braintrust-latest.tgz`
 
 - **`BRAINTRUST_OTEL_TAR`**: Path to @braintrust/otel tarball (auto-created for scenarios that need it)
-
   - Example: `../artifacts/braintrust-otel-latest.tgz`
 
 - **`BRAINTRUST_TEMPLATES_NUNJUCKS_JS_TAR`**: Path to @braintrust/templates-nunjucks-js tarball
-
   - Example: `../artifacts/braintrust-templates-nunjucks-js-latest.tgz`
 
 - **`SMOKE_V2_SHARED_DIST`**: Path to shared test utilities (auto-built if not set)
