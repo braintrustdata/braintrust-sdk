@@ -18,12 +18,6 @@ describe("initNodeTestSuite", () => {
     expect(typeof suite.eval).toBe("function");
     expect(suite.flush).toBeDefined();
     expect(typeof suite.flush).toBe("function");
-    expect(suite.logOutputs).toBeDefined();
-    expect(typeof suite.logOutputs).toBe("function");
-    expect(suite.logFeedback).toBeDefined();
-    expect(typeof suite.logFeedback).toBe("function");
-    expect(suite.getCurrentSpan).toBeDefined();
-    expect(typeof suite.getCurrentSpan).toBe("function");
   });
 
   test("suite.eval() returns a function, not a promise", () => {

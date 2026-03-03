@@ -1,4 +1,5 @@
 import { test, expect, describe, afterAll, beforeAll } from "vitest";
+import { currentSpan } from "../../logger";
 import { initNodeTestSuite } from "./suite";
 import {
   setupNodeTestEnv,
@@ -35,8 +36,10 @@ describe("Node Test Suite Span Creation Integration", () => {
 
   test("creates span with custom outputs and feedback", async () => {
     const fn = suite.eval({ input: "test-data" }, async () => {
-      suite.logOutputs({ step1: "started", step2: "completed" });
-      suite.logFeedback({ name: "quality", score: 0.95 });
+      currentSpan().log({
+        output: { step1: "started", step2: "completed" },
+        scores: { quality: 0.95 },
+      });
       return "final result";
     });
 

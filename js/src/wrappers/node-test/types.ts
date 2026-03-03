@@ -1,4 +1,3 @@
-import type { Span } from "../../logger";
 import type { ScorerFunction, ProgressEvent } from "../shared/types";
 
 export type { ScorerFunction, ProgressEvent } from "../shared/types";
@@ -85,25 +84,4 @@ export interface NodeTestSuite {
    * Called automatically if `after` was provided in the config.
    */
   flush(): Promise<void>;
-
-  /**
-   * Log custom outputs to the current span.
-   * Must be called within a `suite.eval()` test function.
-   */
-  logOutputs(outputs: Record<string, unknown>): void;
-
-  /**
-   * Log custom feedback/scores to the current span.
-   * Must be called within a `suite.eval()` test function.
-   */
-  logFeedback(feedback: {
-    name: string;
-    score: number;
-    metadata?: Record<string, unknown>;
-  }): void;
-
-  /**
-   * Get the current active span, if any.
-   */
-  getCurrentSpan(): Span | null;
 }

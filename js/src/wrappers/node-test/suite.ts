@@ -1,7 +1,6 @@
 import { initExperiment, type Experiment } from "../../logger";
 import { runTracedEval } from "../shared/traced-eval";
 import { summarizeAndFlush } from "../shared/flush";
-import { logOutputs, logFeedback, getCurrentSpan } from "../shared/logging";
 import type {
   NodeTestSuiteConfig,
   EvalConfig,
@@ -109,9 +108,6 @@ export function initNodeTestSuite(config: NodeTestSuiteConfig): NodeTestSuite {
   const suite: NodeTestSuite = {
     eval: evalFunc,
     flush,
-    logOutputs,
-    logFeedback,
-    getCurrentSpan,
   };
 
   // Auto-register flush hook if after() was provided

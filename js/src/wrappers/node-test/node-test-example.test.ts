@@ -1,4 +1,5 @@
 import { test, describe, afterAll, beforeAll } from "vitest";
+import { currentSpan } from "../../logger";
 import { initNodeTestSuite } from "./suite";
 import {
   setupNodeTestEnv,
@@ -122,16 +123,15 @@ describe("Node Test Suite Example", () => {
     });
   }
 
-  // Test using logOutputs and logFeedback
+  // Test using currentSpan() for custom logging
   test("custom outputs and feedback", async () => {
     const fn = suite.eval(
       { input: { query: "test query" } },
       async ({ input }) => {
         const result = `processed: ${(input as any).query}`;
-        suite.logOutputs({ processed_query: result, model: "test-model" });
-        suite.logFeedback({
-          name: "relevance",
-          score: 0.9,
+        currentSpan().log({
+          output: { processed_query: result, model: "test-model" },
+          scores: { relevance: 0.9 },
           metadata: { evaluator: "human" },
         });
         return result;

@@ -164,6 +164,35 @@ for (const [i, record] of dataset.entries()) {
 }
 ```
 
+## Custom Logging with `currentSpan()`
+
+For custom outputs, scores, or metadata beyond what scorers provide, use `currentSpan()` from the main Braintrust API directly inside your `suite.eval()` callback:
+
+```typescript
+import { currentSpan } from "braintrust";
+
+test(
+  "translates with confidence",
+  suite.eval(
+    {
+      input: { text: "goodbye" },
+      expected: "adiós",
+    },
+    async ({ input }) => {
+      const result = await translateWithConfidence(input.text);
+
+      currentSpan().log({
+        output: { confidence: result.confidence },
+        scores: { high_confidence: result.confidence > 0.9 ? 1 : 0 },
+        metadata: { model: "gpt-4" },
+      });
+
+      return result.text;
+    },
+  ),
+);
+```
+
 ## API Reference
 
 ### `initNodeTestSuite(config)`
@@ -182,7 +211,7 @@ initNodeTestSuite({
 })
 ```
 
-**Returns:** `NodeTestSuite`
+**Returns:** `NodeTestSuite` with `eval()` and `flush()` methods.
 
 ### `suite.eval(config, fn)`
 
@@ -220,40 +249,13 @@ after(async () => {
 });
 ```
 
-### `suite.logOutputs(outputs)`
-
-Log custom outputs to the current span (must be called within `suite.eval()`):
-
-```typescript
-suite.logOutputs({
-  translation: result,
-  confidence: 0.95,
-});
-```
-
-### `suite.logFeedback(feedback)`
-
-Log custom scores to the current span:
-
-```typescript
-suite.logFeedback({
-  name: "quality",
-  score: 0.85,
-  metadata: { evaluator: "human" },
-});
-```
-
-### `suite.getCurrentSpan()`
-
-Get the current active Braintrust span, or `null` if none.
-
 ## Examples
 
 ### Complete Example
 
 ```typescript
 import { test, describe, after } from "node:test";
-import { initNodeTestSuite } from "braintrust";
+import { initNodeTestSuite, currentSpan } from "braintrust";
 import { Levenshtein } from "autoevals";
 
 describe("Translation Evaluation", () => {
@@ -277,7 +279,7 @@ describe("Translation Evaluation", () => {
     ),
   );
 
-  // Test with custom outputs and feedback
+  // Test with custom span logging
   test(
     "translates with confidence",
     suite.eval(
@@ -287,10 +289,9 @@ describe("Translation Evaluation", () => {
       },
       async ({ input }) => {
         const result = await translateWithConfidence(input.text);
-        suite.logOutputs({ confidence: result.confidence });
-        suite.logFeedback({
-          name: "high_confidence",
-          score: result.confidence > 0.9 ? 1 : 0,
+        currentSpan().log({
+          output: { confidence: result.confidence },
+          scores: { high_confidence: result.confidence > 0.9 ? 1 : 0 },
         });
         return result.text;
       },

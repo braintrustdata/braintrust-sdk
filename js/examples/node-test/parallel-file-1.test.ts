@@ -8,7 +8,7 @@
 import { test, describe, after } from "node:test";
 import { configureNode } from "../../src/node";
 import { initNodeTestSuite } from "../../src/wrappers/node-test/index";
-import { _exportsForTestingOnly, login } from "../../src/logger";
+import { _exportsForTestingOnly, login, currentSpan } from "../../src/logger";
 import { wrapOpenAI } from "../../src/wrappers/oai";
 import OpenAI from "openai";
 
@@ -97,7 +97,7 @@ describe("File 1: Math Operations Suite", () => {
           temperature: 0,
         });
         const output = response.choices[0]?.message?.content?.trim() || "";
-        suite.logOutputs({ output, tokens: response.usage });
+        currentSpan().log({ output: { output, tokens: response.usage } });
         return output;
       },
     ),
@@ -119,7 +119,7 @@ describe("File 1: Math Operations Suite", () => {
           temperature: 0,
         });
         const output = response.choices[0]?.message?.content?.trim() || "";
-        suite.logOutputs({ output, tokens: response.usage });
+        currentSpan().log({ output: { output, tokens: response.usage } });
         return output;
       },
     ),
