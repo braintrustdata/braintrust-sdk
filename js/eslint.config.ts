@@ -146,15 +146,5 @@ export default [
     plugins: {
       "@typescript-eslint": tseslint,
     },
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "ExportAllDeclaration[exported=null]",
-          message:
-            "Bare 'export *' is forbidden in entry point files. Use explicit named exports instead for better tree-shaking and clarity.",
-        },
-      ],
-    },
   },
 ];
