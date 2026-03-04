@@ -2,8 +2,6 @@
 
 [![npm version](https://img.shields.io/npm/v/%40braintrust%2Fopenai-agents.svg)](https://www.npmjs.com/package/@braintrust/openai-agents)
 
-## Overview
-
 SDK for integrating Braintrust with OpenAI Agents.
 
 ## Installation

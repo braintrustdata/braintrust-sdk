@@ -2,8 +2,6 @@
 
 [![npm version](https://img.shields.io/npm/v/%40braintrust%2Fbrowser.svg)](https://www.npmjs.com/package/@braintrust/browser)
 
-## Overview
-
 Official browser-only SDK for [Braintrust](https://braintrust.dev).
 
 This is an integration package that provides browser-optimized builds of the Braintrust SDK with AsyncLocalStorage polyfill support for standard browsers.
@@ -46,29 +44,20 @@ const result = await braintrust.traced(
 );
 ```
 
-## Differences from Main Package
-
-This package:
-
-- **Includes** `als-browser` polyfill for AsyncLocalStorage (bundled)
-- **Requires** `braintrust`
-
-## When to Use
+## Notes
 
 Use `@braintrust/browser` when:
 
 - Building browser-only applications
-- Need AsyncLocalStorage support in standard browsers
+- Needing AsyncLocalStorage support in standard browsers
 
 Use `braintrust` directly when:
 
 - Building Node.js applications
-- Using in Next.js or other full-stack frameworks (with proper module resolution)
-- Need CLI tools or filesystem access
+- Using Next.js or other full-stack frameworks
+- Needing CLI tools or filesystem access
 
-## Features
-
-All browser-compatible features from the main SDK:
+Browser-compatible features include:
 
 - Logging and tracing
 - Experiments and datasets

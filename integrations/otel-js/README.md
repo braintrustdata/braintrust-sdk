@@ -40,7 +40,7 @@ Note: You may run into a known [OpenTelemetry browser bug](https://github.com/op
 
 It's **important** that `@opentelemetry/core` and related packages all use the same major version (1.x or 2.x).
 
-## Overview
+## Capabilities
 
 This integration provides two main capabilities:
 
@@ -219,39 +219,6 @@ The following environment variables can be used to configure the integration:
 - `BRAINTRUST_API_KEY`: Your Braintrust API key (required for `BraintrustSpanProcessor`)
 - `BRAINTRUST_PARENT`: Parent project identifier (e.g., `project_name:my_project`)
 - `BRAINTRUST_API_URL`: Braintrust API endpoint (defaults to `https://api.braintrust.dev`)
-
-## Development
-
-This package is designed to work with both OpenTelemetry 1.x and 2.x. The development structure ensures compatibility across versions:
-
-### Testing Structure
-
-- **`src/`**: Main source code that is compatible with both OpenTelemetry 1.x and 2.x
-- **`otel-v1/`**: Test package that runs tests against OpenTelemetry 1.x dependencies
-- **`otel-v2/`**: Test package that runs tests against OpenTelemetry 2.x dependencies
-
-### Running Tests
-
-```bash
-# Run tests for both OpenTelemetry versions
-pnpm test
-
-# Run tests for OpenTelemetry 1.x only
-pnpm test:v1
-
-# Run tests for OpenTelemetry 2.x only
-pnpm test:v2
-```
-
-### How It Works
-
-The `otel-v1` and `otel-v2` directories are separate packages that:
-
-1. Reference the main `src/` code from the parent directory
-2. Install different versions of OpenTelemetry dependencies
-3. Run the same test suites against their respective OpenTelemetry versions
-
-This approach ensures the package works correctly with both major OpenTelemetry versions while maintaining a single source codebase.
 
 ## Documentation
 

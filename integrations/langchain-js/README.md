@@ -2,8 +2,6 @@
 
 [![npm version](https://img.shields.io/npm/v/%40braintrust%2Flangchain-js.svg)](https://www.npmjs.com/package/@braintrust/langchain-js)
 
-## Overview
-
 SDK for integrating [Braintrust](https://braintrust.dev) with [LangChain.js](https://langchain.com/js). This package provides a callback handler to automatically log LangChain.js executions to Braintrust.
 
 ## Installation
@@ -28,8 +26,6 @@ First, make sure you have your Braintrust API key set in your environment:
 ```bash
 export BRAINTRUST_API_KEY="your-api-key"
 ```
-
-### Basic Usage
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
@@ -85,20 +81,3 @@ Review the [LangChain.js documentation](https://js.langchain.com/docs/how_to/#ca
 
 - Braintrust docs: [https://www.braintrust.dev/docs](https://www.braintrust.dev/docs)
 - LangChain callback docs: [https://js.langchain.com/docs/how_to/#callbacks](https://js.langchain.com/docs/how_to/#callbacks)
-
-## Development
-
-Contributions are welcomed!
-
-```bash
-git clone https://github.com/braintrustdata/braintrust-sdk-javascript.git
-
-cd braintrust-sdk-javascript/integrations/langchain-js
-
-pnpm install
-
-# work on the code
-
-pnpm test
-pnpm build
-```

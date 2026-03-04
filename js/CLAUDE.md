@@ -6,16 +6,6 @@ Run commands from the `js/` directory unless noted otherwise.
 
 ```bash
 make test                    # Full JS test suite (core + wrappers)
-make test-core               # Core tests only
-make test-openai             # OpenAI wrapper matrix tests
-make test-anthropic          # Anthropic wrapper matrix tests
-make test-google-genai       # Google GenAI wrapper tests
-make test-ai-sdk             # AI SDK wrapper tests (v5 + v6)
-make test-vitest             # Vitest wrapper tests
-make test-claude-agent-sdk   # Claude Agent SDK wrapper tests
-make test-api-compat         # API compatibility test
-make test-smoke              # Smoke tests (delegates to smoke/Makefile)
-make clean                   # Remove build artifacts
 ```
 
 **Run a single test:**

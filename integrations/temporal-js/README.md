@@ -2,8 +2,6 @@
 
 [![npm version](https://img.shields.io/npm/v/%40braintrust%2Ftemporal.svg)](https://www.npmjs.com/package/@braintrust/temporal)
 
-## Overview
-
 SDK for integrating [Braintrust](https://braintrust.dev) tracing with [Temporal](https://temporal.io/) workflows and activities.
 
 ## Installation
@@ -59,7 +57,7 @@ const worker = await Worker.create({
 });
 ```
 
-## Workflow interceptors
+## Workflow Interceptors
 
 This package also exports workflow interceptors that are loaded into the Temporal workflow isolate:
 

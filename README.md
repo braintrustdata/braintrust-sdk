@@ -60,9 +60,7 @@ Apache-2.0
 
 ## Repository History
 
-This repository was previously named `braintrust-sdk` and was renamed to `braintrust-sdk-javascript`.
-
-The rename happened when Python SDK code was split out of this repository. The Python code now lives in the dedicated [`braintrust-sdk-python`](https://github.com/braintrustdata/braintrust-sdk-python) repository, and this repo is now JavaScript-focused.
+This repository was previously named `braintrust-sdk` and was renamed to `braintrust-sdk-javascript`. The rename happened when Python SDK code was split out of this repository. The Python code now lives in a dedicated [`Braintrust Python SDK`](https://github.com/braintrustdata/braintrust-sdk-python) repository.
 
 ## Contributors
 
