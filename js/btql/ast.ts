@@ -117,14 +117,18 @@ export interface Function {
   op: "function";
   name: Ident;
   args: (Expr | AliasExpr)[];
+  duplicate_treatment?: DuplicateTreatment | null;
   loc?: NullableLoc;
   shape?: Shape | null;
   alias?: string | null;
 }
+export const duplicateTreatmentSchema = z.enum(["Distinct", "All"]);
+export type DuplicateTreatment = z.infer<typeof duplicateTreatmentSchema>;
 export const functionSchema: z.ZodType<Function> = z.object({
   op: z.literal("function"),
   name: identSchema,
   args: z.array(z.union([z.lazy(() => exprSchema), z.lazy(() => aliasExpr)])),
+  duplicate_treatment: duplicateTreatmentSchema.nullish(),
   loc,
   shape: shapeSchema.nullish(),
   alias: z.string().nullish(),

@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -127,7 +127,8 @@
     "test:vitest": "pnpm --filter @braintrust/vitest-wrapper-tests test",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
     "lint": "eslint .",
-    "fix:eslint": "eslint --fix ."
+    "fix:eslint": "eslint --fix .",
+    "playground": "tsx playground.ts"
   },
   "author": "",
   "license": "MIT",

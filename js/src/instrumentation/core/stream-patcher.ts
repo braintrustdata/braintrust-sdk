@@ -16,7 +16,7 @@ export function isAsyncIterable(
     value !== null &&
     typeof value === "object" &&
     Symbol.asyncIterator in value &&
-    typeof (value as any)[Symbol.asyncIterator] === "function"
+    typeof value[Symbol.asyncIterator] === "function"
   );
 }
 
@@ -110,7 +110,10 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
   const originalIteratorFn = stream[Symbol.asyncIterator];
 
   // Check if already patched (avoid double-patching)
-  if ((originalIteratorFn as any).__braintrust_patched) {
+  if (
+    "__braintrust_patched" in originalIteratorFn &&
+    originalIteratorFn["__braintrust_patched"]
+  ) {
     return stream;
   }
 
@@ -167,7 +170,10 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
             completed = true;
             if (options.onError) {
               try {
-                options.onError(error as Error, chunks);
+                options.onError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  chunks,
+                );
               } catch (handlerError) {
                 console.error("Error in stream onError handler:", handlerError);
               }
@@ -200,7 +206,11 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
         iterator.throw = async function (...args: any[]) {
           if (!completed) {
             completed = true;
-            const error = args[0] as Error;
+            const rawError: unknown = args[0];
+            const error =
+              rawError instanceof Error
+                ? rawError
+                : new Error(String(rawError));
             if (options.onError) {
               try {
                 options.onError(error, chunks);
@@ -217,7 +227,9 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
     };
 
     // Mark as patched to avoid double-patching
-    (patchedIteratorFn as any).__braintrust_patched = true;
+    Object.defineProperty(patchedIteratorFn, "__braintrust_patched", {
+      value: true,
+    });
 
     // Replace the Symbol.asyncIterator method
     (stream as any)[Symbol.asyncIterator] = patchedIteratorFn;
@@ -295,7 +307,10 @@ export function wrapStreamResult<TChunk = unknown, TProcessed = unknown>(
         } catch (error) {
           console.error("Error processing stream chunks:", error);
           if (options.onError) {
-            options.onError(error as Error, chunks);
+            options.onError(
+              error instanceof Error ? error : new Error(String(error)),
+              chunks,
+            );
           }
         }
       },
@@ -312,7 +327,10 @@ export function wrapStreamResult<TChunk = unknown, TProcessed = unknown>(
     } catch (error) {
       console.error("Error processing non-stream result:", error);
       if (options.onError) {
-        options.onError(error as Error, []);
+        options.onError(
+          error instanceof Error ? error : new Error(String(error)),
+          [],
+        );
       }
     }
     return result;

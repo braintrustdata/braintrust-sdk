@@ -25,6 +25,7 @@
     "src/auto-instrumentations/configs/**",
     "src/auto-instrumentations/loader/**",
     "src/auto-instrumentations/index.ts",
-    "tests/auto-instrumentations/**"
+    "tests/auto-instrumentations/**",
+    "./playground.ts"
   ]
 }

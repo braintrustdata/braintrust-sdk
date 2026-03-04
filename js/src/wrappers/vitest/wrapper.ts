@@ -1,5 +1,4 @@
-import { initExperiment, type ExperimentSummary } from "../../logger";
-import { SpanTypeAttribute } from "../../../util/index";
+import { initExperiment } from "../../logger";
 import type {
   TestConfig,
   TestContext,
@@ -16,45 +15,7 @@ import {
   type VitestExperimentContext,
 } from "./context-manager";
 import { flushExperimentWithSync } from "./flush-manager";
-import { runScorers } from "./scorers";
-
-export function formatExperimentSummary(summary: ExperimentSummary): string {
-  const lines: string[] = [];
-  lines.push("\n┌─ Braintrust Experiment Summary ─────────────────┐");
-  lines.push(`│ Experiment: ${summary.experimentName}`);
-
-  if (Object.keys(summary.scores).length > 0) {
-    lines.push("│");
-    lines.push("│ Scores:");
-    for (const [name, score] of Object.entries(summary.scores)) {
-      const percent = (score.score * 100).toFixed(2);
-      lines.push(`│   ${name}: ${percent}%`);
-    }
-  }
-
-  if (summary.metrics && Object.keys(summary.metrics).length > 0) {
-    lines.push("│");
-    lines.push("│ Metrics:");
-    for (const [name, metric] of Object.entries(summary.metrics)) {
-      const value = Number.isInteger(metric.metric)
-        ? metric.metric.toFixed(0)
-        : metric.metric.toFixed(2);
-      const formatted =
-        metric.unit === "$"
-          ? `${metric.unit}${value}`
-          : `${value}${metric.unit}`;
-      lines.push(`│   ${name}: ${formatted}`);
-    }
-  }
-
-  if (summary.experimentUrl) {
-    lines.push("│");
-    lines.push(`│ View results: ${summary.experimentUrl}`);
-  }
-
-  lines.push("└──────────────────────────────────────────────────┘\n");
-  return lines.join("\n");
-}
+import { runTracedEval } from "../shared/traced-eval";
 
 // Current experiment context
 export function getExperimentContext(): VitestExperimentContext | null {
@@ -96,10 +57,7 @@ export function wrapTest<VitestContext = unknown>(
             input: record.input,
             expected: record.expected,
             metadata: { ...testConfig.metadata, ...record.metadata },
-            tags: [
-              ...(testConfig.tags || []),
-              ...(record.tags || []),
-            ] as string[],
+            tags: [...(testConfig.tags || []), ...(record.tags || [])],
             data: undefined,
           };
 
@@ -169,98 +127,31 @@ export function wrapTest<VitestContext = unknown>(
             return;
           }
 
-          const result = await experiment.traced(
-            async (span) => {
-              let testResult: unknown;
-
-              try {
-                if (testConfig && maybeFn) {
-                  const params: TestContext = {
-                    input: testConfig.input,
-                    expected: testConfig.expected,
-                    metadata: testConfig.metadata,
-                  };
-                  const context = {
-                    ...vitestContext,
-                    ...params,
-                  } satisfies TestContext & VitestContext;
-                  testResult = await maybeFn(context);
-                } else if (typeof configOrFn === "function") {
-                  testResult = await configOrFn(vitestContext);
-                }
-
-                // Run scorers if configured
-                if (testConfig?.scorers && testConfig.scorers.length > 0) {
-                  await runScorers({
-                    scorers: testConfig.scorers,
-                    output: testResult,
-                    expected: testConfig.expected,
-                    input: testConfig.input,
-                    metadata: testConfig.metadata,
-                    span,
-                  });
-                }
-
-                span.log({
-                  scores: {
-                    pass: 1,
-                  },
-                });
-
-                // If test function returns a value, log it as output
-                if (testResult !== undefined) {
-                  span.log({
-                    output: testResult,
-                  });
-                }
-              } catch (error) {
-                // Run scorers on failures
-                if (testConfig?.scorers && testConfig.scorers.length > 0) {
-                  await runScorers({
-                    scorers: testConfig.scorers,
-                    output: testResult,
-                    expected: testConfig.expected,
-                    input: testConfig.input,
-                    metadata: testConfig.metadata,
-                    span,
-                  });
-                }
-
-                // log fail feedback on error
-                span.log({
-                  scores: {
-                    pass: 0,
-                  },
-                  metadata: {
-                    error:
-                      error instanceof Error
-                        ? {
-                            message: error.message,
-                            name: error.name,
-                            stack: error.stack,
-                          }
-                        : String(error),
-                  },
-                });
-                throw error;
+          const result = await runTracedEval({
+            experiment,
+            spanName: name,
+            input: testConfig?.input,
+            expected: testConfig?.expected,
+            metadata: testConfig?.metadata,
+            tags: testConfig?.tags,
+            scorers: testConfig?.scorers,
+            fn: async () => {
+              if (testConfig && maybeFn) {
+                const params: TestContext = {
+                  input: testConfig.input,
+                  expected: testConfig.expected,
+                  metadata: testConfig.metadata,
+                };
+                const context = {
+                  ...vitestContext,
+                  ...params,
+                } satisfies TestContext & VitestContext;
+                return await maybeFn(context);
+              } else if (typeof configOrFn === "function") {
+                return await configOrFn(vitestContext);
               }
-              return testResult;
             },
-            {
-              name,
-              spanAttributes: {
-                type: SpanTypeAttribute.TASK,
-              },
-              event: testConfig
-                ? {
-                    input: testConfig.input,
-                    expected: testConfig.expected,
-                    metadata: testConfig.metadata,
-                    tags: testConfig.tags,
-                  }
-                : undefined,
-            },
-          );
+          });
           passed = true;
           return result;
         } catch (error) {
@@ -367,7 +258,7 @@ export function wrapDescribe(
 
         factory();
 
-        if (afterAll && (config.displaySummary ?? true)) {
+        if (afterAll) {
           afterAll(async () => {
             await flushExperimentWithSync(context, config);
 
@@ -389,11 +280,8 @@ export function wrapDescribe(
   };
 
   const wrappedDescribe = wrapBare(originalDescribe);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedDescribe.skip = wrapBare(originalDescribe.skip);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedDescribe.only = wrapBare(originalDescribe.only);
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   wrappedDescribe.concurrent = wrapBare(originalDescribe.concurrent);
   if (originalDescribe.todo) wrappedDescribe.todo = originalDescribe.todo;
   if (originalDescribe.each)

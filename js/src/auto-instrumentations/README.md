@@ -112,19 +112,16 @@ The bundler plugins (Vite, Webpack, esbuild, Rollup) apply transformations durin
 The plugin system follows the OpenTelemetry pattern:
 
 - **Core Infrastructure**: `js/src/instrumentation/core/` in the main `braintrust` package
-
   - `BasePlugin` - Abstract base class for plugins
   - Channel utilities (`createChannelName`, `parseChannelName`, etc.)
   - Event type definitions
 
 - **Braintrust Implementation**: `js/src/instrumentation/braintrust-plugin.ts` in the main `braintrust` package
-
   - `BraintrustPlugin` - Converts diagnostics_channel events into Braintrust spans
   - Automatically enabled when the Braintrust SDK is loaded
   - Supports configuration to disable specific integrations
 
 - **Plugin Registry**: `js/src/instrumentation/registry.ts` in the main `braintrust` package
-
   - `PluginRegistry` - Manages plugin lifecycle
   - Automatically enables `BraintrustPlugin` on SDK initialization
   - Reads configuration from `configureInstrumentation()` API and `BRAINTRUST_DISABLE_INSTRUMENTATION` environment variable

@@ -444,7 +444,7 @@ const wrapModel = (model: any, ai?: any): any => {
             // Raw chunks may contain text content for structured output / JSON mode
             // The rawValue often contains the delta text from the provider
             if (chunk.rawValue) {
-              const rawVal = chunk.rawValue as any;
+              const rawVal = chunk.rawValue;
               // OpenAI format: rawValue.delta.content or rawValue.choices[0].delta.content
               if (rawVal.delta?.content) {
                 text += rawVal.delta.content;

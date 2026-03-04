@@ -19,8 +19,7 @@
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -rf dist",
-    "test": "vitest run"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "als-browser": "^1.0.1",
