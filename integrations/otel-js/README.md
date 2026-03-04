@@ -1,5 +1,7 @@
 # @braintrust/otel
 
+[![npm version](https://img.shields.io/npm/v/%40braintrust%2Fotel.svg)](https://www.npmjs.com/package/@braintrust/otel)
+
 SDK for integrating [Braintrust](https://braintrust.dev) with [OpenTelemetry](https://opentelemetry.io/). This package enables you to send OpenTelemetry spans to Braintrust for logging and observability, and provides seamless interoperability between Braintrust and OpenTelemetry tracing contexts.
 
 ## Installation
@@ -29,14 +31,14 @@ npm install @opentelemetry/context-async-hooks
 
 This package supports both OpenTelemetry 1.x and 2.x versions.
 
-Note: You may run into a known [OpenTelemetry browser bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545)) with `@opentelemetry/exporter-trace-otlp-http` < 0.205.0. If you encounter this issue, upgrade the `@opentelemetry/exporter-trace-otlp-http` and related packages to a minimum of:
+Note: You may run into a known [OpenTelemetry browser bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545) with `@opentelemetry/exporter-trace-otlp-http` < 0.205.0. If you encounter this issue, upgrade the `@opentelemetry/exporter-trace-otlp-http` and related packages to a minimum of:
 
 - `@opentelemetry/exporter-trace-otlp-http` >= 0.205.0
 - `@opentelemetry/sdk-trace-base` >= 2.1.0
 - `@opentelemetry/api` >= 2.1.0
 - `@opentelemetry/core` >= 2.1.0
 
-It's **important** you do not mix `@opentelemetry/core` and related packages with 1.x with 2.x packages.
+It's **important** that `@opentelemetry/core` and related packages all use the same major version (1.x or 2.x).
 
 ## Overview
 
@@ -251,7 +253,7 @@ The `otel-v1` and `otel-v2` directories are separate packages that:
 
 This approach ensures the package works correctly with both major OpenTelemetry versions while maintaining a single source codebase.
 
-## Learn More
+## Documentation
 
 - [Braintrust Documentation](https://www.braintrust.dev/docs)
 - [OpenTelemetry Documentation](https://opentelemetry.io/docs/)

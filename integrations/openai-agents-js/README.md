@@ -1,14 +1,27 @@
 # @braintrust/openai-agents
 
+[![npm version](https://img.shields.io/npm/v/%40braintrust%2Fopenai-agents.svg)](https://www.npmjs.com/package/@braintrust/openai-agents)
+
+## Overview
+
 SDK for integrating Braintrust with OpenAI Agents.
 
 ## Installation
 
 ```bash
 npm install braintrust @braintrust/openai-agents @openai/agents
+# or
+yarn add braintrust @braintrust/openai-agents @openai/agents
+# or
+pnpm add braintrust @braintrust/openai-agents @openai/agents
 ```
 
-## Usage
+## Requirements
+
+- `braintrust`
+- `@openai/agents`
+
+## Quickstart
 
 ```typescript
 import { initLogger } from "braintrust";
@@ -52,3 +65,8 @@ new OpenAIAgentsTraceProcessor(options?: OpenAIAgentsTraceProcessorOptions)
 
 - `logger?: Logger` - A Braintrust `Span`, `Experiment`, or `Logger` to use for logging. If undefined, the current span, experiment, or logger will be selected exactly as in `startSpan`.
 - `maxTraces?: number` - Maximum number of concurrent traces to keep in memory (default: 10000). When exceeded, oldest traces are evicted using LRU policy to prevent memory leaks.
+
+## Documentation
+
+- Braintrust docs: [https://www.braintrust.dev/docs](https://www.braintrust.dev/docs)
+- OpenAI Agents docs: [https://openai.github.io/openai-agents-js/](https://openai.github.io/openai-agents-js/)

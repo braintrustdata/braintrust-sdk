@@ -1,5 +1,9 @@
 # @braintrust/langchain-js
 
+[![npm version](https://img.shields.io/npm/v/%40braintrust%2Flangchain-js.svg)](https://www.npmjs.com/package/@braintrust/langchain-js)
+
+## Overview
+
 SDK for integrating [Braintrust](https://braintrust.dev) with [LangChain.js](https://langchain.com/js). This package provides a callback handler to automatically log LangChain.js executions to Braintrust.
 
 ## Installation
@@ -17,7 +21,7 @@ pnpm add @braintrust/langchain-js
 - Node.js >= 16
 - LangChain.js >= 0.3.42 (incl. 1.0.0)
 
-## Usage
+## Quickstart
 
 First, make sure you have your Braintrust API key set in your environment:
 
@@ -77,14 +81,19 @@ The callback handler supports logging for:
 
 Review the [LangChain.js documentation](https://js.langchain.com/docs/how_to/#callbacks) for more information on how to use callbacks.
 
+## Documentation
+
+- Braintrust docs: [https://www.braintrust.dev/docs](https://www.braintrust.dev/docs)
+- LangChain callback docs: [https://js.langchain.com/docs/how_to/#callbacks](https://js.langchain.com/docs/how_to/#callbacks)
+
 ## Development
 
 Contributions are welcomed!
 
 ```bash
-git clone https://github.com/braintrustdata/sdk.git
+git clone https://github.com/braintrustdata/braintrust-sdk-javascript.git
 
-cd sdk/integrations/langchain-js
+cd braintrust-sdk-javascript/integrations/langchain-js
 
 pnpm install
 
