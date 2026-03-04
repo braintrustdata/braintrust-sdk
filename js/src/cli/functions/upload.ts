@@ -158,6 +158,42 @@ export async function uploadHandleBundles({
           }
         : undefined;
 
+      const fileSpecs: BundledFunctionSpec[] = [
+        {
+          ...baseInfo,
+          // There is a very small chance that someone names a function with the same convention, but
+          // let's assume it's low enough that it doesn't matter.
+          ...formatNameAndSlug(["eval", namePrefix, "task"]),
+          description: `Task for eval ${namePrefix}`,
+          location: {
+            type: "experiment",
+            eval_name: evaluator.evaluator.evalName,
+            position: { type: "task" },
+          },
+          function_type: "task",
+          origin,
+        },
+        ...evaluator.evaluator.scores.map((score, i): BundledFunctionSpec => {
+          const name = scorerName(score, i);
+          return {
+            ...baseInfo,
+            // There is a very small chance that someone names a function with the same convention, but
+            // let's assume it's low enough that it doesn't matter.
+            ...formatNameAndSlug(["eval", namePrefix, "scorer", name]),
+            description: `Score ${name} for eval ${namePrefix}`,
+            location: {
+              type: "experiment",
+              eval_name: evaluator.evaluator.evalName,
+              position: { type: "scorer", index: i },
+            },
+            function_type: "scorer",
+            origin,
+          };
+        }),
+      ];
+
+      bundleSpecs.push(...fileSpecs);
+
       if (setCurrent) {
         const sourceStem = path
           .basename(sourceFile, path.extname(sourceFile))
@@ -201,44 +237,7 @@ export async function uploadHandleBundles({
           },
           origin,
         });
-        continue;
       }
-
-      const fileSpecs: BundledFunctionSpec[] = [
-        {
-          ...baseInfo,
-          // There is a very small chance that someone names a function with the same convention, but
-          // let's assume it's low enough that it doesn't matter.
-          ...formatNameAndSlug(["eval", namePrefix, "task"]),
-          description: `Task for eval ${namePrefix}`,
-          location: {
-            type: "experiment",
-            eval_name: evaluator.evaluator.evalName,
-            position: { type: "task" },
-          },
-          function_type: "task",
-          origin,
-        },
-        ...evaluator.evaluator.scores.map((score, i): BundledFunctionSpec => {
-          const name = scorerName(score, i);
-          return {
-            ...baseInfo,
-            // There is a very small chance that someone names a function with the same convention, but
-            // let's assume it's low enough that it doesn't matter.
-            ...formatNameAndSlug(["eval", namePrefix, "scorer", name]),
-            description: `Score ${name} for eval ${namePrefix}`,
-            location: {
-              type: "experiment",
-              eval_name: evaluator.evaluator.evalName,
-              position: { type: "scorer", index: i },
-            },
-            function_type: "scorer",
-            origin,
-          };
-        }),
-      ];
-
-      bundleSpecs.push(...fileSpecs);
     }
 
     const slugs: Set<string> = new Set();
