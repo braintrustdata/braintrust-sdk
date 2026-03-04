@@ -34,6 +34,20 @@ const DIRECT_MODIFIERS = [
 ] as const;
 const CONDITIONAL_MODIFIERS = ["if", "skipIf", "todoIf"] as const;
 
+// Modifiers safe to validate eagerly. "only" is excluded because bun's CI
+// mode throws when test.only is even *accessed* (property read) to prevent
+// accidentally focusing tests. The .only wrapper defers access to call time.
+const VALIDATED_MODIFIERS = [
+  "skip",
+  "todo",
+  "failing",
+  "concurrent",
+  "serial",
+  "if",
+  "skipIf",
+  "todoIf",
+] as const;
+
 function validateTestFunction(test: unknown): ValidatedTestFunction {
   if (typeof test !== "function") {
     throw new Error(
@@ -42,7 +56,7 @@ function validateTestFunction(test: unknown): ValidatedTestFunction {
     );
   }
   const t = test as unknown as Record<string, unknown>;
-  for (const mod of [...DIRECT_MODIFIERS, ...CONDITIONAL_MODIFIERS]) {
+  for (const mod of VALIDATED_MODIFIERS) {
     if (typeof t[mod] !== "function") {
       throw new Error(
         `initBunTestSuite: "test.${mod}" must be a function (got ${typeof t[mod]}). ` +
@@ -170,17 +184,30 @@ export function initBunTestSuite<TTest extends (...args: any[]) => any>(
   }
 
   const t = validateTestFunction(config.test);
-  const suiteTest = Object.assign(wrapTestVariant(t), {
-    skip: wrapTestVariant(t.skip.bind(t)),
-    only: wrapTestVariant(t.only.bind(t)),
-    todo: wrapTestVariant(t.todo.bind(t)),
-    failing: wrapTestVariant(t.failing.bind(t)),
-    concurrent: wrapTestVariant(t.concurrent.bind(t)),
-    serial: wrapTestVariant(t.serial.bind(t)),
-    if: wrapConditional(t.if.bind(t)),
-    skipIf: wrapConditional(t.skipIf.bind(t)),
-    todoIf: wrapConditional(t.todoIf.bind(t)),
-  }) as SuiteTestFunction;
+
+  // Build modifier wrappers lazily — calling .bind() on modifiers like
+  // test.only at construction time triggers bun's CI guard which disables
+  // .only when CI=true. By deferring the .bind() to invocation time, we
+  // avoid the error when the modifier is never actually called.
+  const modifiers: Partial<Omit<SuiteTestFunction, never>> = {};
+  for (const mod of DIRECT_MODIFIERS) {
+    (modifiers as any)[mod] = (
+      name: string,
+      evalConfig: EvalConfig,
+      fn: (context: EvalContext) => unknown | Promise<unknown>,
+    ) => {
+      wrapTestVariant(t[mod].bind(t))(name, evalConfig, fn);
+    };
+  }
+  for (const mod of CONDITIONAL_MODIFIERS) {
+    (modifiers as any)[mod] = (condition: boolean) => {
+      return wrapConditional(t[mod].bind(t))(condition);
+    };
+  }
+  const suiteTest = Object.assign(
+    wrapTestVariant(t),
+    modifiers,
+  ) as unknown as SuiteTestFunction;
 
   async function flush(): Promise<void> {
     if (!experiment) {

@@ -1,6 +1,6 @@
-import type { ScorerFunction } from "../shared/types";
+export type { ScorerFunction, EvalConfig, EvalContext } from "../shared/types";
 
-export type { ScorerFunction } from "../shared/types";
+import type { EvalConfig, EvalContext } from "../shared/types";
 
 /** Progress events emitted by the bun-test integration. */
 export type BunTestProgressEvent =
@@ -12,93 +12,33 @@ export type BunTestProgressEvent =
       duration: number;
     };
 
-/**
- * Configuration for a single eval test case.
- */
-export interface EvalConfig {
-  /** Test input data, logged to the span. */
-  input?: unknown;
-  /** Expected output, passed to scorers. */
-  expected?: unknown;
-  /** Custom metadata, logged to the span. */
-  metadata?: Record<string, unknown>;
-  /** Tags for organizing test cases. */
-  tags?: string[];
-  /** Scorer functions to evaluate the output. */
-  scorers?: ScorerFunction[];
-  /** Override span name (defaults to the test name). */
-  name?: string;
-}
+/** A single traced eval test function signature. */
+type EvalTestFn = (
+  name: string,
+  config: EvalConfig,
+  fn: (context: EvalContext) => unknown | Promise<unknown>,
+) => void;
 
-/**
- * Context passed to the eval test function.
- */
-export interface EvalContext {
-  input: unknown;
-  expected?: unknown;
-  metadata?: Record<string, unknown>;
-}
+/** Conditional modifier: returns an EvalTestFn based on a boolean condition. */
+type ConditionalEvalTestFn = (condition: boolean) => EvalTestFn;
 
 /**
  * The wrapped test function with `(name, config, fn)` signature.
  */
-export interface SuiteTestFunction {
-  (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ): void;
-  skip: (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  only: (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
+export interface SuiteTestFunction extends EvalTestFn {
+  skip: EvalTestFn;
+  only: EvalTestFn;
   todo: (
     name: string,
     config?: EvalConfig,
     fn?: (context: EvalContext) => unknown | Promise<unknown>,
   ) => void;
-  failing: (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  concurrent: (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  serial: (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  if: (
-    condition: boolean,
-  ) => (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  skipIf: (
-    condition: boolean,
-  ) => (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
-  todoIf: (
-    condition: boolean,
-  ) => (
-    name: string,
-    config: EvalConfig,
-    fn: (context: EvalContext) => unknown | Promise<unknown>,
-  ) => void;
+  failing: EvalTestFn;
+  concurrent: EvalTestFn;
+  serial: EvalTestFn;
+  if: ConditionalEvalTestFn;
+  skipIf: ConditionalEvalTestFn;
+  todoIf: ConditionalEvalTestFn;
 }
 
 /**

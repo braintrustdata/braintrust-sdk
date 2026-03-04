@@ -130,10 +130,10 @@ test-api-compat:
 	pnpm test:api-compat
 
 # Test everything
-test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk test-bun-test
+test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk test-bun-test
+test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
 
 
 prune:

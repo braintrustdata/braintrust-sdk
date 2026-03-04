@@ -1,6 +1,6 @@
-import type { ScorerFunction } from "../shared/types";
+import type { EvalConfig, EvalContext } from "../shared/types";
 
-export type { ScorerFunction } from "../shared/types";
+export type { ScorerFunction, EvalConfig, EvalContext } from "../shared/types";
 
 /** Progress events emitted by the node-test integration. */
 export type NodeTestProgressEvent =
@@ -44,33 +44,6 @@ export interface NodeTestSuiteConfig {
    * Emits `test_start` and `test_complete` events.
    */
   onProgress?: (event: NodeTestProgressEvent) => void;
-}
-
-/**
- * Configuration for a single eval test case.
- */
-export interface EvalConfig {
-  /** Test input data, logged to the span. */
-  input?: unknown;
-  /** Expected output, passed to scorers. */
-  expected?: unknown;
-  /** Custom metadata, logged to the span. */
-  metadata?: Record<string, unknown>;
-  /** Tags for organizing test cases. */
-  tags?: string[];
-  /** Scorer functions to evaluate the output. */
-  scorers?: ScorerFunction[];
-  /** Override span name (defaults to `t.name`, then `"unnamed test"`). */
-  name?: string;
-}
-
-/**
- * Context passed to the eval test function.
- */
-export interface EvalContext {
-  input: unknown;
-  expected?: unknown;
-  metadata?: Record<string, unknown>;
 }
 
 /**
