@@ -127,23 +127,26 @@ jobs:
         if: github.event_name == 'push'
         id: release_notes
         run: |
+          VERSION="${RELEASE_TAG#js-sdk-v}"
           RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh "${{ env.RELEASE_TAG }}" "js/")
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+          echo "release_name=JavaScript SDK v${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         if: github.event_name == 'push'
         uses: actions/github-script@v8
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
+          RELEASE_NAME: ${{ steps.release_notes.outputs.release_name }}
         with:
           script: |
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: process.env.RELEASE_TAG,
-              name: process.env.RELEASE_TAG,
+              name: process.env.RELEASE_NAME,
               body: process.env.RELEASE_NOTES,
               draft: false,
               prerelease: false
