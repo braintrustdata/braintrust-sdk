@@ -194,10 +194,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
   test("ai sdk image input", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const base64Image = readFileSync(
-      join(FIXTURES_DIR, "test-image.png"),
-      "base64",
-    );
+    const imageBuffer = readFileSync(join(FIXTURES_DIR, "test-image.png"));
 
     const model = openai(TEST_MODEL);
     const start = getCurrentUnixTimestamp();
@@ -210,7 +207,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: [
             {
               type: "image",
-              image: `data:image/png;base64,${base64Image}`,
+              image: imageBuffer,
+              mimeType: "image/png",
             },
             { type: "text", text: "What color is this image?" },
           ],
@@ -1988,10 +1986,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
   test("doGenerate processes image attachments in prompt array", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const base64Image = readFileSync(
-      join(FIXTURES_DIR, "test-image.png"),
-      "base64",
-    );
+    const imageBuffer = readFileSync(join(FIXTURES_DIR, "test-image.png"));
 
     const { createOpenAI } = await import("@ai-sdk/openai");
     const openaiProvider = createOpenAI({});
@@ -2005,7 +2000,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: [
             {
               type: "image",
-              image: `data:image/png;base64,${base64Image}`,
+              image: imageBuffer,
+              mimeType: "image/png",
             },
             { type: "text", text: "What color is this image?" },
           ],

@@ -1,29 +1,26 @@
-# Braintrust SDK
+# Braintrust JavaScript SDK Monorepo
 
-JavaScript client for Braintrust, plus wrapper libraries for OpenAI, Anthropic, and other AI providers.
+JavaScript/TypeScript SDKs and integrations for Braintrust.
 
-This repo uses `pnpm` as it's package manager.
+This repository uses `pnpm` workspaces.
 
-## Structure
+## Repository Structure
 
+```text
+.
+├── js/             # Main `braintrust` package (see js/CLAUDE.md)
+├── integrations/   # Integration packages (@braintrust/*)
+├── docs/           # Docs and reference material
+└── internal/       # Internal test fixtures and golden projects
 ```
-sdk/
-├── js/           # JavaScript SDK (see js/CLAUDE.md)
-└── core/         # Shared core library
-```
 
-## Quick Reference
-
-| Task          | Command          |
-| ------------- | ---------------- |
-| Run all tests | `pnpm run test`  |
-| Build         | `pnpm run build` |
-| Lint check    | `pnpm run lint`  |
-| Auto-fix      | `pnpm run fix`   |
-
-## Setup
+## Common Commands (repo root)
 
 ```bash
-pnpm install      # Install dependencies
-pnpm run build    # Build all packages
+pnpm install        # Install dependencies
+pnpm run build      # Build all workspace packages
+pnpm run test       # Run workspace tests (via turbo)
+pnpm run lint       # Prettier + ESLint checks
+pnpm run fix        # Auto-fix Prettier + ESLint
+make test           # Full JS-oriented test flow used in this repo
 ```

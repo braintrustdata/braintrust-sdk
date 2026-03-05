@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+  },
+}));
+
 import { AISDKPlugin } from "./ai-sdk-plugin";
 import { Attachment } from "../../logger";
+import iso from "../../isomorph";
+
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Import private functions by re-exporting them in the test
 // Since these are private, we'll test them through the public API
@@ -10,6 +21,14 @@ describe("AISDKPlugin", () => {
   let plugin: AISDKPlugin;
 
   beforeEach(() => {
+    // Setup mock channel
+    const mockChannel = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      hasSubscribers: false,
+    };
+    mockNewTracingChannel.mockReturnValue(mockChannel);
+
     plugin = new AISDKPlugin();
   });
 

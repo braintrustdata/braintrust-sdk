@@ -116,7 +116,8 @@ export default defineConfig([
     format: ["esm"],
     outDir: "dist/auto-instrumentations",
     dts: false,
-    external: ["@apm-js-collab/code-transformer", "zod"],
+    platform: "node",
+    external: ["@apm-js-collab/code-transformer", "@anthropic-ai/sdk", "zod"],
     outExtension({ format }) {
       return { js: ".mjs" };
     },

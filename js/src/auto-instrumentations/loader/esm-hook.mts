@@ -13,17 +13,17 @@ import {
 import moduleDetailsFromPath from "module-details-from-path";
 import { getPackageVersion } from "./get-package-version.js";
 
-let transformers: Map<string, any> | null = null;
-let packages: Set<string> | null = null;
-let instrumentator: any | null = null;
+let instrumentator: any;
+let packages: Set<string>;
+let transformers: Map<string, any> = new Map();
 
 export async function initialize(
   data: { instrumentations?: InstrumentationConfig[] } = {},
 ) {
-  const instrumentations = data?.instrumentations || [];
-  instrumentator = create(instrumentations);
-  packages = new Set(instrumentations.map((i) => i.module.name));
-  transformers = new Map();
+  // Use the instrumentations passed from the parent via register()
+  const configs = data.instrumentations || [];
+  instrumentator = create(configs);
+  packages = new Set(configs.map((i) => i.module.name));
 }
 
 export async function resolve(
@@ -44,20 +44,20 @@ export async function resolve(
 
   const resolvedModule = moduleDetailsFromPath(normalizedForPlatform);
 
-  if (resolvedModule && packages!.has(resolvedModule.name)) {
+  if (resolvedModule && packages?.has(resolvedModule.name)) {
     const version = getPackageVersion(resolvedModule.basedir);
 
     // Normalize module path for WASM transformer (expects forward slashes)
     const normalizedModulePath = resolvedModule.path.replace(/\\/g, "/");
 
-    const transformer = instrumentator!.getTransformer(
+    const transformer = instrumentator.getTransformer(
       resolvedModule.name,
       version,
       normalizedModulePath,
     );
 
     if (transformer) {
-      transformers!.set(url.url, transformer);
+      transformers.set(url.url, transformer);
     }
   }
 
@@ -67,7 +67,8 @@ export async function resolve(
 export async function load(url: string, context: any, nextLoad: Function) {
   const result = await nextLoad(url, context);
 
-  if (!transformers!.has(url)) {
+  if (!transformers.has(url)) {
+    // No transformation needed for this module
     return result;
   }
 
@@ -78,7 +79,7 @@ export async function load(url: string, context: any, nextLoad: Function) {
 
   const code = result.source;
   if (code) {
-    const transformer = transformers!.get(url);
+    const transformer = transformers.get(url);
     try {
       const transformedCode = transformer.transform(
         code.toString("utf8"),

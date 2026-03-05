@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../../isomorph";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan } from "../../logger";
@@ -77,7 +77,7 @@ export class AISDKPlugin extends BasePlugin {
       this.config.denyOutputPaths || DEFAULT_DENY_OUTPUT_PATHS;
 
     // generateText - async function that may return streams
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:generateText", {
+    this.subscribeToStreamingChannel("orchestrion:ai:generateText", {
       name: "generateText",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -101,7 +101,7 @@ export class AISDKPlugin extends BasePlugin {
     });
 
     // streamText - async function returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:streamText", {
+    this.subscribeToStreamingChannel("orchestrion:ai:streamText", {
       name: "streamText",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -125,7 +125,7 @@ export class AISDKPlugin extends BasePlugin {
     });
 
     // generateObject - async function that may return streams
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:generateObject", {
+    this.subscribeToStreamingChannel("orchestrion:ai:generateObject", {
       name: "generateObject",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -149,7 +149,7 @@ export class AISDKPlugin extends BasePlugin {
     });
 
     // streamObject - async function returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:streamObject", {
+    this.subscribeToStreamingChannel("orchestrion:ai:streamObject", {
       name: "streamObject",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -173,7 +173,7 @@ export class AISDKPlugin extends BasePlugin {
     });
 
     // Agent.generate - async method
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:Agent.generate", {
+    this.subscribeToStreamingChannel("orchestrion:ai:Agent.generate", {
       name: "Agent.generate",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -197,7 +197,7 @@ export class AISDKPlugin extends BasePlugin {
     });
 
     // Agent.stream - async method returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:Agent.stream", {
+    this.subscribeToStreamingChannel("orchestrion:ai:Agent.stream", {
       name: "Agent.stream",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -242,7 +242,7 @@ export class AISDKPlugin extends BasePlugin {
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 

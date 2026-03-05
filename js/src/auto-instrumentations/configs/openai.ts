@@ -8,8 +8,8 @@ import { OPENAI_CHANNEL_SUFFIX } from "../../instrumentation/plugins/channels";
  * to emit events on. They are used by orchestrion-js to perform AST
  * transformation at build-time or load-time.
  *
- * NOTE: Channel names should NOT include the braintrust: prefix. The code-transformer
- * will prepend "orchestrion:openai:" to these names, resulting in final channel names like:
+ * NOTE: Channel names should NOT include the orchestrion: prefix. The code-transformer
+ * will prepend "orchestrion:" + module.name + ":" to these names, resulting in final channel names like:
  * "orchestrion:openai:chat.completions.create"
  */
 export const openaiConfigs: InstrumentationConfig[] = [

@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { GoogleGenAIPlugin } from "./google-genai-plugin";
-import { tracingChannel } from "dc-browser";
-import { Attachment } from "../../logger";
 
-// Mock dc-browser
-vi.mock("dc-browser", () => ({
-  tracingChannel: vi.fn(),
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+  },
 }));
+
+import { GoogleGenAIPlugin } from "./google-genai-plugin";
+import { Attachment } from "../../logger";
+import iso from "../../isomorph";
+
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Mock logger
 vi.mock("../../logger", () => ({
@@ -37,9 +42,10 @@ describe("GoogleGenAIPlugin", () => {
     mockChannel = {
       subscribe: subscribeSpy,
       unsubscribe: unsubscribeSpy,
+      hasSubscribers: false,
     };
 
-    vi.mocked(tracingChannel).mockReturnValue(mockChannel);
+    mockNewTracingChannel.mockReturnValue(mockChannel);
     plugin = new GoogleGenAIPlugin();
   });
 
@@ -51,11 +57,11 @@ describe("GoogleGenAIPlugin", () => {
     it("should subscribe to channels when enabled", () => {
       plugin.enable();
 
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContent",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@google/genai:models.generateContent",
       );
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContentStream",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@google/genai:models.generateContentStream",
       );
       expect(subscribeSpy).toHaveBeenCalled();
     });
@@ -99,8 +105,9 @@ describe("GoogleGenAIPlugin", () => {
 
       const subscribeCall = subscribeSpy.mock.calls.find(
         (call: any) =>
-          tracingChannel.mock.results[subscribeSpy.mock.calls.indexOf(call)]
-            ?.value === mockChannel,
+          mockNewTracingChannel.mock.results[
+            subscribeSpy.mock.calls.indexOf(call)
+          ]?.value === mockChannel,
       );
 
       expect(subscribeCall).toBeDefined();
@@ -117,8 +124,8 @@ describe("GoogleGenAIPlugin", () => {
     it("should subscribe to streaming channel", () => {
       plugin.enable();
 
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContentStream",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@google/genai:models.generateContentStream",
       );
     });
   });
