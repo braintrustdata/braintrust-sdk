@@ -3,6 +3,12 @@ import { Attachment } from "../../logger";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { OPENAI_CHANNEL } from "./channels";
+import {
+  BRAINTRUST_CACHED_STREAM_METRIC,
+  getCachedMetricFromHeaders,
+  parseMetricsFromUsage,
+} from "../../openai-utils";
 
 /**
  * Plugin for OpenAI SDK instrumentation.
@@ -21,35 +27,36 @@ export class OpenAIPlugin extends BasePlugin {
 
   protected onEnable(): void {
     // Chat Completions - supports streaming
-    this.subscribeToStreamingChannel(
-      "orchestrion:openai:chat.completions.create",
-      {
-        name: "Chat Completion",
-        type: SpanTypeAttribute.LLM,
-        extractInput: (args: any[]) => {
-          const params = args[0] || {};
-          const { messages, ...metadata } = params;
-          return {
-            input: processInputAttachments(messages),
-            metadata: { ...metadata, provider: "openai" },
-          };
-        },
-        extractOutput: (result: any) => {
-          return result?.choices;
-        },
-        extractMetrics: (result: any, startTime?: number) => {
-          const metrics = parseMetricsFromUsage(result?.usage);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
-        aggregateChunks: aggregateChatCompletionChunks,
+    this.subscribeToStreamingChannel(OPENAI_CHANNEL.CHAT_COMPLETIONS_CREATE, {
+      name: "Chat Completion",
+      type: SpanTypeAttribute.LLM,
+      extractInput: (args: any[]) => {
+        const params = args[0] || {};
+        const { messages, ...metadata } = params;
+        return {
+          input: processInputAttachments(messages),
+          metadata: { ...metadata, provider: "openai" },
+        };
       },
-    );
+      extractOutput: (result: any) => {
+        return result?.choices;
+      },
+      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+        const metrics = withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
+        if (startTime) {
+          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+        }
+        return metrics;
+      },
+      aggregateChunks: aggregateChatCompletionChunks,
+    });
 
     // Embeddings
-    this.subscribeToChannel("orchestrion:openai:embeddings.create", {
+    this.subscribeToChannel(OPENAI_CHANNEL.EMBEDDINGS_CREATE, {
       name: "Embedding",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -61,16 +68,24 @@ export class OpenAIPlugin extends BasePlugin {
         };
       },
       extractOutput: (result: any) => {
-        return result?.data?.map((d: any) => d.embedding);
+        // Preserve wrapper parity: old wrapper logged only first embedding length.
+        const embedding = result?.data?.[0]?.embedding;
+        return Array.isArray(embedding)
+          ? { embedding_length: embedding.length }
+          : undefined;
       },
-      extractMetrics: (result: any) => {
-        return parseMetricsFromUsage(result?.usage);
+      extractMetrics: (result: any, _startTime?: number, endEvent?: any) => {
+        return withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
       },
     });
 
     // Beta Chat Completions Parse
     this.subscribeToStreamingChannel(
-      "orchestrion:openai:beta.chat.completions.parse",
+      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_PARSE,
       {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
@@ -85,8 +100,12 @@ export class OpenAIPlugin extends BasePlugin {
         extractOutput: (result: any) => {
           return result?.choices;
         },
-        extractMetrics: (result: any, startTime?: number) => {
-          const metrics = parseMetricsFromUsage(result?.usage);
+        extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+          const metrics = withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
           if (startTime) {
             metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
           }
@@ -98,7 +117,7 @@ export class OpenAIPlugin extends BasePlugin {
 
     // Beta Chat Completions Stream (sync method returning event-based stream)
     this.subscribeToSyncStreamChannel(
-      "orchestrion:openai:beta.chat.completions.stream",
+      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_STREAM,
       {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
@@ -114,7 +133,7 @@ export class OpenAIPlugin extends BasePlugin {
     );
 
     // Moderations
-    this.subscribeToChannel("orchestrion:openai:moderations.create", {
+    this.subscribeToChannel(OPENAI_CHANNEL.MODERATIONS_CREATE, {
       name: "Moderation",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -128,14 +147,18 @@ export class OpenAIPlugin extends BasePlugin {
       extractOutput: (result: any) => {
         return result?.results;
       },
-      extractMetrics: () => {
-        // Moderations don't have usage metrics
-        return {};
+      extractMetrics: (result: any, _startTime?: number, endEvent?: any) => {
+        // Include cached metric when wrappers annotate usage from headers.
+        return withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
       },
     });
 
     // Responses API - create (supports streaming via stream=true param)
-    this.subscribeToStreamingChannel("orchestrion:openai:responses.create", {
+    this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_CREATE, {
       name: "openai.responses.create",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -149,18 +172,31 @@ export class OpenAIPlugin extends BasePlugin {
       extractOutput: (result: any) => {
         return processImagesInOutput(result?.output);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = parseMetricsFromUsage(result?.usage);
+      extractMetadata: (result: any) => {
+        if (!result) {
+          return undefined;
+        }
+        const { output: _output, usage: _usage, ...metadata } = result;
+        return Object.keys(metadata).length > 0 ? metadata : undefined;
+      },
+      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+        const metrics = withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
         return metrics;
       },
+      aggregateChunks: aggregateResponseStreamEvents,
     });
 
     // Responses API - stream (sync method returning event-based stream)
-    this.subscribeToSyncStreamChannel("orchestrion:openai:responses.stream", {
-      name: "openai.responses.stream",
+    this.subscribeToSyncStreamChannel(OPENAI_CHANNEL.RESPONSES_STREAM, {
+      // Preserve wrapper parity: responses.stream logged as openai.responses.create.
+      name: "openai.responses.create",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
         const params = args[0] || {};
@@ -203,7 +239,7 @@ export class OpenAIPlugin extends BasePlugin {
     });
 
     // Responses API - parse
-    this.subscribeToStreamingChannel("orchestrion:openai:responses.parse", {
+    this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_PARSE, {
       name: "openai.responses.parse",
       type: SpanTypeAttribute.LLM,
       extractInput: (args: any[]) => {
@@ -217,13 +253,25 @@ export class OpenAIPlugin extends BasePlugin {
       extractOutput: (result: any) => {
         return processImagesInOutput(result?.output);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = parseMetricsFromUsage(result?.usage);
+      extractMetadata: (result: any) => {
+        if (!result) {
+          return undefined;
+        }
+        const { output: _output, usage: _usage, ...metadata } = result;
+        return Object.keys(metadata).length > 0 ? metadata : undefined;
+      },
+      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+        const metrics = withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
         return metrics;
       },
+      aggregateChunks: aggregateResponseStreamEvents,
     });
   }
 
@@ -232,57 +280,57 @@ export class OpenAIPlugin extends BasePlugin {
   }
 }
 
-/**
- * Token name mappings for OpenAI metrics.
- */
-const TOKEN_NAME_MAP: Record<string, string> = {
-  input_tokens: "prompt_tokens",
-  output_tokens: "completion_tokens",
-  total_tokens: "tokens",
-};
-
-/**
- * Token prefix mappings for OpenAI metrics.
- */
-const TOKEN_PREFIX_MAP: Record<string, string> = {
-  input: "prompt",
-  output: "completion",
-};
-
-/**
- * Parse metrics from OpenAI usage object.
- * Handles both legacy token names (prompt_tokens, completion_tokens)
- * and newer API token names (input_tokens, output_tokens).
- * Also handles *_tokens_details fields like input_tokens_details.cached_tokens.
- */
-export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
-  if (!usage) {
-    return {};
+function getCachedMetricFromEndEvent(endEvent: unknown): number | undefined {
+  if (!isObject(endEvent)) {
+    return undefined;
   }
 
-  const metrics: Record<string, number> = {};
-
-  for (const [oai_name, value] of Object.entries(usage)) {
-    if (typeof value === "number") {
-      const metricName = TOKEN_NAME_MAP[oai_name] || oai_name;
-      metrics[metricName] = value;
-    } else if (oai_name.endsWith("_tokens_details")) {
-      if (!isObject(value)) {
-        continue;
-      }
-      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
-      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
-      for (const [key, n] of Object.entries(value)) {
-        if (typeof n !== "number") {
-          continue;
-        }
-        const metricName = `${prefix}_${key}`;
-        metrics[metricName] = n;
-      }
-    }
+  const response = (endEvent as Record<string, unknown>).response;
+  if (!isObject(response)) {
+    return undefined;
   }
 
-  return metrics;
+  const headers = (response as { headers?: unknown }).headers;
+  if (!headers || typeof (headers as Headers).get !== "function") {
+    return undefined;
+  }
+
+  return getCachedMetricFromHeaders(headers as Headers);
+}
+
+function withCachedMetric(
+  metrics: Record<string, number>,
+  result: unknown,
+  endEvent?: unknown,
+): Record<string, number> {
+  if (metrics.cached !== undefined) {
+    return metrics;
+  }
+
+  const cachedFromEvent = getCachedMetricFromEndEvent(endEvent);
+  if (cachedFromEvent !== undefined) {
+    return {
+      ...metrics,
+      cached: cachedFromEvent,
+    };
+  }
+
+  if (!isObject(result)) {
+    return metrics;
+  }
+
+  const cached = (result as Record<string, unknown>)[
+    BRAINTRUST_CACHED_STREAM_METRIC
+  ];
+
+  if (typeof cached !== "number") {
+    return metrics;
+  }
+
+  return {
+    ...metrics,
+    cached,
+  };
 }
 
 /**
@@ -338,7 +386,11 @@ export function processImagesInOutput(output: any): any {
  * Combines role (first), content (concatenated), tool_calls (by id),
  * finish_reason (last), and usage (last chunk).
  */
-export function aggregateChatCompletionChunks(chunks: any[]): {
+export function aggregateChatCompletionChunks(
+  chunks: any[],
+  streamResult?: unknown,
+  endEvent?: unknown,
+): {
   output: any[];
   metrics: Record<string, number>;
 } {
@@ -346,7 +398,7 @@ export function aggregateChatCompletionChunks(chunks: any[]): {
   let content = undefined;
   let tool_calls = undefined;
   let finish_reason = undefined;
-  let metrics = {};
+  let metrics: Record<string, number> = {};
 
   for (const chunk of chunks) {
     if (chunk.usage) {
@@ -394,6 +446,8 @@ export function aggregateChatCompletionChunks(chunks: any[]): {
     }
   }
 
+  metrics = withCachedMetric(metrics, streamResult, endEvent);
+
   return {
     metrics,
     output: [
@@ -410,3 +464,46 @@ export function aggregateChatCompletionChunks(chunks: any[]): {
     ],
   };
 }
+
+function aggregateResponseStreamEvents(
+  chunks: any[],
+  _streamResult?: unknown,
+  endEvent?: unknown,
+): {
+  output: any;
+  metrics: Record<string, number>;
+  metadata?: Record<string, any>;
+} {
+  let output: any = undefined;
+  let metrics: Record<string, number> = {};
+  let metadata: Record<string, any> | undefined = undefined;
+
+  for (const chunk of chunks) {
+    if (!chunk || !chunk.type || !chunk.response) {
+      continue;
+    }
+    if (chunk.type !== "response.completed") {
+      continue;
+    }
+
+    const response = chunk.response;
+    if (response?.output !== undefined) {
+      output = processImagesInOutput(response.output);
+    }
+
+    const { usage: _usage, output: _output, ...rest } = response || {};
+    if (Object.keys(rest).length > 0) {
+      metadata = rest;
+    }
+
+    metrics = parseMetricsFromUsage(response?.usage);
+  }
+
+  return {
+    output,
+    metrics: withCachedMetric(metrics, undefined, endEvent),
+    ...(metadata !== undefined ? { metadata } : {}),
+  };
+}
+
+export { parseMetricsFromUsage };

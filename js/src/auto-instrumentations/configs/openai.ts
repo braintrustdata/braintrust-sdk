@@ -1,4 +1,5 @@
 import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
+import { OPENAI_CHANNEL_SUFFIX } from "../../instrumentation/plugins/channels";
 
 /**
  * Instrumentation configurations for the OpenAI SDK.
@@ -14,7 +15,7 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
 export const openaiConfigs: InstrumentationConfig[] = [
   // Chat Completions
   {
-    channelName: "chat.completions.create",
+    channelName: OPENAI_CHANNEL_SUFFIX.CHAT_COMPLETIONS_CREATE,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -29,7 +30,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Embeddings
   {
-    channelName: "embeddings.create",
+    channelName: OPENAI_CHANNEL_SUFFIX.EMBEDDINGS_CREATE,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -44,7 +45,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Beta Chat Completions Parse
   {
-    channelName: "beta.chat.completions.parse",
+    channelName: OPENAI_CHANNEL_SUFFIX.BETA_CHAT_COMPLETIONS_PARSE,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -59,7 +60,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Moderations
   {
-    channelName: "moderations.create",
+    channelName: OPENAI_CHANNEL_SUFFIX.MODERATIONS_CREATE,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -74,7 +75,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Beta Chat Completions Stream
   {
-    channelName: "beta.chat.completions.stream",
+    channelName: OPENAI_CHANNEL_SUFFIX.BETA_CHAT_COMPLETIONS_STREAM,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -89,7 +90,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Responses API (v4.87.0+)
   {
-    channelName: "responses.create",
+    channelName: OPENAI_CHANNEL_SUFFIX.RESPONSES_CREATE,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",
@@ -103,7 +104,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: "responses.stream",
+    channelName: OPENAI_CHANNEL_SUFFIX.RESPONSES_STREAM,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",
@@ -117,7 +118,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: "responses.parse",
+    channelName: OPENAI_CHANNEL_SUFFIX.RESPONSES_PARSE,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",

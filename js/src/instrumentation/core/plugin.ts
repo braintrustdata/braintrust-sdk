@@ -4,7 +4,89 @@ import { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 import type { StartEvent } from "./types";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
-import { getCurrentUnixTimestamp } from "../../util";
+import { getCurrentUnixTimestamp, isObject, mergeDicts } from "../../util";
+
+type ChannelConfig = {
+  name: string;
+  type: string;
+};
+
+type ChannelSpanInfo = {
+  name?: string;
+  spanAttributes?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+function getChannelSpanInfo(event: StartEvent): ChannelSpanInfo | undefined {
+  const fromContext = (event as Record<string, unknown>).span_info;
+  if (isObject(fromContext)) {
+    return fromContext as ChannelSpanInfo;
+  }
+
+  const firstArg = event.arguments?.[0];
+  if (
+    isObject(firstArg) &&
+    isObject((firstArg as Record<string, unknown>).span_info)
+  ) {
+    return (firstArg as Record<string, unknown>).span_info as ChannelSpanInfo;
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolves span start config for a channel event by combining static channel
+ * config (`name`, `type`) with per-call overrides from optional `span_info`.
+ */
+function buildStartSpanArgs(
+  config: ChannelConfig,
+  event: StartEvent,
+): {
+  name: string;
+  spanAttributes: Record<string, unknown>;
+  spanInfoMetadata: Record<string, unknown> | undefined;
+} {
+  const spanInfo = getChannelSpanInfo(event);
+  const spanAttributes: Record<string, unknown> = {
+    type: config.type,
+  };
+
+  if (isObject(spanInfo?.spanAttributes)) {
+    mergeDicts(spanAttributes, spanInfo.spanAttributes);
+  }
+
+  return {
+    name:
+      typeof spanInfo?.name === "string" && spanInfo.name
+        ? spanInfo.name
+        : config.name,
+    spanAttributes,
+    spanInfoMetadata: isObject(spanInfo?.metadata)
+      ? spanInfo.metadata
+      : undefined,
+  };
+}
+
+function mergeInputMetadata(
+  metadata: unknown,
+  spanInfoMetadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!spanInfoMetadata) {
+    return isObject(metadata)
+      ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        (metadata as Record<string, unknown>)
+      : undefined;
+  }
+
+  const mergedMetadata: Record<string, unknown> = {};
+  mergeDicts(mergedMetadata, spanInfoMetadata);
+
+  if (isObject(metadata)) {
+    mergeDicts(mergedMetadata, metadata as Record<string, unknown>);
+  }
+
+  return mergedMetadata;
+}
 
 /**
  * Base class for creating instrumentation plugins.
@@ -71,10 +153,12 @@ export abstract class BasePlugin {
       name: string;
       type: string;
       extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
+      extractOutput: (result: any, endEvent?: any) => any;
+      extractMetadata?: (result: any, endEvent?: any) => any;
       extractMetrics: (
         result: any,
         startTime?: number,
+        endEvent?: any,
       ) => Record<string, number>;
     },
   ): void {
@@ -84,11 +168,13 @@ export abstract class BasePlugin {
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -98,7 +184,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);
@@ -114,11 +200,13 @@ export abstract class BasePlugin {
         const { span, startTime } = spanData;
 
         try {
-          const output = config.extractOutput(event.result);
-          const metrics = config.extractMetrics(event.result, startTime);
+          const output = config.extractOutput(event.result, event);
+          const metrics = config.extractMetrics(event.result, startTime, event);
+          const metadata = config.extractMetadata?.(event.result, event);
 
           span.log({
             output,
+            ...(metadata !== undefined ? { metadata } : {}),
             metrics,
           });
         } catch (error) {
@@ -163,14 +251,21 @@ export abstract class BasePlugin {
       name: string;
       type: string;
       extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
+      extractOutput: (result: any, endEvent?: any) => any;
+      extractMetadata?: (result: any, endEvent?: any) => any;
       extractMetrics: (
         result: any,
         startTime?: number,
+        endEvent?: any,
       ) => Record<string, number>;
-      aggregateChunks?: (chunks: any[]) => {
+      aggregateChunks?: (
+        chunks: any[],
+        result?: any,
+        endEvent?: any,
+      ) => {
         output: any;
         metrics: Record<string, number>;
+        metadata?: any;
       };
     },
   ): void {
@@ -180,11 +275,13 @@ export abstract class BasePlugin {
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -194,7 +291,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);
@@ -211,30 +308,52 @@ export abstract class BasePlugin {
 
         // Check if result is a stream
         if (isAsyncIterable(event.result)) {
+          let firstChunkTime: number | undefined;
+
           // Patch the stream to collect chunks
           patchStreamIfNeeded(event.result, {
+            onChunk: () => {
+              if (firstChunkTime === undefined) {
+                firstChunkTime = getCurrentUnixTimestamp();
+              }
+            },
             onComplete: (chunks: any[]) => {
               try {
                 let output: any;
                 let metrics: Record<string, number>;
+                let metadata: any;
 
                 if (config.aggregateChunks) {
-                  const aggregated = config.aggregateChunks(chunks);
+                  const aggregated = config.aggregateChunks(
+                    chunks,
+                    event.result,
+                    event,
+                  );
                   output = aggregated.output;
                   metrics = aggregated.metrics;
+                  metadata = aggregated.metadata;
                 } else {
-                  output = config.extractOutput(chunks);
-                  metrics = config.extractMetrics(chunks, startTime);
+                  output = config.extractOutput(chunks, event);
+                  metrics = config.extractMetrics(chunks, startTime, event);
                 }
 
                 // Add time_to_first_token if not already present
-                if (!metrics.time_to_first_token && chunks.length > 0) {
+                if (
+                  metrics.time_to_first_token === undefined &&
+                  firstChunkTime !== undefined
+                ) {
+                  metrics.time_to_first_token = firstChunkTime - startTime;
+                } else if (
+                  metrics.time_to_first_token === undefined &&
+                  chunks.length > 0
+                ) {
                   metrics.time_to_first_token =
                     getCurrentUnixTimestamp() - startTime;
                 }
 
                 span.log({
                   output,
+                  ...(metadata !== undefined ? { metadata } : {}),
                   metrics,
                 });
               } catch (error) {
@@ -258,11 +377,19 @@ export abstract class BasePlugin {
         } else {
           // Non-streaming response
           try {
-            const output = config.extractOutput(event.result);
-            const metrics = config.extractMetrics(event.result, startTime);
+            const output = config.extractOutput(event.result, event);
+            const metadata = config.extractMetadata
+              ? config.extractMetadata(event.result, event)
+              : undefined;
+            const metrics = config.extractMetrics(
+              event.result,
+              startTime,
+              event,
+            );
 
             span.log({
               output,
+              ...(metadata !== undefined ? { metadata } : {}),
               metrics,
             });
           } catch (error) {
@@ -321,11 +448,13 @@ export abstract class BasePlugin {
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -335,7 +464,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);

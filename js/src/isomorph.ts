@@ -31,23 +31,27 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
  * TracingChannel interface matching both node:diagnostics_channel and dc-browser.
  * Provides event-based instrumentation for sync/async operations.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface IsoTracingChannel<M = any> {
   hasSubscribers: boolean;
   subscribe(handlers: IsoChannelHandlers<M>): void;
   unsubscribe(handlers: IsoChannelHandlers<M>): boolean;
-  traceSync?<F extends (...args: any[]) => any>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  traceSync<F extends (...args: any[]) => any>(
     fn: F,
     message: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): ReturnType<F>;
-  tracePromise?<F extends (...args: any[]) => any>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tracePromise<F extends (...args: any[]) => any>(
     fn: F,
     message: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): Promise<ReturnType<F>>;
-  traceCallback?<F extends (...args: any[]) => any>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  traceCallback<F extends (...args: any[]) => any>(
     fn: F,
     position: number | undefined,
     message: M,
@@ -56,6 +60,7 @@ export interface IsoTracingChannel<M = any> {
   ): ReturnType<F>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface IsoChannelHandlers<M = any> {
   start?: (context: M, name: string) => void;
   end?: (context: M, name: string) => void;
@@ -74,6 +79,7 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   unsubscribe(_handlers: IsoChannelHandlers<M>): boolean {
     return false;
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceSync<F extends (...args: any[]) => any>(
     fn: F,
     _message: M,
@@ -82,6 +88,7 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   ): ReturnType<F> {
     return fn.apply(thisArg, args);
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tracePromise<F extends (...args: any[]) => any>(
     fn: F,
     _message: M,
@@ -90,6 +97,7 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   ): Promise<ReturnType<F>> {
     return Promise.resolve(fn.apply(thisArg, args));
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceCallback<F extends (...args: any[]) => any>(
     fn: F,
     _position: number | undefined,
@@ -117,9 +125,11 @@ export interface Common {
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newTracingChannel: <M = any>(
     nameOrChannels: string | object,
   ) => IsoTracingChannel<M>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   processOn: (event: string, handler: (code: any) => void) => void;
 
   // hash a string. not guaranteed to be crypto safe.
@@ -141,7 +151,9 @@ export interface Common {
   readdir?: (path: string) => Promise<string[]>;
   utimes?: (path: string, atime: Date, mtime: Date) => Promise<void>;
   unlink?: (path: string) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   stat?: (path: string) => Promise<any>; // type-erased
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   statSync?: (path: string) => any; // type-erased
   homedir?: () => string;
   tmpdir?: () => string;
@@ -151,10 +163,13 @@ export interface Common {
   appendFileSync?: (filename: string, data: string) => void;
   readFileSync?: (filename: string, encoding: string) => string;
   unlinkSync?: (path: string) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   openFile?: (path: string, flags: string) => Promise<any>; // fs.promises.FileHandle, type-erased
 
   // zlib (promisified and type-erased).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   gunzip?: (data: any) => Promise<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   gzip?: (data: any) => Promise<any>;
 }
 
@@ -165,6 +180,7 @@ const iso: Common = {
   getEnv: (_name) => undefined,
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newTracingChannel: <M = any>(_nameOrChannels: string | object) =>
     new DefaultTracingChannel<M>(),
   processOn: (_0, _1) => {},
