@@ -6,6 +6,12 @@ import type { Span } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import type {
+  AISDKCallParams,
+  AISDKModel,
+  AISDKResult,
+  AISDKUsage,
+} from "../../vendor-sdk-types/ai-sdk";
 
 export interface AISDKPluginConfig {
   /**
@@ -80,18 +86,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:generateText", {
       name: "generateText",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -104,18 +110,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:streamText", {
       name: "streamText",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -128,18 +134,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:generateObject", {
       name: "generateObject",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -152,18 +158,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:streamObject", {
       name: "streamObject",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -176,18 +182,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:Agent.generate", {
       name: "Agent.generate",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -200,18 +206,18 @@ export class AISDKPlugin extends BasePlugin {
     this.subscribeToStreamingChannel("orchestrion:ai:Agent.stream", {
       name: "Agent.stream",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AISDKCallParams;
         return {
           input: processAISDKInput(params),
           metadata: extractMetadataFromParams(params),
         };
       },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
+      extractOutput: (result: unknown) => {
+        return processAISDKOutput(result as AISDKResult, denyOutputPaths);
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
+      extractMetrics: (result: unknown, startTime?: number) => {
+        const metrics = extractTokenMetrics(result as AISDKResult);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -227,24 +233,11 @@ export class AISDKPlugin extends BasePlugin {
    */
   protected subscribeToStreamingChannel(
     channelName: string,
-    config: {
-      name: string;
-      type: string;
-      extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
-      extractMetrics: (
-        result: any,
-        startTime?: number,
-      ) => Record<string, number>;
-      aggregateChunks?: (chunks: any[]) => {
-        output: any;
-        metrics: Record<string, number>;
-      };
-    },
+    config: StreamingChannelConfig,
   ): void {
     const channel = iso.newTracingChannel(channelName);
 
-    const spans = new WeakMap<any, { span: Span; startTime: number }>();
+    const spans = new WeakMap<WeakKey, { span: Span; startTime: number }>();
 
     const handlers = {
       start: (event: StartEvent) => {
@@ -269,21 +262,22 @@ export class AISDKPlugin extends BasePlugin {
         }
       },
 
-      asyncEnd: (event: any) => {
+      asyncEnd: (event: Record<string, unknown>) => {
         const spanData = spans.get(event);
         if (!spanData) {
           return;
         }
 
         const { span, startTime } = spanData;
+        const eventResult = event.result;
 
         // Check if result is a stream
-        if (isAsyncIterable(event.result)) {
+        if (isAsyncIterable(eventResult)) {
           // Patch the stream to collect chunks
-          patchStreamIfNeeded(event.result, {
-            onComplete: (chunks: any[]) => {
+          patchStreamIfNeeded(eventResult, {
+            onComplete: (chunks: unknown[]) => {
               try {
-                let output: any;
+                let output: unknown;
                 let metrics: Record<string, number>;
 
                 if (config.aggregateChunks) {
@@ -326,8 +320,8 @@ export class AISDKPlugin extends BasePlugin {
         } else {
           // Non-streaming response
           try {
-            const output = config.extractOutput(event.result);
-            const metrics = config.extractMetrics(event.result, startTime);
+            const output = config.extractOutput(eventResult);
+            const metrics = config.extractMetrics(eventResult, startTime);
 
             span.log({
               output,
@@ -342,16 +336,17 @@ export class AISDKPlugin extends BasePlugin {
         }
       },
 
-      error: (event: any) => {
+      error: (event: Record<string, unknown>) => {
         const spanData = spans.get(event);
         if (!spanData) {
           return;
         }
 
         const { span } = spanData;
+        const eventError = event.error as Error | undefined;
 
         span.log({
-          error: event.error.message,
+          error: eventError?.message,
         });
         span.end();
         spans.delete(event);
@@ -367,10 +362,28 @@ export class AISDKPlugin extends BasePlugin {
   }
 }
 
+interface StreamingChannelConfig {
+  name: string;
+  type: string;
+  extractInput: (args: unknown[]) => {
+    input: unknown;
+    metadata: Record<string, unknown>;
+  };
+  extractOutput: (result: unknown) => unknown;
+  extractMetrics: (
+    result: unknown,
+    startTime?: number,
+  ) => Record<string, number>;
+  aggregateChunks?: (chunks: unknown[]) => {
+    output: unknown;
+    metrics: Record<string, number>;
+  };
+}
+
 /**
  * Process AI SDK input parameters, converting attachments as needed.
  */
-function processAISDKInput(params: any): any {
+function processAISDKInput(params: AISDKCallParams): unknown {
   if (!params) return params;
 
   // Use the attachment processing from the manual wrapper
@@ -381,8 +394,10 @@ function processAISDKInput(params: any): any {
  * Extract metadata from AI SDK parameters.
  * Includes model, provider, and integration info.
  */
-function extractMetadataFromParams(params: any): Record<string, any> {
-  const metadata: Record<string, any> = {
+function extractMetadataFromParams(
+  params: AISDKCallParams,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
     braintrust: {
       integration_name: "ai-sdk",
       sdk_language: "typescript",
@@ -404,7 +419,10 @@ function extractMetadataFromParams(params: any): Record<string, any> {
 /**
  * Process AI SDK output, omitting specified paths.
  */
-function processAISDKOutput(output: any, denyOutputPaths: string[]): any {
+function processAISDKOutput(
+  output: AISDKResult,
+  denyOutputPaths: string[],
+): Record<string, unknown> | AISDKResult {
   if (!output) return output;
 
   // Extract getter values from result objects
@@ -420,11 +438,11 @@ function processAISDKOutput(output: any, denyOutputPaths: string[]): any {
 /**
  * Extract token metrics from AI SDK result.
  */
-function extractTokenMetrics(result: any): Record<string, number> {
+function extractTokenMetrics(result: AISDKResult): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // Agent results use totalUsage, other results use usage
-  let usage = result?.totalUsage || result?.usage;
+  let usage: AISDKUsage | undefined = result?.totalUsage || result?.usage;
 
   // Try as getter if not directly accessible
   if (!usage && result) {
@@ -485,15 +503,15 @@ function extractTokenMetrics(result: any): Record<string, number> {
 /**
  * Aggregate AI SDK streaming chunks into a single response.
  */
-function aggregateAISDKChunks(chunks: any[]): {
-  output: any;
+function aggregateAISDKChunks(chunks: unknown[]): {
+  output: Record<string, unknown>;
   metrics: Record<string, number>;
 } {
   // For AI SDK streams, the chunks are typically delta objects
   // We'll return the last chunk which usually contains the final state
-  const lastChunk = chunks[chunks.length - 1];
+  const lastChunk = chunks[chunks.length - 1] as AISDKResult | undefined;
 
-  const output: any = {};
+  const output: Record<string, unknown> = {};
   let metrics: Record<string, number> = {};
 
   // Extract usage from last chunk
@@ -521,8 +539,10 @@ function aggregateAISDKChunks(chunks: any[]): {
 /**
  * Extract getter values from AI SDK result objects.
  */
-function extractGetterValues(obj: any): any {
-  const getterValues: Record<string, any> = {};
+function extractGetterValues(
+  obj: AISDKResult,
+): Partial<Record<string, unknown>> {
+  const getterValues: Record<string, unknown> = {};
 
   const getterNames = [
     "text",
@@ -555,8 +575,8 @@ function extractGetterValues(obj: any): any {
 /**
  * Extracts model ID and provider from a model object or string.
  */
-function serializeModelWithProvider(model: any): {
-  model: string;
+function serializeModelWithProvider(model: AISDKModel | undefined): {
+  model: string | undefined;
   provider?: string;
 } {
   const modelId = typeof model === "string" ? model : model?.modelId;
@@ -598,7 +618,7 @@ function parseGatewayModelString(modelString: string): {
 /**
  * Extract cost from result's providerMetadata.
  */
-function extractCostFromResult(result: any): number | undefined {
+function extractCostFromResult(result: AISDKResult): number | undefined {
   // Check for cost in steps (multi-step results)
   if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
     let totalCost = 0;
@@ -714,7 +734,10 @@ function parsePath(path: string): (string | number)[] {
 /**
  * Omit a value at a specific path in an object.
  */
-function omitAtPath(obj: any, keys: (string | number)[]): void {
+function omitAtPath(
+  obj: Record<string, unknown> | unknown[] | undefined,
+  keys: (string | number)[],
+): void {
   if (keys.length === 0) return;
 
   const firstKey = keys[0];
