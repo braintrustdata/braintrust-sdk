@@ -6,8 +6,8 @@ import {
   X_CACHED_HEADER,
 } from "../openai-utils";
 import { responsesProxy } from "./oai_responses";
-import { tracingChannel } from "dc-browser";
 import { OPENAI_CHANNEL } from "../instrumentation/plugins/channels";
+import iso from "../isomorph";
 import {
   APIPromise,
   ChannelContext,
@@ -184,7 +184,9 @@ function wrapBetaChatCompletionParse<
 >(completion: (params: P) => C): (params: P) => Promise<any> {
   return async (allParams: P & SpanInfo) => {
     const { span_info, ...params } = allParams;
-    const channel = tracingChannel(OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_PARSE);
+    const channel = iso.newTracingChannel(
+      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_PARSE,
+    );
     return channel.tracePromise(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       () => completion(params as P),
@@ -199,7 +201,9 @@ function wrapBetaChatCompletionStream<
 >(completion: (params: P) => C): (params: P & SpanInfo) => C {
   return (allParams: P & SpanInfo) => {
     const { span_info, ...params } = allParams;
-    const channel = tracingChannel(OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_STREAM);
+    const channel = iso.newTracingChannel(
+      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_STREAM,
+    );
     return channel.traceSync(
       () =>
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions

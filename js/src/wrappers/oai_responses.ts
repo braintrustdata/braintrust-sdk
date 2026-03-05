@@ -1,5 +1,5 @@
-import { tracingChannel } from "dc-browser";
 import { OPENAI_CHANNEL } from "../instrumentation/plugins/channels";
+import iso from "../isomorph";
 import { parseMetricsFromUsage } from "../openai-utils";
 import {
   APIPromise,
@@ -83,7 +83,7 @@ function wrapResponsesSyncStream<TParams, TResult>(
 ): (params: TParams & SpanInfo, options?: unknown) => TResult {
   return (allParams: TParams & SpanInfo, options?: unknown): TResult => {
     const { span_info, ...params } = allParams;
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
     return channel.traceSync(() => target(params as TParams, options), {
       arguments: [params],
       span_info,

@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../isomorph";
 
 export type EnhancedResponse<T> = {
   response: Response;
@@ -20,7 +20,7 @@ export async function tracePromiseWithResponse<T>(
   traceContext: ChannelContext,
   apiPromise: APIPromise<T>,
 ): Promise<EnhancedResponse<T>> {
-  const channel = tracingChannel(channelName);
+  const channel = iso.newTracingChannel(channelName);
   let enhancedResponse: EnhancedResponse<T> | undefined;
 
   const data = await channel.tracePromise(async () => {
