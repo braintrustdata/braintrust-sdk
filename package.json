@@ -14,6 +14,7 @@
     "start": "turbo run start",
     "clean": "turbo run clean",
     "test": "dotenv -e .env -- turbo run test --filter=\"!@braintrust/otel\"",
+    "test:e2e": "dotenv -e .env -- turbo run test:e2e",
     "playground": "dotenv -e .env -- turbo run playground --filter=\"braintrust\"",
     "prepare": "husky || true",
     "lint:prettier": "prettier --check .",
