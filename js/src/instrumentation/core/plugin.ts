@@ -1,5 +1,5 @@
-import { tracingChannel } from "dc-browser";
-import type { ChannelHandlers as DCChannelHandlers } from "dc-browser";
+import iso from "../../isomorph";
+import type { IsoChannelHandlers } from "../../isomorph";
 import { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 import type { StartEvent } from "./types";
 import { startSpan } from "../../logger";
@@ -56,8 +56,8 @@ export abstract class BasePlugin {
    * @param channelName - The channel name to subscribe to
    * @param handlers - Event handlers
    */
-  protected subscribe(channelName: string, handlers: DCChannelHandlers): void {
-    const channel = tracingChannel(channelName);
+  protected subscribe(channelName: string, handlers: IsoChannelHandlers): void {
+    const channel = iso.newTracingChannel(channelName);
     channel.subscribe(handlers);
   }
 
@@ -78,7 +78,7 @@ export abstract class BasePlugin {
       ) => Record<string, number>;
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
@@ -174,7 +174,7 @@ export abstract class BasePlugin {
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
@@ -315,7 +315,7 @@ export abstract class BasePlugin {
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
