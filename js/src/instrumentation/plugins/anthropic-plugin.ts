@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../../isomorph";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan, Attachment } from "../../logger";
@@ -37,53 +37,56 @@ export class AnthropicPlugin extends BasePlugin {
 
   private subscribeToAnthropicChannels(): void {
     // Messages API - supports streaming via stream=true parameter
-    this.subscribeToStreamingChannel("orchestrion:anthropic:messages.create", {
-      name: "anthropic.messages.create",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        const input = coalesceInput(params.messages || [], params.system);
-        const metadata = filterFrom(params, ["messages", "system"]);
-        return {
-          input: processAttachmentsInInput(input),
-          metadata: { ...metadata, provider: "anthropic" },
-        };
-      },
-      extractOutput: (result: any) => {
-        return result ? { role: result.role, content: result.content } : null;
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = parseMetricsFromUsage(result?.usage);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        const finalized = finalizeAnthropicTokens(metrics);
-        // Filter out undefined values to match Record<string, number> type
-        return Object.fromEntries(
-          Object.entries(finalized).filter(
-            (entry): entry is [string, number] => entry[1] !== undefined,
-          ),
-        );
-      },
-      extractMetadata: (result: any) => {
-        const metadata: Record<string, unknown> = {};
-        const metas = ["stop_reason", "stop_sequence"];
-        for (const m of metas) {
-          if (result?.[m] !== undefined) {
-            metadata[m] = result[m];
+    this.subscribeToStreamingChannel(
+      "orchestrion:@anthropic-ai/sdk:messages.create",
+      {
+        name: "anthropic.messages.create",
+        type: SpanTypeAttribute.LLM,
+        extractInput: (args: any[]) => {
+          const params = args[0] || {};
+          const input = coalesceInput(params.messages || [], params.system);
+          const metadata = filterFrom(params, ["messages", "system"]);
+          return {
+            input: processAttachmentsInInput(input),
+            metadata: { ...metadata, provider: "anthropic" },
+          };
+        },
+        extractOutput: (result: any) => {
+          return result ? { role: result.role, content: result.content } : null;
+        },
+        extractMetrics: (result: any, startTime?: number) => {
+          const metrics = parseMetricsFromUsage(result?.usage);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
           }
-        }
-        return metadata;
+          const finalized = finalizeAnthropicTokens(metrics);
+          // Filter out undefined values to match Record<string, number> type
+          return Object.fromEntries(
+            Object.entries(finalized).filter(
+              (entry): entry is [string, number] => entry[1] !== undefined,
+            ),
+          );
+        },
+        extractMetadata: (result: any) => {
+          const metadata: Record<string, unknown> = {};
+          const metas = ["stop_reason", "stop_sequence"];
+          for (const m of metas) {
+            if (result?.[m] !== undefined) {
+              metadata[m] = result[m];
+            }
+          }
+          return metadata;
+        },
+        aggregateChunks: aggregateAnthropicStreamChunks,
+        isStreaming: (args: any[]) => {
+          return args[0]?.stream === true;
+        },
       },
-      aggregateChunks: aggregateAnthropicStreamChunks,
-      isStreaming: (args: any[]) => {
-        return args[0]?.stream === true;
-      },
-    });
+    );
 
     // Beta Messages API - supports streaming via stream=true parameter
     this.subscribeToStreamingChannel(
-      "orchestrion:anthropic:beta.messages.create",
+      "orchestrion:@anthropic-ai/sdk:beta.messages.create",
       {
         name: "anthropic.beta.messages.create",
         type: SpanTypeAttribute.LLM,
@@ -154,7 +157,7 @@ export class AnthropicPlugin extends BasePlugin {
       isStreaming?: (args: any[]) => boolean;
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 

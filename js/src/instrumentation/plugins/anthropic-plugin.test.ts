@@ -1,18 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+  },
+}));
+
 import {
   AnthropicPlugin,
   parseMetricsFromUsage,
   aggregateAnthropicStreamChunks,
   processAttachmentsInInput,
 } from "./anthropic-plugin";
-import { tracingChannel } from "dc-browser";
 import type { StartEvent } from "../core";
 import { Attachment } from "../../logger";
+import iso from "../../isomorph";
 
-// Mock dc-browser's tracingChannel
-vi.mock("dc-browser", () => ({
-  tracingChannel: vi.fn(),
-}));
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Mock startSpan from logger
 vi.mock("../../logger", () => ({
@@ -46,9 +51,10 @@ describe("AnthropicPlugin", () => {
         mockHandlers = handlers;
       }),
       unsubscribe: vi.fn(),
+      hasSubscribers: false,
     };
 
-    (tracingChannel as any).mockReturnValue(mockChannel);
+    mockNewTracingChannel.mockReturnValue(mockChannel);
 
     plugin = new AnthropicPlugin();
   });
@@ -64,11 +70,11 @@ describe("AnthropicPlugin", () => {
       plugin.enable();
 
       // Should subscribe to both messages.create and beta.messages.create
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:anthropic:messages.create",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@anthropic-ai/sdk:messages.create",
       );
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:anthropic:beta.messages.create",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@anthropic-ai/sdk:beta.messages.create",
       );
       expect(mockChannel.subscribe).toHaveBeenCalled();
     });

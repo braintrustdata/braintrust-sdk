@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../../isomorph";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan, Attachment } from "../../logger";
@@ -36,29 +36,32 @@ export class GoogleGenAIPlugin extends BasePlugin {
 
   private subscribeToGoogleGenAIChannels(): void {
     // GenerativeModel.generateContent (non-streaming)
-    this.subscribeToChannel("orchestrion:google-genai:models.generateContent", {
-      name: "google-genai.generateContent",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        const input = serializeInput(params);
-        const metadata = extractMetadata(params);
-        return {
-          input,
-          metadata: { ...metadata, provider: "google-genai" },
-        };
+    this.subscribeToChannel(
+      "orchestrion:@google/genai:models.generateContent",
+      {
+        name: "google-genai.generateContent",
+        type: SpanTypeAttribute.LLM,
+        extractInput: (args: any[]) => {
+          const params = args[0] || {};
+          const input = serializeInput(params);
+          const metadata = extractMetadata(params);
+          return {
+            input,
+            metadata: { ...metadata, provider: "google-genai" },
+          };
+        },
+        extractOutput: (result: any) => {
+          return result;
+        },
+        extractMetrics: (result: any, startTime?: number) => {
+          return extractGenerateContentMetrics(result, startTime);
+        },
       },
-      extractOutput: (result: any) => {
-        return result;
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        return extractGenerateContentMetrics(result, startTime);
-      },
-    });
+    );
 
     // GenerativeModel.generateContentStream (streaming)
     this.subscribeToGoogleStreamingChannel(
-      "orchestrion:google-genai:models.generateContentStream",
+      "orchestrion:@google/genai:models.generateContentStream",
       {
         name: "google-genai.generateContentStream",
         type: SpanTypeAttribute.LLM,
@@ -89,7 +92,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
       ) => Record<string, number>;
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
@@ -178,7 +181,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 

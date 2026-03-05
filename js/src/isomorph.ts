@@ -27,6 +27,80 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
   }
 }
 
+/**
+ * TracingChannel interface matching both node:diagnostics_channel and dc-browser.
+ * Provides event-based instrumentation for sync/async operations.
+ */
+export interface IsoTracingChannel<M = any> {
+  hasSubscribers: boolean;
+  subscribe(handlers: IsoChannelHandlers<M>): void;
+  unsubscribe(handlers: IsoChannelHandlers<M>): boolean;
+  traceSync?<F extends (...args: any[]) => any>(
+    fn: F,
+    message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F>;
+  tracePromise?<F extends (...args: any[]) => any>(
+    fn: F,
+    message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): Promise<ReturnType<F>>;
+  traceCallback?<F extends (...args: any[]) => any>(
+    fn: F,
+    position: number | undefined,
+    message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F>;
+}
+
+export interface IsoChannelHandlers<M = any> {
+  start?: (context: M, name: string) => void;
+  end?: (context: M, name: string) => void;
+  asyncStart?: (context: M, name: string) => void;
+  asyncEnd?: (context: M, name: string) => void;
+  error?: (context: M, name: string) => void;
+}
+
+/**
+ * Default no-op TracingChannel implementation.
+ */
+class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
+  hasSubscribers = false;
+
+  subscribe(_handlers: IsoChannelHandlers<M>): void {}
+  unsubscribe(_handlers: IsoChannelHandlers<M>): boolean {
+    return false;
+  }
+  traceSync<F extends (...args: any[]) => any>(
+    fn: F,
+    _message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F> {
+    return fn.apply(thisArg, args);
+  }
+  tracePromise<F extends (...args: any[]) => any>(
+    fn: F,
+    _message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): Promise<ReturnType<F>> {
+    return Promise.resolve(fn.apply(thisArg, args));
+  }
+  traceCallback<F extends (...args: any[]) => any>(
+    fn: F,
+    _position: number | undefined,
+    _message: M,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F> {
+    return fn.apply(thisArg, args);
+  }
+}
+
 export interface Common {
   buildType:
     | "browser" // deprecated, use /workerd or /edge-light entrypoints for edge environments
@@ -43,6 +117,9 @@ export interface Common {
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
+  newTracingChannel: <M = any>(
+    nameOrChannels: string | object,
+  ) => IsoTracingChannel<M>;
   processOn: (event: string, handler: (code: any) => void) => void;
 
   // hash a string. not guaranteed to be crypto safe.
@@ -88,6 +165,8 @@ const iso: Common = {
   getEnv: (_name) => undefined,
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
+  newTracingChannel: <M = any>(_nameOrChannels: string | object) =>
+    new DefaultTracingChannel<M>(),
   processOn: (_0, _1) => {},
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
   writeln: (text: string) => console.log(text),

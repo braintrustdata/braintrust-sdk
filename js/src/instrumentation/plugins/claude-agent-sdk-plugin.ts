@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../../isomorph";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan } from "../../logger";
@@ -259,7 +259,9 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
    * and individual LLM calls.
    */
   private subscribeToQuery(): void {
-    const channel = tracingChannel("orchestrion:claude-agent-sdk:query");
+    const channel = iso.newTracingChannel(
+      "orchestrion:@anthropic-ai/claude-agent-sdk:query",
+    );
 
     const spans = new WeakMap<
       any,

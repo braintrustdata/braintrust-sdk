@@ -1,7 +1,30 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+    getEnv: vi.fn(() => undefined),
+    buildType: "node",
+  },
+}));
+
 import { registry, configureInstrumentation } from "./registry";
+import iso from "../isomorph";
+
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 describe("Plugin Registry", () => {
+  beforeEach(() => {
+    // Setup mock channel
+    const mockChannel = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      hasSubscribers: false,
+    };
+    mockNewTracingChannel.mockReturnValue(mockChannel);
+  });
+
   // Clean up after each test
   afterEach(() => {
     registry.disable();
