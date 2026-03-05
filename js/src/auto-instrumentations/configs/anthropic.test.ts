@@ -16,7 +16,7 @@ describe("Anthropic Instrumentation Configs", () => {
     expect(config).toBeDefined();
     expect(config?.module.name).toBe("@anthropic-ai/sdk");
     expect(config?.module.versionRange).toBe(">=0.60.0");
-    expect(config?.module.filePath).toBe("resources/messages.mjs");
+    expect(config?.module.filePath).toBe("resources/messages/messages.mjs");
     expect((config?.functionQuery as any).className).toBe("Messages");
     expect((config?.functionQuery as any).methodName).toBe("create");
     expect((config?.functionQuery as any).kind).toBe("Async");

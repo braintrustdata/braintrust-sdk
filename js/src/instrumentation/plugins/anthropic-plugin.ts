@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import iso from "../../isomorph";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan, Attachment } from "../../logger";
@@ -101,13 +101,13 @@ export class AnthropicPlugin extends BasePlugin {
 
     // Messages API - supports streaming via stream=true parameter
     this.subscribeToStreamingChannel(
-      "orchestrion:anthropic:messages.create",
+      "orchestrion:@anthropic-ai/sdk:messages.create",
       anthropicConfig,
     );
 
     // Beta Messages API - supports streaming via stream=true parameter
     this.subscribeToStreamingChannel(
-      "orchestrion:anthropic:beta.messages.create",
+      "orchestrion:@anthropic-ai/sdk:beta.messages.create",
       {
         ...anthropicConfig,
         name: "anthropic.beta.messages.create",
@@ -123,7 +123,7 @@ export class AnthropicPlugin extends BasePlugin {
     channelName: string,
     config: StreamingChannelConfig,
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<WeakKey, { span: Span; startTime: number }>();
 

@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ClaudeAgentSDKPlugin } from "./claude-agent-sdk-plugin";
-import { tracingChannel } from "dc-browser";
 
-// Mock the dc-browser module
-vi.mock("dc-browser", () => ({
-  tracingChannel: vi.fn(),
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+  },
 }));
+
+import { ClaudeAgentSDKPlugin } from "./claude-agent-sdk-plugin";
+import iso from "../../isomorph";
+
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Mock the logger module
 vi.mock("../../logger", () => ({
@@ -100,9 +105,10 @@ describe("ClaudeAgentSDKPlugin", () => {
     mockChannel = {
       subscribe: vi.fn(),
       unsubscribe: mockUnsubscribe,
+      hasSubscribers: false,
     };
 
-    (tracingChannel as any).mockReturnValue(mockChannel);
+    mockNewTracingChannel.mockReturnValue(mockChannel);
 
     plugin = new ClaudeAgentSDKPlugin();
   });
@@ -115,8 +121,8 @@ describe("ClaudeAgentSDKPlugin", () => {
     it("should enable the plugin and subscribe to channels", () => {
       plugin.enable();
 
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:claude-agent-sdk:query",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@anthropic-ai/claude-agent-sdk:query",
       );
       expect(mockChannel.subscribe).toHaveBeenCalledTimes(1);
       expect(mockChannel.subscribe).toHaveBeenCalledWith(

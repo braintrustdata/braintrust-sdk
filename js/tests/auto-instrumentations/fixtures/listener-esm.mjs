@@ -1,21 +1,26 @@
-import { tracingChannel } from "diagnostics_channel";
-import { parentPort } from "worker_threads";
+import { tracingChannel } from "node:diagnostics_channel";
+import { parentPort } from "node:worker_threads";
+import * as dc from "node:diagnostics_channel";
 
 const events = { start: [], end: [], error: [] };
 // NOTE: code-transformer prepends "orchestrion:openai:" to the channel name
 const expectedChannel = "orchestrion:openai:chat.completions.create";
 
+// Get the kStoreKey symbol to access the store
+const kStoreKey = dc.kStoreKey || Symbol.for("diagnostics_channel.store");
+
 // Subscribe to the channel and accumulate events
 const channel = tracingChannel(expectedChannel);
 channel.subscribe({
   start: (ctx) => {
-    // Convert arguments to array for serialization
+    // Arguments are stored in the Symbol(diagnostics_channel.store)
+    const store = ctx[kStoreKey];
     events.start.push({
-      args: Array.from(ctx.arguments || []),
-      self: !!ctx.self,
+      args: store?.arguments ? Array.from(store.arguments) : [],
+      self: !!store?.self,
     });
   },
-  end: (ctx) => {
+  asyncEnd: (ctx) => {
     // Only send serializable result data
     events.end.push({
       result: ctx.result ? JSON.parse(JSON.stringify(ctx.result)) : null,

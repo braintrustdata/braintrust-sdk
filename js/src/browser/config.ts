@@ -1,3 +1,4 @@
+import { tracingChannel } from "dc-browser";
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
 import { registry } from "../instrumentation/registry";
@@ -31,6 +32,9 @@ export function configureBrowser(): void {
   } catch {
     // Ignore
   }
+
+  iso.newTracingChannel = <_M = any>(nameOrChannels: string | object) =>
+    tracingChannel(nameOrChannels as any) as any;
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
