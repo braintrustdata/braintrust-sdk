@@ -41,7 +41,9 @@ interface WorkflowSpanState {
   spanId: string | undefined;
 }
 
-class BraintrustWorkflowInboundInterceptor implements WorkflowInboundCallsInterceptor {
+class BraintrustWorkflowInboundInterceptor
+  implements WorkflowInboundCallsInterceptor
+{
   constructor(private state: WorkflowSpanState) {}
 
   async execute(
@@ -74,7 +76,9 @@ class BraintrustWorkflowInboundInterceptor implements WorkflowInboundCallsInterc
   }
 }
 
-class BraintrustWorkflowOutboundInterceptor implements WorkflowOutboundCallsInterceptor {
+class BraintrustWorkflowOutboundInterceptor
+  implements WorkflowOutboundCallsInterceptor
+{
   constructor(private state: WorkflowSpanState) {}
 
   private getHeaders(): Record<string, Payload> {

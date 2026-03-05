@@ -708,8 +708,9 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   });
 
   test("otelContextFromSpanExport parses BT span and creates OTEL context", async () => {
-    const { contextFromSpanExport: otelContextFromSpanExport } =
-      await import("./");
+    const { contextFromSpanExport: otelContextFromSpanExport } = await import(
+      "./"
+    );
     const { SpanComponentsV4 } = await import("braintrust/util");
     const { SpanObjectTypeV3 } = await import("braintrust/util");
 
@@ -754,8 +755,9 @@ describe("Distributed Tracing (BT → OTEL)", () => {
   test("BT span in Service A can be parent of OTEL span in Service B", async () => {
     const { tracer, exporter, processor } =
       setupOtelFixture("service-a-project");
-    const { contextFromSpanExport: otelContextFromSpanExport } =
-      await import("./");
+    const { contextFromSpanExport: otelContextFromSpanExport } = await import(
+      "./"
+    );
 
     const projectName = "service-a-project";
     const logger = initLogger({ projectName });
