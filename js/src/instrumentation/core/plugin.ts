@@ -308,8 +308,15 @@ export abstract class BasePlugin {
 
         // Check if result is a stream
         if (isAsyncIterable(event.result)) {
+          let firstChunkTime: number | undefined;
+
           // Patch the stream to collect chunks
           patchStreamIfNeeded(event.result, {
+            onChunk: () => {
+              if (firstChunkTime === undefined) {
+                firstChunkTime = getCurrentUnixTimestamp();
+              }
+            },
             onComplete: (chunks: any[]) => {
               try {
                 let output: any;
@@ -331,7 +338,15 @@ export abstract class BasePlugin {
                 }
 
                 // Add time_to_first_token if not already present
-                if (!metrics.time_to_first_token && chunks.length > 0) {
+                if (
+                  metrics.time_to_first_token === undefined &&
+                  firstChunkTime !== undefined
+                ) {
+                  metrics.time_to_first_token = firstChunkTime - startTime;
+                } else if (
+                  metrics.time_to_first_token === undefined &&
+                  chunks.length > 0
+                ) {
                   metrics.time_to_first_token =
                     getCurrentUnixTimestamp() - startTime;
                 }
