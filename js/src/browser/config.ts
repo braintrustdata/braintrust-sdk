@@ -34,7 +34,7 @@ export function configureBrowser(): void {
   }
 
   iso.newTracingChannel = <_M = any>(nameOrChannels: string | object) =>
-    tracingChannel(nameOrChannels) as any;
+    tracingChannel(nameOrChannels as any) as any;
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
