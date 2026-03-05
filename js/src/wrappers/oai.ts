@@ -189,7 +189,7 @@ function wrapBetaChatCompletionParse<
     );
     return channel.tracePromise(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      () => completion(params as P),
+      async () => await completion(params as P),
       { arguments: [params], span_info },
     );
   };
