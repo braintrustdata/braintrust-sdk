@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
@@ -39,19 +39,16 @@ async function runWithAutoInstrumentation(
   spans: any[];
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [`--import=${hookPath}`, scriptPath],
-      {
-        env: {
-          ...process.env,
-          ...env,
-          // Disable actual API calls
-          NODE_ENV: "test",
-        },
-        cwd: fixturesDir,
+    const hookUrl = pathToFileURL(hookPath).href;
+    const child = spawn(process.execPath, [`--import=${hookUrl}`, scriptPath], {
+      env: {
+        ...process.env,
+        ...env,
+        // Disable actual API calls
+        NODE_ENV: "test",
       },
-    );
+      cwd: fixturesDir,
+    });
 
     let stdout = "";
     let stderr = "";
