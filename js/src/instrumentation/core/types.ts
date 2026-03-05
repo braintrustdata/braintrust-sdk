@@ -74,14 +74,14 @@ export interface ErrorEvent extends BaseContext {
  * Event emitted when a promise begins to settle.
  * This fires after the synchronous portion and when the async continuation starts.
  */
-export interface AsyncStartEvent<TInput = unknown> extends StartEvent<TInput> {}
+export type AsyncStartEvent<TInput = unknown> = StartEvent<TInput>;
 
 /**
  * Event emitted when a promise finishes settling.
  * This fires BEFORE control returns to user code after await.
  * This is where you should extract output data and finalize spans.
  */
-export interface AsyncEndEvent<TResult = unknown> extends EndEvent<TResult> {}
+export type AsyncEndEvent<TResult = unknown> = EndEvent<TResult>;
 
 /**
  * Subscription handlers for a TracingChannel.

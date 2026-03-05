@@ -60,8 +60,10 @@ export class AnthropicPlugin extends BasePlugin {
         const finalized = finalizeAnthropicTokens(metrics);
         // Filter out undefined values to match Record<string, number> type
         return Object.fromEntries(
-          Object.entries(finalized).filter(([, v]) => v !== undefined),
-        ) as Record<string, number>;
+          Object.entries(finalized).filter(
+            (entry): entry is [string, number] => entry[1] !== undefined,
+          ),
+        );
       },
       extractMetadata: (result: any) => {
         const metadata: Record<string, unknown> = {};
@@ -105,8 +107,10 @@ export class AnthropicPlugin extends BasePlugin {
           const finalized = finalizeAnthropicTokens(metrics);
           // Filter out undefined values to match Record<string, number> type
           return Object.fromEntries(
-            Object.entries(finalized).filter(([, v]) => v !== undefined),
-          ) as Record<string, number>;
+            Object.entries(finalized).filter(
+              (entry): entry is [string, number] => entry[1] !== undefined,
+            ),
+          );
         },
         extractMetadata: (result: any) => {
           const metadata: Record<string, unknown> = {};
@@ -374,8 +378,10 @@ export function aggregateAnthropicStreamChunks(chunks: any[]): {
   const finalized = finalizeAnthropicTokens(metrics);
   // Filter out undefined values to match Record<string, number> type
   const filteredMetrics = Object.fromEntries(
-    Object.entries(finalized).filter(([, v]) => v !== undefined),
-  ) as Record<string, number>;
+    Object.entries(finalized).filter(
+      (entry): entry is [string, number] => entry[1] !== undefined,
+    ),
+  );
 
   return {
     output,

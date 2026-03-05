@@ -1,11 +1,7 @@
-import { currentSpan } from "../../logger";
-import {
-  wrapTest,
-  wrapDescribe,
-  getExperimentContext,
-  formatExperimentSummary,
-} from "./wrapper";
+import { wrapTest, wrapDescribe, getExperimentContext } from "./wrapper";
 import { wrapExpect } from "./expect-wrapper";
+import { summarizeAndFlush } from "../shared/flush";
+import { logOutputs, logFeedback, getCurrentSpan } from "../shared/logging";
 import type { VitestMethods, BraintrustVitest, WrapperConfig } from "./types";
 
 export type { Score } from "../../../util/score";
@@ -100,38 +96,9 @@ export function wrapVitest<
     afterAll: vitestMethods.afterAll || (() => {}),
     beforeEach: vitestMethods.beforeEach,
     afterEach: vitestMethods.afterEach,
-    logOutputs: (outputs: Record<string, unknown>) => {
-      const span = currentSpan();
-      if (!span) {
-        console.warn(
-          "Braintrust: No active span. logOutputs() must be called within a wrapped test.",
-        );
-        return;
-      }
-      span.log({ output: outputs });
-    },
-    logFeedback: (feedback: {
-      name: string;
-      score: number;
-      metadata?: Record<string, unknown>;
-    }) => {
-      const span = currentSpan();
-      if (!span) {
-        console.warn(
-          "Braintrust: No active span. logFeedback() must be called within a wrapped test.",
-        );
-        return;
-      }
-      span.log({
-        scores: {
-          [feedback.name]: feedback.score,
-        },
-        metadata: feedback.metadata,
-      });
-    },
-    getCurrentSpan: () => {
-      return currentSpan();
-    },
+    logOutputs,
+    logFeedback,
+    getCurrentSpan,
     flushExperiment: async (options?: { displaySummary?: boolean }) => {
       const ctx = getExperimentContext();
       if (!ctx) {
@@ -141,30 +108,9 @@ export function wrapVitest<
         return;
       }
 
-      // Default displaySummary to the config value, or true if not specified
-      const shouldDisplaySummary =
-        options?.displaySummary ?? config.displaySummary ?? true;
-
-      // Get summary before flushing
-      let summary;
-      if (shouldDisplaySummary) {
-        try {
-          summary = await ctx.experiment.summarize();
-        } catch (error) {
-          console.warn(
-            "Braintrust: Failed to generate experiment summary:",
-            error,
-          );
-        }
-      }
-
-      // Flush the experiment
-      await ctx.experiment.flush();
-
-      // Display summary after flushing
-      if (summary && shouldDisplaySummary) {
-        console.log(formatExperimentSummary(summary));
-      }
+      await summarizeAndFlush(ctx.experiment, {
+        displaySummary: options?.displaySummary ?? config.displaySummary,
+      });
     },
   };
 }

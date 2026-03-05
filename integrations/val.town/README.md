@@ -2,9 +2,7 @@
 
 A collection of example vals showing how to use Braintrust with Val Town.
 
-## Examples
-
-### Tutorial
+## Tutorial
 
 [![Open Val Town Template](https://stevekrouse-badge.web.val.run/?3)](https://esm.town/v/braintrust/sdk)
 
@@ -20,7 +18,7 @@ A simple example showing how to use the Braintrust SDK to evaluate an AI functio
 2. Follow the setup instructions in the example's README
 3. Fork and run the val to see it in action
 
-## Resources
+## Documentation
 
 - [Braintrust documentation](https://www.braintrust.dev/docs)
 - [Val Town documentation](https://docs.val.town)

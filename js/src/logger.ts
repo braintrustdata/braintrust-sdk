@@ -861,7 +861,7 @@ export class BraintrustState {
   public httpLogger(): HTTPBackgroundLogger {
     // this is called for configuration in some end-to-end tests so
     // expose the http bg logger here.
-    return this._bgLogger.get() as HTTPBackgroundLogger;
+    return this._bgLogger.get();
   }
 
   public setOverrideBgLogger(logger: BackgroundLogger | null) {
@@ -6307,8 +6307,8 @@ export class SpanImpl implements Span {
       [IS_MERGE_FIELD]: this.isMerge,
     });
 
-    if (partialRecord.metrics?.end) {
-      this.loggedEndTime = partialRecord.metrics?.end as number;
+    if (typeof partialRecord.metrics?.end === "number") {
+      this.loggedEndTime = partialRecord.metrics.end;
     }
 
     // Write to local span cache for scorer access
@@ -6317,11 +6317,10 @@ export class SpanImpl implements Span {
       const cachedSpan: CachedSpan = {
         input: partialRecord.input,
         output: partialRecord.output,
-        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        metadata: partialRecord.metadata,
         span_id: this._spanId,
         span_parents: this._spanParents,
-        span_attributes:
-          partialRecord.span_attributes as CachedSpan["span_attributes"],
+        span_attributes: partialRecord.span_attributes,
       };
       this._state.spanCache.queueWrite(
         this._rootSpanId,
@@ -6529,6 +6528,7 @@ export class SpanImpl implements Span {
       default: {
         // trigger a compile-time error if we add a new object type
         const _exhaustive: never = this.parentObjectType;
+        // eslint-disable-next-line no-unused-expressions
         _exhaustive;
         return NOOP_SPAN_PERMALINK;
       }
@@ -6970,7 +6970,8 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
       ? ChatPrompt
       : Flavor extends "completion"
         ? CompletionPrompt
-        : {});
+        : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+          {});
 
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
@@ -7565,13 +7566,7 @@ export class RemoteEvalParameters<
       typeof x === "object" &&
       x !== null &&
       "__braintrust_parameters_marker" in x &&
-      (
-        x as unknown as RemoteEvalParameters<
-          boolean,
-          boolean,
-          Record<string, unknown>
-        >
-      ).__braintrust_parameters_marker === true
+      x.__braintrust_parameters_marker === true
     );
   }
 }
