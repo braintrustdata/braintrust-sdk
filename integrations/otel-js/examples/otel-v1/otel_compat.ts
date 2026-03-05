@@ -35,9 +35,8 @@ async function main() {
   // Try to import AsyncHooksContextManager - it's optional but required for context propagation
   let AsyncHooksContextManager: any;
   try {
-    const contextAsyncHooks = await import(
-      "@opentelemetry/context-async-hooks"
-    );
+    const contextAsyncHooks =
+      await import("@opentelemetry/context-async-hooks");
     AsyncHooksContextManager = contextAsyncHooks.AsyncHooksContextManager;
   } catch (e) {
     console.error("⚠️  @opentelemetry/context-async-hooks not found.");
