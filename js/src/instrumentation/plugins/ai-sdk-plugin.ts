@@ -747,17 +747,26 @@ function omitAtPath(
     if (Array.isArray(obj)) {
       obj.forEach((item) => {
         if (remainingKeys.length > 0) {
-          omitAtPath(item, remainingKeys);
+          omitAtPath(
+            item as Record<string, unknown> | unknown[] | undefined,
+            remainingKeys,
+          );
         }
       });
     }
   } else if (remainingKeys.length === 0) {
     if (obj && typeof obj === "object" && firstKey in obj) {
-      obj[firstKey] = "<omitted>";
+      (obj as Record<string | number, unknown>)[firstKey] = "<omitted>";
     }
   } else {
     if (obj && typeof obj === "object" && firstKey in obj) {
-      omitAtPath(obj[firstKey], remainingKeys);
+      omitAtPath(
+        (obj as Record<string | number, unknown>)[firstKey] as
+          | Record<string, unknown>
+          | unknown[]
+          | undefined,
+        remainingKeys,
+      );
     }
   }
 }

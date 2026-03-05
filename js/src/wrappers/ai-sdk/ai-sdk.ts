@@ -164,11 +164,11 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
   }) as T;
 }
 
-export const wrapAgentClass = <T>(
-  AgentClass: T,
+export const wrapAgentClass = (
+  AgentClass: any,
   options: WrapAISDKOptions = {},
-): T => {
-  const typedAgentClass = AgentClass as unknown as AISDKAgentClass;
+): any => {
+  const typedAgentClass = AgentClass as AISDKAgentClass;
 
   return new Proxy(typedAgentClass, {
     construct(target, args, newTarget) {
@@ -198,7 +198,7 @@ export const wrapAgentClass = <T>(
         },
       });
     },
-  }) as unknown as T;
+  }) as any;
 };
 
 const wrapAgentGenerate = (
