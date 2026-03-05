@@ -1,5 +1,7 @@
 # @braintrust/otel
 
+[![npm version](https://img.shields.io/npm/v/%40braintrust%2Fotel.svg)](https://www.npmjs.com/package/@braintrust/otel)
+
 SDK for integrating [Braintrust](https://braintrust.dev) with [OpenTelemetry](https://opentelemetry.io/). This package enables you to send OpenTelemetry spans to Braintrust for logging and observability, and provides seamless interoperability between Braintrust and OpenTelemetry tracing contexts.
 
 ## Installation
@@ -29,16 +31,16 @@ npm install @opentelemetry/context-async-hooks
 
 This package supports both OpenTelemetry 1.x and 2.x versions.
 
-Note: You may run into a known [OpenTelemetry browser bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545)) with `@opentelemetry/exporter-trace-otlp-http` < 0.205.0. If you encounter this issue, upgrade the `@opentelemetry/exporter-trace-otlp-http` and related packages to a minimum of:
+Note: You may run into a known [OpenTelemetry browser bug](https://github.com/open-telemetry/opentelemetry-js/issues/3545) with `@opentelemetry/exporter-trace-otlp-http` < 0.205.0. If you encounter this issue, upgrade the `@opentelemetry/exporter-trace-otlp-http` and related packages to a minimum of:
 
 - `@opentelemetry/exporter-trace-otlp-http` >= 0.205.0
 - `@opentelemetry/sdk-trace-base` >= 2.1.0
 - `@opentelemetry/api` >= 2.1.0
 - `@opentelemetry/core` >= 2.1.0
 
-It's **important** you do not mix `@opentelemetry/core` and related packages with 1.x with 2.x packages.
+It's **important** that `@opentelemetry/core` and related packages all use the same major version (1.x or 2.x).
 
-## Overview
+## Capabilities
 
 This integration provides two main capabilities:
 
@@ -218,40 +220,7 @@ The following environment variables can be used to configure the integration:
 - `BRAINTRUST_PARENT`: Parent project identifier (e.g., `project_name:my_project`)
 - `BRAINTRUST_API_URL`: Braintrust API endpoint (defaults to `https://api.braintrust.dev`)
 
-## Development
-
-This package is designed to work with both OpenTelemetry 1.x and 2.x. The development structure ensures compatibility across versions:
-
-### Testing Structure
-
-- **`src/`**: Main source code that is compatible with both OpenTelemetry 1.x and 2.x
-- **`otel-v1/`**: Test package that runs tests against OpenTelemetry 1.x dependencies
-- **`otel-v2/`**: Test package that runs tests against OpenTelemetry 2.x dependencies
-
-### Running Tests
-
-```bash
-# Run tests for both OpenTelemetry versions
-pnpm test
-
-# Run tests for OpenTelemetry 1.x only
-pnpm test:v1
-
-# Run tests for OpenTelemetry 2.x only
-pnpm test:v2
-```
-
-### How It Works
-
-The `otel-v1` and `otel-v2` directories are separate packages that:
-
-1. Reference the main `src/` code from the parent directory
-2. Install different versions of OpenTelemetry dependencies
-3. Run the same test suites against their respective OpenTelemetry versions
-
-This approach ensures the package works correctly with both major OpenTelemetry versions while maintaining a single source codebase.
-
-## Learn More
+## Documentation
 
 - [Braintrust Documentation](https://www.braintrust.dev/docs)
 - [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
