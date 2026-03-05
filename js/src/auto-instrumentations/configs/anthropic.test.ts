@@ -38,7 +38,7 @@ describe("Anthropic Instrumentation Configs", () => {
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
-  it("should NOT include braintrust: prefix (code-transformer adds orchestrion:anthropic: prefix)", () => {
+  it("should NOT include braintrust: prefix (code-transformer adds orchestrion:@anthropic-ai/sdk: prefix)", () => {
     for (const config of anthropicConfigs) {
       expect(config.channelName).not.toContain("braintrust:");
       expect(config.channelName).not.toContain("orchestrion:");

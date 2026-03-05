@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan } from "../../logger";
@@ -232,7 +232,7 @@ async function createLLMSpanForMessages(
 /**
  * Plugin for Claude Agent SDK auto-instrumentation.
  *
- * Subscribes to orchestrion:claude-agent-sdk:* channels and creates
+ * Subscribes to orchestrion:@anthropic-ai/claude-agent-sdk:* channels and creates
  * Braintrust spans with proper tracing for agent interactions.
  *
  * NOTE: Uses span type TASK (not LLM) for agent interactions since agents
@@ -259,7 +259,9 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
    * and individual LLM calls.
    */
   private subscribeToQuery(): void {
-    const channel = tracingChannel("orchestrion:claude-agent-sdk:query");
+    const channel = tracingChannel(
+      "orchestrion:@anthropic-ai/claude-agent-sdk:query",
+    );
 
     const spans = new WeakMap<
       any,

@@ -1,5 +1,5 @@
-import { tracingChannel } from "dc-browser";
-import type { ChannelHandlers as DCChannelHandlers } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
+import type { ChannelHandlers as DCChannelHandlers } from "./types";
 import { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 import type { StartEvent } from "./types";
 import { startSpan } from "../../logger";

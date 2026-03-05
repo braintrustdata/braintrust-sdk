@@ -20,7 +20,7 @@ describe("Claude Agent SDK Instrumentation Configs", () => {
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
-  it("should NOT include braintrust: prefix (code-transformer adds orchestrion:claude-agent-sdk: prefix)", () => {
+  it("should NOT include braintrust: prefix (code-transformer adds orchestrion:@anthropic-ai/claude-agent-sdk: prefix)", () => {
     for (const config of claudeAgentSDKConfigs) {
       expect(config.channelName).not.toContain("braintrust:");
       expect(config.channelName).not.toContain("orchestrion:");

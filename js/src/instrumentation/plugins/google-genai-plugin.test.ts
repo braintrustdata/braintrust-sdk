@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GoogleGenAIPlugin } from "./google-genai-plugin";
-import { tracingChannel } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
 import { Attachment } from "../../logger";
 
-// Mock dc-browser
-vi.mock("dc-browser", () => ({
+// Mock node:diagnostics_channel
+vi.mock("node:diagnostics_channel", () => ({
   tracingChannel: vi.fn(),
 }));
 
@@ -52,10 +52,10 @@ describe("GoogleGenAIPlugin", () => {
       plugin.enable();
 
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContent",
+        "orchestrion:@google/genai:models.generateContent",
       );
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContentStream",
+        "orchestrion:@google/genai:models.generateContentStream",
       );
       expect(subscribeSpy).toHaveBeenCalled();
     });
@@ -118,7 +118,7 @@ describe("GoogleGenAIPlugin", () => {
       plugin.enable();
 
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:google-genai:models.generateContentStream",
+        "orchestrion:@google/genai:models.generateContentStream",
       );
     });
   });

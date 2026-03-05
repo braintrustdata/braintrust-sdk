@@ -161,7 +161,12 @@ describe("CLI import restrictions", () => {
         const relativePath = path.relative(srcDir, fullPath);
 
         // Skip the cli directory - CLI code is allowed to use require() and dynamic imports
-        if (entry.isDirectory() && entry.name === "cli") {
+        // Skip the instrumentation directory - Node.js-only code that needs dynamic imports
+        // for optional SDK patching (e.g., APIPromise Symbol.species)
+        if (
+          entry.isDirectory() &&
+          (entry.name === "cli" || entry.name === "instrumentation")
+        ) {
           continue;
         }
 

@@ -40,7 +40,7 @@ describe("Google GenAI Instrumentation Configs", () => {
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
-  it("should NOT include braintrust: or orchestrion: prefix (code-transformer adds orchestrion:google-genai: prefix)", () => {
+  it("should NOT include braintrust: or orchestrion: prefix (code-transformer adds orchestrion:@google/genai: prefix)", () => {
     for (const config of googleGenAIConfigs) {
       expect(config.channelName).not.toContain("braintrust:");
       expect(config.channelName).not.toContain("orchestrion:");

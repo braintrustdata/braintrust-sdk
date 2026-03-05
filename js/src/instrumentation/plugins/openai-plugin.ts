@@ -20,6 +20,8 @@ export class OpenAIPlugin extends BasePlugin {
   }
 
   protected onEnable(): void {
+    this.patchAPIPromise();
+
     // Chat Completions - supports streaming
     this.subscribeToStreamingChannel(
       "orchestrion:openai:chat.completions.create",
@@ -225,6 +227,20 @@ export class OpenAIPlugin extends BasePlugin {
         return metrics;
       },
     });
+  }
+
+  private async patchAPIPromise(): Promise<void> {
+    try {
+      const mod = await import("openai/core");
+      const APIPromise = mod.APIPromise;
+      if (APIPromise && !APIPromise[Symbol.species]) {
+        Object.defineProperty(APIPromise, Symbol.species, {
+          get: () => Promise,
+        });
+      }
+    } catch {
+      // SDK not installed, nothing to patch
+    }
   }
 
   protected onDisable(): void {

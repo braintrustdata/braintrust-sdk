@@ -5,12 +5,12 @@ import {
   aggregateAnthropicStreamChunks,
   processAttachmentsInInput,
 } from "./anthropic-plugin";
-import { tracingChannel } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
 import type { StartEvent } from "../core";
 import { Attachment } from "../../logger";
 
-// Mock dc-browser's tracingChannel
-vi.mock("dc-browser", () => ({
+// Mock node:diagnostics_channel's tracingChannel
+vi.mock("node:diagnostics_channel", () => ({
   tracingChannel: vi.fn(),
 }));
 
@@ -65,10 +65,10 @@ describe("AnthropicPlugin", () => {
 
       // Should subscribe to both messages.create and beta.messages.create
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:anthropic:messages.create",
+        "orchestrion:@anthropic-ai/sdk:messages.create",
       );
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:anthropic:beta.messages.create",
+        "orchestrion:@anthropic-ai/sdk:beta.messages.create",
       );
       expect(mockChannel.subscribe).toHaveBeenCalled();
     });

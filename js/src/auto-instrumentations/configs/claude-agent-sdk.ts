@@ -8,8 +8,8 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * transformation at build-time or load-time.
  *
  * NOTE: Channel names should NOT include the braintrust: prefix. The code-transformer
- * will prepend "orchestrion:claude-agent-sdk:" to these names, resulting in final channel
- * names like: "orchestrion:claude-agent-sdk:query"
+ * will prepend "orchestrion:<module.name>:" to these names, resulting in final channel
+ * names like: "orchestrion:@anthropic-ai/claude-agent-sdk:query"
  */
 export const claudeAgentSDKConfigs: InstrumentationConfig[] = [
   // query - Main entry point for agent interactions (top-level exported async generator function)

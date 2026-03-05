@@ -8,8 +8,8 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * transformation at build-time or load-time.
  *
  * NOTE: Channel names should NOT include the braintrust: prefix. The code-transformer
- * will prepend "orchestrion:anthropic:" to these names, resulting in final channel names like:
- * "orchestrion:anthropic:messages.create"
+ * will prepend "orchestrion:<module.name>:" to these names, resulting in final channel names like:
+ * "orchestrion:@anthropic-ai/sdk:messages.create"
  */
 export const anthropicConfigs: InstrumentationConfig[] = [
   // Messages API - create (supports streaming via stream=true parameter)

@@ -8,8 +8,8 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * transformation at build-time or load-time.
  *
  * NOTE: Channel names should NOT include the braintrust: prefix. The code-transformer
- * will prepend "orchestrion:google-genai:" to these names, resulting in final channel names like:
- * "orchestrion:google-genai:models.generateContent"
+ * will prepend "orchestrion:<module.name>:" to these names, resulting in final channel names like:
+ * "orchestrion:@google/genai:models.generateContent"
  */
 export const googleGenAIConfigs: InstrumentationConfig[] = [
   // Models.generateContentInternal - The actual class method (Node.js entry point)

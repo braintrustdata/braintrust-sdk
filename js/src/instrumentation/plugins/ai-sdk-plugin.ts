@@ -1,4 +1,4 @@
-import { tracingChannel } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
 import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
 import type { StartEvent } from "../core";
 import { startSpan } from "../../logger";

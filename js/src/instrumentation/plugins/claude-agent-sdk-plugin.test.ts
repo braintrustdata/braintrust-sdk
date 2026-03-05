@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ClaudeAgentSDKPlugin } from "./claude-agent-sdk-plugin";
-import { tracingChannel } from "dc-browser";
+import { tracingChannel } from "node:diagnostics_channel";
 
-// Mock the dc-browser module
-vi.mock("dc-browser", () => ({
+// Mock the node:diagnostics_channel module
+vi.mock("node:diagnostics_channel", () => ({
   tracingChannel: vi.fn(),
 }));
 
@@ -116,7 +116,7 @@ describe("ClaudeAgentSDKPlugin", () => {
       plugin.enable();
 
       expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:claude-agent-sdk:query",
+        "orchestrion:@anthropic-ai/claude-agent-sdk:query",
       );
       expect(mockChannel.subscribe).toHaveBeenCalledTimes(1);
       expect(mockChannel.subscribe).toHaveBeenCalledWith(
