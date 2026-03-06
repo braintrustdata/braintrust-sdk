@@ -1,7 +1,7 @@
 // ID generation system for Braintrust spans
 // Supports both UUID and OpenTelemetry-compatible ID formats
 
-import { v4 as uuidv4 } from "uuid";
+import { v7 as uuidv7 } from "uuid";
 
 /**
  * Abstract base class for ID generators
@@ -24,15 +24,15 @@ export abstract class IDGenerator {
 }
 
 /**
- * ID generator that uses UUID4 for both span and trace IDs
+ * ID generator that uses UUIDv7 for both span and trace IDs
  */
 export class UUIDGenerator extends IDGenerator {
   getSpanId(): string {
-    return uuidv4();
+    return uuidv7();
   }
 
   getTraceId(): string {
-    return uuidv4();
+    return uuidv7();
   }
 
   shareRootSpanId(): boolean {

@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4, v7 as uuidv7 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import { IDGenerator, getIdGenerator } from "./id-gen";
@@ -1798,7 +1798,7 @@ function logFeedbackImpl(
   if (!isEmpty(comment)) {
     const record = new LazyValue(async () => {
       return {
-        id: uuidv4(),
+        id: uuidv7(),
         created: new Date().toISOString(),
         origin: {
           // NOTE: We do not know (or care?) what the transaction id of the row that
@@ -6790,7 +6790,7 @@ export class Dataset<
   }): string {
     this.validateEvent({ metadata, expected, output, tags });
 
-    const rowId = id || uuidv4();
+    const rowId = id || uuidv7();
     const args = this.createArgs(
       deepCopyEvent({
         id: rowId,
