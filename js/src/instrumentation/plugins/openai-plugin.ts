@@ -9,6 +9,20 @@ import {
   getCachedMetricFromHeaders,
   parseMetricsFromUsage,
 } from "../../openai-utils";
+import type {
+  OpenAIChatChoice,
+  OpenAIChatCompletion,
+  OpenAIChatCompletionChunk,
+  OpenAIChatCreateParams,
+  OpenAIEmbeddingCreateParams,
+  OpenAIEmbeddingResponse,
+  OpenAIModerationCreateParams,
+  OpenAIModerationResponse,
+  OpenAIResponse,
+  OpenAIResponseCompletedEvent,
+  OpenAIResponseCreateParams,
+  OpenAIResponseStreamEvent,
+} from "../../vendor-sdk-types/openai";
 
 /**
  * Plugin for OpenAI SDK instrumentation.
@@ -30,20 +44,29 @@ export class OpenAIPlugin extends BasePlugin {
     this.subscribeToStreamingChannel(OPENAI_CHANNEL.CHAT_COMPLETIONS_CREATE, {
       name: "Chat Completion",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIChatCreateParams;
         const { messages, ...metadata } = params;
         return {
           input: processInputAttachments(messages),
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractOutput: (result: any) => {
-        return result?.choices;
+      extractOutput: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIChatCompletion | undefined;
+        return response?.choices;
       },
-      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+      extractMetrics: (
+        result: unknown,
+        startTime?: number,
+        endEvent?: unknown,
+      ) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIChatCompletion | undefined;
         const metrics = withCachedMetric(
-          parseMetricsFromUsage(result?.usage),
+          parseMetricsFromUsage(response?.usage),
           result,
           endEvent,
         );
@@ -59,24 +82,33 @@ export class OpenAIPlugin extends BasePlugin {
     this.subscribeToChannel(OPENAI_CHANNEL.EMBEDDINGS_CREATE, {
       name: "Embedding",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIEmbeddingCreateParams;
         const { input, ...metadata } = params;
         return {
           input,
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractOutput: (result: any) => {
+      extractOutput: (result: unknown) => {
         // Preserve wrapper parity: old wrapper logged only first embedding length.
-        const embedding = result?.data?.[0]?.embedding;
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIEmbeddingResponse | undefined;
+        const embedding = response?.data?.[0]?.embedding;
         return Array.isArray(embedding)
           ? { embedding_length: embedding.length }
           : undefined;
       },
-      extractMetrics: (result: any, _startTime?: number, endEvent?: any) => {
+      extractMetrics: (
+        result: unknown,
+        _startTime?: number,
+        endEvent?: unknown,
+      ) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIEmbeddingResponse | undefined;
         return withCachedMetric(
-          parseMetricsFromUsage(result?.usage),
+          parseMetricsFromUsage(response?.usage),
           result,
           endEvent,
         );
@@ -89,20 +121,29 @@ export class OpenAIPlugin extends BasePlugin {
       {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
-        extractInput: (args: any[]) => {
-          const params = args[0] || {};
+        extractInput: (args: unknown[]) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const params = (args[0] || {}) as OpenAIChatCreateParams;
           const { messages, ...metadata } = params;
           return {
             input: processInputAttachments(messages),
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result: any) => {
-          return result?.choices;
+        extractOutput: (result: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const response = result as OpenAIChatCompletion | undefined;
+          return response?.choices;
         },
-        extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+        extractMetrics: (
+          result: unknown,
+          startTime?: number,
+          endEvent?: unknown,
+        ) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const response = result as OpenAIChatCompletion | undefined;
           const metrics = withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+            parseMetricsFromUsage(response?.usage),
             result,
             endEvent,
           );
@@ -121,8 +162,9 @@ export class OpenAIPlugin extends BasePlugin {
       {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
-        extractInput: (args: any[]) => {
-          const params = args[0] || {};
+        extractInput: (args: unknown[]) => {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const params = (args[0] || {}) as OpenAIChatCreateParams;
           const { messages, ...metadata } = params;
           return {
             input: processInputAttachments(messages),
@@ -136,21 +178,30 @@ export class OpenAIPlugin extends BasePlugin {
     this.subscribeToChannel(OPENAI_CHANNEL.MODERATIONS_CREATE, {
       name: "Moderation",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIModerationCreateParams;
         const { input, ...metadata } = params;
         return {
           input,
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractOutput: (result: any) => {
-        return result?.results;
+      extractOutput: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIModerationResponse | undefined;
+        return response?.results;
       },
-      extractMetrics: (result: any, _startTime?: number, endEvent?: any) => {
+      extractMetrics: (
+        result: unknown,
+        _startTime?: number,
+        endEvent?: unknown,
+      ) => {
         // Include cached metric when wrappers annotate usage from headers.
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIModerationResponse | undefined;
         return withCachedMetric(
-          parseMetricsFromUsage(result?.usage),
+          parseMetricsFromUsage(response?.usage),
           result,
           endEvent,
         );
@@ -161,27 +212,38 @@ export class OpenAIPlugin extends BasePlugin {
     this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_CREATE, {
       name: "openai.responses.create",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIResponseCreateParams;
         const { input, ...metadata } = params;
         return {
           input: processInputAttachments(input),
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractOutput: (result: any) => {
-        return processImagesInOutput(result?.output);
+      extractOutput: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
+        return processImagesInOutput(response?.output);
       },
-      extractMetadata: (result: any) => {
-        if (!result) {
+      extractMetadata: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
+        if (!response) {
           return undefined;
         }
-        const { output: _output, usage: _usage, ...metadata } = result;
+        const { output: _output, usage: _usage, ...metadata } = response;
         return Object.keys(metadata).length > 0 ? metadata : undefined;
       },
-      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+      extractMetrics: (
+        result: unknown,
+        startTime?: number,
+        endEvent?: unknown,
+      ) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
         const metrics = withCachedMetric(
-          parseMetricsFromUsage(result?.usage),
+          parseMetricsFromUsage(response?.usage),
           result,
           endEvent,
         );
@@ -198,43 +260,41 @@ export class OpenAIPlugin extends BasePlugin {
       // Preserve wrapper parity: responses.stream logged as openai.responses.create.
       name: "openai.responses.create",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIResponseCreateParams;
         const { input, ...metadata } = params;
         return {
           input: processInputAttachments(input),
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractFromEvent: (event: any) => {
-        if (!event || !event.type || !event.response) {
+      extractFromEvent: (event: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = (event as OpenAIResponseCompletedEvent | undefined)
+          ?.response;
+        if (
+          !event ||
+          !response ||
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          (event as OpenAIResponseCompletedEvent).type !== "response.completed"
+        ) {
           return {};
         }
 
-        const response = event.response;
+        const data: Record<string, unknown> = {};
 
-        if (event.type === "response.completed") {
-          const data: Record<string, any> = {};
-
-          if (response?.output !== undefined) {
-            data.output = processImagesInOutput(response.output);
-          }
-
-          // Extract metadata - preserve response fields except usage and output
-          if (response) {
-            const { usage: _usage, output: _output, ...metadata } = response;
-            if (Object.keys(metadata).length > 0) {
-              data.metadata = metadata;
-            }
-          }
-
-          // Extract metrics from usage
-          data.metrics = parseMetricsFromUsage(response?.usage);
-
-          return data;
+        if (response.output !== undefined) {
+          data.output = processImagesInOutput(response.output);
         }
 
-        return {};
+        const { usage: _usage, output: _output, ...metadata } = response;
+        if (Object.keys(metadata).length > 0) {
+          data.metadata = metadata;
+        }
+
+        data.metrics = parseMetricsFromUsage(response.usage);
+        return data;
       },
     });
 
@@ -242,27 +302,38 @@ export class OpenAIPlugin extends BasePlugin {
     this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_PARSE, {
       name: "openai.responses.parse",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const params = (args[0] || {}) as OpenAIResponseCreateParams;
         const { input, ...metadata } = params;
         return {
           input: processInputAttachments(input),
           metadata: { ...metadata, provider: "openai" },
         };
       },
-      extractOutput: (result: any) => {
-        return processImagesInOutput(result?.output);
+      extractOutput: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
+        return processImagesInOutput(response?.output);
       },
-      extractMetadata: (result: any) => {
-        if (!result) {
+      extractMetadata: (result: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
+        if (!response) {
           return undefined;
         }
-        const { output: _output, usage: _usage, ...metadata } = result;
+        const { output: _output, usage: _usage, ...metadata } = response;
         return Object.keys(metadata).length > 0 ? metadata : undefined;
       },
-      extractMetrics: (result: any, startTime?: number, endEvent?: any) => {
+      extractMetrics: (
+        result: unknown,
+        startTime?: number,
+        endEvent?: unknown,
+      ) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const response = result as OpenAIResponse | undefined;
         const metrics = withCachedMetric(
-          parseMetricsFromUsage(result?.usage),
+          parseMetricsFromUsage(response?.usage),
           result,
           endEvent,
         );
@@ -387,11 +458,11 @@ export function processImagesInOutput(output: any): any {
  * finish_reason (last), and usage (last chunk).
  */
 export function aggregateChatCompletionChunks(
-  chunks: any[],
+  chunks: OpenAIChatCompletionChunk[],
   streamResult?: unknown,
   endEvent?: unknown,
 ): {
-  output: any[];
+  output: OpenAIChatChoice[];
   metrics: Record<string, number>;
 } {
   let role = undefined;
@@ -466,7 +537,7 @@ export function aggregateChatCompletionChunks(
 }
 
 function aggregateResponseStreamEvents(
-  chunks: any[],
+  chunks: OpenAIResponseStreamEvent[],
   _streamResult?: unknown,
   endEvent?: unknown,
 ): {
