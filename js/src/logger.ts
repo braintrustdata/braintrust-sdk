@@ -135,10 +135,6 @@ const InlineAttachmentReferenceSchema = z.object({
   filename: z.string().optional(),
 });
 
-type InlineAttachmentReference = z.infer<
-  typeof InlineAttachmentReferenceSchema
->;
-
 // Context management interfaces
 export interface ContextParentSpanIds {
   rootSpanId: string;
