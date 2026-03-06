@@ -625,7 +625,11 @@ describe("onFlushError wiring", () => {
   });
 
   test("initLogger updates an existing background logger callback", async () => {
-    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const state = new BraintrustState({});
+    await state.login({
+      apiKey: TEST_API_KEY,
+      appUrl: "https://braintrust.dev",
+    });
     const flushError = new Error("initLogger flush failure");
     const onFlushError = vi.fn();
 
@@ -635,6 +639,7 @@ describe("onFlushError wiring", () => {
       projectName: "test-project",
       projectId: "test-project-id",
       onFlushError,
+      state,
     });
 
     const span = logger.startSpan({ name: "test-span" });
