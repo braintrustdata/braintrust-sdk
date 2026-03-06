@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { CompiledPrompt } from "../logger";
+import type { CompiledPrompt } from "../logger";
 import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
@@ -8,6 +8,16 @@ import {
 import { responsesProxy } from "./oai_responses";
 import { OPENAI_CHANNEL } from "../instrumentation/plugins/channels";
 import iso from "../isomorph";
+import type {
+  OpenAIChatCompletion,
+  OpenAIChatCreateParams,
+  OpenAIChatStream,
+  OpenAIClient,
+  OpenAIEmbeddingCreateParams,
+  OpenAIEmbeddingResponse,
+  OpenAIModerationCreateParams,
+  OpenAIModerationResponse,
+} from "../vendor-sdk-types/openai";
 import {
   APIPromise,
   ChannelContext,
@@ -15,27 +25,7 @@ import {
   EnhancedResponse,
   tracePromiseWithResponse,
 } from "./openai-promise-utils";
-
-interface BetaLike {
-  chat: {
-    completions: {
-      stream: any;
-    };
-  };
-  embeddings: any;
-}
-
-interface ChatLike {
-  completions: any;
-}
-
-interface OpenAILike {
-  chat: ChatLike;
-  embeddings: any;
-  moderations: any;
-  beta?: BetaLike;
-  responses?: any;
-}
+import { OpenAIV4Client } from "../vendor-sdk-types/openai-v4";
 
 declare global {
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
@@ -46,7 +36,7 @@ declare global {
  * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
  * a no-op.
  *
- * Currently, this supports both the `v4` and `v5` API.
+ * Currently, this supports the `v4`, `v5`, and `v6` API.
  *
  * @param openai
  * @returns The wrapped `OpenAI` object.
@@ -65,7 +55,9 @@ export function wrapOpenAI<T extends object>(openai: T): T {
     "create" in oai.chat.completions
   ) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return wrapOpenAIv4(oai as OpenAILike) as T;
+    const typedOpenAI = oai as OpenAIClient;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return wrapOpenAIv4(typedOpenAI) as T;
   } else {
     console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
     return openai;
@@ -73,8 +65,11 @@ export function wrapOpenAI<T extends object>(openai: T): T {
 }
 globalThis.__inherited_braintrust_wrap_openai = wrapOpenAI;
 
-export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
-  const completionProxy = new Proxy(openai.chat.completions, {
+export function wrapOpenAIv4<T extends object>(openai: T): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const typedOpenai = openai as OpenAIV4Client;
+
+  const completionProxy = new Proxy(typedOpenai.chat.completions, {
     get(target, name, receiver) {
       const baseVal = Reflect.get(target, name, receiver);
       if (name === "create") {
@@ -88,7 +83,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     },
   });
 
-  const chatProxy = new Proxy(openai.chat, {
+  const chatProxy = new Proxy(typedOpenai.chat, {
     get(target, name, receiver) {
       if (name === "completions") {
         return completionProxy;
@@ -98,28 +93,31 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   });
 
   const embeddingProxy = createEndpointProxy<
-    EmbeddingCreateParams,
-    CreateEmbeddingResponse
-  >(openai.embeddings, wrapEmbeddings);
+    OpenAIEmbeddingCreateParams,
+    OpenAIEmbeddingResponse
+  >(typedOpenai.embeddings, wrapEmbeddings);
   const moderationProxy = createEndpointProxy<
-    ModerationCreateParams,
-    CreateModerationResponse
-  >(openai.moderations, wrapModerations);
+    OpenAIModerationCreateParams,
+    OpenAIModerationResponse
+  >(typedOpenai.moderations, wrapModerations);
 
-  let betaProxy: BetaLike;
-  if (openai.beta?.chat?.completions?.stream) {
-    const betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
-      get(target, name, receiver) {
-        const baseVal = Reflect.get(target, name, receiver);
-        if (name === "parse") {
-          return wrapBetaChatCompletionParse(baseVal.bind(target));
-        } else if (name === "stream") {
-          return wrapBetaChatCompletionStream(baseVal.bind(target));
-        }
-        return baseVal;
+  let betaProxy: OpenAIClient["beta"];
+  if (typedOpenai.beta?.chat?.completions?.stream) {
+    const betaChatCompletionProxy = new Proxy(
+      typedOpenai?.beta?.chat.completions,
+      {
+        get(target, name, receiver) {
+          const baseVal = Reflect.get(target, name, receiver);
+          if (name === "parse") {
+            return wrapBetaChatCompletionParse(baseVal.bind(target));
+          } else if (name === "stream") {
+            return wrapBetaChatCompletionStream(baseVal.bind(target));
+          }
+          return baseVal;
+        },
       },
-    });
-    const betaChatProxy = new Proxy(openai.beta.chat, {
+    );
+    const betaChatProxy = new Proxy(typedOpenai.beta.chat, {
       get(target, name, receiver) {
         if (name === "completions") {
           return betaChatCompletionProxy;
@@ -127,7 +125,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
         return Reflect.get(target, name, receiver);
       },
     });
-    betaProxy = new Proxy(openai.beta, {
+    betaProxy = new Proxy(typedOpenai.beta, {
       get(target, name, receiver) {
         if (name === "chat") {
           return betaChatProxy;
@@ -137,7 +135,8 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     });
   }
 
-  return new Proxy(openai, {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy(typedOpenai, {
     get(target, name, receiver) {
       switch (name) {
         case "chat":
@@ -147,7 +146,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
         case "moderations":
           return moderationProxy;
         case "responses":
-          return responsesProxy(openai);
+          return responsesProxy(typedOpenai);
       }
 
       if (name === "beta" && betaProxy) {
@@ -155,33 +154,17 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
       }
       return Reflect.get(target, name, receiver);
     },
-  });
+  }) as T;
 }
 
 type SpanInfo = {
   span_info?: CompiledPrompt<"chat">["span_info"];
 };
 
-type ChatParams = {
-  messages: unknown;
-  stream?: boolean | null;
-};
-
-interface NonStreamingChatResponse {
-  choices: any[];
-  usage:
-    | {
-        total_tokens: number;
-        prompt_tokens: number;
-        completion_tokens: number;
-      }
-    | undefined;
-}
-
 function wrapBetaChatCompletionParse<
-  P extends ChatParams,
-  C extends Promise<NonStreamingChatResponse>,
->(completion: (params: P) => C): (params: P) => Promise<any> {
+  P extends OpenAIChatCreateParams,
+  C extends Promise<OpenAIChatCompletion>,
+>(completion: (params: P) => C): (params: P) => Promise<unknown> {
   return async (allParams: P & SpanInfo) => {
     const { span_info, ...params } = allParams;
     const channel = iso.newTracingChannel(
@@ -195,10 +178,9 @@ function wrapBetaChatCompletionParse<
   };
 }
 
-function wrapBetaChatCompletionStream<
-  P extends ChatParams,
-  C extends StreamingChatResponse,
->(completion: (params: P) => C): (params: P & SpanInfo) => C {
+function wrapBetaChatCompletionStream<P extends OpenAIChatCreateParams, C>(
+  completion: (params: P) => C,
+): (params: P & SpanInfo) => C {
   return (allParams: P & SpanInfo) => {
     const { span_info, ...params } = allParams;
     const channel = iso.newTracingChannel(
@@ -213,13 +195,11 @@ function wrapBetaChatCompletionStream<
   };
 }
 
-// TODO: Mock this up better
-type StreamingChatResponse = any;
 export { LEGACY_CACHED_HEADER, parseCachedHeader, X_CACHED_HEADER };
 
 function wrapChatCompletion<
-  P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse,
+  P extends OpenAIChatCreateParams,
+  C extends OpenAIChatCompletion | OpenAIChatStream,
 >(
   completion: (params: P, options?: unknown) => APIPromise<C>,
 ): (params: P, options?: unknown) => APIPromise<C> {
@@ -245,7 +225,7 @@ function wrapChatCompletion<
               // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
               params as P,
               options,
-            ) as APIPromise<StreamingChatResponse>;
+            ) as APIPromise<OpenAIChatStream>;
             const { data, response } = await tracePromiseWithResponse(
               OPENAI_CHANNEL.CHAT_COMPLETIONS_CREATE,
               traceContext,
@@ -260,7 +240,7 @@ function wrapChatCompletion<
             // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             params as P,
             options,
-          ) as APIPromise<NonStreamingChatResponse>;
+          ) as APIPromise<OpenAIChatCompletion>;
           const { data, response } = await tracePromiseWithResponse(
             OPENAI_CHANNEL.CHAT_COMPLETIONS_CREATE,
             traceContext,
@@ -295,38 +275,10 @@ function createEndpointProxy<T, R>(
   });
 }
 
-type EmbeddingCreateParams = {
-  input: string;
-};
-
-type CreateEmbeddingResponse = {
-  data: { embedding: Array<number> }[];
-  usage:
-    | {
-        total_tokens: number;
-        prompt_tokens: number;
-      }
-    | undefined;
-};
-
-type ModerationCreateParams = {
-  input: string;
-};
-
-type CreateModerationResponse = {
-  results: Array<any>;
-  usage?: {
-    cached?: number;
-  };
-};
-
 function wrapApiCreateWithChannel<T, R>(
-  create: (
-    params: Omit<T & SpanInfo, "span_info">,
-    options?: unknown,
-  ) => APIPromise<R>,
+  create: (params: T, options?: unknown) => APIPromise<R>,
   channelName: string,
-): (params: T & SpanInfo, options?: unknown) => Promise<any> {
+): (params: T & SpanInfo, options?: unknown) => Promise<unknown> {
   return async (allParams: T & SpanInfo, options?: unknown) => {
     const { span_info, ...params } = allParams;
     const traceContext: ChannelContext = {
@@ -336,7 +288,8 @@ function wrapApiCreateWithChannel<T, R>(
     const { data } = await tracePromiseWithResponse(
       channelName,
       traceContext,
-      create(params, options),
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      create(params as T, options),
     );
     return data;
   };
@@ -344,22 +297,22 @@ function wrapApiCreateWithChannel<T, R>(
 
 const wrapEmbeddings = (
   create: (
-    params: EmbeddingCreateParams,
+    params: OpenAIEmbeddingCreateParams,
     options?: unknown,
-  ) => APIPromise<CreateEmbeddingResponse>,
+  ) => APIPromise<OpenAIEmbeddingResponse>,
 ) =>
-  wrapApiCreateWithChannel<EmbeddingCreateParams, CreateEmbeddingResponse>(
-    create,
-    OPENAI_CHANNEL.EMBEDDINGS_CREATE,
-  );
+  wrapApiCreateWithChannel<
+    OpenAIEmbeddingCreateParams,
+    OpenAIEmbeddingResponse
+  >(create, OPENAI_CHANNEL.EMBEDDINGS_CREATE);
 
 const wrapModerations = (
   create: (
-    params: ModerationCreateParams,
+    params: OpenAIModerationCreateParams,
     options?: unknown,
-  ) => APIPromise<CreateModerationResponse>,
+  ) => APIPromise<OpenAIModerationResponse>,
 ) =>
-  wrapApiCreateWithChannel<ModerationCreateParams, CreateModerationResponse>(
-    create,
-    OPENAI_CHANNEL.MODERATIONS_CREATE,
-  );
+  wrapApiCreateWithChannel<
+    OpenAIModerationCreateParams,
+    OpenAIModerationResponse
+  >(create, OPENAI_CHANNEL.MODERATIONS_CREATE);
