@@ -55,7 +55,7 @@ function normalizeObject(
     typeof value.caller_filename === "string"
       ? value.caller_filename
       : undefined;
-  const isNodeInternalCaller = callerFilename?.startsWith("node:internal/");
+  const isNodeInternalCaller = callerFilename?.startsWith("node:");
 
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => {
