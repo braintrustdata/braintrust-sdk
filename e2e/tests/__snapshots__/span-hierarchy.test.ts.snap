@@ -4,9 +4,9 @@ exports[`span-hierarchy covers context propagation, parent reattachment, span mu
 [
   {
     "context": {
-      "caller_filename": "node:internal/async_local_storage/async_context_frame",
-      "caller_functionname": "AsyncLocalStorage.run",
-      "caller_lineno": 63,
+      "caller_filename": "<node-internal>",
+      "caller_functionname": "<node-internal>",
+      "caller_lineno": 0,
     },
     "created": "<timestamp>",
     "id": "<span:1>",

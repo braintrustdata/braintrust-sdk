@@ -47,6 +47,35 @@ function normalizeMockServerUrl(value: string): string | undefined {
   }
 }
 
+function normalizeObject(
+  value: { [key: string]: Json },
+  tokenMaps: TokenMaps,
+): Json {
+  const callerFilename =
+    typeof value.caller_filename === "string"
+      ? value.caller_filename
+      : undefined;
+  const isNodeInternalCaller = callerFilename?.startsWith("node:internal/");
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (isNodeInternalCaller) {
+        if (key === "caller_filename") {
+          return [key, "<node-internal>"];
+        }
+        if (key === "caller_functionname") {
+          return [key, "<node-internal>"];
+        }
+        if (key === "caller_lineno") {
+          return [key, 0];
+        }
+      }
+
+      return [key, normalizeValue(entry as Json, tokenMaps, key)];
+    }),
+  );
+}
+
 function tokenFor(
   map: Map<string, string>,
   rawValue: string,
@@ -80,12 +109,7 @@ function normalizeValue(
   }
 
   if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [
-        key,
-        normalizeValue(entry as Json, tokenMaps, key),
-      ]),
-    );
+    return normalizeObject(value, tokenMaps);
   }
 
   if (typeof value === "number") {
